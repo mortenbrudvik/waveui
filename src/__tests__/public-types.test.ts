@@ -193,6 +193,7 @@ import type {
   PopoverTriggerChildProps,
   PopupRect,
   PopupTarget,
+  PopupTargetInput,
   PresencePhase,
   PresenceProps,
   ProgressBarColor,
@@ -837,7 +838,7 @@ describe('0.7 menus, popovers and toolbars from the package entry', () => {
       openOnContext?: boolean;
       persistOnItemClick?: boolean;
     }>();
-    expectTypeOf<MenuPopoverProps['target']>().toEqualTypeOf<PopupTarget | undefined>();
+    expectTypeOf<MenuPopoverProps['target']>().toEqualTypeOf<PopupTargetInput | undefined>();
     expectTypeOf<PopupTarget>().toEqualTypeOf<HTMLElement | VirtualElement | null>();
     expectTypeOf<DOMRect>().toExtend<PopupRect>();
     expectTypeOf<ReturnType<VirtualElement['getBoundingClientRect']>>().toEqualTypeOf<PopupRect>();
@@ -888,10 +889,10 @@ describe('0.7 menus, popovers and toolbars from the package entry', () => {
       closeDelay?: number;
       openOnContext?: boolean;
     }>();
-    expectTypeOf<PopoverProps['target']>().toEqualTypeOf<PopupTarget | undefined>();
-    // TeachingPopover's 0.6 target (an element or a ref, no VirtualElement) is unchanged.
+    expectTypeOf<PopoverProps['target']>().toEqualTypeOf<PopupTargetInput | undefined>();
+    // TeachingPopover's target also takes a VirtualElement since 0.12; the 0.6 forms still fit.
     expectTypeOf<TeachingPopoverProps['target']>().toEqualTypeOf<
-      RefObject<HTMLElement | null> | HTMLElement | null | undefined
+      RefObject<HTMLElement | null> | HTMLElement | VirtualElement | null | undefined
     >();
     // Unchanged: its optional handler members are filled in hover and context modes.
     expectTypeOf<PopoverTriggerChildProps>().toEqualTypeOf<

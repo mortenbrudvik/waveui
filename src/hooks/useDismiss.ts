@@ -109,9 +109,9 @@ export function DismissLayerProvider(props: {
  *   then keeps it open too.
  *
  * A layer's tree is its `refs`, the portal wrappers rendered inside it, its descendant layers and
- * the `[data-wave-focus-trap-allow]` regions (toasts). Parentage comes from
- * {@link DismissLayerContext}: wrap the surface in `Portal layerId={layerId}` (or
- * {@link DismissLayerProvider}) so layers opened inside it become its children.
+ * the `[data-wave-focus-trap-allow]` regions (toasts). Parentage follows the React tree: wrap the surface in
+ * `Portal layerId={layerId}` (or {@link DismissLayerProvider}) so layers opened inside it become
+ * its children.
  *
  * @example
  * const { layerId } = useDismiss({ open, onDismiss: () => setOpen(false), refs: [surfaceRef, triggerRef], anchorRef: triggerRef });

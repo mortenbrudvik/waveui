@@ -218,7 +218,7 @@ export function checkPlainCss(css) {
     );
   }
   const classes = selectorClasses(css);
-  for (const name of ['bg-primary', 'text-body-1']) {
+  for (const name of ['bg-primary', 'text-body-1', ...FOCUS_RECIPE_UTILITIES]) {
     if (!classes.has(name)) errors.push(`missing the component utility .${name}`);
   }
   if (!tokenFound) errors.push('missing the token --wave-primary');
@@ -226,6 +226,9 @@ export function checkPlainCss(css) {
   if (!resetFound) errors.push(`missing the scoped native reset (${NATIVE_RESET})`);
   return errors;
 }
+
+/** Utilities of the exported focus recipes (`focusRing`, `focusRingInset`), which apps compose. */
+const FOCUS_RECIPE_UTILITIES = ['focus-visible:outline-ring', 'focus-visible:-outline-offset-2'];
 
 /** Wave motion utilities used by the Tailwind fixture's own source (`src/app.html`). */
 const MOTION_UTILITIES = ['duration-wave-normal', 'ease-wave-decelerate-mid'];
@@ -272,7 +275,7 @@ export function checkTailwindCss(css, { directionClasses = [], setup = 'tailwind
     }
   }
   const classes = selectorClasses(css);
-  for (const name of ['bg-primary', 'text-body-1']) {
+  for (const name of ['bg-primary', 'text-body-1', ...FOCUS_RECIPE_UTILITIES]) {
     if (!classes.has(name)) {
       errors.push(
         `the component class .${name} was not generated (the package's dist was not scanned)`,

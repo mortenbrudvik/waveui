@@ -1,7 +1,14 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { menuPopoverClassNames } from '../../lib/classNames';
-import type { PopupAlign, PopupSide, PopupTarget } from '../../lib/types';
+import type {
+  PopupAlign,
+  PopupPositioning,
+  PopupSide,
+  PopupTarget,
+  PopupTargetInput,
+} from '../../lib/types';
+import { usePopupTarget } from '../../hooks/useResolvedTarget';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -11,7 +18,7 @@ import { useDismiss } from '../../hooks/useDismiss';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { createHoverIntentGroup, type HoverIntentGroup } from '../../hooks/useHoverIntent';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
@@ -43,11 +50,18 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * with a `target` needs no trigger; name it with `aria-label`, and give a toggle button you use
    * as the target `aria-haspopup="menu"` and `aria-expanded` yourself (the menu's `id` is
    * generated, so the toggle cannot point `aria-controls` at it). A press on a target element
-   * does not close the menu. Hold the element in state (a ref cannot be observed;
-   * TeachingPopover's `target` also takes a ref). A menu opened by `openOnContext` is placed at
+   * does not close the menu. Hold the element in state, or pass a ref object (read after
+   * each render of the menu). A menu opened by `openOnContext` is placed at
    * the gesture instead.
    */
-  target?: PopupTarget;
+  target?: PopupTargetInput;
+  /**
+   * Advanced positioning (Fluent's `positioning`): `offset`, `fitViewport`, `matchReferenceWidth`,
+   * `fallbackPlacements` and `target` (used when the `target` prop is not set). `side` and `align`
+   * stay separate props, and the `offset` prop wins over `positioning.offset`.
+   * @default `{ fitViewport: true }`
+   */
+  positioning?: PopupPositioning;
   /** Menu items and dividers. */
   children: React.ReactNode;
   /**
@@ -150,7 +164,8 @@ export const MenuPopover = ({
   side,
   align = 'start',
   offset,
-  target,
+  target: targetProp,
+  positioning,
   children,
   className,
   style,
@@ -187,6 +202,11 @@ export const MenuPopover = ({
     contextOpener,
   } = menu;
   useStaticMenuPartWarning('Menu.Popover', popup);
+  const { target, pending: targetPending } = usePopupTarget(
+    'Menu.Popover',
+    targetProp,
+    positioning,
+  );
   const targetElement = isElementTarget(target) ? target : null;
 
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
@@ -200,14 +220,23 @@ export const MenuPopover = ({
   // `open`, so focus returns and the layer goes on close, not after an exit motion.
   const { isMounted, ref: presenceRef, presenceProps } = usePresence(open);
 
-  const { setReference, setFloating, floatingProps, isPositioned } = usePopupPosition({
+  const {
+    setReference,
+    setFloating,
+    floatingProps: positionedProps,
+    isPositioned,
+  } = usePopupPosition({
     open,
     side: side ?? (isSubmenu ? 'end' : 'bottom'),
     align,
-    offset: offset ?? (isSubmenu ? 0 : 4),
-    fitViewport: true,
     shift: isSubmenu ? SUBMENU_SHIFT : undefined,
+    ...resolvePositioning(positioning, { offset: isSubmenu ? 0 : 4, fitViewport: true }),
+    ...(offset !== undefined && { offset }),
   });
+  // A ref target that holds no element yet keeps the popup hidden (as TeachingPopover's is).
+  const floatingProps = targetPending
+    ? { ...positionedProps, style: { ...positionedProps.style, visibility: 'hidden' as const } }
+    : positionedProps;
   // The size limits come from menuPopoverClasses, which a consumer class can replace; an inline
   // max-height/max-width would beat every class.
   const { maxHeight: _maxHeight, maxWidth: _maxWidth, ...positionStyle } = floatingProps.style;

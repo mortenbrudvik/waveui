@@ -142,6 +142,7 @@ const NO_ELEMENT: readonly string[] = [
   'Dialog', // a context provider: Dialog.Content renders the surface
   'DialogClose', // clones its child (asChild={false} renders a wrapper span that takes className)
   'DialogTrigger', // clones its child
+  'DismissLayerProvider', // a context provider: the custom surface renders the element (0.12)
   'DrawerClose', // clones its child
   'DrawerTrigger', // clones its child
   'ListboxProvider', // a context provider: the custom picker renders the list (phase 5)

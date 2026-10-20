@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'v
 import { act, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import {
+  resolvePositioning,
   usePopupPosition,
   type UsePopupPositionOptions,
   type UsePopupPositionResult,
@@ -525,5 +526,152 @@ describe('usePopupPosition — virtual anchors', () => {
     expectTypeOf<Parameters<UsePopupPositionResult['setReference']>[0]>().toEqualTypeOf<
       HTMLElement | VirtualElement | null
     >();
+  });
+});
+
+describe('usePopupPosition — fallbackPlacements and hideWhenDetached', () => {
+  it('tries fallbackPlacements instead of the opposite side when the requested side collides', async () => {
+    boxes.reference = { x: 500, y: 700, width: 200, height: 20 };
+    render(<Popup fallbackPlacements={[{ side: 'right' }]} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('floating')).toHaveAttribute('data-side', 'right'),
+    );
+  });
+
+  it.each([
+    ['LTR', 'ltr', 'left'],
+    ['RTL', 'rtl', 'right'],
+  ] as const)('maps a logical fallback side in %s', async (_name, dir, expected) => {
+    boxes.reference = { x: 500, y: 700, width: 200, height: 20 };
+    render(
+      <WaveProvider dir={dir}>
+        <Popup fallbackPlacements={[{ side: 'start', align: 'center' }]} />
+      </WaveProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('floating')).toHaveAttribute('data-side', expected),
+    );
+  });
+
+  it('hides the surface while the anchor is outside the viewport', async () => {
+    boxes.reference = { x: 500, y: -500, width: 200, height: 20 };
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup hideWhenDetached onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(screen.getByTestId('floating').style.visibility).toBe('hidden');
+  });
+
+  it('leaves the surface visible while the anchor is in view', async () => {
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup hideWhenDetached onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(screen.getByTestId('floating').style.visibility).not.toBe('hidden');
+  });
+
+  it('does not hide a detached anchor by default', async () => {
+    boxes.reference = { x: 500, y: -500, width: 200, height: 20 };
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(screen.getByTestId('floating').style.visibility).not.toBe('hidden');
+  });
+});
+
+describe('resolvePositioning', () => {
+  it('lets a consumer offset of 0 or below win over the default', () => {
+    expect(resolvePositioning({ offset: 0 }, { offset: 8 }).offset).toBe(0);
+    expect(resolvePositioning({ offset: -4 }, { offset: 8 }).offset).toBe(-4);
+  });
+
+  it('lets matchReferenceWidth and fitViewport false win over a true default', () => {
+    const resolved = resolvePositioning(
+      { matchReferenceWidth: false, fitViewport: false },
+      { matchReferenceWidth: true, fitViewport: true },
+    );
+    expect(resolved.matchReferenceWidth).toBe(false);
+    expect(resolved.fitViewport).toBe(false);
+  });
+
+  it('keeps the defaults for undefined values and for no positioning at all', () => {
+    expect(resolvePositioning(undefined, { offset: 8, fitViewport: true })).toEqual({
+      offset: 8,
+      matchReferenceWidth: undefined,
+      fitViewport: true,
+      fallbackPlacements: undefined,
+    });
+    expect(resolvePositioning({}, { offset: 8 }).offset).toBe(8);
+  });
+
+  it('passes fallbackPlacements through', () => {
+    const fallback = [{ side: 'top' as const }];
+    expect(resolvePositioning({ fallbackPlacements: fallback }, {}).fallbackPlacements).toBe(
+      fallback,
+    );
+  });
+});
+
+describe('usePopupPosition — onPositioned and update', () => {
+  it('calls onPositioned once with the final placement, not on every recompute', async () => {
+    const onPositioned = vi.fn();
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup onPositioned={onPositioned} onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(onPositioned).toHaveBeenCalledTimes(1);
+    expect(onPositioned).toHaveBeenCalledWith({
+      placement: 'bottom-start',
+      side: 'bottom',
+      isPositioned: true,
+    });
+    act(() => last!.update());
+    await act(async () => {});
+    expect(onPositioned).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the flipped placement', async () => {
+    boxes.reference = { x: 500, y: 700, width: 200, height: 20 };
+    const onPositioned = vi.fn();
+    render(<Popup onPositioned={onPositioned} />);
+    await waitFor(() => expect(onPositioned).toHaveBeenCalled());
+    expect(onPositioned).toHaveBeenLastCalledWith(
+      expect.objectContaining({ side: 'top', placement: 'top-start' }),
+    );
+  });
+
+  it('calls onPositioned once per change in StrictMode', async () => {
+    const onPositioned = vi.fn();
+    let last: UsePopupPositionResult | null = null;
+    render(
+      <React.StrictMode>
+        <Popup onPositioned={onPositioned} onResult={(r) => (last = r)} />
+      </React.StrictMode>,
+    );
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(onPositioned).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onPositioned while closed', async () => {
+    const onPositioned = vi.fn();
+    render(<Popup open={false} onPositioned={onPositioned} />);
+    await act(async () => {});
+    expect(onPositioned).not.toHaveBeenCalled();
+  });
+
+  it('update() recomputes the position on demand', async () => {
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup onResult={(r) => (last = r)} />);
+    const floating = screen.getByTestId('floating');
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(translateOf(floating).x).toBe(500);
+    boxes.reference = { x: 300, y: 100, width: 200, height: 20 };
+    act(() => last!.update());
+    await waitFor(() => expect(translateOf(floating).x).toBe(300));
+  });
+
+  it('update() is a no-op while closed', async () => {
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup open={false} onResult={(r) => (last = r)} />);
+    await act(async () => {});
+    expect(() => act(() => last!.update())).not.toThrow();
+    expect(last!.isPositioned).toBe(false);
   });
 });

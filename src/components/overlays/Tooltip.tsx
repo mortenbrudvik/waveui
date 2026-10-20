@@ -11,12 +11,12 @@ import {
   STATE_ARIA,
   unwrapFragment,
 } from '../../lib/renderTrigger';
-import type { PopupAlign, PopupSide } from '../../lib/types';
+import type { PopupAlign, PopupPositioningOptions, PopupSide } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useDismiss } from '../../hooks/useDismiss';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { Portal } from '../portal/Portal';
@@ -87,6 +87,13 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
    * @default 'center'
    */
   align?: PopupAlign;
+  /**
+   * Advanced positioning (Fluent's `positioning`): `offset`, `fitViewport`, `matchReferenceWidth`
+   * and `fallbackPlacements`. `side` and `align` stay separate props. The hover bridge across the
+   * gap covers the default 8px, so a larger `offset` leaves a gap the pointer cannot cross.
+   * @default `{ offset: 8 }`
+   */
+  positioning?: PopupPositioningOptions;
   /**
    * A single element that triggers the tooltip on hover and focus: it receives the
    * `aria-describedby`/`aria-labelledby`, plus any `id` and `aria-*` props given to the Tooltip
@@ -312,6 +319,7 @@ export const Tooltip = ({
   relationship = 'description',
   side = 'top',
   align = 'center',
+  positioning,
   children,
   className,
   onMouseEnter,
@@ -346,7 +354,7 @@ export const Tooltip = ({
     open: visible,
     side,
     align,
-    offset: 8,
+    ...resolvePositioning(positioning, { offset: 8 }),
   });
   const wrapperElementRef = useMergedRefs<HTMLSpanElement>(ref, wrapperRef, setReference);
   const surfaceElementRef = useMergedRefs<HTMLSpanElement>(surfaceRef, setFloating);

@@ -18,7 +18,7 @@ import {
   inputPaddingClasses,
   inputTextClasses,
 } from '../../lib/styles';
-import type { CoreSize, InputAppearance } from '../../lib/types';
+import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -28,7 +28,7 @@ import { useIsClient } from '../../hooks/useIsClient';
 import { ListboxContext, useListbox, useListboxOption } from '../../hooks/useListbox';
 import type { ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
@@ -207,6 +207,13 @@ export interface TimePickerProps extends Omit<
    */
   size?: CoreSize;
   /**
+   * Advanced positioning of the popup (Fluent's `positioning`): `offset`, `fitViewport`,
+   * `matchReferenceWidth` and `fallbackPlacements` (tried in order when the requested side has no
+   * room). The popup opens below the field.
+   * @default `{ matchReferenceWidth: true, fitViewport: true }`
+   */
+  positioning?: PopupPositioningOptions;
+  /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
    * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
@@ -362,6 +369,7 @@ export const TimePicker = (props: TimePickerProps) => {
     placeholder = 'Select a time',
     disabled = false,
     size: sizeProp,
+    positioning,
     appearance: appearanceProp,
     readOnly,
     clearable = false,
@@ -645,8 +653,7 @@ export const TimePicker = (props: TimePickerProps) => {
     open,
     side: 'bottom',
     align: 'start',
-    matchReferenceWidth: true,
-    fitViewport: true,
+    ...resolvePositioning(positioning, { matchReferenceWidth: true, fitViewport: true }),
   });
   const surfaceRefs = useMergedRefs<HTMLDivElement>(surfaceRef, setFloating);
 

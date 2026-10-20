@@ -10,11 +10,12 @@ import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { CheckIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
+import type { PopupPositioningOptions } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useDismiss } from '../../hooks/useDismiss';
 import type { DismissReason } from '../../hooks/useDismiss';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import {
   ListboxContext,
   markListboxElement,
@@ -569,6 +570,11 @@ export interface UseListboxPopupOptions {
    * `setReference` too (merged into its ref), which places the surface against it.
    */
   anchorRef: React.RefObject<HTMLElement | null>;
+  /**
+   * Advanced positioning: `offset`, `fitViewport`, `matchReferenceWidth` and `fallbackPlacements`.
+   * @default `{ matchReferenceWidth: true, fitViewport: true }`
+   */
+  positioning?: PopupPositioningOptions;
 }
 
 /**
@@ -616,14 +622,13 @@ export interface UseListboxPopupResult {
  * const buttonMergedRef = useMergedRefs(buttonRef, setReference);
  */
 export function useListboxPopup(options: UseListboxPopupOptions): UseListboxPopupResult {
-  const { open, surfaceOpen, onDismiss, rootRef, anchorRef } = options;
+  const { open, surfaceOpen, onDismiss, rootRef, anchorRef, positioning } = options;
   const surfaceElementRef = React.useRef<HTMLElement | null>(null);
   const { setReference, setFloating, floatingProps } = usePopupPosition({
     open: surfaceOpen,
     side: 'bottom',
     align: 'start',
-    matchReferenceWidth: true,
-    fitViewport: true,
+    ...resolvePositioning(positioning, { matchReferenceWidth: true, fitViewport: true }),
   });
   const { layerId } = useDismiss({
     open,

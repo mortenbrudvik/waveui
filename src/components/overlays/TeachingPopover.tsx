@@ -6,12 +6,13 @@ import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { DismissIcon } from '../../lib/icons';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusRing, forcedColors } from '../../lib/styles';
-import type { PopupAlign, PopupSide } from '../../lib/types';
+import type { PopupAlign, PopupPositioning, PopupSide, VirtualElement } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
+import { useTargetConflictWarning } from '../../hooks/useResolvedTarget';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useAnnounce } from '../../hooks/useAnnounce';
 import { Button } from '../button/Button';
@@ -95,7 +96,8 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    */
   labels?: TeachingPopoverLabels;
   /**
-   * The element the popover points at (a ref or the element). When given, the popover is
+   * The element the popover points at (a ref, the element, or a `VirtualElement`: a rectangle such as a
+   * point; an inline object is fine). When given, the popover is
    * rendered in a portal, positioned next to it with a beak, and flips or shifts to stay in view;
    * without it (`undefined`) the popover renders inline where it is placed (0.4 behaviour).
    * While the target is `null` or has not been positioned against yet (an element held in state
@@ -116,7 +118,7 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    * attached hides the popover right after that commit. Pass the element held in state when the
    * target can mount or unmount without the popover re-rendering.
    */
-  target?: React.RefObject<HTMLElement | null> | HTMLElement | null;
+  target?: React.RefObject<HTMLElement | null> | HTMLElement | VirtualElement | null;
   /** Side of the `target` to open on; `start`/`end` follow the writing direction.
    * @default 'bottom'
    */
@@ -125,6 +127,13 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    * @default 'center'
    */
   align?: PopupAlign;
+  /**
+   * Advanced positioning (Fluent's `positioning`): `offset`, `fitViewport`, `matchReferenceWidth`,
+   * `fallbackPlacements` and `target` (used when the `target` prop is not set). `side` and `align`
+   * stay separate props.
+   * @default `{ offset: 12 }`
+   */
+  positioning?: PopupPositioning;
   /** Ref to the popover surface (`role="dialog"`). */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -136,11 +145,17 @@ function isRefObject(
 }
 
 function isElementTarget(target: TeachingPopoverProps['target']): target is HTMLElement {
-  return target != null && !isRefObject(target);
+  return (
+    target != null && !isRefObject(target) && typeof (target as Partial<Node>).nodeType === 'number'
+  );
+}
+
+function isVirtualTarget(target: TeachingPopoverProps['target']): target is VirtualElement {
+  return target != null && !isRefObject(target) && !isElementTarget(target);
 }
 
 function resolveTarget(target: TeachingPopoverProps['target']): HTMLElement | null {
-  if (!target) return null;
+  if (!target || isVirtualTarget(target)) return null;
   return isRefObject(target) ? target.current : target;
 }
 
@@ -165,7 +180,9 @@ function clampStep(step: number, count: number): number {
  * - With `target`, the popover is portaled and positioned next to that element with a beak (it
  *   inherits the surface colors); it stays hidden while the target is `null`, not positioned yet or
  *   no longer mounted (a ref target is read after each render of the popover; see `target`).
- * - With `target`, the keyboard order treats the popover as if it followed the target: Tab past
+ * - With a `VirtualElement` target there is no element to follow: the popover keeps the place of
+ *   its portal in the keyboard order.
+ * - With an element or ref `target`, the keyboard order treats the popover as if it followed the target: Tab past
  *   its last button continues after the target, Shift+Tab from its first button (or from the
  *   popover itself) returns to the target (for a target outside the Tab order, to the last control
  *   inside it, else to the control before it), Tab from there enters the popover, and Shift+Tab
@@ -189,7 +206,8 @@ export const TeachingPopover = ({
   onOpenChange,
   closeLabel = 'Close',
   labels,
-  target,
+  target: targetProp,
+  positioning,
   side = 'bottom',
   align = 'center',
   className,
@@ -198,6 +216,10 @@ export const TeachingPopover = ({
   ref,
   ...rest
 }: TeachingPopoverProps) => {
+  useTargetConflictWarning('TeachingPopover', targetProp, positioning?.target);
+  const target = (
+    targetProp !== undefined ? targetProp : positioning?.target
+  ) as TeachingPopoverProps['target'];
   const controlledStep = resolveDeprecatedProp(
     'TeachingPopover',
     activeStepProp,
@@ -238,8 +260,10 @@ export const TeachingPopover = ({
   // update has read a newly passed ref, the ref keeps this last known availability: moving between
   // attached refs (a multi-target tour) or passing a new ref object on every render never hides
   // the popover, and a switch to a ref that is not attached hides it once the update lands.
-  const [targetResolved, setTargetResolved] = React.useState(() => isElementTarget(target));
-  const elementAvailable = target === null ? false : isElementTarget(target) ? true : undefined;
+  const pointsAtOneNow = (value: TeachingPopoverProps['target']) =>
+    isElementTarget(value) || isVirtualTarget(value);
+  const [targetResolved, setTargetResolved] = React.useState(() => pointsAtOneNow(target));
+  const elementAvailable = target === null ? false : pointsAtOneNow(target) ? true : undefined;
   if (elementAvailable !== undefined && elementAvailable !== targetResolved) {
     setTargetResolved(elementAvailable);
   }
@@ -259,7 +283,13 @@ export const TeachingPopover = ({
     arrowStyles,
     side: placedSide,
     isPositioned,
-  } = usePopupPosition({ open: shown && hasTarget, side, align, offset: 12, arrowRef });
+  } = usePopupPosition({
+    open: shown && hasTarget,
+    side,
+    align,
+    arrowRef,
+    ...resolvePositioning(positioning, { offset: 12 }),
+  });
   // An anchored popover is shown only while it points at a resolved target: otherwise the surface
   // is rendered (so it can be measured) but hidden, unfocused, silent and without an Escape layer.
   const targetAvailable = target != null && (isRefObject(target) ? targetResolved : true);
@@ -276,7 +306,7 @@ export const TeachingPopover = ({
     availabilityRef.current = targetResolved;
     const element = resolveTarget(target);
     targetRef.current = element;
-    setReference(element);
+    setReference(isVirtualTarget(target) ? target : element);
     if (target == null || !isRefObject(target)) return;
     queueMicrotask(() => {
       const latest = resolveTarget(targetPropRef.current);

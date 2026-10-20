@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-10-20
+
+The seventh Fluent UI v9 parity release: Phase 7 of the [roadmap](docs/ROADMAP.md), the overlay and focus primitives made public. The positioning, dismiss, modal-layer and focus hooks behind WaveUI's own surfaces are public and documented, so an app can build a command palette, a custom popup or a full-screen overlay that joins the layer stack (Escape order, outside presses, toasts), and a `positioning` prop reaches the advanced placement options of nine components. Nothing is removed; see [Upgrading from 0.11](README.md#upgrading-from-011).
+
+### Added
+
+- **Overlay hooks:** `usePopupPosition`, `useDismiss` with `DismissLayerProvider` (and `Portal layerId`), `useModalLayer`, `useFocusTrap`, `useInitialFocus` and `useRestoreFocus`, with their option and result types (`UsePopupPositionOptions`, `UsePopupPositionResult`, `PositionedInfo`, `UseDismissOptions`, `DismissLayer`, `UseModalLayerOptions`, `UseFocusTrapOptions`, `UseInitialFocusOptions`, `UseRestoreFocusOptions`) and `LayerKind`. `useModalLayer` is the documented way to get a modal's dismissal, focus trap, `inert` isolation (instead of `aria-modal`, so toasts stay announced), scroll lock and focus restore; `useModalIsolation` and `useScrollLock` stay internal.
+- **`usePopupPosition`** options `fallbackPlacements` (a list of `PopupPlacement`, `{ side, align? }`, tried in order instead of only the opposite side), `hideWhenDetached` (hides the surface while its anchor is scrolled out of view or clipped) and `onPositioned` (called once per final placement), and a result `update()` that recomputes the position.
+- **`positioning`** on Popover, `Menu.Popover`, Tooltip, TeachingPopover, Combobox, Dropdown, TagPicker, DatePicker and TimePicker (Fluent's `positioning`): `offset`, `fitViewport` (Popover gets Fluent's `autoSize` this way), `matchReferenceWidth` and `fallbackPlacements`, plus `target` where the component already has a `target` prop. `side` and `align` stay separate props. `useListboxPopup` takes `positioning` too. Types `PopupPositioning`, `PopupPositioningOptions`, `PopupPlacement` and `PopupTargetInput`.
+- **`modalAllowProps`** (spread on an app-owned region such as a notification area) keeps that region usable over a modal Dialog or Drawer: its content counts as inside every dismiss layer, its tabbable elements join every focus trap's Tab cycle and it is never made `inert`. The attribute it sets, `data-wave-focus-trap-allow`, is the one the Toaster's own region carries and is now a documented contract.
+- **`useModalOpen()`** and **`hasOpenModal()`**: whether a modal surface is open (a Dialog, an overlay Drawer, an alert, the DatePicker's calendar or your own `useDismiss({ kind: 'modal' })` layer), from the commit that opens it to the commit that closes it (a non-modal Dialog, a Popover or a Menu is no modal). `false` on the server.
+- **`useRovingTabIndex`** `orientation: 'grid'` and `columns`: Left/Right across rows, Up/Down to the same index or the nearest enabled cell, Home/End per row, Ctrl+Home/End for the grid; rows come from `role="row"` elements or the `columns` count. The internal grid hook under SwatchPicker now delegates to it.
+- **`useFocusableGroup({ tabBehavior })`** (`'unlimited'`, `'limited'`, `'limited-trap-focus'`; Fluent's `useFocusableGroup`): one tab stop that holds several focusable elements; Enter or F2 enters it, Escape leaves. Types `UseFocusableGroupOptions`, `UseFocusableGroupResult`, `FocusableGroupProps`, `FocusableGroupTabBehavior`.
+- **`useFocusVisible()`**: whether the last input was the keyboard.
+- **Focus utilities:** `getTabbableElements`, `getFirstTabbable`, `getLastTabbable`; `useGridNavigation` (the static Table's navigation; `UseGridNavigationOptions`, `UseGridNavigationResult`, `GridNavigationHandlers`); the recipes `focusRing`, `focusRingInset`, `inputFocus` and `inputFocusWithin`.
+- **Development warning** (key): `useRovingTabIndex:grid-rows`; `Popover:positioning-target`, `Menu.Popover:positioning-target` and `TeachingPopover:positioning-target` (both `target` and `positioning.target` are set; `target` wins).
+- A "Custom overlays" story, `stories/CustomOverlays.fixtures.tsx` and its integration tests: a popup on the public hooks, and a command palette over a Dialog with an app-owned status region.
+
+### Changed
+
+- **`target`** of Popover and `Menu.Popover` also takes a ref object (read after each render of the popup; the popup stays hidden while the ref holds no element), and TeachingPopover's also takes a `VirtualElement`; the existing forms behave as before.
+- **`useRovingTabIndex`** `orientation` accepts `'grid'` (an exhaustive `switch` over the option's type needs the case).
+- Dev gates: `verify-dist` probes that an import of only `useFocusVisible`, `useFocusableGroup`, `getFirstTabbable` or `useModalOpen` holds no component and no positioning library, and `pack-smoke` checks that the utilities of `focusRing` and `focusRingInset` are in both fixtures' CSS.
+
+### Deprecated
+
+- Nothing new is deprecated.
+
+### Size
+
+Not re-measured for 0.12: the additions are hooks and one prop each on nine components, all tree-shakeable (the `verify-dist` hook probes show that an import of only `useFocusVisible`, `useFocusableGroup`, `getFirstTabbable` or `useModalOpen` holds no component and no positioning library). The 0.11.0 table below stays the reference.
+
 ## [0.11.0] - 2026-10-18
 
 The sixth Fluent UI v9 parity release: Phase 6 of the [roadmap](docs/ROADMAP.md), tags, drawers and the app shell. Tag gains Fluent's appearances, sizes, shapes and slots, a `TagGroup` gives a set of tags one keyboard model and moves focus when a tag is removed, `InteractionTag` is a tag with an action and a separate Dismiss button, and TagPicker becomes a composable picker built on them, with free tagging. Drawer gains sizes, a bottom position and header, body and footer parts; Dialog and Drawer can be non-modal, Drawer inline in the page, and both can stay mounted while closed. Nav gains section headers, dividers, app items and item actions, and `NavDrawer` and `Hamburger` complete the app shell. It closes 18 medium and 22 low gaps of the [Fluent UI v9 comparison](docs/research/fluent-ui-v9-comparison.md) (the ids in backticks below). Fluent's names are used where they fit Wave's conventions (`appearance`, `size`, `shape`, `media`, `secondaryText`, `modalType="non-modal"`, `backdrop`, `type`, `separator`, `unmountOnClose`, `headingLevel`, `focusMode`); selection keeps Wave's `value`/`defaultValue`/`onValueChange` (Fluent's `selectedValues` and `onTagSelect`, NavDrawer's `selectedValue`), and where a Fluent name does not fit, the prop's JSDoc names it (NavDrawer `onItemSelect` for `onNavItemSelect`, `focusMode` for `tabbable`, `Nav.Item actions` for SplitNavItem). **Nothing public was removed.** Changes of behaviour, DOM structure and types that are not additions are listed under [Changed](#changed): read them, and [Upgrading from 0.10](#upgrading-from-010), before upgrading if your tests assert Wave's DOM, class strings, Tab order or console output.

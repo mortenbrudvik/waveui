@@ -203,11 +203,50 @@ export interface VirtualElement {
 }
 
 /**
- * Where a popup is placed instead of next to its trigger (`Menu.Popover` and `Popover` `target`):
- * an element held in state, or a `VirtualElement`. TeachingPopover's `target` (0.6) also takes a
- * ref and no `VirtualElement`; ROADMAP P7-01 unifies them.
+ * Where a popup is placed instead of next to its trigger (`Menu.Popover`, `Popover` and
+ * `TeachingPopover` `target`): an element held in state, or a `VirtualElement`. Those components
+ * also take a ref object (`PopupPositioning['target']`).
  */
 export type PopupTarget = HTMLElement | VirtualElement | null;
+
+/**
+ * What a popup's `target` prop accepts: a {@link PopupTarget}, or a ref object (an element that
+ * attaches without the popup rendering is read after each render of the popup).
+ */
+export type PopupTargetInput = PopupTarget | { readonly current: HTMLElement | null };
+
+/** A placement for `PopupPositioning.fallbackPlacements`: a side, and optionally an alignment on it. */
+export interface PopupPlacement {
+  /** Side of the anchor. `start` and `end` follow the writing direction. */
+  side: PopupSide;
+  /** Alignment along that side. @default the surface's own `align` */
+  align?: PopupAlign;
+}
+
+/**
+ * The advanced positioning options of a popup (the `positioning` prop; Fluent's `positioning`).
+ * `side` and `align` stay separate props of each component, so every option has one source.
+ */
+export interface PopupPositioning {
+  /** Distance from the anchor in px. @default the component's own (Popover 8, Tooltip 8, TeachingPopover 12, listboxes 4) */
+  offset?: number;
+  /**
+   * Limit the surface to the space the viewport leaves (Fluent's `autoSize`). Popover also scrolls
+   * its content inside its border; the other surfaces only limit their size (their own lists and
+   * grids scroll as they always did).
+   * @default the component's own
+   */
+  fitViewport?: boolean;
+  /** Make the surface as wide as its anchor. @default the component's own */
+  matchReferenceWidth?: boolean;
+  /** Placements to try, in order, when the requested side has no room; replaces the opposite side. */
+  fallbackPlacements?: readonly PopupPlacement[];
+  /** Position against this instead of the trigger. */
+  target?: PopupTargetInput;
+}
+
+/** {@link PopupPositioning} without `target`: the options of a popup that has no `target` prop. */
+export type PopupPositioningOptions = Omit<PopupPositioning, 'target'>;
 
 /** A day of the week, as `Date.prototype.getDay()` numbers them: 0 is Sunday, 6 is Saturday. */
 export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;

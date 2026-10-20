@@ -5,14 +5,21 @@ import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusElement, getFirstTabbable, isConnectedAndFocusable } from '../../lib/focus';
-import type { PopupAlign, PopupSide, PopupTarget } from '../../lib/types';
+import type {
+  PopupAlign,
+  PopupPositioning,
+  PopupSide,
+  PopupTarget,
+  PopupTargetInput,
+} from '../../lib/types';
+import { usePopupTarget } from '../../hooks/useResolvedTarget';
 import { useId } from '../../hooks/useId';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
 import { useContextMenuAnchor, type ContextMenuAnchor } from '../../hooks/useContextMenuAnchor';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useHoverIntent, type HoverIntent } from '../../hooks/useHoverIntent';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useIsClient } from '../../hooks/useIsClient';
@@ -112,10 +119,18 @@ export interface PopoverProps {
    * `aria-labelledby`, and give a toggle button you use as the target `aria-haspopup="dialog"`,
    * `aria-expanded` and `aria-controls` yourself. A press on a target element does not close the
    * popover, and Tab from it enters the content when there is no trigger. Hold the element in
-   * state (a ref cannot be observed; TeachingPopover's `target` also takes a ref). A popover
+   * state, or pass a ref object (read after each render of the popover, so an element that attaches without it rendering is noticed on its next render). A popover
    * opened by `openOnContext` is placed at the gesture instead.
    */
-  target?: PopupTarget;
+  target?: PopupTargetInput;
+  /**
+   * Advanced positioning (Fluent's `positioning`): `offset` (px from the anchor), `fitViewport`
+   * (limit the content to the space the viewport leaves; Fluent's `autoSize`), `matchReferenceWidth`,
+   * `fallbackPlacements` (tried in order when the requested side has no room) and `target` (used
+   * when the `target` prop is not set). `side` and `align` stay separate props.
+   * @default `{ offset: 8 }`
+   */
+  positioning?: PopupPositioning;
   /** `Popover.Trigger` and `Popover.Content`. */
   children: React.ReactNode;
 }
@@ -218,6 +233,8 @@ interface PopoverContextValue {
   floatingProps: { 'data-side': string; 'data-align': string; style: React.CSSProperties };
   arrowStyles: React.CSSProperties;
   placedSide: PopoverPhysicalSide;
+  /** `positioning.fitViewport`: the content scrolls inside the border when it is limited. */
+  fitViewport: boolean;
 }
 
 const PopoverContext = React.createContext<PopoverContextValue | null>(null);
@@ -253,6 +270,7 @@ function getInertContext(): PopoverContextValue {
     floatingProps: { 'data-side': 'bottom', 'data-align': 'start', style: {} },
     arrowStyles: {},
     placedSide: 'bottom',
+    fitViewport: false,
   };
   return inertContext;
 }
@@ -359,9 +377,11 @@ const PopoverRoot = ({
   openDelay = 250,
   closeDelay = 500,
   openOnContext = false,
-  target,
+  target: targetProp,
+  positioning,
   children,
 }: PopoverProps) => {
+  const { target, pending: targetPending } = usePopupTarget('Popover', targetProp, positioning);
   const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   // A hover close in flight (written in handlers, read when the popover closes): set when the hover
   // intent asks to close, so that close moves no focus even when a controlled parent applies it in
@@ -416,10 +436,24 @@ const PopoverRoot = ({
   const {
     setReference,
     setFloating,
-    floatingProps,
+    floatingProps: positionedProps,
     arrowStyles,
     side: placedSide,
-  } = usePopupPosition({ open, side, align, offset: 8, arrowRef });
+  } = usePopupPosition({
+    open,
+    side,
+    align,
+    arrowRef,
+    ...resolvePositioning(positioning, { offset: 8 }),
+  });
+  // A ref target that holds no element yet keeps the popup hidden (as TeachingPopover's is).
+  const floatingProps = React.useMemo(
+    () =>
+      targetPending
+        ? { ...positionedProps, style: { ...positionedProps.style, visibility: 'hidden' as const } }
+        : positionedProps,
+    [targetPending, positionedProps],
+  );
 
   // The one focus resolver: the focus-return fallback and the layer's anchor (where a surface
   // opened from the content restores focus once its opener is gone). In context mode the element
@@ -647,6 +681,7 @@ const PopoverRoot = ({
       floatingProps,
       arrowStyles,
       placedSide,
+      fitViewport: positioning?.fitViewport === true,
     }),
     [
       open,
@@ -671,6 +706,7 @@ const PopoverRoot = ({
       floatingProps,
       arrowStyles,
       placedSide,
+      positioning?.fitViewport,
     ],
   );
 
@@ -834,6 +870,7 @@ export const PopoverContent = ({
     floatingProps,
     arrowStyles,
     placedSide,
+    fitViewport,
     onContentKeyDown,
     hoverSurfaceHandlers: hover,
     contextMode,
@@ -919,6 +956,20 @@ export const PopoverContent = ({
 
   if (!open) return null;
 
+  const titleAndChildren = (
+    <>
+      {hasTitle && (
+        <h2
+          id={titleId}
+          className={cn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold')}
+        >
+          {title}
+        </h2>
+      )}
+      {children}
+    </>
+  );
+
   return (
     <Portal layerId={layerId}>
       <div
@@ -953,15 +1004,15 @@ export const PopoverContent = ({
           data-wave-popover-arrow=""
           className={popoverContentClassNames.beak}
         />
-        {hasTitle && (
-          <h2
-            id={titleId}
-            className={cn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold')}
-          >
-            {title}
-          </h2>
+        {fitViewport ? (
+          // The beak sits half outside the border, so the scroller is inside it: the viewport
+          // limit minus the content's padding (2 x 1rem) and border (2 x 1px).
+          <div className="overflow-y-auto max-h-[calc(var(--wave-popup-available-height)-2rem-2px)]">
+            {titleAndChildren}
+          </div>
+        ) : (
+          titleAndChildren
         )}
-        {children}
       </div>
     </Portal>
   );

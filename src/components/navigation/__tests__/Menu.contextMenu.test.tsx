@@ -748,6 +748,115 @@ describe('Menu.Popover target', () => {
     await waitFor(() => expect(translateOf(menu)).toEqual({ x: 400, y: 314 }));
   });
 
+  it('positions against a RefObject target', async () => {
+    function ByRef() {
+      const ref = React.useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={ref} data-testid="anchor" />
+          <Menu open onOpenChange={() => {}}>
+            <Menu.Popover target={ref} aria-label="By ref">
+              <Menu.Item>Paste</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        </>
+      );
+    }
+    const { rerender } = render(<ByRef />);
+    mockRect(screen.getByTestId('anchor'), { x: 40, y: 60, width: 50, height: 10 });
+    rerender(<ByRef />);
+    const menu = await screen.findByRole('menu', { name: 'By ref' });
+    await waitFor(() => expect(translateOf(menu)).toEqual({ x: 40, y: 74 }));
+  });
+
+  it('a RefObject target that is not attached renders without throwing', async () => {
+    function Detached() {
+      const ref = React.useRef<HTMLDivElement>(null);
+      return (
+        <Menu open onOpenChange={() => {}}>
+          <Menu.Popover target={ref} aria-label="Detached">
+            <Menu.Item>Paste</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      );
+    }
+    render(<Detached />);
+    await act(async () => {});
+    expect(screen.getByRole('menu', { hidden: true }).style.visibility).toBe('hidden');
+  });
+
+  describe('positioning', () => {
+    function Anchored({
+      offset,
+      positioning,
+    }: {
+      offset?: number;
+      positioning?: MenuPopoverProps['positioning'];
+    }) {
+      const ref = React.useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={ref} data-testid="anchor" />
+          <Menu open onOpenChange={() => {}}>
+            <Menu.Popover
+              target={ref}
+              offset={offset}
+              positioning={positioning}
+              aria-label="Positioned"
+            >
+              <Menu.Item>Paste</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        </>
+      );
+    }
+
+    async function placedAt(ui: React.ReactElement) {
+      const { rerender } = render(ui);
+      mockRect(screen.getByTestId('anchor'), { x: 40, y: 60, width: 50, height: 10 });
+      await act(async () => {
+        rerender(ui);
+      });
+      return screen.findByRole('menu', { name: 'Positioned' });
+    }
+
+    it('keeps the default offset of 4 without positioning', async () => {
+      const menu = await placedAt(<Anchored />);
+      await waitFor(() => expect(translateOf(menu)).toEqual({ x: 40, y: 74 }));
+    });
+
+    it.each([
+      [20, 90],
+      [0, 70],
+    ])('positioning.offset %s applies', async (offset, y) => {
+      const menu = await placedAt(<Anchored positioning={{ offset }} />);
+      await waitFor(() => expect(translateOf(menu)).toEqual({ x: 40, y }));
+    });
+
+    it('the offset prop wins over positioning.offset', async () => {
+      const menu = await placedAt(<Anchored offset={6} positioning={{ offset: 20 }} />);
+      await waitFor(() => expect(translateOf(menu)).toEqual({ x: 40, y: 76 }));
+    });
+
+    it('positioning.target positions against the target', async () => {
+      function ViaPositioning() {
+        const ref = React.useRef<HTMLDivElement>(null);
+        return (
+          <>
+            <div ref={ref} data-testid="anchor" />
+            <Menu open onOpenChange={() => {}}>
+              <Menu.Popover positioning={{ target: ref }} aria-label="Positioned">
+                <Menu.Item>Paste</Menu.Item>
+              </Menu.Popover>
+            </Menu>
+          </>
+        );
+      }
+      const menu = await placedAt(<ViaPositioning />);
+      await waitFor(() => expect(translateOf(menu)).toEqual({ x: 40, y: 74 }));
+    });
+  });
+
   it('warns once when a menu at a target without a trigger has no name', () => {
     function Unnamed() {
       const [target, setTarget] = React.useState<HTMLElement | null>(null);

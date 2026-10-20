@@ -63,6 +63,20 @@ export interface LayerRecord {
  */
 export const ALLOW_OUTSIDE_SELECTOR = '[data-wave-focus-trap-allow]';
 
+/**
+ * Props that mark an app-owned region (a notification area, a live status bar) so that WaveUI's
+ * modal surfaces leave it usable. Spread them on the region's element: `<div {...modalAllowProps}>`.
+ * Over an open Dialog or Drawer the region
+ *
+ * - counts as inside every dismiss layer, so a press in it closes nothing;
+ * - has its tabbable elements in the Tab cycle of every focus trap;
+ * - is never made `inert` by the modal's page isolation.
+ *
+ * The attribute it sets, `data-wave-focus-trap-allow`, is the one the Toaster's own region
+ * carries, and it is a stable contract.
+ */
+export const modalAllowProps = { 'data-wave-focus-trap-allow': '' } as const;
+
 interface PressSnapshot {
   /**
    * Layers with outside press enabled whose tree did not contain the pointerdown target. Only these
@@ -293,6 +307,15 @@ export function subscribeLayers(listener: () => void): () => void {
   return () => {
     subscribers.delete(listener);
   };
+}
+
+/**
+ * Whether a modal surface is open now: a layer of kind `'modal'` (a Dialog, an overlay Drawer, an
+ * alert, the DatePicker's calendar, or your own `useDismiss({ kind: 'modal' })`). A non-modal
+ * surface is no modal. Server-safe: `false` when no layer is registered, as on the server.
+ */
+export function hasOpenModal(): boolean {
+  return getState().stack.some((layer) => layer.kind === 'modal');
 }
 
 /** The open layers from bottom to top (a copy; a parent always precedes its descendants). */

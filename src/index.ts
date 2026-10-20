@@ -13,7 +13,7 @@ export { resolveSlot, renderSlot } from './lib/slot';
 export type { Slot, SlotObject, ResolvedSlot } from './lib/slot';
 export { composeEventHandlers } from './lib/composeEventHandlers';
 export { mergeRefs } from './lib/mergeRefs';
-export type { DismissReason } from './lib/layers';
+export type { DismissReason, LayerKind } from './lib/layers';
 export * from './lib/classNames';
 export { addDays, addMonths, isSameDay, startOfWeek, getWeekNumber } from './lib/date';
 export type { GetWeekNumberOptions } from './lib/date';
@@ -76,6 +76,40 @@ export type {
   UseListboxOptionResult,
   ListboxElementKind,
 } from './hooks/useListbox';
+
+// Overlay and focus primitives
+export { usePopupPosition } from './hooks/usePopupPosition';
+export type {
+  UsePopupPositionOptions,
+  UsePopupPositionResult,
+  PositionedInfo,
+} from './hooks/usePopupPosition';
+export { useDismiss, DismissLayerProvider } from './hooks/useDismiss';
+export type { UseDismissOptions, DismissLayer } from './hooks/useDismiss';
+export { useModalLayer } from './hooks/useModalLayer';
+export type { UseModalLayerOptions } from './hooks/useModalLayer';
+export { useFocusTrap, useInitialFocus } from './hooks/useFocusTrap';
+export type { UseFocusTrapOptions, UseInitialFocusOptions } from './hooks/useFocusTrap';
+export { useRestoreFocus } from './hooks/useRestoreFocus';
+export type { UseRestoreFocusOptions } from './hooks/useRestoreFocus';
+export { useModalOpen } from './hooks/useModalOpen';
+export { useFocusVisible } from './hooks/useFocusVisible';
+export { useFocusableGroup } from './hooks/useFocusableGroup';
+export type {
+  FocusableGroupProps,
+  FocusableGroupTabBehavior,
+  UseFocusableGroupOptions,
+  UseFocusableGroupResult,
+} from './hooks/useFocusableGroup';
+export { useGridNavigation } from './components/table/useGridNavigation';
+export type {
+  UseGridNavigationOptions,
+  UseGridNavigationResult,
+  GridNavigationHandlers,
+} from './components/table/useGridNavigation';
+export { getTabbableElements, getFirstTabbable, getLastTabbable } from './lib/focus';
+export { focusRing, focusRingInset, inputFocus, inputFocusWithin } from './lib/styles';
+export { hasOpenModal, modalAllowProps } from './lib/layers';
 
 // Provider
 export { WaveProvider, useWaveTheme, getThemeClassName } from './components/provider/WaveProvider';

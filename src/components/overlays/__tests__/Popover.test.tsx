@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { flushSync } from 'react-dom';
 import { hydrateRoot } from 'react-dom/client';
@@ -18,7 +18,7 @@ import { Tooltip } from '../Tooltip';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
-import type { PopupTarget } from '../../../lib/types';
+import type { PopupTargetInput } from '../../../lib/types';
 import {
   createOverlayTestWrapper,
   expectNoA11yViolations,
@@ -3079,8 +3079,176 @@ describe('Popover', () => {
       expect(commits - settled).toBeLessThanOrEqual(4);
     });
 
-    it('types target as PopupTarget', () => {
-      expectTypeOf<PopoverProps['target']>().toEqualTypeOf<PopupTarget | undefined>();
+    it('positions against a RefObject target', async () => {
+      mockLayout({
+        target: { x: 400, y: 300, width: 80, height: 32 },
+        content: { x: 0, y: 0, width: 256, height: 120 },
+      });
+      function ByRef() {
+        const ref = React.useRef<HTMLSpanElement>(null);
+        return (
+          <>
+            <span data-testid="target" ref={ref} />
+            <Popover open onOpenChange={() => {}} target={ref}>
+              <Popover.Content aria-label="By ref" data-testid="content">
+                Body
+              </Popover.Content>
+            </Popover>
+          </>
+        );
+      }
+      render(<ByRef />);
+      const surface = await screen.findByRole('dialog', { name: 'By ref' });
+      await waitFor(() => expect(surface.style.transform).toBe('translate(400px, 340px)'));
+    });
+
+    it('a RefObject target that is not attached yet renders without throwing, then follows it', async () => {
+      mockLayout({
+        target: { x: 400, y: 300, width: 80, height: 32 },
+        content: { x: 0, y: 0, width: 256, height: 120 },
+      });
+      function Late({ attached }: { attached: boolean }) {
+        const ref = React.useRef<HTMLSpanElement>(null);
+        return (
+          <>
+            {attached && <span data-testid="target" ref={ref} />}
+            <Popover open onOpenChange={() => {}} target={ref}>
+              <Popover.Content aria-label="Late" data-testid="content">
+                Body
+              </Popover.Content>
+            </Popover>
+          </>
+        );
+      }
+      const { rerender } = render(<Late attached={false} />);
+      await act(async () => {});
+      expect(screen.getByRole('dialog', { hidden: true }).style.visibility).toBe('hidden');
+      rerender(<Late attached />);
+      await waitFor(() =>
+        expect(screen.getByRole('dialog', { name: 'Late' }).style.transform).toBe(
+          'translate(400px, 340px)',
+        ),
+      );
+    });
+
+    it('types target as PopupTargetInput', () => {
+      expectTypeOf<PopoverProps['target']>().toEqualTypeOf<PopupTargetInput | undefined>();
+    });
+  });
+
+  describe('positioning', () => {
+    const boxes = {
+      trigger: { x: 20, y: 20, width: 80, height: 32 },
+      content: { x: 0, y: 0, width: 256, height: 120 },
+    };
+    function WithPositioning(props: Partial<PopoverProps>) {
+      return (
+        <Popover defaultOpen {...props}>
+          <Popover.Trigger>
+            <button type="button" data-testid="trigger">
+              Toggle
+            </button>
+          </Popover.Trigger>
+          <Popover.Content data-testid="content">Body</Popover.Content>
+        </Popover>
+      );
+    }
+
+    it('keeps the default offset of 8 without positioning', async () => {
+      mockLayout(boxes);
+      render(<WithPositioning />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      await waitFor(() => expect(surface.style.transform).toBe('translate(20px, 60px)'));
+    });
+
+    it.each([
+      [20, 'translate(20px, 72px)'],
+      [0, 'translate(20px, 52px)'],
+    ])('positioning.offset %s applies', async (offset, expected) => {
+      mockLayout(boxes);
+      render(<WithPositioning positioning={{ offset }} />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      await waitFor(() => expect(surface.style.transform).toBe(expected));
+    });
+
+    it('positioning.fitViewport scrolls the content inside the border and keeps the beak outside the scroller', async () => {
+      mockLayout(boxes);
+      render(<WithPositioning positioning={{ fitViewport: true }} />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      const scroller = within(surface).getByText('Body').closest<HTMLElement>('.overflow-y-auto');
+      expect(scroller).not.toBeNull();
+      expect(surface.contains(scroller)).toBe(true);
+      expect(
+        surface.querySelector('[data-wave-popover-arrow]')?.closest('.overflow-y-auto'),
+      ).toBeNull();
+      expect(scroller!.className).toContain('--wave-popup-available-height');
+    });
+
+    it('has no scroll container without fitViewport', () => {
+      mockLayout(boxes);
+      render(<WithPositioning />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      expect(within(surface).getByText('Body').closest('.overflow-y-auto')).toBeNull();
+    });
+
+    it('positioning.fitViewport limits the surface to the available space', async () => {
+      mockLayout(boxes);
+      render(<WithPositioning positioning={{ fitViewport: true }} />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      await waitFor(() =>
+        expect(surface.style.maxHeight).toBe('var(--wave-popup-available-height)'),
+      );
+    });
+
+    it('positioning.target positions against the target', async () => {
+      mockLayout({ ...boxes, anchor: { x: 400, y: 300, width: 80, height: 32 } });
+      function Anchored() {
+        const ref = React.useRef<HTMLSpanElement>(null);
+        return (
+          <>
+            <span data-testid="anchor" ref={ref} />
+            <Popover open onOpenChange={() => {}} positioning={{ target: ref }}>
+              <Popover.Content aria-label="Anchored" data-testid="content">
+                Body
+              </Popover.Content>
+            </Popover>
+          </>
+        );
+      }
+      render(<Anchored />);
+      const surface = await screen.findByRole('dialog', { name: 'Anchored' });
+      await waitFor(() => expect(surface.style.transform).toBe('translate(400px, 340px)'));
+    });
+
+    it('warns once when both target props are set, and the top-level target wins', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockLayout({
+        ...boxes,
+        first: { x: 400, y: 300, width: 80, height: 32 },
+        second: { x: 600, y: 100, width: 80, height: 32 },
+      });
+      function Both() {
+        const [first, setFirst] = React.useState<HTMLElement | null>(null);
+        const [second, setSecond] = React.useState<HTMLElement | null>(null);
+        return (
+          <>
+            <span data-testid="first" ref={setFirst} />
+            <span data-testid="second" ref={setSecond} />
+            <Popover open onOpenChange={() => {}} target={first} positioning={{ target: second }}>
+              <Popover.Content aria-label="Both" data-testid="content">
+                Body
+              </Popover.Content>
+            </Popover>
+          </>
+        );
+      }
+      const { rerender } = render(<Both />);
+      rerender(<Both />);
+      const surface = screen.getByRole('dialog', { name: 'Both' });
+      await waitFor(() => expect(surface.style.transform).toBe('translate(400px, 340px)'));
+      expect(warn.mock.calls).toEqual([
+        [expect.stringMatching(/^\[WaveUI\] Popover: both target and positioning\.target/)],
+      ]);
     });
   });
 
