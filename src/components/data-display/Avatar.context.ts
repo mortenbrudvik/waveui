@@ -12,8 +12,10 @@ import * as React from 'react';
  * media). Internal.
  */
 export interface AvatarSizeContextValue {
-  /** The box: 24px (Avatar's `extra-small`), or the internal 20px and 16px boxes. */
-  size: 16 | 20 | 24;
+  /** The box in pixels: a tag's 24px (Avatar's `extra-small`), 20px or 16px box, or a group's size. */
+  size: number;
+  /** The shape the container gives its Avatars: a rounded Tag gives `square`. */
+  shape?: 'circular' | 'square';
 }
 
 /** Internal: provided by Tag and InteractionTag.Primary around their `media`; `null` elsewhere. */

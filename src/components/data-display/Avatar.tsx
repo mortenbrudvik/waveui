@@ -7,7 +7,16 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { PersonIcon } from '../../lib/icons';
 import type { Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import { AvatarSizeContext, type AvatarSizeContextValue } from './Avatar.context';
+import { AvatarSizeContext } from './Avatar.context';
+import {
+  avatarBoxClasses,
+  avatarPixelSize,
+  avatarShapeClasses,
+  avatarSizeClassesFor,
+  type AvatarSize,
+} from './Avatar.sizes';
+
+export type { AvatarNumericSize, AvatarSize } from './Avatar.sizes';
 
 /** Properties for the Avatar component. */
 export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -23,11 +32,17 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
    */
   name?: string;
   /**
-   * Size of the avatar. Without it, an Avatar in the `media` of a tag (Tag, InteractionTag) takes
-   * the tag's media box instead: 24, 20 or 16px by the tag's size.
+   * Size of the avatar: a named size (`extra-small` 24px to `extra-large` 56px) or a pixel size from
+   * 16 to 128. Without it, an Avatar in the `media` of a tag (Tag, InteractionTag) takes the tag's
+   * media box instead: 24, 20 or 16px by the tag's size.
    * @default 'medium'
    */
-  size?: Size;
+  size?: AvatarSize;
+  /**
+   * Shape of the avatar. Without it, an Avatar in the `media` of a rounded tag is square.
+   * @default 'circular'
+   */
+  shape?: 'circular' | 'square';
   /**
    * Icon shown instead of the initials when there is no image. Rendered in an `aria-hidden`
    * `<span>` (a slot object can override its attributes). A falsy value (`null`, `false`, `''`,
@@ -74,21 +89,11 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
  * AvatarGroup sizes its overflow button with the same classes, so the two always match.
  */
 export const avatarSizeClasses: Readonly<Record<Size, string>> = {
-  'extra-small': 'w-6 h-6 text-[10px]', // 24px
-  small: 'w-8 h-8 text-xs', // 32px
-  medium: 'w-10 h-10 text-sm', // 40px
-  large: 'w-12 h-12 text-base', // 48px
-  'extra-large': 'w-14 h-14 text-lg', // 56px
-};
-
-/**
- * Width, height and text size classes of each box of {@link AvatarSizeContext}, for an Avatar
- * that sets no `size`: 24px is the `extra-small` size, 20px and 16px are internal boxes.
- */
-const AVATAR_BOX_CLASSES: Readonly<Record<AvatarSizeContextValue['size'], string>> = {
-  24: avatarSizeClasses['extra-small'],
-  20: 'w-5 h-5 text-[10px]',
-  16: 'w-4 h-4 text-[10px]',
+  'extra-small': avatarBoxClasses[24],
+  small: avatarBoxClasses[32],
+  medium: avatarBoxClasses[40],
+  large: avatarBoxClasses[48],
+  'extra-large': avatarBoxClasses[56],
 };
 
 const IMAGE_CLASS = 'w-full h-full object-cover';
@@ -206,6 +211,7 @@ export const Avatar = ({
   src,
   name,
   size: sizeProp,
+  shape: shapeProp,
   icon,
   image,
   badge,
@@ -427,16 +433,15 @@ export const Avatar = ({
 
   // An own `size` wins; without one, the box of a surrounding tag's media, else medium. With a
   // badge the visual is sized, not the wrapper.
-  const sizeClasses =
-    sizeProp !== undefined
-      ? avatarSizeClasses[sizeProp]
-      : box
-        ? AVATAR_BOX_CLASSES[box.size]
-        : avatarSizeClasses.medium;
+  const resolvedSize: AvatarSize = sizeProp ?? (box ? (box.size as AvatarSize) : 'medium');
+  const resolvedShape = shapeProp ?? box?.shape ?? 'circular';
+  const pixels = avatarPixelSize(resolvedSize);
+  const stateProps = { 'data-size': String(resolvedSize), 'data-shape': resolvedShape };
   const visualClassName = cn(
     avatarClassNames.visual,
-    'inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 font-bold',
-    sizeClasses,
+    'inline-flex items-center justify-center overflow-hidden shrink-0 font-bold',
+    avatarShapeClasses(resolvedShape, pixels),
+    avatarSizeClassesFor(resolvedSize),
     colorClass,
   );
 
@@ -445,6 +450,7 @@ export const Avatar = ({
       <span
         ref={rootVisualRef}
         {...a11yProps}
+        {...stateProps}
         {...rest}
         className={cn(avatarClassNames.root, visualClassName, className)}
       >
@@ -456,6 +462,7 @@ export const Avatar = ({
   return (
     <span
       ref={ref}
+      {...stateProps}
       {...rest}
       className={cn(avatarClassNames.root, 'relative inline-flex shrink-0', className)}
     >

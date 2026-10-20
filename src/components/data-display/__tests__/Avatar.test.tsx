@@ -7,6 +7,8 @@ import { Avatar } from '../Avatar';
 import type { AvatarProps } from '../Avatar';
 import { AvatarSizeContext, type AvatarSizeContextValue } from '../Avatar.context';
 import { PresenceBadge } from '../PresenceBadge';
+import { Tag } from '../Tag';
+import { InteractionTag } from '../InteractionTag';
 import { expectNoA11yViolations, renderWithProviders, testSystemProps } from '../../../test-utils';
 import type { Size } from '../../../lib/types';
 
@@ -999,8 +1001,8 @@ describe('Avatar', () => {
         expect(avatar).not.toHaveClass('w-10');
         expect(avatar).not.toHaveClass('h-10');
         expect(avatar).not.toHaveClass('text-sm');
-        // No data-size: Avatar renders none (none in 0.10 either).
-        expect(avatar).not.toHaveAttribute('data-size');
+        // The box is reported as the resolved size (0.13).
+        expect(avatar).toHaveAttribute('data-size', String(size));
       },
     );
 
@@ -1048,7 +1050,7 @@ describe('Avatar', () => {
 
     it('is null by default and named for React DevTools', () => {
       expectTypeOf(AvatarSizeContext).toEqualTypeOf<React.Context<AvatarSizeContextValue | null>>();
-      expectTypeOf<AvatarSizeContextValue['size']>().toEqualTypeOf<16 | 20 | 24>();
+      expectTypeOf<AvatarSizeContextValue['size']>().toEqualTypeOf<number>();
       expect(AvatarSizeContext.displayName).toBe('AvatarSizeContext');
       let value: AvatarSizeContextValue | null | undefined;
       const Probe = () => {
@@ -1057,6 +1059,110 @@ describe('Avatar', () => {
       };
       render(<Probe />);
       expect(value).toBeNull();
+    });
+  });
+
+  describe('shape and numeric sizes (0.13)', () => {
+    const NAMED = [
+      ['extra-small', 24],
+      ['small', 32],
+      ['medium', 40],
+      ['large', 48],
+      ['extra-large', 56],
+    ] as const;
+    const NUMERIC = [16, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72, 96, 120, 128] as const;
+    const visual = () => screen.getByRole('img');
+
+    it.each(NAMED)('the named size %s keeps its 0.12 box of %dpx', (size, px) => {
+      render(<Avatar name="Jane Doe" size={size} />);
+      expect(visual()).toHaveAttribute('data-size', size);
+      expect(visual().className).toContain(`w-${px / 4}`);
+      expect(visual().className).toContain(`h-${px / 4}`);
+    });
+
+    it.each(NUMERIC)('the numeric size %d renders its box', (px) => {
+      render(<Avatar name="Jane Doe" size={px} />);
+      expect(visual()).toHaveAttribute('data-size', String(px));
+      expect(visual().className).toContain(`w-${px / 4}`);
+      expect(visual().className).toContain(`h-${px / 4}`);
+    });
+
+    it('defaults to medium and renders the resolved data-size and data-shape', () => {
+      render(<Avatar name="Jane Doe" />);
+      expect(visual()).toHaveAttribute('data-size', 'medium');
+      expect(visual()).toHaveAttribute('data-shape', 'circular');
+      expect(visual().className).toContain('rounded-full');
+    });
+
+    it('a square avatar is rounded-md from 40px and rounded-sm below', () => {
+      const { rerender } = render(<Avatar name="Jane Doe" shape="square" size={40} />);
+      expect(visual()).toHaveAttribute('data-shape', 'square');
+      expect(visual().className).toContain('rounded-md');
+      expect(visual().className).not.toContain('rounded-full');
+      rerender(<Avatar name="Jane Doe" shape="square" size={24} />);
+      expect(visual().className).toContain('rounded-sm');
+    });
+
+    it('with a badge the data attributes are on the root and the visual is sized', () => {
+      const { container } = render(
+        <Avatar name="Jane Doe" size={64} shape="square" badge={<PresenceBadge status="busy" />} />,
+      );
+      const root = container.firstElementChild as HTMLElement;
+      expect(root).toHaveAttribute('data-size', '64');
+      expect(root).toHaveAttribute('data-shape', 'square');
+    });
+
+    it('a rounded Tag gives its Avatar a square shape and a circular Tag a circular one', () => {
+      const { rerender } = render(
+        <Tag shape="rounded" media={<Avatar name="Jane Doe" />}>
+          Jane
+        </Tag>,
+      );
+      expect(visual()).toHaveAttribute('data-shape', 'square');
+      rerender(
+        <Tag shape="circular" media={<Avatar name="Jane Doe" />}>
+          Jane
+        </Tag>,
+      );
+      expect(visual()).toHaveAttribute('data-shape', 'circular');
+    });
+
+    it('an InteractionTag.Primary passes its shape too', () => {
+      const { container } = render(
+        <InteractionTag shape="rounded">
+          <InteractionTag.Primary media={<Avatar name="Jane Doe" />}>Jane</InteractionTag.Primary>
+        </InteractionTag>,
+      );
+      // The Avatar sits inside a button, whose children are presentational for the role queries.
+      expect(container.querySelector('.wave-avatar')).toHaveAttribute('data-shape', 'square');
+    });
+
+    it("an Avatar's own shape wins over the Tag's", () => {
+      render(
+        <Tag shape="rounded" media={<Avatar name="Jane Doe" shape="circular" />}>
+          Jane
+        </Tag>,
+      );
+      expect(visual()).toHaveAttribute('data-shape', 'circular');
+    });
+
+    it('the 16, 20 and 24px tag boxes are unchanged', () => {
+      render(
+        <AvatarSizeContext.Provider value={{ size: 16 }}>
+          <Avatar name="Jane Doe" />
+        </AvatarSizeContext.Provider>,
+      );
+      expect(visual().className).toContain('w-4');
+      expect(visual()).toHaveAttribute('data-size', '16');
+    });
+
+    it('types the numeric sizes next to the named ones', () => {
+      expectTypeOf<AvatarProps['size']>().toEqualTypeOf<
+        Size | 16 | 20 | 24 | 28 | 32 | 36 | 40 | 48 | 56 | 64 | 72 | 96 | 120 | 128 | undefined
+      >();
+      expectTypeOf<AvatarProps['shape']>().toEqualTypeOf<'circular' | 'square' | undefined>();
+      // @ts-expect-error 50 is not a size
+      void (<Avatar size={50} />);
     });
   });
 });

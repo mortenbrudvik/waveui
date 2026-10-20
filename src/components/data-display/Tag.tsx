@@ -855,7 +855,13 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   const hasIcon = slotRendersContent(icon);
   const secondary = materialiseSlotContent(secondaryText);
   const hasSecondary = slotRendersContent(secondary);
-  const avatarBox = React.useMemo(() => ({ size: TAG_AVATAR_SIZE[size] }), [size]);
+  const avatarBox = React.useMemo(
+    () => ({
+      size: TAG_AVATAR_SIZE[size],
+      shape: shape === 'rounded' ? ('square' as const) : ('circular' as const),
+    }),
+    [size, shape],
+  );
 
   // `disabled` and `value` are Tag props: they reach only an element that takes them natively,
   // or a component, never the default span or an anchor.
