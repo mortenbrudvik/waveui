@@ -866,13 +866,23 @@ export const cardClassNames = {
   root: 'wave-card',
   checkbox: 'wave-card__checkbox',
   checkmark: 'wave-card__checkmark',
+  floatingAction: 'wave-card__floating-action',
 } as const;
 
 /** Card.Header: `root` on the rendered element; `title` on the title; `subtitle` on the subtitle. */
 export const cardHeaderClassNames = {
   root: 'wave-card-header',
+  image: 'wave-card-header__image',
+  text: 'wave-card-header__text',
   title: 'wave-card-header__title',
   subtitle: 'wave-card-header__subtitle',
+  action: 'wave-card-header__action',
+} as const;
+
+/** Card.Preview: `root` on the rendered element; `logo` on the logo over its bottom start corner. */
+export const cardPreviewClassNames = {
+  root: 'wave-card-preview',
+  logo: 'wave-card-preview__logo',
 } as const;
 
 /** Card.Body: `root` on the rendered element. */

@@ -1,10 +1,12 @@
-export { Card, CardHeader, CardBody, CardFooter } from './Card';
+export { Card, CardHeader, CardPreview, CardBody, CardFooter } from './Card';
 export type {
   CardProps,
   CardAppearance,
   CardOwnProps,
   CardHeaderProps,
   CardHeaderOwnProps,
+  CardPreviewProps,
+  CardPreviewOwnProps,
   CardBodyProps,
   CardBodyOwnProps,
   CardFooterProps,

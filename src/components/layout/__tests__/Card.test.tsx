@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FOCUSABLE_SELECTOR } from '../../../lib/focus';
-import { Card, CardBody, CardFooter, CardHeader } from '../Card';
+import { renderToString } from 'react-dom/server';
+import { Card, CardBody, CardFooter, CardHeader, CardPreview } from '../Card';
 import type {
   CardBodyProps,
   CardFooterProps,
@@ -14,6 +15,7 @@ import type {
   CardProps,
 } from '../Card';
 import {
+  asClientReference,
   axe,
   expectNoA11yViolations,
   testCompoundExposure,
@@ -899,8 +901,12 @@ describe('Card', () => {
         | 'appearance'
         | 'size'
         | 'orientation'
+        | 'checkbox'
+        | 'floatingAction'
       >();
-      expectTypeOf<keyof CardHeaderOwnProps>().toEqualTypeOf<'title' | 'subtitle'>();
+      expectTypeOf<keyof CardHeaderOwnProps>().toEqualTypeOf<
+        'title' | 'subtitle' | 'image' | 'action'
+      >();
       expectTypeOf<CardHeaderProps['title']>().toEqualTypeOf<React.ReactNode>();
     });
   });
@@ -1130,6 +1136,262 @@ describe('Card composition', () => {
       expectTypeOf<CardOwnProps['orientation']>().toEqualTypeOf<
         'horizontal' | 'vertical' | undefined
       >();
+    });
+  });
+
+  describe('Preview, header slots, checkbox slot and floating action (0.13)', () => {
+    const card = () => screen.getByTestId('card');
+
+    it('exposes Preview as a compound member and flat name', () => {
+      expect(CardPreview).toBe(Card.Preview);
+      expect(CardPreview.displayName).toBe('CardPreview');
+    });
+
+    it('server output of a Preview written in a Server Component equals the plain one', () => {
+      const plain = (
+        <Card>
+          <Card.Preview logo="L">media</Card.Preview>
+        </Card>
+      );
+      const client = (
+        <Card>{React.createElement(asClientReference(Card.Preview), { logo: 'L' }, 'media')}</Card>
+      );
+      expect(renderToString(client)).toBe(renderToString(plain));
+    });
+
+    it('Preview is edge to edge: no padding, and it carries its stable class', () => {
+      render(
+        <Card>
+          <Card.Preview data-testid="preview">media</Card.Preview>
+        </Card>,
+      );
+      const preview = screen.getByTestId('preview');
+      expect(preview).toHaveClass('wave-card-preview', 'overflow-hidden');
+      expect(preview.className).not.toMatch(/(^| )p[xytblrse]?-/);
+    });
+
+    it('Preview fills the width of a vertical card and the height of a horizontal one', () => {
+      const { rerender } = render(
+        <Card>
+          <Card.Preview data-testid="preview">media</Card.Preview>
+        </Card>,
+      );
+      expect(screen.getByTestId('preview')).toHaveClass('w-full');
+      rerender(
+        <Card orientation="horizontal">
+          <Card.Preview data-testid="preview">media</Card.Preview>
+        </Card>,
+      );
+      expect(screen.getByTestId('preview')).toHaveClass('shrink-0', 'self-stretch');
+    });
+
+    it.each([
+      ['a string', 'Logo'],
+      ['an element', <b key="b">Logo</b>],
+      ['an object', { children: 'Logo', className: 'custom-logo' }],
+    ])('Preview renders a logo slot (%s) in its bottom start corner', (_label, logo) => {
+      render(
+        <Card>
+          <Card.Preview data-testid="preview" logo={logo}>
+            media
+          </Card.Preview>
+        </Card>,
+      );
+      const node = screen.getByTestId('preview').querySelector('.wave-card-preview__logo');
+      expect(node).toHaveTextContent('Logo');
+      expect(node).toHaveClass('absolute', 'start-3', 'bottom-3');
+    });
+
+    it('Preview renders no logo element for an empty slot', () => {
+      render(
+        <Card>
+          <Card.Preview data-testid="preview" logo={[]}>
+            media
+          </Card.Preview>
+        </Card>,
+      );
+      expect(screen.getByTestId('preview').querySelector('.wave-card-preview__logo')).toBeNull();
+    });
+
+    it('Preview takes a polymorphic element', () => {
+      render(
+        <Card>
+          <Card.Preview as="figure" data-testid="preview">
+            media
+          </Card.Preview>
+        </Card>,
+      );
+      expect(screen.getByTestId('preview').tagName).toBe('FIGURE');
+    });
+
+    it('Header without image or action renders as in 0.12: no grid and no wrapper', () => {
+      render(<Card.Header data-testid="header" title="T" subtitle="S" />);
+      const header = screen.getByTestId('header');
+      expect(header.className).not.toContain('grid');
+      expect(header.firstElementChild).toHaveClass('wave-card-header__title');
+    });
+
+    it('Header lays out an image, the text and an action', () => {
+      render(
+        <Card.Header
+          data-testid="header"
+          title="T"
+          subtitle="S"
+          image={<i data-testid="image" />}
+          action={<button type="button">Menu</button>}
+        />,
+      );
+      const header = screen.getByTestId('header');
+      expect(header).toHaveClass('grid');
+      expect(header.querySelector('.wave-card-header__image')).toContainElement(
+        screen.getByTestId('image'),
+      );
+      expect(header.querySelector('.wave-card-header__action')).toContainElement(
+        screen.getByRole('button', { name: 'Menu' }),
+      );
+      expect(header.querySelector('.wave-card-header__text')).toHaveTextContent('TS');
+    });
+
+    it('Header slots that render nothing leave the 0.12 layout', () => {
+      render(<Card.Header data-testid="header" title="T" image={[]} action="" />);
+      expect(screen.getByTestId('header').className).not.toContain('grid');
+    });
+
+    it('a checkbox card with image and action still names the checkbox by the title', () => {
+      render(
+        <Card selectionControl="checkbox" onSelect={() => {}}>
+          <Card.Header
+            title="Quarterly report"
+            image={<i />}
+            action={<button type="button">Menu</button>}
+          />
+        </Card>,
+      );
+      expect(screen.getByRole('checkbox', { name: 'Quarterly report' })).toBeInTheDocument();
+    });
+
+    it('the checkbox slot merges an object onto the built-in checkbox', () => {
+      render(
+        <Card
+          selectionControl="checkbox"
+          onSelect={() => {}}
+          selectLabel="Pick"
+          checkbox={{ className: 'custom-box', 'aria-describedby': 'hint', name: 'picked' }}
+        >
+          x
+        </Card>,
+      );
+      const box = screen.getByRole('checkbox', { name: 'Pick' });
+      expect(box).toHaveClass('custom-box', 'wave-card__checkbox');
+      expect(box).toHaveAttribute('aria-describedby', 'hint');
+      expect(box).toHaveAttribute('name', 'picked');
+      expect(box).toHaveAttribute('type', 'checkbox');
+    });
+
+    it('checkbox={null} removes the built-in control, with no role on the card and no warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Card data-testid="card" selectionControl="checkbox" onSelect={() => {}} checkbox={null}>
+          x
+        </Card>,
+      );
+      expect(screen.queryByRole('checkbox')).toBeNull();
+      expect(card()).not.toHaveAttribute('role');
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('a checkbox element replaces the built-in control', () => {
+      render(
+        <Card
+          selectionControl="checkbox"
+          onSelect={() => {}}
+          checkbox={<input type="checkbox" aria-label="Mine" />}
+        >
+          x
+        </Card>,
+      );
+      expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+      expect(screen.getByRole('checkbox', { name: 'Mine' })).toBeInTheDocument();
+    });
+
+    it('the checkbox slot is ignored without the checkbox selection control', () => {
+      render(
+        <Card data-testid="card" onSelect={() => {}} checkbox={{ className: 'custom-box' }}>
+          x
+        </Card>,
+      );
+      expect(screen.queryByRole('checkbox')).toBeNull();
+    });
+
+    it('floatingAction renders at the top end corner and positions the card', () => {
+      render(
+        <Card data-testid="card" floatingAction={<button type="button">More</button>}>
+          x
+        </Card>,
+      );
+      const slot = card().querySelector('.wave-card__floating-action');
+      expect(slot).toHaveClass('absolute', 'end-3', 'top-3');
+      expect(card()).toHaveClass('relative');
+      expect(slot).toContainElement(screen.getByRole('button', { name: 'More' }));
+    });
+
+    it('floatingAction that renders nothing renders no element', () => {
+      render(
+        <Card data-testid="card" floatingAction={[]}>
+          x
+        </Card>,
+      );
+      expect(card().querySelector('.wave-card__floating-action')).toBeNull();
+      expect(card().className).not.toMatch(/(^| )relative( |$)/);
+    });
+
+    it('with a floating action the checkbox moves to the top start corner and the header pads for it', () => {
+      render(
+        <Card
+          data-testid="card"
+          selectionControl="checkbox"
+          onSelect={() => {}}
+          floatingAction={<button type="button">More</button>}
+        >
+          <Card.Header data-testid="header" title="T" />
+        </Card>,
+      );
+      const box = screen.getByRole('checkbox', { name: 'T' });
+      expect(box).toHaveClass('start-3', 'top-3');
+      expect(box.className).not.toContain('end-3');
+      expect(screen.getByTestId('header')).toHaveClass('ps-10', 'pe-10');
+    });
+
+    it('without a floating action the checkbox keeps the top end corner', () => {
+      render(
+        <Card selectionControl="checkbox" onSelect={() => {}}>
+          <Card.Header title="T" />
+        </Card>,
+      );
+      expect(screen.getByRole('checkbox', { name: 'T' })).toHaveClass('end-3', 'top-3');
+    });
+
+    it('is axe clean with the new parts and slots', async () => {
+      const { container } = render(
+        <Card
+          selectionControl="checkbox"
+          onSelect={() => {}}
+          floatingAction={<button type="button">More</button>}
+        >
+          <Card.Preview logo={<span>L</span>}>
+            <img alt="Cover" src="data:," />
+          </Card.Preview>
+          <Card.Header
+            title="Title"
+            subtitle="Sub"
+            image={<i aria-hidden="true" />}
+            action={<button type="button">Open menu</button>}
+          />
+          <Card.Body>Body</Card.Body>
+        </Card>,
+      );
+      await expectNoA11yViolations(container);
     });
   });
 });

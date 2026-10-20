@@ -10,10 +10,15 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
 import { CheckIcon } from '../../lib/icons';
-import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
+import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
-import type { CoreSize, Orientation } from '../../lib/types';
+import type { CoreSize, Orientation, Slot } from '../../lib/types';
+import { CardCornersContext, CardOrientationContext } from './Card.context';
+import { CardPreview } from './Card.preview';
+
+export { CardPreview };
+export type { CardPreviewOwnProps, CardPreviewProps } from './Card.preview';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -165,6 +170,20 @@ export interface CardOwnProps {
    * `Card.Header` title, which the checkbox references with `aria-labelledby`.
    */
   selectLabel?: string;
+  /**
+   * The built-in checkbox of `selectionControl="checkbox"`: an object of `<input>` attributes is
+   * merged onto it (a class, `aria-describedby`, `name`; its type, checked state and change
+   * handling stay the card's), an element replaces it (give that control its own name and call
+   * `onSelect` from it), and `null` or `false` removes it, for a control you render elsewhere.
+   * Ignored with the default `selectionControl`.
+   */
+  checkbox?: Slot<'input'>;
+  /**
+   * An action over the top end corner of the card (a menu button, say). A card with one is
+   * positioned; with `selectionControl="checkbox"` the built-in checkbox then moves to the top
+   * start corner. Content that renders nothing renders no element.
+   */
+  floatingAction?: Slot<'span'>;
 }
 
 /**
@@ -189,6 +208,8 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
     onSelect,
     selectionControl = 'card',
     selectLabel,
+    checkbox,
+    floatingAction,
     appearance = 'filled',
     size = 'medium',
     orientation = 'vertical',
@@ -206,6 +227,26 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
   const selectable = onSelect !== undefined;
   const checkboxMode = selectable && selectionControl === 'checkbox';
   const cardMode = selectable && !checkboxMode;
+  const hasFloatingAction = floatingAction !== undefined && slotRendersContent(floatingAction);
+  // The built-in checkbox: not with `checkbox={null | false}` (the consumer renders the control)
+  // nor with an element (it replaces it); an object is merged onto it.
+  const checkboxHidden = checkbox === null || checkbox === false;
+  const checkboxElement = React.isValidElement(checkbox) ? checkbox : null;
+  const builtInCheckbox = checkboxMode && !checkboxHidden && checkboxElement === null;
+  const checkboxProps =
+    typeof checkbox === 'object' &&
+    checkbox !== null &&
+    !React.isValidElement(checkbox) &&
+    !Array.isArray(checkbox)
+      ? (checkbox as React.InputHTMLAttributes<HTMLInputElement>)
+      : undefined;
+  const corners = React.useMemo(
+    () => ({
+      checkboxAtStart: builtInCheckbox && hasFloatingAction,
+      floatingAction: hasFloatingAction,
+    }),
+    [builtInCheckbox, hasFloatingAction],
+  );
   /** A native `<button>` already has the role, tab stop and keyboard activation. */
   const nativeButton = Component === 'button';
 
@@ -228,7 +269,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
         'Card: a selectable card (`onSelect`) is a button and must not contain focusable elements (buttons, links, inputs). Use `selectionControl="checkbox"` for cards with interactive content.',
       );
     }
-    if (checkboxMode && !selectLabel && !root.ownerDocument.getElementById(titleId)) {
+    if (builtInCheckbox && !selectLabel && !root.ownerDocument.getElementById(titleId)) {
       warnOnce(
         'Card:checkbox-name',
         'Card: the selection checkbox has no accessible name. Render a `Card.Header` with a `title`, or pass `selectLabel`.',
@@ -312,59 +353,77 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
 
   return (
     <CardTitleIdContext.Provider value={checkboxMode ? titleId : null}>
-      <Component
-        {...defaults}
-        {...rest}
-        ref={mergedRef}
-        data-selected={selected ? '' : undefined}
-        data-appearance={appearance}
-        data-size={size}
-        data-orientation={orientation}
-        className={cn(
-          cardClassNames.root,
-          'overflow-hidden rounded-md',
-          cardAppearanceClasses[appearance].surface,
-          cardSizeClasses[size],
-          orientation === 'horizontal' && 'flex flex-row',
-          // Positions the check glyph / checkbox; plain cards keep their 0.4 positioning.
-          (selectable || selected !== undefined) && 'relative',
-          selected &&
-            cn(
-              'border-primary bg-selected text-selected-foreground ring-1 ring-inset ring-primary',
-              forcedColors.selectedContainer,
-            ),
-          selectable && 'cursor-pointer',
-          selectable && !selected && cardAppearanceClasses[appearance].interactive,
-          cardMode && focusRing,
-          className,
-        )}
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        onKeyUp={handleKeyUp}
-        onBlur={handleBlur}
-      >
-        {checkboxMode && (
-          <input
-            type="checkbox"
-            checked={selected ?? false}
-            onChange={() => onSelect()}
-            aria-label={selectLabel}
-            aria-labelledby={selectLabel ? undefined : titleId}
+      <CardCornersContext.Provider value={corners}>
+        <CardOrientationContext.Provider value={orientation}>
+          <Component
+            {...defaults}
+            {...rest}
+            ref={mergedRef}
+            data-selected={selected ? '' : undefined}
+            data-appearance={appearance}
+            data-size={size}
+            data-orientation={orientation}
             className={cn(
-              cardClassNames.checkbox,
-              'absolute end-3 top-3 m-0 size-4 cursor-pointer accent-primary',
-              focusRing,
+              cardClassNames.root,
+              'overflow-hidden rounded-md',
+              cardAppearanceClasses[appearance].surface,
+              cardSizeClasses[size],
+              orientation === 'horizontal' && 'flex flex-row',
+              // Positions the check glyph / checkbox; plain cards keep their 0.4 positioning.
+              (selectable || selected !== undefined || hasFloatingAction) && 'relative',
+              selected &&
+                cn(
+                  'border-primary bg-selected text-selected-foreground ring-1 ring-inset ring-primary',
+                  forcedColors.selectedContainer,
+                ),
+              selectable && 'cursor-pointer',
+              selectable && !selected && cardAppearanceClasses[appearance].interactive,
+              cardMode && focusRing,
+              className,
             )}
-          />
-        )}
-        {selected && !checkboxMode && (
-          <CheckIcon
-            size={12}
-            className={cn(cardClassNames.checkmark, 'absolute end-2 top-2 text-primary')}
-          />
-        )}
-        {children}
-      </Component>
+            onClick={handleClick}
+            onKeyDown={handleKeyDown}
+            onKeyUp={handleKeyUp}
+            onBlur={handleBlur}
+          >
+            {builtInCheckbox && (
+              <input
+                {...checkboxProps}
+                type="checkbox"
+                checked={selected ?? false}
+                onChange={composeEventHandlers(checkboxProps?.onChange, () => onSelect())}
+                aria-label={checkboxProps?.['aria-label'] ?? selectLabel}
+                aria-labelledby={
+                  (checkboxProps?.['aria-label'] ?? selectLabel)
+                    ? undefined
+                    : (checkboxProps?.['aria-labelledby'] ?? titleId)
+                }
+                className={cn(
+                  cardClassNames.checkbox,
+                  'absolute top-3 m-0 size-4 cursor-pointer accent-primary',
+                  hasFloatingAction ? 'start-3' : 'end-3',
+                  focusRing,
+                  checkboxProps?.className,
+                )}
+              />
+            )}
+            {checkboxMode && checkboxElement}
+            {hasFloatingAction &&
+              renderSlot(
+                floatingAction,
+                'span',
+                cn(cardClassNames.floatingAction, 'absolute end-3 top-3 inline-flex'),
+              )}
+            {selected && !checkboxMode && (
+              <CheckIcon
+                size={12}
+                className={cn(cardClassNames.checkmark, 'absolute end-2 top-2 text-primary')}
+              />
+            )}
+            {children}
+          </Component>
+        </CardOrientationContext.Provider>
+      </CardCornersContext.Provider>
     </CardTitleIdContext.Provider>
   );
 };
@@ -380,6 +439,16 @@ export interface CardHeaderOwnProps {
   title?: React.ReactNode;
   /** Subtitle content displayed below the title (none when it renders nothing, as `title`). */
   subtitle?: React.ReactNode;
+  /**
+   * An image beside the text, at the start: an `Avatar`, an icon, a logo. A value that renders
+   * nothing renders no element.
+   */
+  image?: Slot<'span'>;
+  /**
+   * An action beside the text, at the end: a menu button, say. A value that renders nothing
+   * renders no element.
+   */
+  action?: Slot<'span'>;
 }
 
 /** Props of {@link CardHeader} rendered as `C` (default `'div'`), including `ref`. */
@@ -399,7 +468,8 @@ type CardHeaderImplProps = CardHeaderOwnProps &
  * Flat export for React Server Components (`Card.Header` in client files).
  */
 export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (props) => {
-  const { as, title, subtitle, className, children, ref, ...rest } = props as CardHeaderImplProps;
+  const { as, title, subtitle, image, action, className, children, ref, ...rest } =
+    props as CardHeaderImplProps;
   const Component: React.ElementType = as ?? 'div';
   /** Set only inside a `selectionControl="checkbox"` card: the title names its checkbox. */
   const titleId = React.useContext(CardTitleIdContext);
@@ -407,18 +477,11 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
   // checkbox card with such a title warns about its missing name; `0` is content.
   const hasTitle = slotRendersContent(title);
   const hasSubtitle = slotRendersContent(subtitle);
-  return (
-    // In a checkbox card the header keeps clear of the checkbox in the top end corner.
-    <Component
-      ref={ref}
-      className={cn(
-        cardHeaderClassNames.root,
-        'p-[var(--wave-card-padding,1rem)]',
-        titleId && 'pe-10',
-        className,
-      )}
-      {...rest}
-    >
+  const hasImage = image !== undefined && slotRendersContent(image);
+  const hasAction = action !== undefined && slotRendersContent(action);
+  const corners = React.useContext(CardCornersContext);
+  const text = (
+    <>
       {hasTitle && (
         <div
           id={titleId ?? undefined}
@@ -433,6 +496,43 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
         </div>
       )}
       {children}
+    </>
+  );
+  return (
+    // In a checkbox card the header keeps clear of the checkbox in the top end corner.
+    <Component
+      ref={ref}
+      className={cn(
+        cardHeaderClassNames.root,
+        'p-[var(--wave-card-padding,1rem)]',
+        ((titleId && !corners.checkboxAtStart) || corners.floatingAction) && 'pe-10',
+        corners.checkboxAtStart && 'ps-10',
+        (hasImage || hasAction) &&
+          cn(
+            'grid items-center gap-x-3',
+            hasImage && hasAction
+              ? 'grid-cols-[auto_1fr_auto]'
+              : hasImage
+                ? 'grid-cols-[auto_1fr]'
+                : 'grid-cols-[1fr_auto]',
+          ),
+        className,
+      )}
+      {...rest}
+    >
+      {hasImage &&
+        renderSlot(
+          image,
+          'span',
+          cn(cardHeaderClassNames.image, 'inline-flex shrink-0 items-center'),
+        )}
+      {hasImage || hasAction ? <div className={cardHeaderClassNames.text}>{text}</div> : text}
+      {hasAction &&
+        renderSlot(
+          action,
+          'span',
+          cn(cardHeaderClassNames.action, 'inline-flex shrink-0 items-center'),
+        )}
     </Component>
   );
 };
@@ -501,7 +601,8 @@ export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (prop
 CardFooter.displayName = 'CardFooter';
 
 /**
- * A surface that groups related content, with `Card.Header`, `Card.Body` and `Card.Footer`.
+ * A surface that groups related content, with `Card.Header`, `Card.Preview`, `Card.Body` and
+ * `Card.Footer`.
  *
  * **Selectable cards** (`onSelect`) come in two patterns:
  * - A card without interactive content is itself the control (`selectionControl="card"`, the
@@ -518,7 +619,7 @@ CardFooter.displayName = 'CardFooter';
  * the selected look only; its state is not exposed to assistive technology.
  *
  * React Server Components cannot dot into a client module: import the flat names `CardHeader`,
- * `CardBody` and `CardFooter` there; `Card.Header` etc. work in client files.
+ * `CardPreview`, `CardBody` and `CardFooter` there; `Card.Header` etc. work in client files.
  *
  * @example
  * <Card onSelect={toggle} selected={selected}>
@@ -532,6 +633,7 @@ CardFooter.displayName = 'CardFooter';
  */
 export const Card = /* @__PURE__ */ Object.assign(CardRoot, {
   Header: CardHeader,
+  Preview: CardPreview,
   Body: CardBody,
   Footer: CardFooter,
 });
