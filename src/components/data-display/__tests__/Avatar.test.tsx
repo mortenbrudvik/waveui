@@ -5,6 +5,7 @@ import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import { Avatar } from '../Avatar';
 import type { AvatarProps } from '../Avatar';
+import { hashToNamedColor, type AvatarNamedColor } from '../Avatar.colors';
 import { AvatarSizeContext, type AvatarSizeContextValue } from '../Avatar.context';
 import { PresenceBadge } from '../PresenceBadge';
 import { Tag } from '../Tag';
@@ -1229,6 +1230,114 @@ describe('Avatar', () => {
       const { container } = render(<Avatar name="Jane Doe" src={PHOTO} initials="XY" />);
       expect(initialsOf(container)).toBeUndefined();
       expect(container.querySelector('img')).not.toBeNull();
+    });
+  });
+
+  describe('color (0.13)', () => {
+    const NAMED = [
+      'red',
+      'pumpkin',
+      'gold',
+      'forest',
+      'teal',
+      'blue',
+      'navy',
+      'lavender',
+      'purple',
+      'magenta',
+      'brown',
+      'steel',
+    ] as const;
+    const visual = (container: HTMLElement) =>
+      container.querySelector<HTMLElement>('.wave-avatar')!;
+
+    it('defaults to brand, with the 0.12 classes', () => {
+      const { container } = render(<Avatar name="Jane Doe" />);
+      expect(visual(container)).toHaveAttribute('data-color', 'brand');
+      expect(visual(container)).toHaveClass('bg-primary', 'text-primary-foreground');
+    });
+
+    it('neutral uses the muted pair', () => {
+      const { container } = render(<Avatar name="Jane Doe" color="neutral" />);
+      expect(visual(container)).toHaveAttribute('data-color', 'neutral');
+      expect(visual(container)).toHaveClass('bg-muted', 'text-muted-foreground');
+    });
+
+    it.each(NAMED)('the named color %s uses its palette pair', (color) => {
+      const { container } = render(<Avatar name="Jane Doe" color={color} />);
+      expect(visual(container)).toHaveAttribute('data-color', color);
+      expect(visual(container)).toHaveClass(
+        `bg-palette-${color}`,
+        `text-palette-${color}-foreground`,
+      );
+    });
+
+    it('colorful picks the same named color for the same idForColor, whatever the name', () => {
+      const a = render(<Avatar name="Jane Doe" color="colorful" idForColor="user-42" />);
+      const b = render(<Avatar name="Somebody Else" color="colorful" idForColor="user-42" />);
+      const colorA = visual(a.container).getAttribute('data-color');
+      expect(NAMED).toContain(colorA);
+      expect(visual(b.container)).toHaveAttribute('data-color', colorA!);
+      expect(visual(a.container)).toHaveClass(`bg-palette-${colorA}`);
+    });
+
+    it('colorful falls back to the name without an id', () => {
+      const a = render(<Avatar name="Jane Doe" color="colorful" />);
+      const b = render(<Avatar name="Jane Doe" color="colorful" />);
+      expect(visual(b.container).getAttribute('data-color')).toBe(
+        visual(a.container).getAttribute('data-color'),
+      );
+      expect(NAMED).toContain(visual(a.container).getAttribute('data-color'));
+    });
+
+    it('colorful with neither a name nor an id falls back to brand', () => {
+      const { container } = render(<Avatar color="colorful" />);
+      expect(visual(container)).toHaveAttribute('data-color', 'brand');
+      expect(visual(container).className).not.toMatch(/undefined|NaN/);
+    });
+
+    it('colorful spreads different ids over several colors', () => {
+      const seen = new Set<string>();
+      for (let i = 0; i < 24; i += 1) {
+        const { container, unmount } = render(
+          <Avatar name="Jane Doe" color="colorful" idForColor={`user-${i}`} />,
+        );
+        seen.add(visual(container).getAttribute('data-color')!);
+        unmount();
+      }
+      expect(seen.size).toBeGreaterThanOrEqual(6);
+    });
+
+    it('the hash is stable: known ids keep their color across releases', () => {
+      const { container } = render(<Avatar color="colorful" idForColor="user-42" />);
+      expect(visual(container).getAttribute('data-color')).toBe(hashToNamedColor('user-42'));
+      expect(hashToNamedColor('')).toBe(hashToNamedColor(''));
+    });
+
+    it('colorful renders the same on the server and the client', () => {
+      const html = renderToString(<Avatar name="Jane Doe" color="colorful" idForColor="user-42" />);
+      const { container } = render(
+        <Avatar name="Jane Doe" color="colorful" idForColor="user-42" />,
+      );
+      expect(html).toContain(`data-color="${visual(container).getAttribute('data-color')}"`);
+    });
+
+    it('an image avatar ignores the color classes but reports the color', () => {
+      const { container } = render(<Avatar name="Jane Doe" src={PHOTO} color="red" />);
+      expect(visual(container)).toHaveAttribute('data-color', 'red');
+      expect(visual(container).className).not.toContain('bg-palette-red');
+    });
+
+    it('an icon avatar keeps the muted pair', () => {
+      const { container } = render(<Avatar name="Jane Doe" icon={<svg />} color="red" />);
+      expect(visual(container)).toHaveClass('bg-muted', 'text-muted-foreground');
+    });
+
+    it('types the colors', () => {
+      expectTypeOf<AvatarProps['color']>().toEqualTypeOf<
+        'neutral' | 'brand' | 'colorful' | AvatarNamedColor | undefined
+      >();
+      expectTypeOf<AvatarNamedColor>().toEqualTypeOf<(typeof NAMED)[number]>();
     });
   });
 });

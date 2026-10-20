@@ -1,5 +1,11 @@
 export { Avatar } from './Avatar';
-export type { AvatarProps, AvatarNumericSize, AvatarSize } from './Avatar';
+export type {
+  AvatarProps,
+  AvatarNumericSize,
+  AvatarSize,
+  AvatarColor,
+  AvatarNamedColor,
+} from './Avatar';
 
 export { AvatarGroup } from './AvatarGroup';
 export type { AvatarGroupProps } from './AvatarGroup';

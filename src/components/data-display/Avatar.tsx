@@ -10,6 +10,7 @@ import { PersonIcon } from '../../lib/icons';
 import type { Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { AvatarSizeContext } from './Avatar.context';
+import { avatarColorClasses, resolveAvatarColor, type AvatarColor } from './Avatar.colors';
 import {
   avatarBoxClasses,
   avatarPixelSize,
@@ -19,6 +20,7 @@ import {
 } from './Avatar.sizes';
 
 export type { AvatarNumericSize, AvatarSize } from './Avatar.sizes';
+export type { AvatarColor, AvatarNamedColor } from './Avatar.colors';
 
 /** Properties for the Avatar component. */
 export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -45,6 +47,19 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
    * @default 'circular'
    */
   shape?: 'circular' | 'square';
+  /**
+   * Color of the avatar when it shows initials: `brand` (the primary color), `neutral` (muted),
+   * `colorful` (one of the named colors, chosen from `idForColor`, else from `name`; `brand`
+   * without either) or a named color of the persona palette. An image, or an icon, keeps its own
+   * look.
+   * @default 'brand'
+   */
+  color?: AvatarColor;
+  /**
+   * A stable id (a user id, say) that picks the color of `color="colorful"`, so the same person has
+   * the same color wherever they are shown, whatever their name looks like.
+   */
+  idForColor?: string;
   /**
    * The initials shown when there is no image and no icon, instead of the ones computed from
    * `name` (see `getInitials`): a string, an element or an object of `<span>` attributes. A value
@@ -212,6 +227,8 @@ export const Avatar = ({
   name,
   size: sizeProp,
   shape: shapeProp,
+  color: colorProp = 'brand',
+  idForColor,
   initials: initialsSlot,
   icon,
   image,
@@ -372,6 +389,7 @@ export const Avatar = ({
       ? renderSlot(icon, 'span', cn(avatarClassNames.icon, 'inline-flex'), { 'aria-hidden': true })
       : null;
   const dir = useDirection();
+  const resolvedColor = resolveAvatarColor(colorProp, idForColor, name);
   const showsInitials = imageNode === null && iconNode === null;
   const computedInitials = showsInitials && name ? getInitials(name, { dir }) : '';
   const initialsNode = !showsInitials ? null : initialsSlot && slotRendersContent(initialsSlot) ? (
@@ -391,7 +409,7 @@ export const Avatar = ({
     colorClass = 'bg-muted text-muted-foreground';
   } else if (initialsNode) {
     content = initialsNode;
-    colorClass = 'bg-primary text-primary-foreground';
+    colorClass = avatarColorClasses[resolvedColor];
   } else {
     content = <PersonIcon size="60%" className={avatarClassNames.icon} />;
     colorClass = 'bg-muted text-muted-foreground';
@@ -442,7 +460,11 @@ export const Avatar = ({
   const resolvedSize: AvatarSize = sizeProp ?? (box ? (box.size as AvatarSize) : 'medium');
   const resolvedShape = shapeProp ?? box?.shape ?? 'circular';
   const pixels = avatarPixelSize(resolvedSize);
-  const stateProps = { 'data-size': String(resolvedSize), 'data-shape': resolvedShape };
+  const stateProps = {
+    'data-size': String(resolvedSize),
+    'data-shape': resolvedShape,
+    'data-color': resolvedColor,
+  };
   const visualClassName = cn(
     avatarClassNames.visual,
     'inline-flex items-center justify-center overflow-hidden shrink-0 font-bold',
