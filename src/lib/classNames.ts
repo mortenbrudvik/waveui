@@ -961,13 +961,15 @@ export const treeItemPersonaLayoutClassNames = {
 
 /**
  * Carousel: `root` on the `role="region"` element; `autoPlayButton` on the pause and start
- * button; `track` on the moving element around the slides; `slide` on each slide wrapper;
+ * button; `viewport` on the clipping element around the track; `track` on the moving element
+ * around the slides; `slide` on each slide wrapper;
  * `previousButton` and `nextButton` on the arrow buttons; `picker` on the `role="group"` of
  * picker buttons; `pickerButton` on each of them; `pickerIndicator` on each button's dot.
  */
 export const carouselClassNames = {
   root: 'wave-carousel',
   autoPlayButton: 'wave-carousel__auto-play-button',
+  viewport: 'wave-carousel__viewport',
   track: 'wave-carousel__track',
   slide: 'wave-carousel__slide',
   previousButton: 'wave-carousel__previous-button',
@@ -977,8 +979,14 @@ export const carouselClassNames = {
   pickerIndicator: 'wave-carousel__picker-indicator',
 } as const;
 
-/** Carousel.Item: `root` on the item element. */
-export const carouselItemClassNames = { root: 'wave-carousel-item' } as const;
+/** Carousel.Item: `root` on the item element; `thumbnail` on the image in its picker button. */
+export const carouselItemClassNames = {
+  root: 'wave-carousel-item',
+  thumbnail: 'wave-carousel-item__thumbnail',
+} as const;
+
+/** Carousel.Button: `root` on the button element. */
+export const carouselButtonClassNames = { root: 'wave-carousel-button' } as const;
 
 /**
  * Overflow: `root` on the overflow element; `overflowButton` on the element around what

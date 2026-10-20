@@ -5,9 +5,10 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent } from '../../lib/direction';
-import { slotRendersContent } from '../../lib/slot';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
+import type { Slot } from '../../lib/types';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
-import { disabledStyles, focusRing, forcedColors } from '../../lib/styles';
+import { focusRing, forcedColors } from '../../lib/styles';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../lib/icons';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -16,8 +17,17 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
+import { CarouselButton } from './Carousel.button';
+import { CarouselContext } from './Carousel.context';
+import type { CarouselContextValue, CarouselControlsLayout } from './Carousel.context';
 import { useCarouselDrag } from './Carousel.drag';
 import { clampToPage, lastPageStart, pageCount } from './Carousel.groups';
+import { CAROUSEL_CONTROL_BASE, CAROUSEL_CONTROL_LAYOUT } from './Carousel.styles';
+
+export type { CarouselControlsLayout };
+
+/** How a Carousel is drawn: `flat`, or `elevated` with rounded corners and a shadow. */
+export type CarouselAppearance = 'flat' | 'elevated';
 
 /** Accessible names of the rotation control shown while `autoPlay` is on. */
 export interface CarouselAutoPlayLabels {
@@ -115,6 +125,19 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   draggable?: boolean;
   /**
+   * Where the Previous and Next buttons go. `overlay` floats round buttons over the slides;
+   * `overlay-wide` makes them full-height strips at the edges; `inline` puts them in a row with
+   * the slides, outside them; `inline-wide` is `inline` with full-height buttons. The rotation
+   * control stays the first focusable element at the start corner in every layout.
+   * @default 'overlay'
+   */
+  controlsLayout?: CarouselControlsLayout;
+  /**
+   * `elevated` rounds the corners and adds a shadow.
+   * @default 'flat'
+   */
+  appearance?: CarouselAppearance;
+  /**
    * Rotates the slides automatically. A Pause/Start control is rendered as the first focusable
    * element. Rotation pauses while focus is anywhere inside the carousel (the control included;
    * clicking a control also moves focus there in most browsers) or the pointer is over it (except
@@ -150,6 +173,14 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
 
 /** Properties for the CarouselItem sub-component. */
 export interface CarouselItemProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * An image for this slide's button in the picker, in place of the dot. A string is the image
+   * `src`; an object sets the `<img>`'s attributes. The button keeps its slide-label name, so the
+   * image is decorative (`alt=""`). When any slide has one, the picker becomes a row of
+   * thumbnails below the slides; a slide without one keeps its dot. With `groupSize` above 1, a
+   * page shows the thumbnail of its first slide.
+   */
+  thumbnail?: Slot<'img'>;
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -205,12 +236,10 @@ function isRotationControl(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('[data-carousel-rotation]') !== null;
 }
 
-const controlButton = [
-  'absolute z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-2',
-  'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
-  focusRing,
-  disabledStyles,
-].join(' ');
+/** The `<img>` slot of a thumbnail: a string is its `src`. */
+function thumbnailSlot(thumbnail: Slot<'img'>): Slot<'img'> {
+  return typeof thumbnail === 'string' ? { src: thumbnail } : thumbnail;
+}
 
 const PauseGlyph = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -238,6 +267,8 @@ const CarouselRoot = ({
   groupSize = 1,
   align = 'start',
   draggable = false,
+  controlsLayout = 'overlay',
+  appearance = 'flat',
   className,
   children,
   onMouseEnter,
@@ -262,8 +293,9 @@ const CarouselRoot = ({
   const prefersReducedMotion = usePrefersReducedMotion();
   const [firstSlideEl, setFirstSlideEl] = React.useState<HTMLElement | null>(null);
   const [trackEl, setTrackEl] = React.useState<HTMLElement | null>(null);
+  const [viewportEl, setViewportEl] = React.useState<HTMLElement | null>(null);
   const auto = groupSize === 'auto';
-  const measured = useAutoPageSize(auto, rootEl, firstSlideEl);
+  const measured = useAutoPageSize(auto, viewportEl, firstSlideEl);
   const size = auto ? measured.perPage : Math.max(1, Math.floor(groupSize) || 1);
 
   // Rotation state: stopped or not (the user's choice, stopped by default under reduced motion, or
@@ -282,12 +314,21 @@ const CarouselRoot = ({
 
   // Slides are the `CarouselItem` children, Fragments flattened; the element type is unwrapped, so
   // slides written in a Server Component (lazy client references) count too (C-COMPOUND).
-  const items: Array<{ key: string; node: React.ReactNode }> = [];
+  const items: Array<{ key: string; node: React.ReactNode; thumbnail?: Slot<'img'> }> = [];
+  // A `Carousel.Button` of each direction replaces the built-in button; a second one of the same
+  // direction is not rendered.
+  const customButtons: { previous?: React.ReactElement; next?: React.ReactElement } = {};
   let droppedChildren = false;
   for (const child of flattenChildren(children)) {
-    if (isElementOfType(child.node, CarouselItem)) items.push(child);
-    else if (slotRendersContent(child.node)) droppedChildren = true;
+    if (isElementOfType<CarouselItemProps>(child.node, CarouselItem)) {
+      items.push({ ...child, thumbnail: child.node.props.thumbnail });
+    } else if (isElementOfType<{ direction?: 'previous' | 'next' }>(child.node, CarouselButton)) {
+      const direction = child.node.props.direction === 'next' ? 'next' : 'previous';
+      if (customButtons[direction]) droppedChildren = true;
+      else customButtons[direction] = React.cloneElement(child.node, { key: child.key });
+    } else if (slotRendersContent(child.node)) droppedChildren = true;
   }
+  const hasThumbnails = items.some((item) => item.thumbnail !== undefined);
   const total = items.length;
 
   React.useEffect(() => {
@@ -455,10 +496,42 @@ const CarouselRoot = ({
     roving.containerProps.onKeyDown(event);
   };
 
+  const previousLabel = labels?.previous ?? DEFAULT_PREVIOUS_LABEL;
+  const nextLabel = labels?.next ?? DEFAULT_NEXT_LABEL;
+  const goPrevious = useEventCallback(() => goPrev());
+  const goToNext = useEventCallback(() => goNext());
+  // What `Carousel.Button` reads (C-MEMO).
+  const context = React.useMemo<CarouselContextValue>(
+    () => ({
+      trackId,
+      previousLabel,
+      nextLabel,
+      previousDisabled: prevDisabled,
+      nextDisabled,
+      goPrevious,
+      goNext: goToNext,
+      controlsLayout,
+      dir,
+    }),
+    [
+      trackId,
+      previousLabel,
+      nextLabel,
+      prevDisabled,
+      nextDisabled,
+      goPrevious,
+      goToNext,
+      controlsLayout,
+      dir,
+    ],
+  );
+
   if (total === 0) {
     return (
       <div
         ref={rootRef}
+        data-controls-layout={controlsLayout}
+        data-appearance={appearance}
         className={cn(carouselClassNames.root, 'relative', className)}
         {...rootHandlers}
         {...rest}
@@ -490,40 +563,50 @@ const CarouselRoot = ({
   const chevronClass = dir === 'rtl' ? '-scale-x-100' : undefined;
   const pauseLabel = autoPlayLabels?.pause ?? DEFAULT_PAUSE_LABEL;
   const playLabel = autoPlayLabels?.play ?? DEFAULT_PLAY_LABEL;
-  const previousLabel = labels?.previous ?? DEFAULT_PREVIOUS_LABEL;
-  const nextLabel = labels?.next ?? DEFAULT_NEXT_LABEL;
   const pickerLabel = labels?.picker ?? DEFAULT_PICKER_LABEL;
   const slideLabel = labels?.slide ?? defaultSlideLabel;
   const carouselRoleDescription =
     labels?.carouselRoleDescription ?? DEFAULT_CAROUSEL_ROLE_DESCRIPTION;
   const slideRoleDescription = labels?.slideRoleDescription ?? DEFAULT_SLIDE_ROLE_DESCRIPTION;
 
-  return (
-    <div
-      ref={rootRef}
-      role="region"
-      aria-roledescription={carouselRoleDescription}
-      aria-label="Carousel"
-      // A stacking context of its own: the controls' z-index cannot lift them over page headers.
-      className={cn(carouselClassNames.root, 'relative isolate overflow-hidden', className)}
-      {...rootHandlers}
-      {...rest}
-    >
-      {hasRotation && (
-        <button
-          type="button"
-          data-carousel-rotation=""
-          aria-label={stopped ? playLabel : pauseLabel}
-          aria-controls={trackId}
-          onClick={toggleRotation}
-          // The pointer over the control does not pause (APG): the user is operating it.
-          onMouseEnter={() => setPointerOnControl(true)}
-          onMouseLeave={() => setPointerOnControl(false)}
-          className={cn(carouselClassNames.autoPlayButton, controlButton, 'top-2 start-2')}
-        >
-          {stopped ? <PlayGlyph /> : <PauseGlyph />}
-        </button>
+  const inline = controlsLayout === 'inline' || controlsLayout === 'inline-wide';
+  const layoutClasses = CAROUSEL_CONTROL_LAYOUT[controlsLayout];
+  const previousControl = customButtons.previous ?? (
+    <button
+      key="previous"
+      type="button"
+      aria-label={previousLabel}
+      aria-controls={trackId}
+      {...focusableDisabledProps(prevDisabled)}
+      onClick={preventIfDisabled(prevDisabled, goPrev)}
+      className={cn(
+        carouselClassNames.previousButton,
+        CAROUSEL_CONTROL_BASE,
+        layoutClasses.previous,
       )}
+    >
+      <ChevronLeftIcon size={16} className={chevronClass} />
+    </button>
+  );
+  const nextControl = customButtons.next ?? (
+    <button
+      key="next"
+      type="button"
+      aria-label={nextLabel}
+      aria-controls={trackId}
+      {...focusableDisabledProps(nextDisabled)}
+      onClick={preventIfDisabled(nextDisabled, goNext)}
+      className={cn(carouselClassNames.nextButton, CAROUSEL_CONTROL_BASE, layoutClasses.next)}
+    >
+      <ChevronRightIcon size={16} className={chevronClass} />
+    </button>
+  );
+
+  const viewport = (
+    <div
+      ref={setViewportEl}
+      className={cn(carouselClassNames.viewport, 'relative min-w-0 flex-1 overflow-hidden')}
+    >
       <div
         id={trackId}
         className={cn(
@@ -567,79 +650,125 @@ const CarouselRoot = ({
           );
         })}
       </div>
-      {/* Announces the current slide, except while slides rotate on their own. */}
-      <div aria-live={rotating ? 'off' : 'polite'} aria-atomic="true" className="sr-only">
-        {pageLabel(index)}
-      </div>
-      <button
-        type="button"
-        aria-label={previousLabel}
-        aria-controls={trackId}
-        {...focusableDisabledProps(prevDisabled)}
-        onClick={preventIfDisabled(prevDisabled, goPrev)}
-        className={cn(
-          carouselClassNames.previousButton,
-          controlButton,
-          'top-1/2 start-2 -translate-y-1/2',
-        )}
-      >
-        <ChevronLeftIcon size={16} className={chevronClass} />
-      </button>
-      <button
-        type="button"
-        aria-label={nextLabel}
-        aria-controls={trackId}
-        {...focusableDisabledProps(nextDisabled)}
-        onClick={preventIfDisabled(nextDisabled, goNext)}
-        className={cn(
-          carouselClassNames.nextButton,
-          controlButton,
-          'top-1/2 end-2 -translate-y-1/2',
-        )}
-      >
-        <ChevronRightIcon size={16} className={chevronClass} />
-      </button>
-      <div
-        role="group"
-        aria-label={pickerLabel}
-        className={cn(
-          carouselClassNames.picker,
-          'absolute inset-x-0 bottom-1 z-10 mx-auto flex w-fit',
-        )}
-      >
-        {items
-          .filter((_, i) => i % size === 0)
-          .map(({ key }, page) => {
-            const start = page * size;
-            const active = start === index;
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-label={pageLabel(start)}
-                aria-current={active ? 'true' : undefined}
-                onClick={() => goTo(start)}
-                className={cn(
-                  carouselClassNames.pickerButton,
-                  'group inline-flex h-6 min-w-6 items-center justify-center',
-                  focusRing,
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    carouselClassNames.pickerIndicator,
-                    'block h-2 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none',
-                    active
-                      ? cn('w-5 bg-primary', forcedColors.selectedLeaf)
-                      : 'w-2 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
-                  )}
-                />
-              </button>
-            );
-          })}
-      </div>
+      {/* Overlaid on the slides, after them in the tab order, like before the layouts. */}
+      {!inline && previousControl}
+      {!inline && nextControl}
     </div>
+  );
+
+  return (
+    <CarouselContext.Provider value={context}>
+      <div
+        ref={rootRef}
+        role="region"
+        aria-roledescription={carouselRoleDescription}
+        aria-label="Carousel"
+        data-controls-layout={controlsLayout}
+        data-appearance={appearance}
+        // A stacking context of its own: the controls' z-index cannot lift them over page headers.
+        className={cn(
+          carouselClassNames.root,
+          'relative isolate overflow-hidden',
+          appearance === 'elevated' && 'rounded-md shadow-4',
+          className,
+        )}
+        {...rootHandlers}
+        {...rest}
+      >
+        {hasRotation && (
+          <button
+            type="button"
+            data-carousel-rotation=""
+            aria-label={stopped ? playLabel : pauseLabel}
+            aria-controls={trackId}
+            onClick={toggleRotation}
+            // The pointer over the control does not pause (APG): the user is operating it.
+            onMouseEnter={() => setPointerOnControl(true)}
+            onMouseLeave={() => setPointerOnControl(false)}
+            className={cn(
+              carouselClassNames.autoPlayButton,
+              CAROUSEL_CONTROL_BASE,
+              'absolute h-8 w-8 rounded-full border border-border bg-background shadow-2 top-2',
+              // Over the viewport's corner: past the Previous button of an inline layout.
+              inline ? 'start-12' : 'start-2',
+            )}
+          >
+            {stopped ? <PlayGlyph /> : <PauseGlyph />}
+          </button>
+        )}
+        {inline ? (
+          <div className="flex items-stretch">
+            {previousControl}
+            {viewport}
+            {nextControl}
+          </div>
+        ) : (
+          viewport
+        )}
+        {/* Announces the current slide, except while slides rotate on their own. */}
+        <div aria-live={rotating ? 'off' : 'polite'} aria-atomic="true" className="sr-only">
+          {pageLabel(index)}
+        </div>
+        <div
+          role="group"
+          aria-label={pickerLabel}
+          className={cn(
+            carouselClassNames.picker,
+            hasThumbnails
+              ? 'relative mx-auto flex w-fit flex-wrap justify-center gap-2 p-2'
+              : 'absolute inset-x-0 bottom-1 z-10 mx-auto flex w-fit',
+          )}
+        >
+          {items
+            .filter((_, i) => i % size === 0)
+            .map(({ key, thumbnail }, page) => {
+              const start = page * size;
+              const active = start === index;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-label={pageLabel(start)}
+                  aria-current={active ? 'true' : undefined}
+                  onClick={() => goTo(start)}
+                  className={cn(
+                    carouselClassNames.pickerButton,
+                    'group inline-flex items-center justify-center',
+                    thumbnail !== undefined ? 'rounded-md p-0.5' : 'h-6 min-w-6',
+                    focusRing,
+                  )}
+                >
+                  {thumbnail !== undefined ? (
+                    renderSlot(
+                      thumbnailSlot(thumbnail),
+                      'img',
+                      cn(
+                        carouselItemClassNames.thumbnail,
+                        'block h-12 w-16 rounded object-cover',
+                        active
+                          ? cn('outline-2 outline-primary', forcedColors.selectedContainer)
+                          : 'opacity-70 group-hover:opacity-100',
+                      ),
+                      { alt: '', draggable: false },
+                    )
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        carouselClassNames.pickerIndicator,
+                        'block h-2 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none',
+                        active
+                          ? cn('w-5 bg-primary', forcedColors.selectedLeaf)
+                          : 'w-2 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
+                      )}
+                    />
+                  )}
+                </button>
+              );
+            })}
+        </div>
+      </div>
+    </CarouselContext.Provider>
   );
 };
 CarouselRoot.displayName = 'Carousel';
@@ -649,7 +778,13 @@ CarouselRoot.displayName = 'Carousel';
  * that renders `Carousel.Item` itself is not recognised as a slide (put that component inside the
  * `Carousel.Item` instead).
  */
-export const CarouselItem = ({ className, children, ref, ...rest }: CarouselItemProps) => {
+export const CarouselItem = ({
+  thumbnail: _thumbnail,
+  className,
+  children,
+  ref,
+  ...rest
+}: CarouselItemProps) => {
   return (
     <div ref={ref} className={cn(carouselItemClassNames.root, 'p-4', className)} {...rest}>
       {children}
@@ -686,9 +821,16 @@ CarouselItem.displayName = 'CarouselItem';
  * - The controls are layered over the slides inside the carousel's own stacking context, so they
  *   never paint over page headers that stay in view while the page scrolls.
  *
- * Compound access (`Carousel.Item`) needs a client module; React Server Components import the
- * flat name `CarouselItem` instead.
+ * - `groupSize` shows several slides per page, `draggable` lets the pointer drag them, and a
+ *   `thumbnail` on a `Carousel.Item` turns the picker into a row of thumbnails.
+ * - `controlsLayout` places the Previous and Next buttons over the slides (`overlay`,
+ *   `overlay-wide`) or beside them (`inline`, `inline-wide`); `Carousel.Button` replaces the
+ *   built-in button of its `direction` with one of your own glyph.
+ *
+ * Compound access (`Carousel.Item`, `Carousel.Button`) needs a client module; React Server
+ * Components import the flat names `CarouselItem` and `CarouselButton` instead.
  */
 export const Carousel = /* @__PURE__ */ Object.assign(CarouselRoot, {
   Item: CarouselItem,
+  Button: CarouselButton,
 });

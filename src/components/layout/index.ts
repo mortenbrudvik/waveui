@@ -43,11 +43,15 @@ export type {
 } from './Tree';
 
 export { Carousel, CarouselItem } from './Carousel';
+export { CarouselButton } from './Carousel.button';
+export type { CarouselButtonProps } from './Carousel.button';
 export type {
   CarouselProps,
   CarouselItemProps,
   CarouselAutoPlayLabels,
   CarouselLabels,
+  CarouselAppearance,
+  CarouselControlsLayout,
 } from './Carousel';
 
 export {
