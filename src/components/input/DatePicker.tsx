@@ -4,7 +4,13 @@ import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { datePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import type { CoreSize, DayOfWeek, FirstWeekOfYear, InputAppearance } from '../../lib/types';
+import type {
+  CoreSize,
+  DayOfWeek,
+  FirstWeekOfYear,
+  InputAppearance,
+  PopupPositioningOptions,
+} from '../../lib/types';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR } from '../../lib/focus';
 import { CalendarIcon, DismissIcon } from '../../lib/icons';
@@ -26,7 +32,7 @@ import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
@@ -167,6 +173,13 @@ export interface DatePickerProps extends Omit<
    * calendar keeps its size.
    */
   size?: CoreSize;
+  /**
+   * Advanced positioning of the popup (Fluent's `positioning`): `offset`, `fitViewport`,
+   * `matchReferenceWidth` and `fallbackPlacements` (tried in order when the requested side has no
+   * room). The popup opens below the field.
+   * @default `{}`: the calendar opens 4px below the field
+   */
+  positioning?: PopupPositioningOptions;
   /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
@@ -382,6 +395,7 @@ export const DatePicker = (props: DatePickerProps) => {
     placeholder = 'Select a date',
     disabled = false,
     size: sizeProp,
+    positioning,
     appearance: appearanceProp,
     readOnly,
     clearable = false,
@@ -598,6 +612,7 @@ export const DatePicker = (props: DatePickerProps) => {
     open: isOpen,
     side: 'bottom',
     align: 'start',
+    ...resolvePositioning(positioning, {}),
   });
   const surfaceRefs = useMergedRefs<HTMLDivElement>(surfaceRef, setSurface, setFloating);
 

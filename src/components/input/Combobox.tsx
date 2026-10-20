@@ -16,7 +16,7 @@ import {
   inputPaddingClasses,
   inputTextClasses,
 } from '../../lib/styles';
-import type { CoreSize, InputAppearance } from '../../lib/types';
+import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -152,6 +152,13 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * listbox keeps its size.
    */
   size?: CoreSize;
+  /**
+   * Advanced positioning of the popup (Fluent's `positioning`): `offset`, `fitViewport`,
+   * `matchReferenceWidth` and `fallbackPlacements` (tried in order when the requested side has no
+   * room). The popup opens below the field.
+   * @default `{ matchReferenceWidth: true, fitViewport: true }`
+   */
+  positioning?: PopupPositioningOptions;
   /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
@@ -337,6 +344,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     placeholder,
     disabled = false,
     size: sizeProp,
+    positioning,
     appearance: appearanceProp,
     freeform: freeformProp = false,
     filter,
@@ -637,6 +645,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   const surfaceOpen = open && (expanded || !!draft);
   const noMatches = surfaceOpen && !expanded;
   const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+    positioning,
     open,
     surfaceOpen,
     onDismiss: close,

@@ -4,7 +4,14 @@ import { cn } from '../../lib/cn';
 import { tagPickerClassNames } from '../../lib/classNames';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import type { Slot } from '../../lib/slot';
-import type { CoreSize, InputAppearance, Size, TagAppearance, TagSize } from '../../lib/types';
+import type {
+  CoreSize,
+  InputAppearance,
+  PopupPositioningOptions,
+  Size,
+  TagAppearance,
+  TagSize,
+} from '../../lib/types';
 import { useAnnounce } from '../../hooks/useAnnounce';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -188,6 +195,13 @@ export interface TagPickerProps extends Omit<
    */
   size?: TagPickerSize;
   /**
+   * Advanced positioning of the popup (Fluent's `positioning`): `offset`, `fitViewport`,
+   * `matchReferenceWidth` and `fallbackPlacements` (tried in order when the requested side has no
+   * room). The popup opens below the field.
+   * @default `{ matchReferenceWidth: true, fitViewport: true }`
+   */
+  positioning?: PopupPositioningOptions;
+  /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
    * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`. The tags are
@@ -357,6 +371,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     onQueryChange,
     disabled = false,
     size: sizeProp,
+    positioning,
     appearance: appearanceProp,
     name,
     form,
@@ -678,6 +693,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
   const surfaceOpen = open && (expanded || query !== '');
   const noMatches = surfaceOpen && !expanded && !showCreate;
   const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+    positioning,
     open,
     surfaceOpen,
     onDismiss: () => setOpen(false),

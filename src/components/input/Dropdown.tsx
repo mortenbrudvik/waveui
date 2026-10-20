@@ -16,7 +16,7 @@ import {
   inputPaddingClasses,
   inputTextClasses,
 } from '../../lib/styles';
-import type { CoreSize, InputAppearance } from '../../lib/types';
+import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -164,6 +164,13 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    */
   size?: CoreSize;
   /**
+   * Advanced positioning of the popup (Fluent's `positioning`): `offset`, `fitViewport`,
+   * `matchReferenceWidth` and `fallbackPlacements` (tried in order when the requested side has no
+   * room). The popup opens below the field.
+   * @default `{ matchReferenceWidth: true, fitViewport: true }`
+   */
+  positioning?: PopupPositioningOptions;
+  /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
    * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
@@ -240,6 +247,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     renderValue,
     disabled = false,
     size: sizeProp,
+    positioning,
     appearance: appearanceProp,
     name,
     form,
@@ -358,6 +366,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
 
   const expanded = open && listbox.items.length > 0;
   const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+    positioning,
     open,
     surfaceOpen: expanded,
     onDismiss: () => setOpen(false),
