@@ -1,6 +1,7 @@
 export { Card, CardHeader, CardBody, CardFooter } from './Card';
 export type {
   CardProps,
+  CardAppearance,
   CardOwnProps,
   CardHeaderProps,
   CardHeaderOwnProps,

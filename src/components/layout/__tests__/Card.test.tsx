@@ -892,7 +892,13 @@ describe('Card', () => {
       expectTypeOf<CardBodyProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
       expectTypeOf<CardFooterProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
       expectTypeOf<keyof CardOwnProps>().toEqualTypeOf<
-        'selected' | 'onSelect' | 'selectionControl' | 'selectLabel'
+        | 'selected'
+        | 'onSelect'
+        | 'selectionControl'
+        | 'selectLabel'
+        | 'appearance'
+        | 'size'
+        | 'orientation'
       >();
       expectTypeOf<keyof CardHeaderOwnProps>().toEqualTypeOf<'title' | 'subtitle'>();
       expectTypeOf<CardHeaderProps['title']>().toEqualTypeOf<React.ReactNode>();
@@ -930,7 +936,7 @@ describe('Card.Body', () => {
     displayName: 'CardBody',
     polymorphic: true,
     defaultProps: { children: 'Body content' },
-    conflictingClass: { className: 'p-8', overrides: 'p-4' },
+    conflictingClass: { className: 'p-8', overrides: 'p-[var(--wave-card-padding,1rem)]' },
   });
 
   it('renders children', () => {
@@ -970,5 +976,160 @@ describe('Card composition', () => {
     expect(card).toHaveTextContent('Description');
     expect(card).toHaveTextContent('Body text');
     expect(screen.getByRole('button', { name: 'Action' })).toBeInTheDocument();
+  });
+
+  describe('appearances, sizes and orientation (0.13)', () => {
+    const APPEARANCES = ['filled', 'filled-alternative', 'outline', 'subtle'] as const;
+    const card = () => screen.getByTestId('card');
+
+    it('renders data-appearance, data-size and data-orientation with their defaults', () => {
+      render(<Card data-testid="card">x</Card>);
+      expect(card()).toHaveAttribute('data-appearance', 'filled');
+      expect(card()).toHaveAttribute('data-size', 'medium');
+      expect(card()).toHaveAttribute('data-orientation', 'vertical');
+    });
+
+    it('the default look is the 0.12 look', () => {
+      render(<Card data-testid="card">x</Card>);
+      expect(card()).toHaveClass(
+        'overflow-hidden',
+        'rounded-md',
+        'border',
+        'border-border',
+        'bg-card',
+        'shadow-4',
+      );
+      expect(card().className).not.toMatch(/(^| )flex( |$)/);
+    });
+
+    it.each([
+      ['filled-alternative', ['bg-muted'], ['shadow-4', 'bg-card']],
+      ['outline', ['border-border', 'bg-transparent'], ['shadow-4', 'bg-card']],
+      ['subtle', ['border-transparent', 'bg-transparent'], ['shadow-4', 'border-border']],
+    ] as const)('the %s appearance', (appearance, has, hasNot) => {
+      render(
+        <Card data-testid="card" appearance={appearance}>
+          x
+        </Card>,
+      );
+      expect(card()).toHaveAttribute('data-appearance', appearance);
+      expect(card()).toHaveClass(...has);
+      for (const name of hasNot) expect(card()).not.toHaveClass(name);
+    });
+
+    it.each(APPEARANCES)(
+      'a selected %s card has the selected look and a Highlight outline',
+      (appearance) => {
+        render(
+          <Card data-testid="card" appearance={appearance} selected>
+            x
+          </Card>,
+        );
+        expect(card()).toHaveClass('border-primary', 'bg-selected', 'ring-1', 'ring-primary');
+        expect(card()).toHaveClass('forced-colors:outline-[Highlight]');
+      },
+    );
+
+    it.each([
+      ['filled', 'not-disabled:not-aria-disabled:hover:shadow-8'],
+      ['filled-alternative', 'not-disabled:not-aria-disabled:hover:bg-muted-hover'],
+      ['outline', 'not-disabled:not-aria-disabled:hover:bg-subtle-hover'],
+      ['subtle', 'not-disabled:not-aria-disabled:hover:bg-subtle-hover'],
+    ] as const)('a selectable %s card gets the gated hover look %s', (appearance, hover) => {
+      render(
+        <Card data-testid="card" appearance={appearance} onSelect={() => {}}>
+          x
+        </Card>,
+      );
+      expect(card()).toHaveClass(hover);
+    });
+
+    it('a selectable filled-alternative, outline and subtle card also has a gated pressed fill', () => {
+      const { rerender } = render(
+        <Card data-testid="card" appearance="filled-alternative" onSelect={() => {}}>
+          x
+        </Card>,
+      );
+      expect(card()).toHaveClass('not-disabled:not-aria-disabled:active:bg-muted-pressed');
+      rerender(
+        <Card data-testid="card" appearance="subtle" onSelect={() => {}}>
+          x
+        </Card>,
+      );
+      expect(card()).toHaveClass('not-disabled:not-aria-disabled:active:bg-subtle-pressed');
+    });
+
+    it('a card that is not selectable, or is selected, has no hover look', () => {
+      const { rerender } = render(<Card data-testid="card">x</Card>);
+      expect(card().className).not.toContain('hover:');
+      rerender(
+        <Card data-testid="card" onSelect={() => {}} selected>
+          x
+        </Card>,
+      );
+      expect(card().className).not.toContain('hover:bg-');
+    });
+
+    it.each([
+      ['small', '[--wave-card-padding:0.75rem]'],
+      ['medium', '[--wave-card-padding:1rem]'],
+      ['large', '[--wave-card-padding:1.25rem]'],
+    ] as const)('the %s size sets the padding variable', (size, variable) => {
+      render(
+        <Card data-testid="card" size={size}>
+          x
+        </Card>,
+      );
+      expect(card()).toHaveAttribute('data-size', size);
+      expect(card()).toHaveClass(variable);
+    });
+
+    it('Header, Body and Footer read the padding variable, with a fallback outside a Card', () => {
+      render(
+        <>
+          <Card.Header data-testid="header" title="T" />
+          <Card.Body data-testid="body">b</Card.Body>
+          <Card.Footer data-testid="footer">f</Card.Footer>
+        </>,
+      );
+      expect(screen.getByTestId('header')).toHaveClass('p-[var(--wave-card-padding,1rem)]');
+      expect(screen.getByTestId('body')).toHaveClass('p-[var(--wave-card-padding,1rem)]', 'pt-0');
+      expect(screen.getByTestId('footer')).toHaveClass('p-[var(--wave-card-padding,1rem)]', 'pt-0');
+    });
+
+    it('horizontal lays the parts out in a row', () => {
+      render(
+        <Card data-testid="card" orientation="horizontal">
+          x
+        </Card>,
+      );
+      expect(card()).toHaveAttribute('data-orientation', 'horizontal');
+      expect(card()).toHaveClass('flex', 'flex-row');
+    });
+
+    it('is axe clean in every appearance, size and orientation', async () => {
+      for (const appearance of APPEARANCES) {
+        const { container, unmount } = render(
+          <Card appearance={appearance} size="large" orientation="horizontal">
+            <Card.Header title="Title" subtitle="Sub" />
+            <Card.Body>Body</Card.Body>
+          </Card>,
+        );
+        await expectNoA11yViolations(container);
+        unmount();
+      }
+    });
+
+    it('types the new props', () => {
+      expectTypeOf<CardOwnProps['appearance']>().toEqualTypeOf<
+        'filled' | 'filled-alternative' | 'outline' | 'subtle' | undefined
+      >();
+      expectTypeOf<CardOwnProps['size']>().toEqualTypeOf<
+        'small' | 'medium' | 'large' | undefined
+      >();
+      expectTypeOf<CardOwnProps['orientation']>().toEqualTypeOf<
+        'horizontal' | 'vertical' | undefined
+      >();
+    });
   });
 });

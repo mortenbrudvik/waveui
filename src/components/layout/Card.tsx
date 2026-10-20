@@ -13,6 +13,7 @@ import { CheckIcon } from '../../lib/icons';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import type { CoreSize, Orientation } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -61,11 +62,68 @@ const NESTED_INTERACTIVE_WARNING = 'Card:nested-interactive';
  */
 const CardTitleIdContext = React.createContext<string | null>(null);
 
+/** The look of a Card: a filled surface with a shadow, a muted fill, an outline, or no surface. */
+export type CardAppearance = 'filled' | 'filled-alternative' | 'outline' | 'subtle';
+
+/**
+ * Surface, border and shadow of a card per appearance, and the hover and pressed fills of a
+ * selectable one (`filled` lifts its shadow instead of changing its fill). Literal strings only.
+ */
+const cardAppearanceClasses: Readonly<
+  Record<CardAppearance, { surface: string; interactive: string }>
+> = {
+  filled: {
+    surface: 'border border-border bg-card shadow-4',
+    interactive: 'not-disabled:not-aria-disabled:hover:shadow-8',
+  },
+  'filled-alternative': {
+    surface: 'border border-transparent bg-muted',
+    interactive:
+      'not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:active:bg-muted-pressed',
+  },
+  outline: {
+    surface: 'border border-border bg-transparent',
+    interactive:
+      'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+  },
+  subtle: {
+    surface: 'border border-transparent bg-transparent',
+    interactive:
+      'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+  },
+};
+
+/** The padding the parts of a card read (`--wave-card-padding`), per size. */
+const cardSizeClasses: Readonly<Record<CoreSize, string>> = {
+  small: '[--wave-card-padding:0.75rem]',
+  medium: '[--wave-card-padding:1rem]',
+  large: '[--wave-card-padding:1.25rem]',
+};
+
 /**
  * The Card's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
  * Every other prop comes from the rendered element (`as`).
  */
 export interface CardOwnProps {
+  /**
+   * Look of the card: `filled` (a surface with a border and a shadow), `filled-alternative` (a
+   * muted fill), `outline` (a border only) or `subtle` (no surface until hovered or selected). A
+   * selectable card gets a hover and pressed look for its appearance; the selected look is the
+   * same in every appearance.
+   * @default 'filled'
+   */
+  appearance?: CardAppearance;
+  /**
+   * Padding of the card's parts: `small` 0.75rem, `medium` 1rem, `large` 1.25rem.
+   * @default 'medium'
+   */
+  size?: CoreSize;
+  /**
+   * Layout of the card's parts: `vertical` stacks them, `horizontal` puts them in a row (put the
+   * text parts in one wrapper element to keep them stacked beside a `Card.Preview`).
+   * @default 'vertical'
+   */
+  orientation?: Orientation;
   /**
    * Whether the card is selected. Shown with the selected colors plus non-color cues: a 2px primary
    * border (a 1px border plus an inset 1px ring), a Highlight outline in forced-colors mode, and a
@@ -131,6 +189,9 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
     onSelect,
     selectionControl = 'card',
     selectLabel,
+    appearance = 'filled',
+    size = 'medium',
+    orientation = 'vertical',
     className,
     children,
     ref,
@@ -256,9 +317,15 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
         {...rest}
         ref={mergedRef}
         data-selected={selected ? '' : undefined}
+        data-appearance={appearance}
+        data-size={size}
+        data-orientation={orientation}
         className={cn(
           cardClassNames.root,
-          'overflow-hidden rounded-md border border-border bg-card shadow-4',
+          'overflow-hidden rounded-md',
+          cardAppearanceClasses[appearance].surface,
+          cardSizeClasses[size],
+          orientation === 'horizontal' && 'flex flex-row',
           // Positions the check glyph / checkbox; plain cards keep their 0.4 positioning.
           (selectable || selected !== undefined) && 'relative',
           selected &&
@@ -267,6 +334,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
               forcedColors.selectedContainer,
             ),
           selectable && 'cursor-pointer',
+          selectable && !selected && cardAppearanceClasses[appearance].interactive,
           cardMode && focusRing,
           className,
         )}
@@ -343,7 +411,12 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
     // In a checkbox card the header keeps clear of the checkbox in the top end corner.
     <Component
       ref={ref}
-      className={cn(cardHeaderClassNames.root, 'p-4', titleId && 'pe-10', className)}
+      className={cn(
+        cardHeaderClassNames.root,
+        'p-[var(--wave-card-padding,1rem)]',
+        titleId && 'pe-10',
+        className,
+      )}
       {...rest}
     >
       {hasTitle && (
@@ -387,7 +460,11 @@ export const CardBody: PolymorphicComponent<'div', CardBodyOwnProps> = (props) =
   const { as, className, ref, ...rest } = props as CardSectionImplProps;
   const Component: React.ElementType = as ?? 'div';
   return (
-    <Component ref={ref} className={cn(cardBodyClassNames.root, 'p-4 pt-0', className)} {...rest} />
+    <Component
+      ref={ref}
+      className={cn(cardBodyClassNames.root, 'p-[var(--wave-card-padding,1rem)] pt-0', className)}
+      {...rest}
+    />
   );
 };
 CardBody.displayName = 'CardBody';
@@ -412,7 +489,11 @@ export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (prop
   return (
     <Component
       ref={ref}
-      className={cn(cardFooterClassNames.root, 'flex justify-end gap-2 p-4 pt-0', className)}
+      className={cn(
+        cardFooterClassNames.root,
+        'flex justify-end gap-2 p-[var(--wave-card-padding,1rem)] pt-0',
+        className,
+      )}
       {...rest}
     />
   );
