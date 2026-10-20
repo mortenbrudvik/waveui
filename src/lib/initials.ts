@@ -1,8 +1,9 @@
 /** Options of {@link getInitials}. */
 export interface GetInitialsOptions {
   /**
-   * Text direction of the place the initials are shown. In `'rtl'` the first and last initial swap,
-   * so they read in the order of the name on screen.
+   * Text direction of the place the initials are shown. In `'rtl'` the first and last initial of a
+   * left-to-right script swap, so they read in the order of the name on screen; a Hebrew or Arabic
+   * name keeps its order, which the text direction already mirrors.
    * @default 'ltr'
    */
   dir?: 'ltr' | 'rtl';
@@ -12,6 +13,10 @@ export interface GetInitialsOptions {
    */
   firstInitialOnly?: boolean;
 }
+
+/** A letter of a script that runs right to left. */
+const STRONG_RTL =
+  /^[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}]/u;
 
 /** Bracketed text: removed together with its brackets. Nested groups go in a few passes. */
 const BRACKETED = /\([^()]*\)|\[[^[\]]*\]|\{[^{}]*\}|<[^<>]*>/g;
@@ -64,5 +69,7 @@ export function getInitials(name: string, options: GetInitialsOptions = {}): str
   const first = letters[0]!.toUpperCase();
   if (firstInitialOnly || letters.length === 1) return first;
   const last = letters[letters.length - 1]!.toUpperCase();
-  return dir === 'rtl' ? last + first : first + last;
+  // The swap is for initials of a left-to-right script on a right-to-left page; a strong
+  // right-to-left letter already lays out right to left, in name order.
+  return dir === 'rtl' && !STRONG_RTL.test(first) ? last + first : first + last;
 }

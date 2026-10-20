@@ -2041,6 +2041,7 @@ describe('Carousel dragging (0.13)', () => {
         <Carousel.Item>
           <p>Slide 1 content</p>
           <button type="button">Inside action</button>
+          <input aria-label="Notes" />
         </Carousel.Item>
         {slides(4)}
       </Carousel>
@@ -2183,14 +2184,14 @@ describe('Carousel dragging (0.13)', () => {
     action.addEventListener('click', onClick);
     drag(el, 300, 100, 1000);
     // The browser's click that follows the release is dropped before it reaches the slide.
-    const dragClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+    const dragClick = new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 });
     act(() => {
       action.dispatchEvent(dragClick);
     });
     expect(onClick).not.toHaveBeenCalled();
     expect(dragClick.defaultPrevented).toBe(true);
     act(() => {
-      action.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      action.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
     });
     expect(onClick).toHaveBeenCalledOnce();
   });
@@ -2276,6 +2277,46 @@ describe('Carousel dragging (0.13)', () => {
     expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
     // Settle the observers the roving focus group and the sizing set up.
     await act(async () => {});
+  });
+
+  it('forgets a press that was released outside the track', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerMove(el, pointer('mouse', 299));
+    });
+    // The release lands elsewhere (the picker, outside the carousel): the track never sees it.
+    act(() => {
+      fireEvent.pointerUp(document.body, pointer('mouse', 299));
+    });
+    act(() => {
+      fireEvent.pointerMove(el, { ...pointer('mouse', 200), buttons: 0 });
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el.style.transform).toBe('translateX(0%)');
+  });
+
+  it('does not swallow a keyboard or programmatic click after a touch drag', () => {
+    const { el } = renderDraggable();
+    const onClick = vi.fn();
+    const action = screen.getByRole('button', { name: 'Inside action' });
+    action.addEventListener('click', onClick);
+    // A touch drag produces no click of its own.
+    drag(el, 300, 100, 1000, 'touch');
+    act(() => {
+      action.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+    });
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('does not start a drag from a text field inside a slide', () => {
+    const { el } = renderDraggable();
+    const input = screen.getByRole('textbox', { name: 'Notes', hidden: true });
+    act(() => {
+      fireEvent.pointerDown(input, pointer('mouse', 300));
+      fireEvent.pointerMove(input, pointer('mouse', 200));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
   });
 
   it('calls onValueChange once per change in StrictMode', () => {

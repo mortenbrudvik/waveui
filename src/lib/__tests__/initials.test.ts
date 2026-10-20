@@ -49,7 +49,10 @@ describe('getInitials', () => {
 
   it('swaps two initials in right-to-left text and leaves one alone', () => {
     expect(getInitials('Jane Doe', { dir: 'rtl' })).toBe('DJ');
-    expect(getInitials('דוד כהן', { dir: 'rtl' })).toBe('כד');
+    // A right-to-left script already runs right to left: the bidi algorithm puts the first initial
+    // on the right, so swapping would read the name backwards.
+    expect(getInitials('דוד כהן', { dir: 'rtl' })).toBe('דכ');
+    expect(getInitials('أحمد علي', { dir: 'rtl' })).toBe('أع');
     expect(getInitials('דוד כהן')).toBe('דכ');
     expect(getInitials('Ada', { dir: 'rtl' })).toBe('A');
     expect(getInitials('Jane Doe', { dir: 'rtl', firstInitialOnly: true })).toBe('J');

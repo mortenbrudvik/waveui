@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { isOwnEvent } from '../../lib/events';
+import { isEditableTarget, isOwnEvent } from '../../lib/events';
 
 /** The pointer has to move this far (px) before a press becomes a drag: a click stays a click. */
 const DRAG_START_DISTANCE = 4;
@@ -92,7 +92,18 @@ export function useCarouselDrag({
   const handlers: UseCarouselDragResult['handlers'] = {
     onPointerDown: (event) => {
       if (event.button !== 0 || !event.isPrimary || !isOwnEvent(event)) return;
+      // A text field inside a slide keeps its own pointer behaviour (selecting text).
+      if (isEditableTarget(event.target) || (event.target as Element).closest?.('select')) return;
       swallowClick.current = false;
+      // A release that never reaches the track (the pointer left before the drag began) must not
+      // leave the press open: the next move would start a drag with no button held.
+      event.currentTarget.ownerDocument.addEventListener(
+        'pointerup',
+        () => {
+          if (session.current && !session.current.active) session.current = null;
+        },
+        { capture: true, once: true },
+      );
       const x = event.clientX;
       const t = performance.now();
       session.current = {
@@ -130,7 +141,9 @@ export function useCarouselDrag({
       finish(false);
     },
     onClickCapture: (event) => {
-      if (!swallowClick.current) return;
+      // The click a browser sends after a mouse drag has a detail; a keyboard or programmatic
+      // click (detail 0) is never that click, and a touch drag sends none.
+      if (!swallowClick.current || event.detail === 0) return;
       swallowClick.current = false;
       event.preventDefault();
       event.stopPropagation();
