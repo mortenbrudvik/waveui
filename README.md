@@ -1604,6 +1604,82 @@ export function Author() {
 - **`target`** on the Popover root (next to `side` and `align`; `PopupTarget`, as on `Menu.Popover`) places the content at an element held in state or at a `VirtualElement` instead of the trigger. A controlled popover with a `target` needs no trigger; a toggle button used as the target carries its own `aria-haspopup="dialog"`, `aria-expanded` and `aria-controls` (give `Popover.Content` an `id`), a press on it does not count as outside, and Tab from it enters the content. TeachingPopover's `target` takes an element or a ref instead (it takes no `VirtualElement`, and Menu and Popover take no ref); a later release unifies them.
 - **Tooltip timing.** `openDelay` (default 200ms) is how long the pointer rests on the child, or the child has keyboard focus, before the tooltip appears: unlike Menu's and Popover's `openDelay`, it applies to focus too. `closeDelay` (default 100ms) is how long it stays once the pointer has left the child and the tooltip; blur and Escape hide it at once. `delay` is the deprecated name of `openDelay` (it warns once in development).
 
+### Custom overlays
+
+The hooks behind WaveUI's own surfaces are public, so a surface WaveUI does not ship (a command palette, a custom popup) joins the same layer stack: Escape closes the topmost layer first, a press in the Toaster or in a marked region closes nothing, and focus returns to the opener.
+
+```tsx
+import * as React from 'react';
+import {
+  Portal,
+  useMergedRefs,
+  useModalLayer,
+  usePopupPosition,
+  useDismiss,
+  useRestoreFocus,
+} from '@mortenbrudvik/waveui';
+
+// A modal command palette: the page behind it is inert, Tab stays inside.
+function CommandPalette({ open, onOpenChange, triggerRef }) {
+  const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+  const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const mergedRef = useMergedRefs(surfaceRef, setSurface);
+  const { layerId } = useModalLayer({
+    open,
+    container: surface,
+    onDismiss: () => onOpenChange(false),
+    refs: [surfaceRef],
+    triggerRef,
+  });
+  if (!open) return null;
+  return (
+    <Portal layerId={layerId}>
+      <div ref={mergedRef} role="dialog" aria-label="Command palette">
+        <input aria-label="Search commands" />
+      </div>
+    </Portal>
+  );
+}
+
+// A non-modal popup placed against its button.
+function Details() {
+  const [open, setOpen] = React.useState(false);
+  const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const { setReference, setFloating, floatingProps } = usePopupPosition({ open, side: 'bottom' });
+  const { layerId } = useDismiss({
+    open,
+    onDismiss: () => setOpen(false),
+    refs: [triggerRef, surfaceRef],
+    anchorRef: triggerRef,
+  });
+  useRestoreFocus({ enabled: open, container: surface, triggerRef });
+  const buttonRef = useMergedRefs(triggerRef, setReference);
+  const popupRef = useMergedRefs(surfaceRef, setSurface, setFloating);
+  return (
+    <>
+      <button ref={buttonRef} onClick={() => setOpen((o) => !o)}>
+        Details
+      </button>
+      {open && (
+        <Portal layerId={layerId}>
+          <div ref={popupRef} role="dialog" aria-label="Details" {...floatingProps}>
+            …
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
+```
+
+- **Layers.** `useDismiss` registers a layer (Escape, outside press and, for listboxes, focus leaving it); give `Portal` the returned `layerId` so a Popover or Menu opened inside becomes the layer's child and closes first. `useModalLayer` adds the trap, the `inert` isolation (WaveUI isolates instead of setting `aria-modal`, so toasts stay announced), the scroll lock and focus restore, with `modalType` `'modal'`, `'alert'` or `'non-modal'`.
+- **Positioning.** `usePopupPosition` takes `side`, `align`, `offset`, `flip`, `fallbackPlacements`, `shift`, `fitViewport`, `matchReferenceWidth`, `strategy`, `hideWhenDetached` and `onPositioned`, and returns `update()`. The anchor is an element or a `VirtualElement`.
+- **App-owned regions.** Spread `modalAllowProps` on a region that a modal must leave usable (a notification area); `useModalOpen()` tells you when a modal is open, so global shortcuts can wait.
+- **`positioning` prop.** Popover, `Menu.Popover`, Tooltip, TeachingPopover, Combobox, Dropdown, TagPicker, DatePicker and TimePicker take `positioning={{ offset, fitViewport, matchReferenceWidth, fallbackPlacements }}` (and `target` where the component has one); `side` and `align` stay their own props.
+- **Stability.** These hooks are public but pre-1.0: their options may still change through the usual deprecation path.
+
 ### Enter and exit motion
 
 Motion tokens are CSS variables on `:root`, the same in every theme: `--wave-duration-ultra-fast` (50ms), `-faster` (100ms), `-fast` (150ms), `-normal` (200ms), `-gentle` (250ms), `-slow` (300ms), `-slower` (400ms), `-ultra-slow` (500ms), and the curves `--wave-curve-accelerate-max`, `-accelerate-mid`, `-accelerate-min`, `-decelerate-max`, `-decelerate-mid`, `-decelerate-min`, `-easy-ease-max`, `-easy-ease` and `-linear`, with the values of Fluent's motion tokens (the guide's "Motion & Animation" chapter lists them). On the Tailwind path they are the utilities `duration-wave-*` and `ease-wave-*`; the precompiled `./styles` contains only the utilities Wave itself uses, so there use the variables in your own CSS.
@@ -2166,7 +2242,16 @@ Typeahead (Menu, selectable List, Tree, Dropdown, Listbox) accepts characters ty
 | Export                                                                                                                                       | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `useControllable(value, defaultValue, onChange)`                                                                                             | Controlled/uncontrolled state; returns `[value, setValue, isControlled]`; `setValue` accepts a value or an updater and skips no-op updates.                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `useRovingTabIndex(options)`                                                                                                                 | Roving tab stop and arrow-key navigation for composite widgets; items marked `data-disabled-focusable` stay reachable, a composite marked `data-roving-transparent` (a toolbar radio group) adds its items to the enclosing arrow order, and `tabStop: 'none'` leaves every item out of the Tab order (a composite reached by arrow keys only).                                                                                                                                                                                                                        |
+| `useRovingTabIndex(options)`                                                                                                                 | Roving tab stop and arrow-key navigation for composite widgets (`orientation: 'grid'` with `columns` for two-dimensional grids); items marked `data-disabled-focusable` stay reachable, a composite marked `data-roving-transparent` (a toolbar radio group) adds its items to the enclosing arrow order, and `tabStop: 'none'` leaves every item out of the Tab order (a composite reached by arrow keys only).                                                                                                                                                                                                                        |
+| `usePopupPosition(options)`                                                                                                                  | Place a surface against an anchor (an element or a `VirtualElement`): `side`, `align`, `offset`, `flip`, `fallbackPlacements`, `shift`, `fitViewport`, `matchReferenceWidth`, `strategy`, `hideWhenDetached`, `onPositioned`; returns `floatingProps`, `update()` and the final placement.                                                                                                                                                                                                                                                                             |
+| `useDismiss(options)`, `DismissLayerProvider`                                                                                                | Register a dismiss layer (Escape, outside press, focus leaving it) in WaveUI's layer stack; `Portal layerId` and `DismissLayerProvider` make layers opened inside its children.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `useModalLayer(options)`, `useFocusTrap`, `useInitialFocus`, `useRestoreFocus`                                                               | A modal surface's dismissal, focus trap, `inert` isolation, scroll lock and focus restore (`modalType`: `modal`, `alert`, `non-modal`); the pieces are public too.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `useModalOpen()`, `hasOpenModal()`, `modalAllowProps`                                                                                        | Whether a modal is open; props that keep an app-owned region usable over a modal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `useFocusableGroup(options)`                                                                                                                 | One tab stop that holds several focusable elements (`tabBehavior`: `unlimited`, `limited`, `limited-trap-focus`); Enter or F2 enters, Escape leaves.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `useFocusVisible()`                                                                                                                          | `true` while the last input was the keyboard; `false` on the server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `useGridNavigation(options)`                                                                                                                 | Keyboard navigation of a static `<table role="grid">` (the Table's own).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `getTabbableElements(container)`, `getFirstTabbable`, `getLastTabbable`                                                                      | The tabbable elements of a container in Tab order (hidden, disabled and `inert` ones left out).                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `focusRing`, `focusRingInset`, `inputFocus`, `inputFocusWithin`                                                                              | The focus class strings of the library, to compose with `cn()` on your own controls.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `useId(prefix?)`                                                                                                                             | SSR-safe ids (`prefix-<react id>`; never parse the React part).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `useEventCallback(fn)`                                                                                                                       | Stable callback that always calls the latest `fn`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `useMergedRefs(...refs)`                                                                                                                     | One stable callback ref for several refs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -2191,6 +2276,16 @@ Typeahead (Menu, selectable List, Tree, Dropdown, Listbox) accepts characters ty
 | `mergeRefs(...refs)`                                                                                                                         | Merge refs outside components.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `resolveSlot`, `renderSlot`                                                                                                                  | The slot helpers the components use.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `getThemeClassName(theme)`                                                                                                                   | The theme classes of a theme.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+## Upgrading from 0.11
+
+0.12 removes nothing public; these changes can still affect your types and tests:
+
+1. **`target` widens.** `Popover` and `Menu.Popover` `target` also accept a ref object (`PopupTargetInput`), and `TeachingPopover` `target` a `VirtualElement`; code that reads `PopoverProps['target']` as `PopupTarget` needs the wider type.
+2. **`useRovingTabIndex` `orientation` gains `'grid'`:** an exhaustive `switch` or a `Record` over the option's type needs the case.
+3. **`usePopupPosition` results gain `update()`**, and `useListboxPopup` options gain `positioning`; nothing else about them changes.
+
+The CHANGELOG's [0.12.0 section](CHANGELOG.md) lists the additions.
 
 ## Upgrading from 0.10
 

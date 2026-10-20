@@ -9,6 +9,7 @@
 - **Phase 4 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md) (0.9.0, released 2026-10-17; P4-05 not included).
 - **Phase 5 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-5-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-5-design.md) (0.10.0, released 2026-10-17).
 - **Phase 6 design:** [`docs/superpowers/specs/2026-10-17-fluent-parity-phase-6-design.md`](superpowers/specs/2026-10-17-fluent-parity-phase-6-design.md) (0.11.0, implemented).
+- **Phase 7 design:** [`docs/superpowers/specs/2026-10-20-fluent-parity-phase-7-design.md`](superpowers/specs/2026-10-20-fluent-parity-phase-7-design.md) (0.12.0, implemented; plan in `docs/superpowers/plans/2026-10-20-fluent-parity-phase-7.md`).
 
 How to read this document:
 - **Phases** are releases (minor versions after 0.5.0, then 1.0.0). A phase has a theme, epics, entry and exit criteria.
@@ -675,6 +676,8 @@ Goal: the responsive navigation pattern of Fluent apps.
 ---
 
 ### Phase 7 — 0.12.0: overlay and focus primitives made public
+
+**Built as (0.12.0, see the Phase 7 spec).** `target` exists only where a component already had one (Popover, `Menu.Popover`, TeachingPopover); Tooltip and the pickers take `PopupPositioningOptions`. The raw `DismissLayerContext` stays internal (only `DismissLayerProvider` is exported), `useModalOpen()`, `hasOpenModal()` and `modalAllowProps` were added for the issue [#5](https://github.com/mortenbrudvik/waveui/issues/5) region and for global shortcuts, and `useFocusableGroup` follows tabster's groupper rules (Enter or F2 enters; `unlimited` intercepts no key). Per-surface mount nodes (`drw-5`, `dialog-6`) and an effective-open context for popups inside a closing kept-mounted surface stay in the backlog.
 
 **Theme.** The positioning, dismiss, modal and focus machinery behind WaveUI's overlays becomes public API, so apps can build custom surfaces that join WaveUI's layer stack.
 **Entry:** 0.11.0 merged to `main` (virtual anchors, hover intent and focusable groups have shipped internally); spec approved. **Exit:** process criteria; a "Custom overlays" guide chapter; `verify-dist` tree-shaking probes for each hook.

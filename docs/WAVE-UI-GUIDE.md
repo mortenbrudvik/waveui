@@ -1143,6 +1143,23 @@ A compound that also has a one-prop form (`<TagPicker options={…} />`) makes t
 - Content the root needs before the parts render (the options' labels for the tags and the summary) is read from the children (`collectOptionLabels`), so the server HTML agrees with the client.
 - Routed props go to whichever trigger part renders (`TagPicker.Input` or `TagPicker.Button`), and exactly one trigger renders (`TagPicker:trigger`).
 
+### Pattern 16: Custom Overlays on the Public Hooks
+
+The hooks behind the library's own surfaces are public, so a surface the library does not ship (a command palette, a full-screen overlay, a custom popup) behaves like a built-in one. Three pieces compose it:
+
+1. **A dismiss layer** (`useDismiss`): Escape closes the topmost layer first, a press outside the layer's tree closes it, and `Portal layerId={layerId}` makes the layers opened inside (a Popover, a Menu) its children, which close first.
+2. **A position** (`usePopupPosition`) for a surface anchored to something: `side`, `align`, `offset`, `flip` with `fallbackPlacements`, `shift`, `fitViewport`, `matchReferenceWidth`, `hideWhenDetached` and `onPositioned`; the anchor is an element or a `VirtualElement`.
+3. **A modal layer** (`useModalLayer`) for a surface that takes over the page: the dismiss layer plus the focus trap, the `inert` isolation of everything else, the scroll lock and focus restore, in the order that works. `modalType` `'non-modal'` registers the lighter `dialog` layer kind instead.
+
+Rules that keep a custom surface honest:
+
+- Hold the surface element in state through a callback ref (`useMergedRefs(surfaceRef, setSurface)`) and pass it as `container`; never read `ref.current` in an effect keyed on `open`.
+- Key the hooks on the open state, not on a mount, and move focus out of a closing surface in the closing commit (C-POPUPS).
+- Isolation is `inert`, never `aria-modal`: the Toaster stays announced and reachable. An app-owned region that a modal must leave usable (a status bar, its own notification area) spreads `modalAllowProps`: its content counts as inside every dismiss layer, its tabbable elements join every focus trap's Tab cycle and it is never made `inert`. `useModalOpen()` says whether a modal is open, for global shortcuts.
+- A focus trap and the roving or group hooks cooperate through the DOM: `useFocusableGroup` makes a row of controls one tab stop (Enter enters, Escape leaves), `useRovingTabIndex` with `orientation: 'grid'` is the arrow-key model of a grid, `useActiveDescendant` that of a widget that keeps focus on one element, and `getTabbableElements` plus the `focusRing` recipes are the finders and look the library uses.
+
+`stories/CustomOverlays.fixtures.tsx` holds a command palette over a Dialog, a popup on the position and dismiss hooks, and an app-owned status region; `src/__tests__/integration.test.tsx` ("custom overlays on the public hooks") shows the behaviour they must keep.
+
 ### Props Interface Conventions
 
 - Extend native HTML attributes: `React.HTMLAttributes<HTMLDivElement>`
@@ -1575,7 +1592,7 @@ Live regions must exist before their content changes. `Toaster` keeps two perman
 ### Focus Management
 
 1. **Focus rings**: focusable controls use `focusRing` (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`), cells and rows `focusRingInset`; text inputs show a primary bottom border (`inputFocus`) with `focus:outline-hidden`, which keeps an outline in forced-colors mode. Never use `focus:outline-none`. A focusable control with the disabled look (`disabledFocusable`, a self-disabling boundary button) goes back to full opacity while its ring shows, so the ring keeps its contrast.
-2. **Moving focus into overlays**: Dialog and Drawer focus their first focusable element (or keep an `autoFocus` element, also when stacked over or nested in another dialog, and in a popover opened from one), Menu focuses its first item, the DatePicker calendar its focused day. Build custom overlays on these components rather than re-implementing traps.
+2. **Moving focus into overlays**: Dialog and Drawer focus their first focusable element (or keep an `autoFocus` element, also when stacked over or nested in another dialog, and in a popover opened from one), Menu focuses its first item, the DatePicker calendar its focused day. Build custom overlays on these components, or on the public hooks of Pattern 16, rather than re-implementing traps.
 3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. A non-modal Dialog or Drawer, and an inline Drawer, move focus on close only when focus was inside them (`useRestoreFocus` with `requireFocusInside`; focus in a popup opened from them counts as inside). Popovers and menus return focus to their trigger (TeachingPopover: to where focus was) when focus was inside them (or lost to `<body>`) at close. A close by hover moves no focus, and neither does the close of a surface opened from inside one that closes by hover (a submenu, a hover card in a hover card). When a focused element disappears (a SearchBox clear button, a dismissed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`; TimePicker and DatePicker settle erased text on Tab before focus moves, so Tab never lands on the clear button that the commit removes.
 4. **Focus trapping**: modal and alert Dialogs and Drawers trap Tab (non-modal and inline ones do not), including the Toaster region and overlays opened from them. Tab inside a plain `<Portal>` rendered in a dialog is native and wraps to the dialog's first or last element at the portal's edges. Focus that lands outside the trap is returned in a microtask after the `focusin`.
 5. **Skip links**: for content-heavy pages, provide a "Skip to main content" link.
