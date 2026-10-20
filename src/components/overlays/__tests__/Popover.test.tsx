@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { flushSync } from 'react-dom';
 import { hydrateRoot } from 'react-dom/client';
@@ -3169,6 +3169,26 @@ describe('Popover', () => {
       render(<WithPositioning positioning={{ offset }} />);
       const surface = screen.getByRole('dialog', { name: 'Toggle' });
       await waitFor(() => expect(surface.style.transform).toBe(expected));
+    });
+
+    it('positioning.fitViewport scrolls the content inside the border and keeps the beak outside the scroller', async () => {
+      mockLayout(boxes);
+      render(<WithPositioning positioning={{ fitViewport: true }} />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      const scroller = within(surface).getByText('Body').closest<HTMLElement>('.overflow-y-auto');
+      expect(scroller).not.toBeNull();
+      expect(surface.contains(scroller)).toBe(true);
+      expect(
+        surface.querySelector('[data-wave-popover-arrow]')?.closest('.overflow-y-auto'),
+      ).toBeNull();
+      expect(scroller!.className).toContain('--wave-popup-available-height');
+    });
+
+    it('has no scroll container without fitViewport', () => {
+      mockLayout(boxes);
+      render(<WithPositioning />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      expect(within(surface).getByText('Body').closest('.overflow-y-auto')).toBeNull();
     });
 
     it('positioning.fitViewport limits the surface to the available space', async () => {

@@ -233,6 +233,8 @@ interface PopoverContextValue {
   floatingProps: { 'data-side': string; 'data-align': string; style: React.CSSProperties };
   arrowStyles: React.CSSProperties;
   placedSide: PopoverPhysicalSide;
+  /** `positioning.fitViewport`: the content scrolls inside the border when it is limited. */
+  fitViewport: boolean;
 }
 
 const PopoverContext = React.createContext<PopoverContextValue | null>(null);
@@ -268,6 +270,7 @@ function getInertContext(): PopoverContextValue {
     floatingProps: { 'data-side': 'bottom', 'data-align': 'start', style: {} },
     arrowStyles: {},
     placedSide: 'bottom',
+    fitViewport: false,
   };
   return inertContext;
 }
@@ -444,9 +447,13 @@ const PopoverRoot = ({
     ...resolvePositioning(positioning, { offset: 8 }),
   });
   // A ref target that holds no element yet keeps the popup hidden (as TeachingPopover's is).
-  const floatingProps = targetPending
-    ? { ...positionedProps, style: { ...positionedProps.style, visibility: 'hidden' as const } }
-    : positionedProps;
+  const floatingProps = React.useMemo(
+    () =>
+      targetPending
+        ? { ...positionedProps, style: { ...positionedProps.style, visibility: 'hidden' as const } }
+        : positionedProps,
+    [targetPending, positionedProps],
+  );
 
   // The one focus resolver: the focus-return fallback and the layer's anchor (where a surface
   // opened from the content restores focus once its opener is gone). In context mode the element
@@ -674,6 +681,7 @@ const PopoverRoot = ({
       floatingProps,
       arrowStyles,
       placedSide,
+      fitViewport: positioning?.fitViewport === true,
     }),
     [
       open,
@@ -698,6 +706,7 @@ const PopoverRoot = ({
       floatingProps,
       arrowStyles,
       placedSide,
+      positioning?.fitViewport,
     ],
   );
 
@@ -861,6 +870,7 @@ export const PopoverContent = ({
     floatingProps,
     arrowStyles,
     placedSide,
+    fitViewport,
     onContentKeyDown,
     hoverSurfaceHandlers: hover,
     contextMode,
@@ -946,6 +956,20 @@ export const PopoverContent = ({
 
   if (!open) return null;
 
+  const titleAndChildren = (
+    <>
+      {hasTitle && (
+        <h2
+          id={titleId}
+          className={cn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold')}
+        >
+          {title}
+        </h2>
+      )}
+      {children}
+    </>
+  );
+
   return (
     <Portal layerId={layerId}>
       <div
@@ -980,15 +1004,15 @@ export const PopoverContent = ({
           data-wave-popover-arrow=""
           className={popoverContentClassNames.beak}
         />
-        {hasTitle && (
-          <h2
-            id={titleId}
-            className={cn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold')}
-          >
-            {title}
-          </h2>
+        {fitViewport ? (
+          // The beak sits half outside the border, so the scroller is inside it: the viewport
+          // limit minus the content's padding (2 x 1rem) and border (2 x 1px).
+          <div className="overflow-y-auto max-h-[calc(var(--wave-popup-available-height)-2rem-2px)]">
+            {titleAndChildren}
+          </div>
+        ) : (
+          titleAndChildren
         )}
-        {children}
       </div>
     </Portal>
   );
