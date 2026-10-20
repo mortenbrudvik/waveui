@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type * as React from 'react';
 import {
   arrow as arrowMiddleware,
@@ -67,6 +67,22 @@ export interface UsePopupPositionOptions {
    * scrolled out of view or clipped away. @default false
    */
   hideWhenDetached?: boolean;
+  /**
+   * Called after the surface is positioned, and again whenever the final placement changes (a flip,
+   * a fallback): not on every scroll or resize recompute. It runs from an effect, never during
+   * render, and not while closed.
+   */
+  onPositioned?: (info: PositionedInfo) => void;
+}
+
+/** What {@link UsePopupPositionOptions.onPositioned} receives. */
+export interface PositionedInfo {
+  /** Final placement after flipping, e.g. `'top-start'`. */
+  placement: string;
+  /** Final physical side after flipping. */
+  side: 'top' | 'bottom' | 'left' | 'right';
+  /** Always `true`: the callback runs once a position exists. */
+  isPositioned: boolean;
 }
 
 /** Returned by {@link usePopupPosition}. */
@@ -90,6 +106,8 @@ export interface UsePopupPositionResult {
   side: 'top' | 'bottom' | 'left' | 'right';
   /** Whether a position has been computed since the popup opened. */
   isPositioned: boolean;
+  /** Recomputes the position now, for a change floating-ui cannot observe. A no-op while closed. */
+  update(): void;
   /** Spread onto the surface: `data-side`, `data-align` and the position style. */
   floatingProps: { 'data-side': string; 'data-align': string; style: React.CSSProperties };
 }
@@ -240,6 +258,7 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
     strategy = 'fixed',
     fallbackPlacements,
     hideWhenDetached = false,
+    onPositioned,
   } = options;
   const dir = useDirection();
   const physicalSide = resolveSide(side, dir);
@@ -293,6 +312,9 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
   const virtualRef = useRef<VirtualElement | null>(null);
   const proxyRef = useRef<VirtualProxy | null>(null);
   const updatePosition = useEventCallback(update);
+  const updateWhileOpen = useEventCallback(() => {
+    if (open) update();
+  });
   const { setReference: setFloatingReference, reference: floatingReference } = refs;
   const setReference = useCallback(
     (anchor: HTMLElement | VirtualElement | null) => {
@@ -314,6 +336,13 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
   );
 
   const [finalSide, finalAlign = 'center'] = placement.split('-') as [PhysicalSide, string?];
+
+  const reportPositioned = useEventCallback((info: PositionedInfo) => onPositioned?.(info));
+  useEffect(() => {
+    if (open && isPositioned) {
+      reportPositioned({ placement, side: finalSide, isPositioned: true });
+    }
+  }, [open, isPositioned, placement, finalSide, reportPositioned]);
 
   const referenceHidden = middlewareData.hide?.referenceHidden === true;
   const style = useMemo<React.CSSProperties>(() => {
@@ -352,6 +381,7 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
     placement,
     side: finalSide,
     isPositioned,
+    update: updateWhileOpen,
     floatingProps,
   };
 }

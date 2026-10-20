@@ -609,3 +609,69 @@ describe('resolvePositioning', () => {
     );
   });
 });
+
+describe('usePopupPosition — onPositioned and update', () => {
+  it('calls onPositioned once with the final placement, not on every recompute', async () => {
+    const onPositioned = vi.fn();
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup onPositioned={onPositioned} onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(onPositioned).toHaveBeenCalledTimes(1);
+    expect(onPositioned).toHaveBeenCalledWith({
+      placement: 'bottom-start',
+      side: 'bottom',
+      isPositioned: true,
+    });
+    act(() => last!.update());
+    await act(async () => {});
+    expect(onPositioned).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the flipped placement', async () => {
+    boxes.reference = { x: 500, y: 700, width: 200, height: 20 };
+    const onPositioned = vi.fn();
+    render(<Popup onPositioned={onPositioned} />);
+    await waitFor(() => expect(onPositioned).toHaveBeenCalled());
+    expect(onPositioned).toHaveBeenLastCalledWith(
+      expect.objectContaining({ side: 'top', placement: 'top-start' }),
+    );
+  });
+
+  it('calls onPositioned once per change in StrictMode', async () => {
+    const onPositioned = vi.fn();
+    let last: UsePopupPositionResult | null = null;
+    render(
+      <React.StrictMode>
+        <Popup onPositioned={onPositioned} onResult={(r) => (last = r)} />
+      </React.StrictMode>,
+    );
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(onPositioned).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onPositioned while closed', async () => {
+    const onPositioned = vi.fn();
+    render(<Popup open={false} onPositioned={onPositioned} />);
+    await act(async () => {});
+    expect(onPositioned).not.toHaveBeenCalled();
+  });
+
+  it('update() recomputes the position on demand', async () => {
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup onResult={(r) => (last = r)} />);
+    const floating = screen.getByTestId('floating');
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(translateOf(floating).x).toBe(500);
+    boxes.reference = { x: 300, y: 100, width: 200, height: 20 };
+    act(() => last!.update());
+    await waitFor(() => expect(translateOf(floating).x).toBe(300));
+  });
+
+  it('update() is a no-op while closed', async () => {
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup open={false} onResult={(r) => (last = r)} />);
+    await act(async () => {});
+    expect(() => act(() => last!.update())).not.toThrow();
+    expect(last!.isPositioned).toBe(false);
+  });
+});
