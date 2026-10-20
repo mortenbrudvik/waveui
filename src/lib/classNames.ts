@@ -244,6 +244,8 @@ export const personaClassNames = {
   badge: 'wave-persona__badge',
   primaryText: 'wave-persona__primary-text',
   secondaryText: 'wave-persona__secondary-text',
+  tertiaryText: 'wave-persona__tertiary-text',
+  quaternaryText: 'wave-persona__quaternary-text',
 } as const;
 
 /**

@@ -44,7 +44,7 @@ export type {
 } from './InteractionTag';
 
 export { Persona } from './Persona';
-export type { PersonaProps } from './Persona';
+export type { PersonaProps, PersonaSize } from './Persona';
 
 export { Divider } from './Divider';
 export type { DividerProps, DividerOwnProps } from './Divider';
