@@ -5,8 +5,10 @@ import {
   compareLayers,
   getTopmostLayer,
   hasIsolatingModalBelow,
+  hasOpenModal,
   isInsideLayerTree,
   isInsideOtherOpenModal,
+  modalAllowProps,
   registerLayer,
   registerLayerElement,
   registerLayerIsolation,
@@ -965,5 +967,34 @@ describe('layers — hasIsolatingModalBelow (dim once)', () => {
     expect(listener).toHaveBeenCalledTimes(2);
     // Listeners read the new state.
     expect(snapshots).toEqual([true, false]);
+  });
+});
+
+describe('layers — hasOpenModal', () => {
+  it('is false without layers', () => {
+    expect(hasOpenModal()).toBe(false);
+  });
+
+  it('is true while a modal-kind layer is registered and false after it unregisters', () => {
+    const release = registerLayer(makeLayer('modal', { kind: 'modal' }));
+    expect(hasOpenModal()).toBe(true);
+    release();
+    expect(hasOpenModal()).toBe(false);
+  });
+
+  it.each(['popover', 'menu', 'listbox', 'tooltip', 'toast', 'dialog'] as const)(
+    'ignores a %s layer',
+    (kind) => {
+      register(makeLayer('other', { kind }));
+      expect(hasOpenModal()).toBe(false);
+    },
+  );
+});
+
+describe('layers — modalAllowProps', () => {
+  it('marks an element the way the allow selector reads it', () => {
+    expect(modalAllowProps).toEqual({ 'data-wave-focus-trap-allow': '' });
+    const el = element('div', modalAllowProps);
+    expect(el.matches(ALLOW_OUTSIDE_SELECTOR)).toBe(true);
   });
 });
