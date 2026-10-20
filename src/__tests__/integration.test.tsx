@@ -13,6 +13,11 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import * as ImageStories from '../../stories/Image.stories';
+import {
+  AppStatusRegion,
+  CommandPalette,
+  CustomPopup,
+} from '../../stories/CustomOverlays.fixtures';
 import * as Wave from '../index';
 import {
   Accordion,
@@ -8102,6 +8107,109 @@ describe('Nav and NavDrawer across components (0.11 spec §4.6 #9)', () => {
     expect(hamburger).toHaveFocus();
     await user.keyboard('{ArrowRight}');
     expect(button('Search')).toHaveFocus();
+    await expectNoA11yViolations(document.body);
+  });
+});
+
+describe('custom overlays on the public hooks (0.12)', () => {
+  const region = () => screen.getByRole('region', { name: 'App status' });
+
+  function PaletteOverDialog({
+    onDialogOpenChange,
+  }: {
+    onDialogOpenChange?: (o: boolean) => void;
+  }) {
+    const [paletteOpen, setPaletteOpen] = React.useState(false);
+    const [dialogOpen, setDialogOpen] = React.useState(true);
+    const openerRef = React.useRef<HTMLButtonElement>(null);
+    return (
+      <Toaster>
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(next) => {
+            onDialogOpenChange?.(next);
+            setDialogOpen(next);
+          }}
+        >
+          <Dialog.Content title="Project">
+            <Button ref={openerRef} onClick={() => setPaletteOpen(true)}>
+              Open palette
+            </Button>
+            <NotifyButton />
+          </Dialog.Content>
+        </Dialog>
+        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} triggerRef={openerRef} />
+        <AppStatusRegion />
+      </Toaster>
+    );
+  }
+
+  it('a custom popup closes topmost-first with a Popover opened over it, and returns focus', async () => {
+    const user = userEvent.setup();
+    render(
+      <CustomPopup label="Details">
+        <Popover>
+          <Popover.Trigger>
+            <Button>More</Button>
+          </Popover.Trigger>
+          <Popover.Content aria-label="More details">Body</Popover.Content>
+        </Popover>
+      </CustomPopup>,
+    );
+    await user.click(button('Details'));
+    await user.click(button('More'));
+    expect(screen.getByRole('dialog', { name: 'More details' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'More details' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Details' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
+    expect(button('Details')).toHaveFocus();
+  });
+
+  it('a press in a region marked with modalAllowProps closes no layer and the region is not inert', async () => {
+    const user = userEvent.setup();
+    const onDialogOpenChange = vi.fn();
+    render(<PaletteOverDialog onDialogOpenChange={onDialogOpenChange} />);
+    expect(screen.getByRole('dialog', { name: 'Project' })).toBeInTheDocument();
+    expect(region().closest('[inert]')).toBeNull();
+    await user.click(within(region()).getByRole('button', { name: 'Retry' }));
+    expect(onDialogOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Project' })).toBeInTheDocument();
+  });
+
+  it('a command palette over a Dialog closes first on Escape and returns focus to its opener', async () => {
+    const user = userEvent.setup();
+    const onDialogOpenChange = vi.fn();
+    render(<PaletteOverDialog onDialogOpenChange={onDialogOpenChange} />);
+    await user.click(button('Open palette'));
+    const palette = screen.getByRole('dialog', { name: 'Command palette' });
+    expect(within(palette).getByRole('textbox', { name: 'Search commands' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Command palette' })).toBeNull();
+    expect(onDialogOpenChange).not.toHaveBeenCalled();
+    expect(button('Open palette')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(onDialogOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('a palette keeps a Toaster and an allow region in its Tab cycle and leaves them usable', async () => {
+    const user = userEvent.setup();
+    render(<PaletteOverDialog />);
+    await user.click(button('Notify'));
+    await user.click(button('Open palette'));
+    expect(screen.getByRole('dialog', { name: 'Command palette' })).toBeInTheDocument();
+    expect(region().closest('[inert]')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Notifications' }).closest('[inert]')).toBeNull();
+    const reached = new Set<string>();
+    for (let i = 0; i < 10; i += 1) {
+      await user.tab();
+      const focused = document.activeElement;
+      reached.add(focused?.getAttribute('aria-label') ?? focused?.textContent ?? '');
+    }
+    expect(reached).toContain('Search commands');
+    expect(reached).toContain('Retry');
+    expect(reached).toContain('Dismiss');
     await expectNoA11yViolations(document.body);
   });
 });
