@@ -4,6 +4,8 @@ import { cn } from '../../lib/cn';
 import { avatarClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useDirection } from '../../hooks/useDirection';
+import { getInitials } from '../../lib/initials';
 import { PersonIcon } from '../../lib/icons';
 import type { Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -43,6 +45,13 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
    * @default 'circular'
    */
   shape?: 'circular' | 'square';
+  /**
+   * The initials shown when there is no image and no icon, instead of the ones computed from
+   * `name` (see `getInitials`): a string, an element or an object of `<span>` attributes. A value
+   * that renders nothing (`''`, `[]`) keeps the computed initials. Rendered in an `aria-hidden`
+   * `<span>`.
+   */
+  initials?: Slot<'span'>;
   /**
    * Icon shown instead of the initials when there is no image. Rendered in an `aria-hidden`
    * `<span>` (a slot object can override its attributes). A falsy value (`null`, `false`, `''`,
@@ -97,15 +106,6 @@ export const avatarSizeClasses: Readonly<Record<Size, string>> = {
 };
 
 const IMAGE_CLASS = 'w-full h-full object-cover';
-
-/** First letter of the first and last word, upper-cased; `''` for a blank name. */
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '';
-  const first = Array.from(parts[0]!)[0] ?? '';
-  const last = parts.length > 1 ? (Array.from(parts[parts.length - 1]!)[0] ?? '') : '';
-  return (first + last).toUpperCase();
-}
 
 /** A name with its whitespace collapsed, or `undefined` when it is blank. */
 function normaliseName(name: string | undefined): string | undefined {
@@ -212,6 +212,7 @@ export const Avatar = ({
   name,
   size: sizeProp,
   shape: shapeProp,
+  initials: initialsSlot,
   icon,
   image,
   badge,
@@ -370,7 +371,16 @@ export const Avatar = ({
     imageNode === null && icon && slotRendersContent(icon)
       ? renderSlot(icon, 'span', cn(avatarClassNames.icon, 'inline-flex'), { 'aria-hidden': true })
       : null;
-  const initials = imageNode === null && iconNode === null && name ? getInitials(name) : '';
+  const dir = useDirection();
+  const showsInitials = imageNode === null && iconNode === null;
+  const computedInitials = showsInitials && name ? getInitials(name, { dir }) : '';
+  const initialsNode = !showsInitials ? null : initialsSlot && slotRendersContent(initialsSlot) ? (
+    renderSlot(initialsSlot, 'span', avatarClassNames.initials, { 'aria-hidden': true })
+  ) : computedInitials ? (
+    <span aria-hidden="true" className={avatarClassNames.initials}>
+      {computedInitials}
+    </span>
+  ) : null;
 
   let content: React.ReactNode;
   let colorClass: string | undefined;
@@ -379,12 +389,8 @@ export const Avatar = ({
   } else if (iconNode !== null) {
     content = iconNode;
     colorClass = 'bg-muted text-muted-foreground';
-  } else if (initials) {
-    content = (
-      <span aria-hidden="true" className={avatarClassNames.initials}>
-        {initials}
-      </span>
-    );
+  } else if (initialsNode) {
+    content = initialsNode;
     colorClass = 'bg-primary text-primary-foreground';
   } else {
     content = <PersonIcon size="60%" className={avatarClassNames.icon} />;

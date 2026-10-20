@@ -18,6 +18,8 @@ export * from './lib/classNames';
 export { addDays, addMonths, isSameDay, startOfWeek, getWeekNumber } from './lib/date';
 export type { GetWeekNumberOptions } from './lib/date';
 export { hsvToHex, hexToHsv } from './lib/color';
+export { getInitials } from './lib/initials';
+export type { GetInitialsOptions } from './lib/initials';
 export { createToaster } from './lib/toaster';
 export type { ToasterHandle } from './lib/toaster';
 

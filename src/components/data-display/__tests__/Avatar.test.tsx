@@ -1165,4 +1165,70 @@ describe('Avatar', () => {
       void (<Avatar size={50} />);
     });
   });
+
+  describe('initials (0.13)', () => {
+    const initialsOf = (container: HTMLElement) =>
+      container.querySelector('.wave-avatar__initials')?.textContent;
+
+    it('strips brackets and punctuation: Jane Doe (Contoso) gives JD', () => {
+      const { container } = render(<Avatar name="Jane Doe (Contoso)" />);
+      expect(initialsOf(container)).toBe('JD');
+    });
+
+    it('swaps the two initials in right-to-left layouts', () => {
+      const { container } = renderWithProviders(<Avatar name="Jane Doe" />, { dir: 'rtl' });
+      expect(initialsOf(container)).toBe('DJ');
+    });
+
+    it('shows the person glyph for a name without initials (a phone number, ideographs)', () => {
+      const { container, rerender } = render(<Avatar name="+1 (555) 010-0000" />);
+      expect(initialsOf(container)).toBeUndefined();
+      expect(container.querySelector('svg')).not.toBeNull();
+      rerender(<Avatar name="田中太郎" />);
+      expect(initialsOf(container)).toBeUndefined();
+      expect(container.querySelector('svg')).not.toBeNull();
+    });
+
+    it.each([
+      ['a string', 'XY'],
+      ['an element', <b key="b">XY</b>],
+    ])('the initials slot replaces the computed initials (%s)', (_label, slot) => {
+      const { container } = render(<Avatar name="Jane Doe" initials={slot} />);
+      const node = container.querySelector('.wave-avatar__initials');
+      expect(node?.textContent).toBe('XY');
+      expect(node).toHaveAttribute('aria-hidden', 'true');
+      expect(container.textContent).not.toContain('JD');
+    });
+
+    it('an object slot adds its props to the initials element', () => {
+      const { container } = render(
+        <Avatar name="Jane Doe" initials={{ children: 'XY', className: 'font-black' }} />,
+      );
+      const node = container.querySelector('.wave-avatar__initials');
+      expect(node?.textContent).toBe('XY');
+      expect(node).toHaveClass('font-black');
+    });
+
+    it('an initials slot works without a name', () => {
+      const { container } = render(<Avatar initials="XY" />);
+      expect(initialsOf(container)).toBe('XY');
+    });
+
+    it.each([
+      ['', '' as const],
+      ['an empty array', [] as unknown as string],
+    ])(
+      'an initials slot that renders nothing (%s) falls back to the computed initials',
+      (_label, slot) => {
+        const { container } = render(<Avatar name="Jane Doe" initials={slot} />);
+        expect(initialsOf(container)).toBe('JD');
+      },
+    );
+
+    it('an image still wins over the initials slot', () => {
+      const { container } = render(<Avatar name="Jane Doe" src={PHOTO} initials="XY" />);
+      expect(initialsOf(container)).toBeUndefined();
+      expect(container.querySelector('img')).not.toBeNull();
+    });
+  });
 });
