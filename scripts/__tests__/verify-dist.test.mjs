@@ -641,6 +641,12 @@ function withPhase7Modules(files) {
     result[`dist/${path}.mjs`] = `${directive}export function ${name}() { ${body} }\n`;
     result[`dist/${path}.cjs`] = `${directive}exports.${name} = function ${name}() { ${body} };\n`;
   }
+  result['dist/hooks/useFocusableGroup.mjs'] =
+    `${DIRECTIVE}import { getFirstTabbable } from '../lib/focus.mjs';\n` +
+    'export function useFocusableGroup() { return { first: getFirstTabbable }; }\n';
+  result['dist/hooks/useFocusableGroup.cjs'] =
+    `${DIRECTIVE}const { getFirstTabbable } = require('../lib/focus.cjs');\n` +
+    'exports.useFocusableGroup = function useFocusableGroup() { return { first: getFirstTabbable }; };\n';
   result['dist/hooks/useModalOpen.mjs'] =
     `${DIRECTIVE}import { hasOpenModal } from '../lib/layers.mjs';\n` +
     'export function useModalOpen() { return hasOpenModal(); }\n';
@@ -653,15 +659,18 @@ function withPhase7Modules(files) {
     `${DIRECTIVE}function Popover() { return null; }\nPopover.displayName = 'Popover';\nexports.Popover = Popover;\n`;
   result['dist/index.mjs'] +=
     "export { useFocusVisible } from './hooks/useFocusVisible.mjs';\n" +
+    "export { useFocusableGroup } from './hooks/useFocusableGroup.mjs';\n" +
     "export { usePopupPosition } from './hooks/usePopupPosition.mjs';\n" +
     "export { useModalOpen } from './hooks/useModalOpen.mjs';\n" +
     "export { getFirstTabbable } from './lib/focus.mjs';\n";
   result['dist/index.cjs'] +=
     "const phase7Focus = require('./hooks/useFocusVisible.cjs');\n" +
+    "const phase7Group = require('./hooks/useFocusableGroup.cjs');\n" +
     "const phase7Position = require('./hooks/usePopupPosition.cjs');\n" +
     "const phase7ModalOpen = require('./hooks/useModalOpen.cjs');\n" +
     "const phase7Tabbable = require('./lib/focus.cjs');\n" +
     'exports.useFocusVisible = phase7Focus.useFocusVisible;\n' +
+    'exports.useFocusableGroup = phase7Group.useFocusableGroup;\n' +
     'exports.usePopupPosition = phase7Position.usePopupPosition;\n' +
     'exports.useModalOpen = phase7ModalOpen.useModalOpen;\n' +
     'exports.getFirstTabbable = phase7Tabbable.getFirstTabbable;\n';

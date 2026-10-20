@@ -340,6 +340,7 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
   it('exports the focus utilities (0.12)', () => {
     for (const name of [
       'useFocusVisible',
+      'useFocusableGroup',
       'useGridNavigation',
       'getTabbableElements',
       'getFirstTabbable',

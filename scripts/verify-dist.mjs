@@ -293,6 +293,12 @@ export const HOOK_PROBES_0_12 = [
     dropExternals: ['@floating-ui/react-dom'],
   },
   {
+    keep: 'useFocusableGroup',
+    modules: ['hooks/useFocusableGroup.mjs', 'lib/focus.mjs'],
+    dropModules: [...OVERLAY_COMPONENT_MODULES, 'hooks/usePopupPosition.mjs'],
+    dropExternals: ['@floating-ui/react-dom'],
+  },
+  {
     keep: 'getFirstTabbable',
     modules: ['lib/focus.mjs'],
     dropModules: [...OVERLAY_COMPONENT_MODULES, 'hooks/usePopupPosition.mjs'],

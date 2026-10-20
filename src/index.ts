@@ -94,6 +94,13 @@ export { useRestoreFocus } from './hooks/useRestoreFocus';
 export type { UseRestoreFocusOptions } from './hooks/useRestoreFocus';
 export { useModalOpen } from './hooks/useModalOpen';
 export { useFocusVisible } from './hooks/useFocusVisible';
+export { useFocusableGroup } from './hooks/useFocusableGroup';
+export type {
+  FocusableGroupProps,
+  FocusableGroupTabBehavior,
+  UseFocusableGroupOptions,
+  UseFocusableGroupResult,
+} from './hooks/useFocusableGroup';
 export { useGridNavigation } from './components/table/useGridNavigation';
 export type {
   UseGridNavigationOptions,
