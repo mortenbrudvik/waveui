@@ -4,6 +4,7 @@ import {
   arrow as arrowMiddleware,
   autoUpdate,
   flip as flipMiddleware,
+  hide as hideMiddleware,
   offset as offsetMiddleware,
   platform,
   shift as shiftMiddleware,
@@ -15,7 +16,14 @@ import {
   type ReferenceType,
   type SizeOptions,
 } from '@floating-ui/react-dom';
-import type { PopupAlign, PopupRect, PopupSide, VirtualElement } from '../lib/types';
+import type {
+  PopupAlign,
+  PopupPlacement,
+  PopupPositioning,
+  PopupRect,
+  PopupSide,
+  VirtualElement,
+} from '../lib/types';
 import type { Direction } from '../lib/direction';
 import { useDirection } from './useDirection';
 import { useEventCallback } from './useEventCallback';
@@ -49,6 +57,16 @@ export interface UsePopupPositionOptions {
   arrowRef?: React.RefObject<HTMLElement | null>;
   /** CSS positioning strategy. @default 'fixed' */
   strategy?: 'absolute' | 'fixed';
+  /**
+   * Placements to try, in order, when the requested side has no room, instead of only the opposite
+   * side. Ignored with `flip: false`. An omitted `align` is the hook's own `align`.
+   */
+  fallbackPlacements?: readonly PopupPlacement[];
+  /**
+   * Hide the surface (`visibility: hidden`, so layout and focus are unaffected) while the anchor is
+   * scrolled out of view or clipped away. @default false
+   */
+  hideWhenDetached?: boolean;
 }
 
 /** Returned by {@link usePopupPosition}. */
@@ -77,6 +95,25 @@ export interface UsePopupPositionResult {
 }
 
 type PhysicalSide = 'top' | 'bottom' | 'left' | 'right';
+
+/**
+ * Internal. The options a component's `positioning` prop sets on top of the component's own
+ * defaults: a value the consumer gave (also `0` or `false`) wins, `undefined` keeps the default.
+ */
+export function resolvePositioning(
+  positioning: PopupPositioning | undefined,
+  defaults: { offset?: number; matchReferenceWidth?: boolean; fitViewport?: boolean },
+): Pick<
+  UsePopupPositionOptions,
+  'offset' | 'matchReferenceWidth' | 'fitViewport' | 'fallbackPlacements'
+> {
+  return {
+    offset: positioning?.offset ?? defaults.offset,
+    matchReferenceWidth: positioning?.matchReferenceWidth ?? defaults.matchReferenceWidth,
+    fitViewport: positioning?.fitViewport ?? defaults.fitViewport,
+    fallbackPlacements: positioning?.fallbackPlacements,
+  };
+}
 
 const STATIC_SIDE: Record<PhysicalSide, PhysicalSide> = {
   top: 'bottom',
@@ -201,23 +238,39 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
     fitViewport = false,
     arrowRef,
     strategy = 'fixed',
+    fallbackPlacements,
+    hideWhenDetached = false,
   } = options;
   const dir = useDirection();
   const physicalSide = resolveSide(side, dir);
-  const requestedPlacement = (
-    align === 'center' ? physicalSide : `${physicalSide}-${align}`
-  ) as Placement;
+  const toPlacement = (placementSide: PhysicalSide, placementAlign: PopupAlign) =>
+    (placementAlign === 'center'
+      ? placementSide
+      : `${placementSide}-${placementAlign}`) as Placement;
+  const requestedPlacement = toPlacement(physicalSide, align);
   const padding = shift === false ? 0 : shift === true ? 8 : shift.padding;
   const shiftCrossAxis = typeof shift === 'object' && shift.crossAxis === true;
 
   const middleware: Middleware[] = [offsetMiddleware(offset)];
-  if (flip) middleware.push(flipMiddleware({ padding }));
+  if (flip) {
+    middleware.push(
+      flipMiddleware({
+        padding,
+        ...(fallbackPlacements && {
+          fallbackPlacements: fallbackPlacements.map((placement) =>
+            toPlacement(resolveSide(placement.side, dir), placement.align ?? align),
+          ),
+        }),
+      }),
+    );
+  }
   if (shift !== false) {
     middleware.push(shiftMiddleware({ padding, crossAxis: shiftCrossAxis }));
   }
   if (matchReferenceWidth || fitViewport) {
     middleware.push(sizeMiddleware({ padding, apply: sizeApply }));
   }
+  if (hideWhenDetached) middleware.push(hideMiddleware({ strategy: 'referenceHidden' }));
   if (arrowRef) middleware.push(arrowMiddleware({ element: arrowRef }));
 
   // Alignment follows the hook's direction (not only the surface's computed CSS direction).
@@ -262,6 +315,7 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
 
   const [finalSide, finalAlign = 'center'] = placement.split('-') as [PhysicalSide, string?];
 
+  const referenceHidden = middlewareData.hide?.referenceHidden === true;
   const style = useMemo<React.CSSProperties>(() => {
     const next: React.CSSProperties = { ...floatingStyles };
     if (matchReferenceWidth) next.width = 'var(--wave-popup-reference-width)';
@@ -269,8 +323,9 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
       next.maxWidth = 'var(--wave-popup-available-width)';
       next.maxHeight = 'var(--wave-popup-available-height)';
     }
+    if (referenceHidden) next.visibility = 'hidden';
     return next;
-  }, [floatingStyles, matchReferenceWidth, fitViewport]);
+  }, [floatingStyles, matchReferenceWidth, fitViewport, referenceHidden]);
 
   const arrowX = middlewareData.arrow?.x;
   const arrowY = middlewareData.arrow?.y;
