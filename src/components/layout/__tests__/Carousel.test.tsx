@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
-import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, afterEach, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Carousel, CarouselItem } from '../Carousel';
@@ -14,6 +14,7 @@ import {
   asClientReference,
   expectNoA11yViolations,
   mockMatchMedia,
+  mockRect,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
@@ -1962,5 +1963,316 @@ describe('Carousel groups (0.13)', () => {
     expectTypeOf<NonNullable<CarouselLabels['slides']>>().toEqualTypeOf<
       (start: number, end: number, total: number) => string
     >();
+  });
+});
+
+describe('Carousel dragging (0.13)', () => {
+  const CAPTURE_METHODS = [
+    'setPointerCapture',
+    'releasePointerCapture',
+    'hasPointerCapture',
+  ] as const;
+  let saved: Array<[string, PropertyDescriptor | undefined]> = [];
+  let clock = 0;
+
+  beforeEach(() => {
+    clock = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    // jsdom has no pointer capture: a stand-in that remembers the captured pointer ids.
+    const captured = new WeakMap<Element, Set<number>>();
+    saved = CAPTURE_METHODS.map((name) => [
+      name,
+      Object.getOwnPropertyDescriptor(Element.prototype, name),
+    ]);
+    Object.defineProperties(Element.prototype, {
+      setPointerCapture: {
+        configurable: true,
+        writable: true,
+        value(this: Element, pointerId: number) {
+          const ids = captured.get(this) ?? new Set<number>();
+          ids.add(pointerId);
+          captured.set(this, ids);
+        },
+      },
+      releasePointerCapture: {
+        configurable: true,
+        writable: true,
+        value(this: Element, pointerId: number) {
+          captured.get(this)?.delete(pointerId);
+        },
+      },
+      hasPointerCapture: {
+        configurable: true,
+        writable: true,
+        value(this: Element, pointerId: number) {
+          return captured.get(this)?.has(pointerId) ?? false;
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(Element.prototype, name, descriptor);
+      else Reflect.deleteProperty(Element.prototype, name);
+    }
+  });
+
+  /** A 400 px wide carousel of five slides; `dir` mirrors it. */
+  function renderDraggable(props: Partial<CarouselProps> = {}, dir?: 'rtl') {
+    const onValueChange = vi.fn();
+    const ui = (
+      <Carousel draggable onValueChange={onValueChange} {...props}>
+        <Carousel.Item>
+          <p>Slide 1 content</p>
+          <button type="button">Inside action</button>
+        </Carousel.Item>
+        {slides(4)}
+      </Carousel>
+    );
+    if (dir) renderWithProviders(ui, { dir });
+    else render(ui);
+    const el = track();
+    mockRect(el.parentElement as Element, { left: 0, top: 0, width: 400, height: 200 });
+    return { el, onValueChange };
+  }
+
+  const pointer = (pointerType: string, x: number, pointerId = 1) => ({
+    pointerId,
+    pointerType,
+    isPrimary: true,
+    button: 0,
+    clientX: x,
+    clientY: 50,
+  });
+
+  /** Presses at `from`, moves to `to` after `ms` and releases at once. */
+  function drag(el: HTMLElement, from: number, to: number, ms: number, pointerType = 'mouse') {
+    act(() => {
+      fireEvent.pointerDown(el, pointer(pointerType, from));
+    });
+    clock += ms;
+    act(() => {
+      fireEvent.pointerMove(el, pointer(pointerType, to));
+    });
+    act(() => {
+      fireEvent.pointerUp(el, pointer(pointerType, to));
+    });
+  }
+
+  it.each(['mouse', 'touch', 'pen'])(
+    'a slow %s drag past a quarter of the width shows the next page',
+    (type) => {
+      const { el, onValueChange } = renderDraggable();
+      drag(el, 300, 150, 1000, type);
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+      expect(exposedSlides()).toEqual([2]);
+    },
+  );
+
+  it('a drag towards the end shows the previous page', () => {
+    const { el, onValueChange } = renderDraggable({ defaultValue: 2 });
+    drag(el, 100, 250, 1000);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it('a short slow drag snaps back and changes nothing', () => {
+    const { el, onValueChange } = renderDraggable();
+    drag(el, 300, 250, 1000);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(exposedSlides()).toEqual([1]);
+    expect(el.style.transform).toBe('translateX(0%)');
+    expect(el).not.toHaveAttribute('data-dragging');
+  });
+
+  it('a fast short flick commits', () => {
+    const { el, onValueChange } = renderDraggable();
+    drag(el, 300, 260, 40);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it('a flick on the first page towards the end does not leave the carousel', () => {
+    const { el, onValueChange } = renderDraggable();
+    drag(el, 100, 200, 40);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(exposedSlides()).toEqual([1]);
+  });
+
+  it('a pointer that rests before the release has no speed', () => {
+    const { el, onValueChange } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+    });
+    clock += 20;
+    act(() => {
+      fireEvent.pointerMove(el, pointer('mouse', 250));
+    });
+    clock += 500;
+    act(() => {
+      fireEvent.pointerUp(el, pointer('mouse', 250));
+    });
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('mirrors the drag direction in right-to-left layouts', () => {
+    const { el, onValueChange } = renderDraggable({}, 'rtl');
+    drag(el, 300, 150, 1000);
+    expect(onValueChange).not.toHaveBeenCalled();
+    drag(el, 100, 250, 1000);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it('follows the pointer while dragging and marks it', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    act(() => {
+      fireEvent.pointerMove(el, pointer('mouse', 240));
+    });
+    expect(el).toHaveAttribute('data-dragging', '');
+    expect(el.style.transform).toBe('translateX(calc(0% + -60px))');
+    expect(el).not.toHaveClass('transition-transform');
+    act(() => {
+      fireEvent.pointerUp(el, pointer('mouse', 240));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el.style.transform).toBe('translateX(0%)');
+    expect(el).toHaveClass('transition-transform');
+  });
+
+  it('does not start a drag below a few pixels', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerMove(el, pointer('mouse', 298));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el.hasPointerCapture(1)).toBe(false);
+  });
+
+  it('captures the pointer once the drag starts', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerMove(el, pointer('mouse', 280));
+    });
+    expect(el.hasPointerCapture(1)).toBe(true);
+  });
+
+  it('swallows the click that ends a drag once, and lets a later click through', () => {
+    const { el } = renderDraggable();
+    const onClick = vi.fn();
+    const action = screen.getByRole('button', { name: 'Inside action', hidden: true });
+    action.addEventListener('click', onClick);
+    drag(el, 300, 100, 1000);
+    // The browser's click that follows the release is dropped before it reaches the slide.
+    const dragClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+    act(() => {
+      action.dispatchEvent(dragClick);
+    });
+    expect(onClick).not.toHaveBeenCalled();
+    expect(dragClick.defaultPrevented).toBe(true);
+    act(() => {
+      action.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('a plain click on a button inside a slide is not swallowed', () => {
+    const { el } = renderDraggable();
+    const onClick = vi.fn();
+    const action = screen.getByRole('button', { name: 'Inside action' });
+    action.addEventListener('click', onClick);
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerUp(el, pointer('mouse', 300));
+    });
+    act(() => action.click());
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('a cancelled pointer snaps back', () => {
+    const { el, onValueChange } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('touch', 300));
+      fireEvent.pointerMove(el, pointer('touch', 100));
+    });
+    expect(el).toHaveAttribute('data-dragging');
+    act(() => {
+      fireEvent.pointerCancel(el, pointer('touch', 100));
+    });
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el.style.transform).toBe('translateX(0%)');
+  });
+
+  it('ignores a secondary button and a non-primary pointer', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, { ...pointer('mouse', 300), button: 2 });
+      fireEvent.pointerMove(el, pointer('mouse', 100));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    act(() => {
+      fireEvent.pointerDown(el, { ...pointer('touch', 300, 2), isPrimary: false });
+      fireEvent.pointerMove(el, pointer('touch', 100, 2));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+  });
+
+  it('attaches nothing without draggable', () => {
+    const { el, onValueChange } = renderDraggable({ draggable: false });
+    drag(el, 300, 50, 40);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el).not.toHaveClass('touch-pan-y');
+  });
+
+  it('lets the page scroll vertically over a draggable track', () => {
+    const { el } = renderDraggable();
+    expect(el).toHaveClass('touch-pan-y');
+  });
+
+  it('pauses autoplay while dragging and resumes after', () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { el, onValueChange } = renderDraggable({ autoPlay: true, autoPlayInterval: 1000 });
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerMove(el, pointer('mouse', 290));
+    });
+    act(() => {
+      vi.advanceTimersByTime(3500);
+    });
+    expect(onValueChange).not.toHaveBeenCalled();
+    act(() => {
+      fireEvent.pointerUp(el, pointer('mouse', 290));
+    });
+    act(() => {
+      vi.advanceTimersByTime(1100);
+    });
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it('moves by pages with groupSize', () => {
+    const { el, onValueChange } = renderDraggable({ groupSize: 2 });
+    drag(el, 300, 100, 1000);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
+  });
+
+  it('calls onValueChange once per change in StrictMode', () => {
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Carousel draggable onValueChange={onValueChange}>
+          {slides(3)}
+        </Carousel>
+      </React.StrictMode>,
+    );
+    const el = track();
+    mockRect(el.parentElement as Element, { left: 0, top: 0, width: 400, height: 200 });
+    drag(el, 300, 100, 1000);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
   });
 });

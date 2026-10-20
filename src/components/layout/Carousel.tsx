@@ -16,6 +16,7 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
+import { useCarouselDrag } from './Carousel.drag';
 import { clampToPage, lastPageStart, pageCount } from './Carousel.groups';
 
 /** Accessible names of the rotation control shown while `autoPlay` is on. */
@@ -103,6 +104,16 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'start'
    */
   align?: 'start' | 'center' | 'end';
+  /**
+   * Lets the pointer drag the slides (mouse, touch and pen). The track follows the pointer and,
+   * on release, the page changes when the drag passed a quarter of the width or left fast, else
+   * it snaps back; the direction follows the carousel's. The click that ends a drag is not
+   * delivered to the slide, and a vertical swipe still scrolls the page. Dragging pauses
+   * autoplay like the pointer over the carousel does. The buttons and the keyboard stay the way
+   * to operate the carousel without a pointer.
+   * @default false
+   */
+  draggable?: boolean;
   /**
    * Rotates the slides automatically. A Pause/Start control is rendered as the first focusable
    * element. Rotation pauses while focus is anywhere inside the carousel (the control included;
@@ -226,6 +237,7 @@ const CarouselRoot = ({
   loop = false,
   groupSize = 1,
   align = 'start',
+  draggable = false,
   className,
   children,
   onMouseEnter,
@@ -308,7 +320,21 @@ const CarouselRoot = ({
   const hasRotation = autoPlay && pages > 1;
   if (hasRotation && !loop && atEnd && !stopped) setEndedAt(total);
   else if (endedAt !== null && !ended) setEndedAt(null);
-  const pausedByPointer = hovered && !pointerOnControl;
+  // A release moves one page towards the drag; past the ends it only loops with `loop`.
+  const drag = useCarouselDrag({
+    enabled: draggable && pages > 1,
+    dir,
+    onCommit: (delta) => {
+      if (delta === 1) {
+        if (!atEnd) goTo(index + size);
+        else if (loop) goTo(0);
+      } else if (delta === -1) {
+        if (!atStart) goTo(index - size);
+        else if (loop) goTo(lastStart);
+      }
+    },
+  });
+  const pausedByPointer = (hovered && !pointerOnControl) || drag.dragging;
   const pausedByFocus = focusWithin && !startedFromControl;
   const rotating = hasRotation && !stopped && !pausedByPointer && !pausedByFocus;
 
@@ -444,11 +470,14 @@ const CarouselRoot = ({
   // A page is as wide as the carousel: the track moves by pages. With `auto` the slides keep their
   // own width and the track moves by whole slides, in pixels, plus the alignment of the page.
   let transform = `translateX(${sign * (index / size) * 100}%)`;
+  if (drag.offsetPx !== 0) {
+    transform = `translateX(calc(${sign * (index / size) * 100}% + ${drag.offsetPx}px))`;
+  }
   if (auto) {
     const leftover = Math.max(0, measured.rootWidth - size * measured.slideWidth);
     const alignShift = align === 'center' ? leftover / 2 : align === 'end' ? leftover : 0;
     const px = sign * index * measured.slideWidth + (dir === 'rtl' ? -alignShift : alignShift);
-    transform = `translateX(${px + 0}px)`;
+    transform = `translateX(${px + drag.offsetPx + 0}px)`;
   }
   const slidesLabel = labels?.slides ?? defaultSlidesLabel;
   /** The name of the page that starts at `start`: its slides, or the one slide it holds. */
@@ -499,9 +528,15 @@ const CarouselRoot = ({
         id={trackId}
         className={cn(
           carouselClassNames.track,
-          'flex transition-transform duration-300 ease-in-out motion-reduce:transition-none',
+          drag.dragging
+            ? 'flex'
+            : 'flex transition-transform duration-300 ease-in-out motion-reduce:transition-none',
+          // Horizontal pointer moves belong to the drag; a vertical swipe still scrolls the page.
+          draggable && 'touch-pan-y',
         )}
         style={{ transform }}
+        data-dragging={drag.dragging ? '' : undefined}
+        {...drag.handlers}
         {...(grouped ? roving.containerProps : null)}
         ref={grouped ? trackRef : setTrackEl}
         onKeyDown={grouped ? handleTrackKeyDown : undefined}
