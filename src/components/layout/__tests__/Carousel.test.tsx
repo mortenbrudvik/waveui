@@ -2471,6 +2471,17 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
       expect(rotation()).toHaveClass('top-2', 'start-12');
     });
 
+    it.each(LAYOUTS)('%s stacks the rotation control above the edge strips', (layout) => {
+      render(
+        <Carousel controlsLayout={layout} autoPlay>
+          {slides(3)}
+        </Carousel>,
+      );
+      const rotation = screen.getByRole('button', { name: /slide rotation/ });
+      expect(rotation).toHaveClass('z-20');
+      expect(rotation).not.toHaveClass('z-10');
+    });
+
     it.each(LAYOUTS)('%s has no accessibility violations', async (layout) => {
       render(
         <Carousel aria-label="Promo" controlsLayout={layout} autoPlay>

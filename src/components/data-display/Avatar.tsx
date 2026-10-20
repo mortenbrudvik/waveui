@@ -413,13 +413,16 @@ export const Avatar = ({
       ? renderSlot(icon, 'span', cn(avatarClassNames.icon, 'inline-flex'), { 'aria-hidden': true })
       : null;
   const dir = useDirection();
+  const group = React.useContext(AvatarGroupContext);
+  // The wedges of a pie overlap at its centre: their initials would print over each other.
+  const initialsClass = cn(avatarClassNames.initials, group?.layout === 'pie' && 'invisible');
   const resolvedColor = resolveAvatarColor(colorProp, idForColor, name);
   const showsInitials = imageNode === null && iconNode === null;
   const computedInitials = showsInitials && name ? getInitials(name, { dir }) : '';
   const initialsNode = !showsInitials ? null : initialsSlot && slotRendersContent(initialsSlot) ? (
-    renderSlot(initialsSlot, 'span', avatarClassNames.initials, { 'aria-hidden': true })
+    renderSlot(initialsSlot, 'span', initialsClass, { 'aria-hidden': true })
   ) : computedInitials ? (
-    <span aria-hidden="true" className={avatarClassNames.initials}>
+    <span aria-hidden="true" className={initialsClass}>
       {computedInitials}
     </span>
   ) : null;
@@ -481,7 +484,6 @@ export const Avatar = ({
 
   // An own `size` wins; without one, the box of a surrounding tag's media, else medium. With a
   // badge the visual is sized, not the wrapper.
-  const group = React.useContext(AvatarGroupContext);
   const resolvedSize: AvatarSize =
     sizeProp ?? group?.size ?? (box ? (box.size as AvatarSize) : 'medium');
   const resolvedShape = shapeProp ?? box?.shape ?? 'circular';

@@ -688,7 +688,8 @@ const CarouselRoot = ({
             className={cn(
               carouselClassNames.autoPlayButton,
               CAROUSEL_CONTROL_BASE,
-              'absolute h-8 w-8 rounded-full border border-border bg-background shadow-2 top-2',
+              // Above the edge strips of the wide layouts, which would dim and cover it.
+              'absolute z-20 h-8 w-8 rounded-full border border-border bg-background shadow-2 top-2',
               // Over the viewport's corner: past the Previous button of an inline layout.
               inline ? 'start-12' : 'start-2',
             )}

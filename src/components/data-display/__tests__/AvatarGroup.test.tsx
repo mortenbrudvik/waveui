@@ -1197,4 +1197,23 @@ describe('AvatarGroup', () => {
       expectTypeOf<AvatarGroupItemProps>().toEqualTypeOf<AvatarProps>();
     });
   });
+
+  describe('pie layout initials', () => {
+    it('hides the initials of wedges, which would overlap, and keeps them in other layouts', () => {
+      const { container, rerender } = render(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['Alice Smith', 'Bob Jones', 'Carol White'])}
+        </AvatarGroup>,
+      );
+      const initials = () => Array.from(container.querySelectorAll('.wave-avatar__initials'));
+      expect(initials()).toHaveLength(3);
+      for (const el of initials()) expect(el).toHaveClass('invisible');
+      rerender(
+        <AvatarGroup aria-label="Team" layout="stack">
+          {members(['Alice Smith', 'Bob Jones', 'Carol White'])}
+        </AvatarGroup>,
+      );
+      for (const el of initials()) expect(el).not.toHaveClass('invisible');
+    });
+  });
 });
