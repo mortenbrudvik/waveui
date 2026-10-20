@@ -47,6 +47,15 @@ export function avatarSizeClassesFor(size: AvatarSize): string {
   return avatarBoxClasses[typeof size === 'number' ? size : NAMED_PIXELS[size]];
 }
 
+/** The size a presence badge takes on an avatar of this pixel box. */
+export function avatarBadgeSize(pixels: number): Size {
+  if (pixels <= 24) return 'extra-small';
+  if (pixels <= 32) return 'small';
+  if (pixels <= 56) return 'medium';
+  if (pixels <= 96) return 'large';
+  return 'extra-large';
+}
+
 /** The corner radius of an Avatar shape: a circle, or rounded-md from 40px and rounded-sm below. */
 export function avatarShapeClasses(shape: 'circular' | 'square', pixels: number): string {
   if (shape === 'circular') return 'rounded-full';

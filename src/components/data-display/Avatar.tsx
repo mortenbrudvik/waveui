@@ -9,9 +9,10 @@ import { getInitials } from '../../lib/initials';
 import { PersonIcon } from '../../lib/icons';
 import type { Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import { AvatarSizeContext } from './Avatar.context';
+import { AvatarBadgeSizeContext, AvatarSizeContext } from './Avatar.context';
 import { avatarColorClasses, resolveAvatarColor, type AvatarColor } from './Avatar.colors';
 import {
+  avatarBadgeSize,
   avatarBoxClasses,
   avatarPixelSize,
   avatarShapeClasses,
@@ -55,6 +56,18 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
    * @default 'brand'
    */
   color?: AvatarColor;
+  /**
+   * Whether the person is active: `active` draws the `activeAppearance` around the avatar, `inactive`
+   * dims it, `unset` shows neither.
+   * @default 'unset'
+   */
+  active?: 'active' | 'inactive' | 'unset';
+  /**
+   * How an `active` avatar is marked: a `ring`, a `shadow`, both (`ring-shadow`) or a `glow` in the
+   * primary color.
+   * @default 'ring'
+   */
+  activeAppearance?: 'ring' | 'ring-shadow' | 'shadow' | 'glow';
   /**
    * A stable id (a user id, say) that picks the color of `color="colorful"`, so the same person has
    * the same color wherever they are shown, whatever their name looks like.
@@ -121,6 +134,14 @@ export const avatarSizeClasses: Readonly<Record<Size, string>> = {
 };
 
 const IMAGE_CLASS = 'w-full h-full object-cover';
+
+/** How an `active` avatar is marked. Literal strings only. */
+const activeClasses: Readonly<Record<'ring' | 'ring-shadow' | 'shadow' | 'glow', string>> = {
+  ring: 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+  'ring-shadow': 'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-8',
+  shadow: 'shadow-8',
+  glow: 'shadow-[0_0_0.5rem_0.125rem_var(--wave-primary)]',
+};
 
 /** A name with its whitespace collapsed, or `undefined` when it is blank. */
 function normaliseName(name: string | undefined): string | undefined {
@@ -229,6 +250,8 @@ export const Avatar = ({
   shape: shapeProp,
   color: colorProp = 'brand',
   idForColor,
+  active = 'unset',
+  activeAppearance = 'ring',
   initials: initialsSlot,
   icon,
   image,
@@ -464,6 +487,8 @@ export const Avatar = ({
     'data-size': String(resolvedSize),
     'data-shape': resolvedShape,
     'data-color': resolvedColor,
+    'data-active': active,
+    'data-active-appearance': activeAppearance,
   };
   const visualClassName = cn(
     avatarClassNames.visual,
@@ -471,6 +496,8 @@ export const Avatar = ({
     avatarShapeClasses(resolvedShape, pixels),
     avatarSizeClassesFor(resolvedSize),
     colorClass,
+    active === 'active' && activeClasses[activeAppearance],
+    active === 'inactive' && 'opacity-60 transition-opacity motion-reduce:transition-none',
   );
 
   if (!hasBadge) {
@@ -497,7 +524,9 @@ export const Avatar = ({
       <span ref={visualRef} {...a11yProps} className={visualClassName}>
         {content}
       </span>
-      {badgeNode}
+      <AvatarBadgeSizeContext.Provider value={avatarBadgeSize(pixels)}>
+        {badgeNode}
+      </AvatarBadgeSizeContext.Provider>
     </span>
   );
 };

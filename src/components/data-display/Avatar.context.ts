@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { Size } from '../../lib/types';
 
 /*
  * The box a container gives the Avatars inside it that set no `size`: Tag and
@@ -17,6 +18,13 @@ export interface AvatarSizeContextValue {
   /** The shape the container gives its Avatars: a rounded Tag gives `square`. */
   shape?: 'circular' | 'square';
 }
+
+/**
+ * The size a badge in an Avatar's `badge` slot takes when it sets none (PresenceBadge): derived from
+ * the avatar's pixel size. Internal.
+ */
+export const AvatarBadgeSizeContext = React.createContext<Size | null>(null);
+AvatarBadgeSizeContext.displayName = 'AvatarBadgeSizeContext';
 
 /** Internal: provided by Tag and InteractionTag.Primary around their `media`; `null` elsewhere. */
 export const AvatarSizeContext = React.createContext<AvatarSizeContextValue | null>(null);

@@ -11,6 +11,7 @@ import {
 } from '../../lib/icons';
 import type { IconComponent } from '../../lib/icons';
 import { warnDeprecated } from '../../lib/dev';
+import { AvatarBadgeSizeContext } from './Avatar.context';
 import { forcedColors } from '../../lib/styles';
 import type { DeprecatedPresenceStatus, PresenceStatus, Size } from '../../lib/types';
 
@@ -22,7 +23,8 @@ export interface PresenceBadgeProps extends React.HTMLAttributes<HTMLSpanElement
    * @default 'available'
    */
   status?: PresenceStatus;
-  /** Size of the presence indicator.
+  /**
+   * Size of the presence indicator. In the `badge` slot of an Avatar it is sized from the avatar.
    * @default 'medium'
    */
   size?: Size;
@@ -124,11 +126,13 @@ const sizeClasses: Record<Size, string> = {
  */
 export const PresenceBadge = ({
   status: statusProp = 'available',
-  size = 'medium',
+  size: sizeProp,
   className,
   ref,
   ...props
 }: PresenceBadgeProps) => {
+  const avatarBadgeSize = React.useContext(AvatarBadgeSizeContext);
+  const size = sizeProp ?? avatarBadgeSize ?? 'medium';
   const status = normalizePresenceStatus(statusProp);
   const { glyph, Icon, className: statusClassName } = statusStyles[status];
 

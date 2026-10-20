@@ -1340,4 +1340,94 @@ describe('Avatar', () => {
       expectTypeOf<AvatarNamedColor>().toEqualTypeOf<(typeof NAMED)[number]>();
     });
   });
+
+  describe('active state and badge size (0.13)', () => {
+    const visual = (container: HTMLElement) =>
+      container.querySelector<HTMLElement>('.wave-avatar__visual, .wave-avatar')!;
+
+    it('renders data-active and data-active-appearance with their defaults', () => {
+      const { container } = render(<Avatar name="Jane Doe" />);
+      expect(container.firstElementChild).toHaveAttribute('data-active', 'unset');
+      expect(container.firstElementChild).toHaveAttribute('data-active-appearance', 'ring');
+    });
+
+    it.each([
+      ['ring', ['ring-2', 'ring-primary']],
+      ['ring-shadow', ['ring-2', 'ring-primary', 'shadow-8']],
+      ['shadow', ['shadow-8']],
+      ['glow', ['shadow-[0_0_0.5rem_0.125rem_var(--wave-primary)]']],
+    ] as const)('an active avatar draws the %s appearance', (activeAppearance, classes) => {
+      const { container } = render(
+        <Avatar name="Jane Doe" active="active" activeAppearance={activeAppearance} />,
+      );
+      expect(container.firstElementChild).toHaveAttribute('data-active', 'active');
+      expect(container.firstElementChild).toHaveAttribute(
+        'data-active-appearance',
+        activeAppearance,
+      );
+      expect(visual(container)).toHaveClass(...classes);
+    });
+
+    it('an unset avatar draws no active look', () => {
+      const { container } = render(<Avatar name="Jane Doe" activeAppearance="glow" />);
+      expect(visual(container).className).not.toMatch(/ring-primary|shadow-8|opacity-60/);
+    });
+
+    it('an inactive avatar is dimmed, with a reduced-motion variant on its transition', () => {
+      const { container } = render(<Avatar name="Jane Doe" active="inactive" />);
+      expect(container.firstElementChild).toHaveAttribute('data-active', 'inactive');
+      expect(visual(container)).toHaveClass('opacity-60', 'motion-reduce:transition-none');
+    });
+
+    it.each([
+      [16, 'size-2'],
+      [24, 'size-2'],
+      [28, 'size-2.5'],
+      [32, 'size-2.5'],
+      [36, 'size-3'],
+      [56, 'size-3'],
+      [64, 'size-4'],
+      [96, 'size-4'],
+      [120, 'size-5'],
+      [128, 'size-5'],
+    ] as const)('a PresenceBadge in the badge slot of a %dpx avatar is %s', (size, boxClass) => {
+      render(<Avatar name="Jane Doe" size={size} badge={<PresenceBadge status="busy" />} />);
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass(boxClass);
+    });
+
+    it('named sizes map the same way', () => {
+      render(<Avatar name="Jane Doe" size="large" badge={<PresenceBadge status="busy" />} />);
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-3');
+    });
+
+    it("the badge's own size wins", () => {
+      render(
+        <Avatar name="Jane Doe" size={128} badge={<PresenceBadge status="busy" size="small" />} />,
+      );
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-2.5');
+    });
+
+    it('a PresenceBadge outside an avatar stays medium', () => {
+      render(<PresenceBadge status="busy" />);
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-3');
+    });
+
+    it('the badge keeps its own role and name beside the avatar, with no violations', async () => {
+      const { container } = render(
+        <Avatar name="Jane Doe" size={64} badge={<PresenceBadge status="away" />} />,
+      );
+      expect(screen.getByRole('img', { name: 'Jane Doe' })).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Away' })).toBeInTheDocument();
+      await expectNoA11yViolations(container);
+    });
+
+    it('types active and activeAppearance', () => {
+      expectTypeOf<AvatarProps['active']>().toEqualTypeOf<
+        'active' | 'inactive' | 'unset' | undefined
+      >();
+      expectTypeOf<AvatarProps['activeAppearance']>().toEqualTypeOf<
+        'ring' | 'ring-shadow' | 'shadow' | 'glow' | undefined
+      >();
+    });
+  });
 });
