@@ -180,7 +180,9 @@ function clampStep(step: number, count: number): number {
  * - With `target`, the popover is portaled and positioned next to that element with a beak (it
  *   inherits the surface colors); it stays hidden while the target is `null`, not positioned yet or
  *   no longer mounted (a ref target is read after each render of the popover; see `target`).
- * - With `target`, the keyboard order treats the popover as if it followed the target: Tab past
+ * - With a `VirtualElement` target there is no element to follow: the popover keeps the place of
+ *   its portal in the keyboard order.
+ * - With an element or ref `target`, the keyboard order treats the popover as if it followed the target: Tab past
  *   its last button continues after the target, Shift+Tab from its first button (or from the
  *   popover itself) returns to the target (for a target outside the Tab order, to the last control
  *   inside it, else to the control before it), Tab from there enters the popover, and Shift+Tab

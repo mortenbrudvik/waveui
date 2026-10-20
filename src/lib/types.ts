@@ -230,7 +230,12 @@ export interface PopupPlacement {
 export interface PopupPositioning {
   /** Distance from the anchor in px. @default the component's own (Popover 8, Tooltip 8, TeachingPopover 12, listboxes 4) */
   offset?: number;
-  /** Limit the surface to the space the viewport leaves (Fluent's `autoSize`). @default the component's own */
+  /**
+   * Limit the surface to the space the viewport leaves (Fluent's `autoSize`). Popover also scrolls
+   * its content inside its border; the other surfaces only limit their size (their own lists and
+   * grids scroll as they always did).
+   * @default the component's own
+   */
   fitViewport?: boolean;
   /** Make the surface as wide as its anchor. @default the component's own */
   matchReferenceWidth?: boolean;

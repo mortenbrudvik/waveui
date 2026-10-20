@@ -8,6 +8,7 @@ import {
   usePopupPosition,
   useRestoreFocus,
 } from '../src';
+import type { UsePopupPositionOptions } from '../src';
 
 // Custom overlays built only on WaveUI's public overlay hooks. They behave like the built-in
 // surfaces: Escape closes the topmost layer first, a press in the Toaster or in a region marked
@@ -79,15 +80,32 @@ export interface CustomPopupProps {
   label?: string;
   /** Content of the popup: another WaveUI Popover opened inside it becomes its child layer. */
   children?: React.ReactNode;
+  /** Placement options passed to `usePopupPosition` (`offset`, `fallbackPlacements`, …). */
+  positioning?: Pick<
+    UsePopupPositionOptions,
+    'offset' | 'fallbackPlacements' | 'fitViewport' | 'matchReferenceWidth'
+  >;
+  /** Hide the popup while its button is scrolled out of view. @default false */
+  hideWhenDetached?: boolean;
 }
 
 /** A non-modal popup placed against its toggle button, on the positioning and dismiss hooks. */
-export function CustomPopup({ label = 'Details', children }: CustomPopupProps) {
+export function CustomPopup({
+  label = 'Details',
+  children,
+  positioning,
+  hideWhenDetached = false,
+}: CustomPopupProps) {
   const [open, setOpen] = React.useState(false);
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
-  const { setReference, setFloating, floatingProps } = usePopupPosition({ open, side: 'bottom' });
+  const { setReference, setFloating, floatingProps } = usePopupPosition({
+    open,
+    side: 'bottom',
+    hideWhenDetached,
+    ...positioning,
+  });
   const { layerId } = useDismiss({
     open,
     onDismiss: () => setOpen(false),

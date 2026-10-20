@@ -6,12 +6,13 @@ function getServerSnapshot(): boolean {
 }
 
 /**
- * Whether a modal surface (a Dialog or an overlay Drawer, also an alert) is open: `true` from the
+ * Whether a modal surface is open (a Dialog, an overlay Drawer, an alert, the DatePicker's calendar, or your
+ * own `useDismiss({ kind: 'modal' })` layer): `true` from the
  * commit that opens it to the commit that closes it, not until its exit motion ends. A non-modal
  * Dialog or Drawer, a Popover or a Menu is no modal. `false` on the server and during hydration.
  *
  * Use it to hold back app behavior the modal should own, such as global keyboard shortcuts, instead
- * of guessing from the page's \`inert\` attributes.
+ * of guessing from the page's `inert` attributes.
  *
  * @example
  * const modalOpen = useModalOpen();

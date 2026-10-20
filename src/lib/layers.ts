@@ -310,7 +310,8 @@ export function subscribeLayers(listener: () => void): () => void {
 }
 
 /**
- * Whether a modal surface (a Dialog or an overlay Drawer, also an alert) is open now. A non-modal
+ * Whether a modal surface is open now: a layer of kind `'modal'` (a Dialog, an overlay Drawer, an
+ * alert, the DatePicker's calendar, or your own `useDismiss({ kind: 'modal' })`). A non-modal
  * surface is no modal. Server-safe: `false` when no layer is registered, as on the server.
  */
 export function hasOpenModal(): boolean {

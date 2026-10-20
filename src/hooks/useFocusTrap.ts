@@ -27,7 +27,7 @@ export interface UseFocusTrapOptions {
    */
   initialFocus?:
     React.RefObject<HTMLElement | null> | 'first' | 'container' | (() => HTMLElement | null);
-  /** Regions outside the container whose tabbables join the Tab cycle. @default ALLOW_OUTSIDE_SELECTOR */
+  /** Regions outside the container whose tabbables join the Tab cycle. @default '[data-wave-focus-trap-allow]' (the regions marked with `modalAllowProps`) */
   allowOutsideSelector?: string;
 }
 

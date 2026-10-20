@@ -63,8 +63,9 @@ export interface UsePopupPositionOptions {
    */
   fallbackPlacements?: readonly PopupPlacement[];
   /**
-   * Hide the surface (`visibility: hidden`, so layout and focus are unaffected) while the anchor is
-   * scrolled out of view or clipped away. @default false
+   * Hide the surface (`visibility: hidden`: its layout is unaffected, but its content cannot take
+   * focus, so a surface that holds focus loses it) while the anchor is scrolled out of view or
+   * clipped away. @default false
    */
   hideWhenDetached?: boolean;
   /**

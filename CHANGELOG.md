@@ -15,7 +15,7 @@ The seventh Fluent UI v9 parity release: Phase 7 of the [roadmap](docs/ROADMAP.m
 - **`usePopupPosition`** options `fallbackPlacements` (a list of `PopupPlacement`, `{ side, align? }`, tried in order instead of only the opposite side), `hideWhenDetached` (hides the surface while its anchor is scrolled out of view or clipped) and `onPositioned` (called once per final placement), and a result `update()` that recomputes the position.
 - **`positioning`** on Popover, `Menu.Popover`, Tooltip, TeachingPopover, Combobox, Dropdown, TagPicker, DatePicker and TimePicker (Fluent's `positioning`): `offset`, `fitViewport` (Popover gets Fluent's `autoSize` this way), `matchReferenceWidth` and `fallbackPlacements`, plus `target` where the component already has a `target` prop. `side` and `align` stay separate props. `useListboxPopup` takes `positioning` too. Types `PopupPositioning`, `PopupPositioningOptions`, `PopupPlacement` and `PopupTargetInput`.
 - **`modalAllowProps`** (spread on an app-owned region such as a notification area) keeps that region usable over a modal Dialog or Drawer: its content counts as inside every dismiss layer, its tabbable elements join every focus trap's Tab cycle and it is never made `inert`. The attribute it sets, `data-wave-focus-trap-allow`, is the one the Toaster's own region carries and is now a documented contract.
-- **`useModalOpen()`** and **`hasOpenModal()`**: whether a modal surface is open, from the commit that opens it to the commit that closes it (a non-modal Dialog, a Popover or a Menu is no modal). `false` on the server.
+- **`useModalOpen()`** and **`hasOpenModal()`**: whether a modal surface is open (a Dialog, an overlay Drawer, an alert, the DatePicker's calendar or your own `useDismiss({ kind: 'modal' })` layer), from the commit that opens it to the commit that closes it (a non-modal Dialog, a Popover or a Menu is no modal). `false` on the server.
 - **`useRovingTabIndex`** `orientation: 'grid'` and `columns`: Left/Right across rows, Up/Down to the same index or the nearest enabled cell, Home/End per row, Ctrl+Home/End for the grid; rows come from `role="row"` elements or the `columns` count. The internal grid hook under SwatchPicker now delegates to it.
 - **`useFocusableGroup({ tabBehavior })`** (`'unlimited'`, `'limited'`, `'limited-trap-focus'`; Fluent's `useFocusableGroup`): one tab stop that holds several focusable elements; Enter or F2 enters it, Escape leaves. Types `UseFocusableGroupOptions`, `UseFocusableGroupResult`, `FocusableGroupProps`, `FocusableGroupTabBehavior`.
 - **`useFocusVisible()`**: whether the last input was the keyboard.
@@ -25,9 +25,9 @@ The seventh Fluent UI v9 parity release: Phase 7 of the [roadmap](docs/ROADMAP.m
 
 ### Changed
 
-- **`target`** of Popover and `Menu.Popover` also takes a ref object (read after each render of the popup), and TeachingPopover's also takes a `VirtualElement`; the existing forms behave as before.
+- **`target`** of Popover and `Menu.Popover` also takes a ref object (read after each render of the popup; the popup stays hidden while the ref holds no element), and TeachingPopover's also takes a `VirtualElement`; the existing forms behave as before.
 - **`useRovingTabIndex`** `orientation` accepts `'grid'` (an exhaustive `switch` over the option's type needs the case).
-- Dev gates: `verify-dist` probes that an import of only `useFocusVisible`, `useFocusableGroup`, `getFirstTabbable` or `useModalOpen` holds no component and no positioning library, and `pack-smoke` checks that the focus recipes' utilities are in both fixtures' CSS.
+- Dev gates: `verify-dist` probes that an import of only `useFocusVisible`, `useFocusableGroup`, `getFirstTabbable` or `useModalOpen` holds no component and no positioning library, and `pack-smoke` checks that the utilities of `focusRing` and `focusRingInset` are in both fixtures' CSS.
 
 ### Deprecated
 
