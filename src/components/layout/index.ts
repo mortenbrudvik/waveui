@@ -30,7 +30,6 @@ export type {
   TabPanelProps,
   TabPanelsProps,
 } from './TabList';
-  TabListAppearance, TabProps, TabPanelProps, TabPanelsProps } from './TabList';
 
 export { Tree, TreeItem, TreeItemPersonaLayout } from './Tree';
 export type {
