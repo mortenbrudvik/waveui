@@ -240,6 +240,9 @@ export interface PopupPositioning {
   target?: PopupTargetInput;
 }
 
+/** {@link PopupPositioning} without `target`: the options of a popup that has no `target` prop. */
+export type PopupPositioningOptions = Omit<PopupPositioning, 'target'>;
+
 /** A day of the week, as `Date.prototype.getDay()` numbers them: 0 is Sunday, 6 is Saturday. */
 export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 

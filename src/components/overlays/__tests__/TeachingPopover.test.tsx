@@ -482,6 +482,35 @@ describe('TeachingPopover', () => {
   });
 
   describe('target anchoring (overlays#30)', () => {
+    it('positioning.offset replaces the default offset of 12', async () => {
+      const html = document.documentElement;
+      Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+      Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+      onTestFinished(() => {
+        Reflect.deleteProperty(html, 'clientWidth');
+        Reflect.deleteProperty(html, 'clientHeight');
+      });
+      const rect = {
+        x: 200,
+        y: 100,
+        width: 100,
+        height: 20,
+        top: 100,
+        right: 300,
+        bottom: 120,
+        left: 200,
+      };
+      render(
+        <TeachingPopover
+          steps={steps}
+          target={{ getBoundingClientRect: () => rect }}
+          positioning={{ offset: 0 }}
+        />,
+      );
+      const dialog = await screen.findByRole('dialog');
+      await waitFor(() => expect(dialog.style.transform).toBe('translate(250px, 120px)'));
+    });
+
     it('positions against a VirtualElement target', async () => {
       const html = document.documentElement;
       Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });

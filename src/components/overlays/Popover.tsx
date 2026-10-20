@@ -5,15 +5,21 @@ import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusElement, getFirstTabbable, isConnectedAndFocusable } from '../../lib/focus';
-import type { PopupAlign, PopupSide, PopupTarget, PopupTargetInput } from '../../lib/types';
-import { useResolvedTarget } from '../../hooks/useResolvedTarget';
+import type {
+  PopupAlign,
+  PopupPositioning,
+  PopupSide,
+  PopupTarget,
+  PopupTargetInput,
+} from '../../lib/types';
+import { usePopupTarget } from '../../hooks/useResolvedTarget';
 import { useId } from '../../hooks/useId';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
 import { useContextMenuAnchor, type ContextMenuAnchor } from '../../hooks/useContextMenuAnchor';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useHoverIntent, type HoverIntent } from '../../hooks/useHoverIntent';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useIsClient } from '../../hooks/useIsClient';
@@ -117,6 +123,14 @@ export interface PopoverProps {
    * opened by `openOnContext` is placed at the gesture instead.
    */
   target?: PopupTargetInput;
+  /**
+   * Advanced positioning (Fluent's `positioning`): `offset` (px from the anchor), `fitViewport`
+   * (limit the content to the space the viewport leaves; Fluent's `autoSize`), `matchReferenceWidth`,
+   * `fallbackPlacements` (tried in order when the requested side has no room) and `target` (used
+   * when the `target` prop is not set). `side` and `align` stay separate props.
+   * @default `{ offset: 8 }`
+   */
+  positioning?: PopupPositioning;
   /** `Popover.Trigger` and `Popover.Content`. */
   children: React.ReactNode;
 }
@@ -361,9 +375,10 @@ const PopoverRoot = ({
   closeDelay = 500,
   openOnContext = false,
   target: targetProp,
+  positioning,
   children,
 }: PopoverProps) => {
-  const target = useResolvedTarget(targetProp);
+  const target = usePopupTarget('Popover', targetProp, positioning);
   const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   // A hover close in flight (written in handlers, read when the popover closes): set when the hover
   // intent asks to close, so that close moves no focus even when a controlled parent applies it in
@@ -421,7 +436,13 @@ const PopoverRoot = ({
     floatingProps,
     arrowStyles,
     side: placedSide,
-  } = usePopupPosition({ open, side, align, offset: 8, arrowRef });
+  } = usePopupPosition({
+    open,
+    side,
+    align,
+    arrowRef,
+    ...resolvePositioning(positioning, { offset: 8 }),
+  });
 
   // The one focus resolver: the focus-return fallback and the layer's anchor (where a surface
   // opened from the content restores focus once its opener is gone). In context mode the element

@@ -3135,6 +3135,102 @@ describe('Popover', () => {
     });
   });
 
+  describe('positioning', () => {
+    const boxes = {
+      trigger: { x: 20, y: 20, width: 80, height: 32 },
+      content: { x: 0, y: 0, width: 256, height: 120 },
+    };
+    function WithPositioning(props: Partial<PopoverProps>) {
+      return (
+        <Popover defaultOpen {...props}>
+          <Popover.Trigger>
+            <button type="button" data-testid="trigger">
+              Toggle
+            </button>
+          </Popover.Trigger>
+          <Popover.Content data-testid="content">Body</Popover.Content>
+        </Popover>
+      );
+    }
+
+    it('keeps the default offset of 8 without positioning', async () => {
+      mockLayout(boxes);
+      render(<WithPositioning />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      await waitFor(() => expect(surface.style.transform).toBe('translate(20px, 60px)'));
+    });
+
+    it.each([
+      [20, 'translate(20px, 72px)'],
+      [0, 'translate(20px, 52px)'],
+    ])('positioning.offset %s applies', async (offset, expected) => {
+      mockLayout(boxes);
+      render(<WithPositioning positioning={{ offset }} />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      await waitFor(() => expect(surface.style.transform).toBe(expected));
+    });
+
+    it('positioning.fitViewport limits the surface to the available space', async () => {
+      mockLayout(boxes);
+      render(<WithPositioning positioning={{ fitViewport: true }} />);
+      const surface = screen.getByRole('dialog', { name: 'Toggle' });
+      await waitFor(() =>
+        expect(surface.style.maxHeight).toBe('var(--wave-popup-available-height)'),
+      );
+    });
+
+    it('positioning.target positions against the target', async () => {
+      mockLayout({ ...boxes, anchor: { x: 400, y: 300, width: 80, height: 32 } });
+      function Anchored() {
+        const ref = React.useRef<HTMLSpanElement>(null);
+        return (
+          <>
+            <span data-testid="anchor" ref={ref} />
+            <Popover open onOpenChange={() => {}} positioning={{ target: ref }}>
+              <Popover.Content aria-label="Anchored" data-testid="content">
+                Body
+              </Popover.Content>
+            </Popover>
+          </>
+        );
+      }
+      render(<Anchored />);
+      const surface = screen.getByRole('dialog', { name: 'Anchored' });
+      await waitFor(() => expect(surface.style.transform).toBe('translate(400px, 340px)'));
+    });
+
+    it('warns once when both target props are set, and the top-level target wins', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockLayout({
+        ...boxes,
+        first: { x: 400, y: 300, width: 80, height: 32 },
+        second: { x: 600, y: 100, width: 80, height: 32 },
+      });
+      function Both() {
+        const [first, setFirst] = React.useState<HTMLElement | null>(null);
+        const [second, setSecond] = React.useState<HTMLElement | null>(null);
+        return (
+          <>
+            <span data-testid="first" ref={setFirst} />
+            <span data-testid="second" ref={setSecond} />
+            <Popover open onOpenChange={() => {}} target={first} positioning={{ target: second }}>
+              <Popover.Content aria-label="Both" data-testid="content">
+                Body
+              </Popover.Content>
+            </Popover>
+          </>
+        );
+      }
+      const { rerender } = render(<Both />);
+      rerender(<Both />);
+      const surface = screen.getByRole('dialog', { name: 'Both' });
+      await waitFor(() => expect(surface.style.transform).toBe('translate(400px, 340px)'));
+      expect(warn.mock.calls).toEqual([
+        [expect.stringMatching(/^\[WaveUI\] Popover: both target and positioning\.target/)],
+      ]);
+    });
+  });
+
   describe('server rendering', () => {
     it.each([
       ['a defaultOpen', { defaultOpen: true }],

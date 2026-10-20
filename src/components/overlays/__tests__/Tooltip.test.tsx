@@ -575,6 +575,24 @@ describe('Tooltip', () => {
       expect(surface()).toHaveAttribute('data-align', 'center');
     });
 
+    it.each([
+      [16, 'translate(380px, 256px)'],
+      [0, 'translate(380px, 272px)'],
+    ])('positioning.offset %s applies', async (offset, expected) => {
+      mockLayout({
+        target: { x: 400, y: 300, width: 80, height: 32 },
+        surface: { x: 0, y: 0, width: 120, height: 28 },
+      });
+      const user = setupTimers();
+      render(
+        <Tooltip content="Tooltip text" openDelay={0} data-testid="target" positioning={{ offset }}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      await user.hover(screen.getByRole('button', { name: 'Target' }));
+      await waitFor(() => expect(surface()?.style.transform).toBe(expected));
+    });
+
     it('flips below the trigger when the top collides with the viewport', async () => {
       mockLayout({
         target: { x: 400, y: 2, width: 80, height: 32 },

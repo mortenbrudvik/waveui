@@ -1,5 +1,6 @@
 import * as React from 'react';
-import type { PopupTarget, PopupTargetInput } from '../lib/types';
+import type { PopupPositioning, PopupTarget, PopupTargetInput } from '../lib/types';
+import { warnOnce } from '../lib/dev';
 
 /** Whether a `target` is a ref object rather than an element or a `VirtualElement`. */
 export function isTargetRef(
@@ -30,4 +31,37 @@ export function useResolvedTarget(target: PopupTargetInput | undefined): PopupTa
   });
   if (isTargetRef(target)) return refElement;
   return target;
+}
+
+/**
+ * Internal. Warns once (from an effect) when both `target` and `positioning.target` are set; the
+ * component uses `target`.
+ */
+export function useTargetConflictWarning(
+  component: string,
+  target: PopupTargetInput | undefined,
+  positioningTarget: PopupTargetInput | undefined,
+): void {
+  const conflict = target != null && positioningTarget != null;
+  React.useEffect(() => {
+    if (conflict) {
+      warnOnce(
+        `${component}:positioning-target`,
+        `${component}: both target and positioning.target are set; target is used.`,
+      );
+    }
+  }, [component, conflict]);
+}
+
+/**
+ * Internal. The `target` of a popup that also takes `positioning`: the `target` prop, else
+ * `positioning.target`, resolved by {@link useResolvedTarget}.
+ */
+export function usePopupTarget(
+  component: string,
+  target: PopupTargetInput | undefined,
+  positioning: PopupPositioning | undefined,
+): PopupTarget | undefined {
+  useTargetConflictWarning(component, target, positioning?.target);
+  return useResolvedTarget(target !== undefined ? target : positioning?.target);
 }

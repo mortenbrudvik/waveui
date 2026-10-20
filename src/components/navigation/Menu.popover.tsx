@@ -1,8 +1,14 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { menuPopoverClassNames } from '../../lib/classNames';
-import type { PopupAlign, PopupSide, PopupTarget, PopupTargetInput } from '../../lib/types';
-import { useResolvedTarget } from '../../hooks/useResolvedTarget';
+import type {
+  PopupAlign,
+  PopupPositioning,
+  PopupSide,
+  PopupTarget,
+  PopupTargetInput,
+} from '../../lib/types';
+import { usePopupTarget } from '../../hooks/useResolvedTarget';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -12,7 +18,7 @@ import { useDismiss } from '../../hooks/useDismiss';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { createHoverIntentGroup, type HoverIntentGroup } from '../../hooks/useHoverIntent';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
@@ -49,6 +55,13 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * the gesture instead.
    */
   target?: PopupTargetInput;
+  /**
+   * Advanced positioning (Fluent's `positioning`): `offset`, `fitViewport`, `matchReferenceWidth`,
+   * `fallbackPlacements` and `target` (used when the `target` prop is not set). `side` and `align`
+   * stay separate props, and the `offset` prop wins over `positioning.offset`.
+   * @default `{ fitViewport: true }`
+   */
+  positioning?: PopupPositioning;
   /** Menu items and dividers. */
   children: React.ReactNode;
   /**
@@ -152,6 +165,7 @@ export const MenuPopover = ({
   align = 'start',
   offset,
   target: targetProp,
+  positioning,
   children,
   className,
   style,
@@ -188,7 +202,7 @@ export const MenuPopover = ({
     contextOpener,
   } = menu;
   useStaticMenuPartWarning('Menu.Popover', popup);
-  const target = useResolvedTarget(targetProp);
+  const target = usePopupTarget('Menu.Popover', targetProp, positioning);
   const targetElement = isElementTarget(target) ? target : null;
 
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
@@ -206,9 +220,9 @@ export const MenuPopover = ({
     open,
     side: side ?? (isSubmenu ? 'end' : 'bottom'),
     align,
-    offset: offset ?? (isSubmenu ? 0 : 4),
-    fitViewport: true,
     shift: isSubmenu ? SUBMENU_SHIFT : undefined,
+    ...resolvePositioning(positioning, { offset: isSubmenu ? 0 : 4, fitViewport: true }),
+    ...(offset !== undefined && { offset }),
   });
   // The size limits come from menuPopoverClasses, which a consumer class can replace; an inline
   // max-height/max-width would beat every class.

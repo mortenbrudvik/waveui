@@ -6,12 +6,13 @@ import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { DismissIcon } from '../../lib/icons';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusRing, forcedColors } from '../../lib/styles';
-import type { PopupAlign, PopupSide, VirtualElement } from '../../lib/types';
+import type { PopupAlign, PopupPositioning, PopupSide, VirtualElement } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
+import { useTargetConflictWarning } from '../../hooks/useResolvedTarget';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useAnnounce } from '../../hooks/useAnnounce';
 import { Button } from '../button/Button';
@@ -126,6 +127,13 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    * @default 'center'
    */
   align?: PopupAlign;
+  /**
+   * Advanced positioning (Fluent's `positioning`): `offset`, `fitViewport`, `matchReferenceWidth`,
+   * `fallbackPlacements` and `target` (used when the `target` prop is not set). `side` and `align`
+   * stay separate props.
+   * @default `{ offset: 12 }`
+   */
+  positioning?: PopupPositioning;
   /** Ref to the popover surface (`role="dialog"`). */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -196,7 +204,8 @@ export const TeachingPopover = ({
   onOpenChange,
   closeLabel = 'Close',
   labels,
-  target,
+  target: targetProp,
+  positioning,
   side = 'bottom',
   align = 'center',
   className,
@@ -205,6 +214,10 @@ export const TeachingPopover = ({
   ref,
   ...rest
 }: TeachingPopoverProps) => {
+  useTargetConflictWarning('TeachingPopover', targetProp, positioning?.target);
+  const target = (
+    targetProp !== undefined ? targetProp : positioning?.target
+  ) as TeachingPopoverProps['target'];
   const controlledStep = resolveDeprecatedProp(
     'TeachingPopover',
     activeStepProp,
@@ -268,7 +281,13 @@ export const TeachingPopover = ({
     arrowStyles,
     side: placedSide,
     isPositioned,
-  } = usePopupPosition({ open: shown && hasTarget, side, align, offset: 12, arrowRef });
+  } = usePopupPosition({
+    open: shown && hasTarget,
+    side,
+    align,
+    arrowRef,
+    ...resolvePositioning(positioning, { offset: 12 }),
+  });
   // An anchored popover is shown only while it points at a resolved target: otherwise the surface
   // is rendered (so it can be measured) but hidden, unfocused, silent and without an Escape layer.
   const targetAvailable = target != null && (isRefObject(target) ? targetResolved : true);
