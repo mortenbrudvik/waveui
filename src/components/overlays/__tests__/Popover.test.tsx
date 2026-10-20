@@ -3098,7 +3098,7 @@ describe('Popover', () => {
         );
       }
       render(<ByRef />);
-      const surface = screen.getByRole('dialog', { name: 'By ref' });
+      const surface = await screen.findByRole('dialog', { name: 'By ref' });
       await waitFor(() => expect(surface.style.transform).toBe('translate(400px, 340px)'));
     });
 
@@ -3121,7 +3121,8 @@ describe('Popover', () => {
         );
       }
       const { rerender } = render(<Late attached={false} />);
-      expect(() => screen.getByRole('dialog', { name: 'Late' })).not.toThrow();
+      await act(async () => {});
+      expect(screen.getByRole('dialog', { hidden: true }).style.visibility).toBe('hidden');
       rerender(<Late attached />);
       await waitFor(() =>
         expect(screen.getByRole('dialog', { name: 'Late' }).style.transform).toBe(
@@ -3195,7 +3196,7 @@ describe('Popover', () => {
         );
       }
       render(<Anchored />);
-      const surface = screen.getByRole('dialog', { name: 'Anchored' });
+      const surface = await screen.findByRole('dialog', { name: 'Anchored' });
       await waitFor(() => expect(surface.style.transform).toBe('translate(400px, 340px)'));
     });
 

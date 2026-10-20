@@ -202,7 +202,11 @@ export const MenuPopover = ({
     contextOpener,
   } = menu;
   useStaticMenuPartWarning('Menu.Popover', popup);
-  const target = usePopupTarget('Menu.Popover', targetProp, positioning);
+  const { target, pending: targetPending } = usePopupTarget(
+    'Menu.Popover',
+    targetProp,
+    positioning,
+  );
   const targetElement = isElementTarget(target) ? target : null;
 
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
@@ -216,7 +220,12 @@ export const MenuPopover = ({
   // `open`, so focus returns and the layer goes on close, not after an exit motion.
   const { isMounted, ref: presenceRef, presenceProps } = usePresence(open);
 
-  const { setReference, setFloating, floatingProps, isPositioned } = usePopupPosition({
+  const {
+    setReference,
+    setFloating,
+    floatingProps: positionedProps,
+    isPositioned,
+  } = usePopupPosition({
     open,
     side: side ?? (isSubmenu ? 'end' : 'bottom'),
     align,
@@ -224,6 +233,10 @@ export const MenuPopover = ({
     ...resolvePositioning(positioning, { offset: isSubmenu ? 0 : 4, fitViewport: true }),
     ...(offset !== undefined && { offset }),
   });
+  // A ref target that holds no element yet keeps the popup hidden (as TeachingPopover's is).
+  const floatingProps = targetPending
+    ? { ...positionedProps, style: { ...positionedProps.style, visibility: 'hidden' as const } }
+    : positionedProps;
   // The size limits come from menuPopoverClasses, which a consumer class can replace; an inline
   // max-height/max-width would beat every class.
   const { maxHeight: _maxHeight, maxWidth: _maxWidth, ...positionStyle } = floatingProps.style;

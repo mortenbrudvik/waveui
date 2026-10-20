@@ -55,13 +55,18 @@ export function useTargetConflictWarning(
 
 /**
  * Internal. The `target` of a popup that also takes `positioning`: the `target` prop, else
- * `positioning.target`, resolved by {@link useResolvedTarget}.
+ * `positioning.target`, resolved by {@link useResolvedTarget}. `pending` is `true` while the target
+ * is a ref object that holds no element: the popup is rendered hidden, as TeachingPopover's is.
  */
 export function usePopupTarget(
   component: string,
   target: PopupTargetInput | undefined,
   positioning: PopupPositioning | undefined,
-): PopupTarget | undefined {
+): { target: PopupTarget | undefined; pending: boolean } {
   useTargetConflictWarning(component, target, positioning?.target);
-  return useResolvedTarget(target !== undefined ? target : positioning?.target);
+  const input = target !== undefined ? target : positioning?.target;
+  const resolved = useResolvedTarget(input);
+  // A ref object whose element is not there (yet): the popup stays hidden until it is.
+  const pending = isTargetRef(input) && resolved === null;
+  return { target: resolved, pending };
 }

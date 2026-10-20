@@ -765,7 +765,7 @@ describe('Menu.Popover target', () => {
     const { rerender } = render(<ByRef />);
     mockRect(screen.getByTestId('anchor'), { x: 40, y: 60, width: 50, height: 10 });
     rerender(<ByRef />);
-    const menu = screen.getByRole('menu', { name: 'By ref' });
+    const menu = await screen.findByRole('menu', { name: 'By ref' });
     await waitFor(() => expect(translateOf(menu)).toEqual({ x: 40, y: 74 }));
   });
 
@@ -782,7 +782,7 @@ describe('Menu.Popover target', () => {
     }
     render(<Detached />);
     await act(async () => {});
-    expect(screen.getByRole('menu', { name: 'Detached' })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { hidden: true }).style.visibility).toBe('hidden');
   });
 
   describe('positioning', () => {
@@ -817,7 +817,7 @@ describe('Menu.Popover target', () => {
       await act(async () => {
         rerender(ui);
       });
-      return screen.getByRole('menu', { name: 'Positioned' });
+      return screen.findByRole('menu', { name: 'Positioned' });
     }
 
     it('keeps the default offset of 4 without positioning', async () => {

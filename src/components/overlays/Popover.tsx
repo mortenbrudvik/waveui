@@ -378,7 +378,7 @@ const PopoverRoot = ({
   positioning,
   children,
 }: PopoverProps) => {
-  const target = usePopupTarget('Popover', targetProp, positioning);
+  const { target, pending: targetPending } = usePopupTarget('Popover', targetProp, positioning);
   const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   // A hover close in flight (written in handlers, read when the popover closes): set when the hover
   // intent asks to close, so that close moves no focus even when a controlled parent applies it in
@@ -433,7 +433,7 @@ const PopoverRoot = ({
   const {
     setReference,
     setFloating,
-    floatingProps,
+    floatingProps: positionedProps,
     arrowStyles,
     side: placedSide,
   } = usePopupPosition({
@@ -443,6 +443,10 @@ const PopoverRoot = ({
     arrowRef,
     ...resolvePositioning(positioning, { offset: 8 }),
   });
+  // A ref target that holds no element yet keeps the popup hidden (as TeachingPopover's is).
+  const floatingProps = targetPending
+    ? { ...positionedProps, style: { ...positionedProps.style, visibility: 'hidden' as const } }
+    : positionedProps;
 
   // The one focus resolver: the focus-return fallback and the layer's anchor (where a surface
   // opened from the content restores focus once its opener is gone). In context mode the element
