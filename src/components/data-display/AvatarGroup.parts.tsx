@@ -39,10 +39,6 @@ OverflowContext.displayName = 'AvatarGroupOverflowContext';
 /** Properties for the AvatarGroup.Item sub-component: the props of an Avatar. */
 export type AvatarGroupItemProps = AvatarProps;
 
-/**
- * A member of an AvatarGroup. In the group it renders as an `Avatar`; in the overflow list of the
- * popup it renders as a row with the avatar and the name. It takes the props of an `Avatar`.
- */
 const AvatarGroupItemImpl = ({ className, ...props }: AvatarGroupItemProps) => {
   const overflow = React.useContext(OverflowContext);
   if (!overflow) {
@@ -60,6 +56,10 @@ const AvatarGroupItemImpl = ({ className, ...props }: AvatarGroupItemProps) => {
   );
 };
 AvatarGroupItemImpl.displayName = 'AvatarGroupItem';
+/**
+ * A member of an AvatarGroup. In the group it renders as an `Avatar`; in the overflow list of the
+ * popup it renders as a row with the avatar and the name. It takes the props of an `Avatar`.
+ */
 export const AvatarGroupItem = AvatarGroupItemImpl;
 
 /**
@@ -349,4 +349,10 @@ const AvatarGroupPopoverImpl = ({
   );
 };
 AvatarGroupPopoverImpl.displayName = 'AvatarGroupPopover';
+/**
+ * The overflow of an AvatarGroup, written by hand: a "+N" button that opens a popup listing its
+ * children (`AvatarGroup.Item`s, `Avatar`s, text or other elements). Write it as a child of the
+ * group to replace the overflow that `max` makes; its `count`, `indicator`, `label`, `open` and
+ * `onOpenChange` take over what `max` would have derived. Tab leaves the popup from the button.
+ */
 export const AvatarGroupPopover = AvatarGroupPopoverImpl;

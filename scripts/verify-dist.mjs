@@ -318,6 +318,33 @@ export const HOOK_PROBES_0_12 = [
   },
 ];
 
+/** Component modules an import of only an Avatar helper must not hold (0.13). */
+const AVATAR_COMPONENT_MODULES = [
+  'components/data-display/Avatar.mjs',
+  'components/data-display/AvatarGroup.mjs',
+  'components/data-display/Persona.mjs',
+];
+
+/**
+ * The helper probes of 0.13 (spec §9): an import of only `getInitials` or only
+ * `partitionAvatarGroupItems`, two pure functions, holds its own module, no Avatar component and
+ * no React module.
+ */
+export const HOOK_PROBES_0_13 = [
+  {
+    keep: 'getInitials',
+    modules: ['lib/initials.mjs'],
+    dropModules: AVATAR_COMPONENT_MODULES,
+    dropExternals: ['react', 'react/jsx-runtime'],
+  },
+  {
+    keep: 'partitionAvatarGroupItems',
+    modules: ['components/data-display/AvatarGroup.partition.mjs'],
+    dropModules: AVATAR_COMPONENT_MODULES,
+    dropExternals: ['react', 'react/jsx-runtime'],
+  },
+];
+
 /**
  * The inclusion probes of 0.11 (spec §6.2): an import of only `keep` holds each of `modules`, so
  * the exclusion probes above cannot pass because a module is missing. A TagPicker is built on the
@@ -1858,6 +1885,13 @@ export async function verifyDist(
     }
   } catch (error) {
     errors.push(`0.12 hook probe failed: ${error.message}`);
+  }
+  try {
+    for (const probe of HOOK_PROBES_0_13) {
+      errors.push(...(await probeHook(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.13 helper probe failed: ${error.message}`);
   }
   try {
     for (const probe of INCLUSION_PROBES_0_11) {

@@ -4723,6 +4723,62 @@ describe('compounds composed in a React Server Component', () => {
       },
     }),
     ssrCase({
+      name: 'AvatarGroup (Item members and a Popover overflow)',
+      parts: { Item: Wave.AvatarGroupItem, Popover: Wave.AvatarGroupPopover },
+      tree: ({ Item, Popover }) => (
+        <Wave.AvatarGroup aria-label="Team">
+          <Item name="Ada Lovelace" />
+          <Item name="Grace Hopper" />
+          <Popover>
+            <Item name="Alan Turing" />
+            <Item name="Edsger Dijkstra" />
+          </Popover>
+        </Wave.AvatarGroup>
+      ),
+      serverText: '2 more',
+      interact: async (user) => {
+        await user.click(screen.getByRole('button', { name: '2 more' }));
+        const popup = within(screen.getByRole('dialog'));
+        expect(popup.getAllByRole('listitem')).toHaveLength(2);
+        expect(popup.getByText('Alan Turing')).toBeInTheDocument();
+        expect(popup.getByText('Edsger Dijkstra')).toBeInTheDocument();
+      },
+    }),
+    ssrCase({
+      name: 'Card (a Preview with a logo, a Header with an action)',
+      parts: { Preview: Wave.CardPreview, Header: Wave.CardHeader, Body: Wave.CardBody },
+      tree: ({ Preview, Header, Body }) => (
+        <Wave.Card aria-label="Report">
+          <Preview logo={<span>Logo</span>}>Cover</Preview>
+          <Header title="Report" action={<button type="button">Open menu</button>} />
+          <Body>Details</Body>
+        </Wave.Card>
+      ),
+      serverText: 'Cover',
+      interact: async (user) => {
+        expect(screen.getByText('Logo')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Open menu' }));
+        expect(screen.getByText('Details')).toBeInTheDocument();
+      },
+    }),
+    ssrCase({
+      name: 'Carousel (a Carousel.Button replacing the Next button)',
+      parts: { Item: Wave.CarouselItem, Button: Wave.CarouselButton },
+      tree: ({ Item, Button }) => (
+        <Wave.Carousel aria-label="Promo">
+          <Item>First slide</Item>
+          <Item>Second slide</Item>
+          <Button direction="next">Go</Button>
+        </Wave.Carousel>
+      ),
+      serverText: 'Go',
+      interact: async (user) => {
+        await user.click(screen.getByRole('button', { name: 'Next slide' }));
+        const region = screen.getByRole('region', { name: 'Promo' });
+        expect(region.querySelector('[aria-live]')).toHaveTextContent('Slide 2 of 2');
+      },
+    }),
+    ssrCase({
       name: 'Drawer',
       parts: { Trigger: DrawerTrigger, Title: DrawerTitle, Close: DrawerClose },
       tree: ({ Trigger, Title, Close }) => (
@@ -8227,5 +8283,231 @@ describe('custom overlays on the public hooks (0.12)', () => {
     expect(reached).toContain('Retry');
     expect(reached).toContain('Dismiss');
     await expectNoA11yViolations(document.body);
+  });
+});
+
+describe('Phase 8 parts across components (0.13)', () => {
+  const barrel = Wave as unknown as Record<string, unknown>;
+
+  it('exports the Phase 8 values and each flat member equal to its dotted one', () => {
+    for (const name of [
+      'getInitials',
+      'partitionAvatarGroupItems',
+      'AvatarGroupItem',
+      'AvatarGroupPopover',
+      'CardPreview',
+      'CarouselButton',
+    ]) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+    expect(Wave.AvatarGroupItem).toBe(Wave.AvatarGroup.Item);
+    expect(Wave.AvatarGroupPopover).toBe(Wave.AvatarGroup.Popover);
+    expect(Wave.CardPreview).toBe(Wave.Card.Preview);
+    expect(Wave.CarouselButton).toBe(Wave.Carousel.Button);
+    expect(Wave.getInitials('Ada Lovelace')).toBe('AL');
+    expect(Wave.partitionAvatarGroupItems({ items: [1, 2, 3, 4], maxInlineItems: 3 })).toEqual({
+      inlineItems: [1, 2, 3],
+      overflowItems: [4],
+    });
+  });
+
+  it('shows a Persona row with an Avatar of every color in a Tree, named by the person', async () => {
+    const colors = [
+      'neutral',
+      'brand',
+      'colorful',
+      'red',
+      'pumpkin',
+      'gold',
+      'forest',
+      'teal',
+      'blue',
+      'navy',
+      'lavender',
+      'purple',
+      'magenta',
+      'brown',
+      'steel',
+    ] as const;
+    render(
+      <Wave.Tree aria-label="People">
+        {colors.map((color) => (
+          <Wave.Tree.Item key={color} value={color}>
+            <Wave.Tree.ItemPersonaLayout
+              media={<Wave.Avatar name={`Ada ${color}`} color={color} />}
+              description="Engineer"
+            >
+              {`Ada ${color}`}
+            </Wave.Tree.ItemPersonaLayout>
+          </Wave.Tree.Item>
+        ))}
+      </Wave.Tree>,
+    );
+    for (const color of colors) {
+      const row = screen.getByRole('treeitem', { name: `Ada ${color}` });
+      const avatar = row.querySelector(`.${Wave.avatarClassNames.root}`);
+      expect(avatar, color).not.toBeNull();
+      expect(avatar!.getAttribute('data-color')).toBeTruthy();
+      if (color !== 'colorful') expect(avatar).toHaveAttribute('data-color', color);
+    }
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('squares the Avatar in a rounded Tag and keeps the circle in a circular one', () => {
+    const { container } = render(
+      <>
+        <Wave.Tag shape="rounded" media={<Wave.Avatar name="Katri Athokas" />}>
+          Katri
+        </Wave.Tag>
+        <Wave.Tag shape="circular" media={<Wave.Avatar name="Ola Nordmann" />}>
+          Ola
+        </Wave.Tag>
+      </>,
+    );
+    const avatars = container.querySelectorAll(`.${Wave.avatarClassNames.root}`);
+    expect(avatars[0]).toHaveAttribute('data-shape', 'square');
+    expect(avatars[1]).toHaveAttribute('data-shape', 'circular');
+  });
+
+  it('a Card action that is a Menu trigger opens its menu without selecting the card', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(
+      <Wave.Card selected={false} onSelect={onSelect} aria-label="Project card">
+        <Wave.Card.Header
+          title="Project"
+          action={
+            <Wave.Menu>
+              <Wave.Menu.Trigger>
+                <Wave.Button aria-label="More options">…</Wave.Button>
+              </Wave.Menu.Trigger>
+              <Wave.Menu.Popover>
+                <Wave.Menu.Item>Rename</Wave.Menu.Item>
+              </Wave.Menu.Popover>
+            </Wave.Menu>
+          }
+        />
+      </Wave.Card>,
+    );
+    const trigger = screen.getByRole('button', { name: 'More options' });
+    await user.click(trigger);
+    expect(onSelect).not.toHaveBeenCalled();
+    const menu = screen.getByRole('menu');
+    await user.click(within(menu).getByRole('menuitem', { name: 'Rename' }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  describe('in a Dialog', () => {
+    const CAPTURE = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'] as const;
+    let saved: Array<[string, PropertyDescriptor | undefined]> = [];
+
+    beforeEach(() => {
+      // jsdom has no pointer capture: a stand-in that remembers the captured pointer ids.
+      const captured = new WeakMap<Element, Set<number>>();
+      saved = CAPTURE.map((name) => [
+        name,
+        Object.getOwnPropertyDescriptor(Element.prototype, name),
+      ]);
+      Object.defineProperties(Element.prototype, {
+        setPointerCapture: {
+          configurable: true,
+          writable: true,
+          value(this: Element, id: number) {
+            const ids = captured.get(this) ?? new Set<number>();
+            ids.add(id);
+            captured.set(this, ids);
+          },
+        },
+        releasePointerCapture: {
+          configurable: true,
+          writable: true,
+          value(this: Element, id: number) {
+            captured.get(this)?.delete(id);
+          },
+        },
+        hasPointerCapture: {
+          configurable: true,
+          writable: true,
+          value(this: Element, id: number) {
+            return captured.get(this)?.has(id) ?? false;
+          },
+        },
+      });
+    });
+
+    afterEach(() => {
+      for (const [name, descriptor] of saved) {
+        if (descriptor) Object.defineProperty(Element.prototype, name, descriptor);
+        else Reflect.deleteProperty(Element.prototype, name);
+      }
+    });
+
+    it('a grouped, draggable Carousel pages by drag and by its buttons', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Wave.Dialog open onOpenChange={() => {}}>
+          <Wave.Dialog.Content title="Gallery">
+            <Wave.Carousel
+              aria-label="Photos"
+              groupSize={2}
+              draggable
+              onValueChange={onValueChange}
+            >
+              {['One', 'Two', 'Three', 'Four', 'Five'].map((name) => (
+                <Wave.Carousel.Item key={name}>{name}</Wave.Carousel.Item>
+              ))}
+            </Wave.Carousel>
+          </Wave.Dialog.Content>
+        </Wave.Dialog>,
+      );
+      const region = screen.getByRole('region', { name: 'Photos' });
+      const track = region.querySelector<HTMLElement>(`.${Wave.carouselClassNames.track}`)!;
+      mockRect(track.parentElement as Element, { left: 0, top: 0, width: 400, height: 200 });
+      const pointer = (x: number) => ({
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+        button: 0,
+        clientX: x,
+        clientY: 50,
+      });
+      act(() => {
+        fireEvent.pointerDown(track, pointer(300));
+        fireEvent.pointerMove(track, pointer(120));
+        fireEvent.pointerUp(track, pointer(120));
+      });
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
+      await user.click(within(region).getByRole('button', { name: 'Next slide' }));
+      expect(onValueChange).toHaveBeenLastCalledWith(4);
+      expect(screen.getByRole('dialog', { name: 'Gallery' })).toBeInTheDocument();
+      await expectNoA11yViolations(document.body);
+    });
+  });
+
+  it('opens the overflow popup of an AvatarGroup from inside a Dialog and closes it first', async () => {
+    const user = userEvent.setup();
+    render(
+      <Wave.Dialog open onOpenChange={() => {}}>
+        <Wave.Dialog.Content title="Team">
+          <Wave.AvatarGroup aria-label="Members" max={2}>
+            {['Ada Lovelace', 'Grace Hopper', 'Alan Turing', 'Edsger Dijkstra'].map((name) => (
+              <Wave.Avatar key={name} name={name} />
+            ))}
+          </Wave.AvatarGroup>
+        </Wave.Dialog.Content>
+      </Wave.Dialog>,
+    );
+    const overflow = screen.getByRole('button', { name: '2 more' });
+    await user.click(overflow);
+    const popup = screen.getAllByRole('dialog').at(-1);
+    expect(popup).toBeDefined();
+    expect(within(popup!).getByText('Alan Turing')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByText('Alan Turing')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Team' })).toBeInTheDocument();
+    expect(overflow).toHaveFocus();
   });
 });
