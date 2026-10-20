@@ -157,6 +157,7 @@ export const avatarGroupClassNames = {
   root: 'wave-avatar-group',
   item: 'wave-avatar-group__item',
   overflowButton: 'wave-avatar-group__overflow-button',
+  pie: 'wave-avatar-group__pie',
   surface: 'wave-avatar-group__surface',
   list: 'wave-avatar-group__list',
   listItem: 'wave-avatar-group__list-item',

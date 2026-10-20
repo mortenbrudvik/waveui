@@ -18,6 +18,7 @@ import {
   testSystemProps,
 } from '../../../test-utils';
 import type { Size } from '../../../lib/types';
+import type { AvatarSize } from '../Avatar.sizes';
 
 const NAMES = ['Alice', 'Bob', 'Charlie', 'Diana'];
 const PHOTO = 'https://example.com/photo.jpg';
@@ -829,5 +830,152 @@ describe('AvatarGroup', () => {
   // button-provider#27 (C-REF): ref is declared in the props interface.
   it('declares ref in AvatarGroupProps (C-REF)', () => {
     expectTypeOf<AvatarGroupProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+  });
+
+  describe('layouts and member size (0.13)', () => {
+    const items = (root: HTMLElement) =>
+      Array.from(root.querySelectorAll<HTMLElement>('.wave-avatar-group__item'));
+
+    it('renders data-layout, stack by default', () => {
+      render(<AvatarGroup aria-label="Team">{members()}</AvatarGroup>);
+      expect(screen.getByRole('group', { name: 'Team' })).toHaveAttribute('data-layout', 'stack');
+    });
+
+    it('size reaches the members that set none, and the overflow button', () => {
+      render(
+        <AvatarGroup aria-label="Team" size="large" max={1}>
+          {members(['Alice', 'Bob'])}
+        </AvatarGroup>,
+      );
+      const group = screen.getByRole('group', { name: 'Team' });
+      expect(group.querySelector('.wave-avatar')).toHaveAttribute('data-size', 'large');
+      expect(screen.getByRole('button', { name: '1 more' }).className).toContain('w-12');
+    });
+
+    it('a member with its own size keeps it', () => {
+      render(
+        <AvatarGroup aria-label="Team" size="large">
+          <Avatar name="Alice" size="small" />
+          <Avatar name="Bob" />
+        </AvatarGroup>,
+      );
+      const avatars = screen.getByRole('group', { name: 'Team' }).querySelectorAll('.wave-avatar');
+      expect(avatars[0]).toHaveAttribute('data-size', 'small');
+      expect(avatars[1]).toHaveAttribute('data-size', 'large');
+    });
+
+    it('the default size is medium, as before', () => {
+      render(<AvatarGroup aria-label="Team">{members(['Alice'])}</AvatarGroup>);
+      expect(screen.getByRole('group').querySelector('.wave-avatar')).toHaveAttribute(
+        'data-size',
+        'medium',
+      );
+    });
+
+    it('numeric sizes reach the members', () => {
+      render(
+        <AvatarGroup aria-label="Team" size={64}>
+          {members(['Alice'])}
+        </AvatarGroup>,
+      );
+      expect(screen.getByRole('group').querySelector('.wave-avatar')).toHaveAttribute(
+        'data-size',
+        '64',
+      );
+    });
+
+    it('stack overlaps every member after the first', () => {
+      render(<AvatarGroup aria-label="Team">{members()}</AvatarGroup>);
+      const [first, ...rest] = items(screen.getByRole('group'));
+      expect(first!.className).not.toContain('-ms-2');
+      for (const item of rest) expect(item).toHaveClass('-ms-2');
+    });
+
+    it('spread puts the members side by side with a gap and no overlap', () => {
+      render(
+        <AvatarGroup aria-label="Team" layout="spread">
+          {members()}
+        </AvatarGroup>,
+      );
+      const group = screen.getByRole('group', { name: 'Team' });
+      expect(group).toHaveAttribute('data-layout', 'spread');
+      expect(group).toHaveClass('gap-1');
+      for (const item of items(group)) expect(item.className).not.toContain('-ms-2');
+    });
+
+    it('spread keeps the overflow button without overlap', () => {
+      render(
+        <AvatarGroup aria-label="Team" layout="spread" max={2}>
+          {members()}
+        </AvatarGroup>,
+      );
+      expect(screen.getByRole('button', { name: '2 more' }).className).not.toContain('-ms-2');
+    });
+
+    it('pie draws up to three wedges as one circle, hidden from assistive technology', () => {
+      render(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['Alice', 'Bob', 'Charlie'])}
+        </AvatarGroup>,
+      );
+      const group = screen.getByRole('group', { name: 'Team' });
+      expect(group).toHaveAttribute('data-layout', 'pie');
+      const wedges = items(group);
+      expect(wedges).toHaveLength(3);
+      for (const wedge of wedges) {
+        expect(wedge).toHaveAttribute('aria-hidden', 'true');
+        expect(wedge.className).toContain('clip-path');
+      }
+      expect(screen.queryByRole('img', { name: 'Alice' })).toBeNull();
+    });
+
+    it('pie defaults to the large size and sends members past three to the overflow', () => {
+      render(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['A', 'B', 'C', 'D', 'E'])}
+        </AvatarGroup>,
+      );
+      const group = screen.getByRole('group', { name: 'Team' });
+      expect(items(group)).toHaveLength(3);
+      expect(group.querySelector('.wave-avatar')).toHaveAttribute('data-size', 'large');
+      expect(screen.getByRole('button', { name: '2 more' })).toBeInTheDocument();
+    });
+
+    it('a pie of one member is a full circle and a pie of two is two halves', () => {
+      const { rerender } = render(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['Alice'])}
+        </AvatarGroup>,
+      );
+      expect(items(screen.getByRole('group'))).toHaveLength(1);
+      expect(items(screen.getByRole('group'))[0]!.className).not.toContain('clip-path');
+      rerender(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['Alice', 'Bob'])}
+        </AvatarGroup>,
+      );
+      const [left, right] = items(screen.getByRole('group'));
+      expect(left!.className).toContain('inset(0_50%_0_0)');
+      expect(right!.className).toContain('inset(0_0_0_50%)');
+    });
+
+    it('is axe clean in every layout', async () => {
+      for (const layout of ['stack', 'spread', 'pie'] as const) {
+        const { container, unmount } = render(
+          <AvatarGroup aria-label="Team" layout={layout} max={4}>
+            {members(['A', 'B', 'C', 'D', 'E'])}
+          </AvatarGroup>,
+        );
+        await expectNoA11yViolations(container);
+        unmount();
+      }
+    });
+
+    it('types layout and numeric size', () => {
+      expectTypeOf<AvatarGroupProps['layout']>().toEqualTypeOf<
+        'stack' | 'spread' | 'pie' | undefined
+      >();
+      expectTypeOf<AvatarGroupProps['size']>().toEqualTypeOf<AvatarSize | undefined>();
+    });
   });
 });

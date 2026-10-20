@@ -10,6 +10,7 @@ import { PersonIcon } from '../../lib/icons';
 import type { Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { AvatarBadgeSizeContext, AvatarSizeContext } from './Avatar.context';
+import { AvatarGroupContext } from './AvatarGroup.context';
 import { avatarColorClasses, resolveAvatarColor, type AvatarColor } from './Avatar.colors';
 import {
   avatarBadgeSize,
@@ -480,7 +481,9 @@ export const Avatar = ({
 
   // An own `size` wins; without one, the box of a surrounding tag's media, else medium. With a
   // badge the visual is sized, not the wrapper.
-  const resolvedSize: AvatarSize = sizeProp ?? (box ? (box.size as AvatarSize) : 'medium');
+  const group = React.useContext(AvatarGroupContext);
+  const resolvedSize: AvatarSize =
+    sizeProp ?? group?.size ?? (box ? (box.size as AvatarSize) : 'medium');
   const resolvedShape = shapeProp ?? box?.shape ?? 'circular';
   const pixels = avatarPixelSize(resolvedSize);
   const stateProps = {

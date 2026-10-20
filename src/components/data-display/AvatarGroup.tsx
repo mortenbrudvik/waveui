@@ -6,15 +6,17 @@ import { warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
 import { isInsideLayerTree } from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
-import type { Size } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { DismissLayerContext, useDismiss } from '../../hooks/useDismiss';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { Portal } from '../portal/Portal';
-import { Avatar, avatarSizeClasses } from './Avatar';
+import { Avatar } from './Avatar';
 import type { AvatarProps } from './Avatar';
+import { avatarSizeClassesFor, type AvatarSize } from './Avatar.sizes';
+import { AvatarGroupContext } from './AvatarGroup.context';
+import { partitionAvatarGroupItems, type AvatarGroupLayout } from './AvatarGroup.partition';
 
 /** Properties for the AvatarGroup component. */
 export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -25,10 +27,18 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
    * count one by one.
    */
   max?: number;
-  /** Size of the overflow button (match it to the avatars).
-   * @default 'medium'
+  /**
+   * Size of the avatars. It reaches the members that set no `size` of their own, and the overflow
+   * button.
+   * @default 'medium' ('large' in a `pie`)
    */
-  size?: Size;
+  size?: AvatarSize;
+  /**
+   * How the members are laid out: `stack` overlaps them, `spread` puts them side by side, `pie`
+   * draws up to three of them as the wedges of one circle (the group's name is then the only name).
+   * @default 'stack'
+   */
+  layout?: AvatarGroupLayout;
   /**
    * Accessible name of the overflow button (and its popup). A function receives the number of
    * hidden members. Localise it here.
@@ -45,6 +55,20 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
 }
+
+/**
+ * The clip of each wedge of a pie, by the number of wedges (one wedge is a full circle). Literal
+ * strings only.
+ */
+const pieWedgeClasses: ReadonlyArray<ReadonlyArray<string>> = [
+  [''],
+  ['[clip-path:inset(0_50%_0_0)]', '[clip-path:inset(0_0_0_50%)]'],
+  [
+    '[clip-path:inset(0_50%_0_0)]',
+    '[clip-path:inset(0_0_50%_50%)]',
+    '[clip-path:inset(50%_0_0_50%)]',
+  ],
+];
 
 /** Default text listed for a hidden member that would render with no accessible name. */
 const DEFAULT_UNNAMED_MEMBER_LABEL = 'Unnamed member';
@@ -114,7 +138,8 @@ function rendersUnnamed(member: React.ReactNode): boolean {
  */
 export const AvatarGroup = ({
   max,
-  size = 'medium',
+  size,
+  layout = 'stack',
   overflowLabel,
   unnamedMemberLabel = DEFAULT_UNNAMED_MEMBER_LABEL,
   className,
@@ -126,10 +151,18 @@ export const AvatarGroup = ({
 }: AvatarGroupProps) => {
   // Fragments are flattened, so each member counts, overlaps and is listed on its own (C-COMPOUND).
   const items = flattenChildren(children);
-  const limit = max === undefined || Number.isNaN(max) ? Infinity : Math.max(0, Math.floor(max));
-  const visible = items.slice(0, limit);
-  const hidden = items.slice(visible.length);
+  const resolvedSize: AvatarSize = size ?? (layout === 'pie' ? 'large' : 'medium');
+  const { inlineItems: visible, overflowItems } = partitionAvatarGroupItems({
+    items,
+    maxInlineItems: max,
+    layout,
+  });
+  const hidden = overflowItems ?? [];
   const overflow = hidden.length;
+  const groupContext = React.useMemo(
+    () => ({ size: resolvedSize, layout }),
+    [resolvedSize, layout],
+  );
 
   const unnamed = ariaLabel === undefined && ariaLabelledBy === undefined;
   React.useEffect(() => {
@@ -240,21 +273,53 @@ export const AvatarGroup = ({
       role="group"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
+      data-layout={layout}
       {...props}
-      className={cn(avatarGroupClassNames.root, 'inline-flex items-center', className)}
+      className={cn(
+        avatarGroupClassNames.root,
+        'inline-flex items-center',
+        layout !== 'stack' && 'gap-1',
+        className,
+      )}
     >
-      {visible.map(({ key, node }, i) => (
-        <span
-          key={key}
-          className={cn(
-            avatarGroupClassNames.item,
-            'inline-flex rounded-full ring-2 ring-background',
-            i > 0 && '-ms-2',
-          )}
-        >
-          {node}
-        </span>
-      ))}
+      <AvatarGroupContext.Provider value={groupContext}>
+        {layout === 'pie'
+          ? visible.length > 0 && (
+              <span
+                className={cn(
+                  avatarGroupClassNames.pie,
+                  'relative inline-block shrink-0 overflow-hidden rounded-full',
+                  avatarSizeClassesFor(resolvedSize),
+                )}
+              >
+                {visible.map(({ key, node }, i) => (
+                  <span
+                    key={key}
+                    aria-hidden="true"
+                    className={cn(
+                      avatarGroupClassNames.item,
+                      'absolute inset-0 inline-flex',
+                      pieWedgeClasses[visible.length - 1]?.[i],
+                    )}
+                  >
+                    {node}
+                  </span>
+                ))}
+              </span>
+            )
+          : visible.map(({ key, node }, i) => (
+              <span
+                key={key}
+                className={cn(
+                  avatarGroupClassNames.item,
+                  'inline-flex rounded-full ring-2 ring-background',
+                  layout === 'stack' && i > 0 && '-ms-2',
+                )}
+              >
+                {node}
+              </span>
+            ))}
+      </AvatarGroupContext.Provider>
       {overflow > 0 && (
         <button
           ref={triggerRefs}
@@ -269,8 +334,8 @@ export const AvatarGroup = ({
             'bg-muted text-muted-foreground ring-2 ring-background',
             'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
             focusRing,
-            visible.length > 0 && '-ms-2',
-            avatarSizeClasses[size],
+            layout === 'stack' && visible.length > 0 && '-ms-2',
+            avatarSizeClassesFor(resolvedSize),
           )}
           onClick={() => setOpen((value) => !value)}
         >
