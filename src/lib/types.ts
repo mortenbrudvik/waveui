@@ -209,6 +209,12 @@ export interface VirtualElement {
  */
 export type PopupTarget = HTMLElement | VirtualElement | null;
 
+/**
+ * What a popup's `target` prop accepts: a {@link PopupTarget}, or a ref object (an element that
+ * attaches without the popup rendering is read after each render of the popup).
+ */
+export type PopupTargetInput = PopupTarget | { readonly current: HTMLElement | null };
+
 /** A placement for `PopupPositioning.fallbackPlacements`: a side, and optionally an alignment on it. */
 export interface PopupPlacement {
   /** Side of the anchor. `start` and `end` follow the writing direction. */
@@ -231,7 +237,7 @@ export interface PopupPositioning {
   /** Placements to try, in order, when the requested side has no room; replaces the opposite side. */
   fallbackPlacements?: readonly PopupPlacement[];
   /** Position against this instead of the trigger. */
-  target?: PopupTarget | { readonly current: HTMLElement | null };
+  target?: PopupTargetInput;
 }
 
 /** A day of the week, as `Date.prototype.getDay()` numbers them: 0 is Sunday, 6 is Saturday. */

@@ -6,7 +6,7 @@ import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { DismissIcon } from '../../lib/icons';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusRing, forcedColors } from '../../lib/styles';
-import type { PopupAlign, PopupSide } from '../../lib/types';
+import type { PopupAlign, PopupSide, VirtualElement } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useDismiss } from '../../hooks/useDismiss';
@@ -95,7 +95,8 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    */
   labels?: TeachingPopoverLabels;
   /**
-   * The element the popover points at (a ref or the element). When given, the popover is
+   * The element the popover points at (a ref, the element, or a `VirtualElement`: a rectangle such as a
+   * point; an inline object is fine). When given, the popover is
    * rendered in a portal, positioned next to it with a beak, and flips or shifts to stay in view;
    * without it (`undefined`) the popover renders inline where it is placed (0.4 behaviour).
    * While the target is `null` or has not been positioned against yet (an element held in state
@@ -116,7 +117,7 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    * attached hides the popover right after that commit. Pass the element held in state when the
    * target can mount or unmount without the popover re-rendering.
    */
-  target?: React.RefObject<HTMLElement | null> | HTMLElement | null;
+  target?: React.RefObject<HTMLElement | null> | HTMLElement | VirtualElement | null;
   /** Side of the `target` to open on; `start`/`end` follow the writing direction.
    * @default 'bottom'
    */
@@ -136,11 +137,17 @@ function isRefObject(
 }
 
 function isElementTarget(target: TeachingPopoverProps['target']): target is HTMLElement {
-  return target != null && !isRefObject(target);
+  return (
+    target != null && !isRefObject(target) && typeof (target as Partial<Node>).nodeType === 'number'
+  );
+}
+
+function isVirtualTarget(target: TeachingPopoverProps['target']): target is VirtualElement {
+  return target != null && !isRefObject(target) && !isElementTarget(target);
 }
 
 function resolveTarget(target: TeachingPopoverProps['target']): HTMLElement | null {
-  if (!target) return null;
+  if (!target || isVirtualTarget(target)) return null;
   return isRefObject(target) ? target.current : target;
 }
 
@@ -238,8 +245,10 @@ export const TeachingPopover = ({
   // update has read a newly passed ref, the ref keeps this last known availability: moving between
   // attached refs (a multi-target tour) or passing a new ref object on every render never hides
   // the popover, and a switch to a ref that is not attached hides it once the update lands.
-  const [targetResolved, setTargetResolved] = React.useState(() => isElementTarget(target));
-  const elementAvailable = target === null ? false : isElementTarget(target) ? true : undefined;
+  const pointsAtOneNow = (value: TeachingPopoverProps['target']) =>
+    isElementTarget(value) || isVirtualTarget(value);
+  const [targetResolved, setTargetResolved] = React.useState(() => pointsAtOneNow(target));
+  const elementAvailable = target === null ? false : pointsAtOneNow(target) ? true : undefined;
   if (elementAvailable !== undefined && elementAvailable !== targetResolved) {
     setTargetResolved(elementAvailable);
   }
@@ -276,7 +285,7 @@ export const TeachingPopover = ({
     availabilityRef.current = targetResolved;
     const element = resolveTarget(target);
     targetRef.current = element;
-    setReference(element);
+    setReference(isVirtualTarget(target) ? target : element);
     if (target == null || !isRefObject(target)) return;
     queueMicrotask(() => {
       const latest = resolveTarget(targetPropRef.current);

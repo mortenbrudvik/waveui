@@ -18,7 +18,7 @@ import { Tooltip } from '../Tooltip';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
-import type { PopupTarget } from '../../../lib/types';
+import type { PopupTargetInput } from '../../../lib/types';
 import {
   createOverlayTestWrapper,
   expectNoA11yViolations,
@@ -3079,8 +3079,59 @@ describe('Popover', () => {
       expect(commits - settled).toBeLessThanOrEqual(4);
     });
 
-    it('types target as PopupTarget', () => {
-      expectTypeOf<PopoverProps['target']>().toEqualTypeOf<PopupTarget | undefined>();
+    it('positions against a RefObject target', async () => {
+      mockLayout({
+        target: { x: 400, y: 300, width: 80, height: 32 },
+        content: { x: 0, y: 0, width: 256, height: 120 },
+      });
+      function ByRef() {
+        const ref = React.useRef<HTMLSpanElement>(null);
+        return (
+          <>
+            <span data-testid="target" ref={ref} />
+            <Popover open onOpenChange={() => {}} target={ref}>
+              <Popover.Content aria-label="By ref" data-testid="content">
+                Body
+              </Popover.Content>
+            </Popover>
+          </>
+        );
+      }
+      render(<ByRef />);
+      const surface = screen.getByRole('dialog', { name: 'By ref' });
+      await waitFor(() => expect(surface.style.transform).toBe('translate(400px, 340px)'));
+    });
+
+    it('a RefObject target that is not attached yet renders without throwing, then follows it', async () => {
+      mockLayout({
+        target: { x: 400, y: 300, width: 80, height: 32 },
+        content: { x: 0, y: 0, width: 256, height: 120 },
+      });
+      function Late({ attached }: { attached: boolean }) {
+        const ref = React.useRef<HTMLSpanElement>(null);
+        return (
+          <>
+            {attached && <span data-testid="target" ref={ref} />}
+            <Popover open onOpenChange={() => {}} target={ref}>
+              <Popover.Content aria-label="Late" data-testid="content">
+                Body
+              </Popover.Content>
+            </Popover>
+          </>
+        );
+      }
+      const { rerender } = render(<Late attached={false} />);
+      expect(() => screen.getByRole('dialog', { name: 'Late' })).not.toThrow();
+      rerender(<Late attached />);
+      await waitFor(() =>
+        expect(screen.getByRole('dialog', { name: 'Late' }).style.transform).toBe(
+          'translate(400px, 340px)',
+        ),
+      );
+    });
+
+    it('types target as PopupTargetInput', () => {
+      expectTypeOf<PopoverProps['target']>().toEqualTypeOf<PopupTargetInput | undefined>();
     });
   });
 

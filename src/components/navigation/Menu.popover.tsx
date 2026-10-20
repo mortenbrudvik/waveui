@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { menuPopoverClassNames } from '../../lib/classNames';
-import type { PopupAlign, PopupSide, PopupTarget } from '../../lib/types';
+import type { PopupAlign, PopupSide, PopupTarget, PopupTargetInput } from '../../lib/types';
+import { useResolvedTarget } from '../../hooks/useResolvedTarget';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -43,11 +44,11 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * with a `target` needs no trigger; name it with `aria-label`, and give a toggle button you use
    * as the target `aria-haspopup="menu"` and `aria-expanded` yourself (the menu's `id` is
    * generated, so the toggle cannot point `aria-controls` at it). A press on a target element
-   * does not close the menu. Hold the element in state (a ref cannot be observed;
-   * TeachingPopover's `target` also takes a ref). A menu opened by `openOnContext` is placed at
+   * does not close the menu. Hold the element in state, or pass a ref object (read after
+   * each render of the menu). A menu opened by `openOnContext` is placed at
    * the gesture instead.
    */
-  target?: PopupTarget;
+  target?: PopupTargetInput;
   /** Menu items and dividers. */
   children: React.ReactNode;
   /**
@@ -150,7 +151,7 @@ export const MenuPopover = ({
   side,
   align = 'start',
   offset,
-  target,
+  target: targetProp,
   children,
   className,
   style,
@@ -187,6 +188,7 @@ export const MenuPopover = ({
     contextOpener,
   } = menu;
   useStaticMenuPartWarning('Menu.Popover', popup);
+  const target = useResolvedTarget(targetProp);
   const targetElement = isElementTarget(target) ? target : null;
 
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);

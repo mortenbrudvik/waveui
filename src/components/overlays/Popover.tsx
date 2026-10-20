@@ -5,7 +5,8 @@ import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusElement, getFirstTabbable, isConnectedAndFocusable } from '../../lib/focus';
-import type { PopupAlign, PopupSide, PopupTarget } from '../../lib/types';
+import type { PopupAlign, PopupSide, PopupTarget, PopupTargetInput } from '../../lib/types';
+import { useResolvedTarget } from '../../hooks/useResolvedTarget';
 import { useId } from '../../hooks/useId';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
 import { useContextMenuAnchor, type ContextMenuAnchor } from '../../hooks/useContextMenuAnchor';
@@ -112,10 +113,10 @@ export interface PopoverProps {
    * `aria-labelledby`, and give a toggle button you use as the target `aria-haspopup="dialog"`,
    * `aria-expanded` and `aria-controls` yourself. A press on a target element does not close the
    * popover, and Tab from it enters the content when there is no trigger. Hold the element in
-   * state (a ref cannot be observed; TeachingPopover's `target` also takes a ref). A popover
+   * state, or pass a ref object (read after each render of the popover, so an element that attaches without it rendering is noticed on its next render). A popover
    * opened by `openOnContext` is placed at the gesture instead.
    */
-  target?: PopupTarget;
+  target?: PopupTargetInput;
   /** `Popover.Trigger` and `Popover.Content`. */
   children: React.ReactNode;
 }
@@ -359,9 +360,10 @@ const PopoverRoot = ({
   openDelay = 250,
   closeDelay = 500,
   openOnContext = false,
-  target,
+  target: targetProp,
   children,
 }: PopoverProps) => {
+  const target = useResolvedTarget(targetProp);
   const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   // A hover close in flight (written in handlers, read when the popover closes): set when the hover
   // intent asks to close, so that close moves no focus even when a controlled parent applies it in

@@ -748,6 +748,43 @@ describe('Menu.Popover target', () => {
     await waitFor(() => expect(translateOf(menu)).toEqual({ x: 400, y: 314 }));
   });
 
+  it('positions against a RefObject target', async () => {
+    function ByRef() {
+      const ref = React.useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={ref} data-testid="anchor" />
+          <Menu open onOpenChange={() => {}}>
+            <Menu.Popover target={ref} aria-label="By ref">
+              <Menu.Item>Paste</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        </>
+      );
+    }
+    const { rerender } = render(<ByRef />);
+    mockRect(screen.getByTestId('anchor'), { x: 40, y: 60, width: 50, height: 10 });
+    rerender(<ByRef />);
+    const menu = screen.getByRole('menu', { name: 'By ref' });
+    await waitFor(() => expect(translateOf(menu)).toEqual({ x: 40, y: 74 }));
+  });
+
+  it('a RefObject target that is not attached renders without throwing', async () => {
+    function Detached() {
+      const ref = React.useRef<HTMLDivElement>(null);
+      return (
+        <Menu open onOpenChange={() => {}}>
+          <Menu.Popover target={ref} aria-label="Detached">
+            <Menu.Item>Paste</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      );
+    }
+    render(<Detached />);
+    await act(async () => {});
+    expect(screen.getByRole('menu', { name: 'Detached' })).toBeInTheDocument();
+  });
+
   it('warns once when a menu at a target without a trigger has no name', () => {
     function Unnamed() {
       const [target, setTarget] = React.useState<HTMLElement | null>(null);
