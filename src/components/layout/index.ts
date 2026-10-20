@@ -23,7 +23,14 @@ export type {
 } from './Accordion';
 
 export { TabList, TabListTab, TabListPanel, TabListPanels } from './TabList';
-export type { TabListProps, TabProps, TabPanelProps, TabPanelsProps } from './TabList';
+export type {
+  TabListProps,
+  TabListAppearance,
+  TabProps,
+  TabPanelProps,
+  TabPanelsProps,
+} from './TabList';
+  TabListAppearance, TabProps, TabPanelProps, TabPanelsProps } from './TabList';
 
 export { Tree, TreeItem, TreeItemPersonaLayout } from './Tree';
 export type {

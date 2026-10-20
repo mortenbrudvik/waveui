@@ -14,8 +14,9 @@ import {
   warnDeprecated,
   warnOnce,
 } from '../../lib/dev';
-import { disabledStyles, focusRing, focusRingInset } from '../../lib/styles';
-import type { Orientation } from '../../lib/types';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
+import { disabledStyles, focusRing, focusRingInset, forcedColors } from '../../lib/styles';
+import type { CoreSize, Orientation, Slot } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
@@ -122,8 +123,13 @@ interface TabListStructure {
   panels: Array<[string, string | null]>;
 }
 
+/** The look of a TabList: an underline, subtle fills, or circular subtle or filled tabs. */
+export type TabListAppearance = 'transparent' | 'subtle' | 'subtle-circular' | 'filled-circular';
+
 interface TabListContextValue {
   orientation: Orientation;
+  appearance: TabListAppearance;
+  size: CoreSize;
   /** Whether the tab with this value is the selected one (explicit value, else the tab stop). */
   isSelected: (value: string) => boolean;
   /**
@@ -151,6 +157,8 @@ const TabListContext = React.createContext<TabListContextValue | null>(null);
 
 const INERT_CONTEXT: TabListContextValue = {
   orientation: 'horizontal',
+  appearance: 'transparent',
+  size: 'medium',
   isSelected: () => false,
   select: () => {},
   getTabIndex: () => -1,
@@ -286,6 +294,19 @@ export interface TabListProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
    */
   orientation?: Orientation;
   /**
+   * Look of the tabs: `transparent` underlines the selected tab, `subtle` and `subtle-circular`
+   * fill it with a subtle color (square or fully rounded), `filled-circular` fills it with the
+   * primary color. In forced colors the selected tab keeps a Highlight outline (or underline) in
+   * every appearance.
+   * @default 'transparent'
+   */
+  appearance?: TabListAppearance;
+  /**
+   * Size of the tabs: their padding and type (`medium` is 14px text on 16 by 8px padding).
+   * @default 'medium'
+   */
+  size?: CoreSize;
+  /**
    * Whether moving focus with the arrow keys, Home and End also selects the tab (automatic
    * activation, as in 0.5). With `false`, the keys only move focus and Enter, Space or a click
    * selects the focused tab (manual activation, for panels that are slow to show). Fluent's
@@ -313,6 +334,8 @@ const TabListRoot = ({
   defaultValue: defaultValueProp,
   onValueChange,
   orientation: orientationProp,
+  appearance = 'transparent',
+  size = 'medium',
   selectTabOnFocus = true,
   selectedValue,
   defaultSelectedValue,
@@ -410,6 +433,8 @@ const TabListRoot = ({
   const context = React.useMemo<TabListContextValue>(
     () => ({
       orientation,
+      appearance,
+      size,
       isSelected,
       select,
       getTabIndex,
@@ -423,7 +448,7 @@ const TabListRoot = ({
       },
       registry,
     }),
-    [orientation, isSelected, select, getTabIndex, baseId, structure, registry],
+    [orientation, appearance, size, isSelected, select, getTabIndex, baseId, structure, registry],
   );
 
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref);
@@ -442,11 +467,17 @@ const TabListRoot = ({
         <div
           role="tablist"
           aria-orientation={orientation}
+          data-appearance={appearance}
+          data-size={size}
+          data-orientation={orientation}
           className={cn(
             tabListClassNames.root,
-            isVertical
-              ? 'flex w-40 flex-col border-e border-border'
-              : 'flex border-b border-border',
+            isVertical ? 'flex w-40 flex-col' : 'flex',
+            appearance === 'transparent'
+              ? isVertical
+                ? 'border-e border-border'
+                : 'border-b border-border'
+              : 'gap-1',
             className,
           )}
           {...rest}
@@ -470,10 +501,74 @@ TabListRoot.displayName = 'TabList';
 /*  TabList.Tab                                                        */
 /* ------------------------------------------------------------------ */
 
+/** Padding of a tab with text, per size. Literal strings only. */
+const tabPadding: Readonly<Record<CoreSize, string>> = {
+  small: 'px-3 py-1.5',
+  medium: 'px-4 py-2',
+  large: 'px-5 py-3',
+};
+
+/** Padding of an icon-only tab (a square hit area), per size. */
+const tabIconOnlyPadding: Readonly<Record<CoreSize, string>> = {
+  small: 'p-1.5',
+  medium: 'p-2',
+  large: 'p-3',
+};
+
+/** Type step of a tab, per size. */
+const tabText: Readonly<Record<CoreSize, string>> = {
+  small: 'text-caption-1',
+  medium: 'text-body-1',
+  large: 'text-body-2',
+};
+
+/**
+ * The colors, fill and selected indicator of a tab per appearance. Literal strings only; hover and
+ * pressed use the gated rules (a disabled tab keeps its look). In forced colors fills are dropped,
+ * so every selected tab keeps a Highlight outline (or, for the underline, a Highlight border).
+ */
+function tabLookClasses(
+  appearance: TabListAppearance,
+  selected: boolean,
+  vertical: boolean,
+): string {
+  switch (appearance) {
+    case 'subtle':
+    case 'subtle-circular': {
+      const shape = appearance === 'subtle' ? 'rounded-md' : 'rounded-full';
+      return selected
+        ? cn(shape, 'bg-subtle-selected text-foreground', forcedColors.selectedContainer)
+        : cn(
+            shape,
+            'text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+          );
+    }
+    case 'filled-circular':
+      return selected
+        ? cn(
+            'rounded-full bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+            forcedColors.selectedContainer,
+          )
+        : 'rounded-full bg-muted text-muted-foreground not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-muted-pressed';
+    default:
+      return selected
+        ? cn(
+            'text-primary forced-colors:border-[Highlight]',
+            vertical ? 'border-s-2 border-s-primary' : 'border-b-2 border-b-primary',
+          )
+        : 'text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground';
+  }
+}
+
 /** Properties for the Tab sub-component. */
 export interface TabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Unique value identifying this tab (and its panel). */
   value: string;
+  /**
+   * An icon before the text, hidden from assistive technology. A tab with an icon and no text is
+   * icon-only (a square hit area): name it with `aria-label`, or a development warning asks for it.
+   */
+  icon?: Slot<'span'>;
   /** Ref to the tab `<button>`. */
   ref?: React.Ref<HTMLButtonElement>;
 }
@@ -485,11 +580,26 @@ export interface TabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
  * it). The selected tab references its panel with `aria-controls` only while a `TabList.Panel`
  * with its value is mounted.
  */
-const Tab = ({ value, id: idProp, className, children, onClick, ref, ...rest }: TabProps) => {
+const Tab = ({ value, id: idProp, icon, className, children, onClick, ref, ...rest }: TabProps) => {
   const ctx = useTabListContext('TabList.Tab');
   const selected = ctx.isSelected(value);
   const isVertical = ctx.orientation === 'vertical';
   const unavailable = isUnavailable(rest);
+  const hasIcon = !!icon && slotRendersContent(icon);
+  const iconOnly = hasIcon && !slotRendersContent(children);
+  const ariaLabel = rest['aria-label'];
+  const ariaLabelledBy = rest['aria-labelledby'];
+  const named =
+    (typeof ariaLabel === 'string' && ariaLabel.trim() !== '') ||
+    (typeof ariaLabelledBy === 'string' && ariaLabelledBy.trim() !== '');
+  React.useEffect(() => {
+    if (iconOnly && !named) {
+      warnOnce(
+        'TabList.Tab:icon-only-name',
+        'TabList.Tab: a tab with an icon and no text has no accessible name. Pass `aria-label` (or `aria-labelledby`).',
+      );
+    }
+  }, [iconOnly, named]);
 
   const { registry } = ctx;
   const id = consumerId(idProp) ?? ctx.getGeneratedId('tab', value);
@@ -510,14 +620,12 @@ const Tab = ({ value, id: idProp, className, children, onClick, ref, ...rest }: 
       role="tab"
       className={cn(
         tabListTabClassNames.root,
-        'px-4 py-2 text-body-1 font-semibold transition-colors motion-reduce:transition-none',
+        'font-semibold transition-colors motion-reduce:transition-none',
+        iconOnly ? tabIconOnlyPadding[ctx.size] : tabPadding[ctx.size],
+        tabText[ctx.size],
+        hasIcon && 'inline-flex items-center justify-center gap-2',
         isVertical && 'text-start',
-        selected
-          ? cn(
-              'text-primary',
-              isVertical ? 'border-s-2 border-s-primary' : 'border-b-2 border-b-primary',
-            )
-          : 'text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground',
+        tabLookClasses(ctx.appearance, selected, isVertical),
         disabledStyles,
         focusRingInset,
         className,
@@ -529,11 +637,13 @@ const Tab = ({ value, id: idProp, className, children, onClick, ref, ...rest }: 
       tabIndex={ctx.getTabIndex(value)}
       data-roving-value={value}
       data-selected={selected ? '' : undefined}
+      data-icon-only={iconOnly ? '' : undefined}
       onClick={composeEventHandlers(onClick, () => {
         if (!unavailable) ctx.select(value);
       })}
       ref={ref}
     >
+      {hasIcon && renderSlot(icon, 'span', tabListTabClassNames.icon, { 'aria-hidden': true })}
       {children}
     </button>
   );

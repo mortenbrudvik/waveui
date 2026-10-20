@@ -1663,4 +1663,198 @@ describe('TabList - panels still loading inside their own Suspense', () => {
     expect(html).toMatch(/aria-selected="true"[^>]*>Tab A</);
     expect(html).toContain('Loading panels');
   });
+
+  describe('appearances, sizes and icons (0.13)', () => {
+    const APPEARANCES = ['transparent', 'subtle', 'subtle-circular', 'filled-circular'] as const;
+    const tablist = () => screen.getByRole('tablist');
+    const tab = (name: string) => screen.getByRole('tab', { name });
+    const twoTabs = (props: Partial<TabListProps> = {}) => (
+      <TabList defaultValue="a" aria-label="Sections" {...props}>
+        <TabList.Tab value="a">Tab A</TabList.Tab>
+        <TabList.Tab value="b">Tab B</TabList.Tab>
+      </TabList>
+    );
+
+    it('renders data-appearance, data-size and data-orientation with their defaults', () => {
+      render(twoTabs());
+      expect(tablist()).toHaveAttribute('data-appearance', 'transparent');
+      expect(tablist()).toHaveAttribute('data-size', 'medium');
+      expect(tablist()).toHaveAttribute('data-orientation', 'horizontal');
+    });
+
+    it('the default look is the 0.12 look', () => {
+      render(twoTabs());
+      expect(tab('Tab A')).toHaveClass(
+        'px-4',
+        'py-2',
+        'text-body-1',
+        'font-semibold',
+        'text-primary',
+        'border-b-2',
+        'border-b-primary',
+      );
+      expect(tab('Tab B')).toHaveClass('text-muted-foreground');
+      expect(tablist()).toHaveClass('flex', 'border-b', 'border-border');
+    });
+
+    it('the transparent selected indicator is kept visible in forced colors', () => {
+      render(twoTabs());
+      expect(tab('Tab A')).toHaveClass('forced-colors:border-[Highlight]');
+    });
+
+    it.each(APPEARANCES)('the %s appearance renders data-appearance', (appearance) => {
+      render(twoTabs({ appearance }));
+      expect(tablist()).toHaveAttribute('data-appearance', appearance);
+    });
+
+    it.each(['subtle', 'subtle-circular', 'filled-circular'] as const)(
+      'a selected %s tab keeps a Highlight outline in forced colors and has no underline',
+      (appearance) => {
+        render(twoTabs({ appearance }));
+        expect(tab('Tab A')).toHaveClass(
+          'forced-colors:outline-2',
+          'forced-colors:outline-[Highlight]',
+        );
+        expect(tab('Tab A').className).not.toContain('border-b-2');
+        expect(tablist().className).not.toContain('border-b');
+      },
+    );
+
+    it('subtle uses the subtle fills, gated by the hover and pressed rules', () => {
+      render(twoTabs({ appearance: 'subtle' }));
+      expect(tab('Tab A')).toHaveClass('bg-subtle-selected', 'rounded-md');
+      expect(tab('Tab B')).toHaveClass(
+        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+      );
+    });
+
+    it('the circular appearances are fully rounded', () => {
+      const { rerender } = render(twoTabs({ appearance: 'subtle-circular' }));
+      expect(tab('Tab A')).toHaveClass('rounded-full', 'bg-subtle-selected');
+      rerender(twoTabs({ appearance: 'filled-circular' }));
+      expect(tab('Tab A')).toHaveClass('rounded-full', 'bg-primary', 'text-primary-foreground');
+      expect(tab('Tab B')).toHaveClass('rounded-full', 'bg-muted', 'text-muted-foreground');
+      expect(tab('Tab B')).toHaveClass('not-disabled:not-aria-disabled:hover:bg-muted-hover');
+    });
+
+    it.each([
+      ['small', ['px-3', 'py-1.5', 'text-caption-1']],
+      ['medium', ['px-4', 'py-2', 'text-body-1']],
+      ['large', ['px-5', 'py-3', 'text-body-2']],
+    ] as const)('the %s size sets the padding and type', (size, classes) => {
+      render(twoTabs({ size }));
+      expect(tablist()).toHaveAttribute('data-size', size);
+      expect(tab('Tab A')).toHaveClass(...classes);
+    });
+
+    it.each(APPEARANCES)(
+      'a vertical %s list renders data-orientation and no horizontal border',
+      (appearance) => {
+        render(twoTabs({ appearance, orientation: 'vertical' }));
+        expect(tablist()).toHaveAttribute('data-orientation', 'vertical');
+        expect(tablist()).toHaveClass('flex-col');
+        expect(tablist().className).not.toMatch(/(^| )border-b( |$)/);
+      },
+    );
+
+    it('vertical transparent keeps the start border indicator, also in RTL', () => {
+      renderWithProviders(twoTabs({ orientation: 'vertical' }), { dir: 'rtl' });
+      expect(tab('Tab A')).toHaveClass('border-s-2', 'border-s-primary');
+    });
+
+    it('Tab renders an icon slot before its text, hidden from assistive technology', () => {
+      const { rerender } = render(
+        <TabList defaultValue="a" aria-label="Sections">
+          <TabList.Tab value="a" icon={<svg data-testid="icon" />}>
+            Tab A
+          </TabList.Tab>
+        </TabList>,
+      );
+      const icon = screen.getByTestId('icon').closest('.wave-tab-list-tab__icon') as HTMLElement;
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+      expect(tab('Tab A').firstElementChild).toBe(icon);
+      rerender(
+        <TabList defaultValue="a" aria-label="Sections">
+          <TabList.Tab value="a" icon={{ children: <i data-testid="obj" />, className: 'size-5' }}>
+            Tab A
+          </TabList.Tab>
+        </TabList>,
+      );
+      expect(screen.getByTestId('obj').parentElement).toHaveClass('size-5');
+    });
+
+    it('an icon that renders nothing is no icon', () => {
+      render(
+        <TabList defaultValue="a" aria-label="Sections">
+          <TabList.Tab value="a" icon={[]}>
+            Tab A
+          </TabList.Tab>
+        </TabList>,
+      );
+      expect(tab('Tab A').querySelector('.wave-tab-list-tab__icon')).toBeNull();
+      expect(tab('Tab A')).not.toHaveAttribute('data-icon-only');
+    });
+
+    it('an icon with no text is an icon-only tab named by aria-label, with no warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <TabList defaultValue="a" aria-label="Sections">
+          <TabList.Tab value="a" aria-label="Home" icon={<svg />} />
+          <TabList.Tab value="b" aria-label="Search" icon={<svg />} />
+        </TabList>,
+      );
+      expect(tab('Home')).toHaveAttribute('data-icon-only', '');
+      expect(tab('Home')).toHaveClass('p-2');
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('an icon-only tab without a name warns once', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <TabList defaultValue="a" aria-label="Sections">
+          <TabList.Tab value="a" icon={<svg />} />
+          <TabList.Tab value="b" icon={<svg />} />
+        </TabList>,
+      );
+      expect(warn.mock.calls).toEqual([[expect.stringContaining('TabList.Tab')]]);
+      warn.mockRestore();
+    });
+
+    it('a tab with text and an icon is not icon-only', () => {
+      render(
+        <TabList defaultValue="a" aria-label="Sections">
+          <TabList.Tab value="a" icon={<svg />}>
+            Home
+          </TabList.Tab>
+        </TabList>,
+      );
+      expect(tab('Home')).not.toHaveAttribute('data-icon-only');
+      expect(tab('Home')).toHaveClass('inline-flex', 'gap-2');
+    });
+
+    it.each(APPEARANCES)('is axe clean in the %s appearance with icons', async (appearance) => {
+      const { container } = render(
+        <TabList defaultValue="a" aria-label="Sections" appearance={appearance}>
+          <TabList.Tab value="a" icon={<svg />}>
+            Home
+          </TabList.Tab>
+          <TabList.Tab value="b" aria-label="Search" icon={<svg />} />
+          <TabList.Panel value="a">Panel A</TabList.Panel>
+        </TabList>,
+      );
+      await expectNoA11yViolations(container);
+    });
+
+    it('types appearance, size and icon', () => {
+      expectTypeOf<TabListProps['appearance']>().toEqualTypeOf<
+        'transparent' | 'subtle' | 'subtle-circular' | 'filled-circular' | undefined
+      >();
+      expectTypeOf<TabListProps['size']>().toEqualTypeOf<
+        'small' | 'medium' | 'large' | undefined
+      >();
+      expectTypeOf<TabProps['icon']>().not.toBeNever();
+    });
+  });
 });

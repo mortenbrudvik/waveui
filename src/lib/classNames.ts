@@ -904,7 +904,10 @@ export const accordionPanelClassNames = { root: 'wave-accordion-panel' } as cons
 export const tabListClassNames = { root: 'wave-tab-list' } as const;
 
 /** TabList.Tab: `root` on the `role="tab"` button. */
-export const tabListTabClassNames = { root: 'wave-tab-list-tab' } as const;
+export const tabListTabClassNames = {
+  root: 'wave-tab-list-tab',
+  icon: 'wave-tab-list-tab__icon',
+} as const;
 
 /** TabList.Panel: `root` on the `role="tabpanel"` element. */
 export const tabListPanelClassNames = { root: 'wave-tab-list-panel' } as const;
