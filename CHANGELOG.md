@@ -29,6 +29,14 @@ The seventh Fluent UI v9 parity release: Phase 7 of the [roadmap](docs/ROADMAP.m
 - **`useRovingTabIndex`** `orientation` accepts `'grid'` (an exhaustive `switch` over the option's type needs the case).
 - Dev gates: `verify-dist` probes that an import of only `useFocusVisible`, `useFocusableGroup`, `getFirstTabbable` or `useModalOpen` holds no component and no positioning library, and `pack-smoke` checks that the focus recipes' utilities are in both fixtures' CSS.
 
+### Deprecated
+
+- Nothing new is deprecated.
+
+### Size
+
+Not re-measured for 0.12: the additions are hooks and one prop each on nine components, all tree-shakeable (the `verify-dist` hook probes show that an import of only `useFocusVisible`, `useFocusableGroup`, `getFirstTabbable` or `useModalOpen` holds no component and no positioning library). The 0.11.0 table below stays the reference.
+
 ## [0.11.0] - 2026-10-18
 
 The sixth Fluent UI v9 parity release: Phase 6 of the [roadmap](docs/ROADMAP.md), tags, drawers and the app shell. Tag gains Fluent's appearances, sizes, shapes and slots, a `TagGroup` gives a set of tags one keyboard model and moves focus when a tag is removed, `InteractionTag` is a tag with an action and a separate Dismiss button, and TagPicker becomes a composable picker built on them, with free tagging. Drawer gains sizes, a bottom position and header, body and footer parts; Dialog and Drawer can be non-modal, Drawer inline in the page, and both can stay mounted while closed. Nav gains section headers, dividers, app items and item actions, and `NavDrawer` and `Hamburger` complete the app shell. It closes 18 medium and 22 low gaps of the [Fluent UI v9 comparison](docs/research/fluent-ui-v9-comparison.md) (the ids in backticks below). Fluent's names are used where they fit Wave's conventions (`appearance`, `size`, `shape`, `media`, `secondaryText`, `modalType="non-modal"`, `backdrop`, `type`, `separator`, `unmountOnClose`, `headingLevel`, `focusMode`); selection keeps Wave's `value`/`defaultValue`/`onValueChange` (Fluent's `selectedValues` and `onTagSelect`, NavDrawer's `selectedValue`), and where a Fluent name does not fit, the prop's JSDoc names it (NavDrawer `onItemSelect` for `onNavItemSelect`, `focusMode` for `tabbable`, `Nav.Item actions` for SplitNavItem). **Nothing public was removed.** Changes of behaviour, DOM structure and types that are not additions are listed under [Changed](#changed): read them, and [Upgrading from 0.10](#upgrading-from-010), before upgrading if your tests assert Wave's DOM, class strings, Tab order or console output.

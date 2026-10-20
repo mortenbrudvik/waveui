@@ -218,6 +218,7 @@ describe('checkPlainCss (repo-level#1)', () => {
     reset +
     '.bg-primary{background-color:var(--wave-primary)}' +
     '.text-body-1{font-size:14px}' +
+    '.focus-visible\\:outline-ring{outline-color:var(--wave-ring)}.focus-visible\\:-outline-offset-2{outline-offset:-2px}' +
     '@keyframes wave-spin{to{transform:rotate(360deg)}}';
 
   it('passes unlayered CSS with the classes, tokens, keyframes and scoped reset', () => {
@@ -251,7 +252,7 @@ describe('checkTailwindCss (repo-level#1)', () => {
     '@layer theme,base,components,utilities;' +
     '@layer theme{:root,:host{--color-red-500:red}:root,.wave-light{--wave-primary:#0f6cbd}}' +
     '@layer base{*{box-sizing:border-box}.wave-root,.wave-portal{font-family:var(--wave-font-family)}}' +
-    '@layer utilities{.bg-primary{background-color:var(--color-primary)}.text-body-1{font-size:14px}.p-4{padding:1rem}' +
+    '@layer utilities{.bg-primary{background-color:var(--color-primary)}.text-body-1{font-size:14px}.focus-visible\\:outline-ring{outline-color:var(--wave-ring)}.focus-visible\\:-outline-offset-2{outline-offset:-2px}.p-4{padding:1rem}' +
     '.duration-wave-normal{--tw-duration:var(--wave-duration-normal);transition-duration:var(--wave-duration-normal)}' +
     '.ease-wave-decelerate-mid{--tw-ease:var(--wave-curve-decelerate-mid);transition-timing-function:var(--wave-curve-decelerate-mid)}}';
 
