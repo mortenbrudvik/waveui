@@ -1,12 +1,19 @@
 import type * as React from 'react';
-import { describe, it, expect, expectTypeOf } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { PresenceBadge } from '../PresenceBadge';
 import type { PresenceBadgeProps } from '../PresenceBadge';
 import { renderWithProviders, testSystemProps } from '../../../test-utils';
-import type { PresenceStatus, Size } from '../../../lib/types';
+import type { DeprecatedPresenceStatus, PresenceStatus, Size } from '../../../lib/types';
 
-const STATUSES: PresenceStatus[] = ['available', 'busy', 'away', 'offline', 'dnd', 'oof'];
+const STATUSES: PresenceStatus[] = [
+  'available',
+  'busy',
+  'away',
+  'offline',
+  'do-not-disturb',
+  'out-of-office',
+];
 
 describe('PresenceBadge', () => {
   testSystemProps(PresenceBadge, {
@@ -125,7 +132,7 @@ describe('PresenceBadge', () => {
   });
 
   it('mirrors no other status glyph', () => {
-    for (const status of STATUSES.filter((s) => s !== 'oof')) {
+    for (const status of STATUSES.filter((s) => s !== 'out-of-office')) {
       const { unmount } = render(<PresenceBadge status={status} />);
       expect(screen.getByRole('img').querySelector('svg')!.getAttribute('class')).not.toMatch(
         /scale-x/,
@@ -139,5 +146,55 @@ describe('PresenceBadge', () => {
     expectTypeOf<PresenceBadgeProps['ref']>().toEqualTypeOf<
       React.Ref<HTMLSpanElement> | undefined
     >();
+  });
+
+  describe('Fluent status names (0.13)', () => {
+    it.each([
+      ['do-not-disturb', 'dnd'],
+      ['out-of-office', 'oof'],
+    ] as const)(
+      '%s and the deprecated %s render the same glyph, class and name',
+      (status, alias) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { container: current } = render(<PresenceBadge status={status} />);
+        const { container: legacy } = render(<PresenceBadge status={alias} />);
+        const a = current.firstElementChild as HTMLElement;
+        const b = legacy.firstElementChild as HTMLElement;
+        expect(b.className).toBe(a.className);
+        expect(b).toHaveAttribute('data-glyph', a.getAttribute('data-glyph'));
+        expect(b).toHaveAttribute('aria-label', a.getAttribute('aria-label'));
+        expect(b).toHaveAttribute('data-status', status);
+        expect(a).toHaveAttribute('data-status', status);
+        warn.mockRestore();
+      },
+    );
+
+    it.each([
+      ['dnd', 'do-not-disturb'],
+      ['oof', 'out-of-office'],
+    ] as const)('the %s alias warns once and names %s', (alias, status) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { rerender } = render(<PresenceBadge status={alias} />);
+      rerender(<PresenceBadge status={alias} />);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(`status '${alias}'`)]]);
+      expect(warn.mock.calls[0][0]).toContain(`'${status}'`);
+      warn.mockRestore();
+    });
+
+    it('status is optional and defaults to available', () => {
+      render(<PresenceBadge />);
+      expect(screen.getByRole('img', { name: 'Available' })).toHaveAttribute(
+        'data-status',
+        'available',
+      );
+    });
+
+    it('types the new names, the aliases and the optional status', () => {
+      expectTypeOf<PresenceBadgeProps['status']>().toEqualTypeOf<PresenceStatus | undefined>();
+      expectTypeOf<'do-not-disturb'>().toExtend<PresenceStatus>();
+      expectTypeOf<'out-of-office'>().toExtend<PresenceStatus>();
+      expectTypeOf<DeprecatedPresenceStatus>().toEqualTypeOf<'dnd' | 'oof'>();
+      expectTypeOf<DeprecatedPresenceStatus>().toExtend<PresenceStatus>();
+    });
   });
 });

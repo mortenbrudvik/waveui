@@ -3,7 +3,14 @@ import { PresenceBadge } from '../src';
 import type { PresenceStatus } from '../src';
 import { sizeArgType } from './_helpers';
 
-const STATUSES: PresenceStatus[] = ['available', 'busy', 'away', 'offline', 'dnd', 'oof'];
+const STATUSES: PresenceStatus[] = [
+  'available',
+  'busy',
+  'away',
+  'offline',
+  'do-not-disturb',
+  'out-of-office',
+];
 
 const meta = {
   title: 'Components/Data Display/PresenceBadge',
@@ -39,11 +46,11 @@ export const Offline: Story = {
 };
 
 export const DND: Story = {
-  args: { status: 'dnd' },
+  args: { status: 'do-not-disturb' },
 };
 
 export const OOF: Story = {
-  args: { status: 'oof' },
+  args: { status: 'out-of-office' },
 };
 
 /** Every status has its own shape, so none depends on color alone. */
