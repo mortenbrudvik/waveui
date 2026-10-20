@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { useFocusableGroup, type UseFocusableGroupOptions } from '../useFocusableGroup';
+import { Toolbar } from '../../components/button/Toolbar';
 
 function Group({
   tabBehavior,
@@ -37,6 +38,13 @@ function Page(props: React.ComponentProps<typeof Group>) {
 const group = (label = 'Group') => screen.getByRole('group', { name: label });
 const button = (name: string) => screen.getByRole('button', { name });
 
+/** Tab to the group element: Before, then the group. */
+async function tabToGroup(user: ReturnType<typeof userEvent.setup>) {
+  await user.tab();
+  await user.tab();
+  expect(group()).toHaveFocus();
+}
+
 describe('useFocusableGroup', () => {
   it('returns the props of a focusable group element', () => {
     const html = renderToString(<Group tabBehavior="limited" />);
@@ -48,9 +56,7 @@ describe('useFocusableGroup', () => {
     it('is one more tab stop and leaves the inner elements reachable by Tab', async () => {
       const user = userEvent.setup();
       render(<Page />);
-      await user.tab();
-      await user.tab();
-      expect(group()).toHaveFocus();
+      await tabToGroup(user);
       await user.tab();
       expect(button('One')).toHaveFocus();
       await user.tab();
@@ -62,8 +68,7 @@ describe('useFocusableGroup', () => {
     it('does not intercept Enter or Escape', async () => {
       const user = userEvent.setup();
       render(<Page />);
-      await user.tab();
-      await user.tab();
+      await tabToGroup(user);
       await user.keyboard('{Enter}');
       expect(group()).toHaveFocus();
       await user.tab();
@@ -73,45 +78,19 @@ describe('useFocusableGroup', () => {
   });
 
   describe.each(['limited', 'limited-trap-focus'] as const)('%s', (tabBehavior) => {
-    it('is one tab stop until it is entered', async () => {
+    it('is one tab stop in both directions until it is entered', async () => {
       const user = userEvent.setup();
       render(<Page tabBehavior={tabBehavior} />);
-      expect(button('One')).toHaveAttribute('tabindex', '-1');
-      expect(button('Two')).toHaveAttribute('tabindex', '-1');
-      await user.tab();
-      await user.tab();
-      expect(group()).toHaveFocus();
+      await tabToGroup(user);
       await user.tab();
       expect(button('After')).toHaveFocus();
       await user.tab({ shift: true });
       expect(group()).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Before')).toHaveFocus();
     });
 
-    it.each(['{Enter}', '{F2}'])('%s on the group enters it', async (key) => {
-      const user = userEvent.setup();
-      render(<Page tabBehavior={tabBehavior} />);
-      await user.tab();
-      await user.tab();
-      await user.keyboard(key);
-      expect(button('One')).toHaveFocus();
-      expect(button('Two')).not.toHaveAttribute('tabindex', '-1');
-      await user.tab();
-      expect(button('Two')).toHaveFocus();
-    });
-
-    it('Escape returns focus to the group and skips the inner elements again', async () => {
-      const user = userEvent.setup();
-      render(<Page tabBehavior={tabBehavior} />);
-      await user.tab();
-      await user.tab();
-      await user.keyboard('{Enter}');
-      await user.keyboard('{Escape}');
-      expect(group()).toHaveFocus();
-      expect(button('One')).toHaveAttribute('tabindex', '-1');
-    });
-
-    it('restores the original tabindex of an inner element when it is entered', async () => {
-      const user = userEvent.setup();
+    it('never changes the tabindex of the elements inside', async () => {
       render(
         <Page tabBehavior={tabBehavior}>
           <button type="button" tabIndex={0}>
@@ -120,15 +99,122 @@ describe('useFocusableGroup', () => {
           <button type="button" tabIndex={-1}>
             Skipped
           </button>
+          <button type="button">Plain</button>
         </Page>,
       );
-      expect(button('Own')).toHaveAttribute('tabindex', '-1');
-      await user.tab();
-      await user.tab();
-      await user.keyboard('{Enter}');
-      expect(button('Own')).toHaveFocus();
       expect(button('Own')).toHaveAttribute('tabindex', '0');
       expect(button('Skipped')).toHaveAttribute('tabindex', '-1');
+      expect(button('Plain')).not.toHaveAttribute('tabindex');
+    });
+
+    it.each(['{Enter}', '{F2}'])('%s on the group enters it', async (key) => {
+      const user = userEvent.setup();
+      render(<Page tabBehavior={tabBehavior} />);
+      await tabToGroup(user);
+      await user.keyboard(key);
+      expect(button('One')).toHaveFocus();
+      await user.tab();
+      expect(button('Two')).toHaveFocus();
+    });
+
+    it('Escape returns focus to the group, and Tab skips the inner elements again', async () => {
+      const user = userEvent.setup();
+      render(<Page tabBehavior={tabBehavior} />);
+      await tabToGroup(user);
+      await user.keyboard('{Enter}');
+      await user.keyboard('{Escape}');
+      expect(group()).toHaveFocus();
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+    });
+
+    it('a click on an inner element enters the group: Tab moves between the inner elements', async () => {
+      const user = userEvent.setup();
+      render(<Page tabBehavior={tabBehavior} />);
+      await user.click(button('One'));
+      await user.tab();
+      expect(button('Two')).toHaveFocus();
+    });
+
+    it('focus returning from a popup opened inside keeps the group entered', async () => {
+      function WithPopup() {
+        const [open, setOpen] = React.useState(false);
+        const [host, setHost] = React.useState<HTMLElement | null>(null);
+        return (
+          <>
+            <div ref={setHost} />
+            <Group tabBehavior={tabBehavior}>
+              <button type="button" onClick={() => setOpen(true)}>
+                More
+              </button>
+              <button type="button">Three</button>
+              {open &&
+                host &&
+                createPortal(
+                  <button type="button" onClick={() => setOpen(false)}>
+                    Close popup
+                  </button>,
+                  host,
+                )}
+            </Group>
+            <button type="button">After</button>
+          </>
+        );
+      }
+      const user = userEvent.setup();
+      render(<WithPopup />);
+      await user.click(button('More'));
+      await user.click(button('Close popup'));
+      await act(async () => button('More').focus());
+      await user.tab();
+      expect(button('Three')).toHaveFocus();
+    });
+
+    it('a roving composite inside keeps its own tab stop and is skipped until the group is entered', async () => {
+      const user = userEvent.setup();
+      render(
+        <Page tabBehavior={tabBehavior}>
+          <Toolbar aria-label="Actions">
+            <Toolbar.Button>Bold</Toolbar.Button>
+            <Toolbar.Button>Italic</Toolbar.Button>
+          </Toolbar>
+        </Page>,
+      );
+      await tabToGroup(user);
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(group()).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+    });
+
+    it('a button that gets enabled later is skipped until the group is entered', async () => {
+      function Enabling() {
+        const [enabled, setEnabled] = React.useState(false);
+        return (
+          <>
+            <button type="button" onClick={() => setEnabled(true)}>
+              Enable
+            </button>
+            <Group tabBehavior={tabBehavior}>
+              <button type="button" disabled={!enabled}>
+                Save
+              </button>
+            </Group>
+            <button type="button">After</button>
+          </>
+        );
+      }
+      const user = userEvent.setup();
+      render(<Enabling />);
+      await user.click(button('Enable'));
+      await user.tab();
+      expect(group()).toHaveFocus();
+      await user.tab();
+      expect(button('After')).toHaveFocus();
     });
 
     it('skips hidden elements when entering', async () => {
@@ -141,39 +227,9 @@ describe('useFocusableGroup', () => {
           <button type="button">Visible</button>
         </Page>,
       );
-      await user.tab();
-      await user.tab();
+      await tabToGroup(user);
       await user.keyboard('{Enter}');
       expect(button('Visible')).toHaveFocus();
-    });
-
-    it('skips content that is added later until the group is entered', async () => {
-      function Growing() {
-        const [extra, setExtra] = React.useState(false);
-        return (
-          <>
-            <button type="button" onClick={() => setExtra(true)}>
-              Add
-            </button>
-            <Group tabBehavior={tabBehavior}>{extra && <button type="button">Late</button>}</Group>
-          </>
-        );
-      }
-      const user = userEvent.setup();
-      render(<Growing />);
-      await user.click(button('Add'));
-      await act(async () => {});
-      expect(button('Late')).toHaveAttribute('tabindex', '-1');
-    });
-
-    it('leaves when focus moves outside, and the inner elements are skipped again', async () => {
-      const user = userEvent.setup();
-      render(<Page tabBehavior={tabBehavior} />);
-      await user.tab();
-      await user.tab();
-      await user.keyboard('{Enter}');
-      act(() => button('After').focus());
-      expect(button('One')).toHaveAttribute('tabindex', '-1');
     });
 
     it('leaves an Escape that an inner element consumed', async () => {
@@ -188,15 +244,14 @@ describe('useFocusableGroup', () => {
           />
         </Page>,
       );
-      await user.tab();
-      await user.tab();
+      await tabToGroup(user);
       await user.keyboard('{Enter}');
       expect(screen.getByRole('textbox', { name: 'Field' })).toHaveFocus();
       await user.keyboard('{Escape}');
       expect(screen.getByRole('textbox', { name: 'Field' })).toHaveFocus();
     });
 
-    it('ignores a key from a portaled popup opened inside', async () => {
+    it('ignores a key from a portaled popup opened inside', () => {
       function WithPopup() {
         const [host, setHost] = React.useState<HTMLElement | null>(null);
         return (
@@ -216,7 +271,7 @@ describe('useFocusableGroup', () => {
       expect(portaled).toHaveFocus();
     });
 
-    it('Escape leaves only the innermost of nested groups', async () => {
+    it('nested groups: Enter and Escape go one level at a time, and Escape on the inner group element goes to the outer one', async () => {
       const user = userEvent.setup();
       render(
         <Page tabBehavior={tabBehavior}>
@@ -225,15 +280,29 @@ describe('useFocusableGroup', () => {
           </Group>
         </Page>,
       );
-      await user.tab();
-      await user.tab();
-      expect(group()).toHaveFocus();
+      await tabToGroup(user);
       await user.keyboard('{Enter}');
       expect(group('Inner')).toHaveFocus();
       await user.keyboard('{Enter}');
       expect(button('Deep')).toHaveFocus();
       await user.keyboard('{Escape}');
       expect(group('Inner')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(group()).toHaveFocus();
+    });
+
+    it('Shift+Tab from outside lands on the outer group of nested groups', async () => {
+      const user = userEvent.setup();
+      render(
+        <Page tabBehavior={tabBehavior}>
+          <Group tabBehavior={tabBehavior} label="Inner">
+            <button type="button">Deep</button>
+          </Group>
+        </Page>,
+      );
+      await user.click(button('After'));
+      await user.tab({ shift: true });
+      expect(group()).toHaveFocus();
     });
 
     it('works in StrictMode', async () => {
@@ -243,26 +312,13 @@ describe('useFocusableGroup', () => {
           <Page tabBehavior={tabBehavior} />
         </React.StrictMode>,
       );
-      await user.tab();
-      await user.tab();
+      await tabToGroup(user);
       await user.keyboard('{Enter}');
-      expect(button('One')).toHaveFocus();
-    });
-  });
-
-  describe('limited-trap-focus', () => {
-    it('wraps Tab at the last inner element and Shift+Tab at the first', async () => {
-      const user = userEvent.setup();
-      render(<Page tabBehavior="limited-trap-focus" />);
-      await user.tab();
-      await user.tab();
-      await user.keyboard('{Enter}');
-      await user.tab();
-      expect(button('Two')).toHaveFocus();
-      await user.tab();
       expect(button('One')).toHaveFocus();
       await user.tab({ shift: true });
-      expect(button('Two')).toHaveFocus();
+      // Shift+Tab before the first element: the group element, or the last element when it traps.
+      if (tabBehavior === 'limited') expect(group()).toHaveFocus();
+      else expect(button('Two')).toHaveFocus();
     });
   });
 
@@ -270,8 +326,7 @@ describe('useFocusableGroup', () => {
     it('Shift+Tab before the first inner element returns to the group', async () => {
       const user = userEvent.setup();
       render(<Page tabBehavior="limited" />);
-      await user.tab();
-      await user.tab();
+      await tabToGroup(user);
       await user.keyboard('{Enter}');
       await user.tab({ shift: true });
       expect(group()).toHaveFocus();
@@ -280,13 +335,26 @@ describe('useFocusableGroup', () => {
     it('Tab past the last inner element leaves the group', async () => {
       const user = userEvent.setup();
       render(<Page tabBehavior="limited" />);
-      await user.tab();
-      await user.tab();
+      await tabToGroup(user);
       await user.keyboard('{Enter}');
       await user.tab();
       await user.tab();
       expect(button('After')).toHaveFocus();
-      expect(button('One')).toHaveAttribute('tabindex', '-1');
+    });
+  });
+
+  describe('limited-trap-focus', () => {
+    it('wraps Tab at the last inner element and Shift+Tab at the first', async () => {
+      const user = userEvent.setup();
+      render(<Page tabBehavior="limited-trap-focus" />);
+      await tabToGroup(user);
+      await user.keyboard('{Enter}');
+      await user.tab();
+      expect(button('Two')).toHaveFocus();
+      await user.tab();
+      expect(button('One')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Two')).toHaveFocus();
     });
   });
 });

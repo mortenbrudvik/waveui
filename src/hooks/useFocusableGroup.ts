@@ -12,9 +12,9 @@ export interface UseFocusableGroupOptions {
    *
    * - `'unlimited'`: the group is one more tab stop and the elements inside it stay reachable by
    *   Tab; no key is intercepted.
-   * - `'limited'`: the group is one tab stop. Enter or F2 on it moves focus to its first tabbable
-   *   element, Tab and Shift+Tab then move between the elements inside, Tab past the last one
-   *   leaves the group, and Escape returns focus to the group.
+   * - `'limited'`: the group is one tab stop, in both directions. Enter or F2 on it moves focus to
+   *   its first tabbable element, Tab and Shift+Tab then move between the elements inside, Tab
+   *   past the last one leaves the group, and Escape returns focus to the group.
    * - `'limited-trap-focus'`: as `'limited'`, but Tab past the last element wraps to the first and
    *   Shift+Tab before the first wraps to the last, until Escape.
    *
@@ -25,12 +25,10 @@ export interface UseFocusableGroupOptions {
 
 /** Props to spread onto the group element (compose its handlers with your own). */
 export interface FocusableGroupProps {
-  /** Ref callback for the group element. */
-  ref: React.RefCallback<HTMLElement>;
   /** The group is itself focusable. */
   tabIndex: 0;
   onKeyDown: React.KeyboardEventHandler<HTMLElement>;
-  onBlur: React.FocusEventHandler<HTMLElement>;
+  onFocusCapture: React.FocusEventHandler<HTMLElement>;
   /** Marks the element as a group: nested groups own their own contents. */
   'data-focusable-group': '';
 }
@@ -42,44 +40,38 @@ export interface UseFocusableGroupResult {
 }
 
 const GROUP_ATTRIBUTE = 'data-focusable-group';
-const STAMP_ATTRIBUTE = 'data-focusable-group-tabindex';
 
-/** The tabbable elements that belong to `group` itself: those of a nested group are its own. */
-function ownedTabbables(group: HTMLElement): HTMLElement[] {
-  return getTabbableElements(group).filter(
-    (element) => element.parentElement?.closest(`[${GROUP_ATTRIBUTE}]`) === group,
+/** Focus events a group has already redirected, so a group nested in it does not redirect again. */
+const redirected = new WeakSet<Event>();
+
+/** The group that owns `element`: the nearest group element above it. */
+function owningGroup(element: Element): Element | null {
+  return element.closest(`[${GROUP_ATTRIBUTE}]`);
+}
+
+/** The first tabbable element after the group's own subtree in document order, or `null`. */
+function firstTabbableAfter(group: HTMLElement): HTMLElement | null {
+  const candidates = getTabbableElements(group.ownerDocument.body);
+  return (
+    candidates.find(
+      (element) =>
+        !group.contains(element) &&
+        (group.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+    ) ?? null
   );
-}
-
-/** Takes the group's tabbable elements out of the Tab order, remembering their own tabindex. */
-function stamp(group: HTMLElement): void {
-  for (const element of ownedTabbables(group)) {
-    element.setAttribute(STAMP_ATTRIBUTE, element.getAttribute('tabindex') ?? '');
-    element.setAttribute('tabindex', '-1');
-  }
-}
-
-/** Gives the stamped elements of the group back the tabindex they had. */
-function unstamp(group: HTMLElement): void {
-  for (const element of group.querySelectorAll<HTMLElement>(`[${STAMP_ATTRIBUTE}]`)) {
-    if (element.parentElement?.closest(`[${GROUP_ATTRIBUTE}]`) !== group) continue;
-    const original = element.getAttribute(STAMP_ATTRIBUTE);
-    if (original) element.setAttribute('tabindex', original);
-    else element.removeAttribute('tabindex');
-    element.removeAttribute(STAMP_ATTRIBUTE);
-  }
 }
 
 /**
  * A focusable group (Fluent's `useFocusableGroup`, tabster's groupper): one tab stop that holds
  * several focusable elements, so a long list of rich rows does not cost a Tab press per control.
- * With `tabBehavior: 'limited'` or `'limited-trap-focus'`, the elements inside are skipped by Tab
- * until Enter or F2 enters the group, and Escape (or moving focus away) leaves it again. A key
- * from a popup portaled out of the group, a key that belongs to a nested group and a key an inner
- * element already handled (`preventDefault()`, as an input consuming Escape does) are left alone.
- *
- * While the group is not entered, its tabbable elements, also those added later, get
- * `tabindex="-1"`; they get their own tabindex back on entering.
+ * With `tabBehavior: 'limited'` or `'limited-trap-focus'`, Tab skips the elements inside while focus
+ * is on the group element itself, and Shift+Tab from outside lands on the group element instead of
+ * its last element; Enter or F2 enters the group, and Escape leaves it. A group is entered while
+ * focus is on an element inside it, however it got there (a click, a popup returning focus, a
+ * script). No tabindex is rewritten: components with their own tab stops (Toolbar, TabList) work
+ * inside a group. A key from a popup portaled out of the group, a key that belongs to a nested
+ * group and a key an inner element already handled (`preventDefault()`, as an input consuming
+ * Escape does) are left alone.
  *
  * @example
  * const { groupProps } = useFocusableGroup({ tabBehavior: 'limited' });
@@ -90,29 +82,26 @@ function unstamp(group: HTMLElement): void {
 export function useFocusableGroup(options: UseFocusableGroupOptions = {}): UseFocusableGroupResult {
   const { tabBehavior = 'unlimited' } = options;
   const limited = tabBehavior !== 'unlimited';
-  const [container, setContainer] = React.useState<HTMLElement | null>(null);
-  // Whether the group is entered (its elements are in the Tab order). Written in handlers and
-  // effects only.
-  const entered = React.useRef(false);
+  // Whether the focus that is arriving was caused by Shift+Tab (written by document listeners).
+  const pendingShiftTab = React.useRef(false);
+  const arrivedByShiftTab = React.useRef(false);
 
-  React.useLayoutEffect(() => {
-    if (!container || !limited) return;
-    entered.current = false;
-    stamp(container);
-    const observer = new MutationObserver(() => {
-      if (!entered.current) stamp(container);
-    });
-    observer.observe(container, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      unstamp(container);
+  React.useEffect(() => {
+    if (!limited) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      pendingShiftTab.current = event.key === 'Tab' && event.shiftKey;
     };
-  }, [container, limited]);
-
-  const leave = (group: HTMLElement) => {
-    entered.current = false;
-    stamp(group);
-  };
+    const onFocusIn = () => {
+      arrivedByShiftTab.current = pendingShiftTab.current;
+      pendingShiftTab.current = false;
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('focusin', onFocusIn, true);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('focusin', onFocusIn, true);
+    };
+  }, [limited]);
 
   const onKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
     if (!limited || event.defaultPrevented) return;
@@ -120,28 +109,37 @@ export function useFocusableGroup(options: UseFocusableGroupOptions = {}): UseFo
     const target = event.target;
     // A key from a portaled popup, or from a nested group, is not this group's.
     if (!(target instanceof Element) || !group.contains(target)) return;
-    if (target.closest(`[${GROUP_ATTRIBUTE}]`) !== group) return;
-    const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    if (owningGroup(target) !== group) return;
+    const modified = event.altKey || event.ctrlKey || event.metaKey;
 
     if (target === group) {
-      if (plain && (event.key === 'Enter' || event.key === 'F2')) {
-        event.preventDefault();
-        entered.current = true;
-        unstamp(group);
+      if (modified) return;
+      if (!event.shiftKey && (event.key === 'Enter' || event.key === 'F2')) {
         const first = getFirstTabbable(group);
-        if (!first || !focusElement(first)) leave(group);
+        if (first && focusElement(first)) event.preventDefault();
+      } else if (!event.shiftKey && event.key === 'Tab') {
+        // One tab stop: skip the elements inside.
+        const next = firstTabbableAfter(group);
+        if (next && focusElement(next)) event.preventDefault();
+      } else if (!event.shiftKey && event.key === 'Escape') {
+        // A nested group's Escape goes to the group around it.
+        const parent = group.parentElement ? owningGroup(group.parentElement) : null;
+        if (parent instanceof HTMLElement) {
+          event.preventDefault();
+          parent.focus();
+        }
       }
       return;
     }
 
-    if (plain && event.key === 'Escape') {
+    if (modified) return;
+    if (!event.shiftKey && event.key === 'Escape') {
       event.preventDefault();
-      leave(group);
       group.focus();
       return;
     }
 
-    if (tabBehavior === 'limited-trap-focus' && entered.current && event.key === 'Tab') {
+    if (tabBehavior === 'limited-trap-focus' && event.key === 'Tab') {
       const tabbables = getTabbableElements(group);
       const first = tabbables[0];
       const last = tabbables[tabbables.length - 1];
@@ -155,24 +153,28 @@ export function useFocusableGroup(options: UseFocusableGroupOptions = {}): UseFo
     }
   });
 
-  const onBlur = useEventCallback((event: React.FocusEvent<HTMLElement>) => {
-    if (!limited) return;
+  // Capture phase: the outermost group sees the focus first, and a group inside it stands down.
+  const onFocusCapture = useEventCallback((event: React.FocusEvent<HTMLElement>) => {
+    if (!limited || redirected.has(event.nativeEvent)) return;
     const group = event.currentTarget;
-    const next = event.relatedTarget;
-    // Focus left for the group itself (Shift+Tab before the first element) or for somewhere
-    // outside it: the elements are skipped again.
-    if (next === group || (next instanceof Node && !group.contains(next))) leave(group);
+    const target = event.target;
+    const from = event.relatedTarget;
+    if (target === group || !(target instanceof Node) || !group.contains(target)) return;
+    // Focus that arrives from outside by Shift+Tab lands on the group element, not on its last
+    // element. Any other arrival (a click, a script, a popup returning focus) enters the group.
+    if (!arrivedByShiftTab.current || !(from instanceof Node) || group.contains(from)) return;
+    redirected.add(event.nativeEvent);
+    group.focus();
   });
 
   const groupProps = React.useMemo<FocusableGroupProps>(
     () => ({
-      ref: setContainer,
       tabIndex: 0,
       onKeyDown,
-      onBlur,
+      onFocusCapture,
       [GROUP_ATTRIBUTE]: '',
     }),
-    [onKeyDown, onBlur],
+    [onKeyDown, onFocusCapture],
   );
 
   return { groupProps };
