@@ -29,8 +29,8 @@ describe('PresenceBadge', () => {
     ['busy', 'Busy'],
     ['away', 'Away'],
     ['offline', 'Offline'],
-    ['dnd', 'Do not disturb'],
-    ['oof', 'Out of office'],
+    ['do-not-disturb', 'Do not disturb'],
+    ['out-of-office', 'Out of office'],
   ] as Array<[PresenceStatus, string]>)(
     'renders status "%s" as an image named "%s"',
     (status, label) => {
@@ -47,14 +47,16 @@ describe('PresenceBadge', () => {
     ['busy', 'solid'],
     ['away', 'clock'],
     ['offline', 'ring-x'],
-    ['dnd', 'bar'],
-    ['oof', 'arrow'],
+    ['do-not-disturb', 'bar'],
+    ['out-of-office', 'arrow'],
   ] as Array<[PresenceStatus, string]>)('status "%s" draws the %s glyph', (status, glyph) => {
     render(<PresenceBadge status={status} />);
     const badge = screen.getByRole('img');
     expect(badge).toHaveAttribute('data-glyph', glyph);
     const svg = badge.querySelector('svg');
-    expect(svg).toHaveAttribute('data-wave-icon', `presence-${status}`);
+    // The icons keep their 0.12 names (`presence-dnd`, `presence-oof`).
+    const icon = status === 'do-not-disturb' ? 'dnd' : status === 'out-of-office' ? 'oof' : status;
+    expect(svg).toHaveAttribute('data-wave-icon', `presence-${icon}`);
     expect(svg).toHaveAttribute('aria-hidden', 'true');
     expect(svg).toHaveClass('size-full');
     expect(badge.querySelectorAll('svg')).toHaveLength(1);
@@ -90,8 +92,8 @@ describe('PresenceBadge', () => {
     ['busy', ['bg-presence-busy', 'text-presence-busy']],
     ['away', ['bg-presence-away', 'text-presence-glyph']],
     ['offline', ['bg-background', 'text-presence-offline']],
-    ['dnd', ['bg-presence-busy', 'text-presence-glyph']],
-    ['oof', ['bg-presence-oof', 'text-presence-glyph']],
+    ['do-not-disturb', ['bg-presence-busy', 'text-presence-glyph']],
+    ['out-of-office', ['bg-presence-oof', 'text-presence-glyph']],
   ] as Array<[PresenceStatus, string[]]>)('status "%s" uses %j', (status, classes) => {
     render(<PresenceBadge status={status} />);
     const badge = screen.getByRole('img');
@@ -122,7 +124,7 @@ describe('PresenceBadge', () => {
   it('mirrors the out-of-office arrow in right-to-left layouts with the wave-rtl variant', () => {
     renderWithProviders(
       <div dir="ltr">
-        <PresenceBadge status="oof" />
+        <PresenceBadge status="out-of-office" />
       </div>,
       { dir: 'rtl' },
     );

@@ -8373,7 +8373,7 @@ describe('Phase 8 parts across components (0.13)', () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(
-      <Wave.Card selected={false} onSelect={onSelect} aria-label="Project card">
+      <Wave.Card selected={false} onSelect={onSelect} selectionControl="checkbox">
         <Wave.Card.Header
           title="Project"
           action={

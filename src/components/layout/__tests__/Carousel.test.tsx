@@ -1580,13 +1580,15 @@ describe('Carousel groups (0.13)', () => {
     expect(exposedIndexes()).toEqual([0, 1, 2]);
   });
 
-  it('sizes each slide to a share of the viewport and moves the track by pages', () => {
+  it('sizes each slide to a share of the viewport and moves the track by pages', async () => {
     render(<Carousel groupSize={3}>{slides(9)}</Carousel>);
     // jsdom folds calc(100% / 3) into calc(33.3333%); a browser keeps the division.
     expect(slideElements()[0]!.style.width).toMatch(/^calc\((100% \/ 3|33\.3333%)\)$/);
     expect(track().style.transform).toBe('translateX(0%)');
     act(() => nextButton().click());
     expect(track().style.transform).toBe('translateX(-100%)');
+    // Settle the observers the roving focus group and the sizing set up.
+    await act(async () => {});
   });
 
   it('groupSize 1 keeps the 0.12 markup: full-width slides', () => {
@@ -1704,7 +1706,7 @@ describe('Carousel groups (0.13)', () => {
     expect(exposedIndexes()).toEqual(expected);
   });
 
-  it('keeps showing the last page when slides are removed under it', () => {
+  it('keeps showing the last page when slides are removed under it', async () => {
     const { rerender } = render(
       <Carousel groupSize={3} defaultValue={6}>
         {slides(9)}
@@ -1716,6 +1718,8 @@ describe('Carousel groups (0.13)', () => {
       </Carousel>,
     );
     expect(exposedIndexes()).toEqual([3, 4]);
+    // Settle the observers the roving focus group and the sizing set up.
+    await act(async () => {});
   });
 
   it('a group larger than the slides is one page with both buttons disabled', () => {
@@ -1740,7 +1744,7 @@ describe('Carousel groups (0.13)', () => {
   });
 
   describe('autoplay by page', () => {
-    it('advances a page at a time and stops at the last page without loop', () => {
+    it('advances a page at a time and stops at the last page without loop', async () => {
       vi.useFakeTimers();
       render(
         <Carousel groupSize={3} autoPlay autoPlayInterval={1000}>
@@ -1759,6 +1763,8 @@ describe('Carousel groups (0.13)', () => {
         vi.advanceTimersByTime(3000);
       });
       expect(exposedIndexes()).toEqual([6, 7, 8]);
+      // Settle the observers the roving focus group and the sizing set up.
+      await act(async () => {});
     });
 
     it('wraps to the first page with loop', () => {
@@ -1798,7 +1804,7 @@ describe('Carousel groups (0.13)', () => {
       });
     }
 
-    it('shows as many slides as fit and follows a resize', () => {
+    it('shows as many slides as fit and follows a resize', async () => {
       const ro = installResizeObserverMock();
       let rootWidth = 300;
       stubWidths(
@@ -1813,6 +1819,8 @@ describe('Carousel groups (0.13)', () => {
       expect(exposedIndexes()).toEqual([0, 1]);
       expect(dots()).toHaveLength(5);
       ro.restore();
+      // Settle the observers the roving focus group and the sizing set up.
+      await act(async () => {});
     });
 
     it('snaps the shown index to the new page start when the page size changes', () => {
@@ -2262,10 +2270,12 @@ describe('Carousel dragging (0.13)', () => {
     expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
   });
 
-  it('moves by pages with groupSize', () => {
+  it('moves by pages with groupSize', async () => {
     const { el, onValueChange } = renderDraggable({ groupSize: 2 });
     drag(el, 300, 100, 1000);
     expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
+    // Settle the observers the roving focus group and the sizing set up.
+    await act(async () => {});
   });
 
   it('calls onValueChange once per change in StrictMode', () => {
