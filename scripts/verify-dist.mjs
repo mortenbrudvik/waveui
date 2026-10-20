@@ -272,6 +272,46 @@ export const EXCLUSION_PROBES_0_11 = [
   },
 ];
 
+/** Component modules an import of only a standalone hook or utility must not hold (0.12). */
+const OVERLAY_COMPONENT_MODULES = [
+  'components/button/Button.mjs',
+  'components/overlays/Dialog.mjs',
+  'components/overlays/Popover.mjs',
+  'components/navigation/Menu.mjs',
+];
+
+/**
+ * The hook probes of 0.12 (spec §5): an import of only `keep`, a public hook or utility, holds
+ * each of `modules`, none of `dropModules` and imports none of the `dropExternals` packages, so
+ * a hook that needs no positioning library does not pull one in.
+ */
+export const HOOK_PROBES_0_12 = [
+  {
+    keep: 'useFocusVisible',
+    modules: ['hooks/useFocusVisible.mjs'],
+    dropModules: [...OVERLAY_COMPONENT_MODULES, 'hooks/usePopupPosition.mjs'],
+    dropExternals: ['@floating-ui/react-dom'],
+  },
+  {
+    keep: 'getFirstTabbable',
+    modules: ['lib/focus.mjs'],
+    dropModules: [...OVERLAY_COMPONENT_MODULES, 'hooks/usePopupPosition.mjs'],
+    dropExternals: ['@floating-ui/react-dom'],
+  },
+  {
+    keep: 'useModalOpen',
+    modules: ['hooks/useModalOpen.mjs', 'lib/layers.mjs'],
+    dropModules: [...OVERLAY_COMPONENT_MODULES, 'hooks/usePopupPosition.mjs'],
+    dropExternals: ['@floating-ui/react-dom'],
+  },
+  {
+    keep: 'usePopupPosition',
+    modules: ['hooks/usePopupPosition.mjs'],
+    dropModules: OVERLAY_COMPONENT_MODULES,
+    dropExternals: [],
+  },
+];
+
 /**
  * The inclusion probes of 0.11 (spec §6.2): an import of only `keep` holds each of `modules`, so
  * the exclusion probes above cannot pass because a module is missing. A TagPicker is built on the
@@ -388,7 +428,6 @@ export const MODULE_ONLY_NAMES = [
   'useDrawerOpen',
   'useFocusWithin',
   'useHeldFocus',
-  'useInitialFocus',
   'useModalOpener',
   'useNavContext',
   'useNavListChildCheck',
@@ -1635,6 +1674,45 @@ export async function probeIncludes(dist, { keep, modules }) {
 }
 
 /**
+ * Hook probe: bundles an entry that imports only `keep` from `dist/index.mjs` and reports each of
+ * `modules` missing from the bundle, each of `dropModules` in it (a listed module that does not
+ * exist in `dist` is an error: the probe would pass vacuously) and each of `dropExternals` that
+ * the bundle imports.
+ */
+export async function probeHook(
+  dist,
+  { keep, modules = [], dropModules = [], dropExternals = [] },
+) {
+  const distRoot = realpathSync(resolve(dist));
+  const existing = new Set(listFiles(distRoot).map(fold));
+  const errors = [];
+  for (const path of [...modules, ...dropModules]) {
+    if (!existing.has(fold(path)))
+      errors.push(`${path}, listed for the hook ${keep}, does not exist in dist`);
+  }
+  const chunks = await bundleImport(distRoot, [keep]);
+  const included = new Set([...bundledModules(distRoot, chunks)].map(fold));
+  for (const path of modules) {
+    if (!included.has(fold(path)))
+      errors.push(`${path} is not in the bundle of an import of only ${keep}`);
+  }
+  for (const path of dropModules) {
+    if (included.has(fold(path)))
+      errors.push(`${path} is in the bundle of an import of only ${keep}`);
+  }
+  const chunkNames = new Set(chunks.map((chunk) => chunk.fileName));
+  const imported = new Set(
+    chunks
+      .flatMap((chunk) => [...chunk.imports, ...chunk.dynamicImports])
+      .filter((id) => !chunkNames.has(id)),
+  );
+  for (const id of dropExternals) {
+    if (imported.has(id)) errors.push(`the bundle of an import of only ${keep} imports ${id}`);
+  }
+  return errors;
+}
+
+/**
  * Size budget probe: a minified Vite build of an entry that imports `names` from
  * `dist/index.mjs`, bare imports external. Returns the minified and gzip (`node:zlib`) sizes in
  * bytes, the external ids the closure imports (sorted), an error for each budget exceeded, and an
@@ -1767,6 +1845,13 @@ export async function verifyDist(
     }
   } catch (error) {
     errors.push(`tree-shaking probe failed: ${error.message}`);
+  }
+  try {
+    for (const probe of HOOK_PROBES_0_12) {
+      errors.push(...(await probeHook(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.12 hook probe failed: ${error.message}`);
   }
   try {
     for (const probe of INCLUSION_PROBES_0_11) {

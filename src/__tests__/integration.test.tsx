@@ -337,6 +337,21 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     expect(barrel['DismissLayerContext']).toBeUndefined();
   });
 
+  it('exports the focus utilities (0.12)', () => {
+    for (const name of [
+      'useFocusVisible',
+      'useGridNavigation',
+      'getTabbableElements',
+      'getFirstTabbable',
+      'getLastTabbable',
+    ]) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+    for (const name of ['focusRing', 'focusRingInset', 'inputFocus', 'inputFocusWithin']) {
+      expect(barrel[name], name).toBeTypeOf('string');
+    }
+  });
+
   it('keeps internal helpers out of the public API', () => {
     const internal = [
       'buttonClassName',
@@ -352,7 +367,7 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'getPaginationRange',
       'useControlErrorMessage',
       'isInvalidLook',
-      'useGridNavigation',
+      'useRovingGrid',
       'parseHexColor',
       'formatDate',
       'parseDate',

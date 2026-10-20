@@ -93,6 +93,15 @@ export type { UseFocusTrapOptions, UseInitialFocusOptions } from './hooks/useFoc
 export { useRestoreFocus } from './hooks/useRestoreFocus';
 export type { UseRestoreFocusOptions } from './hooks/useRestoreFocus';
 export { useModalOpen } from './hooks/useModalOpen';
+export { useFocusVisible } from './hooks/useFocusVisible';
+export { useGridNavigation } from './components/table/useGridNavigation';
+export type {
+  UseGridNavigationOptions,
+  UseGridNavigationResult,
+  GridNavigationHandlers,
+} from './components/table/useGridNavigation';
+export { getTabbableElements, getFirstTabbable, getLastTabbable } from './lib/focus';
+export { focusRing, focusRingInset, inputFocus, inputFocusWithin } from './lib/styles';
 export { hasOpenModal, modalAllowProps } from './lib/layers';
 
 // Provider
