@@ -163,6 +163,18 @@ export const avatarGroupClassNames = {
   listItem: 'wave-avatar-group__list-item',
 } as const;
 
+/**
+ * AvatarGroup.Item: `root` on the avatar it renders in the group, and on the row (avatar and name)
+ * it renders in the overflow list; `name` on the name text of that row.
+ */
+export const avatarGroupItemClassNames = {
+  root: 'wave-avatar-group-item',
+  name: 'wave-avatar-group-item__name',
+} as const;
+
+/** AvatarGroup.Popover: `root` on the overflow button (which also carries the group's button class). */
+export const avatarGroupPopoverClassNames = { root: 'wave-avatar-group-popover' } as const;
+
 /** Badge: `root` on the badge span. */
 export const badgeClassNames = { root: 'wave-badge' } as const;
 

@@ -3,20 +3,21 @@ import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { avatarGroupClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
-import { getTabbableElements } from '../../lib/focus';
-import { isInsideLayerTree } from '../../lib/layers';
-import { focusRing } from '../../lib/styles';
-import { useId } from '../../hooks/useId';
-import { DismissLayerContext, useDismiss } from '../../hooks/useDismiss';
-import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
-import { useRestoreFocus } from '../../hooks/useRestoreFocus';
-import { Portal } from '../portal/Portal';
-import { Avatar } from './Avatar';
-import type { AvatarProps } from './Avatar';
 import { avatarSizeClassesFor, type AvatarSize } from './Avatar.sizes';
 import { AvatarGroupContext } from './AvatarGroup.context';
 import { partitionAvatarGroupItems, type AvatarGroupLayout } from './AvatarGroup.partition';
+import {
+  AvatarGroupItem,
+  AvatarGroupPopover,
+  DEFAULT_UNNAMED_MEMBER_LABEL,
+  type AvatarGroupItemProps,
+  type AvatarGroupOpenChangeDetails,
+  type AvatarGroupPopoverProps,
+} from './AvatarGroup.parts';
+
+export { AvatarGroupItem, AvatarGroupPopover };
+export type { AvatarGroupItemProps, AvatarGroupOpenChangeDetails, AvatarGroupPopoverProps };
+export type { AvatarGroupLayout };
 
 /** Properties for the AvatarGroup component. */
 export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -24,7 +25,7 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
    * Maximum number of avatars to display. The others are replaced by an overflow button that
    * lists their names. `0` or a negative value shows only the overflow button, a fraction is
    * rounded down, and `NaN` shows every member (as without `max`). The members of a Fragment
-   * count one by one.
+   * count one by one. A `pie` shows at most three.
    */
   max?: number;
   /**
@@ -40,6 +41,12 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   layout?: AvatarGroupLayout;
   /**
+   * What the overflow button shows: the number of hidden members (`+3`, capped at `99+`), or an
+   * icon.
+   * @default 'count'
+   */
+  overflowIndicator?: 'count' | 'icon';
+  /**
    * Accessible name of the overflow button (and its popup). A function receives the number of
    * hidden members. Localise it here.
    * @default (count) => `${count} more`
@@ -52,14 +59,23 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'Unnamed member'
    */
   unnamedMemberLabel?: string;
+  /** Whether the overflow popup is open (controlled). */
+  open?: boolean;
+  /**
+   * Whether the overflow popup starts open (uncontrolled).
+   * @default false
+   */
+  defaultOpen?: boolean;
+  /**
+   * Called when the overflow popup asks to open or close, with the reason: `trigger` (the button),
+   * `escape`, `outside-press` or `focus-outside`.
+   */
+  onOpenChange?: (open: boolean, details?: AvatarGroupOpenChangeDetails) => void;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/**
- * The clip of each wedge of a pie, by the number of wedges (one wedge is a full circle). Literal
- * strings only.
- */
+/** The clip of each wedge of a pie, by the number of wedges (one wedge is a full circle). Literal strings only. */
 const pieWedgeClasses: ReadonlyArray<ReadonlyArray<string>> = [
   [''],
   ['[clip-path:inset(0_50%_0_0)]', '[clip-path:inset(0_0_0_50%)]'],
@@ -70,78 +86,16 @@ const pieWedgeClasses: ReadonlyArray<ReadonlyArray<string>> = [
   ],
 ];
 
-/** Default text listed for a hidden member that would render with no accessible name. */
-const DEFAULT_UNNAMED_MEMBER_LABEL = 'Unnamed member';
-
-const nonBlank = (value: unknown): value is string =>
-  typeof value === 'string' && value.trim() !== '';
-
-/**
- * The text name of a member for the overflow list: the text of a text member, or the accessible
- * name of an `Avatar` given by its props (`aria-label` before `name`). An `Avatar` labelled by
- * `aria-labelledby` (unless `decorative`) and every other element have none: they are rendered as
- * they are, so a link keeps working and keeps its own label.
- */
-function getMemberName(member: React.ReactNode): string | undefined {
-  if (typeof member === 'string' || typeof member === 'number') {
-    return String(member).trim() || undefined;
-  }
-  if (!isElementOfType<AvatarProps>(member, Avatar)) return undefined;
-  const { decorative, name, 'aria-label': label, 'aria-labelledby': labelledBy } = member.props;
-  if (!decorative && nonBlank(labelledBy)) return undefined;
-  for (const value of [label, name]) {
-    if (nonBlank(value)) return value.trim();
-  }
-  return undefined;
-}
-
-/**
- * Whether a member without a {@link getMemberName} name would render with no accessible name,
- * so its list item would be empty for assistive technology: blank text, or an `Avatar` that is
- * neither labelled by `aria-labelledby` nor named by its image's `alt` (or is `decorative`).
- * Other elements are rendered as they are, since their content is unknown here.
- */
-function rendersUnnamed(member: React.ReactNode): boolean {
-  if (typeof member === 'string' || typeof member === 'number') return true;
-  if (!isElementOfType<AvatarProps>(member, Avatar)) return false;
-  const { decorative, image, 'aria-labelledby': labelledBy } = member.props;
-  if (decorative) return true;
-  if (nonBlank(labelledBy)) return false;
-  const imageProps: unknown = React.isValidElement(image) ? image.props : image;
-  const alt =
-    typeof imageProps === 'object' && imageProps !== null && 'alt' in imageProps
-      ? imageProps.alt
-      : undefined;
-  return !nonBlank(alt);
-}
-
-/**
- * A row of overlapping avatars (`role="group"`; name it with `aria-label`).
- *
- * With `max`, the avatars beyond the limit are replaced by an overflow `<button>` ("+3", named
- * "3 more", see `overflowLabel`). It toggles a popup that lists the hidden members' names: an
- * `Avatar` by its `aria-label` or `name` prop, text as it is. Other members, such as an `Avatar`
- * inside a link or one labelled by `aria-labelledby`, are rendered as they are, and an `Avatar` or
- * text with no accessible name is listed as `unnamedMemberLabel` with a development warning.
- * Focus moves into the popup; Escape, a press outside or the button close it and focus returns to
- * the button. Tab and Shift+Tab move through the popup's own tab stops (links in rendered
- * members); Tab from the last one closes the popup and moves on to the element after the button,
- * Shift+Tab from the first one closes it and returns to the button. When the button is the last
- * tab stop (of the page, or of the Wave layer the group is in, such as a dialog), Tab is left to
- * the browser or the enclosing focus trap.
- *
- * @example
- * <AvatarGroup aria-label="Project team" max={3}>
- *   <Avatar name="Ada Lovelace" />
- *   <Avatar name="Alan Turing" />
- * </AvatarGroup>
- */
-export const AvatarGroup = ({
+const AvatarGroupRoot = ({
   max,
   size,
   layout = 'stack',
+  overflowIndicator = 'count',
   overflowLabel,
   unnamedMemberLabel = DEFAULT_UNNAMED_MEMBER_LABEL,
+  open,
+  defaultOpen,
+  onOpenChange,
   className,
   children,
   ref,
@@ -150,7 +104,10 @@ export const AvatarGroup = ({
   ...props
 }: AvatarGroupProps) => {
   // Fragments are flattened, so each member counts, overlaps and is listed on its own (C-COMPOUND).
-  const items = flattenChildren(children);
+  // A consumer-written AvatarGroup.Popover is the overflow part, not a member.
+  const parts = flattenChildren(children);
+  const customPopover = parts.find(({ node }) => isElementOfType(node, AvatarGroupPopover));
+  const items = parts.filter(({ node }) => !isElementOfType(node, AvatarGroupPopover));
   const resolvedSize: AvatarSize = size ?? (layout === 'pie' ? 'large' : 'medium');
   const { inlineItems: visible, overflowItems } = partitionAvatarGroupItems({
     items,
@@ -158,10 +115,10 @@ export const AvatarGroup = ({
     layout,
   });
   const hidden = overflowItems ?? [];
-  const overflow = hidden.length;
+  const hasInlineItems = visible.length > 0;
   const groupContext = React.useMemo(
-    () => ({ size: resolvedSize, layout }),
-    [resolvedSize, layout],
+    () => ({ size: resolvedSize, layout, hasInlineItems }),
+    [resolvedSize, layout, hasInlineItems],
   );
 
   const unnamed = ariaLabel === undefined && ariaLabelledBy === undefined;
@@ -173,99 +130,6 @@ export const AvatarGroup = ({
       );
     }
   }, [unnamed]);
-
-  const popupId = useId('avatar-group-overflow');
-  const [open, setOpen] = React.useState(false);
-  // Nothing is hidden any more: close, so the popup does not reappear when members overflow again.
-  if (open && overflow === 0) setOpen(false);
-  const isOpen = open && overflow > 0;
-  const label =
-    typeof overflowLabel === 'function'
-      ? overflowLabel(overflow)
-      : (overflowLabel ?? `${overflow} more`);
-
-  // The layer the group is rendered in (a dialog or popover), if any: the popup's parent layer.
-  const parentLayerId = React.useContext(DismissLayerContext);
-  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
-  const surfaceRef = React.useRef<HTMLDivElement | null>(null);
-  const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
-
-  const { setReference, setFloating, floatingProps } = usePopupPosition({
-    open: isOpen,
-    side: 'bottom',
-    align: 'start',
-  });
-  const { layerId } = useDismiss({
-    open: isOpen,
-    onDismiss: () => setOpen(false),
-    refs: [triggerRef, surfaceRef],
-    anchorRef: triggerRef,
-    focusOutside: true,
-  });
-  useRestoreFocus({ enabled: isOpen, container: surface, triggerRef, onlyIfFocusInside: true });
-  const triggerRefs = useMergedRefs<HTMLButtonElement>(triggerRef, setReference);
-  const surfaceRefs = useMergedRefs<HTMLDivElement>(surfaceRef, setFloating, setSurface);
-
-  // Move focus into the popup once it is mounted, so its list is read next.
-  React.useEffect(() => {
-    if (isOpen && surface) surface.focus({ preventScroll: true });
-  }, [isOpen, surface]);
-
-  // The popup is portaled, so native tabbing would leave it for the end of the page. Tab moves
-  // through the popup's own tab stops (a rendered member can be a link); leaving the last one
-  // closes the popup and moves on from the button instead (Shift+Tab before the first one: back to
-  // the button), like a focus trap does for a popup anchored in a dialog. When nothing tabbable
-  // follows the button, Tab is not prevented: focus returns to the button as the popup closes and
-  // the browser (leaving the page) or an enclosing focus trap (wrapping) takes it from there.
-  // Inside a parent layer (a dialog, a popover), a tab stop after the button that lies outside that
-  // layer is treated the same way: a focus trap that leaves the page outside it interactive would
-  // pull focus back from there, while its descendant-layer rule (§2.4) wraps from the button.
-  // Tab stops are computed at keydown time, never cached (§2.2 focus utilities). A key that
-  // bubbles through React from a portal a member opened is not the popup's: it is ignored.
-  const handleSurfaceKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    const trigger = triggerRef.current;
-    if (event.key !== 'Tab' || event.defaultPrevented || !trigger) return;
-    const popup = event.currentTarget;
-    // Duck typed (`nodeType`), not `instanceof Node`: a popup portaled into another document (an
-    // iframe, a popout window) holds nodes of that realm.
-    const origin = event.target as Partial<Node> | null;
-    if (!origin || typeof origin.nodeType !== 'number' || !popup.contains(origin as Node)) return;
-    const inner = getTabbableElements(popup);
-    // -1 while focus is on the popup itself (or on something that is not a tab stop).
-    const current = inner.findIndex((el) => el.contains(origin as Node));
-    const next = current + (event.shiftKey ? -1 : 1);
-    if (next >= 0 && next < inner.length) {
-      event.preventDefault();
-      inner[next]!.focus();
-      return;
-    }
-    let target: HTMLElement | undefined = trigger;
-    if (!event.shiftKey) {
-      const order = getTabbableElements(trigger.ownerDocument.body).filter(
-        (el) => !popup.contains(el),
-      );
-      const index = order.indexOf(trigger);
-      target = index === -1 ? trigger : order[index + 1];
-      if (target && parentLayerId !== null && !isInsideLayerTree(parentLayerId, target)) {
-        target = undefined;
-      }
-    }
-    setOpen(false);
-    if (!target) return;
-    event.preventDefault();
-    target.focus();
-  };
-
-  const hasUnnamedMember =
-    isOpen && hidden.some(({ node }) => getMemberName(node) === undefined && rendersUnnamed(node));
-  React.useEffect(() => {
-    if (hasUnnamedMember) {
-      warnOnce(
-        'AvatarGroup:unnamed-member',
-        `AvatarGroup: a hidden member has no accessible name and is listed as "${unnamedMemberLabel}". Give each member a \`name\` or \`aria-label\`.`,
-      );
-    }
-  }, [hasUnnamedMember, unnamedMemberLabel]);
 
   return (
     <div
@@ -319,58 +183,58 @@ export const AvatarGroup = ({
                 {node}
               </span>
             ))}
-      </AvatarGroupContext.Provider>
-      {overflow > 0 && (
-        <button
-          ref={triggerRefs}
-          type="button"
-          aria-label={label}
-          aria-haspopup="dialog"
-          aria-expanded={isOpen}
-          aria-controls={isOpen ? popupId : undefined}
-          className={cn(
-            avatarGroupClassNames.overflowButton,
-            'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full border-0 p-0 font-semibold',
-            'bg-muted text-muted-foreground ring-2 ring-background',
-            'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
-            focusRing,
-            layout === 'stack' && visible.length > 0 && '-ms-2',
-            avatarSizeClassesFor(resolvedSize),
-          )}
-          onClick={() => setOpen((value) => !value)}
-        >
-          +{overflow}
-        </button>
-      )}
-      {isOpen && (
-        <Portal layerId={layerId}>
-          <div
-            ref={surfaceRefs}
-            id={popupId}
-            role="dialog"
-            aria-label={label}
-            tabIndex={-1}
-            data-state="open"
-            {...floatingProps}
-            className={cn(
-              avatarGroupClassNames.surface,
-              'min-w-32 max-w-xs rounded-md border border-border bg-background p-2 text-body-1 text-foreground shadow-16',
-              focusRing,
+        {customPopover
+          ? customPopover.node
+          : hidden.length > 0 && (
+              <AvatarGroupPopover
+                count={hidden.length}
+                indicator={overflowIndicator}
+                label={overflowLabel}
+                unnamedMemberLabel={unnamedMemberLabel}
+                open={open}
+                defaultOpen={defaultOpen}
+                onOpenChange={onOpenChange}
+              >
+                {hidden.map(({ key, node }) => (
+                  <React.Fragment key={key}>{node}</React.Fragment>
+                ))}
+              </AvatarGroupPopover>
             )}
-            onKeyDown={handleSurfaceKeyDown}
-          >
-            <ul className={cn(avatarGroupClassNames.list, 'm-0 flex list-none flex-col gap-1 p-0')}>
-              {hidden.map(({ key, node }) => (
-                <li key={key} className={cn(avatarGroupClassNames.listItem, 'px-1 py-0.5')}>
-                  {getMemberName(node) ?? (rendersUnnamed(node) ? unnamedMemberLabel : node)}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Portal>
-      )}
+      </AvatarGroupContext.Provider>
     </div>
   );
 };
 
-AvatarGroup.displayName = 'AvatarGroup';
+AvatarGroupRoot.displayName = 'AvatarGroup';
+
+/**
+ * A row of avatars (`role="group"`; name it with `aria-label`), laid out as a `stack` (overlapping),
+ * `spread` or `pie` (`layout`). `size` reaches the members.
+ *
+ * With `max`, the avatars beyond the limit are replaced by an overflow `<button>` ("+3", named
+ * "3 more", see `overflowLabel`; `overflowIndicator="icon"` shows an icon, and a count above 99
+ * reads "99+"). It toggles a popup that lists the hidden members: an `AvatarGroup.Item` as a row
+ * with its avatar and name, an `Avatar` by its `aria-label` or `name` prop, text as it is. Other
+ * members, such as an `Avatar` inside a link or one labelled by `aria-labelledby`, are rendered as
+ * they are, and an `Avatar` or text with no accessible name is listed as `unnamedMemberLabel` with
+ * a development warning. Focus moves into the popup; Escape, a press outside or the button close
+ * it and focus returns to the button (`open`, `defaultOpen` and `onOpenChange(open, details)`
+ * control it). Tab and Shift+Tab move through the popup's own tab stops (links in rendered
+ * members); Tab from the last one closes the popup and moves on to the element after the button,
+ * Shift+Tab from the first one closes it and returns to the button. When the button is the last
+ * tab stop (of the page, or of the Wave layer the group is in, such as a dialog), Tab is left to
+ * the browser or the enclosing focus trap.
+ *
+ * To split the members yourself, render `AvatarGroup.Item`s and an `AvatarGroup.Popover` holding
+ * the overflow items (see `partitionAvatarGroupItems`).
+ *
+ * @example
+ * <AvatarGroup aria-label="Project team" max={3}>
+ *   <AvatarGroup.Item name="Ada Lovelace" />
+ *   <AvatarGroup.Item name="Alan Turing" />
+ * </AvatarGroup>
+ */
+export const AvatarGroup = /* @__PURE__ */ Object.assign(AvatarGroupRoot, {
+  Item: AvatarGroupItem,
+  Popover: AvatarGroupPopover,
+});

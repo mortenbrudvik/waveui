@@ -7,8 +7,19 @@ export type {
   AvatarNamedColor,
 } from './Avatar';
 
-export { AvatarGroup } from './AvatarGroup';
-export type { AvatarGroupProps } from './AvatarGroup';
+export { AvatarGroup, AvatarGroupItem, AvatarGroupPopover } from './AvatarGroup';
+export type {
+  AvatarGroupProps,
+  AvatarGroupItemProps,
+  AvatarGroupPopoverProps,
+  AvatarGroupOpenChangeDetails,
+  AvatarGroupLayout,
+} from './AvatarGroup';
+export { partitionAvatarGroupItems } from './AvatarGroup.partition';
+export type {
+  PartitionAvatarGroupItemsOptions,
+  PartitionAvatarGroupItemsResult,
+} from './AvatarGroup.partition';
 
 export { Badge } from './Badge';
 export type { BadgeProps } from './Badge';

@@ -13,6 +13,8 @@ export interface AvatarGroupContextValue {
   size: AvatarSize;
   /** The layout of the group. */
   layout: AvatarGroupLayout;
+  /** Whether the group shows any member inline (the overflow button overlaps it in a stack). */
+  hasInlineItems: boolean;
 }
 
 /** Internal: provided by AvatarGroup around its members; `null` elsewhere. */
