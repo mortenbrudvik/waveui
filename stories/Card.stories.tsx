@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, Card } from '../src';
+import { Avatar, Button, Card } from '../src';
 
 const meta = {
   title: 'Components/Layout/Card',
@@ -134,4 +134,89 @@ export const FullComposition: Story = {
       </Card.Footer>
     </Card>
   ),
+};
+
+/** The four looks of a card, and the three sizes (the padding of its parts). */
+export const AppearancesAndSizes: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap gap-4">
+        {(['filled', 'filled-alternative', 'outline', 'subtle'] as const).map((appearance) => (
+          <Card key={appearance} {...args} appearance={appearance}>
+            <Card.Header title={appearance} subtitle="appearance" />
+            <Card.Body>Body</Card.Body>
+          </Card>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-4">
+        {(['small', 'medium', 'large'] as const).map((size) => (
+          <Card key={size} {...args} size={size} appearance="outline">
+            <Card.Header title={size} subtitle="size" />
+            <Card.Body>Body</Card.Body>
+          </Card>
+        ))}
+      </div>
+    </div>
+  ),
+};
+
+/** `orientation="horizontal"` lays the preview out beside the text. */
+export const HorizontalWithPreview: Story = {
+  args: { style: { width: 480 } },
+  render: (args) => (
+    <Card {...args} orientation="horizontal" appearance="outline">
+      <Card.Preview logo={<span className="text-caption-1">W</span>}>
+        <div className="flex h-32 w-40 items-center justify-center bg-muted text-foreground">
+          Preview
+        </div>
+      </Card.Preview>
+      <div>
+        <Card.Header title="Quarterly report" subtitle="Updated today" />
+        <Card.Body>Highlights from the last three months.</Card.Body>
+      </div>
+    </Card>
+  ),
+};
+
+/** The header takes an image beside the text and an action at the end. */
+export const HeaderWithImageAndAction: Story = {
+  render: (args) => (
+    <Card {...args} appearance="outline">
+      <Card.Header
+        title="Design review"
+        subtitle="Thursday, 10:00"
+        image={<Avatar name="Ada Lovelace" />}
+        action={
+          <Button appearance="subtle" aria-label="More options">
+            …
+          </Button>
+        }
+      />
+      <Card.Body>Agenda and notes.</Card.Body>
+    </Card>
+  ),
+};
+
+/** A floating action sits over the top end corner; the checkbox moves to the start corner. */
+export const FloatingActionWithCheckbox: Story = {
+  args: { onSelect: fn(), selectionControl: 'checkbox' },
+  render: function FloatingAction(args) {
+    const [selected, setSelected] = React.useState(false);
+    return (
+      <Card
+        {...args}
+        selected={selected}
+        onSelect={() => setSelected((value) => !value)}
+        floatingAction={
+          <Button appearance="subtle" aria-label="More options">
+            …
+          </Button>
+        }
+        appearance="outline"
+      >
+        <Card.Header title="Team plan" />
+        <Card.Body>Shared workspaces for up to 20 people.</Card.Body>
+      </Card>
+    );
+  },
 };

@@ -1160,6 +1160,15 @@ Rules that keep a custom surface honest:
 
 `stories/CustomOverlays.fixtures.tsx` holds a command palette over a Dialog, a popup on the position and dismiss hooks, and an app-owned status region; `src/__tests__/integration.test.tsx` ("custom overlays on the public hooks") shows the behaviour they must keep.
 
+### Pattern 17: Shared Size Contexts
+
+A part that draws something sized by its host reads a context from the host instead of taking a prop from every caller. `Avatar.context.ts` holds two: `AvatarSizeContext` (`{ size, shape? }`: the box in pixels that a `Tag`, an `InteractionTag` or an `AvatarGroup` gives the Avatar it holds, and the shape of a rounded tag) and `AvatarBadgeSizeContext` (the size a `PresenceBadge` inside an Avatar takes). `AvatarGroup.context.ts` adds the group's `size`, `layout` and whether it holds inline members.
+
+- **Resolution order.** The part's own prop wins, then the host's context, then the default (`Avatar`: its `size`, the group's, the tag's box, `medium`). The context holds a number, so a named size and a pixel size resolve alike (`avatarPixelSize`).
+- **Context files import no component** (the module-only rule of `TagGroup.context.ts`): they hold the context, its inert default and the hook, so the host and the part can both import it without a cycle.
+- **Defaults are inert.** A part used outside its host gets the default context, never an error: an `Avatar` outside a tag is an ordinary avatar. Contexts that a part cannot work without throw in development instead (C-CONTEXT).
+- **Memoize the value** (C-MEMO), and render an enumerated `data-*` attribute with the resolved value so the result is visible to selectors (`data-size`, `data-shape`).
+
 ### Props Interface Conventions
 
 - Extend native HTML attributes: `React.HTMLAttributes<HTMLDivElement>`
@@ -1474,7 +1483,7 @@ Typed text in the DatePicker input is kept and marked invalid when it is not an 
 - **Stepper**: every reachable step is a Tab stop; Enter/Space activate.
 - **Tooltip, InfoLabel, InfoButton**: open on keyboard focus (Tooltip after `openDelay`, 200ms by default; it hides `closeDelay` after the pointer leaves, and at once on blur); Escape closes. Focus, blur and pointer entry inside a popup that the Tooltip's child renders in a portal (a DatePicker calendar, a listbox) do not show or hide the tooltip or reach its `onFocus`/`onBlur`; `onMouseEnter`/`onMouseLeave` follow React's tree. An icon-only trigger named by `Tooltip relationship="label"` also names a Popover it opens.
 - **Popover, TeachingPopover**: Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened (with `target`, to the target when nothing had focus, such as a tour opened on page load; see [Focus Management](#focus-management)). A close by hover moves no focus. In the Tab order the portaled content follows its trigger (TeachingPopover with `target`: the target), like inline content: Tab from the trigger enters it, Tab past its last element continues after the trigger, Shift+Tab from its first element returns to the trigger (or, when nothing in the trigger can take focus, to the tab stop before it), and Shift+Tab from the element after the trigger enters it at its last element. For a trigger outside the tab order the content follows the tab stop before the trigger; with no tab stop before the trigger or target, it is reached where it is portaled, at the end of the page, in both directions. A Tab lap visits the content once: Tab from the last element of the page moves past the portaled content (it is hidden for that one Tab) and leaves the page, and Shift+Tab from the browser's own controls reaches the page's last element (outside every open popover) instead of the content. Content that the Tab from the page end still reaches follows the document order, so Tab never cycles. Focus leaving it does not close it (Escape or an outside press does). A hover card (`openOnHover`) opens without taking focus and is still entered by Tab from its trigger. A context popover (`openOnContext`) opened by Shift+F10 or the ContextMenu key moves focus into the content (its first tabbable element, else the surface), and Escape returns focus to the element that had it; one opened by a right click leaves focus where it is, and Tab from that element enters the content.
-- **Accordion, Carousel, Nav, Breadcrumb, Pagination**: native buttons and links (Tab, Enter, Space); no arrow-key navigation.
+- **Accordion, Carousel, Nav, Breadcrumb, Pagination**: native buttons and links (Tab, Enter, Space); no arrow-key navigation between the controls. A Carousel with `groupSize` above 1 makes the slides of the shown page one arrow-key group: the slide that last had focus is its Tab stop, and an arrow past the end of the page shows the next one.
 
 ### ARIA Patterns
 
@@ -2170,11 +2179,11 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Choose one from few | `RadioGroup` |
 | Pick a number | `Slider`, `SpinButton` |
 | Pick a color | `ColorPicker`, `ColorArea`, `ColorSlider`, `AlphaSlider`, `SwatchPicker` (with `ColorSwatch`, `ImageSwatch`, `EmptySwatch`) |
-| Show user identity | `Avatar`, `AvatarGroup`, `Persona` |
+| Show user identity | `Avatar` (sizes 16 to 128, `shape`, named `color`, `active`, `initials`; `getInitials`), `AvatarGroup` (`stack`, `spread`, `pie`; `AvatarGroup.Item` and `AvatarGroup.Popover` with `partitionAvatarGroupItems`), `Persona` (up to four text lines, `textPosition`, `presenceOnly`) |
 | Categorize items | `Badge`, `Tag`, `TagGroup` (a set of tags, with dismissal and focus after a removal), `InteractionTag` (a tag with an action), `CounterBadge` |
-| Show status | `PresenceBadge`, `MessageBar` |
+| Show status | `PresenceBadge` (`available`, `busy`, `away`, `offline`, `do-not-disturb`, `out-of-office`), `MessageBar` |
 | Display data | `Table`, `DataGrid`, `List` |
-| Organize content | `Card`, `Accordion`, `TabList`, `Tree`, `Grid`, `Stack`, `Flex` |
+| Organize content | `Card` (`appearance`, `size`, `orientation`, `Card.Preview`, header `image` and `action`, `floatingAction`), `Accordion`, `TabList` (`appearance`, `size`, icon tabs), `Tree`, `Grid`, `Stack`, `Flex` |
 | Overlay content | `Dialog`, `Drawer` (also non-modal, or inline in the page), `Popover`, `Tooltip` |
 | Offer actions in a popup | `Menu` with `MenuButton` or `SplitButton` |
 | Show progress | `Spinner`, `ProgressBar`, `Skeleton` |
@@ -2184,7 +2193,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Guide users | `TeachingPopover` |
 | Show step progress | `Stepper` |
 | Handle overflow | `Overflow` / `OverflowItem` |
-| Browse content | `Carousel` |
+| Browse content | `Carousel` (`groupSize`, `draggable`, `Carousel.Item thumbnail`, `controlsLayout`, `Carousel.Button`) |
 | Rate items | `Rating`, `RatingDisplay` |
 | Label fields | `Label`, `InfoLabel`, `Field` |
 

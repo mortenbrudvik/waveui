@@ -152,3 +152,84 @@ function ControlledCarousel(args: CarouselProps) {
 export const Controlled: Story = {
   render: (args) => <ControlledCarousel {...args} />,
 };
+
+const manySlides = Array.from({ length: 7 }, (_, i) => (
+  <Carousel.Item key={i}>
+    <div className={`${slideClass} bg-muted text-foreground`}>Slide {i + 1}</div>
+  </Carousel.Item>
+));
+
+// A tiny grey picture for each thumbnail.
+const thumbColors = ['gray', 'slategray', 'dimgray', 'darkgray', 'lightslategray'];
+const thumbnail = (n: number) =>
+  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48"><rect width="64" height="48" fill="${thumbColors[n % 5]}"/></svg>`)}`; // wave-allow-color: fixture
+
+const thumbSlides = Array.from({ length: 5 }, (_, i) => (
+  <Carousel.Item key={i} thumbnail={thumbnail(i + 1)}>
+    <div className={`${slideClass} bg-muted text-foreground`}>Slide {i + 1}</div>
+  </Carousel.Item>
+));
+
+/** `groupSize` shows several slides at once; paging, the picker and autoplay move by page. */
+export const Groups: Story = {
+  args: { groupSize: 3, children: manySlides },
+};
+
+/** `groupSize="auto"` shows as many slides as fit; they keep their own width. */
+export const AutoSize: Story = {
+  args: {
+    groupSize: 'auto',
+    align: 'center',
+    children: manySlides.map((slide, i) => (
+      <Carousel.Item key={i}>
+        <div className={`${slideClass} w-40 bg-card text-card-foreground border border-border`}>
+          Slide {i + 1}
+        </div>
+      </Carousel.Item>
+    )),
+  },
+};
+
+/** Drag with a mouse, finger or pen; a vertical swipe still scrolls the page. */
+export const Draggable: Story = {
+  args: { draggable: true, groupSize: 2, children: manySlides },
+};
+
+/** A `thumbnail` on a slide turns the picker into a row of thumbnails. */
+export const Thumbnails: Story = {
+  args: { children: thumbSlides },
+};
+
+/** Where the Previous and Next buttons go. */
+export const ControlsLayouts: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-6">
+      {(['overlay', 'overlay-wide', 'inline', 'inline-wide'] as const).map((controlsLayout) => (
+        <Carousel
+          key={controlsLayout}
+          {...args}
+          controlsLayout={controlsLayout}
+          aria-label={controlsLayout}
+          autoPlay
+        >
+          {neutralSlides}
+        </Carousel>
+      ))}
+    </div>
+  ),
+};
+
+/** `Carousel.Button` replaces the built-in button of its direction with your own glyph. */
+export const CustomButtons: Story = {
+  render: (args) => (
+    <Carousel {...args} controlsLayout="inline">
+      {neutralSlides}
+      <Carousel.Button direction="previous">‹</Carousel.Button>
+      <Carousel.Button direction="next">›</Carousel.Button>
+    </Carousel>
+  ),
+};
+
+export const Elevated: Story = {
+  args: { appearance: 'elevated' },
+};

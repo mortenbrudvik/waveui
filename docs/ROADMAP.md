@@ -714,6 +714,8 @@ Goal: grid navigation, focusable groups and focus utilities for custom widgets.
 
 ### Phase 8 — 0.13.0: identity, cards, tabs and carousel
 
+**Built as (0.13.0, see the Phase 8 spec, §9).** Avatar gives no initials only for scripts without letter initials (Han, Kana, Hangul, Thai, Lao, Khmer, Myanmar, Tibetan; Cyrillic, Greek and Arabic have them); the presence badge of an Avatar is sized from the avatar and not merged into its name (merging would nest two `img` roles); Persona's `name` is optional with a `Persona:unnamed` warning; Card's `subtitle` is Fluent's `description`, so there is no new prop; the Carousel thumbnail is `Carousel.Item thumbnail` only (no `NavImageButton` part); `Carousel.Button` takes `direction="previous" | "next"` and is rendered in the slot of the built-in button it replaces; the Carousel index stays a slide index (the first slide of the shown page, snapped down); Card's `checkbox` is `Slot<'input'>`. AvatarGroup keeps `stack` as its default layout. Carousel has a viewport element that clips the track, which `groupSize="auto"` measures. Drag thresholds are 25 % of the viewport or 0.5 px/ms.
+
 **Theme.** People and entity displays, card layouts, tab styles and carousels at Fluent's breadth.
 **Entry:** 0.12.0 merged to `main`; spec approved (persona palette tokens reviewed). **Exit:** process criteria.
 

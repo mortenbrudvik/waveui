@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - Unreleased
+
+The eighth Fluent UI v9 parity release: Phase 8 of the [roadmap](docs/ROADMAP.md), identity, cards, tabs and the carousel. Avatar gains Fluent's sizes, shapes, named colors, active state and initials that behave; AvatarGroup gains layouts and a compound form; Persona gains four text lines and positions; PresenceBadge takes Fluent's status names; Card and TabList gain appearances and sizes; and Carousel shows several slides, drags, shows thumbnails and lays out its controls in four ways. Existing markup keeps working; the type widenings and the few visible changes are under "Upgrading from 0.12".
+
+### Upgrading from 0.12
+
+1. **`PresenceStatus` gains `'do-not-disturb'` and `'out-of-office'`** (and `dnd` and `oof` stay as deprecated aliases): an exhaustive `switch` or a `Record<PresenceStatus, …>` needs the new cases. `PresenceBadge`'s `status` is optional (`'available'`).
+2. **`Avatar` `size` also takes a number** (16, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72, 96, 120 or 128: the box in pixels), and `Persona` `size` gains `'huge'`: code that narrows these unions needs the new members. `AvatarSizeContext` (internal) now carries a number and the shape.
+3. **An Avatar in a rounded Tag is square.** `Tag` and `InteractionTag` with `shape="rounded"` give their `media` Avatar `shape="square"`; a circular Tag keeps the circle.
+4. **Avatar initials come from `getInitials`:** brackets and punctuation are dropped, a hyphen or apostrophe joins the words of a name, and a name with digits only, emoji or a script without letter initials (Han, Kana, Hangul, Thai and others) shows none. `Persona` and `AvatarGroup` show the same initials.
+5. **AvatarGroup's overflow popup is `AvatarGroup.Popover`:** the "+N" count reads `99+` past 99 (the accessible name keeps the real number), and the popup lists hidden members as rows of avatar and name.
+6. **Card parts take their padding from the card:** `Card.Header`, `Card.Body` and `Card.Footer` use a CSS variable (`--wave-card-padding`, `1rem` by default) instead of a fixed `p-4`; a test that asserts the `p-4` class, or a `className` that overrides it, uses the variable or a class of your own.
+7. **Carousel has a viewport element** (`.wave-carousel__viewport`) around the track, which clips it; the Previous and Next buttons of the default layout sit inside it, after the track. A style or test that reached the track as a child of the carousel uses `.wave-carousel__track`. The pause and start control and the buttons keep their classes and their tab order.
+8. **Carousel's index is the first slide of the shown page** (with `groupSize` above 1; `1` keeps 0.12's behaviour exactly): `value`, `defaultValue` and `onValueChange` are slide indexes that snap down to the start of a page.
+
+### Added
+
+- **Avatar:** `size` with numeric boxes (16 to 128) beside the named sizes, `shape` (`circular`, `square`), `color` (`neutral`, `brand`, `colorful` and twelve named colors; `colorful` picks one from `idForColor` or the name, the same every time), `active` (`active`, `inactive`, `unset`) with `activeAppearance` (`ring`, `ring-shadow`, `shadow`, `glow`), an `initials` slot, and `data-size`, `data-shape`, `data-color`, `data-active` and `data-active-appearance`. Twelve `--wave-palette-<name>` tokens (and `-foreground` pairs) in the light, dark and high-contrast themes, bound in `@theme inline` and asserted in `tokens.test.ts`.
+- **`getInitials(name, { dir, firstInitialOnly })`** and `GetInitialsOptions`: the initials Avatar shows, server-safe, right-to-left aware.
+- **AvatarGroup:** `layout` (`stack`, `spread`, `pie`), the group's `size` for members that have none, and a compound form: `AvatarGroup.Item` (`AvatarGroupItem`) and `AvatarGroup.Popover` (`AvatarGroupPopover`: `indicator`, `count`, `label`, `unnamedMemberLabel`, `open`, `defaultOpen`, `onOpenChange(open, details)` with `AvatarGroupOpenChangeDetails`). A hand-written popover replaces the one `max` makes. **`partitionAvatarGroupItems`** (with `PartitionAvatarGroupItemsOptions` and `PartitionAvatarGroupItemsResult`) splits a list into the inline and overflow items; it imports nothing.
+- **Persona:** `name`, `primaryText`, `secondaryText`, `tertiaryText` and `quaternaryText` slots, `textPosition` (`after`, `before`, `below`), `textAlignment`, `presenceOnly`, and the `huge` size (72 px avatar); `PersonaSize`.
+- **PresenceBadge:** `status` `'do-not-disturb'` and `'out-of-office'`, `data-status`, and a size that follows the avatar it is a badge of.
+- **TabList:** `appearance` (`transparent`, `subtle`, `subtle-circular`, `filled-circular`; `TabListAppearance`), `size` (`small`, `medium`, `large`), a `Tab` `icon` slot with an icon-only layout, and `data-appearance`, `data-size` and `data-orientation`.
+- **Card:** `appearance` (`filled`, `filled-alternative`, `outline`, `subtle`; `CardAppearance`), `size`, `orientation`, `Card.Preview` (`CardPreview`, with a `logo` slot), `Card.Header` `image` and `action` slots, a `checkbox` slot (merge onto, replace or remove the built-in checkbox) and a `floatingAction` slot (the checkbox then moves to the start corner).
+- **Carousel:** `groupSize` (a number, or `'auto'` to fit the width) with `align`, and `labels.slides(start, end, total)`; the picker has one button per page, and the slides of the shown page are one arrow-key focus group. `draggable` (mouse, touch and pen: a quarter of the width or 0.5 px/ms commits, the click that ends a drag is dropped, a vertical swipe still scrolls, autoplay pauses). `Carousel.Item` `thumbnail` (a `src` string or `<img>` attributes) turns the picker into thumbnails. `controlsLayout` (`overlay`, `overlay-wide`, `inline`, `inline-wide`; `CarouselControlsLayout`), `appearance` (`flat`, `elevated`; `CarouselAppearance`) and `Carousel.Button` (`CarouselButton`, `CarouselButtonProps`: `direction="previous"` or `"next"`, replaces the built-in button of its direction).
+- **Stable class names:** `avatarGroupItemClassNames`, `avatarGroupPopoverClassNames`, `cardPreviewClassNames`, `tabListTabClassNames`, `carouselButtonClassNames`, and new parts on `avatarClassNames`, `avatarGroupClassNames` (`pie`), `personaClassNames` (`tertiaryText`, `quaternaryText`), `cardClassNames` (`floatingAction`), `cardHeaderClassNames` (`image`, `text`, `action`), `carouselClassNames` (`viewport`) and `carouselItemClassNames` (`thumbnail`).
+- **Development warnings** (keys): `Persona:unnamed`, `AvatarGroup:unnamed-member` and `TabList.Tab:icon-only-name`; `PresenceBadge` warns once when `dnd` or `oof` is used.
+- Stories for the new sizes, colors, layouts, appearances, groups, dragging, thumbnails and control layouts.
+
+### Changed
+
+- **Tag and InteractionTag** pass their shape to the Avatar in `media` (see "Upgrading from 0.12", 3).
+- **Carousel** autoplay, looping and the end buttons count pages (identical to slides at `groupSize` 1).
+- Dev gates: `verify-dist` probes that an import of only `getInitials` or only `partitionAvatarGroupItems` holds no component and no React module, and the fixture tests cover them.
+
+### Deprecated
+
+- **`PresenceStatus` `'dnd'` and `'oof'`:** use `'do-not-disturb'` and `'out-of-office'`. They keep working, render the same badge and log a development warning once.
+
+### Size
+
+Not re-measured for 0.13: the additions are new props on seven components and two helpers, all tree-shakeable (the `verify-dist` helper probes show that an import of only `getInitials` or `partitionAvatarGroupItems` holds no component and no React module).
+
 ## [0.12.0] - 2026-10-20
 
 The seventh Fluent UI v9 parity release: Phase 7 of the [roadmap](docs/ROADMAP.md), the overlay and focus primitives made public. The positioning, dismiss, modal-layer and focus hooks behind WaveUI's own surfaces are public and documented, so an app can build a command palette, a custom popup or a full-screen overlay that joins the layer stack (Escape order, outside presses, toasts), and a `positioning` prop reaches the advanced placement options of nine components. Nothing is removed; see [Upgrading from 0.11](README.md#upgrading-from-011).
