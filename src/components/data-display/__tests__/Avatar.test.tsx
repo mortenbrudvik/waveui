@@ -5,8 +5,11 @@ import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import { Avatar } from '../Avatar';
 import type { AvatarProps } from '../Avatar';
+import { hashToNamedColor, type AvatarNamedColor } from '../Avatar.colors';
 import { AvatarSizeContext, type AvatarSizeContextValue } from '../Avatar.context';
 import { PresenceBadge } from '../PresenceBadge';
+import { Tag } from '../Tag';
+import { InteractionTag } from '../InteractionTag';
 import { expectNoA11yViolations, renderWithProviders, testSystemProps } from '../../../test-utils';
 import type { Size } from '../../../lib/types';
 
@@ -999,8 +1002,8 @@ describe('Avatar', () => {
         expect(avatar).not.toHaveClass('w-10');
         expect(avatar).not.toHaveClass('h-10');
         expect(avatar).not.toHaveClass('text-sm');
-        // No data-size: Avatar renders none (none in 0.10 either).
-        expect(avatar).not.toHaveAttribute('data-size');
+        // The box is reported as the resolved size (0.13).
+        expect(avatar).toHaveAttribute('data-size', String(size));
       },
     );
 
@@ -1048,7 +1051,7 @@ describe('Avatar', () => {
 
     it('is null by default and named for React DevTools', () => {
       expectTypeOf(AvatarSizeContext).toEqualTypeOf<React.Context<AvatarSizeContextValue | null>>();
-      expectTypeOf<AvatarSizeContextValue['size']>().toEqualTypeOf<16 | 20 | 24>();
+      expectTypeOf<AvatarSizeContextValue['size']>().toEqualTypeOf<number>();
       expect(AvatarSizeContext.displayName).toBe('AvatarSizeContext');
       let value: AvatarSizeContextValue | null | undefined;
       const Probe = () => {
@@ -1057,6 +1060,374 @@ describe('Avatar', () => {
       };
       render(<Probe />);
       expect(value).toBeNull();
+    });
+  });
+
+  describe('shape and numeric sizes (0.13)', () => {
+    const NAMED = [
+      ['extra-small', 24],
+      ['small', 32],
+      ['medium', 40],
+      ['large', 48],
+      ['extra-large', 56],
+    ] as const;
+    const NUMERIC = [16, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72, 96, 120, 128] as const;
+    const visual = () => screen.getByRole('img');
+
+    it.each(NAMED)('the named size %s keeps its 0.12 box of %dpx', (size, px) => {
+      render(<Avatar name="Jane Doe" size={size} />);
+      expect(visual()).toHaveAttribute('data-size', size);
+      expect(visual().className).toContain(`w-${px / 4}`);
+      expect(visual().className).toContain(`h-${px / 4}`);
+    });
+
+    it.each(NUMERIC)('the numeric size %d renders its box', (px) => {
+      render(<Avatar name="Jane Doe" size={px} />);
+      expect(visual()).toHaveAttribute('data-size', String(px));
+      expect(visual().className).toContain(`w-${px / 4}`);
+      expect(visual().className).toContain(`h-${px / 4}`);
+    });
+
+    it('defaults to medium and renders the resolved data-size and data-shape', () => {
+      render(<Avatar name="Jane Doe" />);
+      expect(visual()).toHaveAttribute('data-size', 'medium');
+      expect(visual()).toHaveAttribute('data-shape', 'circular');
+      expect(visual().className).toContain('rounded-full');
+    });
+
+    it('a square avatar is rounded-md from 40px and rounded-sm below', () => {
+      const { rerender } = render(<Avatar name="Jane Doe" shape="square" size={40} />);
+      expect(visual()).toHaveAttribute('data-shape', 'square');
+      expect(visual().className).toContain('rounded-md');
+      expect(visual().className).not.toContain('rounded-full');
+      rerender(<Avatar name="Jane Doe" shape="square" size={24} />);
+      expect(visual().className).toContain('rounded-sm');
+    });
+
+    it('with a badge the data attributes are on the root and the visual is sized', () => {
+      const { container } = render(
+        <Avatar name="Jane Doe" size={64} shape="square" badge={<PresenceBadge status="busy" />} />,
+      );
+      const root = container.firstElementChild as HTMLElement;
+      expect(root).toHaveAttribute('data-size', '64');
+      expect(root).toHaveAttribute('data-shape', 'square');
+    });
+
+    it('a rounded Tag gives its Avatar a square shape and a circular Tag a circular one', () => {
+      const { rerender } = render(
+        <Tag shape="rounded" media={<Avatar name="Jane Doe" />}>
+          Jane
+        </Tag>,
+      );
+      expect(visual()).toHaveAttribute('data-shape', 'square');
+      rerender(
+        <Tag shape="circular" media={<Avatar name="Jane Doe" />}>
+          Jane
+        </Tag>,
+      );
+      expect(visual()).toHaveAttribute('data-shape', 'circular');
+    });
+
+    it('an InteractionTag.Primary passes its shape too', () => {
+      const { container } = render(
+        <InteractionTag shape="rounded">
+          <InteractionTag.Primary media={<Avatar name="Jane Doe" />}>Jane</InteractionTag.Primary>
+        </InteractionTag>,
+      );
+      // The Avatar sits inside a button, whose children are presentational for the role queries.
+      expect(container.querySelector('.wave-avatar')).toHaveAttribute('data-shape', 'square');
+    });
+
+    it("an Avatar's own shape wins over the Tag's", () => {
+      render(
+        <Tag shape="rounded" media={<Avatar name="Jane Doe" shape="circular" />}>
+          Jane
+        </Tag>,
+      );
+      expect(visual()).toHaveAttribute('data-shape', 'circular');
+    });
+
+    it('the 16, 20 and 24px tag boxes are unchanged', () => {
+      render(
+        <AvatarSizeContext.Provider value={{ size: 16 }}>
+          <Avatar name="Jane Doe" />
+        </AvatarSizeContext.Provider>,
+      );
+      expect(visual().className).toContain('w-4');
+      expect(visual()).toHaveAttribute('data-size', '16');
+    });
+
+    it('types the numeric sizes next to the named ones', () => {
+      expectTypeOf<AvatarProps['size']>().toEqualTypeOf<
+        Size | 16 | 20 | 24 | 28 | 32 | 36 | 40 | 48 | 56 | 64 | 72 | 96 | 120 | 128 | undefined
+      >();
+      expectTypeOf<AvatarProps['shape']>().toEqualTypeOf<'circular' | 'square' | undefined>();
+      // @ts-expect-error 50 is not a size
+      void (<Avatar size={50} />);
+    });
+  });
+
+  describe('initials (0.13)', () => {
+    const initialsOf = (container: HTMLElement) =>
+      container.querySelector('.wave-avatar__initials')?.textContent;
+
+    it('strips brackets and punctuation: Jane Doe (Contoso) gives JD', () => {
+      const { container } = render(<Avatar name="Jane Doe (Contoso)" />);
+      expect(initialsOf(container)).toBe('JD');
+    });
+
+    it('swaps the two initials in right-to-left layouts', () => {
+      const { container } = renderWithProviders(<Avatar name="Jane Doe" />, { dir: 'rtl' });
+      expect(initialsOf(container)).toBe('DJ');
+    });
+
+    it('shows the person glyph for a name without initials (a phone number, ideographs)', () => {
+      const { container, rerender } = render(<Avatar name="+1 (555) 010-0000" />);
+      expect(initialsOf(container)).toBeUndefined();
+      expect(container.querySelector('svg')).not.toBeNull();
+      rerender(<Avatar name="田中太郎" />);
+      expect(initialsOf(container)).toBeUndefined();
+      expect(container.querySelector('svg')).not.toBeNull();
+    });
+
+    it.each([
+      ['a string', 'XY'],
+      ['an element', <b key="b">XY</b>],
+    ])('the initials slot replaces the computed initials (%s)', (_label, slot) => {
+      const { container } = render(<Avatar name="Jane Doe" initials={slot} />);
+      const node = container.querySelector('.wave-avatar__initials');
+      expect(node?.textContent).toBe('XY');
+      expect(node).toHaveAttribute('aria-hidden', 'true');
+      expect(container.textContent).not.toContain('JD');
+    });
+
+    it('an object slot adds its props to the initials element', () => {
+      const { container } = render(
+        <Avatar name="Jane Doe" initials={{ children: 'XY', className: 'font-black' }} />,
+      );
+      const node = container.querySelector('.wave-avatar__initials');
+      expect(node?.textContent).toBe('XY');
+      expect(node).toHaveClass('font-black');
+    });
+
+    it('an initials slot works without a name', () => {
+      const { container } = render(<Avatar initials="XY" />);
+      expect(initialsOf(container)).toBe('XY');
+    });
+
+    it.each([
+      ['', '' as const],
+      ['an empty array', [] as unknown as string],
+    ])(
+      'an initials slot that renders nothing (%s) falls back to the computed initials',
+      (_label, slot) => {
+        const { container } = render(<Avatar name="Jane Doe" initials={slot} />);
+        expect(initialsOf(container)).toBe('JD');
+      },
+    );
+
+    it('an image still wins over the initials slot', () => {
+      const { container } = render(<Avatar name="Jane Doe" src={PHOTO} initials="XY" />);
+      expect(initialsOf(container)).toBeUndefined();
+      expect(container.querySelector('img')).not.toBeNull();
+    });
+  });
+
+  describe('color (0.13)', () => {
+    const NAMED = [
+      'red',
+      'pumpkin',
+      'gold',
+      'forest',
+      'teal',
+      'blue',
+      'navy',
+      'lavender',
+      'purple',
+      'magenta',
+      'brown',
+      'steel',
+    ] as const;
+    const visual = (container: HTMLElement) =>
+      container.querySelector<HTMLElement>('.wave-avatar')!;
+
+    it('defaults to brand, with the 0.12 classes', () => {
+      const { container } = render(<Avatar name="Jane Doe" />);
+      expect(visual(container)).toHaveAttribute('data-color', 'brand');
+      expect(visual(container)).toHaveClass('bg-primary', 'text-primary-foreground');
+    });
+
+    it('neutral uses the muted pair', () => {
+      const { container } = render(<Avatar name="Jane Doe" color="neutral" />);
+      expect(visual(container)).toHaveAttribute('data-color', 'neutral');
+      expect(visual(container)).toHaveClass('bg-muted', 'text-muted-foreground');
+    });
+
+    it.each(NAMED)('the named color %s uses its palette pair', (color) => {
+      const { container } = render(<Avatar name="Jane Doe" color={color} />);
+      expect(visual(container)).toHaveAttribute('data-color', color);
+      expect(visual(container)).toHaveClass(
+        `bg-palette-${color}`,
+        `text-palette-${color}-foreground`,
+      );
+    });
+
+    it('colorful picks the same named color for the same idForColor, whatever the name', () => {
+      const a = render(<Avatar name="Jane Doe" color="colorful" idForColor="user-42" />);
+      const b = render(<Avatar name="Somebody Else" color="colorful" idForColor="user-42" />);
+      const colorA = visual(a.container).getAttribute('data-color');
+      expect(NAMED).toContain(colorA);
+      expect(visual(b.container)).toHaveAttribute('data-color', colorA!);
+      expect(visual(a.container)).toHaveClass(`bg-palette-${colorA}`);
+    });
+
+    it('colorful falls back to the name without an id', () => {
+      const a = render(<Avatar name="Jane Doe" color="colorful" />);
+      const b = render(<Avatar name="Jane Doe" color="colorful" />);
+      expect(visual(b.container).getAttribute('data-color')).toBe(
+        visual(a.container).getAttribute('data-color'),
+      );
+      expect(NAMED).toContain(visual(a.container).getAttribute('data-color'));
+    });
+
+    it('colorful with neither a name nor an id falls back to brand', () => {
+      const { container } = render(<Avatar color="colorful" />);
+      expect(visual(container)).toHaveAttribute('data-color', 'brand');
+      expect(visual(container).className).not.toMatch(/undefined|NaN/);
+    });
+
+    it('colorful spreads different ids over several colors', () => {
+      const seen = new Set<string>();
+      for (let i = 0; i < 24; i += 1) {
+        const { container, unmount } = render(
+          <Avatar name="Jane Doe" color="colorful" idForColor={`user-${i}`} />,
+        );
+        seen.add(visual(container).getAttribute('data-color')!);
+        unmount();
+      }
+      expect(seen.size).toBeGreaterThanOrEqual(6);
+    });
+
+    it('the hash is stable: known ids keep their color across releases', () => {
+      const { container } = render(<Avatar color="colorful" idForColor="user-42" />);
+      expect(visual(container).getAttribute('data-color')).toBe(hashToNamedColor('user-42'));
+      expect(hashToNamedColor('')).toBe(hashToNamedColor(''));
+    });
+
+    it('colorful renders the same on the server and the client', () => {
+      const html = renderToString(<Avatar name="Jane Doe" color="colorful" idForColor="user-42" />);
+      const { container } = render(
+        <Avatar name="Jane Doe" color="colorful" idForColor="user-42" />,
+      );
+      expect(html).toContain(`data-color="${visual(container).getAttribute('data-color')}"`);
+    });
+
+    it('an image avatar ignores the color classes but reports the color', () => {
+      const { container } = render(<Avatar name="Jane Doe" src={PHOTO} color="red" />);
+      expect(visual(container)).toHaveAttribute('data-color', 'red');
+      expect(visual(container).className).not.toContain('bg-palette-red');
+    });
+
+    it('an icon avatar keeps the muted pair', () => {
+      const { container } = render(<Avatar name="Jane Doe" icon={<svg />} color="red" />);
+      expect(visual(container)).toHaveClass('bg-muted', 'text-muted-foreground');
+    });
+
+    it('types the colors', () => {
+      expectTypeOf<AvatarProps['color']>().toEqualTypeOf<
+        'neutral' | 'brand' | 'colorful' | AvatarNamedColor | undefined
+      >();
+      expectTypeOf<AvatarNamedColor>().toEqualTypeOf<(typeof NAMED)[number]>();
+    });
+  });
+
+  describe('active state and badge size (0.13)', () => {
+    const visual = (container: HTMLElement) =>
+      container.querySelector<HTMLElement>('.wave-avatar__visual, .wave-avatar')!;
+
+    it('renders data-active and data-active-appearance with their defaults', () => {
+      const { container } = render(<Avatar name="Jane Doe" />);
+      expect(container.firstElementChild).toHaveAttribute('data-active', 'unset');
+      expect(container.firstElementChild).toHaveAttribute('data-active-appearance', 'ring');
+    });
+
+    it.each([
+      ['ring', ['ring-2', 'ring-primary']],
+      ['ring-shadow', ['ring-2', 'ring-primary', 'shadow-8']],
+      ['shadow', ['shadow-8']],
+      ['glow', ['shadow-[0_0_0.5rem_0.125rem_var(--wave-primary)]']],
+    ] as const)('an active avatar draws the %s appearance', (activeAppearance, classes) => {
+      const { container } = render(
+        <Avatar name="Jane Doe" active="active" activeAppearance={activeAppearance} />,
+      );
+      expect(container.firstElementChild).toHaveAttribute('data-active', 'active');
+      expect(container.firstElementChild).toHaveAttribute(
+        'data-active-appearance',
+        activeAppearance,
+      );
+      expect(visual(container)).toHaveClass(...classes);
+    });
+
+    it('an unset avatar draws no active look', () => {
+      const { container } = render(<Avatar name="Jane Doe" activeAppearance="glow" />);
+      expect(visual(container).className).not.toMatch(/ring-primary|shadow-8|opacity-60/);
+    });
+
+    it('an inactive avatar is dimmed, with a reduced-motion variant on its transition', () => {
+      const { container } = render(<Avatar name="Jane Doe" active="inactive" />);
+      expect(container.firstElementChild).toHaveAttribute('data-active', 'inactive');
+      expect(visual(container)).toHaveClass('opacity-60', 'motion-reduce:transition-none');
+    });
+
+    it.each([
+      [16, 'size-2'],
+      [24, 'size-2'],
+      [28, 'size-2.5'],
+      [32, 'size-2.5'],
+      [36, 'size-3'],
+      [56, 'size-3'],
+      [64, 'size-4'],
+      [96, 'size-4'],
+      [120, 'size-5'],
+      [128, 'size-5'],
+    ] as const)('a PresenceBadge in the badge slot of a %dpx avatar is %s', (size, boxClass) => {
+      render(<Avatar name="Jane Doe" size={size} badge={<PresenceBadge status="busy" />} />);
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass(boxClass);
+    });
+
+    it('named sizes map the same way', () => {
+      render(<Avatar name="Jane Doe" size="large" badge={<PresenceBadge status="busy" />} />);
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-3');
+    });
+
+    it("the badge's own size wins", () => {
+      render(
+        <Avatar name="Jane Doe" size={128} badge={<PresenceBadge status="busy" size="small" />} />,
+      );
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-2.5');
+    });
+
+    it('a PresenceBadge outside an avatar stays medium', () => {
+      render(<PresenceBadge status="busy" />);
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-3');
+    });
+
+    it('the badge keeps its own role and name beside the avatar, with no violations', async () => {
+      const { container } = render(
+        <Avatar name="Jane Doe" size={64} badge={<PresenceBadge status="away" />} />,
+      );
+      expect(screen.getByRole('img', { name: 'Jane Doe' })).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Away' })).toBeInTheDocument();
+      await expectNoA11yViolations(container);
+    });
+
+    it('types active and activeAppearance', () => {
+      expectTypeOf<AvatarProps['active']>().toEqualTypeOf<
+        'active' | 'inactive' | 'unset' | undefined
+      >();
+      expectTypeOf<AvatarProps['activeAppearance']>().toEqualTypeOf<
+        'ring' | 'ring-shadow' | 'shadow' | 'glow' | undefined
+      >();
     });
   });
 });

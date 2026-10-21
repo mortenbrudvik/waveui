@@ -183,6 +183,32 @@
   --wave-presence-offline: #616161;
   --wave-presence-oof: #b4009e;
   --wave-presence-glyph: #ffffff;
+
+  /* Persona palette: avatar colors (Avatar `color`), each with its text color */
+  --wave-palette-red: #c50f1f;
+  --wave-palette-red-foreground: #ffffff;
+  --wave-palette-pumpkin: #b5470a;
+  --wave-palette-pumpkin-foreground: #ffffff;
+  --wave-palette-gold: #8a6200;
+  --wave-palette-gold-foreground: #ffffff;
+  --wave-palette-forest: #107c10;
+  --wave-palette-forest-foreground: #ffffff;
+  --wave-palette-teal: #0a6b6b;
+  --wave-palette-teal-foreground: #ffffff;
+  --wave-palette-blue: #0f6cbd;
+  --wave-palette-blue-foreground: #ffffff;
+  --wave-palette-navy: #103a73;
+  --wave-palette-navy-foreground: #ffffff;
+  --wave-palette-lavender: #6a5cb8;
+  --wave-palette-lavender-foreground: #ffffff;
+  --wave-palette-purple: #5c2e91;
+  --wave-palette-purple-foreground: #ffffff;
+  --wave-palette-magenta: #b4009e;
+  --wave-palette-magenta-foreground: #ffffff;
+  --wave-palette-brown: #8e562e;
+  --wave-palette-brown-foreground: #ffffff;
+  --wave-palette-steel: #4f7391;
+  --wave-palette-steel-foreground: #ffffff;
   --wave-backdrop: rgb(0 0 0 / 0.4);
 
   /* Derived (re-declared per theme so nested themes re-resolve them) */
@@ -280,6 +306,32 @@
   --wave-presence-offline: #adadad;
   --wave-presence-oof: #d696c8;
   --wave-presence-glyph: #000000;
+
+  /* Persona palette: avatar colors (Avatar `color`), each with its text color */
+  --wave-palette-red: #f48a94;
+  --wave-palette-red-foreground: #000000;
+  --wave-palette-pumpkin: #f2a46b;
+  --wave-palette-pumpkin-foreground: #000000;
+  --wave-palette-gold: #f7b538;
+  --wave-palette-gold-foreground: #000000;
+  --wave-palette-forest: #6fcf6f;
+  --wave-palette-forest-foreground: #000000;
+  --wave-palette-teal: #4cc2c2;
+  --wave-palette-teal-foreground: #000000;
+  --wave-palette-blue: #479ef5;
+  --wave-palette-blue-foreground: #000000;
+  --wave-palette-navy: #7fa7e0;
+  --wave-palette-navy-foreground: #000000;
+  --wave-palette-lavender: #b4a7f0;
+  --wave-palette-lavender-foreground: #000000;
+  --wave-palette-purple: #c8a6f0;
+  --wave-palette-purple-foreground: #000000;
+  --wave-palette-magenta: #ec8fdc;
+  --wave-palette-magenta-foreground: #000000;
+  --wave-palette-brown: #d4a373;
+  --wave-palette-brown-foreground: #000000;
+  --wave-palette-steel: #9fb8cc;
+  --wave-palette-steel-foreground: #000000;
   --wave-backdrop: rgb(0 0 0 / 0.5);
 
   /* Derived (re-declared per theme so nested themes re-resolve them) */
@@ -377,6 +429,32 @@
   --wave-presence-offline: #ffffff;
   --wave-presence-oof: #ff80ff;
   --wave-presence-glyph: #000000;
+
+  /* Persona palette: avatar colors (Avatar `color`), each with its text color */
+  --wave-palette-red: #ffffff;
+  --wave-palette-red-foreground: #000000;
+  --wave-palette-pumpkin: #ffffff;
+  --wave-palette-pumpkin-foreground: #000000;
+  --wave-palette-gold: #ffffff;
+  --wave-palette-gold-foreground: #000000;
+  --wave-palette-forest: #ffffff;
+  --wave-palette-forest-foreground: #000000;
+  --wave-palette-teal: #ffffff;
+  --wave-palette-teal-foreground: #000000;
+  --wave-palette-blue: #ffffff;
+  --wave-palette-blue-foreground: #000000;
+  --wave-palette-navy: #ffffff;
+  --wave-palette-navy-foreground: #000000;
+  --wave-palette-lavender: #ffffff;
+  --wave-palette-lavender-foreground: #000000;
+  --wave-palette-purple: #ffffff;
+  --wave-palette-purple-foreground: #000000;
+  --wave-palette-magenta: #ffffff;
+  --wave-palette-magenta-foreground: #000000;
+  --wave-palette-brown: #ffffff;
+  --wave-palette-brown-foreground: #000000;
+  --wave-palette-steel: #ffffff;
+  --wave-palette-steel-foreground: #000000;
   --wave-backdrop: rgb(0 0 0 / 0.8);
 
   /* Derived (re-declared per theme so nested themes re-resolve them) */
@@ -473,6 +551,30 @@
   --color-presence-offline: var(--wave-presence-offline);
   --color-presence-oof: var(--wave-presence-oof);
   --color-presence-glyph: var(--wave-presence-glyph);
+  --color-palette-red: var(--wave-palette-red);
+  --color-palette-red-foreground: var(--wave-palette-red-foreground);
+  --color-palette-pumpkin: var(--wave-palette-pumpkin);
+  --color-palette-pumpkin-foreground: var(--wave-palette-pumpkin-foreground);
+  --color-palette-gold: var(--wave-palette-gold);
+  --color-palette-gold-foreground: var(--wave-palette-gold-foreground);
+  --color-palette-forest: var(--wave-palette-forest);
+  --color-palette-forest-foreground: var(--wave-palette-forest-foreground);
+  --color-palette-teal: var(--wave-palette-teal);
+  --color-palette-teal-foreground: var(--wave-palette-teal-foreground);
+  --color-palette-blue: var(--wave-palette-blue);
+  --color-palette-blue-foreground: var(--wave-palette-blue-foreground);
+  --color-palette-navy: var(--wave-palette-navy);
+  --color-palette-navy-foreground: var(--wave-palette-navy-foreground);
+  --color-palette-lavender: var(--wave-palette-lavender);
+  --color-palette-lavender-foreground: var(--wave-palette-lavender-foreground);
+  --color-palette-purple: var(--wave-palette-purple);
+  --color-palette-purple-foreground: var(--wave-palette-purple-foreground);
+  --color-palette-magenta: var(--wave-palette-magenta);
+  --color-palette-magenta-foreground: var(--wave-palette-magenta-foreground);
+  --color-palette-brown: var(--wave-palette-brown);
+  --color-palette-brown-foreground: var(--wave-palette-brown-foreground);
+  --color-palette-steel: var(--wave-palette-steel);
+  --color-palette-steel-foreground: var(--wave-palette-steel-foreground);
   --color-backdrop: var(--wave-backdrop);
 
   /* Brand ramp (for designers; components use the semantic colors) */

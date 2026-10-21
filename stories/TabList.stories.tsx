@@ -138,3 +138,53 @@ export const WithPanelsContainer: Story = {
     </TabList>
   ),
 };
+
+const TabGlyph = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+    <path d="M10 2a4 4 0 100 8 4 4 0 000-8zM4 18a6 6 0 0112 0H4z" />
+  </svg>
+);
+
+/** Four looks: `transparent` (default), `subtle`, `subtle-circular` and `filled-circular`. */
+export const Appearances: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-4">
+      {(['transparent', 'subtle', 'subtle-circular', 'filled-circular'] as const).map(
+        (appearance) => (
+          <TabList key={appearance} {...args} appearance={appearance} aria-label={appearance}>
+            <TabList.Tab value="one">One</TabList.Tab>
+            <TabList.Tab value="two">Two</TabList.Tab>
+            <TabList.Tab value="three">Three</TabList.Tab>
+          </TabList>
+        ),
+      )}
+    </div>
+  ),
+};
+
+/** `size` small, medium and large. */
+export const Sizes: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-4">
+      {(['small', 'medium', 'large'] as const).map((size) => (
+        <TabList key={size} {...args} size={size} aria-label={size}>
+          <TabList.Tab value="one">One</TabList.Tab>
+          <TabList.Tab value="two">Two</TabList.Tab>
+        </TabList>
+      ))}
+    </div>
+  ),
+};
+
+/** A tab with an icon and no text needs its own name (`aria-label`). */
+export const IconOnly: Story = {
+  render: (args) => (
+    <TabList {...args} aria-label="Views">
+      <TabList.Tab value="people" icon={<TabGlyph />} aria-label="People" />
+      <TabList.Tab value="teams" icon={<TabGlyph />} aria-label="Teams" />
+      <TabList.Tab value="all" icon={<TabGlyph />}>
+        All
+      </TabList.Tab>
+    </TabList>
+  ),
+};

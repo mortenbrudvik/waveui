@@ -1,9 +1,15 @@
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
-import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, afterEach, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Carousel, CarouselItem } from '../Carousel';
+import { CarouselButton } from '../Carousel.button';
+import {
+  carouselButtonClassNames,
+  carouselClassNames,
+  carouselItemClassNames,
+} from '../../../lib/classNames';
 import type {
   CarouselAutoPlayLabels,
   CarouselItemProps,
@@ -13,13 +19,16 @@ import type {
 import {
   asClientReference,
   expectNoA11yViolations,
+  expectThrows,
   mockMatchMedia,
+  mockRect,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
   testSystemProps,
 } from '../../../test-utils';
 import { getTabbableElements } from '../../../lib/focus';
+import { installResizeObserverMock } from '../../../test-utils';
 
 const threeSlides = [
   <Carousel.Item key="1">
@@ -90,7 +99,7 @@ describe('Carousel', () => {
     ],
   });
 
-  testCompoundExposure(Carousel, ['Item']);
+  testCompoundExposure(Carousel, ['Item', 'Button']);
 
   testNoImplicitSubmit(Carousel, {
     defaultProps: { autoPlay: true, children: threeSlides },
@@ -1553,6 +1562,1262 @@ describe('Carousel', () => {
       );
       expect(slideGroups()).toHaveLength(2);
       expect(warn).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('Carousel groups (0.13)', () => {
+  const slideElements = () => slideGroups();
+  const isExposed = (slide: HTMLElement) =>
+    !slide.hasAttribute('aria-hidden') && !slide.hasAttribute('inert');
+  const exposedIndexes = () =>
+    slideElements()
+      .map((slide, i) => (isExposed(slide) ? i : -1))
+      .filter((i) => i >= 0);
+
+  it('shows groupSize slides at once and hides the rest', () => {
+    render(<Carousel groupSize={3}>{slides(9)}</Carousel>);
+    expect(exposedIndexes()).toEqual([0, 1, 2]);
+  });
+
+  it('sizes each slide to a share of the viewport and moves the track by pages', async () => {
+    render(<Carousel groupSize={3}>{slides(9)}</Carousel>);
+    // jsdom folds calc(100% / 3) into calc(33.3333%); a browser keeps the division.
+    expect(slideElements()[0]!.style.width).toMatch(/^calc\((100% \/ 3|33\.3333%)\)$/);
+    expect(track().style.transform).toBe('translateX(0%)');
+    act(() => nextButton().click());
+    expect(track().style.transform).toBe('translateX(-100%)');
+    // Settle the observers the roving focus group and the sizing set up.
+    await act(async () => {});
+  });
+
+  it('groupSize 1 keeps the 0.12 markup: full-width slides', () => {
+    render(<Carousel>{slides(3)}</Carousel>);
+    expect(slideElements()[0]).toHaveClass('w-full');
+    expect(slideElements()[0]!.style.width).toBe('');
+  });
+
+  it('has one picker button per page, named with the slides it shows', () => {
+    render(<Carousel groupSize={3}>{slides(9)}</Carousel>);
+    expect(dots().map((dot) => dot.getAttribute('aria-label'))).toEqual([
+      'Slides 1 to 3 of 9',
+      'Slides 4 to 6 of 9',
+      'Slides 7 to 9 of 9',
+    ]);
+    expect(currentDot()).toHaveAttribute('aria-label', 'Slides 1 to 3 of 9');
+  });
+
+  it('names a one-slide last page like a single slide', () => {
+    render(<Carousel groupSize={3}>{slides(7)}</Carousel>);
+    expect(dots().map((dot) => dot.getAttribute('aria-label'))).toEqual([
+      'Slides 1 to 3 of 7',
+      'Slides 4 to 6 of 7',
+      'Slide 7 of 7',
+    ]);
+  });
+
+  it('announces the page in the live region', () => {
+    render(<Carousel groupSize={3}>{slides(9)}</Carousel>);
+    expect(liveRegion()).toHaveTextContent('Slides 1 to 3 of 9');
+  });
+
+  it('the labels.slides function names the pages', () => {
+    render(
+      <Carousel
+        groupSize={2}
+        labels={{ slides: (start, end, total) => `Sider ${start}–${end} av ${total}` }}
+      >
+        {slides(4)}
+      </Carousel>,
+    );
+    expect(dots()[0]).toHaveAttribute('aria-label', 'Sider 1–2 av 4');
+  });
+
+  it('Next and Previous move by a page and report the page start once', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Carousel groupSize={3} onValueChange={onValueChange}>
+        {slides(9)}
+      </Carousel>,
+    );
+    await user.click(nextButton());
+    expect(exposedIndexes()).toEqual([3, 4, 5]);
+    expect(onValueChange).toHaveBeenLastCalledWith(3);
+    await user.click(nextButton());
+    expect(onValueChange).toHaveBeenLastCalledWith(6);
+    await user.click(prevButton());
+    expect(exposedIndexes()).toEqual([3, 4, 5]);
+    expect(onValueChange).toHaveBeenCalledTimes(3);
+  });
+
+  it('a picker button goes to its page', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Carousel groupSize={3} onValueChange={onValueChange}>
+        {slides(9)}
+      </Carousel>,
+    );
+    await user.click(dots()[2]!);
+    expect(onValueChange).toHaveBeenCalledWith(6);
+    expect(currentDot()).toBe(dots()[2]);
+  });
+
+  it('Next is disabled on the last page without loop and wraps with loop', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <Carousel groupSize={3} defaultValue={6}>
+        {slides(9)}
+      </Carousel>,
+    );
+    expect(nextButton()).toHaveAttribute('aria-disabled', 'true');
+    rerender(
+      <Carousel groupSize={3} defaultValue={6} loop>
+        {slides(9)}
+      </Carousel>,
+    );
+    await user.click(nextButton());
+    expect(exposedIndexes()).toEqual([0, 1, 2]);
+  });
+
+  it('Previous wraps to the last page with loop', async () => {
+    const user = userEvent.setup();
+    render(
+      <Carousel groupSize={3} loop>
+        {slides(7)}
+      </Carousel>,
+    );
+    await user.click(prevButton());
+    expect(exposedIndexes()).toEqual([6]);
+  });
+
+  it.each([
+    [4, [3, 4, 5]],
+    [5, [3, 4, 5]],
+    [99, [6, 7, 8]],
+    [-3, [0, 1, 2]],
+  ])('a controlled value of %d shows the page that holds it', (value, expected) => {
+    render(
+      <Carousel groupSize={3} value={value}>
+        {slides(9)}
+      </Carousel>,
+    );
+    expect(exposedIndexes()).toEqual(expected);
+  });
+
+  it('keeps showing the last page when slides are removed under it', async () => {
+    const { rerender } = render(
+      <Carousel groupSize={3} defaultValue={6}>
+        {slides(9)}
+      </Carousel>,
+    );
+    rerender(
+      <Carousel groupSize={3} defaultValue={6}>
+        {slides(5)}
+      </Carousel>,
+    );
+    expect(exposedIndexes()).toEqual([3, 4]);
+    // Settle the observers the roving focus group and the sizing set up.
+    await act(async () => {});
+  });
+
+  it('a group larger than the slides is one page with both buttons disabled', () => {
+    render(<Carousel groupSize={5}>{slides(3)}</Carousel>);
+    expect(exposedIndexes()).toEqual([0, 1, 2]);
+    expect(prevButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(nextButton()).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('calls onValueChange once per page change in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Carousel groupSize={3} onValueChange={onValueChange}>
+          {slides(9)}
+        </Carousel>
+      </React.StrictMode>,
+    );
+    await user.click(nextButton());
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+  });
+
+  describe('autoplay by page', () => {
+    it('advances a page at a time and stops at the last page without loop', async () => {
+      vi.useFakeTimers();
+      render(
+        <Carousel groupSize={3} autoPlay autoPlayInterval={1000}>
+          {slides(9)}
+        </Carousel>,
+      );
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(exposedIndexes()).toEqual([3, 4, 5]);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(exposedIndexes()).toEqual([6, 7, 8]);
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(exposedIndexes()).toEqual([6, 7, 8]);
+      // Settle the observers the roving focus group and the sizing set up.
+      await act(async () => {});
+    });
+
+    it('wraps to the first page with loop', () => {
+      vi.useFakeTimers();
+      render(
+        <Carousel groupSize={3} autoPlay loop autoPlayInterval={1000}>
+          {slides(9)}
+        </Carousel>,
+      );
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(exposedIndexes()).toEqual([0, 1, 2]);
+    });
+
+    it('does not rotate when everything fits on one page', () => {
+      render(
+        <Carousel groupSize={5} autoPlay>
+          {slides(3)}
+        </Carousel>,
+      );
+      expect(region().querySelector('[data-carousel-rotation]')).toBeNull();
+    });
+  });
+
+  describe('auto size', () => {
+    function stubWidths(rootWidth: () => number, slideWidth: () => number) {
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return this.classList.contains('wave-carousel__viewport') ? rootWidth() : 0;
+      });
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return this.classList.contains('wave-carousel__slide') ? slideWidth() : 0;
+      });
+    }
+
+    it('shows as many slides as fit and follows a resize', async () => {
+      const ro = installResizeObserverMock();
+      let rootWidth = 300;
+      stubWidths(
+        () => rootWidth,
+        () => 100,
+      );
+      render(<Carousel groupSize="auto">{slides(9)}</Carousel>);
+      expect(exposedIndexes()).toEqual([0, 1, 2]);
+      expect(dots()).toHaveLength(3);
+      rootWidth = 200;
+      ro.trigger();
+      expect(exposedIndexes()).toEqual([0, 1]);
+      expect(dots()).toHaveLength(5);
+      ro.restore();
+      // Settle the observers the roving focus group and the sizing set up.
+      await act(async () => {});
+    });
+
+    it('snaps the shown index to the new page start when the page size changes', () => {
+      const ro = installResizeObserverMock();
+      let rootWidth = 100;
+      stubWidths(
+        () => rootWidth,
+        () => 100,
+      );
+      render(
+        <Carousel groupSize="auto" defaultValue={4}>
+          {slides(9)}
+        </Carousel>,
+      );
+      expect(exposedIndexes()).toEqual([4]);
+      rootWidth = 300;
+      ro.trigger();
+      expect(exposedIndexes()).toEqual([3, 4, 5]);
+      ro.restore();
+    });
+
+    it('shows one slide at a time before anything is measured', () => {
+      render(<Carousel groupSize="auto">{slides(4)}</Carousel>);
+      expect(exposedIndexes()).toEqual([0]);
+    });
+
+    it('lets the slides keep their own width', () => {
+      render(<Carousel groupSize="auto">{slides(4)}</Carousel>);
+      expect(slideElements()[0]).toHaveClass('w-auto', 'shrink-0');
+      expect(slideElements()[0]).not.toHaveClass('w-full');
+    });
+
+    it.each([
+      ['start', 0],
+      ['center', 25],
+      ['end', 50],
+    ] as const)(
+      'align=%s offsets the page by %dpx when the slides do not fill the viewport',
+      (align, px) => {
+        const ro = installResizeObserverMock();
+        stubWidths(
+          () => 250,
+          () => 100,
+        );
+        render(
+          <Carousel groupSize="auto" align={align}>
+            {slides(6)}
+          </Carousel>,
+        );
+        ro.trigger();
+        expect(track().style.transform).toBe(`translateX(${px}px)`);
+        ro.restore();
+      },
+    );
+  });
+
+  describe('focus group across the visible slides', () => {
+    const focusable = () =>
+      slideElements().filter((slide) => slide.hasAttribute('data-roving-value'));
+
+    it('makes the visible slides one roving group: one tab stop', () => {
+      render(<Carousel groupSize={3}>{slides(9)}</Carousel>);
+      expect(focusable()).toHaveLength(3);
+      expect(focusable().map((slide) => slide.tabIndex)).toEqual([0, -1, -1]);
+    });
+
+    it('groupSize 1 adds no focus group and no key handling', () => {
+      render(<Carousel>{slides(3)}</Carousel>);
+      expect(focusable()).toHaveLength(0);
+      expect(slideElements()[0]).not.toHaveAttribute('tabindex');
+    });
+
+    it('arrow keys move focus between the visible slides', async () => {
+      const user = userEvent.setup();
+      render(<Carousel groupSize={3}>{slides(9)}</Carousel>);
+      act(() => focusable()[0]!.focus());
+      await user.keyboard('{ArrowRight}');
+      expect(focusable()[1]).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(focusable()[0]).toHaveFocus();
+    });
+
+    it('an arrow past the last visible slide changes the page and focuses its first slide', async () => {
+      const user = userEvent.setup();
+      render(<Carousel groupSize={3}>{slides(9)}</Carousel>);
+      act(() => focusable()[2]!.focus());
+      await user.keyboard('{ArrowRight}');
+      expect(exposedIndexes()).toEqual([3, 4, 5]);
+      expect(focusable()[0]).toHaveFocus();
+      expect(slideElements()[3]).toHaveFocus();
+    });
+
+    it('an arrow before the first visible slide goes back a page and focuses its last slide', async () => {
+      const user = userEvent.setup();
+      render(
+        <Carousel groupSize={3} defaultValue={3}>
+          {slides(9)}
+        </Carousel>,
+      );
+      act(() => slideElements()[3]!.focus());
+      await user.keyboard('{ArrowLeft}');
+      expect(exposedIndexes()).toEqual([0, 1, 2]);
+      expect(slideElements()[2]).toHaveFocus();
+    });
+
+    it('stops at the ends without loop', async () => {
+      const user = userEvent.setup();
+      render(
+        <Carousel groupSize={3} defaultValue={6}>
+          {slides(9)}
+        </Carousel>,
+      );
+      act(() => slideElements()[8]!.focus());
+      await user.keyboard('{ArrowRight}');
+      expect(exposedIndexes()).toEqual([6, 7, 8]);
+      expect(slideElements()[8]).toHaveFocus();
+    });
+
+    it('mirrors the arrows in right-to-left layouts', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Carousel groupSize={3}>{slides(9)}</Carousel>, { dir: 'rtl' });
+      act(() => focusable()[0]!.focus());
+      await user.keyboard('{ArrowLeft}');
+      expect(focusable()[1]).toHaveFocus();
+    });
+
+    it('leaves the arrow keys alone inside an input in a slide', async () => {
+      const user = userEvent.setup();
+      render(
+        <Carousel groupSize={3}>
+          <Carousel.Item>
+            <input aria-label="Field" />
+          </Carousel.Item>
+          {slides(2)}
+        </Carousel>,
+      );
+      await user.click(screen.getByRole('textbox', { name: 'Field' }));
+      await user.keyboard('{ArrowRight}');
+      expect(screen.getByRole('textbox', { name: 'Field' })).toHaveFocus();
+    });
+  });
+
+  it('is axe clean with groups', async () => {
+    const { container } = render(
+      <Carousel groupSize={3} aria-label="Gallery">
+        {slides(9)}
+      </Carousel>,
+    );
+    await expectNoA11yViolations(container);
+  });
+
+  it('types groupSize, align and labels.slides', () => {
+    expectTypeOf<CarouselProps['groupSize']>().toEqualTypeOf<number | 'auto' | undefined>();
+    expectTypeOf<CarouselProps['align']>().toEqualTypeOf<'start' | 'center' | 'end' | undefined>();
+    expectTypeOf<NonNullable<CarouselLabels['slides']>>().toEqualTypeOf<
+      (start: number, end: number, total: number) => string
+    >();
+  });
+});
+
+describe('Carousel dragging (0.13)', () => {
+  const CAPTURE_METHODS = [
+    'setPointerCapture',
+    'releasePointerCapture',
+    'hasPointerCapture',
+  ] as const;
+  let saved: Array<[string, PropertyDescriptor | undefined]> = [];
+  let clock = 0;
+
+  beforeEach(() => {
+    clock = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    // jsdom has no pointer capture: a stand-in that remembers the captured pointer ids.
+    const captured = new WeakMap<Element, Set<number>>();
+    saved = CAPTURE_METHODS.map((name) => [
+      name,
+      Object.getOwnPropertyDescriptor(Element.prototype, name),
+    ]);
+    Object.defineProperties(Element.prototype, {
+      setPointerCapture: {
+        configurable: true,
+        writable: true,
+        value(this: Element, pointerId: number) {
+          const ids = captured.get(this) ?? new Set<number>();
+          ids.add(pointerId);
+          captured.set(this, ids);
+        },
+      },
+      releasePointerCapture: {
+        configurable: true,
+        writable: true,
+        value(this: Element, pointerId: number) {
+          captured.get(this)?.delete(pointerId);
+        },
+      },
+      hasPointerCapture: {
+        configurable: true,
+        writable: true,
+        value(this: Element, pointerId: number) {
+          return captured.get(this)?.has(pointerId) ?? false;
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(Element.prototype, name, descriptor);
+      else Reflect.deleteProperty(Element.prototype, name);
+    }
+  });
+
+  /** A 400 px wide carousel of five slides; `dir` mirrors it. */
+  function renderDraggable(props: Partial<CarouselProps> = {}, dir?: 'rtl') {
+    const onValueChange = vi.fn();
+    const ui = (
+      <Carousel draggable onValueChange={onValueChange} {...props}>
+        <Carousel.Item>
+          <p>Slide 1 content</p>
+          <button type="button">Inside action</button>
+          <input aria-label="Notes" />
+        </Carousel.Item>
+        {slides(4)}
+      </Carousel>
+    );
+    if (dir) renderWithProviders(ui, { dir });
+    else render(ui);
+    const el = track();
+    mockRect(el.parentElement as Element, { left: 0, top: 0, width: 400, height: 200 });
+    return { el, onValueChange };
+  }
+
+  const pointer = (pointerType: string, x: number, pointerId = 1) => ({
+    pointerId,
+    pointerType,
+    isPrimary: true,
+    button: 0,
+    clientX: x,
+    clientY: 50,
+  });
+
+  /** Presses at `from`, moves to `to` after `ms` and releases at once. */
+  function drag(el: HTMLElement, from: number, to: number, ms: number, pointerType = 'mouse') {
+    act(() => {
+      fireEvent.pointerDown(el, pointer(pointerType, from));
+    });
+    clock += ms;
+    act(() => {
+      fireEvent.pointerMove(el, pointer(pointerType, to));
+    });
+    act(() => {
+      fireEvent.pointerUp(el, pointer(pointerType, to));
+    });
+  }
+
+  it.each(['mouse', 'touch', 'pen'])(
+    'a slow %s drag past a quarter of the width shows the next page',
+    (type) => {
+      const { el, onValueChange } = renderDraggable();
+      drag(el, 300, 150, 1000, type);
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+      expect(exposedSlides()).toEqual([2]);
+    },
+  );
+
+  it('a drag towards the end shows the previous page', () => {
+    const { el, onValueChange } = renderDraggable({ defaultValue: 2 });
+    drag(el, 100, 250, 1000);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it('a short slow drag snaps back and changes nothing', () => {
+    const { el, onValueChange } = renderDraggable();
+    drag(el, 300, 250, 1000);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(exposedSlides()).toEqual([1]);
+    expect(el.style.transform).toBe('translateX(0%)');
+    expect(el).not.toHaveAttribute('data-dragging');
+  });
+
+  it('a fast short flick commits', () => {
+    const { el, onValueChange } = renderDraggable();
+    drag(el, 300, 260, 40);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it('a flick on the first page towards the end does not leave the carousel', () => {
+    const { el, onValueChange } = renderDraggable();
+    drag(el, 100, 200, 40);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(exposedSlides()).toEqual([1]);
+  });
+
+  it('a pointer that rests before the release has no speed', () => {
+    const { el, onValueChange } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+    });
+    clock += 20;
+    act(() => {
+      fireEvent.pointerMove(el, pointer('mouse', 250));
+    });
+    clock += 500;
+    act(() => {
+      fireEvent.pointerUp(el, pointer('mouse', 250));
+    });
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('mirrors the drag direction in right-to-left layouts', () => {
+    const { el, onValueChange } = renderDraggable({}, 'rtl');
+    drag(el, 300, 150, 1000);
+    expect(onValueChange).not.toHaveBeenCalled();
+    drag(el, 100, 250, 1000);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it('follows the pointer while dragging and marks it', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    act(() => {
+      fireEvent.pointerMove(el, pointer('mouse', 240));
+    });
+    expect(el).toHaveAttribute('data-dragging', '');
+    expect(el.style.transform).toBe('translateX(calc(0% + -60px))');
+    expect(el).not.toHaveClass('transition-transform');
+    act(() => {
+      fireEvent.pointerUp(el, pointer('mouse', 240));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el.style.transform).toBe('translateX(0%)');
+    expect(el).toHaveClass('transition-transform');
+  });
+
+  it('does not start a drag below a few pixels', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerMove(el, pointer('mouse', 298));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el.hasPointerCapture(1)).toBe(false);
+  });
+
+  it('captures the pointer once the drag starts', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerMove(el, pointer('mouse', 280));
+    });
+    expect(el.hasPointerCapture(1)).toBe(true);
+  });
+
+  it('swallows the click that ends a drag once, and lets a later click through', () => {
+    const { el } = renderDraggable();
+    const onClick = vi.fn();
+    const action = screen.getByRole('button', { name: 'Inside action', hidden: true });
+    action.addEventListener('click', onClick);
+    drag(el, 300, 100, 1000);
+    // The browser's click that follows the release is dropped before it reaches the slide.
+    const dragClick = new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 });
+    act(() => {
+      action.dispatchEvent(dragClick);
+    });
+    expect(onClick).not.toHaveBeenCalled();
+    expect(dragClick.defaultPrevented).toBe(true);
+    act(() => {
+      action.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    });
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('a plain click on a button inside a slide is not swallowed', () => {
+    const { el } = renderDraggable();
+    const onClick = vi.fn();
+    const action = screen.getByRole('button', { name: 'Inside action' });
+    action.addEventListener('click', onClick);
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerUp(el, pointer('mouse', 300));
+    });
+    act(() => action.click());
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('a cancelled pointer snaps back', () => {
+    const { el, onValueChange } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('touch', 300));
+      fireEvent.pointerMove(el, pointer('touch', 100));
+    });
+    expect(el).toHaveAttribute('data-dragging');
+    act(() => {
+      fireEvent.pointerCancel(el, pointer('touch', 100));
+    });
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el.style.transform).toBe('translateX(0%)');
+  });
+
+  it('ignores a secondary button and a non-primary pointer', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, { ...pointer('mouse', 300), button: 2 });
+      fireEvent.pointerMove(el, pointer('mouse', 100));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    act(() => {
+      fireEvent.pointerDown(el, { ...pointer('touch', 300, 2), isPrimary: false });
+      fireEvent.pointerMove(el, pointer('touch', 100, 2));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+  });
+
+  it('attaches nothing without draggable', () => {
+    const { el, onValueChange } = renderDraggable({ draggable: false });
+    drag(el, 300, 50, 40);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el).not.toHaveClass('touch-pan-y');
+  });
+
+  it('lets the page scroll vertically over a draggable track', () => {
+    const { el } = renderDraggable();
+    expect(el).toHaveClass('touch-pan-y');
+  });
+
+  it('pauses autoplay while dragging and resumes after', () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { el, onValueChange } = renderDraggable({ autoPlay: true, autoPlayInterval: 1000 });
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerMove(el, pointer('mouse', 290));
+    });
+    act(() => {
+      vi.advanceTimersByTime(3500);
+    });
+    expect(onValueChange).not.toHaveBeenCalled();
+    act(() => {
+      fireEvent.pointerUp(el, pointer('mouse', 290));
+    });
+    act(() => {
+      vi.advanceTimersByTime(1100);
+    });
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it('moves by pages with groupSize', async () => {
+    const { el, onValueChange } = renderDraggable({ groupSize: 2 });
+    drag(el, 300, 100, 1000);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
+    // Settle the observers the roving focus group and the sizing set up.
+    await act(async () => {});
+  });
+
+  it('forgets a press that was released outside the track', () => {
+    const { el } = renderDraggable();
+    act(() => {
+      fireEvent.pointerDown(el, pointer('mouse', 300));
+      fireEvent.pointerMove(el, pointer('mouse', 299));
+    });
+    // The release lands elsewhere (the picker, outside the carousel): the track never sees it.
+    act(() => {
+      fireEvent.pointerUp(document.body, pointer('mouse', 299));
+    });
+    act(() => {
+      fireEvent.pointerMove(el, { ...pointer('mouse', 200), buttons: 0 });
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(el.style.transform).toBe('translateX(0%)');
+  });
+
+  it('does not swallow a keyboard or programmatic click after a touch drag', () => {
+    const { el } = renderDraggable();
+    const onClick = vi.fn();
+    const action = screen.getByRole('button', { name: 'Inside action' });
+    action.addEventListener('click', onClick);
+    // A touch drag produces no click of its own.
+    drag(el, 300, 100, 1000, 'touch');
+    act(() => {
+      action.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+    });
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('does not start a drag from a text field inside a slide', () => {
+    const { el } = renderDraggable();
+    const input = screen.getByRole('textbox', { name: 'Notes', hidden: true });
+    act(() => {
+      fireEvent.pointerDown(input, pointer('mouse', 300));
+      fireEvent.pointerMove(input, pointer('mouse', 200));
+    });
+    expect(el).not.toHaveAttribute('data-dragging');
+  });
+
+  it('calls onValueChange once per change in StrictMode', () => {
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Carousel draggable onValueChange={onValueChange}>
+          {slides(3)}
+        </Carousel>
+      </React.StrictMode>,
+    );
+    const el = track();
+    mockRect(el.parentElement as Element, { left: 0, top: 0, width: 400, height: 200 });
+    drag(el, 300, 100, 1000);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+});
+
+describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
+  const thumbs = (n: number) =>
+    Array.from({ length: n }, (_, i) => (
+      <Carousel.Item key={i} thumbnail={`/thumb-${i + 1}.png`}>
+        <p>Slide {i + 1} content</p>
+      </Carousel.Item>
+    ));
+  const LAYOUTS = ['overlay', 'inline', 'overlay-wide', 'inline-wide'] as const;
+  const pickerButtons = () => dots();
+
+  describe('thumbnails', () => {
+    it('shows the thumbnail of each slide in its picker button, keeping the button name', () => {
+      render(<Carousel>{thumbs(3)}</Carousel>);
+      const buttons = pickerButtons();
+      expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+        'Slide 1 of 3',
+        'Slide 2 of 3',
+        'Slide 3 of 3',
+      ]);
+      const images = buttons.map((button) => button.querySelector('img'));
+      expect(images.map((image) => image?.getAttribute('src'))).toEqual([
+        '/thumb-1.png',
+        '/thumb-2.png',
+        '/thumb-3.png',
+      ]);
+      for (const image of images) {
+        expect(image).toHaveAttribute('alt', '');
+        expect(image).toHaveClass(carouselItemClassNames.thumbnail);
+      }
+      expect(currentDot()).toBe(buttons[0]);
+      expect(region().querySelector(`.${carouselClassNames.pickerIndicator}`)).toBeNull();
+    });
+
+    it('takes an object of img attributes', () => {
+      render(
+        <Carousel>
+          <Carousel.Item thumbnail={{ src: '/a.png', className: 'custom-thumb', loading: 'lazy' }}>
+            <p>One</p>
+          </Carousel.Item>
+          <Carousel.Item>
+            <p>Two</p>
+          </Carousel.Item>
+        </Carousel>,
+      );
+      const image = pickerButtons()[0]!.querySelector('img')!;
+      expect(image).toHaveAttribute('src', '/a.png');
+      expect(image).toHaveAttribute('loading', 'lazy');
+      expect(image).toHaveClass('custom-thumb', carouselItemClassNames.thumbnail);
+    });
+
+    it('keeps the dot of a slide without a thumbnail', () => {
+      render(
+        <Carousel>
+          <Carousel.Item thumbnail="/a.png">One</Carousel.Item>
+          <Carousel.Item>Two</Carousel.Item>
+        </Carousel>,
+      );
+      expect(pickerButtons()[0]!.querySelector('img')).not.toBeNull();
+      expect(pickerButtons()[1]!.querySelector('img')).toBeNull();
+      expect(
+        pickerButtons()[1]!.querySelector(`.${carouselClassNames.pickerIndicator}`),
+      ).not.toBeNull();
+    });
+
+    it('renders no image and keeps the dots without any thumbnail', () => {
+      render(<Carousel>{slides(3)}</Carousel>);
+      expect(region().querySelector('img')).toBeNull();
+      expect(region().querySelectorAll(`.${carouselClassNames.pickerIndicator}`)).toHaveLength(3);
+    });
+
+    it('does not put the thumbnail prop on the slide element', () => {
+      render(<Carousel>{thumbs(2)}</Carousel>);
+      expect(
+        slideGroups()[0]!.querySelector(`.${carouselItemClassNames.root}`),
+      ).not.toHaveAttribute('thumbnail');
+    });
+
+    it('shows the thumbnail of the first slide of each page with groupSize', () => {
+      render(<Carousel groupSize={2}>{thumbs(5)}</Carousel>);
+      expect(
+        pickerButtons().map((button) => button.querySelector('img')?.getAttribute('src')),
+      ).toEqual(['/thumb-1.png', '/thumb-3.png', '/thumb-5.png']);
+    });
+
+    it('moves to the slide of the thumbnail that is clicked', async () => {
+      const user = userEvent.setup();
+      render(<Carousel>{thumbs(3)}</Carousel>);
+      await user.click(pickerButtons()[2]!);
+      expect(exposedSlides()).toEqual([3]);
+      expect(currentDot()).toBe(pickerButtons()[2]);
+    });
+
+    it('has no accessibility violations', async () => {
+      render(<Carousel aria-label="Gallery">{thumbs(3)}</Carousel>);
+      await expectNoA11yViolations();
+    });
+  });
+
+  describe('controlsLayout', () => {
+    it('defaults to overlay and renders the layout and appearance as data attributes', () => {
+      render(<Carousel>{slides(3)}</Carousel>);
+      expect(region()).toHaveAttribute('data-controls-layout', 'overlay');
+      expect(region()).toHaveAttribute('data-appearance', 'flat');
+    });
+
+    it.each(LAYOUTS)('renders data-controls-layout=%s', (layout) => {
+      render(<Carousel controlsLayout={layout}>{slides(3)}</Carousel>);
+      expect(region()).toHaveAttribute('data-controls-layout', layout);
+    });
+
+    it.each(['overlay', 'overlay-wide'] as const)(
+      '%s puts the buttons over the slides, inside the viewport after the track',
+      (layout) => {
+        render(<Carousel controlsLayout={layout}>{slides(3)}</Carousel>);
+        const viewport = region().querySelector<HTMLElement>(`.${carouselClassNames.viewport}`)!;
+        expect(prevButton().parentElement).toBe(viewport);
+        expect(nextButton().parentElement).toBe(viewport);
+        expect(prevButton()).toHaveClass('absolute');
+        expect(nextButton()).toHaveClass('absolute');
+        expect(viewport.firstElementChild).toBe(track());
+      },
+    );
+
+    it.each(['inline', 'inline-wide'] as const)(
+      '%s flanks the viewport with the buttons, outside the slides',
+      (layout) => {
+        render(<Carousel controlsLayout={layout}>{slides(3)}</Carousel>);
+        const viewport = region().querySelector<HTMLElement>(`.${carouselClassNames.viewport}`)!;
+        expect(prevButton().nextElementSibling).toBe(viewport);
+        expect(viewport.nextElementSibling).toBe(nextButton());
+        expect(viewport).not.toContainElement(prevButton());
+        expect(viewport).not.toContainElement(nextButton());
+        expect(prevButton()).not.toHaveClass('absolute');
+      },
+    );
+
+    it('overlay-wide makes full-height strips and overlay keeps round buttons', () => {
+      const { unmount } = render(<Carousel controlsLayout="overlay-wide">{slides(3)}</Carousel>);
+      expect(prevButton()).toHaveClass('inset-y-0', 'start-0');
+      expect(nextButton()).toHaveClass('inset-y-0', 'end-0');
+      unmount();
+      render(<Carousel>{slides(3)}</Carousel>);
+      expect(prevButton()).toHaveClass('rounded-full', 'start-2');
+      expect(nextButton()).toHaveClass('rounded-full', 'end-2');
+    });
+
+    it('inline-wide stretches the buttons over the full height', () => {
+      render(<Carousel controlsLayout="inline-wide">{slides(3)}</Carousel>);
+      expect(prevButton()).toHaveClass('self-stretch');
+      expect(nextButton()).toHaveClass('self-stretch');
+    });
+
+    it.each(LAYOUTS)('%s keeps the rotation control the first focusable element', (layout) => {
+      render(
+        <Carousel controlsLayout={layout} autoPlay loop>
+          {slides(3)}
+        </Carousel>,
+      );
+      const tabbable = getTabbableElements(region());
+      expect(tabbable[0]).toBe(screen.getByRole('button', { name: 'Pause slide rotation' }));
+      expect(tabbable).toContain(prevButton());
+      expect(tabbable).toContain(nextButton());
+    });
+
+    it('keeps the rotation control at the start corner, clear of an inline Previous button', () => {
+      const { unmount } = render(<Carousel autoPlay>{slides(3)}</Carousel>);
+      const rotation = () => screen.getByRole('button', { name: /slide rotation/ });
+      expect(rotation()).toHaveClass('top-2', 'start-2');
+      unmount();
+      render(
+        <Carousel autoPlay controlsLayout="inline">
+          {slides(3)}
+        </Carousel>,
+      );
+      expect(rotation()).toHaveClass('top-2', 'start-12');
+    });
+
+    it.each(LAYOUTS)('%s stacks the rotation control above the edge strips', (layout) => {
+      render(
+        <Carousel controlsLayout={layout} autoPlay>
+          {slides(3)}
+        </Carousel>,
+      );
+      const rotation = screen.getByRole('button', { name: /slide rotation/ });
+      expect(rotation).toHaveClass('z-20');
+      expect(rotation).not.toHaveClass('z-10');
+    });
+
+    it.each(LAYOUTS)('%s has no accessibility violations', async (layout) => {
+      render(
+        <Carousel aria-label="Promo" controlsLayout={layout} autoPlay>
+          {slides(3)}
+        </Carousel>,
+      );
+      await expectNoA11yViolations();
+    });
+
+    it('mirrors the chevrons in right-to-left layouts in every layout', () => {
+      renderWithProviders(<Carousel controlsLayout="inline">{slides(3)}</Carousel>, { dir: 'rtl' });
+      expect(prevButton().querySelector('svg')).toHaveClass('-scale-x-100');
+    });
+
+    it('measures the viewport, not the whole carousel, for groupSize auto', () => {
+      const ro = installResizeObserverMock();
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        if (this.classList.contains('wave-carousel__viewport')) return 200;
+        return this.classList.contains('wave-carousel') ? 300 : 0;
+      });
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return this.classList.contains('wave-carousel__slide') ? 100 : 0;
+      });
+      render(
+        <Carousel controlsLayout="inline" groupSize="auto">
+          {slides(6)}
+        </Carousel>,
+      );
+      expect(slideGroups().filter((slide) => !slide.hasAttribute('aria-hidden'))).toHaveLength(2);
+      ro.restore();
+    });
+  });
+
+  describe('appearance', () => {
+    it('flat adds no corners or shadow', () => {
+      render(<Carousel>{slides(3)}</Carousel>);
+      expect(region()).not.toHaveClass('rounded-md');
+      expect(region()).not.toHaveClass('shadow-4');
+    });
+
+    it('elevated rounds the corners and adds a shadow', () => {
+      render(<Carousel appearance="elevated">{slides(3)}</Carousel>);
+      expect(region()).toHaveAttribute('data-appearance', 'elevated');
+      expect(region()).toHaveClass('rounded-md', 'shadow-4');
+    });
+
+    it('renders the data attributes on a carousel without slides too', () => {
+      const { container } = render(<Carousel appearance="elevated" controlsLayout="inline" />);
+      expect(container.firstElementChild).toHaveAttribute('data-appearance', 'elevated');
+      expect(container.firstElementChild).toHaveAttribute('data-controls-layout', 'inline');
+    });
+  });
+
+  describe('Carousel.Button', () => {
+    it('exposes the flat name', () => {
+      expect(CarouselButton).toBe(Carousel.Button);
+    });
+
+    it('replaces the built-in button of its direction and keeps the other', () => {
+      render(
+        <Carousel>
+          {slides(3)}
+          <Carousel.Button direction="next" data-testid="custom-next">
+            Go
+          </Carousel.Button>
+        </Carousel>,
+      );
+      expect(screen.getAllByRole('button', { name: 'Next slide' })).toHaveLength(1);
+      expect(screen.getByTestId('custom-next')).toHaveTextContent('Go');
+      expect(screen.getByTestId('custom-next')).toBe(nextButton());
+      expect(screen.getByTestId('custom-next')).toHaveClass(carouselButtonClassNames.root);
+      expect(prevButton()).toHaveClass(carouselClassNames.previousButton);
+      expect(screen.getByTestId('custom-next')).not.toHaveClass(carouselClassNames.nextButton);
+    });
+
+    it('is named, wired to the track and disabled like the built-in ones', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Carousel onValueChange={onValueChange}>
+          {slides(3)}
+          <Carousel.Button direction="previous" />
+          <Carousel.Button direction="next" />
+        </Carousel>,
+      );
+      expect(prevButton()).toHaveAttribute('aria-controls', track().id);
+      expect(nextButton()).toHaveAttribute('aria-controls', track().id);
+      expect(prevButton()).toHaveAttribute('aria-disabled', 'true');
+      expect(prevButton()).toHaveAttribute('data-disabled');
+      expect(prevButton()).not.toBeDisabled();
+      await user.click(prevButton());
+      expect(onValueChange).not.toHaveBeenCalled();
+      await user.click(nextButton());
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+      expect(prevButton()).not.toHaveAttribute('aria-disabled');
+      await user.click(nextButton());
+      expect(nextButton()).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('uses the localized labels and lets aria-label win', () => {
+      render(
+        <Carousel labels={{ previous: 'Forrige', next: 'Neste' }}>
+          {slides(3)}
+          <Carousel.Button direction="previous" />
+          <Carousel.Button direction="next" aria-label="Weiter" />
+        </Carousel>,
+      );
+      expect(screen.getByRole('button', { name: 'Forrige' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Weiter' })).toBeInTheDocument();
+    });
+
+    it('composes the consumer onClick before moving, and does not call it while disabled', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <Carousel>
+          {slides(2)}
+          <Carousel.Button direction="previous" onClick={onClick} />
+          <Carousel.Button direction="next" onClick={onClick} />
+        </Carousel>,
+      );
+      await user.click(prevButton());
+      expect(onClick).not.toHaveBeenCalled();
+      await user.click(nextButton());
+      expect(onClick).toHaveBeenCalledOnce();
+      expect(exposedSlides()).toEqual([2]);
+    });
+
+    it('does not move when the consumer onClick prevents the default', async () => {
+      const user = userEvent.setup();
+      render(
+        <Carousel>
+          {slides(3)}
+          <Carousel.Button direction="next" onClick={(event) => event.preventDefault()} />
+        </Carousel>,
+      );
+      await user.click(nextButton());
+      expect(exposedSlides()).toEqual([1]);
+    });
+
+    it('draws the children instead of the chevron, and the chevron mirrors in RTL', () => {
+      const { unmount } = render(
+        <Carousel>
+          {slides(3)}
+          <Carousel.Button direction="next">
+            <span data-testid="glyph">→</span>
+          </Carousel.Button>
+        </Carousel>,
+      );
+      expect(within(nextButton()).getByTestId('glyph')).toBeInTheDocument();
+      expect(nextButton().querySelector('svg')).toBeNull();
+      unmount();
+      renderWithProviders(
+        <Carousel>
+          {slides(3)}
+          <Carousel.Button direction="next" />
+        </Carousel>,
+        { dir: 'rtl' },
+      );
+      expect(nextButton().querySelector('svg')).toHaveClass('-scale-x-100');
+    });
+
+    it('takes the place of the built-in button in the layout', () => {
+      render(
+        <Carousel controlsLayout="inline">
+          {slides(3)}
+          <Carousel.Button direction="previous" />
+        </Carousel>,
+      );
+      const viewport = region().querySelector(`.${carouselClassNames.viewport}`);
+      expect(prevButton().nextElementSibling).toBe(viewport);
+      expect(prevButton()).toHaveClass('relative');
+    });
+
+    it('keeps type="button" before the rest and the data-direction attribute', () => {
+      render(
+        <Carousel>
+          {slides(2)}
+          <Carousel.Button direction="next" />
+        </Carousel>,
+      );
+      expect(nextButton()).toHaveAttribute('type', 'button');
+      expect(nextButton()).toHaveAttribute('data-direction', 'next');
+    });
+
+    it('does not submit a surrounding form', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+      render(
+        <form onSubmit={onSubmit}>
+          <Carousel>
+            {slides(3)}
+            <Carousel.Button direction="next" />
+          </Carousel>
+        </form>,
+      );
+      await user.click(nextButton());
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('is not a slide: no warning, and other children still warn', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Carousel>
+          {slides(2)}
+          <Carousel.Button direction="next" />
+          <p>stray</p>
+        </Carousel>,
+      );
+      expect(warn).toHaveBeenCalledOnce();
+      expect(String(warn.mock.calls[0]![0])).toContain('Carousel: only `Carousel.Item`');
+      expect(slideGroups()).toHaveLength(2);
+    });
+
+    it('renders only the first Carousel.Button of a direction and warns about the other', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Carousel>
+          {slides(3)}
+          <Carousel.Button direction="next" data-testid="first" />
+          <Carousel.Button direction="next" data-testid="second" />
+        </Carousel>,
+      );
+      expect(screen.queryByTestId('second')).toBeNull();
+      expect(screen.getByTestId('first')).toBeInTheDocument();
+      expect(warn).toHaveBeenCalledOnce();
+    });
+
+    it('finds the button inside Fragments', () => {
+      render(
+        <Carousel>
+          {slides(3)}
+          <>
+            <Carousel.Button direction="next" data-testid="in-fragment" />
+          </>
+        </Carousel>,
+      );
+      expect(screen.getByTestId('in-fragment')).toBe(nextButton());
+    });
+
+    it('throws outside a Carousel in development', () => {
+      expectThrows(
+        <CarouselButton direction="next" />,
+        '[WaveUI] Carousel.Button must be used within Carousel',
+      );
+    });
+
+    it('logs once and renders an inert disabled button outside a Carousel in production', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(<CarouselButton direction="next" aria-label="Orphan" />);
+      expect(screen.getByRole('button', { name: 'Orphan' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      expect(error).toHaveBeenCalledExactlyOnceWith(
+        '[WaveUI] Carousel.Button must be used within Carousel',
+      );
+      vi.unstubAllEnvs();
+    });
+
+    it('is recognised when written in a Server Component', () => {
+      const Button = asClientReference(CarouselButton);
+      const Item = asClientReference(CarouselItem);
+      const lazy = renderToString(
+        <Carousel aria-label="Promo">
+          <Item>One</Item>
+          <Item>Two</Item>
+          <Button direction="next" data-testid="lazy-next" />
+        </Carousel>,
+      );
+      const plain = renderToString(
+        <Carousel aria-label="Promo">
+          <CarouselItem>One</CarouselItem>
+          <CarouselItem>Two</CarouselItem>
+          <CarouselButton direction="next" data-testid="lazy-next" />
+        </Carousel>,
+      );
+      expect(lazy).toBe(plain);
+      expect(plain).toContain('data-testid="lazy-next"');
+    });
+
+    it('has no accessibility violations in any layout', async () => {
+      render(
+        <Carousel aria-label="Promo" controlsLayout="inline-wide">
+          {slides(3)}
+          <Carousel.Button direction="previous" />
+          <Carousel.Button direction="next" />
+        </Carousel>,
+      );
+      await expectNoA11yViolations();
     });
   });
 });

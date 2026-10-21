@@ -272,141 +272,143 @@ function createToaster() {
   // src/lib/dev.ts reads the bundler-injected mode at call time.
   const dev = (exportSyntax) =>
     `function isDevEnvironment() {\n  try {\n    return process.env.NODE_ENV !== "production";\n  } catch {\n    return true;\n  }\n}\n${exportSyntax}`;
-  return withPhase7Modules(
-    withPhase6Modules({
-      'package.json': JSON.stringify({
-        name: 'wave-fixture',
-        type: 'module',
-        sideEffects: ['*.css'],
-        dependencies: { clsx: '^2.1.1' },
-        peerDependencies: { react: '^19.0.0' },
+  return withPhase8Modules(
+    withPhase7Modules(
+      withPhase6Modules({
+        'package.json': JSON.stringify({
+          name: 'wave-fixture',
+          type: 'module',
+          sideEffects: ['*.css'],
+          dependencies: { clsx: '^2.1.1' },
+          peerDependencies: { react: '^19.0.0' },
+        }),
+        'dist/lib/cn.mjs':
+          "export function cn(...inputs) { return inputs.filter(Boolean).join(' '); }\n",
+        'dist/lib/cn.cjs':
+          "exports.cn = function cn(...inputs) { return inputs.filter(Boolean).join(' '); };\n",
+        'dist/lib/classNames.mjs':
+          "export const buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
+          "export const dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n" +
+          "export const infoButtonClassNames = { root: 'wave-info-button', info: 'wave-info-button__info' };\n",
+        'dist/lib/classNames.cjs':
+          "exports.buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
+          "exports.dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n" +
+          "exports.infoButtonClassNames = { root: 'wave-info-button', info: 'wave-info-button__info' };\n",
+        'dist/lib/dev.mjs': dev('export const isDev = isDevEnvironment();\n'),
+        'dist/lib/dev.cjs': dev('exports.isDev = isDevEnvironment();\n'),
+        'dist/hooks/useThing.mjs': `${DIRECTIVE}import { useState } from 'react';\nexport function useThing() { return useState(0); }\n`,
+        'dist/hooks/useThing.cjs': `${DIRECTIVE}const react = require('react');\nexports.useThing = function useThing() { return react.useState(0); };\n`,
+        'dist/components/button/Button.mjs': button.esm,
+        'dist/components/button/Button.cjs': button.cjs,
+        'dist/components/input/Field.mjs': field.esm,
+        'dist/components/input/Field.cjs': field.cjs,
+        'dist/components/data-display/InfoButton.mjs': infoButton.esm,
+        'dist/components/data-display/InfoButton.cjs': infoButton.cjs,
+        'dist/components/layout/Card.mjs': card.esm,
+        'dist/components/layout/Card.cjs': card.cjs,
+        'dist/components/overlays/Dialog.mjs': dialog.esm,
+        'dist/components/overlays/Dialog.cjs': dialog.cjs,
+        'dist/hooks/usePresence.mjs': usePresence.esm,
+        'dist/hooks/usePresence.cjs': usePresence.cjs,
+        'dist/components/motion/Presence.mjs': presence.esm,
+        'dist/components/motion/Presence.cjs': presence.cjs,
+        'dist/components/navigation/Menu.mjs': menu.esm,
+        'dist/components/navigation/Menu.cjs': menu.cjs,
+        'dist/components/input/ColorArea.mjs': colorArea.esm,
+        'dist/components/input/ColorArea.cjs': colorArea.cjs,
+        'dist/components/input/ColorSlider.mjs': colorSlider.esm,
+        'dist/components/input/ColorSlider.cjs': colorSlider.cjs,
+        'dist/components/input/AlphaSlider.mjs': alphaSlider.esm,
+        'dist/components/input/AlphaSlider.cjs': alphaSlider.cjs,
+        'dist/components/feedback/Toaster.mjs': toaster.esm,
+        'dist/components/feedback/Toaster.cjs': toaster.cjs,
+        'dist/lib/date.mjs': `${dateHelpers}export { addDays };\n`,
+        'dist/lib/date.cjs': `${dateHelpers}exports.addDays = addDays;\n`,
+        'dist/hooks/useActiveDescendant.mjs': useActiveDescendant.esm,
+        'dist/hooks/useActiveDescendant.cjs': useActiveDescendant.cjs,
+        'dist/hooks/useListbox.mjs': useListbox.esm,
+        'dist/hooks/useListbox.cjs': useListbox.cjs,
+        'dist/components/input/Option.mjs': option.esm,
+        'dist/components/input/Option.cjs': option.cjs,
+        'dist/components/input/Listbox.mjs': listbox.esm,
+        'dist/components/input/Listbox.cjs': listbox.cjs,
+        'dist/components/input/Dropdown.mjs': dropdown.esm,
+        'dist/components/input/Dropdown.cjs': dropdown.cjs,
+        'dist/components/input/Calendar.mjs': calendar.esm,
+        'dist/components/input/Calendar.cjs': calendar.cjs,
+        'dist/lib/color.mjs': `${colorHelpers}export { hsvToHex, hexToHsv };\n`,
+        'dist/lib/color.cjs': `${colorHelpers}exports.hsvToHex = hsvToHex;\nexports.hexToHsv = hexToHsv;\n`,
+        'dist/lib/toaster.mjs': `${toasterHandle}export { createToaster };\n`,
+        'dist/lib/toaster.cjs': `${toasterHandle}exports.createToaster = createToaster;\n`,
+        'dist/index.mjs':
+          "export { cn } from './lib/cn.mjs';\n" +
+          "export { buttonClassNames, dialogContentClassNames } from './lib/classNames.mjs';\n" +
+          "export { infoButtonClassNames } from './lib/classNames.mjs';\n" +
+          "export { useThing } from './hooks/useThing.mjs';\n" +
+          "export { Button } from './components/button/Button.mjs';\n" +
+          "export { Field } from './components/input/Field.mjs';\n" +
+          "export { InfoButton } from './components/data-display/InfoButton.mjs';\n" +
+          "export { Card, CardHeader } from './components/layout/Card.mjs';\n" +
+          "export { Dialog, DialogTrigger, DialogContent } from './components/overlays/Dialog.mjs';\n" +
+          "export { usePresence } from './hooks/usePresence.mjs';\n" +
+          "export { Presence } from './components/motion/Presence.mjs';\n" +
+          "export { Menu } from './components/navigation/Menu.mjs';\n" +
+          "export { hsvToHex, hexToHsv } from './lib/color.mjs';\n" +
+          "export { createToaster } from './lib/toaster.mjs';\n" +
+          "export { ColorArea } from './components/input/ColorArea.mjs';\n" +
+          "export { ColorSlider } from './components/input/ColorSlider.mjs';\n" +
+          "export { AlphaSlider } from './components/input/AlphaSlider.mjs';\n" +
+          "export { Toaster } from './components/feedback/Toaster.mjs';\n" +
+          "export { addDays } from './lib/date.mjs';\n" +
+          "export { useActiveDescendant } from './hooks/useActiveDescendant.mjs';\n" +
+          "export { Listbox } from './components/input/Listbox.mjs';\n" +
+          "export { Dropdown } from './components/input/Dropdown.mjs';\n" +
+          "export { Calendar } from './components/input/Calendar.mjs';\n",
+        'dist/index.cjs':
+          "Object.defineProperty(exports, '__esModule', { value: true });\n" +
+          "const cn = require('./lib/cn.cjs');\n" +
+          "const classNames = require('./lib/classNames.cjs');\n" +
+          "const hook = require('./hooks/useThing.cjs');\n" +
+          "const button = require('./components/button/Button.cjs');\n" +
+          "const field = require('./components/input/Field.cjs');\n" +
+          "const infoButton = require('./components/data-display/InfoButton.cjs');\n" +
+          "const card = require('./components/layout/Card.cjs');\n" +
+          "const dialog = require('./components/overlays/Dialog.cjs');\n" +
+          "const presenceHook = require('./hooks/usePresence.cjs');\n" +
+          "const presence = require('./components/motion/Presence.cjs');\n" +
+          "const menu = require('./components/navigation/Menu.cjs');\n" +
+          "const color = require('./lib/color.cjs');\n" +
+          "const toasterHandle = require('./lib/toaster.cjs');\n" +
+          "const colorArea = require('./components/input/ColorArea.cjs');\n" +
+          "const colorSlider = require('./components/input/ColorSlider.cjs');\n" +
+          "const alphaSlider = require('./components/input/AlphaSlider.cjs');\n" +
+          "const toaster = require('./components/feedback/Toaster.cjs');\n" +
+          "const date = require('./lib/date.cjs');\n" +
+          "const activeDescendant = require('./hooks/useActiveDescendant.cjs');\n" +
+          "const listbox = require('./components/input/Listbox.cjs');\n" +
+          "const dropdown = require('./components/input/Dropdown.cjs');\n" +
+          "const calendar = require('./components/input/Calendar.cjs');\n" +
+          'exports.cn = cn.cn;\nexports.useThing = hook.useThing;\nexports.Button = button.Button;\n' +
+          'exports.Field = field.Field;\nexports.InfoButton = infoButton.InfoButton;\n' +
+          'exports.buttonClassNames = classNames.buttonClassNames;\n' +
+          'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n' +
+          'exports.infoButtonClassNames = classNames.infoButtonClassNames;\n' +
+          'exports.Card = card.Card;\nexports.CardHeader = card.CardHeader;\n' +
+          'exports.Dialog = dialog.Dialog;\nexports.DialogTrigger = dialog.DialogTrigger;\n' +
+          'exports.DialogContent = dialog.DialogContent;\n' +
+          'exports.usePresence = presenceHook.usePresence;\nexports.Presence = presence.Presence;\n' +
+          'exports.Menu = menu.Menu;\n' +
+          'exports.hsvToHex = color.hsvToHex;\nexports.hexToHsv = color.hexToHsv;\n' +
+          'exports.createToaster = toasterHandle.createToaster;\n' +
+          'exports.ColorArea = colorArea.ColorArea;\nexports.ColorSlider = colorSlider.ColorSlider;\n' +
+          'exports.AlphaSlider = alphaSlider.AlphaSlider;\nexports.Toaster = toaster.Toaster;\n' +
+          'exports.addDays = date.addDays;\nexports.useActiveDescendant = activeDescendant.useActiveDescendant;\n' +
+          'exports.Listbox = listbox.Listbox;\nexports.Dropdown = dropdown.Dropdown;\n' +
+          'exports.Calendar = calendar.Calendar;\n',
+        'dist/index.d.ts': DTS,
+        'dist/index.d.cts': DTS,
       }),
-      'dist/lib/cn.mjs':
-        "export function cn(...inputs) { return inputs.filter(Boolean).join(' '); }\n",
-      'dist/lib/cn.cjs':
-        "exports.cn = function cn(...inputs) { return inputs.filter(Boolean).join(' '); };\n",
-      'dist/lib/classNames.mjs':
-        "export const buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
-        "export const dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n" +
-        "export const infoButtonClassNames = { root: 'wave-info-button', info: 'wave-info-button__info' };\n",
-      'dist/lib/classNames.cjs':
-        "exports.buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
-        "exports.dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n" +
-        "exports.infoButtonClassNames = { root: 'wave-info-button', info: 'wave-info-button__info' };\n",
-      'dist/lib/dev.mjs': dev('export const isDev = isDevEnvironment();\n'),
-      'dist/lib/dev.cjs': dev('exports.isDev = isDevEnvironment();\n'),
-      'dist/hooks/useThing.mjs': `${DIRECTIVE}import { useState } from 'react';\nexport function useThing() { return useState(0); }\n`,
-      'dist/hooks/useThing.cjs': `${DIRECTIVE}const react = require('react');\nexports.useThing = function useThing() { return react.useState(0); };\n`,
-      'dist/components/button/Button.mjs': button.esm,
-      'dist/components/button/Button.cjs': button.cjs,
-      'dist/components/input/Field.mjs': field.esm,
-      'dist/components/input/Field.cjs': field.cjs,
-      'dist/components/data-display/InfoButton.mjs': infoButton.esm,
-      'dist/components/data-display/InfoButton.cjs': infoButton.cjs,
-      'dist/components/layout/Card.mjs': card.esm,
-      'dist/components/layout/Card.cjs': card.cjs,
-      'dist/components/overlays/Dialog.mjs': dialog.esm,
-      'dist/components/overlays/Dialog.cjs': dialog.cjs,
-      'dist/hooks/usePresence.mjs': usePresence.esm,
-      'dist/hooks/usePresence.cjs': usePresence.cjs,
-      'dist/components/motion/Presence.mjs': presence.esm,
-      'dist/components/motion/Presence.cjs': presence.cjs,
-      'dist/components/navigation/Menu.mjs': menu.esm,
-      'dist/components/navigation/Menu.cjs': menu.cjs,
-      'dist/components/input/ColorArea.mjs': colorArea.esm,
-      'dist/components/input/ColorArea.cjs': colorArea.cjs,
-      'dist/components/input/ColorSlider.mjs': colorSlider.esm,
-      'dist/components/input/ColorSlider.cjs': colorSlider.cjs,
-      'dist/components/input/AlphaSlider.mjs': alphaSlider.esm,
-      'dist/components/input/AlphaSlider.cjs': alphaSlider.cjs,
-      'dist/components/feedback/Toaster.mjs': toaster.esm,
-      'dist/components/feedback/Toaster.cjs': toaster.cjs,
-      'dist/lib/date.mjs': `${dateHelpers}export { addDays };\n`,
-      'dist/lib/date.cjs': `${dateHelpers}exports.addDays = addDays;\n`,
-      'dist/hooks/useActiveDescendant.mjs': useActiveDescendant.esm,
-      'dist/hooks/useActiveDescendant.cjs': useActiveDescendant.cjs,
-      'dist/hooks/useListbox.mjs': useListbox.esm,
-      'dist/hooks/useListbox.cjs': useListbox.cjs,
-      'dist/components/input/Option.mjs': option.esm,
-      'dist/components/input/Option.cjs': option.cjs,
-      'dist/components/input/Listbox.mjs': listbox.esm,
-      'dist/components/input/Listbox.cjs': listbox.cjs,
-      'dist/components/input/Dropdown.mjs': dropdown.esm,
-      'dist/components/input/Dropdown.cjs': dropdown.cjs,
-      'dist/components/input/Calendar.mjs': calendar.esm,
-      'dist/components/input/Calendar.cjs': calendar.cjs,
-      'dist/lib/color.mjs': `${colorHelpers}export { hsvToHex, hexToHsv };\n`,
-      'dist/lib/color.cjs': `${colorHelpers}exports.hsvToHex = hsvToHex;\nexports.hexToHsv = hexToHsv;\n`,
-      'dist/lib/toaster.mjs': `${toasterHandle}export { createToaster };\n`,
-      'dist/lib/toaster.cjs': `${toasterHandle}exports.createToaster = createToaster;\n`,
-      'dist/index.mjs':
-        "export { cn } from './lib/cn.mjs';\n" +
-        "export { buttonClassNames, dialogContentClassNames } from './lib/classNames.mjs';\n" +
-        "export { infoButtonClassNames } from './lib/classNames.mjs';\n" +
-        "export { useThing } from './hooks/useThing.mjs';\n" +
-        "export { Button } from './components/button/Button.mjs';\n" +
-        "export { Field } from './components/input/Field.mjs';\n" +
-        "export { InfoButton } from './components/data-display/InfoButton.mjs';\n" +
-        "export { Card, CardHeader } from './components/layout/Card.mjs';\n" +
-        "export { Dialog, DialogTrigger, DialogContent } from './components/overlays/Dialog.mjs';\n" +
-        "export { usePresence } from './hooks/usePresence.mjs';\n" +
-        "export { Presence } from './components/motion/Presence.mjs';\n" +
-        "export { Menu } from './components/navigation/Menu.mjs';\n" +
-        "export { hsvToHex, hexToHsv } from './lib/color.mjs';\n" +
-        "export { createToaster } from './lib/toaster.mjs';\n" +
-        "export { ColorArea } from './components/input/ColorArea.mjs';\n" +
-        "export { ColorSlider } from './components/input/ColorSlider.mjs';\n" +
-        "export { AlphaSlider } from './components/input/AlphaSlider.mjs';\n" +
-        "export { Toaster } from './components/feedback/Toaster.mjs';\n" +
-        "export { addDays } from './lib/date.mjs';\n" +
-        "export { useActiveDescendant } from './hooks/useActiveDescendant.mjs';\n" +
-        "export { Listbox } from './components/input/Listbox.mjs';\n" +
-        "export { Dropdown } from './components/input/Dropdown.mjs';\n" +
-        "export { Calendar } from './components/input/Calendar.mjs';\n",
-      'dist/index.cjs':
-        "Object.defineProperty(exports, '__esModule', { value: true });\n" +
-        "const cn = require('./lib/cn.cjs');\n" +
-        "const classNames = require('./lib/classNames.cjs');\n" +
-        "const hook = require('./hooks/useThing.cjs');\n" +
-        "const button = require('./components/button/Button.cjs');\n" +
-        "const field = require('./components/input/Field.cjs');\n" +
-        "const infoButton = require('./components/data-display/InfoButton.cjs');\n" +
-        "const card = require('./components/layout/Card.cjs');\n" +
-        "const dialog = require('./components/overlays/Dialog.cjs');\n" +
-        "const presenceHook = require('./hooks/usePresence.cjs');\n" +
-        "const presence = require('./components/motion/Presence.cjs');\n" +
-        "const menu = require('./components/navigation/Menu.cjs');\n" +
-        "const color = require('./lib/color.cjs');\n" +
-        "const toasterHandle = require('./lib/toaster.cjs');\n" +
-        "const colorArea = require('./components/input/ColorArea.cjs');\n" +
-        "const colorSlider = require('./components/input/ColorSlider.cjs');\n" +
-        "const alphaSlider = require('./components/input/AlphaSlider.cjs');\n" +
-        "const toaster = require('./components/feedback/Toaster.cjs');\n" +
-        "const date = require('./lib/date.cjs');\n" +
-        "const activeDescendant = require('./hooks/useActiveDescendant.cjs');\n" +
-        "const listbox = require('./components/input/Listbox.cjs');\n" +
-        "const dropdown = require('./components/input/Dropdown.cjs');\n" +
-        "const calendar = require('./components/input/Calendar.cjs');\n" +
-        'exports.cn = cn.cn;\nexports.useThing = hook.useThing;\nexports.Button = button.Button;\n' +
-        'exports.Field = field.Field;\nexports.InfoButton = infoButton.InfoButton;\n' +
-        'exports.buttonClassNames = classNames.buttonClassNames;\n' +
-        'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n' +
-        'exports.infoButtonClassNames = classNames.infoButtonClassNames;\n' +
-        'exports.Card = card.Card;\nexports.CardHeader = card.CardHeader;\n' +
-        'exports.Dialog = dialog.Dialog;\nexports.DialogTrigger = dialog.DialogTrigger;\n' +
-        'exports.DialogContent = dialog.DialogContent;\n' +
-        'exports.usePresence = presenceHook.usePresence;\nexports.Presence = presence.Presence;\n' +
-        'exports.Menu = menu.Menu;\n' +
-        'exports.hsvToHex = color.hsvToHex;\nexports.hexToHsv = color.hexToHsv;\n' +
-        'exports.createToaster = toasterHandle.createToaster;\n' +
-        'exports.ColorArea = colorArea.ColorArea;\nexports.ColorSlider = colorSlider.ColorSlider;\n' +
-        'exports.AlphaSlider = alphaSlider.AlphaSlider;\nexports.Toaster = toaster.Toaster;\n' +
-        'exports.addDays = date.addDays;\nexports.useActiveDescendant = activeDescendant.useActiveDescendant;\n' +
-        'exports.Listbox = listbox.Listbox;\nexports.Dropdown = dropdown.Dropdown;\n' +
-        'exports.Calendar = calendar.Calendar;\n',
-      'dist/index.d.ts': DTS,
-      'dist/index.d.cts': DTS,
-    }),
+    ),
   );
 }
 
@@ -674,6 +676,38 @@ function withPhase7Modules(files) {
     'exports.usePopupPosition = phase7Position.usePopupPosition;\n' +
     'exports.useModalOpen = phase7ModalOpen.useModalOpen;\n' +
     'exports.getFirstTabbable = phase7Tabbable.getFirstTabbable;\n';
+  return result;
+}
+
+/**
+ * The 0.13 modules of the fixture: the two pure helpers that HOOK_PROBES_0_13 bundle on their own
+ * (importing no component and no React module), and the Avatar components the probes must not
+ * find in those bundles.
+ */
+function withPhase8Modules(files) {
+  const result = { ...files };
+  result['dist/lib/initials.mjs'] =
+    'export function getInitials(name) { return name.slice(0, 1); }\n';
+  result['dist/lib/initials.cjs'] =
+    'exports.getInitials = function getInitials(name) { return name.slice(0, 1); };\n';
+  result['dist/components/data-display/AvatarGroup.partition.mjs'] =
+    `${DIRECTIVE}export function partitionAvatarGroupItems(options) { return { inlineItems: options.items, overflowItems: undefined }; }\n`;
+  result['dist/components/data-display/AvatarGroup.partition.cjs'] =
+    `${DIRECTIVE}exports.partitionAvatarGroupItems = function partitionAvatarGroupItems(options) { return { inlineItems: options.items, overflowItems: undefined }; };\n`;
+  for (const name of ['Avatar', 'AvatarGroup', 'Persona']) {
+    result[`dist/components/data-display/${name}.mjs`] =
+      `${DIRECTIVE}import { createElement } from 'react';\nfunction ${name}() { return createElement('span'); }\n${name}.displayName = '${name}';\nexport { ${name} };\n`;
+    result[`dist/components/data-display/${name}.cjs`] =
+      `${DIRECTIVE}const { createElement } = require('react');\nfunction ${name}() { return createElement('span'); }\n${name}.displayName = '${name}';\nexports.${name} = ${name};\n`;
+  }
+  result['dist/index.mjs'] +=
+    "export { getInitials } from './lib/initials.mjs';\n" +
+    "export { partitionAvatarGroupItems } from './components/data-display/AvatarGroup.partition.mjs';\n";
+  result['dist/index.cjs'] +=
+    "const phase8Initials = require('./lib/initials.cjs');\n" +
+    "const phase8Partition = require('./components/data-display/AvatarGroup.partition.cjs');\n" +
+    'exports.getInitials = phase8Initials.getInitials;\n' +
+    'exports.partitionAvatarGroupItems = phase8Partition.partitionAvatarGroupItems;\n';
   return result;
 }
 
@@ -1796,6 +1830,45 @@ describe('verifyDist: the 0.12 hook probes', () => {
     expect(
       errors.some((error) =>
         /Popover\.mjs, listed for the hook .* does not exist in dist/.test(error),
+      ),
+    ).toBe(true);
+  }, 30_000);
+});
+
+describe('verifyDist: the 0.13 helper probes', () => {
+  it('reports a helper whose bundle holds an Avatar component', async () => {
+    const { dist } = fixture({
+      'dist/lib/initials.mjs':
+        "import { Avatar } from '../components/data-display/Avatar.mjs';\n" +
+        'export function getInitials() { return Avatar.displayName; }\n',
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'components/data-display/Avatar.mjs is in the bundle of an import of only getInitials',
+      'the bundle of an import of only getInitials imports react',
+    ]);
+  }, 30_000);
+
+  it('reports a helper that imports a React module', async () => {
+    const { dist } = fixture({
+      'dist/components/data-display/AvatarGroup.partition.mjs':
+        '"use client";\n' +
+        "import { useState } from 'react';\n" +
+        'export function partitionAvatarGroupItems() { return useState(0); }\n',
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toContain(
+      'the bundle of an import of only partitionAvatarGroupItems imports react',
+    );
+  }, 30_000);
+
+  it('reports a helper module that dist lacks', async () => {
+    const { dist } = fixture();
+    rmSync(join(dist, 'components/data-display/Persona.mjs'));
+    const { errors } = await verifyDist(dist, noPending);
+    expect(
+      errors.some((error) =>
+        /Persona\.mjs, listed for the hook .* does not exist in dist/.test(error),
       ),
     ).toBe(true);
   }, 30_000);

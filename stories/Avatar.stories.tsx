@@ -75,3 +75,98 @@ export const Sizes: Story = {
     </div>
   ),
 };
+
+const NUMERIC_SIZES = [16, 24, 36, 56, 96, 128] as const;
+const NAMED_COLORS = [
+  'red',
+  'pumpkin',
+  'gold',
+  'forest',
+  'teal',
+  'blue',
+  'navy',
+  'lavender',
+  'purple',
+  'magenta',
+  'brown',
+  'steel',
+] as const;
+const PEOPLE = ['Ada Lovelace', 'Grace Hopper', 'Alan Turing', 'Katherine Johnson'];
+
+/** A number is the box in pixels; the initials and the badge scale with it. */
+export const NumericSizes: Story = {
+  render: (args) => (
+    <div className="flex items-end gap-2">
+      {NUMERIC_SIZES.map((size) => (
+        <Avatar key={size} {...args} size={size} aria-label={`${args.name}, ${size} pixels`} />
+      ))}
+    </div>
+  ),
+};
+
+/** `shape="square"` has rounded corners; the badge keeps to the corner either way. */
+export const Shapes: Story = {
+  args: { size: 56, badge: <PresenceBadge status="busy" /> },
+  render: (args) => (
+    <div className="flex items-center gap-3">
+      <Avatar {...args} shape="circular" aria-label="Jane Doe, circular" />
+      <Avatar {...args} shape="square" aria-label="Jane Doe, square" />
+    </div>
+  ),
+};
+
+/** `neutral`, `brand`, the twelve named colors; `colorful` picks one from the name. */
+export const Colors: Story = {
+  render: (args) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <Avatar {...args} color="neutral" aria-label="Neutral" />
+      <Avatar {...args} color="brand" aria-label="Brand" />
+      {NAMED_COLORS.map((color) => (
+        <Avatar key={color} {...args} color={color} aria-label={color} />
+      ))}
+    </div>
+  ),
+};
+
+/** The same name always gets the same color; `idForColor` picks it from something stable. */
+export const ColorfulFromNameOrId: Story = {
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      {PEOPLE.map((name) => (
+        <Avatar key={name} {...args} name={name} color="colorful" />
+      ))}
+      <Avatar {...args} name="Renamed Person" color="colorful" idForColor="user-1042" />
+    </div>
+  ),
+};
+
+/** `active` draws a ring, shadow or glow; `inactive` dims the avatar. */
+export const ActiveAndInactive: Story = {
+  args: { size: 56 },
+  render: (args) => (
+    <div className="flex items-center gap-4">
+      {(['ring', 'ring-shadow', 'shadow', 'glow'] as const).map((appearance) => (
+        <Avatar
+          key={appearance}
+          {...args}
+          active="active"
+          activeAppearance={appearance}
+          aria-label={`Active, ${appearance}`}
+        />
+      ))}
+      <Avatar {...args} active="inactive" aria-label="Inactive" />
+    </div>
+  ),
+};
+
+/** Initials come from the name: two letters, one for a single name, none for digits or emoji. */
+export const Initials: Story = {
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      {['Ada Lovelace', 'Plato', 'Mary-Jane O’Neil', 'Ola Nordmann (UiO)'].map((name) => (
+        <Avatar key={name} {...args} name={name} color="colorful" />
+      ))}
+      <Avatar {...args} name="Custom" initials="XY" />
+    </div>
+  ),
+};

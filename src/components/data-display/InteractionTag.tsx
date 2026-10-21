@@ -458,7 +458,7 @@ export const InteractionTagPrimary = ({
   ...rest
 }: InteractionTagPrimaryProps) => {
   const tag = useInteractionTagContext('InteractionTag.Primary');
-  const { size, look } = tag;
+  const { size, look, shape } = tag;
   const disabled = tag.disabled || disabledProp;
   const hold = useHeldFocus(disabled);
   // Its text names the Secondary while it renders (D43).
@@ -470,7 +470,13 @@ export const InteractionTagPrimary = ({
   const hasIcon = slotRendersContent(icon);
   const secondary = materialiseSlotContent(secondaryText);
   const hasSecondary = slotRendersContent(secondary);
-  const avatarBox = React.useMemo(() => ({ size: TAG_AVATAR_SIZE[size] }), [size]);
+  const avatarBox = React.useMemo(
+    () => ({
+      size: TAG_AVATAR_SIZE[size],
+      shape: shape === 'rounded' ? ('square' as const) : ('circular' as const),
+    }),
+    [size, shape],
+  );
 
   // In a selecting TagGroup a click (also Enter and Space) toggles the tag's value, after the
   // consumer's `onClick`; never for a click from a portal opened from the Primary (C-COMPOSE).

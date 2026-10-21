@@ -1,8 +1,25 @@
 export { Avatar } from './Avatar';
-export type { AvatarProps } from './Avatar';
+export type {
+  AvatarProps,
+  AvatarNumericSize,
+  AvatarSize,
+  AvatarColor,
+  AvatarNamedColor,
+} from './Avatar';
 
-export { AvatarGroup } from './AvatarGroup';
-export type { AvatarGroupProps } from './AvatarGroup';
+export { AvatarGroup, AvatarGroupItem, AvatarGroupPopover } from './AvatarGroup';
+export type {
+  AvatarGroupProps,
+  AvatarGroupItemProps,
+  AvatarGroupPopoverProps,
+  AvatarGroupOpenChangeDetails,
+  AvatarGroupLayout,
+} from './AvatarGroup';
+export { partitionAvatarGroupItems } from './AvatarGroup.partition';
+export type {
+  PartitionAvatarGroupItemsOptions,
+  PartitionAvatarGroupItemsResult,
+} from './AvatarGroup.partition';
 
 export { Badge } from './Badge';
 export type { BadgeProps } from './Badge';
@@ -27,7 +44,7 @@ export type {
 } from './InteractionTag';
 
 export { Persona } from './Persona';
-export type { PersonaProps } from './Persona';
+export type { PersonaProps, PersonaSize } from './Persona';
 
 export { Divider } from './Divider';
 export type { DividerProps, DividerOwnProps } from './Divider';

@@ -3,9 +3,10 @@ import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
-import { AvatarGroup } from '../AvatarGroup';
-import type { AvatarGroupProps } from '../AvatarGroup';
+import { AvatarGroup, AvatarGroupItem, AvatarGroupPopover } from '../AvatarGroup';
+import type { AvatarGroupProps, AvatarGroupItemProps } from '../AvatarGroup';
 import { Avatar } from '../Avatar';
+import type { AvatarProps } from '../Avatar';
 import { Portal } from '../../portal/Portal';
 import { WaveProvider } from '../../provider/WaveProvider';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
@@ -18,6 +19,7 @@ import {
   testSystemProps,
 } from '../../../test-utils';
 import type { Size } from '../../../lib/types';
+import type { AvatarSize } from '../Avatar.sizes';
 
 const NAMES = ['Alice', 'Bob', 'Charlie', 'Diana'];
 const PHOTO = 'https://example.com/photo.jpg';
@@ -829,5 +831,389 @@ describe('AvatarGroup', () => {
   // button-provider#27 (C-REF): ref is declared in the props interface.
   it('declares ref in AvatarGroupProps (C-REF)', () => {
     expectTypeOf<AvatarGroupProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+  });
+
+  describe('layouts and member size (0.13)', () => {
+    const items = (root: HTMLElement) =>
+      Array.from(root.querySelectorAll<HTMLElement>('.wave-avatar-group__item'));
+
+    it('renders data-layout, stack by default', () => {
+      render(<AvatarGroup aria-label="Team">{members()}</AvatarGroup>);
+      expect(screen.getByRole('group', { name: 'Team' })).toHaveAttribute('data-layout', 'stack');
+    });
+
+    it('size reaches the members that set none, and the overflow button', () => {
+      render(
+        <AvatarGroup aria-label="Team" size="large" max={1}>
+          {members(['Alice', 'Bob'])}
+        </AvatarGroup>,
+      );
+      const group = screen.getByRole('group', { name: 'Team' });
+      expect(group.querySelector('.wave-avatar')).toHaveAttribute('data-size', 'large');
+      expect(screen.getByRole('button', { name: '1 more' }).className).toContain('w-12');
+    });
+
+    it('a member with its own size keeps it', () => {
+      render(
+        <AvatarGroup aria-label="Team" size="large">
+          <Avatar name="Alice" size="small" />
+          <Avatar name="Bob" />
+        </AvatarGroup>,
+      );
+      const avatars = screen.getByRole('group', { name: 'Team' }).querySelectorAll('.wave-avatar');
+      expect(avatars[0]).toHaveAttribute('data-size', 'small');
+      expect(avatars[1]).toHaveAttribute('data-size', 'large');
+    });
+
+    it('the default size is medium, as before', () => {
+      render(<AvatarGroup aria-label="Team">{members(['Alice'])}</AvatarGroup>);
+      expect(screen.getByRole('group').querySelector('.wave-avatar')).toHaveAttribute(
+        'data-size',
+        'medium',
+      );
+    });
+
+    it('numeric sizes reach the members', () => {
+      render(
+        <AvatarGroup aria-label="Team" size={64}>
+          {members(['Alice'])}
+        </AvatarGroup>,
+      );
+      expect(screen.getByRole('group').querySelector('.wave-avatar')).toHaveAttribute(
+        'data-size',
+        '64',
+      );
+    });
+
+    it('stack overlaps every member after the first', () => {
+      render(<AvatarGroup aria-label="Team">{members()}</AvatarGroup>);
+      const [first, ...rest] = items(screen.getByRole('group'));
+      expect(first!.className).not.toContain('-ms-2');
+      for (const item of rest) expect(item).toHaveClass('-ms-2');
+    });
+
+    it('spread puts the members side by side with a gap and no overlap', () => {
+      render(
+        <AvatarGroup aria-label="Team" layout="spread">
+          {members()}
+        </AvatarGroup>,
+      );
+      const group = screen.getByRole('group', { name: 'Team' });
+      expect(group).toHaveAttribute('data-layout', 'spread');
+      expect(group).toHaveClass('gap-1');
+      for (const item of items(group)) expect(item.className).not.toContain('-ms-2');
+    });
+
+    it('spread keeps the overflow button without overlap', () => {
+      render(
+        <AvatarGroup aria-label="Team" layout="spread" max={2}>
+          {members()}
+        </AvatarGroup>,
+      );
+      expect(screen.getByRole('button', { name: '2 more' }).className).not.toContain('-ms-2');
+    });
+
+    it('pie draws up to three wedges as one circle, hidden from assistive technology', () => {
+      render(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['Alice', 'Bob', 'Charlie'])}
+        </AvatarGroup>,
+      );
+      const group = screen.getByRole('group', { name: 'Team' });
+      expect(group).toHaveAttribute('data-layout', 'pie');
+      const wedges = items(group);
+      expect(wedges).toHaveLength(3);
+      for (const wedge of wedges) {
+        expect(wedge).toHaveAttribute('aria-hidden', 'true');
+        expect(wedge.className).toContain('clip-path');
+      }
+      expect(screen.queryByRole('img', { name: 'Alice' })).toBeNull();
+    });
+
+    it('pie defaults to the large size and sends members past three to the overflow', () => {
+      render(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['A', 'B', 'C', 'D', 'E'])}
+        </AvatarGroup>,
+      );
+      const group = screen.getByRole('group', { name: 'Team' });
+      expect(items(group)).toHaveLength(3);
+      expect(group.querySelector('.wave-avatar')).toHaveAttribute('data-size', 'large');
+      expect(screen.getByRole('button', { name: '2 more' })).toBeInTheDocument();
+    });
+
+    it('a pie of one member is a full circle and a pie of two is two halves', () => {
+      const { rerender } = render(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['Alice'])}
+        </AvatarGroup>,
+      );
+      expect(items(screen.getByRole('group'))).toHaveLength(1);
+      expect(items(screen.getByRole('group'))[0]!.className).not.toContain('clip-path');
+      rerender(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['Alice', 'Bob'])}
+        </AvatarGroup>,
+      );
+      const [left, right] = items(screen.getByRole('group'));
+      expect(left!.className).toContain('inset(0_50%_0_0)');
+      expect(right!.className).toContain('inset(0_0_0_50%)');
+    });
+
+    it('is axe clean in every layout', async () => {
+      for (const layout of ['stack', 'spread', 'pie'] as const) {
+        const { container, unmount } = render(
+          <AvatarGroup aria-label="Team" layout={layout} max={4}>
+            {members(['A', 'B', 'C', 'D', 'E'])}
+          </AvatarGroup>,
+        );
+        await expectNoA11yViolations(container);
+        unmount();
+      }
+    });
+
+    it('types layout and numeric size', () => {
+      expectTypeOf<AvatarGroupProps['layout']>().toEqualTypeOf<
+        'stack' | 'spread' | 'pie' | undefined
+      >();
+      expectTypeOf<AvatarGroupProps['size']>().toEqualTypeOf<AvatarSize | undefined>();
+    });
+  });
+
+  describe('parts, indicator and controlled open (0.13)', () => {
+    const names = (count: number) => Array.from({ length: count }, (_, i) => `Person ${i + 1}`);
+
+    it('exposes Item and Popover as compound members and flat names', () => {
+      expect(AvatarGroupItem).toBe(AvatarGroup.Item);
+      expect(AvatarGroupPopover).toBe(AvatarGroup.Popover);
+      expect(AvatarGroup.Item.displayName).toBe('AvatarGroupItem');
+      expect(AvatarGroup.Popover.displayName).toBe('AvatarGroupPopover');
+    });
+
+    it('server output of a part written in a Server Component equals the plain parts', () => {
+      const plain = (
+        <AvatarGroup aria-label="Team" max={1}>
+          <AvatarGroup.Item name="Alice" />
+          <AvatarGroup.Item name="Bob" />
+        </AvatarGroup>
+      );
+      const client = (
+        <AvatarGroup aria-label="Team" max={1}>
+          {React.createElement(asClientReference(AvatarGroup.Item), { name: 'Alice' })}
+          {React.createElement(asClientReference(AvatarGroup.Item), { name: 'Bob' })}
+        </AvatarGroup>
+      );
+      expect(renderToString(client)).toBe(renderToString(plain));
+    });
+
+    it('an Item renders an avatar in the group', () => {
+      render(
+        <AvatarGroup aria-label="Team">
+          <AvatarGroup.Item name="Alice" />
+        </AvatarGroup>,
+      );
+      expect(screen.getByRole('img', { name: 'Alice' })).toBeInTheDocument();
+    });
+
+    it('caps the shown count at 99+ while the name keeps the real number', () => {
+      render(
+        <AvatarGroup aria-label="Team" max={0}>
+          {names(120).map((n) => (
+            <AvatarGroup.Item key={n} name={n} />
+          ))}
+        </AvatarGroup>,
+      );
+      const button = screen.getByRole('button', { name: '120 more' });
+      expect(button).toHaveTextContent('99+');
+      expect(button).not.toHaveTextContent('120');
+    });
+
+    it('shows the exact count up to 99', () => {
+      render(
+        <AvatarGroup aria-label="Team" max={0}>
+          {names(99).map((n) => (
+            <AvatarGroup.Item key={n} name={n} />
+          ))}
+        </AvatarGroup>,
+      );
+      expect(screen.getByRole('button', { name: '99 more' })).toHaveTextContent('+99');
+    });
+
+    it('the icon indicator draws an icon instead of the count, with the same name', () => {
+      render(
+        <AvatarGroup aria-label="Team" max={1} overflowIndicator="icon">
+          {names(4).map((n) => (
+            <AvatarGroup.Item key={n} name={n} />
+          ))}
+        </AvatarGroup>,
+      );
+      const button = screen.getByRole('button', { name: '3 more' });
+      expect(button.querySelector('svg')).not.toBeNull();
+      expect(button).not.toHaveTextContent('+');
+    });
+
+    it('lists hidden Items as avatars with their names', async () => {
+      const user = userEvent.setup();
+      render(
+        <AvatarGroup aria-label="Team" max={1}>
+          <AvatarGroup.Item name="Alice" />
+          <AvatarGroup.Item name="Bob Builder" />
+          <AvatarGroup.Item name="Carol" />
+        </AvatarGroup>,
+      );
+      await user.click(screen.getByRole('button', { name: '2 more' }));
+      const list = within(screen.getByRole('dialog', { name: '2 more' })).getByRole('list');
+      const rows = within(list).getAllByRole('listitem');
+      expect(rows).toHaveLength(2);
+      expect(within(rows[0]!).getByText('Bob Builder')).toBeInTheDocument();
+      expect(rows[0]!.querySelector('.wave-avatar')).not.toBeNull();
+      expect(within(rows[1]!).getByText('Carol')).toBeInTheDocument();
+    });
+
+    it('lists a hidden direct Avatar by its name only, as in 0.12', async () => {
+      const user = userEvent.setup();
+      render(
+        <AvatarGroup aria-label="Team" max={1}>
+          {members(['Alice', 'Bob'])}
+        </AvatarGroup>,
+      );
+      await user.click(screen.getByRole('button', { name: '1 more' }));
+      const row = within(screen.getByRole('dialog')).getByRole('listitem');
+      expect(row).toHaveTextContent(/^Bob$/);
+      expect(row.querySelector('.wave-avatar')).toBeNull();
+    });
+
+    it('a consumer-written Popover with its own overflow items replaces the automatic one', async () => {
+      const user = userEvent.setup();
+      render(
+        <AvatarGroup aria-label="Team">
+          <AvatarGroup.Item name="Alice" />
+          <AvatarGroup.Popover>
+            <AvatarGroup.Item name="Bob Builder" />
+            <AvatarGroup.Item name="Carol" />
+          </AvatarGroup.Popover>
+        </AvatarGroup>,
+      );
+      expect(screen.getAllByRole('img', { name: 'Alice' })).toHaveLength(1);
+      await user.click(screen.getByRole('button', { name: '2 more' }));
+      const dialog = screen.getByRole('dialog', { name: '2 more' });
+      expect(within(dialog).getByText('Bob Builder')).toBeInTheDocument();
+      expect(within(dialog).getByText('Carol')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByRole('button', { name: '2 more' })).toHaveFocus();
+    });
+
+    it('defaultOpen opens the popup at mount', () => {
+      render(
+        <AvatarGroup aria-label="Team" max={1} defaultOpen>
+          {members(['Alice', 'Bob'])}
+        </AvatarGroup>,
+      );
+      expect(screen.getByRole('dialog', { name: '1 more' })).toBeInTheDocument();
+    });
+
+    it('a controlled open follows the prop and reports requests with a reason', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const { rerender } = render(
+        <AvatarGroup aria-label="Team" max={1} open={false} onOpenChange={onOpenChange}>
+          {members(['Alice', 'Bob'])}
+        </AvatarGroup>,
+      );
+      await user.click(screen.getByRole('button', { name: '1 more' }));
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).toHaveBeenLastCalledWith(
+        true,
+        expect.objectContaining({ reason: 'trigger', event: expect.any(Event) }),
+      );
+      expect(screen.queryByRole('dialog')).toBeNull();
+      rerender(
+        <AvatarGroup aria-label="Team" max={1} open onOpenChange={onOpenChange}>
+          {members(['Alice', 'Bob'])}
+        </AvatarGroup>,
+      );
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      expect(onOpenChange).toHaveBeenLastCalledWith(
+        false,
+        expect.objectContaining({ reason: 'escape' }),
+      );
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('reports an outside press with its reason', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <>
+          <button type="button">Elsewhere</button>
+          <AvatarGroup aria-label="Team" max={1} defaultOpen onOpenChange={onOpenChange}>
+            {members(['Alice', 'Bob'])}
+          </AvatarGroup>
+        </>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Elsewhere' }));
+      expect(onOpenChange).toHaveBeenCalledWith(
+        false,
+        expect.objectContaining({ reason: 'outside-press' }),
+      );
+    });
+
+    it('calls onOpenChange once per request in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <AvatarGroup aria-label="Team" max={1} onOpenChange={onOpenChange}>
+            {members(['Alice', 'Bob'])}
+          </AvatarGroup>
+        </React.StrictMode>,
+      );
+      await user.click(screen.getByRole('button', { name: '1 more' }));
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('is axe clean closed and open, with Items', async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <AvatarGroup aria-label="Team" max={1}>
+          <AvatarGroup.Item name="Alice" />
+          <AvatarGroup.Item name="Bob" />
+          <AvatarGroup.Item name="Carol" />
+        </AvatarGroup>,
+      );
+      await expectNoA11yViolations(container);
+      await user.click(screen.getByRole('button', { name: '2 more' }));
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('types the new props', () => {
+      expectTypeOf<AvatarGroupProps['overflowIndicator']>().toEqualTypeOf<
+        'count' | 'icon' | undefined
+      >();
+      expectTypeOf<AvatarGroupProps['open']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<NonNullable<AvatarGroupProps['onOpenChange']>>().toBeFunction();
+      expectTypeOf<AvatarGroupItemProps>().toEqualTypeOf<AvatarProps>();
+    });
+  });
+
+  describe('pie layout initials', () => {
+    it('hides the initials of wedges, which would overlap, and keeps them in other layouts', () => {
+      const { container, rerender } = render(
+        <AvatarGroup aria-label="Team" layout="pie">
+          {members(['Alice Smith', 'Bob Jones', 'Carol White'])}
+        </AvatarGroup>,
+      );
+      const initials = () => Array.from(container.querySelectorAll('.wave-avatar__initials'));
+      expect(initials()).toHaveLength(3);
+      for (const el of initials()) expect(el).toHaveClass('invisible');
+      rerender(
+        <AvatarGroup aria-label="Team" layout="stack">
+          {members(['Alice Smith', 'Bob Jones', 'Carol White'])}
+        </AvatarGroup>,
+      );
+      for (const el of initials()) expect(el).not.toHaveClass('invisible');
+    });
   });
 });

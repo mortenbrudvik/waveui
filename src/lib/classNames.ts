@@ -157,10 +157,23 @@ export const avatarGroupClassNames = {
   root: 'wave-avatar-group',
   item: 'wave-avatar-group__item',
   overflowButton: 'wave-avatar-group__overflow-button',
+  pie: 'wave-avatar-group__pie',
   surface: 'wave-avatar-group__surface',
   list: 'wave-avatar-group__list',
   listItem: 'wave-avatar-group__list-item',
 } as const;
+
+/**
+ * AvatarGroup.Item: `root` on the avatar it renders in the group, and on the row (avatar and name)
+ * it renders in the overflow list; `name` on the name text of that row.
+ */
+export const avatarGroupItemClassNames = {
+  root: 'wave-avatar-group-item',
+  name: 'wave-avatar-group-item__name',
+} as const;
+
+/** AvatarGroup.Popover: `root` on the overflow button (which also carries the group's button class). */
+export const avatarGroupPopoverClassNames = { root: 'wave-avatar-group-popover' } as const;
 
 /** Badge: `root` on the badge span. */
 export const badgeClassNames = { root: 'wave-badge' } as const;
@@ -231,6 +244,8 @@ export const personaClassNames = {
   badge: 'wave-persona__badge',
   primaryText: 'wave-persona__primary-text',
   secondaryText: 'wave-persona__secondary-text',
+  tertiaryText: 'wave-persona__tertiary-text',
+  quaternaryText: 'wave-persona__quaternary-text',
 } as const;
 
 /**
@@ -851,13 +866,23 @@ export const cardClassNames = {
   root: 'wave-card',
   checkbox: 'wave-card__checkbox',
   checkmark: 'wave-card__checkmark',
+  floatingAction: 'wave-card__floating-action',
 } as const;
 
 /** Card.Header: `root` on the rendered element; `title` on the title; `subtitle` on the subtitle. */
 export const cardHeaderClassNames = {
   root: 'wave-card-header',
+  image: 'wave-card-header__image',
+  text: 'wave-card-header__text',
   title: 'wave-card-header__title',
   subtitle: 'wave-card-header__subtitle',
+  action: 'wave-card-header__action',
+} as const;
+
+/** Card.Preview: `root` on the rendered element; `logo` on the logo over its bottom start corner. */
+export const cardPreviewClassNames = {
+  root: 'wave-card-preview',
+  logo: 'wave-card-preview__logo',
 } as const;
 
 /** Card.Body: `root` on the rendered element. */
@@ -889,7 +914,10 @@ export const accordionPanelClassNames = { root: 'wave-accordion-panel' } as cons
 export const tabListClassNames = { root: 'wave-tab-list' } as const;
 
 /** TabList.Tab: `root` on the `role="tab"` button. */
-export const tabListTabClassNames = { root: 'wave-tab-list-tab' } as const;
+export const tabListTabClassNames = {
+  root: 'wave-tab-list-tab',
+  icon: 'wave-tab-list-tab__icon',
+} as const;
 
 /** TabList.Panel: `root` on the `role="tabpanel"` element. */
 export const tabListPanelClassNames = { root: 'wave-tab-list-panel' } as const;
@@ -933,13 +961,15 @@ export const treeItemPersonaLayoutClassNames = {
 
 /**
  * Carousel: `root` on the `role="region"` element; `autoPlayButton` on the pause and start
- * button; `track` on the moving element around the slides; `slide` on each slide wrapper;
+ * button; `viewport` on the clipping element around the track; `track` on the moving element
+ * around the slides; `slide` on each slide wrapper;
  * `previousButton` and `nextButton` on the arrow buttons; `picker` on the `role="group"` of
  * picker buttons; `pickerButton` on each of them; `pickerIndicator` on each button's dot.
  */
 export const carouselClassNames = {
   root: 'wave-carousel',
   autoPlayButton: 'wave-carousel__auto-play-button',
+  viewport: 'wave-carousel__viewport',
   track: 'wave-carousel__track',
   slide: 'wave-carousel__slide',
   previousButton: 'wave-carousel__previous-button',
@@ -949,8 +979,14 @@ export const carouselClassNames = {
   pickerIndicator: 'wave-carousel__picker-indicator',
 } as const;
 
-/** Carousel.Item: `root` on the item element. */
-export const carouselItemClassNames = { root: 'wave-carousel-item' } as const;
+/** Carousel.Item: `root` on the item element; `thumbnail` on the image in its picker button. */
+export const carouselItemClassNames = {
+  root: 'wave-carousel-item',
+  thumbnail: 'wave-carousel-item__thumbnail',
+} as const;
+
+/** Carousel.Button: `root` on the button element. */
+export const carouselButtonClassNames = { root: 'wave-carousel-button' } as const;
 
 /**
  * Overflow: `root` on the overflow element; `overflowButton` on the element around what

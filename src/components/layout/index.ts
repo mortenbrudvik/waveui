@@ -1,9 +1,12 @@
-export { Card, CardHeader, CardBody, CardFooter } from './Card';
+export { Card, CardHeader, CardPreview, CardBody, CardFooter } from './Card';
 export type {
   CardProps,
+  CardAppearance,
   CardOwnProps,
   CardHeaderProps,
   CardHeaderOwnProps,
+  CardPreviewProps,
+  CardPreviewOwnProps,
   CardBodyProps,
   CardBodyOwnProps,
   CardFooterProps,
@@ -23,7 +26,13 @@ export type {
 } from './Accordion';
 
 export { TabList, TabListTab, TabListPanel, TabListPanels } from './TabList';
-export type { TabListProps, TabProps, TabPanelProps, TabPanelsProps } from './TabList';
+export type {
+  TabListProps,
+  TabListAppearance,
+  TabProps,
+  TabPanelProps,
+  TabPanelsProps,
+} from './TabList';
 
 export { Tree, TreeItem, TreeItemPersonaLayout } from './Tree';
 export type {
@@ -34,11 +43,15 @@ export type {
 } from './Tree';
 
 export { Carousel, CarouselItem } from './Carousel';
+export { CarouselButton } from './Carousel.button';
+export type { CarouselButtonProps } from './Carousel.button';
 export type {
   CarouselProps,
   CarouselItemProps,
   CarouselAutoPlayLabels,
   CarouselLabels,
+  CarouselAppearance,
+  CarouselControlsLayout,
 } from './Carousel';
 
 export {
