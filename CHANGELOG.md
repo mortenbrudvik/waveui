@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.13.0] - Unreleased
+## [0.13.0] - 2026-10-21
 
 The eighth Fluent UI v9 parity release: Phase 8 of the [roadmap](docs/ROADMAP.md), identity, cards, tabs and the carousel. Avatar gains Fluent's sizes, shapes, named colors, active state and initials that behave; AvatarGroup gains layouts and a compound form; Persona gains four text lines and positions; PresenceBadge takes Fluent's status names; Card and TabList gain appearances and sizes; and Carousel shows several slides, drags, shows thumbnails and lays out its controls in four ways. Existing markup keeps working; the type widenings and the few visible changes are under "Upgrading from 0.12".
 
