@@ -45,6 +45,9 @@ export function getTablePartKind(node: React.ReactNode): TablePartKind | null {
 // Selection control
 // ---------------------------------------------------------------------------
 
+/** The box of a selection cell (DataGrid's and Table.SelectionCell's): 40px wide, a row's rule. */
+export const SELECTION_CELL_CLASSES = 'w-10 px-3 py-3 border-b border-border';
+
 /**
  * A subtle control is transparent while it is not checked, until the group named by `reveal` is
  * hovered or holds focus; forced colors and a coarse pointer (touch) always draw it. It stays

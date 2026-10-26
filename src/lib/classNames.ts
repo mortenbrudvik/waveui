@@ -1418,6 +1418,27 @@ export const tableRowClassNames = { root: 'wave-table-row' } as const;
 /** Table.Cell: `root` on the `<td>`. */
 export const tableCellClassNames = { root: 'wave-table-cell' } as const;
 
+/** Table.SelectionCell: `root` on the `<td>`; `control` on its checkbox or radio. */
+export const tableSelectionCellClassNames = {
+  root: 'wave-table-selection-cell',
+  control: 'wave-table-selection-cell__control',
+} as const;
+
+/**
+ * Table.CellLayout: `root` on the layout element; `media` on the media `<span>`; `content` on the
+ * column that holds the text; `main` on the main text; `description` on the description line.
+ */
+export const tableCellLayoutClassNames = {
+  root: 'wave-table-cell-layout',
+  media: 'wave-table-cell-layout__media',
+  content: 'wave-table-cell-layout__content',
+  main: 'wave-table-cell-layout__main',
+  description: 'wave-table-cell-layout__description',
+} as const;
+
+/** Table.CellActions: `root` on the element that holds the actions. */
+export const tableCellActionsClassNames = { root: 'wave-table-cell-actions' } as const;
+
 /** DataGrid: `root` on the grid element (`role="grid"`); `container` on the wrapper around it. */
 export const dataGridClassNames = {
   root: 'wave-data-grid',

@@ -26,6 +26,7 @@ import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import {
+  SELECTION_CELL_CLASSES,
   TableSelectionControl,
   TableSortButton,
   getTablePartKind,
@@ -966,7 +967,6 @@ function warnDuplicateRowId(rowId: string): void {
 }
 
 const cellBase = 'px-4 py-3 border-b border-border';
-const selectionCell = 'w-10 px-3 py-3 border-b border-border';
 
 /** A body row: its hover and, per `selectionAppearance`, the fill of a selected row. */
 const BODY_ROW_CLASSES: Record<DataGridSelectionAppearance, string> = {
@@ -1565,7 +1565,7 @@ function DataGridSelectionHeaderCell({
       className={cn(
         stableClassName,
         dataGridHeaderClassNames.selectionCell,
-        selectionCell,
+        SELECTION_CELL_CLASSES,
         'text-start',
         focusRingInset,
         className,
@@ -1655,7 +1655,7 @@ function DataGridSelectionHeaderSlot({
       className={cn(
         stableClassName,
         dataGridHeaderClassNames.selectionCell,
-        selectionCell,
+        SELECTION_CELL_CLASSES,
         focusRingInset,
         className,
       )}
@@ -1942,7 +1942,8 @@ DataGridBody.displayName = 'DataGridBody';
  * with the grid's `selectOnRowClick`.
  *
  * The row is the `group/table-row` group whose hover or focus draws a subtle selection control
- * (`subtleSelection`). A group is matched by any ancestor, so the rows of a grid nested in a cell
+ * (`subtleSelection`) and the `Table.CellActions` of its cells. A group is matched by any
+ * ancestor, so the rows of a grid nested in a cell
  * share it: hovering the outer row also draws the subtle controls of the nested grid (a limit of
  * CSS groups). A Tree in a cell keeps its own rows' group.
  */
@@ -2179,7 +2180,7 @@ function DataGridBodySelectionCell({
       className={cn(
         stableClassName,
         dataGridRowClassNames.selectionCell,
-        selectionCell,
+        SELECTION_CELL_CLASSES,
         focusRingInset,
         row.selectionCellProps?.className,
         className,
@@ -2295,12 +2296,21 @@ const DataGridSelectionCell = ({
 DataGridSelectionCell.displayName = 'DataGridSelectionCell';
 markTablePart(DataGridSelectionCell, 'dataGridSelectionCell');
 
-/** A grid cell (`<td>`), focusable through the grid's keyboard navigation. */
+/**
+ * A grid cell (`<td>`), focusable through the grid's keyboard navigation. It is the positioning
+ * box of a `Table.CellActions` inside it.
+ */
 const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) => (
   <td
     ref={ref}
     role="gridcell"
-    className={cn(dataGridCellClassNames.root, cellBase, 'text-body-1', focusRingInset, className)}
+    className={cn(
+      dataGridCellClassNames.root,
+      cellBase,
+      'relative text-body-1',
+      focusRingInset,
+      className,
+    )}
     {...rest}
   >
     {children}

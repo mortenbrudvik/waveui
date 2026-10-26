@@ -7,6 +7,9 @@ export {
   TableBody,
   TableRow,
   TableCell,
+  TableSelectionCell,
+  TableCellLayout,
+  TableCellActions,
 } from './Table';
 export type {
   TableProps,
@@ -17,6 +20,10 @@ export type {
   TableBodyProps,
   TableRowProps,
   TableCellProps,
+  TableSelectionCellProps,
+  TableSelectionCellCheckedChangeDetails,
+  TableCellLayoutProps,
+  TableCellActionsProps,
 } from './Table';
 
 export {
