@@ -2157,6 +2157,24 @@ describe('Overflow - groups, divider, hooks and asChild (P9-01)', () => {
       expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
     });
 
+    it('makes the button wrapper a list item of a list row, so the list holds only list items', async () => {
+      layoutWith({ overflow: 70, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 });
+      render(<Items overflowButton={moreButton} />);
+      const wrapper = screen.getByRole('button', { name: '+2' }).parentElement;
+      expect(wrapper).toHaveAttribute('data-overflow-button');
+      expect(wrapper).toHaveAttribute('role', 'listitem');
+      expect(screen.getAllByRole('listitem')).toEqual([screen.getByTestId('item-a'), wrapper]);
+      await expectNoA11yViolations();
+    });
+
+    it('gives the button wrapper no role in a row that is not a list', () => {
+      layoutWith({ overflow: 70, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 });
+      render(<ThreeItems overflowButton={moreButton} />);
+      const wrapper = screen.getByRole('button', { name: '+2' }).parentElement;
+      expect(wrapper).toHaveAttribute('data-overflow-button');
+      expect(wrapper).not.toHaveAttribute('role');
+    });
+
     it('lets the hidden state win over the child own style and aria-hidden', () => {
       layoutWith({ overflow: 40, 'item-a': 30, 'item-b': 30, button: 20 });
       render(

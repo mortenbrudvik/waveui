@@ -38,7 +38,8 @@ export interface OverflowProps extends React.HTMLAttributes<HTMLDivElement> {
    * hidden. Receives the number of hidden items and their `itemId`s in DOM order, so the button
    * can open a menu of the hidden items. `hiddenIds` is the button's own array (sorting it in
    * place affects nobody else). Its size on the row's axis (width, or height for a vertical row)
-   * is measured and reserved when items overflow.
+   * is measured and reserved when items overflow. In a list row (`role="list"`, with `asChild`
+   * `<li>` items) the button's wrapper is a list item (`role="listitem"`).
    * Components rendered by it can also read the hidden items with {@link useOverflowMenu}.
    */
   overflowButton?: (count: number, hiddenIds: string[]) => React.ReactNode;
@@ -535,6 +536,8 @@ const OverflowRoot = ({
           // stays in the row.)
           <div
             ref={setButton}
+            // A list row (role="list", a Breadcrumb trail) holds only list items.
+            role={rest.role === 'list' ? 'listitem' : undefined}
             data-overflow-button=""
             data-overflow-pinned={buttonCovers ? '' : undefined}
             className={cn(
