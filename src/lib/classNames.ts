@@ -1036,6 +1036,15 @@ export const breadcrumbItemClassNames = {
   icon: 'wave-breadcrumb-item__icon',
 } as const;
 
+/**
+ * Breadcrumb's overflow button (`maxDisplayedItems`): `root` on the "…" `<button>` that opens the
+ * menu of the hidden items; `icon` on its decorative glyph.
+ */
+export const breadcrumbOverflowClassNames = {
+  root: 'wave-breadcrumb-overflow',
+  icon: 'wave-breadcrumb-overflow__icon',
+} as const;
+
 /** Menu: `root` on the `role="menu"` element of a static menu (a popup menu has Menu.Popover's). */
 export const menuClassNames = { root: 'wave-menu' } as const;
 

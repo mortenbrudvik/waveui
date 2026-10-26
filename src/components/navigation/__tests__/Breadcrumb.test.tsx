@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { Breadcrumb, BreadcrumbItem } from '../Breadcrumb';
 import type { BreadcrumbItemProps } from '../Breadcrumb';
 import type { Slot } from '../../../lib/types';
+import { breadcrumbClassNames, breadcrumbOverflowClassNames } from '../../../lib/classNames';
 import {
   asClientReference,
   createOverlayTestWrapper,
@@ -991,6 +992,397 @@ describe('Breadcrumb', () => {
         target: string;
         children: string;
       }>().toMatchTypeOf<BreadcrumbItemProps>();
+    });
+  });
+  describe('collapse, size, focus mode and divider', () => {
+    const itemLabels = (list: HTMLElement) =>
+      within(list)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent);
+
+    const Trail = (props: Partial<React.ComponentProps<typeof Breadcrumb>>) => (
+      <Breadcrumb {...props}>
+        <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+        <Breadcrumb.Item href="/a">Alpha</Breadcrumb.Item>
+        <Breadcrumb.Item href="/b">Beta</Breadcrumb.Item>
+        <Breadcrumb.Item onClick={() => {}}>Gamma</Breadcrumb.Item>
+        <Breadcrumb.Item href="/d">Delta</Breadcrumb.Item>
+        <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+      </Breadcrumb>
+    );
+
+    const OVERFLOW_ITEM_WARNING =
+      '[WaveUI] Breadcrumb: a hidden item cannot be listed in the overflow menu (it has no `href` or `onClick`, or is not a Breadcrumb.Item): it is shown there disabled, or left out. Give it `href` or `onClick`.';
+
+    it('renders the whole trail, with the default size and focus mode, without any prop', () => {
+      render(<Trail />);
+      const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      expect(nav).toHaveAttribute('data-size', 'medium');
+      expect(nav).toHaveAttribute('data-focus-mode', 'tab');
+      expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
+      expect(within(nav).getAllByRole('listitem')).toHaveLength(6);
+      expect(separatorsIn(nav)).toHaveLength(5);
+      for (const link of within(nav).getAllByRole('link')) {
+        expect(link).not.toHaveAttribute('tabindex');
+      }
+    });
+
+    it('a trail that fits maxDisplayedItems is not collapsed', () => {
+      render(<Trail maxDisplayedItems={6} />);
+      expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
+      expect(screen.getAllByRole('listitem')).toHaveLength(6);
+    });
+
+    it('collapses the middle items into a "More items" menu button', async () => {
+      const user = userEvent.setup();
+      render(<Trail maxDisplayedItems={4} />);
+      const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      expect(itemLabels(nav)).toEqual(['Home', '…', 'Gamma', 'Delta', 'Widget']);
+      expect(separatorsIn(nav)).toHaveLength(4);
+      const button = screen.getByRole('button', { name: 'More items' });
+      expect(button).toHaveAttribute('aria-haspopup', 'menu');
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).toHaveClass(breadcrumbOverflowClassNames.root);
+      expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+
+      await user.click(button);
+      const items = screen.getAllByRole('menuitem');
+      expect(items.map((item) => item.textContent)).toEqual(['Alpha', 'Beta']);
+      expect(items[0]).toHaveAttribute('href', '/a');
+      expect(items[1]).toHaveAttribute('href', '/b');
+      await user.keyboard('{Escape}');
+    });
+
+    it('lists a button item as a menu item that runs its onClick', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <Breadcrumb maxDisplayedItems={2}>
+          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+          <Breadcrumb.Item onClick={onClick}>Gamma</Breadcrumb.Item>
+          <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      await user.click(screen.getByRole('button', { name: 'More items' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Gamma' }));
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('keeps the icon and the disabled state of a hidden item in the menu', async () => {
+      const user = userEvent.setup();
+      render(
+        <Breadcrumb maxDisplayedItems={2}>
+          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+          <Breadcrumb.Item href="/gone" disabled icon={<i data-testid="icon" />}>
+            Gone
+          </Breadcrumb.Item>
+          <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      await user.click(screen.getByRole('button', { name: 'More items' }));
+      const item = screen.getByRole('menuitem', { name: 'Gone' });
+      expect(item).toHaveAttribute('aria-disabled', 'true');
+      expect(item).not.toHaveAttribute('href');
+      expect(within(item).getByTestId('icon')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+    });
+
+    it('names the overflow button with overflowLabel', () => {
+      render(<Trail maxDisplayedItems={4} overflowLabel="Weitere Elemente" />);
+      expect(screen.getByRole('button', { name: 'Weitere Elemente' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
+    });
+
+    it('starts the collapse at overflowIndex', () => {
+      render(<Trail maxDisplayedItems={4} overflowIndex={2} />);
+      const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      expect(itemLabels(nav)).toEqual(['Home', 'Alpha', '…', 'Delta', 'Widget']);
+    });
+
+    it('never hides the first item, whatever overflowIndex says', () => {
+      render(<Trail maxDisplayedItems={4} overflowIndex={0} />);
+      const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      expect(itemLabels(nav)).toEqual(['Home', '…', 'Gamma', 'Delta', 'Widget']);
+    });
+
+    it('never hides the current item', () => {
+      render(
+        <Breadcrumb maxDisplayedItems={3}>
+          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+          <Breadcrumb.Item href="/a">Alpha</Breadcrumb.Item>
+          <Breadcrumb.Item current>Beta</Breadcrumb.Item>
+          <Breadcrumb.Item href="/c">Gamma</Breadcrumb.Item>
+          <Breadcrumb.Item href="/d">Delta</Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      const labels = itemLabels(nav);
+      expect(labels).toContain('Home');
+      expect(labels).toContain('Beta');
+      expect(nav.querySelector('[aria-current="page"]')).toHaveTextContent('Beta');
+      expect(screen.getByRole('button', { name: 'More items' })).toBeInTheDocument();
+    });
+
+    it('accepts items inside Fragments and an asChild link with an href', async () => {
+      const user = userEvent.setup();
+      render(
+        <Breadcrumb maxDisplayedItems={2}>
+          <>
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            <Breadcrumb.Item asChild>
+              <a href="/routed">Routed</a>
+            </Breadcrumb.Item>
+          </>
+          <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      await user.click(screen.getByRole('button', { name: 'More items' }));
+      expect(screen.getByRole('menuitem', { name: 'Routed' })).toHaveAttribute('href', '/routed');
+      await user.keyboard('{Escape}');
+    });
+
+    it('warns once about a hidden item that cannot be listed', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const ui = (
+        <Breadcrumb maxDisplayedItems={2}>
+          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+          <Breadcrumb.Item>Plain</Breadcrumb.Item>
+          <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+        </Breadcrumb>
+      );
+      const { rerender } = render(ui);
+      rerender(ui);
+      expect(warn.mock.calls).toEqual([[OVERFLOW_ITEM_WARNING]]);
+    });
+
+    it('does not warn when every hidden item can be listed', () => {
+      const warn = vi.spyOn(console, 'warn');
+      render(<Trail maxDisplayedItems={4} />);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('has no axe violations collapsed and open', async () => {
+      const user = userEvent.setup();
+      const { container } = render(<Trail maxDisplayedItems={4} />);
+      await expectNoA11yViolations(container);
+      await user.click(screen.getByRole('button', { name: 'More items' }));
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{Escape}');
+    });
+
+    it('server-renders the collapsed trail', () => {
+      const html = renderToString(<Trail maxDisplayedItems={4} />);
+      expect(html).toContain('aria-label="More items"');
+      expect(html).not.toContain('Alpha');
+    });
+
+    it('keeps the stable class names on the overflow button and its list item', () => {
+      render(<Trail maxDisplayedItems={4} />);
+      const button = screen.getByRole('button', { name: 'More items' });
+      expect(button).toHaveClass(breadcrumbOverflowClassNames.root);
+      expect(button.closest('li')).toHaveClass(breadcrumbClassNames.listItem);
+    });
+
+    describe('size', () => {
+      it.each([
+        ['small', 'text-caption-1', '12'],
+        ['medium', 'text-body-1', '12'],
+        ['large', 'text-body-2', '16'],
+      ] as const)('%s sets data-size, the text step and the divider size', (size, text, icon) => {
+        render(<Trail size={size} />);
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(nav).toHaveAttribute('data-size', size);
+        expect(nav.querySelector('ol')).toHaveClass(text);
+        expect(separatorsIn(nav)[0]).toHaveAttribute('width', icon);
+      });
+    });
+
+    describe('focusMode', () => {
+      it('"tab" leaves every link in the tab order and ignores arrow keys', async () => {
+        const user = userEvent.setup();
+        render(<Trail maxDisplayedItems={4} />);
+        const home = screen.getByRole('link', { name: 'Home' });
+        home.focus();
+        await user.keyboard('{ArrowRight}');
+        expect(home).toHaveFocus();
+        for (const el of screen.getAllByRole('link')) expect(el).not.toHaveAttribute('tabindex');
+      });
+
+      it('"arrow" is one Tab stop and arrows move across links and the overflow button', async () => {
+        const user = userEvent.setup();
+        render(<Trail maxDisplayedItems={4} focusMode="arrow" />);
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(nav).toHaveAttribute('data-focus-mode', 'arrow');
+        const home = screen.getByRole('link', { name: 'Home' });
+        const more = screen.getByRole('button', { name: 'More items' });
+        const gamma = screen.getByRole('button', { name: 'Gamma' });
+        const delta = screen.getByRole('link', { name: 'Delta' });
+        expect([home, more, gamma, delta].filter((el) => el.tabIndex === 0)).toEqual([home]);
+
+        await user.tab();
+        expect(home).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(more).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(gamma).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(delta).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(home).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(delta).toHaveFocus();
+        await user.keyboard('{Home}');
+        expect(home).toHaveFocus();
+        await user.keyboard('{End}');
+        expect(delta).toHaveFocus();
+
+        // The last focused item holds the one Tab stop; Tab leaves the trail.
+        expect(delta).toHaveAttribute('tabindex', '0');
+        expect(home).toHaveAttribute('tabindex', '-1');
+        await user.tab();
+        expect(nav.contains(document.activeElement)).toBe(false);
+      });
+
+      it('"arrow" mirrors the arrow keys in RTL', async () => {
+        const user = userEvent.setup();
+        renderWithProviders(<Trail maxDisplayedItems={4} focusMode="arrow" />, { dir: 'rtl' });
+        const home = screen.getByRole('link', { name: 'Home' });
+        const more = screen.getByRole('button', { name: 'More items' });
+        await user.tab();
+        expect(home).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(more).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(home).toHaveFocus();
+      });
+
+      it('"arrow" skips an unavailable link', async () => {
+        const user = userEvent.setup();
+        render(
+          <Breadcrumb focusMode="arrow">
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            <Breadcrumb.Item href="/gone" disabled>
+              Gone
+            </Breadcrumb.Item>
+            <Breadcrumb.Item href="/c">Delta</Breadcrumb.Item>
+            <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+          </Breadcrumb>,
+        );
+        await user.tab();
+        expect(screen.getByRole('link', { name: 'Home' })).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(screen.getByRole('link', { name: 'Delta' })).toHaveFocus();
+      });
+
+      it('"arrow" leaves the arrow keys of the open overflow menu to the menu', async () => {
+        const user = userEvent.setup();
+        render(<Trail maxDisplayedItems={4} focusMode="arrow" />);
+        await user.tab();
+        await user.keyboard('{ArrowRight}');
+        await user.keyboard('{Enter}');
+        const items = await screen.findAllByRole('menuitem');
+        expect(items[0]).toHaveFocus();
+        await user.keyboard('{ArrowDown}');
+        expect(items[1]).toHaveFocus();
+        await user.keyboard('{Escape}');
+        expect(screen.getByRole('button', { name: 'More items' })).toHaveFocus();
+      });
+
+      it('hands the tab stops back when the mode changes to "tab"', () => {
+        const { rerender } = render(<Trail focusMode="arrow" />);
+        expect(screen.getByRole('link', { name: 'Alpha' })).toHaveAttribute('tabindex', '-1');
+        rerender(<Trail focusMode="tab" />);
+        expect(screen.getByRole('link', { name: 'Alpha' })).not.toHaveAttribute('tabindex');
+      });
+
+      it('keeps the consumer onKeyDown and ref on the nav', async () => {
+        const user = userEvent.setup();
+        const onKeyDown = vi.fn();
+        const ref = React.createRef<HTMLElement>();
+        render(<Trail focusMode="arrow" onKeyDown={onKeyDown} ref={ref} />);
+        await user.tab();
+        await user.keyboard('{ArrowRight}');
+        expect(onKeyDown).toHaveBeenCalled();
+        expect(ref.current).toBe(screen.getByRole('navigation', { name: 'Breadcrumb' }));
+      });
+    });
+
+    it('imports Menu, and no Menu module imports Breadcrumb', () => {
+      const menuModules = import.meta.glob<string>(['../Menu*.{ts,tsx}'], {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      });
+      expect(Object.keys(menuModules).length).toBeGreaterThan(5);
+      for (const [path, source] of Object.entries(menuModules)) {
+        expect(source, path).not.toMatch(/from\s+['"][^'"]*Breadcrumb['"]/);
+      }
+    });
+
+    describe('divider', () => {
+      it('replaces the chevron with the slot content', () => {
+        render(<Trail divider="/" />);
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        const dividers = separatorsIn(nav);
+        expect(dividers).toHaveLength(5);
+        expect(dividers[0]).toHaveTextContent('/');
+        expect(dividers[0]).toHaveAttribute('aria-hidden', 'true');
+        expect(dividers[0]).toHaveClass(breadcrumbClassNames.divider);
+        expect(dividers[0].tagName).toBe('SPAN');
+        expect(dividers[0].getAttribute('class')).not.toContain('wave-rtl:-scale-x-100');
+        expect(nav.querySelector('svg[data-wave-icon]')).toBeNull();
+      });
+
+      it('false hides the divider', () => {
+        render(<Trail divider={false} />);
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(separatorsIn(nav)).toHaveLength(0);
+        expect(within(nav).getAllByRole('listitem')).toHaveLength(6);
+      });
+
+      // `0` is content for a slot (unlike an icon, which treats it as a falsy count): it renders.
+      it.each(EMPTY_ICONS.filter(([name]) => name !== '0'))(
+        '%s hides the divider',
+        (_name, make) => {
+          render(<Trail divider={make()} />);
+          expect(separatorsIn(screen.getByRole('navigation', { name: 'Breadcrumb' }))).toHaveLength(
+            0,
+          );
+        },
+      );
+
+      it.each([
+        ['null', null],
+        ['undefined', undefined],
+      ])('%s keeps the chevron', (_name, divider) => {
+        render(<Trail divider={divider} />);
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(separatorsIn(nav)).toHaveLength(5);
+        expect(separatorsIn(nav)[0].tagName.toLowerCase()).toBe('svg');
+      });
+
+      it('mirrors the default chevron in RTL', () => {
+        renderWithProviders(<Trail />, { dir: 'rtl' });
+        expect(separatorsIn(screen.getByRole('navigation'))[0]).toHaveClass(
+          'wave-rtl:-scale-x-100',
+        );
+      });
+
+      it('applies to the separators around the overflow button too', () => {
+        render(<Trail maxDisplayedItems={4} divider="|" />);
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(separatorsIn(nav)).toHaveLength(4);
+        for (const divider of separatorsIn(nav)) expect(divider).toHaveTextContent('|');
+      });
+
+      it('accepts a slot object', () => {
+        render(<Trail divider={{ children: '>', className: 'text-error' }} />);
+        const divider = separatorsIn(screen.getByRole('navigation'))[0];
+        expect(divider).toHaveTextContent('>');
+        expect(divider).toHaveClass('text-error');
+        expect(divider).toHaveClass(breadcrumbClassNames.divider);
+      });
     });
   });
 });

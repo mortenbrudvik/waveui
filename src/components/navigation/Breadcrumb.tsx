@@ -2,13 +2,22 @@ import * as React from 'react';
 import { preventIfDisabled } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
-import { breadcrumbClassNames, breadcrumbItemClassNames } from '../../lib/classNames';
-import type { Slot } from '../../lib/types';
+import {
+  breadcrumbClassNames,
+  breadcrumbItemClassNames,
+  breadcrumbOverflowClassNames,
+} from '../../lib/classNames';
+import { partitionBreadcrumbItems } from '../../lib/breadcrumb';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import type { CoreSize, FocusMode, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { warnOnce } from '../../lib/dev';
 import { ChevronRightIcon } from '../../lib/icons';
 import { disabledStyles, focusRing } from '../../lib/styles';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { useTriggerElement } from '../../hooks/useTriggerElement';
+import { Menu } from './Menu';
 
 /** Properties for the Breadcrumb component. */
 export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
@@ -17,6 +26,43 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
    * the items of a conditional group (`{isAdmin && <>…</>}`) each get their own list item too.
    */
   children: React.ReactNode;
+  /**
+   * The most items the trail shows, the overflow button not counted. A longer trail collapses its
+   * middle items, from `overflowIndex`, into a "…" button that opens a menu of them (a link item
+   * becomes a `Menu.ItemLink`, a button item a `Menu.Item`). The first item and the last `current`
+   * item are never hidden. Without it the whole trail is shown. A value below 1 means 6, as in
+   * `partitionBreadcrumbItems`.
+   */
+  maxDisplayedItems?: number;
+  /**
+   * The index of the first collapsed item (with `maxDisplayedItems`). It is at least 1, so the
+   * first item stays, and at most `maxDisplayedItems - 1`.
+   * @default 1
+   */
+  overflowIndex?: number;
+  /**
+   * Accessible name of the overflow button (with `maxDisplayedItems`).
+   * @default "More items"
+   */
+  overflowLabel?: string;
+  /**
+   * Text and divider size.
+   * @default 'medium'
+   */
+  size?: CoreSize;
+  /**
+   * `'tab'`: every link is a Tab stop. `'arrow'`: the trail is one Tab stop (the last focused link
+   * or button, at first the first one) and the arrow keys (mirrored in right-to-left layouts),
+   * Home and End move between its links and the overflow button.
+   * @default 'tab'
+   */
+  focusMode?: FocusMode;
+  /**
+   * The separator between items; a decorative `<span>`. `null` or `undefined` keep the chevron
+   * (mirrored in right-to-left layouts); `false`, or content that renders nothing, hides the
+   * separators. A custom divider is not mirrored.
+   */
+  divider?: Slot<'span'>;
   /** Ref to the `<nav>` element. */
   ref?: React.Ref<HTMLElement>;
 }
@@ -208,35 +254,236 @@ function spanAttributes(rest: Record<string, unknown>): React.HTMLAttributes<HTM
   return attributes as React.HTMLAttributes<HTMLSpanElement>;
 }
 
-const BreadcrumbRoot = ({ children, className, ref, ...rest }: BreadcrumbProps) => {
+/** Text step and divider size (px) of each size; literal classes for Tailwind's scan. */
+const breadcrumbSizes = {
+  small: { text: 'text-caption-1', divider: 12 },
+  medium: { text: 'text-body-1', divider: 12 },
+  large: { text: 'text-body-2', divider: 16 },
+} as const satisfies Record<CoreSize, { text: string; divider: number }>;
+
+/** The controls of the trail that the arrow keys visit (`focusMode="arrow"`). */
+const BREADCRUMB_FOCUS_SELECTOR = 'a[href], button, [role="link"]';
+
+/** The key of the list item that holds the overflow button; a flattened child key never matches. */
+const OVERFLOW_KEY = '\u0000overflow';
+
+type BreadcrumbEntry = ReturnType<typeof flattenChildren>[number];
+
+/** The props of a trail item that the overflow menu reads. */
+interface HiddenItemProps {
+  href?: string;
+  current?: boolean;
+  icon?: Slot<'span'>;
+  disabled?: boolean;
+  asChild?: boolean;
+  children?: React.ReactNode;
+  onClick?: React.MouseEventHandler<HTMLElement>;
+}
+
+function isCurrentEntry(entry: BreadcrumbEntry): boolean {
+  return (
+    isElementOfType<HiddenItemProps>(entry.node, BreadcrumbItem) &&
+    entry.node.props.current === true
+  );
+}
+
+/**
+ * The indexes of the entries that collapse into the overflow menu, ascending. The partition of
+ * `partitionBreadcrumbItems` decides, except that the first entry and the last current one stay:
+ * a protected entry in the range is replaced by the next unprotected entry after it, else before.
+ */
+function collapsedIndexes(
+  entries: readonly BreadcrumbEntry[],
+  maxDisplayedItems: number | undefined,
+  overflowIndex: number,
+): number[] {
+  if (maxDisplayedItems === undefined) return [];
+  const { overflowItems } = partitionBreadcrumbItems({
+    items: entries.map((_, index) => index),
+    maxDisplayedItems,
+    overflowIndex: Math.max(1, overflowIndex),
+  });
+  if (!overflowItems) return [];
+  const current = entries.map(isCurrentEntry).lastIndexOf(true);
+  const isProtected = (index: number) => index === 0 || index === current;
+  const collapsed = overflowItems.filter((index) => !isProtected(index));
+  for (
+    let next = overflowItems[overflowItems.length - 1] + 1;
+    collapsed.length < overflowItems.length && next < entries.length;
+    next++
+  ) {
+    if (!isProtected(next)) collapsed.push(next);
+  }
+  for (
+    let before = overflowItems[0] - 1;
+    collapsed.length < overflowItems.length && before >= 1;
+    before--
+  ) {
+    if (!isProtected(before)) collapsed.push(before);
+  }
+  return collapsed.sort((a, b) => a - b);
+}
+
+/**
+ * The menu item of a collapsed trail item: a `Menu.ItemLink` for a link (an `asChild` element
+ * with an `href` too), a `Menu.Item` for a button. An item with neither is listed disabled, and an
+ * element that is no `Breadcrumb.Item` is left out; both are not `mappable`.
+ */
+function overflowMenuItem(entry: BreadcrumbEntry): { node: React.ReactNode; mappable: boolean } {
+  const item = entry.node;
+  if (!isElementOfType<HiddenItemProps>(item, BreadcrumbItem)) {
+    return { node: null, mappable: false };
+  }
+  const { href: itemHref, icon, disabled, asChild, children, onClick } = item.props;
+  const inner =
+    asChild && React.isValidElement<{ href?: string; children?: React.ReactNode }>(children)
+      ? children
+      : null;
+  const label = inner ? inner.props.children : children;
+  const href = itemHref ?? inner?.props.href;
+  if (typeof href === 'string') {
+    return {
+      node: (
+        <Menu.ItemLink
+          key={entry.key}
+          href={href}
+          icon={icon}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {label}
+        </Menu.ItemLink>
+      ),
+      mappable: true,
+    };
+  }
+  return {
+    node: (
+      <Menu.Item
+        key={entry.key}
+        icon={icon}
+        disabled={disabled || !onClick}
+        onClick={onClick as React.MouseEventHandler<HTMLDivElement> | undefined}
+      >
+        {label}
+      </Menu.Item>
+    ),
+    mappable: onClick !== undefined,
+  };
+}
+
+const BreadcrumbRoot = ({
+  children,
+  maxDisplayedItems,
+  overflowIndex = 1,
+  overflowLabel = 'More items',
+  size = 'medium',
+  focusMode = 'tab',
+  divider,
+  className,
+  onKeyDown,
+  onFocus,
+  ref,
+  ...rest
+}: BreadcrumbProps) => {
   // Fragments are opened (`{isAdmin && <>…</>}`), so every crumb gets its own list item and separator.
-  const items = flattenChildren(children);
+  const entries = flattenChildren(children);
+  const collapsed = collapsedIndexes(entries, maxDisplayedItems, overflowIndex);
+  const collapsedItems = collapsed.map((index) => overflowMenuItem(entries[index]));
+  const unlistable = collapsedItems.some((item) => !item.mappable);
+  React.useEffect(() => {
+    if (unlistable) {
+      warnOnce(
+        'Breadcrumb:overflow-item',
+        'Breadcrumb: a hidden item cannot be listed in the overflow menu (it has no `href` or `onClick`, or is not a Breadcrumb.Item): it is shown there disabled, or left out. Give it `href` or `onClick`.',
+      );
+    }
+  }, [unlistable]);
+
+  // The trail in order, the overflow button standing where the first collapsed item was.
+  const trail: Array<{ key: string; node: React.ReactNode }> = [];
+  entries.forEach((entry, index) => {
+    if (!collapsed.includes(index)) {
+      trail.push(entry);
+    } else if (index === collapsed[0]) {
+      trail.push({
+        key: OVERFLOW_KEY,
+        node: (
+          <Menu>
+            <Menu.Trigger>
+              <button
+                type="button"
+                aria-label={overflowLabel}
+                className={cn(breadcrumbOverflowClassNames.root, linkClasses, 'rounded px-1')}
+              >
+                <span aria-hidden="true" className={breadcrumbOverflowClassNames.icon}>
+                  …
+                </span>
+              </button>
+            </Menu.Trigger>
+            <Menu.Popover>{collapsedItems.map((item) => item.node)}</Menu.Popover>
+          </Menu>
+        ),
+      });
+    }
+  });
+
+  const arrow = focusMode === 'arrow';
+  const { containerProps } = useRovingTabIndex({
+    itemSelector: BREADCRUMB_FOCUS_SELECTOR,
+    manageTabIndex: arrow,
+    tabStop: 'last-focused',
+    orientation: 'horizontal',
+  });
+  const mergedRef = useMergedRefs<HTMLElement>(arrow ? containerProps.ref : null, ref);
+
+  // `divider` is an optional indicator: unset keeps the chevron, a value that renders nothing hides it.
+  const renderDivider = () =>
+    divider == null ? (
+      <ChevronRightIcon
+        size={breadcrumbSizes[size].divider}
+        data-wave-breadcrumb-separator=""
+        className={cn(
+          breadcrumbClassNames.divider,
+          'shrink-0 text-muted-foreground wave-rtl:-scale-x-100',
+        )}
+      />
+    ) : slotRendersContent(divider) ? (
+      renderSlot(
+        divider,
+        'span',
+        cn(breadcrumbClassNames.divider, 'inline-flex shrink-0 items-center text-muted-foreground'),
+        { 'aria-hidden': true, 'data-wave-breadcrumb-separator': '' },
+      )
+    ) : null;
 
   return (
     <nav
-      ref={ref}
       aria-label="Breadcrumb"
+      data-size={size}
+      data-focus-mode={focusMode}
       {...rest}
+      ref={mergedRef}
+      data-roving-container={arrow ? '' : undefined}
+      onKeyDown={arrow ? composeEventHandlers(onKeyDown, containerProps.onKeyDown) : onKeyDown}
+      onFocus={
+        arrow
+          ? composeEventHandlers(onFocus, containerProps.onFocus, { checkDefaultPrevented: false })
+          : onFocus
+      }
       className={cn(breadcrumbClassNames.root, className)}
     >
       <ol
         className={cn(
           breadcrumbClassNames.list,
-          'm-0 flex list-none items-center gap-1 p-0 text-body-1',
+          'm-0 flex list-none items-center gap-1 p-0',
+          breadcrumbSizes[size].text,
         )}
       >
-        {items.map(({ key, node: child }, index) => (
+        {trail.map(({ key, node }, index) => (
           <li key={key} className={cn(breadcrumbClassNames.listItem, 'flex items-center gap-1')}>
-            {index > 0 && (
-              <ChevronRightIcon
-                data-wave-breadcrumb-separator=""
-                className={cn(
-                  breadcrumbClassNames.divider,
-                  'shrink-0 text-muted-foreground wave-rtl:-scale-x-100',
-                )}
-              />
-            )}
-            {child}
+            {index > 0 && renderDivider()}
+            {node}
           </li>
         ))}
       </ol>
@@ -461,7 +708,10 @@ BreadcrumbItem.displayName = 'BreadcrumbItem';
  * A breadcrumb trail: a `<nav aria-label="Breadcrumb">` landmark with an ordered list. Each child
  * is placed in its own list item (Fragments are opened, so each of their items gets one too); from
  * the second one on, the item begins with a decorative separator chevron that is mirrored in
- * right-to-left layouts.
+ * right-to-left layouts (`divider` replaces or hides it).
+ *
+ * `maxDisplayedItems` collapses the middle of a long trail into a "…" menu button; `size` sets the
+ * text step and `focusMode="arrow"` makes the trail one Tab stop with arrow-key navigation.
  *
  * `Breadcrumb.Item` is also exported as `BreadcrumbItem`: React Server Components import the flat
  * name, because dotted access needs a client file.
