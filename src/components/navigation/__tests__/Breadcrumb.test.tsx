@@ -1,21 +1,27 @@
 import * as React from 'react';
 import { describe, it, expect, vi, afterEach, expectTypeOf } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Breadcrumb, BreadcrumbItem } from '../Breadcrumb';
 import type { BreadcrumbItemProps } from '../Breadcrumb';
 import type { Slot } from '../../../lib/types';
-import { breadcrumbClassNames } from '../../../lib/classNames';
+import {
+  breadcrumbClassNames,
+  overflowClassNames,
+  overflowItemClassNames,
+} from '../../../lib/classNames';
 import {
   asClientReference,
   createOverlayTestWrapper,
   expectNoA11yViolations,
+  installResizeObserverMock,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
   testSystemProps,
 } from '../../../test-utils';
+import type { ResizeObserverMock } from '../../../test-utils';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -1489,6 +1495,259 @@ describe('Breadcrumb', () => {
         expect(divider).toHaveTextContent('>');
         expect(divider).toHaveClass('text-error');
         expect(divider).toHaveClass(breadcrumbClassNames.divider);
+      });
+    });
+
+    describe('responsive collapse (overflow="auto")', () => {
+      const restores: Array<() => void> = [];
+      let resize: ResizeObserverMock | null = null;
+
+      afterEach(() => {
+        restores.splice(0).forEach((restore) => restore());
+        resize?.restore();
+        resize = null;
+      });
+
+      /**
+       * jsdom has no layout: the trail is `room` wide, each list item 50 (its separator included)
+       * and the overflow button's wrapper 20. Like a `display: none` element in a browser, a hidden
+       * item measures 0, so the trail measures it from its cache. Change `room` and call `grow()`
+       * to resize the trail.
+       */
+      function layoutWith(room: number) {
+        const stub = (proto: object, name: string, get: (el: Element) => number) => {
+          const saved = Object.getOwnPropertyDescriptor(proto, name);
+          Object.defineProperty(proto, name, {
+            configurable: true,
+            get(this: Element) {
+              return get(this);
+            },
+          });
+          restores.push(() => {
+            if (saved) Object.defineProperty(proto, name, saved);
+            else Reflect.deleteProperty(proto, name);
+          });
+        };
+        const layout = {
+          room,
+          resizeTo(next: number) {
+            layout.room = next;
+            resize?.trigger(screen.getByRole('list'));
+          },
+        };
+        stub(HTMLElement.prototype, 'offsetWidth', (el) => {
+          if (el.hasAttribute('data-overflow-hidden')) return 0;
+          if (el.hasAttribute('data-overflow-button')) return 20;
+          return el.tagName === 'LI' ? 50 : 0;
+        });
+        stub(Element.prototype, 'clientWidth', (el) =>
+          el.classList.contains(overflowClassNames.root) ? layout.room : 0,
+        );
+        resize = installResizeObserverMock();
+        return layout;
+      }
+
+      /** The shown list items (hidden ones are `aria-hidden`), the overflow button's included. */
+      const shownLabels = () => screen.getAllByRole('listitem').map((li) => li.textContent);
+
+      const menuLabels = async (user: ReturnType<typeof userEvent.setup>) => {
+        await user.click(screen.getByRole('button', { name: 'More items' }));
+        const labels = screen.getAllByRole('menuitem').map((item) => item.textContent);
+        await user.keyboard('{Escape}');
+        return labels;
+      };
+
+      it('hides middle items first, from the start of the trail, into the "More items" menu', async () => {
+        const user = userEvent.setup();
+        layoutWith(200);
+        render(<Trail overflow="auto" />);
+        // 6 x 50 = 300 in 200: Alpha, Beta and Gamma go (150 + the 20 of the button fit).
+        expect(shownLabels()).toEqual(['Home', 'Delta', 'Widget', '…']);
+        const button = screen.getByRole('button', { name: 'More items' });
+        expect(button).toHaveAttribute('aria-haspopup', 'menu');
+        expect(button).toHaveAttribute('type', 'button');
+
+        await user.click(button);
+        const items = screen.getAllByRole('menuitem');
+        expect(items.map((item) => item.textContent)).toEqual(['Alpha', 'Beta', 'Gamma']);
+        expect(items[0]).toHaveAttribute('href', '/a');
+        expect(items[1]).toHaveAttribute('href', '/b');
+        expect(items[2]).not.toHaveAttribute('href');
+        await user.keyboard('{Escape}');
+      });
+
+      it('hides the first item only after every middle item, and never the current item', async () => {
+        const user = userEvent.setup();
+        const layout = layoutWith(130);
+        render(<Trail overflow="auto" />);
+        expect(shownLabels()).toEqual(['Home', 'Widget', '…']);
+        expect(await menuLabels(user)).toEqual(['Alpha', 'Beta', 'Gamma', 'Delta']);
+
+        layout.resizeTo(80);
+        expect(shownLabels()).toEqual(['Widget', '…']);
+        expect(await menuLabels(user)).toEqual(['Home', 'Alpha', 'Beta', 'Gamma', 'Delta']);
+
+        layout.resizeTo(10);
+        expect(shownLabels()).toEqual(['Widget', '…']);
+        expect(screen.getByText('Widget')).toHaveAttribute('aria-current', 'page');
+      });
+
+      it('restores the hidden items in order as the trail grows, and drops the button', () => {
+        const layout = layoutWith(80);
+        render(<Trail overflow="auto" />);
+        expect(shownLabels()).toEqual(['Widget', '…']);
+        layout.resizeTo(130);
+        expect(shownLabels()).toEqual(['Home', 'Widget', '…']);
+        layout.resizeTo(180);
+        expect(shownLabels()).toEqual(['Home', 'Delta', 'Widget', '…']);
+        layout.resizeTo(230);
+        expect(shownLabels()).toEqual(['Home', 'Gamma', 'Delta', 'Widget', '…']);
+        layout.resizeTo(280);
+        expect(shownLabels()).toEqual(['Home', 'Beta', 'Gamma', 'Delta', 'Widget', '…']);
+        layout.resizeTo(300);
+        expect(shownLabels()).toEqual(['Home', 'Alpha', 'Beta', 'Gamma', 'Delta', 'Widget']);
+        expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
+      });
+
+      it('renders the trail as Overflow list items with both stable classes', () => {
+        layoutWith(200);
+        render(<Trail overflow="auto" size="large" />);
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(nav).toHaveAttribute('data-overflow', 'auto');
+        const list = within(nav).getByRole('list');
+        expect(list).toHaveClass(overflowClassNames.root, breadcrumbClassNames.list, 'text-body-2');
+        const items = list.querySelectorAll('li');
+        expect(items).toHaveLength(6);
+        for (const li of Array.from(items)) {
+          expect(li.parentElement).toBe(list);
+          expect(li).toHaveClass(overflowItemClassNames.root, breadcrumbClassNames.listItem);
+        }
+        expect(items[1]).toHaveAttribute('data-overflow-hidden');
+        expect(separatorsIn(nav)).toHaveLength(5);
+        const button = screen.getByRole('button', { name: 'More items' });
+        expect(button).toHaveClass(breadcrumbClassNames.overflowButton);
+        expect(button.parentElement).toHaveAttribute('role', 'listitem');
+      });
+
+      it('has no axe violations collapsed and with the menu open', async () => {
+        const user = userEvent.setup();
+        layoutWith(200);
+        const { container } = render(<Trail overflow="auto" />);
+        await expectNoA11yViolations(container);
+        await user.click(screen.getByRole('button', { name: 'More items' }));
+        await expectNoA11yViolations(document.body);
+        await user.keyboard('{Escape}');
+      });
+
+      it('names the overflow button with overflowLabel', () => {
+        layoutWith(200);
+        render(<Trail overflow="auto" overflowLabel="Weitere Elemente" />);
+        expect(screen.getByRole('button', { name: 'Weitere Elemente' })).toBeInTheDocument();
+      });
+
+      it('ignores maxDisplayedItems and overflowIndex: the room decides', () => {
+        layoutWith(300);
+        render(<Trail overflow="auto" maxDisplayedItems={2} overflowIndex={2} />);
+        expect(shownLabels()).toEqual(['Home', 'Alpha', 'Beta', 'Gamma', 'Delta', 'Widget']);
+        expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
+      });
+
+      it('"none", the default, renders no Overflow (the 0.13 list)', () => {
+        const { rerender } = render(<Trail />);
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(nav).toHaveAttribute('data-overflow', 'none');
+        rerender(<Trail overflow="none" />);
+        expect(nav).toHaveAttribute('data-overflow', 'none');
+        expect(within(nav).getByRole('list').tagName).toBe('OL');
+        expect(nav.querySelector(`.${overflowClassNames.root}`)).toBeNull();
+        expect(nav.querySelector(`.${overflowItemClassNames.root}`)).toBeNull();
+      });
+
+      it('"arrow" focus mode skips the hidden items and reaches the overflow button', async () => {
+        const user = userEvent.setup();
+        layoutWith(200);
+        render(<Trail overflow="auto" focusMode="arrow" />);
+        const home = screen.getByRole('link', { name: 'Home' });
+        await user.tab();
+        expect(home).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(screen.getByRole('link', { name: 'Delta' })).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(screen.getByRole('button', { name: 'More items' })).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(home).toHaveFocus();
+      });
+
+      it('"arrow" focus mode moves the one Tab stop off an item that gets hidden', async () => {
+        const user = userEvent.setup();
+        const layout = layoutWith(300);
+        render(<Trail overflow="auto" focusMode="arrow" />);
+        const alpha = screen.getByRole('link', { name: 'Alpha' });
+        await user.tab();
+        await user.keyboard('{ArrowRight}');
+        expect(alpha).toHaveFocus();
+        await user.tab();
+        expect(alpha).toHaveAttribute('tabindex', '0');
+
+        // The Tab stops a keyboard can reach (an inert item is out of the tab order).
+        const reachableStops = () =>
+          Array.from(
+            screen.getByRole('navigation').querySelectorAll<HTMLElement>('a, button'),
+          ).filter((el) => el.tabIndex === 0 && !el.closest('[inert]'));
+        layout.resizeTo(200);
+        await act(async () => {});
+        expect(alpha.closest('li')).toHaveAttribute('data-overflow-hidden');
+        expect(reachableStops()).toEqual([screen.getByRole('link', { name: 'Home' })]);
+
+        // Shown again, the last focused item takes its Tab stop back.
+        layout.resizeTo(300);
+        await act(async () => {});
+        expect(reachableStops()).toEqual([alpha]);
+      });
+
+      it('warns once about a hidden item that cannot be listed', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        layoutWith(130);
+        const ui = (
+          <Breadcrumb overflow="auto">
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            <Breadcrumb.Item>Plain</Breadcrumb.Item>
+            <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+          </Breadcrumb>
+        );
+        const { rerender } = render(ui);
+        rerender(ui);
+        expect(shownLabels()).toEqual(['Home', 'Widget', '…']);
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] Breadcrumb.Item: a non-current item without `href` or `onClick` renders as plain text, not a link. Pass `href` (or `onClick`, which renders a button) to make it navigable.',
+          ],
+          [OVERFLOW_ITEM_WARNING],
+        ]);
+      });
+
+      it('pins a current item written in a Server Component (C-COMPOUND)', () => {
+        const Item = asClientReference(BreadcrumbItem);
+        const layout = layoutWith(80);
+        render(
+          <Breadcrumb overflow="auto">
+            <Item href="/">Home</Item>
+            <Item href="/a">Alpha</Item>
+            <Item current>Widget</Item>
+          </Breadcrumb>,
+        );
+        expect(shownLabels()).toEqual(['Widget', '…']);
+        layout.resizeTo(10);
+        expect(shownLabels()).toEqual(['Widget', '…']);
+      });
+
+      it('server-renders the whole trail as list items, before any measurement', () => {
+        const html = renderToString(<Trail overflow="auto" />);
+        expect(html).toContain('data-overflow="auto"');
+        expect(html).toContain('role="list"');
+        expect(html).toContain('Alpha');
+        expect(html).not.toContain('data-overflow-hidden');
+        expect(html).not.toContain('More items');
       });
     });
   });
