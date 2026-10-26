@@ -158,7 +158,7 @@
 
 **Files:** Modify `Table.tsx`, `Table.shared.tsx`, `src/lib/classNames.ts`, barrels; Test `Table.test.tsx`.
 
-**Interfaces:** Produces `Table.SelectionCell` (`type`, `checked: boolean|'mixed'`, `defaultChecked`, `onCheckedChange(checked, details?)`, `name`, `subtle`, `invisible`), `Table.CellLayout` (`media`, `description`, `truncate`, `appearance`), `Table.CellActions` (`visible`); flat names and constants; `group/row` on `Table.Row` and `DataGrid.Row`.
+**Interfaces:** Produces `Table.SelectionCell` (`type`, `checked: boolean|'mixed'`, `defaultChecked`, `onCheckedChange(checked, details?)`, `name`, `subtle`, `invisible`), `Table.CellLayout` (`media`, `description`, `truncate`, `appearance`), `Table.CellActions` (`visible`); flat names and constants; `group/table-row` on `Table.Row` and `DataGrid.Row`.
 
 - [ ] **Step 1:** Failing tests: the cell renders the grid's native input (checkbox or radio, `mixed` sets indeterminate), controlled and uncontrolled, control props reach the input (C-ROUTING), StrictMode once; `CellLayout` media/description/truncate classes and the fixed avatar size context; `CellActions` hidden until row hover/focus-within, `visible`, forced-colors and coarse pointer, logical `end-0` (RTL), keeps the striped row rule; axe; compound exposure and `asClientReference`.
 - [ ] **Step 2:** Run; FAIL on new cases only.
