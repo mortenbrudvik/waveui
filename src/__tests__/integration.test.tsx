@@ -282,8 +282,11 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'useIsClient',
       'useOverflowMenu',
       'useIsOverflowItemVisible',
+      'useIsOverflowGroupVisible',
+      'useHasHiddenItems',
       'RadioItem',
       'OverflowItem',
+      'OverflowDivider',
     ]) {
       expect(barrel[name], name).toBeTypeOf('function');
     }

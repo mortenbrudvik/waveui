@@ -1000,6 +1000,9 @@ export const overflowClassNames = {
 /** Overflow.Item: `root` on the item element. */
 export const overflowItemClassNames = { root: 'wave-overflow-item' } as const;
 
+/** Overflow.Divider: `root` on the divider element. */
+export const overflowDividerClassNames = { root: 'wave-overflow-divider' } as const;
+
 /** Stack: `root` on the rendered element. */
 export const stackClassNames = { root: 'wave-stack' } as const;
 

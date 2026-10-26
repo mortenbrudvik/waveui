@@ -21,6 +21,7 @@ import {
   flexClassNames,
   gridClassNames,
   overflowClassNames,
+  overflowDividerClassNames,
   overflowItemClassNames,
   stackClassNames,
   tabListClassNames,
@@ -226,7 +227,7 @@ describe('stable class names: layout folder', () => {
     expect(screen.getByTestId('empty')).toHaveClass(carouselClassNames.root);
   });
 
-  it('Overflow: root, items and the wrapper of the overflow button', () => {
+  it('Overflow: root, items, divider and the wrapper of the overflow button', () => {
     const restore = stubOverflowWidths({ overflow: 60, 'item-a': 40, 'item-b': 40, button: 20 });
     try {
       render(
@@ -240,9 +241,11 @@ describe('stable class names: layout folder', () => {
           <Overflow.Item itemId="b" data-testid="item-b">
             B
           </Overflow.Item>
+          <Overflow.Divider groupId="g" data-testid="divider" />
         </Overflow>,
       );
       expect(screen.getByTestId('overflow')).toHaveClass(overflowClassNames.root);
+      expect(screen.getByTestId('divider')).toHaveClass(overflowDividerClassNames.root);
       expect(screen.getByTestId('item-a')).toHaveClass(overflowItemClassNames.root);
       expect(screen.getByTestId('item-b')).toHaveClass(overflowItemClassNames.root);
       expect(screen.getByRole('button', { name: '+1' }).parentElement).toHaveClass(

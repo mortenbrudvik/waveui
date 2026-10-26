@@ -56,13 +56,17 @@ export type {
 
 export {
   Overflow,
+  OverflowDivider,
   OverflowItem,
+  useHasHiddenItems,
+  useIsOverflowGroupVisible,
   useIsOverflowing,
   useOverflowMenu,
   useIsOverflowItemVisible,
 } from './Overflow';
 export type {
   OverflowProps,
+  OverflowDividerProps,
   OverflowItemProps,
   OverflowItemBaseProps,
   OverflowItemPriorityProps,
