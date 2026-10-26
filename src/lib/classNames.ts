@@ -1427,7 +1427,7 @@ export const dataGridHeaderClassNames = {
 
 /**
  * DataGrid.HeaderCell: `root` on the `<th>`; `button` on the sort button; `sortIcon` on its
- * direction `<svg>`.
+ * direction glyph (the default arrow `<svg>`, or the `<span>` of a `sortIcon` slot).
  */
 export const dataGridHeaderCellClassNames = {
   root: 'wave-data-grid-header-cell',

@@ -14,6 +14,8 @@ const ICONS: Array<[name: string, dataName: string, defaultSize: number]> = [
   ['ChevronUpIcon', 'chevron-up', 12],
   ['ChevronLeftIcon', 'chevron-left', 12],
   ['ChevronRightIcon', 'chevron-right', 12],
+  ['SortArrowUp', 'sort-arrow-up', 12],
+  ['SortArrowDown', 'sort-arrow-down', 12],
   ['ChevronDoubleLeftIcon', 'chevron-double-left', 12],
   ['ChevronDoubleRightIcon', 'chevron-double-right', 12],
   ['CalendarIcon', 'calendar', 16],

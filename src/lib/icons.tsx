@@ -146,6 +146,30 @@ export const ChevronRightIcon = /* @__PURE__ */ createIcon({
   content: <path d={CHEVRON_RIGHT} />,
 });
 
+/** Arrow pointing up: an ascending sort (DataGrid and Table sort buttons). */
+export const SortArrowUp = /* @__PURE__ */ createIcon({
+  name: 'sort-arrow-up',
+  displayName: 'SortArrowUp',
+  viewBox: '0 0 12 12',
+  defaultSize: 12,
+  paint: 'fill',
+  content: (
+    <path d="M6 1.5a.75.75 0 0 1 .53.22l3.25 3.25a.75.75 0 0 1-1.06 1.06L6.75 4.06v5.69a.75.75 0 0 1-1.5 0V4.06L3.28 6.03a.75.75 0 0 1-1.06-1.06l3.25-3.25A.75.75 0 0 1 6 1.5Z" />
+  ),
+});
+
+/** Arrow pointing down: a descending sort (DataGrid and Table sort buttons). */
+export const SortArrowDown = /* @__PURE__ */ createIcon({
+  name: 'sort-arrow-down',
+  displayName: 'SortArrowDown',
+  viewBox: '0 0 12 12',
+  defaultSize: 12,
+  paint: 'fill',
+  content: (
+    <path d="M6 10.5a.75.75 0 0 0 .53-.22l3.25-3.25a.75.75 0 0 0-1.06-1.06L6.75 7.94V2.25a.75.75 0 0 0-1.5 0v5.69L3.28 5.97a.75.75 0 0 0-1.06 1.06l3.25 3.25a.75.75 0 0 0 .53.22Z" />
+  ),
+});
+
 /** Double chevron pointing left (Pagination "first"). */
 export const ChevronDoubleLeftIcon = /* @__PURE__ */ createIcon({
   name: 'chevron-double-left',
