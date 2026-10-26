@@ -2,11 +2,7 @@ import * as React from 'react';
 import { preventIfDisabled } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
-import {
-  breadcrumbClassNames,
-  breadcrumbItemClassNames,
-  breadcrumbOverflowClassNames,
-} from '../../lib/classNames';
+import { breadcrumbClassNames, breadcrumbItemClassNames } from '../../lib/classNames';
 import { partitionBreadcrumbItems } from '../../lib/breadcrumb';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import type { CoreSize, FocusMode, Slot } from '../../lib/types';
@@ -275,6 +271,7 @@ interface HiddenItemProps {
   current?: boolean;
   icon?: Slot<'span'>;
   disabled?: boolean;
+  'aria-disabled'?: boolean | 'true' | 'false';
   asChild?: boolean;
   children?: React.ReactNode;
   onClick?: React.MouseEventHandler<HTMLElement>;
@@ -288,9 +285,10 @@ function isCurrentEntry(entry: BreadcrumbEntry): boolean {
 }
 
 /**
- * The indexes of the entries that collapse into the overflow menu, ascending. The partition of
- * `partitionBreadcrumbItems` decides, except that the first entry and the last current one stay:
- * a protected entry in the range is replaced by the next unprotected entry after it, else before.
+ * The indexes of the entries that collapse into the overflow menu: one contiguous run, as long as
+ * the partition of `partitionBreadcrumbItems` says, that never holds the first entry or the last
+ * current one. A run that would hold the current entry moves past it when it fits there, else ends
+ * just before it, else shrinks to the longer side of it.
  */
 function collapsedIndexes(
   entries: readonly BreadcrumbEntry[],
@@ -304,24 +302,44 @@ function collapsedIndexes(
     overflowIndex: Math.max(1, overflowIndex),
   });
   if (!overflowItems) return [];
+  const count = entries.length;
+  const length = overflowItems.length;
   const current = entries.map(isCurrentEntry).lastIndexOf(true);
-  const isProtected = (index: number) => index === 0 || index === current;
-  const collapsed = overflowItems.filter((index) => !isProtected(index));
-  for (
-    let next = overflowItems[overflowItems.length - 1] + 1;
-    collapsed.length < overflowItems.length && next < entries.length;
-    next++
-  ) {
-    if (!isProtected(next)) collapsed.push(next);
+  let start = Math.max(1, overflowItems[0]);
+  let end = Math.min(count, start + length);
+  if (current >= start && current < end) {
+    if (current + 1 + length <= count) {
+      start = current + 1;
+      end = start + length;
+    } else if (current - length >= 1) {
+      start = current - length;
+      end = current;
+    } else if (current - 1 >= count - current - 1) {
+      start = 1;
+      end = current;
+    } else {
+      start = current + 1;
+      end = Math.min(count, start + length);
+    }
   }
-  for (
-    let before = overflowItems[0] - 1;
-    collapsed.length < overflowItems.length && before >= 1;
-    before--
-  ) {
-    if (!isProtected(before)) collapsed.push(before);
-  }
-  return collapsed.sort((a, b) => a - b);
+  return Array.from({ length: Math.max(0, end - start) }, (_, offset) => start + offset);
+}
+
+/**
+ * Whether an item is unavailable: `disabled` or `aria-disabled="true"` on the item, or on the
+ * element of an `asChild` item. One rule for the visible item and for its entry in the overflow menu.
+ */
+function isItemDisabled(
+  props: { disabled?: unknown; 'aria-disabled'?: unknown },
+  child: React.ReactElement | null,
+): boolean {
+  const childProps = (child?.props ?? {}) as Record<string, unknown>;
+  return [
+    props.disabled,
+    props['aria-disabled'],
+    childProps.disabled,
+    childProps['aria-disabled'],
+  ].some((value) => value === true || value === 'true');
 }
 
 /**
@@ -334,12 +352,13 @@ function overflowMenuItem(entry: BreadcrumbEntry): { node: React.ReactNode; mapp
   if (!isElementOfType<HiddenItemProps>(item, BreadcrumbItem)) {
     return { node: null, mappable: false };
   }
-  const { href: itemHref, icon, disabled, asChild, children, onClick } = item.props;
+  const { href: itemHref, icon, asChild, children, onClick } = item.props;
   const inner =
     asChild && React.isValidElement<{ href?: string; children?: React.ReactNode }>(children)
       ? children
       : null;
   const label = inner ? inner.props.children : children;
+  const disabled = isItemDisabled(item.props, inner);
   const href = itemHref ?? inner?.props.href;
   if (typeof href === 'string') {
     return {
@@ -414,11 +433,9 @@ const BreadcrumbRoot = ({
               <button
                 type="button"
                 aria-label={overflowLabel}
-                className={cn(breadcrumbOverflowClassNames.root, linkClasses, 'rounded px-1')}
+                className={cn(breadcrumbClassNames.overflowButton, linkClasses, 'rounded px-1')}
               >
-                <span aria-hidden="true" className={breadcrumbOverflowClassNames.icon}>
-                  …
-                </span>
+                <span aria-hidden="true">…</span>
               </button>
             </Menu.Trigger>
             <Menu.Popover>{collapsedItems.map((item) => item.node)}</Menu.Popover>
@@ -589,13 +606,7 @@ function BreadcrumbItem(
   // navigation, and an `aria-disabled` link only looks disabled unless the click is cancelled.
   // With asChild the element is the link, so its own `disabled`/`aria-disabled` count too.
   const ariaDisabled = rest['aria-disabled'];
-  const childProps = (child?.props ?? {}) as Record<string, unknown>;
-  const linkDisabled = [
-    rest.disabled,
-    ariaDisabled,
-    childProps.disabled,
-    childProps['aria-disabled'],
-  ].some((value) => value === true || value === 'true');
+  const linkDisabled = isItemDisabled(rest, child);
   React.useEffect(() => {
     if (invalidAsChild) {
       warnOnce(

@@ -161,13 +161,6 @@ const NO_ELEMENT: readonly string[] = [
  */
 const PENDING_CLASS_NAMES: readonly string[] = [];
 
-/**
- * Constants of an element that a public component renders but that is no public component itself
- * (so no flat name to match): Breadcrumb's overflow button (phase 9). The orphan check skips them;
- * the applied check still covers them.
- */
-const NOT_A_COMPONENT: readonly string[] = ['breadcrumbOverflowClassNames'];
-
 const isPending = (name: string, key?: string): boolean =>
   PENDING_CLASS_NAMES.includes(name) ||
   (key !== undefined && PENDING_CLASS_NAMES.includes(`${name}.${key}`));
@@ -251,7 +244,7 @@ describe('class-name registry: completeness (spec §1.4.3)', () => {
   it('names every constant after a public component, except the pending Phase 3 constants', () => {
     const orphans = constants
       .map(([name]) => name)
-      .filter((name) => !isPending(name) && !NOT_A_COMPONENT.includes(name))
+      .filter((name) => !isPending(name))
       .filter(
         (name) => !components.has(`${name[0].toUpperCase()}${name.slice(1, -'ClassNames'.length)}`),
       );

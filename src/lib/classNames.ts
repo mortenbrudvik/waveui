@@ -1018,13 +1018,16 @@ export const gridClassNames = { root: 'wave-grid' } as const;
 
 /**
  * Breadcrumb: `root` on the `<nav>`; `list` on its `<ol>`; `listItem` on each `<li>`; `divider`
- * on each separator `<svg>`.
+ * on each separator (the default chevron `<svg>`, or the `<span>` of a custom `divider`);
+ * `overflowButton` on the "…" `<button>` that opens the menu of the items `maxDisplayedItems`
+ * collapsed.
  */
 export const breadcrumbClassNames = {
   root: 'wave-breadcrumb',
   list: 'wave-breadcrumb__list',
   listItem: 'wave-breadcrumb__list-item',
   divider: 'wave-breadcrumb__divider',
+  overflowButton: 'wave-breadcrumb__overflow-button',
 } as const;
 
 /**
@@ -1034,15 +1037,6 @@ export const breadcrumbClassNames = {
 export const breadcrumbItemClassNames = {
   root: 'wave-breadcrumb-item',
   icon: 'wave-breadcrumb-item__icon',
-} as const;
-
-/**
- * Breadcrumb's overflow button (`maxDisplayedItems`): `root` on the "…" `<button>` that opens the
- * menu of the hidden items; `icon` on its decorative glyph.
- */
-export const breadcrumbOverflowClassNames = {
-  root: 'wave-breadcrumb-overflow',
-  icon: 'wave-breadcrumb-overflow__icon',
 } as const;
 
 /** Menu: `root` on the `role="menu"` element of a static menu (a popup menu has Menu.Popover's). */

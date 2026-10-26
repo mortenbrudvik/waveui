@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { Breadcrumb, BreadcrumbItem } from '../Breadcrumb';
 import type { BreadcrumbItemProps } from '../Breadcrumb';
 import type { Slot } from '../../../lib/types';
-import { breadcrumbClassNames, breadcrumbOverflowClassNames } from '../../../lib/classNames';
+import { breadcrumbClassNames } from '../../../lib/classNames';
 import {
   asClientReference,
   createOverlayTestWrapper,
@@ -1042,7 +1042,7 @@ describe('Breadcrumb', () => {
       const button = screen.getByRole('button', { name: 'More items' });
       expect(button).toHaveAttribute('aria-haspopup', 'menu');
       expect(button).toHaveAttribute('type', 'button');
-      expect(button).toHaveClass(breadcrumbOverflowClassNames.root);
+      expect(button).toHaveClass(breadcrumbClassNames.overflowButton);
       expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
 
       await user.click(button);
@@ -1106,22 +1106,129 @@ describe('Breadcrumb', () => {
       expect(itemLabels(nav)).toEqual(['Home', '…', 'Gamma', 'Delta', 'Widget']);
     });
 
-    it('never hides the current item', () => {
-      render(
-        <Breadcrumb maxDisplayedItems={3}>
-          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
-          <Breadcrumb.Item href="/a">Alpha</Breadcrumb.Item>
-          <Breadcrumb.Item current>Beta</Breadcrumb.Item>
-          <Breadcrumb.Item href="/c">Gamma</Breadcrumb.Item>
-          <Breadcrumb.Item href="/d">Delta</Breadcrumb.Item>
-        </Breadcrumb>,
-      );
-      const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
-      const labels = itemLabels(nav);
-      expect(labels).toContain('Home');
-      expect(labels).toContain('Beta');
-      expect(nav.querySelector('[aria-current="page"]')).toHaveTextContent('Beta');
-      expect(screen.getByRole('button', { name: 'More items' })).toBeInTheDocument();
+    describe('a current item inside the collapsed range', () => {
+      const menuLabels = async (user: ReturnType<typeof userEvent.setup>) => {
+        await user.click(screen.getByRole('button', { name: 'More items' }));
+        const labels = screen.getAllByRole('menuitem').map((item) => item.textContent);
+        await user.keyboard('{Escape}');
+        return labels;
+      };
+
+      it('moves the collapsed run past the current item when it fits', async () => {
+        const user = userEvent.setup();
+        render(
+          <Breadcrumb maxDisplayedItems={3}>
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            <Breadcrumb.Item href="/a">Alpha</Breadcrumb.Item>
+            <Breadcrumb.Item current>Beta</Breadcrumb.Item>
+            <Breadcrumb.Item href="/c">Gamma</Breadcrumb.Item>
+            <Breadcrumb.Item href="/d">Delta</Breadcrumb.Item>
+          </Breadcrumb>,
+        );
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(itemLabels(nav)).toEqual(['Home', 'Alpha', 'Beta', '…']);
+        expect(nav.querySelector('[aria-current="page"]')).toHaveTextContent('Beta');
+        expect(await menuLabels(user)).toEqual(['Gamma', 'Delta']);
+      });
+
+      it('ends the run just before the current item when it does not fit after it', async () => {
+        const user = userEvent.setup();
+        render(
+          <Breadcrumb maxDisplayedItems={3} overflowIndex={2}>
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            <Breadcrumb.Item href="/a">Alpha</Breadcrumb.Item>
+            <Breadcrumb.Item href="/b">Beta</Breadcrumb.Item>
+            <Breadcrumb.Item current>Gamma</Breadcrumb.Item>
+            <Breadcrumb.Item href="/d">Delta</Breadcrumb.Item>
+          </Breadcrumb>,
+        );
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(itemLabels(nav)).toEqual(['Home', '…', 'Gamma', 'Delta']);
+        expect(await menuLabels(user)).toEqual(['Alpha', 'Beta']);
+      });
+
+      it('hides fewer items when neither side has room for all of them', async () => {
+        const user = userEvent.setup();
+        render(
+          <Breadcrumb maxDisplayedItems={1}>
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            <Breadcrumb.Item href="/a">Alpha</Breadcrumb.Item>
+            <Breadcrumb.Item href="/b">Beta</Breadcrumb.Item>
+            <Breadcrumb.Item current>Gamma</Breadcrumb.Item>
+          </Breadcrumb>,
+        );
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(itemLabels(nav)).toEqual(['Home', '…', 'Gamma']);
+        expect(await menuLabels(user)).toEqual(['Alpha', 'Beta']);
+      });
+
+      it('keeps the trail whole when only protected items could be hidden', () => {
+        render(
+          <Breadcrumb maxDisplayedItems={1}>
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+          </Breadcrumb>,
+        );
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(itemLabels(nav)).toEqual(['Home', 'Widget']);
+        expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
+      });
+    });
+
+    describe('a disabled hidden item stays unavailable in the menu', () => {
+      const openMenu = async (items: React.ReactNode) => {
+        const user = userEvent.setup();
+        render(
+          <Breadcrumb maxDisplayedItems={2}>
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            {items}
+            <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+          </Breadcrumb>,
+        );
+        await user.click(screen.getByRole('button', { name: 'More items' }));
+        return user;
+      };
+
+      it('aria-disabled on the item', async () => {
+        const user = await openMenu(
+          <Breadcrumb.Item href="/x" aria-disabled="true">
+            Gone
+          </Breadcrumb.Item>,
+        );
+        const item = screen.getByRole('menuitem', { name: 'Gone' });
+        expect(item).toHaveAttribute('aria-disabled', 'true');
+        expect(item).not.toHaveAttribute('href');
+        await user.keyboard('{Escape}');
+      });
+
+      it('disabled on an asChild element', async () => {
+        const user = await openMenu(
+          <Breadcrumb.Item asChild onClick={() => {}}>
+            <button type="button" disabled>
+              Gone
+            </button>
+          </Breadcrumb.Item>,
+        );
+        expect(screen.getByRole('menuitem', { name: 'Gone' })).toHaveAttribute(
+          'aria-disabled',
+          'true',
+        );
+        await user.keyboard('{Escape}');
+      });
+
+      it('aria-disabled on an asChild link', async () => {
+        const user = await openMenu(
+          <Breadcrumb.Item asChild>
+            <a href="/x" aria-disabled="true">
+              Gone
+            </a>
+          </Breadcrumb.Item>,
+        );
+        const item = screen.getByRole('menuitem', { name: 'Gone' });
+        expect(item).toHaveAttribute('aria-disabled', 'true');
+        expect(item).not.toHaveAttribute('href');
+        await user.keyboard('{Escape}');
+      });
     });
 
     it('accepts items inside Fragments and an asChild link with an href', async () => {
@@ -1180,7 +1287,7 @@ describe('Breadcrumb', () => {
     it('keeps the stable class names on the overflow button and its list item', () => {
       render(<Trail maxDisplayedItems={4} />);
       const button = screen.getByRole('button', { name: 'More items' });
-      expect(button).toHaveClass(breadcrumbOverflowClassNames.root);
+      expect(button).toHaveClass(breadcrumbClassNames.overflowButton);
       expect(button.closest('li')).toHaveClass(breadcrumbClassNames.listItem);
     });
 
