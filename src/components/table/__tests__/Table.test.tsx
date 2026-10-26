@@ -14,10 +14,13 @@ import {
 } from '../Table';
 import type { TableProps } from '../Table';
 import {
+  expectNoA11yViolations,
   installResizeObserverMock,
+  renderWithProviders,
   testCompoundExposure,
   testSystemProps,
 } from '../../../test-utils';
+import { tableHeaderCellClassNames } from '../../../lib/classNames';
 
 function tableContent() {
   return [
@@ -493,5 +496,281 @@ describe('Table sub-component refs', () => {
     );
     expect(ref.current).toBe(screen.getByTestId('td'));
     expect(ref.current!.tagName.toLowerCase()).toBe('td');
+  });
+});
+
+describe('Table.HeaderCell sortable', () => {
+  const renderSortable = (
+    cell: React.ReactNode,
+    options?: Parameters<typeof renderWithProviders>[1],
+  ) =>
+    renderWithProviders(
+      <Table>
+        <Table.Header>
+          <tr>{cell}</tr>
+        </Table.Header>
+        <Table.Body>
+          <Table.Row>
+            <Table.Cell>Alpha</Table.Cell>
+          </Table.Row>
+        </Table.Body>
+      </Table>,
+      options,
+    );
+  const header = () => screen.getByRole('columnheader');
+  const sortButton = () => screen.getByRole('button', { name: 'Name' });
+  const glyph = () => sortButton().querySelector(`.${tableHeaderCellClassNames.sortIcon}`);
+
+  it('renders a button inside the th, with aria-sort none while no direction is set', () => {
+    renderSortable(<Table.HeaderCell sortable>Name</Table.HeaderCell>);
+    expect(header()).toHaveAttribute('aria-sort', 'none');
+    expect(header()).toHaveAttribute('scope', 'col');
+    expect(sortButton().closest('th')).toBe(header());
+    expect(sortButton()).toHaveAttribute('type', 'button');
+    expect(sortButton()).toHaveClass(tableHeaderCellClassNames.button);
+    expect(header()).not.toHaveAttribute('tabindex');
+    expect(glyph()).toBeNull();
+  });
+
+  it.each(['ascending', 'descending'] as const)(
+    'sets aria-sort %s and shows a decorative glyph with data-direction',
+    (sortDirection) => {
+      renderSortable(
+        <Table.HeaderCell sortable sortDirection={sortDirection}>
+          Name
+        </Table.HeaderCell>,
+      );
+      expect(header()).toHaveAttribute('aria-sort', sortDirection);
+      expect(glyph()).toHaveAttribute('data-direction', sortDirection);
+      expect(glyph()).toHaveAttribute('aria-hidden', 'true');
+      expect(glyph()).toHaveAttribute(
+        'data-wave-icon',
+        sortDirection === 'ascending' ? 'sort-arrow-up' : 'sort-arrow-down',
+      );
+      expect(sortButton()).toHaveAccessibleName('Name');
+    },
+  );
+
+  it('renders no sort semantics without sortable, whatever the direction', () => {
+    renderSortable(<Table.HeaderCell sortDirection="ascending">Name</Table.HeaderCell>);
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(header()).not.toHaveAttribute('aria-sort');
+  });
+
+  it('keeps a plain header exactly as before', () => {
+    renderSortable(<Table.HeaderCell>Name</Table.HeaderCell>);
+    expect(header().innerHTML).toBe('Name');
+    expect(header()).not.toHaveAttribute('aria-sort');
+  });
+
+  it('calls onSortClick with the click event, and the th onClick through bubbling', async () => {
+    const user = userEvent.setup();
+    const clicked: unknown[] = [];
+    const onSortClick = vi.fn((event: React.MouseEvent<HTMLButtonElement>) => {
+      clicked.push(event.currentTarget);
+    });
+    const onClick = vi.fn();
+    renderSortable(
+      <Table.HeaderCell sortable onSortClick={onSortClick} onClick={onClick}>
+        Name
+      </Table.HeaderCell>,
+    );
+    await user.click(sortButton());
+    expect(onSortClick).toHaveBeenCalledTimes(1);
+    expect(onSortClick.mock.calls[0][0].type).toBe('click');
+    expect(clicked).toEqual([sortButton()]);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('activates onSortClick with Enter and Space', async () => {
+    const user = userEvent.setup();
+    const onSortClick = vi.fn();
+    renderSortable(
+      <Table.HeaderCell sortable onSortClick={onSortClick}>
+        Name
+      </Table.HeaderCell>,
+    );
+    await user.tab();
+    expect(sortButton()).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    expect(onSortClick).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not change the sort by itself (the direction is controlled)', async () => {
+    const user = userEvent.setup();
+    renderSortable(
+      <Table.HeaderCell sortable sortDirection="ascending">
+        Name
+      </Table.HeaderCell>,
+    );
+    await user.click(sortButton());
+    expect(header()).toHaveAttribute('aria-sort', 'ascending');
+  });
+
+  describe('sortIcon', () => {
+    it('renders custom content in a decorative span with the direction, only while sorted', () => {
+      const { rerender } = renderSortable(
+        <Table.HeaderCell sortable sortIcon={<svg data-testid="custom" />}>
+          Name
+        </Table.HeaderCell>,
+      );
+      expect(screen.queryByTestId('custom')).toBeNull();
+      rerender(
+        <Table>
+          <Table.Header>
+            <tr>
+              <Table.HeaderCell
+                sortable
+                sortDirection="descending"
+                sortIcon={<svg data-testid="custom" />}
+              >
+                Name
+              </Table.HeaderCell>
+            </tr>
+          </Table.Header>
+        </Table>,
+      );
+      const span = screen.getByTestId('custom').parentElement!;
+      expect(span.localName).toBe('span');
+      expect(span).toHaveClass(tableHeaderCellClassNames.sortIcon);
+      expect(span).toHaveAttribute('aria-hidden', 'true');
+      expect(span).toHaveAttribute('data-direction', 'descending');
+      expect(sortButton()).toHaveAccessibleName('Name');
+    });
+
+    it('takes a slot object, its className merged after the stable class', () => {
+      renderSortable(
+        <Table.HeaderCell
+          sortable
+          sortDirection="ascending"
+          sortIcon={{ className: 'my-glyph', children: '▲' }}
+        >
+          Name
+        </Table.HeaderCell>,
+      );
+      expect(glyph()).toHaveClass(tableHeaderCellClassNames.sortIcon, 'my-glyph');
+      expect(glyph()).toHaveTextContent('▲');
+    });
+
+    it.each([
+      ['null', null],
+      ['undefined', undefined],
+    ])('keeps the default arrow for %s', (_, sortIcon) => {
+      renderSortable(
+        <Table.HeaderCell sortable sortDirection="ascending" sortIcon={sortIcon}>
+          Name
+        </Table.HeaderCell>,
+      );
+      expect(glyph()).toHaveAttribute('data-wave-icon', 'sort-arrow-up');
+    });
+
+    it.each([
+      ['false', false],
+      ['an empty string', ''],
+      ['an empty Fragment', <></>],
+    ])('shows no glyph for %s', (_, sortIcon) => {
+      renderSortable(
+        <Table.HeaderCell sortable sortDirection="ascending" sortIcon={sortIcon}>
+          Name
+        </Table.HeaderCell>,
+      );
+      expect(header()).toHaveAttribute('aria-sort', 'ascending');
+      expect(sortButton().children).toHaveLength(0);
+    });
+
+    it('unwraps a button passed as sortIcon and warns once', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderSortable(
+        <Table.HeaderCell
+          sortable
+          sortDirection="ascending"
+          sortIcon={<button type="button">^</button>}
+        >
+          Name
+        </Table.HeaderCell>,
+      );
+      expect(screen.getAllByRole('button')).toHaveLength(1);
+      expect(glyph()).toHaveTextContent('^');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('Table.HeaderCell');
+      expect(warn.mock.calls[0][0]).toContain('sortIcon');
+    });
+  });
+
+  describe('aside', () => {
+    it('renders outside the button, after it, in the th', () => {
+      renderSortable(
+        <Table.HeaderCell sortable aside={<span data-testid="aside">Filter</span>}>
+          Name
+        </Table.HeaderCell>,
+      );
+      const aside = screen.getByTestId('aside');
+      expect(header()).toContainElement(aside);
+      expect(sortButton()).not.toContainElement(aside);
+      expect(sortButton()).toHaveAccessibleName('Name');
+      expect(aside.closest(`.${tableHeaderCellClassNames.aside}`)).not.toBeNull();
+      expect(
+        sortButton().compareDocumentPosition(aside) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('takes a slot object, its className merged after the stable class', () => {
+      renderSortable(
+        <Table.HeaderCell sortable aside={{ className: 'my-aside', children: 'x' }}>
+          Name
+        </Table.HeaderCell>,
+      );
+      const aside = header().querySelector(`.${tableHeaderCellClassNames.aside}`);
+      expect(aside).toHaveClass('my-aside');
+      expect(aside).toHaveTextContent('x');
+    });
+
+    it('renders on a plain header too, beside the content', () => {
+      renderSortable(
+        <Table.HeaderCell aside={<span data-testid="aside">Filter</span>}>Name</Table.HeaderCell>,
+      );
+      expect(header()).toContainElement(screen.getByTestId('aside'));
+      expect(screen.queryByRole('button')).toBeNull();
+    });
+
+    it.each([
+      ['null', null],
+      ['false', false],
+      ['an empty Fragment', <></>],
+    ])('renders nothing for %s', (_, aside) => {
+      renderSortable(
+        <Table.HeaderCell sortable aside={aside}>
+          Name
+        </Table.HeaderCell>,
+      );
+      expect(header().querySelector(`.${tableHeaderCellClassNames.aside}`)).toBeNull();
+    });
+  });
+
+  it('passes axe, plain, sorted and with an aside', async () => {
+    renderSortable(
+      <>
+        <Table.HeaderCell sortable>A</Table.HeaderCell>
+        <Table.HeaderCell sortable sortDirection="descending" aside={<span>i</span>}>
+          B
+        </Table.HeaderCell>
+        <Table.HeaderCell>C</Table.HeaderCell>
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('mirrors in RTL: the text starts at the inline start and the glyph follows the label', () => {
+    renderSortable(
+      <Table.HeaderCell sortable sortDirection="ascending" aside={<span>i</span>}>
+        Name
+      </Table.HeaderCell>,
+      { dir: 'rtl' },
+    );
+    expect(sortButton()).toHaveClass('text-start');
+    expect(sortButton()).toHaveAccessibleName('Name');
+    expect(sortButton().lastElementChild).toBe(glyph());
+    expect(header()).toHaveAttribute('aria-sort', 'ascending');
   });
 });

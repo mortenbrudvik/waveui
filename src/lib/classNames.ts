@@ -1397,8 +1397,17 @@ export const tableClassNames = {
 /** Table.Header (and the deprecated Table.Head): `root` on the `<thead>`. */
 export const tableHeaderClassNames = { root: 'wave-table-header' } as const;
 
-/** Table.HeaderCell (and the deprecated Table.HeadCell): `root` on the `<th>`. */
-export const tableHeaderCellClassNames = { root: 'wave-table-header-cell' } as const;
+/**
+ * Table.HeaderCell (and the deprecated Table.HeadCell): `root` on the `<th>`; `button` on the sort
+ * button of a sortable header; `sortIcon` on its direction glyph (the default arrow `<svg>`, or the
+ * `<span>` of a `sortIcon` slot); `aside` on the aside `<span>`, outside the button.
+ */
+export const tableHeaderCellClassNames = {
+  root: 'wave-table-header-cell',
+  button: 'wave-table-header-cell__button',
+  sortIcon: 'wave-table-header-cell__sort-icon',
+  aside: 'wave-table-header-cell__aside',
+} as const;
 
 /** Table.Body: `root` on the `<tbody>`. */
 export const tableBodyClassNames = { root: 'wave-table-body' } as const;

@@ -10,9 +10,13 @@ import {
   tableRowClassNames,
 } from '../../lib/classNames';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
+import type { Slot } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { TableSortButton } from './Table.shared';
+import type { SortDirection } from './Table.shared';
 
 /** Properties for the Table component. */
 export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
@@ -48,6 +52,37 @@ export interface TableHeaderProps extends React.HTMLAttributes<HTMLTableSectionE
 
 /** Properties for the TableHeaderCell sub-component. */
 export interface TableHeaderCellProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
+  /**
+   * Makes the column header a sort control: the content is wrapped in a `<button>` that fills the
+   * cell, and the cell carries `aria-sort` (`"none"` while `sortDirection` is not set). The table
+   * does not sort or track the direction; keep it in your state, set `sortDirection` and sort the
+   * rows in `onSortClick`. The table keeps no grid semantics.
+   * @default false
+   */
+  sortable?: boolean;
+  /**
+   * The direction the column is sorted in, shown as `aria-sort` and as the glyph of a sortable
+   * header. Absent means the column is not sorted. Without `sortable` it has no effect.
+   */
+  sortDirection?: SortDirection;
+  /**
+   * Called with the click event when the sort button is activated (click, Enter or Space).
+   * Fluent's `onSortClick`.
+   */
+  onSortClick?: React.MouseEventHandler<HTMLButtonElement>;
+  /**
+   * The glyph that shows the direction, only while `sortDirection` is set. It is decorative
+   * (`aria-hidden`) and carries `data-direction`. `null` and `undefined` keep the default arrow
+   * (up for ascending, down for descending); `false` or anything that renders nothing hides it. A
+   * `<button>` or `Button` passed here is not nested: its children become the glyph.
+   */
+  sortIcon?: Slot<'span'>;
+  /**
+   * Content beside the header content, outside the sort button (a filter button, an info
+   * button), so it is not part of the button's name. Nothing renders for content that renders
+   * nothing.
+   */
+  aside?: Slot<'span'>;
   /** Header cell content. */
   children: React.ReactNode;
   /** Ref to the `<th>` element. */
@@ -215,20 +250,73 @@ const TableHeader = ({ children, className, ref, ...rest }: TableHeaderProps) =>
 TableHeader.displayName = 'TableHeader';
 
 /** A column header cell (`<th scope="col">`). */
-const TableHeaderCell = ({ children, className, ref, ...props }: TableHeaderCellProps) => (
-  <th
-    ref={ref}
-    scope="col"
-    className={cn(
-      tableHeaderCellClassNames.root,
-      'px-4 py-3 text-start font-semibold text-caption-1 uppercase tracking-wider border-b border-border',
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </th>
-);
+const TableHeaderCell = ({
+  sortable = false,
+  sortDirection,
+  onSortClick,
+  sortIcon,
+  aside,
+  children,
+  className,
+  ref,
+  ...props
+}: TableHeaderCellProps) => {
+  const hasAside = slotRendersContent(aside);
+  const asideNode = hasAside
+    ? renderSlot(
+        aside,
+        'span',
+        cn(
+          tableHeaderCellClassNames.aside,
+          'inline-flex shrink-0 items-center',
+          sortable && 'pe-4',
+        ),
+      )
+    : null;
+
+  let content: React.ReactNode = children;
+  if (sortable) {
+    content = (
+      <div className="flex items-center">
+        <TableSortButton
+          component="Table.HeaderCell"
+          direction={sortDirection}
+          sortIcon={sortIcon}
+          className={tableHeaderCellClassNames.button}
+          iconClassName={tableHeaderCellClassNames.sortIcon}
+          onClick={onSortClick}
+        >
+          {children}
+        </TableSortButton>
+        {asideNode}
+      </div>
+    );
+  } else if (hasAside) {
+    content = (
+      <div className="flex items-center gap-2">
+        {children}
+        {asideNode}
+      </div>
+    );
+  }
+
+  return (
+    <th
+      ref={ref}
+      scope="col"
+      aria-sort={sortable ? (sortDirection ?? 'none') : undefined}
+      className={cn(
+        tableHeaderCellClassNames.root,
+        'px-4 py-3 text-start font-semibold text-caption-1 uppercase tracking-wider border-b border-border',
+        sortable && 'p-0 hover:bg-subtle-hover',
+        className,
+      )}
+      {...props}
+    >
+      {content}
+    </th>
+  );
+};
 TableHeaderCell.displayName = 'TableHeaderCell';
 
 /** @deprecated Use `Table.Header` (`TableHeader`). */
