@@ -1940,6 +1940,11 @@ DataGridBody.displayName = 'DataGridBody';
  * after the row's first cell (or `selectionLabel`), unless a `DataGrid.SelectionCell` child is
  * its selection cell; Space on one of its cells toggles the row, and so does a click on the row
  * with the grid's `selectOnRowClick`.
+ *
+ * The row is the `group/table-row` group whose hover or focus draws a subtle selection control
+ * (`subtleSelection`). A group is matched by any ancestor, so the rows of a grid nested in a cell
+ * share it: hovering the outer row also draws the subtle controls of the nested grid (a limit of
+ * CSS groups). A Tree in a cell keeps its own rows' group.
  */
 const DataGridRow = ({
   rowId: rowIdProp,
@@ -2115,8 +2120,9 @@ const DataGridRow = ({
         ref={ref}
         className={cn(
           dataGridRowClassNames.root,
-          // The group whose hover or focus draws a subtle selection control.
-          'group/row',
+          // The group whose hover or focus draws a subtle selection control (its own name: a
+          // Tree in a cell keys its actions on its rows' `group/row`).
+          'group/table-row',
           !inHeader && BODY_ROW_CLASSES[selectionAppearance],
           selectable && isSelected && forcedColors.selectedContainer,
           className,

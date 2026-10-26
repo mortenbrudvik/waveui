@@ -51,7 +51,7 @@ export function getTablePartKind(node: React.ReactNode): TablePartKind | null {
  * focusable and named.
  */
 const SUBTLE_CONTROL_CLASSES = {
-  row: 'opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
+  row: 'opacity-0 group-hover/table-row:opacity-100 group-focus-within/table-row:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
   grid: 'opacity-0 group-hover/grid:opacity-100 group-focus-within/grid:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
 } as const;
 
@@ -71,8 +71,9 @@ export interface TableSelectionControlProps extends Omit<
    */
   subtle?: boolean;
   /**
-   * The group whose hover or focus draws a subtle control: its row (the `group/row` element) or
-   * the whole grid (`group/grid`).
+   * The group whose hover or focus draws a subtle control: its row (the `group/table-row`
+   * element; not the `group/row` of Tree's rows, which a Tree in a cell keeps to itself) or the
+   * whole grid (`group/grid`).
    * @default 'row'
    */
   reveal?: keyof typeof SUBTLE_CONTROL_CLASSES;

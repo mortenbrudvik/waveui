@@ -47,6 +47,7 @@ import { Button } from '../../button/Button';
 import { MenuButton } from '../../button/MenuButton';
 import { Toolbar } from '../../button/Toolbar';
 import { RadioGroup } from '../../input/RadioGroup';
+import { Tree } from '../../layout/Tree';
 import { Menu } from '../../navigation/Menu';
 import { countTabIndexWrites, flushObservers } from './tabIndexWrites';
 import {
@@ -4537,8 +4538,8 @@ describe('DataGrid selectionAppearance', () => {
 describe('DataGrid subtleSelection', () => {
   const SUBTLE_ROW = [
     'opacity-0',
-    'group-hover/row:opacity-100',
-    'group-focus-within/row:opacity-100',
+    'group-hover/table-row:opacity-100',
+    'group-focus-within/table-row:opacity-100',
     'forced-colors:opacity-100',
     'pointer-coarse:opacity-100',
     'transition-opacity',
@@ -4554,6 +4555,60 @@ describe('DataGrid subtleSelection', () => {
     'motion-reduce:transition-none',
   ];
 
+  it('names every row’s group table-row, never row (a Tree’s rows use that name)', () => {
+    render(
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Header>
+          <DataGrid.Row>
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </DataGrid.Row>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    for (const row of screen.getAllByRole('row')) {
+      expect(row).toHaveClass('group/table-row');
+      expect(row).not.toHaveClass('group/row');
+    }
+  });
+
+  it('leaves a Tree in a cell to its own rows: the grid row does not reveal its actions', () => {
+    render(
+      <DataGrid aria-label="Folders" selectionMode="multiple" subtleSelection>
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1" selectionLabel="Projects">
+            <DataGrid.Cell>
+              <Tree aria-label="Files">
+                <Tree.Item
+                  value="docs"
+                  aside="3 files"
+                  actions={<button type="button">Rename Documents</button>}
+                >
+                  Documents
+                </Tree.Item>
+              </Tree>
+            </DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    const actions = screen.getByRole('toolbar', { name: 'Documents', hidden: true });
+    // The Tree's own classes, keyed on its rows' group.
+    expect(actions).toHaveClass('invisible', 'group-hover/row:visible');
+    // The only element of that group around the actions is the Tree's own row.
+    const groups = [];
+    for (let el = actions.parentElement; el; el = el.parentElement) {
+      if (el.classList.contains('group/row')) groups.push(el);
+    }
+    expect(groups).toHaveLength(1);
+    expect(screen.getByRole('tree')).toContainElement(groups[0]);
+    expect(bodyRows()[0]).toHaveClass('group/table-row');
+  });
+
   it('is off by default: no data-subtle-selection and every control drawn (0.13)', () => {
     renderGrid({ selectionMode: 'multiple' });
     expect(screen.getByRole('grid')).not.toHaveAttribute('data-subtle-selection');
@@ -4565,7 +4620,7 @@ describe('DataGrid subtleSelection', () => {
   it('hides an unchecked row control until its row is hovered or holds focus; forced colors and a coarse pointer always draw it', () => {
     renderGrid({ selectionMode: 'multiple', subtleSelection: true, defaultSelectedItems: ['2'] });
     expect(screen.getByRole('grid')).toHaveAttribute('data-subtle-selection', '');
-    expect(bodyRows()[0]).toHaveClass('group/row');
+    expect(bodyRows()[0]).toHaveClass('group/table-row');
     expect(screen.getByRole('checkbox', { name: 'Alice' })).toHaveClass(...SUBTLE_ROW);
     // A checked control is always drawn.
     const bob = screen.getByRole('checkbox', { name: 'Bob' });
@@ -4894,7 +4949,7 @@ describe('DataGrid.SelectionCell', () => {
     await user.keyboard('{ArrowRight}');
     const bob = screen.getByRole('checkbox', { name: 'Bob' });
     expect(bob).toHaveFocus();
-    expect(bob).toHaveClass('opacity-0', 'group-focus-within/row:opacity-100');
+    expect(bob).toHaveClass('opacity-0', 'group-focus-within/table-row:opacity-100');
     await user.click(cell('Carol'));
     expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3'], CLICK_DETAILS);
     expect(screen.getByRole('checkbox', { name: 'Carol' })).not.toHaveClass('opacity-0');
