@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
-import { SortArrowDown, SortArrowUp } from '../../lib/icons';
+import { SortArrowDownIcon, SortArrowUpIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { focusRingInset } from '../../lib/styles';
@@ -67,7 +67,7 @@ export const TableSortButton = ({
   let icon: React.ReactNode = null;
   if (direction) {
     if (sortIcon == null || (button !== null && !slotRendersContent(glyph))) {
-      const Arrow = direction === 'ascending' ? SortArrowUp : SortArrowDown;
+      const Arrow = direction === 'ascending' ? SortArrowUpIcon : SortArrowDownIcon;
       icon = <Arrow data-direction={direction} className={cn(iconClassName, 'shrink-0')} />;
     } else if (slotRendersContent(glyph)) {
       icon = renderSlot(glyph, 'span', cn(iconClassName, 'inline-flex shrink-0 items-center'), {

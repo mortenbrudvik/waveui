@@ -302,15 +302,12 @@ export interface DataGridLegacySortProps {
  * `items`. The two cannot be mixed.
  */
 export type DataGridProps<T = unknown> = DataGridBaseProps<T> &
-  // The condition always holds; it defers the union while `T` is inferred from `items`, so
-  // TypeScript instantiates it with the inferred `T` before it narrows the union by `items` to
-  // type an inline `onSortChange`. Non-distributive, so a union item type stays one `T`.
-  ([T] extends [unknown]
-    ? | (DataGridItemsProps<T> & DataGridControlledSortProps)
-      | (DataGridItemsProps<T> & DataGridUncontrolledSortProps)
-      | DataGridItemsSortProps<T>
-      | DataGridLegacySortProps
-    : never);
+  (
+    | (DataGridItemsProps<T> & DataGridControlledSortProps)
+    | (DataGridItemsProps<T> & DataGridUncontrolledSortProps)
+    | DataGridItemsSortProps<T>
+    | DataGridLegacySortProps
+  );
 
 /** Properties for the DataGridHeader sub-component. */
 export interface DataGridHeaderProps extends React.HTMLAttributes<HTMLTableSectionElement> {
@@ -783,7 +780,16 @@ const nativeControl = 'accent-primary cursor-pointer';
 // ---------------------------------------------------------------------------
 
 // The component-level JSDoc sits on the exported `DataGrid` below.
-const DataGridRoot = <T,>(props: DataGridProps<T>) => {
+//
+// Two call signatures. The first takes only a grid with `items` (`DataGridItemsSortProps`), so an
+// inline `onSortChange={(sort, details) => …}` next to `items` has one contextual type: in the
+// union of the second, `items` cannot tell the members apart while `T` is still being inferred
+// from it. Every other grid, a generic wrapper's `DataGridProps<T>` included, takes the second.
+function DataGridRoot<T>(
+  props: DataGridBaseProps<T> & DataGridItemsSortProps<T>,
+): React.JSX.Element;
+function DataGridRoot<T = unknown>(props: DataGridProps<T>): React.JSX.Element;
+function DataGridRoot<T>(props: DataGridProps<T>) {
   const {
     items,
     getRowId,
@@ -1264,7 +1270,7 @@ const DataGridRoot = <T,>(props: DataGridProps<T>) => {
       </DataGridSortContext.Provider>
     </DataGridContext.Provider>
   );
-};
+}
 DataGridRoot.displayName = 'DataGrid';
 
 // ---------------------------------------------------------------------------

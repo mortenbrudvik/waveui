@@ -4254,6 +4254,67 @@ describe('DataGrid types', () => {
     expectTypeOf<DataGridHeaderCellProps['sortIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
   });
 
+  it('lets a generic wrapper pass its `DataGridProps<T>` on: spread, with a prop of its own, destructured', async () => {
+    const user = userEvent.setup();
+    function Spread<T>(props: DataGridProps<T>) {
+      return <DataGrid {...props} />;
+    }
+    function SpreadWithClass<T>(props: DataGridProps<T>) {
+      return <DataGrid {...props} className="app-grid" />;
+    }
+    const Destructured = <T,>({ className, ...props }: DataGridProps<T>) => (
+      <DataGrid className={className} {...props} />
+    );
+    const setSort = (sort: DataGridSort | null) => void sort;
+    const elements = [
+      <Spread key="spread" aria-label="People" items={PEOPLE} getRowId={(person) => person.id} />,
+      <SpreadWithClass
+        key="legacy"
+        aria-label="People"
+        onSortChange={(columnId, direction) => {
+          expectTypeOf(columnId).toEqualTypeOf<string>();
+          expectTypeOf(direction).toEqualTypeOf<SortDirection>();
+        }}
+      >
+        {null}
+      </SpreadWithClass>,
+      <Destructured
+        key="destructured"
+        aria-label="People"
+        items={PEOPLE}
+        defaultSort={null}
+        onSortChange={(sort) => setSort(sort)}
+      />,
+    ];
+    expect(elements).toHaveLength(3);
+
+    const onSortChange = vi.fn();
+    render(
+      <Destructured
+        aria-label="People"
+        className="app-grid"
+        items={PEOPLE}
+        columns={[
+          {
+            columnId: 'name',
+            label: 'Name',
+            compare: (a, b) => a.name.localeCompare(b.name),
+            renderCell: (person) => person.name,
+          },
+        ]}
+        onSortChange={onSortChange}
+      />,
+    );
+    expect(screen.getByRole('grid')).toHaveClass('app-grid');
+    await user.click(sortButton('Name'));
+    await user.click(sortButton('Name'));
+    expect(bodyRows().map((row) => row.textContent)).toEqual(['Carol', 'Bob', 'Alice']);
+    expect(onSortChange).toHaveBeenLastCalledWith(
+      { columnId: 'name', direction: 'descending' },
+      DETAILS,
+    );
+  });
+
   it('accepts readonly arrays (`as const`) for columns and the selection, and emits a mutable array', () => {
     const COLUMNS = [
       { id: 'name', label: 'Name', sortable: true },

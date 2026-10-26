@@ -147,9 +147,9 @@ export const ChevronRightIcon = /* @__PURE__ */ createIcon({
 });
 
 /** Arrow pointing up: an ascending sort (DataGrid and Table sort buttons). */
-export const SortArrowUp = /* @__PURE__ */ createIcon({
+export const SortArrowUpIcon = /* @__PURE__ */ createIcon({
   name: 'sort-arrow-up',
-  displayName: 'SortArrowUp',
+  displayName: 'SortArrowUpIcon',
   viewBox: '0 0 12 12',
   defaultSize: 12,
   paint: 'fill',
@@ -159,9 +159,9 @@ export const SortArrowUp = /* @__PURE__ */ createIcon({
 });
 
 /** Arrow pointing down: a descending sort (DataGrid and Table sort buttons). */
-export const SortArrowDown = /* @__PURE__ */ createIcon({
+export const SortArrowDownIcon = /* @__PURE__ */ createIcon({
   name: 'sort-arrow-down',
-  displayName: 'SortArrowDown',
+  displayName: 'SortArrowDownIcon',
   viewBox: '0 0 12 12',
   defaultSize: 12,
   paint: 'fill',
