@@ -86,7 +86,7 @@
 
 **Files:** Modify `Breadcrumb.tsx`, `src/lib/classNames.ts`; Test `Breadcrumb.test.tsx`.
 
-**Interfaces:** Consumes Task 3. Produces `BreadcrumbProps.maxDisplayedItems?`, `overflowIndex?` (default 1), `overflowLabel?` (default `"More items"`), `size?: CoreSize` (`data-size`), `focusMode?: FocusMode` (`data-focus-mode`), `divider?: Slot<'span'>`; `breadcrumbOverflowClassNames`.
+**Interfaces:** Consumes Task 3. Produces `BreadcrumbProps.maxDisplayedItems?`, `overflowIndex?` (default 1), `overflowLabel?` (default `"More items"`), `size?: CoreSize` (`data-size`), `focusMode?: FocusMode` (`data-focus-mode`), `divider?: Slot<'span'>`; `breadcrumbClassNames.overflowButton` (a key of the existing constant; ruled in the SDD ledger).
 
 - [ ] **Step 1:** Failing tests: no props renders the 0.13 trail; with `maxDisplayedItems` the middle items collapse into a `…` Menu button named "More items" (localizable) holding `Menu.ItemLink`s for items with `href` and `Menu.Item`s otherwise; the current item and the first item are never hidden; an unmappable item warns once (`Breadcrumb:overflow-item`); sizes set `data-size` and text steps; `focusMode="arrow"` is one Tab stop with arrows (RTL tested) across links and the overflow button; `divider` replaces the chevron, `false` hides it, `null` keeps it, RTL mirror only on the default; axe; no import cycle (Menu never imports Breadcrumb).
 - [ ] **Step 2:** Run; expect FAIL on the new cases only.
