@@ -38,13 +38,15 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
    */
   overflowIndex?: number;
   /**
-   * `'auto'` fits the trail to its room: the items that do not fit are hidden, the middle ones
-   * first (from the start of the trail), the first item only after them, and the last `current`
-   * item never. A "…" button at the end of the trail (`overflowLabel`) then opens a menu of the
-   * hidden items, in trail order. The room decides alone: `maxDisplayedItems` and
-   * `overflowIndex` do not apply. The trail list is then an `Overflow` (a `role="list"` element
-   * with the `wave-overflow` class and 4px of padding) that measures with `ResizeObserver`.
-   * `'none'` shows the trail as the other props say.
+   * `'auto'` fits the trail to its room: the middle items that do not fit are hidden, from the
+   * start of the trail; the first item and the last `current` item never are. A "…" list item
+   * with its own separator then stands just before the first hidden item (so the trail reads
+   * "Home › … › Parent › Page"), and its button (`overflowLabel`) opens a menu of the hidden
+   * items, in trail order. When even the first and the current item do not fit, the button covers
+   * the end of the trail. The room decides alone: `maxDisplayedItems` and `overflowIndex` do not
+   * apply. The trail list is then an `Overflow` (a `role="list"` element with the `wave-overflow`
+   * class and 4px of padding) that measures with `ResizeObserver`. `'none'` shows the trail as
+   * the other props say.
    * @default 'none'
    */
   overflow?: 'none' | 'auto';
@@ -441,9 +443,6 @@ function BreadcrumbOverflowMenu({
   );
 }
 
-/** Priority of the first entry of an `overflow="auto"` trail: it hides after the middle ones. */
-const FIRST_ITEM_PRIORITY = 1;
-
 const BreadcrumbRoot = ({
   children,
   maxDisplayedItems,
@@ -518,31 +517,29 @@ const BreadcrumbRoot = ({
     </li>
   );
 
-  // `overflow="auto"`: the list is an Overflow of `<li>` items. Middle entries hide first, from
-  // the start of the trail, then the first entry; the last current entry is pinned. The "…" menu
-  // is the Overflow's button and lists the hidden entries.
+  // `overflow="auto"`: the list is an Overflow of `<li>` items. The first and the last current
+  // entry are pinned; the others hide from the start of the trail. The "…" menu is the Overflow's
+  // button: it stands just before the first hidden entry (never first, since that one is pinned),
+  // with its own separator, and lists the hidden entries.
   const currentIndex = entries.map(isCurrentEntry).lastIndexOf(true);
   const list = auto ? (
     <Overflow
       role="list"
       overflowDirection="start"
+      buttonPosition="before-hidden"
       overflowButton={(_count, hiddenIds) => (
-        <BreadcrumbOverflowMenu
-          entries={entries.filter((entry) => hiddenIds.includes(entry.key))}
-          label={overflowLabel}
-        />
+        <span className="flex items-center gap-1">
+          {renderDivider()}
+          <BreadcrumbOverflowMenu
+            entries={entries.filter((entry) => hiddenIds.includes(entry.key))}
+            label={overflowLabel}
+          />
+        </span>
       )}
       className={cn(breadcrumbClassNames.list, 'gap-1', breadcrumbSizes[size].text)}
     >
       {entries.map(({ key, node }, index) => (
-        <OverflowItem
-          key={key}
-          asChild
-          itemId={key}
-          {...(index === currentIndex
-            ? { pinned: true }
-            : { priority: index === 0 ? FIRST_ITEM_PRIORITY : 0 })}
-        >
+        <OverflowItem key={key} asChild itemId={key} pinned={index === 0 || index === currentIndex}>
           {renderListItem(node, index)}
         </OverflowItem>
       ))}
@@ -795,9 +792,9 @@ BreadcrumbItem.displayName = 'BreadcrumbItem';
  * right-to-left layouts (`divider` replaces or hides it).
  *
  * `maxDisplayedItems` collapses the middle of a long trail into a "…" menu button, and
- * `overflow="auto"` collapses it to the room it has instead (the hidden items are listed in a "…"
- * menu at its end); `size` sets the text step and `focusMode="arrow"` makes the trail one Tab stop
- * with arrow-key navigation.
+ * `overflow="auto"` collapses it to the room it has instead (a "…" menu button stands in for the
+ * hidden middle items); `size` sets the text step and `focusMode="arrow"` makes the trail one Tab
+ * stop with arrow-key navigation.
  *
  * `Breadcrumb.Item` is also exported as `BreadcrumbItem`: React Server Components import the flat
  * name, because dotted access needs a client file.

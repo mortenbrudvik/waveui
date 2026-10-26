@@ -1511,8 +1511,8 @@ describe('Breadcrumb', () => {
       /**
        * jsdom has no layout: the trail is `room` wide, each list item 50 (its separator included)
        * and the overflow button's wrapper 20. Like a `display: none` element in a browser, a hidden
-       * item measures 0, so the trail measures it from its cache. Change `room` and call `grow()`
-       * to resize the trail.
+       * item measures 0, so the trail measures it from its cache. `resizeTo(room)` resizes the
+       * trail.
        */
       function layoutWith(room: number) {
         const stub = (proto: object, name: string, get: (el: Element) => number) => {
@@ -1557,12 +1557,21 @@ describe('Breadcrumb', () => {
         return labels;
       };
 
-      it('hides middle items first, from the start of the trail, into the "More items" menu', async () => {
+      /** The list item that holds the "More items" button. */
+      const overflowListItem = () =>
+        screen.getByRole('button', { name: 'More items' }).closest('[role="listitem"]');
+
+      it('hides middle items from the start of the trail into a "More items" menu in their place', async () => {
         const user = userEvent.setup();
         layoutWith(200);
         render(<Trail overflow="auto" />);
         // 6 x 50 = 300 in 200: Alpha, Beta and Gamma go (150 + the 20 of the button fit).
-        expect(shownLabels()).toEqual(['Home', 'Delta', 'Widget', '…']);
+        expect(shownLabels()).toEqual(['Home', '…', 'Delta', 'Widget']);
+        // The "…" stands just before the first hidden item, with its own separator.
+        const listItem = overflowListItem();
+        expect(listItem?.nextElementSibling).toHaveTextContent('Alpha');
+        expect(listItem?.nextElementSibling).toHaveAttribute('data-overflow-hidden');
+        expect(separatorsIn(listItem as HTMLElement)).toHaveLength(1);
         const button = screen.getByRole('button', { name: 'More items' });
         expect(button).toHaveAttribute('aria-haspopup', 'menu');
         expect(button).toHaveAttribute('type', 'button');
@@ -1576,34 +1585,35 @@ describe('Breadcrumb', () => {
         await user.keyboard('{Escape}');
       });
 
-      it('hides the first item only after every middle item, and never the current item', async () => {
+      it('never hides the first or the current item', async () => {
         const user = userEvent.setup();
         const layout = layoutWith(130);
         render(<Trail overflow="auto" />);
-        expect(shownLabels()).toEqual(['Home', 'Widget', '…']);
+        expect(shownLabels()).toEqual(['Home', '…', 'Widget']);
         expect(await menuLabels(user)).toEqual(['Alpha', 'Beta', 'Gamma', 'Delta']);
 
-        layout.resizeTo(80);
-        expect(shownLabels()).toEqual(['Widget', '…']);
-        expect(await menuLabels(user)).toEqual(['Home', 'Alpha', 'Beta', 'Gamma', 'Delta']);
-
-        layout.resizeTo(10);
-        expect(shownLabels()).toEqual(['Widget', '…']);
+        // Too narrow even for the pinned items: they stay, and the button covers the end.
+        for (const room of [80, 10]) {
+          layout.resizeTo(room);
+          expect(shownLabels()).toEqual(['Home', '…', 'Widget']);
+          expect(await menuLabels(user)).toEqual(['Alpha', 'Beta', 'Gamma', 'Delta']);
+        }
+        expect(screen.getByRole('link', { name: 'Home' })).toBeVisible();
         expect(screen.getByText('Widget')).toHaveAttribute('aria-current', 'page');
       });
 
-      it('restores the hidden items in order as the trail grows, and drops the button', () => {
+      it('restores the hidden items in order as the trail grows, without remounting the button', () => {
         const layout = layoutWith(80);
         render(<Trail overflow="auto" />);
-        expect(shownLabels()).toEqual(['Widget', '…']);
-        layout.resizeTo(130);
-        expect(shownLabels()).toEqual(['Home', 'Widget', '…']);
+        expect(shownLabels()).toEqual(['Home', '…', 'Widget']);
+        const button = screen.getByRole('button', { name: 'More items' });
         layout.resizeTo(180);
-        expect(shownLabels()).toEqual(['Home', 'Delta', 'Widget', '…']);
+        expect(shownLabels()).toEqual(['Home', '…', 'Delta', 'Widget']);
         layout.resizeTo(230);
-        expect(shownLabels()).toEqual(['Home', 'Gamma', 'Delta', 'Widget', '…']);
+        expect(shownLabels()).toEqual(['Home', '…', 'Gamma', 'Delta', 'Widget']);
         layout.resizeTo(280);
-        expect(shownLabels()).toEqual(['Home', 'Beta', 'Gamma', 'Delta', 'Widget', '…']);
+        expect(shownLabels()).toEqual(['Home', '…', 'Beta', 'Gamma', 'Delta', 'Widget']);
+        expect(screen.getByRole('button', { name: 'More items' })).toBe(button);
         layout.resizeTo(300);
         expect(shownLabels()).toEqual(['Home', 'Alpha', 'Beta', 'Gamma', 'Delta', 'Widget']);
         expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
@@ -1616,6 +1626,7 @@ describe('Breadcrumb', () => {
         expect(nav).toHaveAttribute('data-overflow', 'auto');
         const list = within(nav).getByRole('list');
         expect(list).toHaveClass(overflowClassNames.root, breadcrumbClassNames.list, 'text-body-2');
+        expect(list).toHaveAttribute('data-button-position', 'before-hidden');
         const items = list.querySelectorAll('li');
         expect(items).toHaveLength(6);
         for (const li of Array.from(items)) {
@@ -1623,10 +1634,20 @@ describe('Breadcrumb', () => {
           expect(li).toHaveClass(overflowItemClassNames.root, breadcrumbClassNames.listItem);
         }
         expect(items[1]).toHaveAttribute('data-overflow-hidden');
-        expect(separatorsIn(nav)).toHaveLength(5);
+        // One per list item after the first, and the one of the "…" list item.
+        expect(separatorsIn(nav)).toHaveLength(6);
         const button = screen.getByRole('button', { name: 'More items' });
         expect(button).toHaveClass(breadcrumbClassNames.overflowButton);
-        expect(button.parentElement).toHaveAttribute('role', 'listitem');
+        expect(overflowListItem()?.parentElement).toBe(list);
+      });
+
+      it('mirrors the separator of the "…" list item in RTL, as the others', () => {
+        layoutWith(200);
+        renderWithProviders(<Trail overflow="auto" />, { dir: 'rtl' });
+        expect(shownLabels()).toEqual(['Home', '…', 'Delta', 'Widget']);
+        expect(separatorsIn(overflowListItem() as HTMLElement)[0]).toHaveClass(
+          'wave-rtl:-scale-x-100',
+        );
       });
 
       it('has no axe violations collapsed and with the menu open', async () => {
@@ -1671,9 +1692,9 @@ describe('Breadcrumb', () => {
         await user.tab();
         expect(home).toHaveFocus();
         await user.keyboard('{ArrowRight}');
-        expect(screen.getByRole('link', { name: 'Delta' })).toHaveFocus();
-        await user.keyboard('{ArrowRight}');
         expect(screen.getByRole('button', { name: 'More items' })).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(screen.getByRole('link', { name: 'Delta' })).toHaveFocus();
         await user.keyboard('{ArrowRight}');
         expect(home).toHaveFocus();
       });
@@ -1717,7 +1738,7 @@ describe('Breadcrumb', () => {
         );
         const { rerender } = render(ui);
         rerender(ui);
-        expect(shownLabels()).toEqual(['Home', 'Widget', '…']);
+        expect(shownLabels()).toEqual(['Home', '…', 'Widget']);
         expect(warn.mock.calls).toEqual([
           [
             '[WaveUI] Breadcrumb.Item: a non-current item without `href` or `onClick` renders as plain text, not a link. Pass `href` (or `onClick`, which renders a button) to make it navigable.',
@@ -1733,12 +1754,13 @@ describe('Breadcrumb', () => {
           <Breadcrumb overflow="auto">
             <Item href="/">Home</Item>
             <Item href="/a">Alpha</Item>
+            <Item href="/b">Beta</Item>
             <Item current>Widget</Item>
           </Breadcrumb>,
         );
-        expect(shownLabels()).toEqual(['Widget', '…']);
+        expect(shownLabels()).toEqual(['Home', '…', 'Widget']);
         layout.resizeTo(10);
-        expect(shownLabels()).toEqual(['Widget', '…']);
+        expect(shownLabels()).toEqual(['Home', '…', 'Widget']);
       });
 
       it('server-renders the whole trail as list items, before any measurement', () => {
