@@ -1230,6 +1230,51 @@ describe('Overflow - priority, pinned items, direction and orientation (P9-01)',
     expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-end-1');
   });
 
+  it('renders the resolved overflow direction as data-overflow-direction', () => {
+    layoutWith({ ...FOUR });
+    const { unmount } = render(<Row />);
+    expect(screen.getByTestId('overflow')).toHaveAttribute('data-overflow-direction', 'end');
+    unmount();
+    render(<Row overflowDirection="start" />);
+    expect(screen.getByTestId('overflow')).toHaveAttribute('data-overflow-direction', 'start');
+  });
+
+  it('hides an item with an infinite priority last, but still hides it; pinned never hides', () => {
+    // 4 x 30 in 100 with a 20px button: two go. Infinity outlasts the others.
+    layoutWith({ ...FOUR });
+    const { unmount } = render(
+      <Row
+        items={fourItems([
+          { id: 'b', priority: Infinity },
+          { id: 'c', priority: Infinity },
+          { id: 'd', priority: Infinity },
+        ])}
+      />,
+    );
+    expect(hiddenItems()).toEqual(['a', 'd']);
+    unmount();
+
+    // Nothing but Infinity priorities left to hide: they are victims too (last in DOM first).
+    layoutWith({ ...FOUR, overflow: 50 });
+    const second = render(
+      <Row items={fourItems(['a', 'b', 'c', 'd'].map((id) => ({ id, priority: Infinity })))} />,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c', 'd']);
+    second.unmount();
+
+    layoutWith({ ...FOUR, overflow: 50 });
+    render(
+      <Row
+        items={fourItems([
+          { id: 'a', pinned: true },
+          ...['b', 'c', 'd'].map((id) => ({ id, priority: Infinity })),
+        ])}
+      />,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c', 'd']);
+    expect(screen.getByTestId('item-a')).not.toHaveAttribute('data-overflow-hidden');
+  });
+
   it('re-measures when a priority changes', () => {
     layoutWith({ ...FOUR });
     const { rerender } = render(<Row items={fourItems([{ id: 'a', priority: -1 }])} />);

@@ -204,13 +204,13 @@ function pickVictim(
   protectedIndex: number,
 ): number {
   let best = -1;
-  let bestPriority = Infinity;
+  let bestPriority = 0;
   for (let step = 0; step < metas.length; step++) {
     const i = direction === 'end' ? metas.length - 1 - step : step;
     const { priority, pinned } = metas[i];
     if (hidden[i] || pinned || i === protectedIndex) continue;
     const value = priority ?? 0;
-    if (value < bestPriority) {
+    if (best < 0 || value < bestPriority) {
       best = i;
       bestPriority = value;
     }
@@ -807,6 +807,7 @@ const OverflowRoot = ({
           className,
         )}
         data-orientation={orientation}
+        data-overflow-direction={overflowDirection}
         {...rest}
       >
         {children}
