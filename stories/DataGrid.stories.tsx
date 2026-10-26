@@ -83,10 +83,10 @@ function HeaderChildrenGrid({ onSortChange, ...args }: DataGridStoryArgs) {
 }
 
 const COLUMNS: DataGridColumn[] = [
-  { id: 'name', label: 'Name', sortable: true },
-  { id: 'role', label: 'Role', sortable: true },
-  { id: 'location', label: 'Location', sortable: true },
-  { id: 'status', label: 'Status' },
+  { columnId: 'name', label: 'Name', sortable: true },
+  { columnId: 'role', label: 'Role', sortable: true },
+  { columnId: 'location', label: 'Location', sortable: true },
+  { columnId: 'status', label: 'Status' },
 ];
 
 function ColumnsGrid({ onSortChange, ...args }: DataGridStoryArgs) {

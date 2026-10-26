@@ -34,13 +34,43 @@ export interface DataGridSort {
   direction: SortDirection;
 }
 
-/** Defines a column in the DataGrid. */
-export interface DataGridColumn {
-  /** Unique identifier for the column (the header cell's `columnId`). */
-  id: string;
-  /** Display label for the column header. */
-  label: string;
-  /** Whether the column supports sorting. */
+/**
+ * Defines a column of the DataGrid, typed by the grid's items (`T`): the header cell it renders
+ * and, with `items`, the cell of each row. `createTableColumn` builds one with `sortable` resolved.
+ * A column with functions (`compare`, `renderCell`, `renderHeaderCell`) cannot be passed from a
+ * Server Component to the DataGrid, since functions are not serializable: define such columns in a
+ * client component.
+ */
+export interface DataGridColumn<T = unknown> {
+  /**
+   * Unique identifier of the column: the `columnId` of its header cell (and of the grid's sort) and
+   * the React key of its cells. Required in practice: a column without it (and without the
+   * deprecated `id`) cannot sort, with a development warning.
+   */
+  columnId?: string;
+  /**
+   * @deprecated Use `columnId`. Read only when `columnId` is not given, with a development
+   * warning.
+   */
+  id?: string;
+  /** The header content (text or any React node), unless `renderHeaderCell` is given. */
+  label: React.ReactNode;
+  /**
+   * Orders two items of the column, as for `Array.prototype.sort` (negative: `a` first). A column
+   * with `compare` is sortable unless `sortable` is `false`.
+   */
+  compare?: (a: T, b: T) => number;
+  /**
+   * Renders the content of the column's cell for one item (rows rendered from `items`). Without
+   * it, the column's cells are empty.
+   */
+  renderCell?: (item: T) => React.ReactNode;
+  /** Renders the header content, in place of `label`. */
+  renderHeaderCell?: () => React.ReactNode;
+  /**
+   * Whether the column's header is a sort button (the header cell carries `aria-sort`).
+   * @default compare !== undefined
+   */
   sortable?: boolean;
 }
 
@@ -61,14 +91,31 @@ export interface DataGridLabels {
 const DEFAULT_SELECT_ALL_LABEL = 'Select all rows';
 const DEFAULT_SELECTION_HEADER_LABEL = 'Selection';
 
-/** Props of every DataGrid, whatever sort API it uses. */
-export interface DataGridBaseProps extends React.HTMLAttributes<HTMLTableElement> {
+/** Props of every DataGrid, whatever sort API it uses. `T` is the type of its `items`. */
+export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTMLTableElement> {
+  /**
+   * The grid's data, one body row per item, in this order. With `columns` and no `DataGrid.Body`
+   * child (or one without children), the grid renders the rows and cells from the columns; a
+   * `DataGrid.Body` whose child is a render function renders the row of each item. Each row's
+   * `rowId` comes from `getRowId`. The grid reads the array and never changes it.
+   */
+  items?: readonly T[];
+  /**
+   * The row id of an item: the `rowId` of its row (for selection), for rows rendered from `items`.
+   * A row's own `rowId` wins. Ids must be unique (a duplicate warns in development).
+   * @default the item's index in `items`, as a string
+   */
+  getRowId?: (item: T) => string;
   /**
    * Column definitions. When given and no `DataGrid.Header` child is present, the header row
-   * (including the selection column) is rendered from them: `id` becomes the header cell's
-   * `columnId`, `label` its content, `sortable` makes it a sort button.
+   * (including the selection column) is rendered from them: `columnId` becomes the header cell's
+   * `columnId`, `renderHeaderCell()` (else `label`) its content, and `sortable` (by default, having
+   * `compare`) makes it a sort button. With `items` and no `DataGrid.Body` child, the body rows are
+   * rendered from them too: one `DataGrid.Cell` per column, filled by `renderCell`. Those rows
+   * render again whenever the array changes, so keep it stable (defined outside the component, or
+   * memoised).
    */
-  columns?: readonly DataGridColumn[];
+  columns?: readonly DataGridColumn<T>[];
   /**
    * Row selection mode. `'multiple'` adds a checkbox column with a "Select all rows" header
    * checkbox; `'single'` adds a radio column (its header reads "Selection" to assistive
@@ -110,8 +157,11 @@ export interface DataGridBaseProps extends React.HTMLAttributes<HTMLTableElement
    * without one they are dropped with a development warning. Name the grid with `aria-label`.
    */
   containerProps?: Omit<React.ComponentPropsWithRef<'div'>, 'children'>;
-  /** DataGrid header, body, and row elements. */
-  children: React.ReactNode;
+  /**
+   * DataGrid header, body, and row elements. Optional when `items` and `columns` render the grid;
+   * a generated body is placed after the header and before a `<tfoot>` child.
+   */
+  children?: React.ReactNode;
   /** Ref to the `<table role="grid">` element. */
   ref?: React.Ref<HTMLTableElement>;
 }
@@ -184,12 +234,12 @@ export interface DataGridLegacySortProps {
 }
 
 /**
- * Properties for the DataGrid component. The sort props form a union: `sort`/`defaultSort` with
- * `onSortChange(sort)` (0.5), or the 0.4 form `onSortChange(columnId, direction)` with the
- * deprecated `sortColumn`/`sortDirection`/`defaultSortColumn`/`defaultSortDirection`. The two
- * cannot be mixed.
+ * Properties for the DataGrid component, whose `items` are of type `T`. The sort props form a
+ * union: `sort`/`defaultSort` with `onSortChange(sort)` (0.5), or the 0.4 form
+ * `onSortChange(columnId, direction)` with the deprecated `sortColumn`/`sortDirection`/
+ * `defaultSortColumn`/`defaultSortDirection`. The two cannot be mixed.
  */
-export type DataGridProps = DataGridBaseProps &
+export type DataGridProps<T = unknown> = DataGridBaseProps<T> &
   (DataGridControlledSortProps | DataGridUncontrolledSortProps | DataGridLegacySortProps);
 
 /** Properties for the DataGridHeader sub-component. */
@@ -221,10 +271,21 @@ export interface DataGridHeaderCellProps extends React.ThHTMLAttributes<HTMLTabl
   ref?: React.Ref<HTMLTableCellElement>;
 }
 
-/** Properties for the DataGridBody sub-component. */
-export interface DataGridBodyProps extends React.HTMLAttributes<HTMLTableSectionElement> {
-  /** DataGrid row elements. */
-  children: React.ReactNode;
+/** Properties for the DataGridBody sub-component, in a grid whose `items` are of type `T`. */
+export interface DataGridBodyProps<T = unknown> extends Omit<
+  React.HTMLAttributes<HTMLTableSectionElement>,
+  'children'
+> {
+  /**
+   * The body rows: `DataGrid.Row` elements, or a render function called with each item of the
+   * grid's `items` and the item's index in `items`, which returns the item's `DataGrid.Row`. The
+   * grid keys each returned row by its row id and gives it that id as `rowId` (from `getRowId`),
+   * and renders it again only when its item, its index or the function change. Type the function
+   * by annotating its item parameter (`(person: Person) => …`) or with `DataGrid.Body<Person>`.
+   * Without children, a grid with `items` and `columns` renders the rows from the columns; empty
+   * children are no rows.
+   */
+  children?: React.ReactNode | ((item: T, index: number) => React.ReactNode);
   /** Ref to the `<tbody>` element. */
   ref?: React.Ref<HTMLTableSectionElement>;
 }
@@ -234,7 +295,9 @@ export interface DataGridRowProps extends React.HTMLAttributes<HTMLTableRowEleme
   /**
    * Unique identifier for this row, used for selection (rows that share one are selected together;
    * a duplicate warns in development). A selectable grid renders no selection control (and warns
-   * in development) for a row without it.
+   * in development) for a row without it. A row rendered from the grid's `items` (by
+   * `DataGrid.Body`'s render function or from `columns`) defaults to the item's row id
+   * (`getRowId`).
    */
   rowId?: string;
   /**
@@ -535,6 +598,34 @@ const DataGridHeaderSlotsContext = React.createContext<HeaderSlotRegistry | null
  */
 const DataGridHeaderRowHintContext = React.createContext(true);
 
+/** Renders the row of one item of `items` (a `DataGrid.Body` render function, or from `columns`). */
+type DataGridRenderRow = (item: unknown, index: number) => React.ReactNode;
+
+/** One row of the grid's `items`. */
+interface DataGridItemRowData {
+  item: unknown;
+  /** The item's index in `items`. */
+  index: number;
+  rowId: string;
+  /** The row's React key: its row id, made unique when the id repeats. */
+  key: string;
+}
+
+interface DataGridItemsContextValue {
+  /** The rows of `items`, in the order they are rendered; `null` without `items`. */
+  rows: readonly DataGridItemRowData[] | null;
+  /** Renders a row from `columns`; `null` without `items` and `columns`. */
+  renderColumnsRow: DataGridRenderRow | null;
+}
+
+/** The grid's `items`, for `DataGrid.Body` (optional: a body of JSX rows needs none). */
+const DataGridItemsContext = React.createContext<DataGridItemsContextValue | null>(null);
+/**
+ * The row id of the item a body row is rendered for, the default `rowId` of `DataGrid.Row`. The
+ * grid resets it, so the rows of a grid nested in a cell do not take the outer row's id.
+ */
+const DataGridRowIdContext = React.createContext<string | null>(null);
+
 const INERT_STORE = createSelectionStore([]);
 const INERT_CONTEXT: DataGridContextValue = {
   selectionMode: 'none',
@@ -582,6 +673,17 @@ function renderFlatChild({ key, node }: { key: string; node: React.ReactNode }):
   return <React.Fragment key={key}>{node}</React.Fragment>;
 }
 
+/** A column's id: `columnId`, else the deprecated `id` (warned once). */
+function columnIdOf<T>(column: DataGridColumn<T>): string | undefined {
+  return resolveDeprecatedProp(
+    'DataGrid',
+    column.columnId,
+    column.id,
+    'columns[].id',
+    'columns[].columnId',
+  );
+}
+
 function warnDuplicateRowId(rowId: string): void {
   warnOnce(
     `DataGrid:duplicate-rowId:${rowId}`,
@@ -599,8 +701,10 @@ const nativeControl = 'accent-primary cursor-pointer';
 // ---------------------------------------------------------------------------
 
 // The component-level JSDoc sits on the exported `DataGrid` below.
-const DataGridRoot = (props: DataGridProps) => {
+const DataGridRoot = <T,>(props: DataGridProps<T>) => {
   const {
+    items,
+    getRowId,
     sort: sortProp,
     defaultSort,
     sortColumn: sortColumnProp,
@@ -853,27 +957,94 @@ const DataGridRoot = (props: DataGridProps) => {
   const { gridRef, gridProps } = useGridNavigation();
   const mergedRef = useMergedRefs<HTMLTableElement>(ref, gridRef);
 
-  // --- header from columns ----------------------------------------------------
+  // --- items ------------------------------------------------------------------
+  const hasItems = items !== undefined;
+  const itemRows = React.useMemo<readonly DataGridItemRowData[] | null>(() => {
+    if (items === undefined) return null;
+    const keys = new Set<string>();
+    return items.map((item, index) => {
+      const rowId = getRowId ? getRowId(item) : String(index);
+      // A repeated id (the selection store warns about it) still gets a key of its own.
+      const key = keys.has(rowId) ? `${rowId}\u0000${index}` : rowId;
+      keys.add(key);
+      return { item, index, rowId, key };
+    });
+  }, [items, getRowId]);
+
+  // Built only with `items`: the column ids are read (and the deprecated `id` warned) when used.
+  const renderColumnsRow = React.useMemo<DataGridRenderRow | null>(() => {
+    if (!columns || !hasItems) return null;
+    const cellKeys = columns.map((column, index) => columnIdOf(column) ?? index);
+    return (item) => (
+      <DataGridRow>
+        {columns.map((column, index) => (
+          <DataGridCell key={cellKeys[index]}>{column.renderCell?.(item as T)}</DataGridCell>
+        ))}
+      </DataGridRow>
+    );
+  }, [columns, hasItems]);
+
+  const itemsContext = React.useMemo<DataGridItemsContextValue>(
+    () => ({ rows: itemRows, renderColumnsRow }),
+    [itemRows, renderColumnsRow],
+  );
+
+  const columnWithoutId =
+    columns?.some((column) => column.columnId === undefined && column.id === undefined) ?? false;
+  React.useEffect(() => {
+    if (columnWithoutId) {
+      warnOnce(
+        'DataGrid:column-without-columnId',
+        'DataGrid: a column in `columns` has no `columnId` (nor the deprecated `id`), so its ' +
+          'header cannot sort. Give every column a unique `columnId`.',
+      );
+    }
+  }, [columnWithoutId]);
+
+  // --- header and body from columns -------------------------------------------
   let content: React.ReactNode = children;
   const flatChildren = columns ? flattenChildren(children) : [];
-  if (columns && !flatChildren.some(({ node }) => isElementOfType(node, DataGridHeader))) {
-    // A `<caption>` stays the table's first child, before the generated header.
-    const isCaption = ({ node }: { node: React.ReactNode }) => isElementOfType(node, 'caption');
-    content = (
-      <>
-        {flatChildren.filter(isCaption).map(renderFlatChild)}
-        <DataGridHeader>
-          <tr>
-            {columns.map((column) => (
-              <DataGridHeaderCell key={column.id} columnId={column.id} sortable={column.sortable}>
-                {column.label}
+  const hasChild = (part: unknown) => flatChildren.some(({ node }) => isElementOfType(node, part));
+  const generatedHeader =
+    columns && !hasChild(DataGridHeader) ? (
+      <DataGridHeader key="wave-generated-header">
+        <tr>
+          {columns.map((column, index) => {
+            const columnId = columnIdOf(column);
+            return (
+              <DataGridHeaderCell
+                key={columnId ?? index}
+                columnId={columnId}
+                sortable={column.sortable ?? column.compare !== undefined}
+              >
+                {column.renderHeaderCell ? column.renderHeaderCell() : column.label}
               </DataGridHeaderCell>
-            ))}
-          </tr>
-        </DataGridHeader>
-        {flatChildren.filter((child) => !isCaption(child)).map(renderFlatChild)}
-      </>
-    );
+            );
+          })}
+        </tr>
+      </DataGridHeader>
+    ) : null;
+  // Without children, the body renders the rows from `columns` (see DataGrid.Body).
+  const generatedBody =
+    columns && hasItems && !hasChild(DataGridBody) ? (
+      <DataGridBody key="wave-generated-body" />
+    ) : null;
+  if (generatedHeader || generatedBody) {
+    // A `<caption>` stays the table's first child, before the generated header; a generated body
+    // goes before a `<tfoot>`, which ends the table.
+    const isCaption = ({ node }: { node: React.ReactNode }) => isElementOfType(node, 'caption');
+    const others = flatChildren.filter((child) => !isCaption(child));
+    const footerIndex = generatedBody
+      ? others.findIndex(({ node }) => isElementOfType(node, 'tfoot'))
+      : -1;
+    const bodyIndex = footerIndex >= 0 ? footerIndex : others.length;
+    content = [
+      ...flatChildren.filter(isCaption).map(renderFlatChild),
+      generatedHeader,
+      ...others.slice(0, bodyIndex).map(renderFlatChild),
+      generatedBody,
+      ...others.slice(bodyIndex).map(renderFlatChild),
+    ];
   }
 
   const {
@@ -902,37 +1073,41 @@ const DataGridRoot = (props: DataGridProps) => {
   return (
     <DataGridContext.Provider value={context}>
       <DataGridSortContext.Provider value={sortContext}>
-        <div
-          {...containerRest}
-          aria-label={containerHasRole ? containerLabel : undefined}
-          aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
-          className={cn(
-            dataGridClassNames.container,
-            'overflow-x-auto rounded-md border border-border',
-            containerClassName,
-          )}
-        >
-          <table
-            ref={mergedRef}
-            role="grid"
-            aria-multiselectable={selectionMode === 'multiple' || undefined}
-            className={cn(
-              dataGridClassNames.root,
-              'w-full border-separate border-spacing-0',
-              className,
-            )}
-            {...rest}
-            onKeyDown={composeEventHandlers(onKeyDown, gridProps.onKeyDown)}
-            onFocus={composeEventHandlers(onFocus, gridProps.onFocus, {
-              checkDefaultPrevented: false,
-            })}
-            onBlur={composeEventHandlers(onBlur, gridProps.onBlur, {
-              checkDefaultPrevented: false,
-            })}
-          >
-            {content}
-          </table>
-        </div>
+        <DataGridItemsContext.Provider value={itemsContext}>
+          <DataGridRowIdContext.Provider value={null}>
+            <div
+              {...containerRest}
+              aria-label={containerHasRole ? containerLabel : undefined}
+              aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
+              className={cn(
+                dataGridClassNames.container,
+                'overflow-x-auto rounded-md border border-border',
+                containerClassName,
+              )}
+            >
+              <table
+                ref={mergedRef}
+                role="grid"
+                aria-multiselectable={selectionMode === 'multiple' || undefined}
+                className={cn(
+                  dataGridClassNames.root,
+                  'w-full border-separate border-spacing-0',
+                  className,
+                )}
+                {...rest}
+                onKeyDown={composeEventHandlers(onKeyDown, gridProps.onKeyDown)}
+                onFocus={composeEventHandlers(onFocus, gridProps.onFocus, {
+                  checkDefaultPrevented: false,
+                })}
+                onBlur={composeEventHandlers(onBlur, gridProps.onBlur, {
+                  checkDefaultPrevented: false,
+                })}
+              >
+                {content}
+              </table>
+            </div>
+          </DataGridRowIdContext.Provider>
+        </DataGridItemsContext.Provider>
       </DataGridSortContext.Provider>
     </DataGridContext.Provider>
   );
@@ -1227,14 +1402,80 @@ const DataGridHeaderCell = ({
 };
 DataGridHeaderCell.displayName = 'DataGridHeaderCell';
 
-/** The grid's `<tbody>`. */
-const DataGridBody = ({ children, className, ref, ...rest }: DataGridBodyProps) => (
-  <DataGridSectionContext.Provider value="body">
-    <tbody ref={ref} className={cn(dataGridBodyClassNames.root, className)} {...rest}>
-      {children}
-    </tbody>
-  </DataGridSectionContext.Provider>
-);
+/**
+ * The row of one item of `items`, under its row id. Memoised, so a grid that renders again (a
+ * sort, a parent update) renders the row again only when its item, its index or the render
+ * function change.
+ */
+const DataGridItemRow = React.memo(function DataGridItemRow({
+  item,
+  index,
+  rowId,
+  render,
+}: {
+  item: unknown;
+  index: number;
+  rowId: string;
+  render: DataGridRenderRow;
+}) {
+  return (
+    <DataGridRowIdContext.Provider value={rowId}>
+      {render(item, index)}
+    </DataGridRowIdContext.Provider>
+  );
+});
+
+/**
+ * The grid's `<tbody>`. Its child can also be a render function, called with each item of the
+ * grid's `items` (and its index there) to render the item's row; without children, a grid with
+ * `items` and `columns` renders the rows from the columns.
+ */
+const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyProps<T>) => {
+  const itemsContext = React.useContext(DataGridItemsContext);
+  const rows = itemsContext?.rows ?? null;
+  const hasRenderFunction = typeof children === 'function';
+
+  const renderWithoutItems = hasRenderFunction && rows === null;
+  React.useEffect(() => {
+    if (renderWithoutItems) {
+      warnOnce(
+        'DataGrid.Body:render-without-items',
+        "DataGrid.Body: a render function child renders one row per item of the DataGrid's " +
+          '`items`, which is not set, so the body has no rows.',
+      );
+    }
+  }, [renderWithoutItems]);
+
+  const renderRows = (render: DataGridRenderRow | null) =>
+    render &&
+    rows?.map((row) => (
+      <DataGridItemRow
+        key={row.key}
+        item={row.item}
+        index={row.index}
+        rowId={row.rowId}
+        render={render}
+      />
+    ));
+
+  let content: React.ReactNode;
+  if (typeof children === 'function') {
+    // The items are the grid's `T`, which the body cannot see: its own `T` types the function.
+    content = renderRows(children as DataGridRenderRow);
+  } else if (children === undefined) {
+    content = renderRows(itemsContext?.renderColumnsRow ?? null);
+  } else {
+    content = children;
+  }
+
+  return (
+    <DataGridSectionContext.Provider value="body">
+      <tbody ref={ref} className={cn(dataGridBodyClassNames.root, className)} {...rest}>
+        {content}
+      </tbody>
+    </DataGridSectionContext.Provider>
+  );
+};
 DataGridBody.displayName = 'DataGridBody';
 
 /**
@@ -1242,7 +1483,7 @@ DataGridBody.displayName = 'DataGridBody';
  * after the row's first cell (or `selectionLabel`); Space on one of its cells toggles the row.
  */
 const DataGridRow = ({
-  rowId,
+  rowId: rowIdProp,
   selectionLabel,
   children,
   className,
@@ -1251,6 +1492,9 @@ const DataGridRow = ({
   ...rest
 }: DataGridRowProps) => {
   const { selectionMode, store, toggleRow, radioName } = useDataGridContext('DataGrid.Row');
+  // A row rendered for an item of `items` defaults to the item's row id.
+  const itemRowId = React.useContext(DataGridRowIdContext);
+  const rowId = rowIdProp ?? itemRowId ?? undefined;
   const section = React.useContext(DataGridSectionContext);
   const firstHeaderRowHint = React.useContext(DataGridHeaderRowHintContext);
   const inHeader = section === 'header';
@@ -1409,6 +1653,11 @@ export { DataGridHeader, DataGridHeaderCell, DataGridBody, DataGridRow, DataGrid
  * indexes, so it keeps its own Tab stop. Supports sortable columns (controlled sorting:
  * `onSortChange` reports the new sort and the consumer reorders the rows) and single or multiple
  * row selection with a select-all header checkbox.
+ *
+ * The grid is composed from its parts, or rendered from data: with `items` and typed `columns`
+ * (`DataGridColumn<T>`, see `createTableColumn`) it renders the header, the rows and the cells
+ * itself, and `DataGrid.Body` also takes a render function that returns each item's row. Rows
+ * rendered from `items` take their `rowId` from `getRowId` (by default the item's index).
  *
  * Sub-components are available as `DataGrid.Header`, `DataGrid.HeaderCell`, `DataGrid.Body`,
  * `DataGrid.Row` and `DataGrid.Cell` in client components, and as the flat exports

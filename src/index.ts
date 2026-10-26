@@ -30,6 +30,8 @@ export type {
   PartitionBreadcrumbItemsOptions,
   PartitionBreadcrumbItemsResult,
 } from './lib/breadcrumb';
+export { createTableColumn } from './lib/table';
+export type { CreateTableColumnOptions } from './lib/table';
 export { createToaster } from './lib/toaster';
 export type { ToasterHandle } from './lib/toaster';
 

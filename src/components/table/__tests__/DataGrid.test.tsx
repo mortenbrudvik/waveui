@@ -15,6 +15,7 @@ import {
 } from '../DataGrid';
 import type {
   DataGridBaseProps,
+  DataGridBodyProps,
   DataGridCellProps,
   DataGridColumn,
   DataGridHeaderCellProps,
@@ -24,7 +25,13 @@ import type {
   DataGridSort,
   SortDirection,
 } from '../DataGrid';
+import {
+  dataGridBodyClassNames,
+  dataGridCellClassNames,
+  dataGridRowClassNames,
+} from '../../../lib/classNames';
 import { getTabbableElements } from '../../../lib/focus';
+import { createTableColumn } from '../../../lib/table';
 import { useRovingTabIndex } from '../../../hooks/useRovingTabIndex';
 import { Button } from '../../button/Button';
 import { MenuButton } from '../../button/MenuButton';
@@ -139,6 +146,14 @@ function cell(text: string, index?: number): HTMLElement {
 /** DataGrid's deprecation warning for the prop `name`, replaced by `replacement`. */
 const deprecated = (name: string, replacement: string) =>
   `[WaveUI] DataGrid: \`${name}\` is deprecated and will be removed in 1.0. Use \`${replacement}\` instead.`;
+
+const DEPRECATED_COLUMN_ID = deprecated('columns[].id', 'columns[].columnId');
+
+const COLUMN_WITHOUT_ID =
+  '[WaveUI] DataGrid: a column in `columns` has no `columnId` (nor the deprecated `id`), so its header cannot sort. Give every column a unique `columnId`.';
+
+const BODY_WITHOUT_ITEMS =
+  "[WaveUI] DataGrid.Body: a render function child renders one row per item of the DataGrid's `items`, which is not set, so the body has no rows.";
 
 const MIXED_SORT_COLUMN =
   '[WaveUI] DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control). The direction is kept internally and toggles on repeated clicks, as in 0.4. Pass `sort` (`{ columnId, direction }`) to control both.';
@@ -809,8 +824,8 @@ describe('DataGrid sorting', () => {
 
 describe('DataGrid header from columns', () => {
   const columns: DataGridColumn[] = [
-    { id: 'name', label: 'Name', sortable: true },
-    { id: 'role', label: 'Role' },
+    { columnId: 'name', label: 'Name', sortable: true },
+    { columnId: 'role', label: 'Role' },
   ];
 
   function rows() {
@@ -901,6 +916,561 @@ describe('DataGrid header from columns', () => {
     expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
       'Custom',
       'Header',
+    ]);
+  });
+
+  describe('the deprecated column `id` (0.13 columns)', () => {
+    it('names the column as `columnId` does, and warns once', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onSortChange = vi.fn();
+      const legacy: DataGridColumn[] = [
+        { id: 'name', label: 'Name', sortable: true },
+        { id: 'role', label: 'Role' },
+      ];
+      render(
+        <DataGrid aria-label="People" columns={legacy} onSortChange={onSortChange}>
+          {rows()}
+        </DataGrid>,
+      );
+      expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+        'Name',
+        'Role',
+      ]);
+      await user.click(sortButton('Name'));
+      await user.click(sortButton('Name'));
+      expect(onSortChange.mock.calls).toEqual([
+        ['name', 'ascending'],
+        ['name', 'descending'],
+      ]);
+      expect(warn.mock.calls).toEqual([[DEPRECATED_COLUMN_ID]]);
+    });
+
+    it('loses to `columnId` when a column has both, and still warns', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onSortChange = vi.fn();
+      render(
+        <DataGrid
+          aria-label="People"
+          columns={[{ columnId: 'fullName', id: 'name', label: 'Name', sortable: true }]}
+          defaultSort={null}
+          onSortChange={onSortChange}
+        >
+          {rows()}
+        </DataGrid>,
+      );
+      await user.click(sortButton('Name'));
+      expect(onSortChange).toHaveBeenCalledWith({ columnId: 'fullName', direction: 'ascending' });
+      expect(warn.mock.calls).toEqual([[DEPRECATED_COLUMN_ID]]);
+    });
+  });
+
+  it('warns once for a column with neither `columnId` nor `id`', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // A column without an id compiles (both names are optional while `id` is deprecated).
+    const { rerender } = render(
+      <DataGrid aria-label="People" columns={[{ label: 'Name', sortable: true }]}>
+        {rows()}
+      </DataGrid>,
+    );
+    rerender(
+      <DataGrid aria-label="People" columns={[{ label: 'Name', sortable: true }]}>
+        {rows()}
+      </DataGrid>,
+    );
+    expect(header('Name')).not.toHaveAttribute('aria-sort');
+    // The header cell's effect runs before the grid's.
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.HeaderCell: `sortable` needs a `columnId`; the header is rendered as not sortable.',
+      ],
+      [COLUMN_WITHOUT_ID],
+    ]);
+  });
+});
+
+describe('DataGrid items and typed columns', () => {
+  const NAME: DataGridColumn<Person> = {
+    columnId: 'name',
+    label: 'Name',
+    renderCell: (person) => person.name,
+  };
+  const ROLE: DataGridColumn<Person> = {
+    columnId: 'role',
+    label: <em>Role</em>,
+    renderCell: (person) => <strong>{person.role}</strong>,
+  };
+  const NOTES: DataGridColumn<Person> = { columnId: 'notes', label: 'Notes' };
+  const COLUMNS: readonly DataGridColumn<Person>[] = [NAME, ROLE, NOTES];
+
+  function cellTexts(): string[][] {
+    return bodyRows().map((row) =>
+      within(row)
+        .getAllByRole('gridcell')
+        .map((td) => td.textContent ?? ''),
+    );
+  }
+
+  /** A body row of the render-function tests: the name, then the index it was rendered with. */
+  function renderPerson(person: Person, index: number) {
+    return (
+      <DataGrid.Row>
+        <DataGrid.Cell>{person.name}</DataGrid.Cell>
+        <DataGrid.Cell>{`#${index}`}</DataGrid.Cell>
+      </DataGrid.Row>
+    );
+  }
+
+  const twoColumnHeader = (
+    <DataGrid.Header>
+      <tr>
+        <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+        <DataGrid.HeaderCell>Index</DataGrid.HeaderCell>
+      </tr>
+    </DataGrid.Header>
+  );
+
+  it('renders the header, the rows and the cells from `items` and `columns`', () => {
+    render(<DataGrid aria-label="People" items={PEOPLE} columns={COLUMNS} />);
+    const grid = screen.getByRole('grid');
+    expect(Array.from(grid.children).map((child) => child.localName)).toEqual(['thead', 'tbody']);
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      'Name',
+      'Role',
+      'Notes',
+    ]);
+    // A ReactNode label.
+    expect(within(header('Role')).getByText('Role').localName).toBe('em');
+    // `renderCell` fills each cell; a column without it leaves its cells empty.
+    expect(cellTexts()).toEqual([
+      ['Alice', 'Engineer', ''],
+      ['Bob', 'Designer', ''],
+      ['Carol', 'Manager', ''],
+    ]);
+    expect(screen.getByText('Designer').localName).toBe('strong');
+    expect(cell('Alice')).toHaveClass(dataGridCellClassNames.root);
+    expect(bodyRows()[0]).toHaveClass(dataGridRowClassNames.root);
+    expect(grid.querySelector('tbody')).toHaveClass(dataGridBodyClassNames.root);
+  });
+
+  it('renders `renderHeaderCell` in place of the label', () => {
+    render(
+      <DataGrid
+        aria-label="People"
+        items={PEOPLE}
+        columns={[
+          { ...NAME, renderHeaderCell: () => <span>Full name</span> },
+          createTableColumn<Person>({
+            columnId: 'role',
+            renderHeaderCell: () => 'Job',
+            renderCell: (person) => person.role,
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      'Full name',
+      'Job',
+    ]);
+    expect(cellTexts()[0]).toEqual(['Alice', 'Engineer']);
+  });
+
+  it('makes a column with `compare` sortable unless `sortable` is false', async () => {
+    const user = userEvent.setup();
+    const onSortChange = vi.fn();
+    render(
+      <DataGrid
+        aria-label="People"
+        items={PEOPLE}
+        defaultSort={null}
+        onSortChange={onSortChange}
+        columns={[
+          { ...NAME, compare: (a, b) => a.name.localeCompare(b.name) },
+          { ...ROLE, compare: (a, b) => a.role.localeCompare(b.role), sortable: false },
+          { ...NOTES, sortable: true },
+        ]}
+      />,
+    );
+    expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+    expect(within(header('Role')).queryByRole('button')).toBeNull();
+    expect(header('Role')).not.toHaveAttribute('aria-sort');
+    expect(header('Notes')).toHaveAttribute('aria-sort', 'none');
+    await user.click(sortButton('Name'));
+    expect(onSortChange).toHaveBeenCalledWith({ columnId: 'name', direction: 'ascending' });
+    expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
+  });
+
+  describe('row ids', () => {
+    it('are the item indexes by default', async () => {
+      const user = userEvent.setup();
+      const onSelectedItemsChange = vi.fn();
+      render(
+        <DataGrid
+          aria-label="People"
+          items={PEOPLE}
+          columns={COLUMNS}
+          selectionMode="multiple"
+          defaultSelectedItems={['2']}
+          onSelectedItemsChange={onSelectedItemsChange}
+        />,
+      );
+      // Each row control is named after the row's first cell.
+      expect(screen.getByRole('checkbox', { name: 'Carol' })).toBeChecked();
+      await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['2', '0']);
+      await user.click(screen.getByRole('checkbox', { name: 'Select all rows' }));
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['0', '1', '2']);
+    });
+
+    it('come from `getRowId`', async () => {
+      const user = userEvent.setup();
+      const onSelectedItemsChange = vi.fn();
+      render(
+        <DataGrid
+          aria-label="People"
+          items={PEOPLE}
+          columns={COLUMNS}
+          getRowId={(person) => `person-${person.id}`}
+          selectionMode="single"
+          onSelectedItemsChange={onSelectedItemsChange}
+        />,
+      );
+      await user.click(screen.getByRole('radio', { name: 'Bob' }));
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['person-2']);
+      expect(bodyRows()[1]).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('lose to a row’s own `rowId`', async () => {
+      const user = userEvent.setup();
+      const onSelectedItemsChange = vi.fn();
+      render(
+        <DataGrid
+          aria-label="People"
+          items={PEOPLE}
+          getRowId={(person) => person.id}
+          selectionMode="multiple"
+          onSelectedItemsChange={onSelectedItemsChange}
+        >
+          <DataGrid.Body>
+            {(person: Person) => (
+              <DataGrid.Row rowId={person.name.toLowerCase()}>
+                <DataGrid.Cell>{person.name}</DataGrid.Cell>
+              </DataGrid.Row>
+            )}
+          </DataGrid.Body>
+        </DataGrid>,
+      );
+      await user.click(screen.getByRole('checkbox', { name: 'Bob' }));
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['bob']);
+    });
+
+    it('that repeat warn once, as rows with the same `rowId` do, and every row renders', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
+      render(
+        <DataGrid
+          aria-label="People"
+          items={PEOPLE}
+          columns={COLUMNS}
+          getRowId={() => 'same'}
+          selectionMode="multiple"
+        />,
+      );
+      // The first cell of each row is the selection cell.
+      expect(cellTexts().map(([, name]) => name)).toEqual(['Alice', 'Bob', 'Carol']);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] DataGrid: several rows share the rowId "same". Row ids must be unique within a DataGrid; rows with the same rowId are selected and deselected together.',
+        ],
+      ]);
+      // No duplicate React keys.
+      expect(error).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('DataGrid.Body render function', () => {
+    it('renders one row per item, with the item and its index in `items`', async () => {
+      const user = userEvent.setup();
+      const renderRow = vi.fn(renderPerson);
+      const onSelectedItemsChange = vi.fn();
+      render(
+        <DataGrid
+          aria-label="People"
+          items={PEOPLE}
+          getRowId={(person) => person.id}
+          selectionMode="multiple"
+          defaultSelectedItems={['3']}
+          onSelectedItemsChange={onSelectedItemsChange}
+        >
+          {twoColumnHeader}
+          <DataGrid.Body>{renderRow}</DataGrid.Body>
+        </DataGrid>,
+      );
+      expect(renderRow.mock.calls).toEqual([
+        [PEOPLE[0], 0],
+        [PEOPLE[1], 1],
+        [PEOPLE[2], 2],
+      ]);
+      expect(cellTexts()).toEqual([
+        ['', 'Alice', '#0'],
+        ['', 'Bob', '#1'],
+        ['', 'Carol', '#2'],
+      ]);
+      // The row id from `getRowId` reaches each DataGrid.Row.
+      expect(screen.getByRole('checkbox', { name: 'Carol' })).toBeChecked();
+      await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3', '1']);
+    });
+
+    it('renders no rows and warns once without `items`', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const renderRow = vi.fn(renderPerson);
+      const { rerender } = render(
+        <DataGrid aria-label="People">
+          {twoColumnHeader}
+          <DataGrid.Body>{renderRow}</DataGrid.Body>
+        </DataGrid>,
+      );
+      rerender(
+        <DataGrid aria-label="People">
+          {twoColumnHeader}
+          <DataGrid.Body>{renderRow}</DataGrid.Body>
+        </DataGrid>,
+      );
+      expect(bodyRows()).toEqual([]);
+      expect(renderRow).not.toHaveBeenCalled();
+      expect(warn.mock.calls).toEqual([[BODY_WITHOUT_ITEMS]]);
+    });
+
+    it('renders an empty body for empty `items`', () => {
+      render(
+        <DataGrid aria-label="People" items={[] as Person[]}>
+          {twoColumnHeader}
+          <DataGrid.Body>{renderPerson}</DataGrid.Body>
+        </DataGrid>,
+      );
+      expect(bodyRows()).toEqual([]);
+      expect(screen.getByRole('grid').querySelectorAll('tbody')).toHaveLength(1);
+    });
+  });
+
+  describe('DataGrid.Body children', () => {
+    it('without children renders the rows from `items` and `columns`', () => {
+      const ref = React.createRef<HTMLTableSectionElement>();
+      render(
+        <DataGrid aria-label="People" items={PEOPLE} columns={COLUMNS}>
+          <DataGrid.Body ref={ref} className="my-body" />
+        </DataGrid>,
+      );
+      expect(ref.current).toHaveClass('my-body', dataGridBodyClassNames.root);
+      expect(screen.getByRole('grid').querySelectorAll('tbody')).toHaveLength(1);
+      expect(cellTexts()).toEqual([
+        ['Alice', 'Engineer', ''],
+        ['Bob', 'Designer', ''],
+        ['Carol', 'Manager', ''],
+      ]);
+    });
+
+    it('as JSX keep their rows: the grid adds none from `items`', () => {
+      const { rerender } = render(
+        <DataGrid aria-label="People" items={PEOPLE} columns={COLUMNS}>
+          <DataGrid.Body>
+            <DataGrid.Row rowId="custom">
+              <DataGrid.Cell>Custom</DataGrid.Cell>
+              <DataGrid.Cell>Row</DataGrid.Cell>
+              <DataGrid.Cell>-</DataGrid.Cell>
+            </DataGrid.Row>
+          </DataGrid.Body>
+        </DataGrid>,
+      );
+      expect(cellTexts()).toEqual([['Custom', 'Row', '-']]);
+      // Empty JSX children are rows too: none.
+      rerender(
+        <DataGrid aria-label="People" items={PEOPLE} columns={COLUMNS}>
+          <DataGrid.Body>{[]}</DataGrid.Body>
+        </DataGrid>,
+      );
+      expect(bodyRows()).toEqual([]);
+      expect(screen.getByRole('grid').querySelectorAll('tbody')).toHaveLength(1);
+    });
+
+    it('finds a DataGrid.Body written in a Server Component and adds no second body', () => {
+      const LazyBody = asClientReference(DataGrid.Body);
+      render(
+        <DataGrid
+          aria-label="People"
+          items={PEOPLE}
+          columns={[{ columnId: 'name', label: 'Name' }]}
+        >
+          <LazyBody>
+            <DataGrid.Row rowId="server">
+              <DataGrid.Cell>Server row</DataGrid.Cell>
+            </DataGrid.Row>
+          </LazyBody>
+        </DataGrid>,
+      );
+      expect(screen.getByRole('grid').querySelectorAll('tbody')).toHaveLength(1);
+      expect(cellTexts()).toEqual([['Server row']]);
+    });
+  });
+
+  it('places the generated body after a caption and the header, before a footer', () => {
+    render(
+      <DataGrid aria-label="People" items={PEOPLE} columns={COLUMNS}>
+        <caption>Team</caption>
+        <tfoot>
+          <tr>
+            <td colSpan={3}>3 people</td>
+          </tr>
+        </tfoot>
+      </DataGrid>,
+    );
+    expect(Array.from(screen.getByRole('grid').children).map((child) => child.localName)).toEqual([
+      'caption',
+      'thead',
+      'tbody',
+      'tfoot',
+    ]);
+  });
+
+  it('includes the selection column in the generated header and rows', async () => {
+    render(
+      <DataGrid aria-label="People" items={PEOPLE} columns={COLUMNS} selectionMode="multiple" />,
+    );
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+    for (const row of bodyRows()) expect(within(row).getAllByRole('gridcell')).toHaveLength(4);
+    await expectNoA11yViolations();
+  });
+
+  it('calls onSelectedItemsChange once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <DataGrid
+          aria-label="People"
+          items={PEOPLE}
+          columns={COLUMNS}
+          selectionMode="multiple"
+          onSelectedItemsChange={onSelectedItemsChange}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('checkbox', { name: 'Bob' }));
+    expect(onSelectedItemsChange.mock.calls).toEqual([[['1']]]);
+  });
+
+  describe('rows memoised by id', () => {
+    const commits: string[] = [];
+    const onRender: React.ProfilerOnRenderCallback = (id, phase) => {
+      if (phase !== 'mount') commits.push(id);
+    };
+    afterEach(() => {
+      commits.length = 0;
+    });
+
+    const PROFILED_COLUMNS: readonly DataGridColumn<Person>[] = [
+      {
+        columnId: 'name',
+        label: 'Name',
+        sortable: true,
+        renderCell: (person) => (
+          <React.Profiler id={`cell-${person.id}`} onRender={onRender}>
+            {person.name}
+          </React.Profiler>
+        ),
+      },
+    ];
+
+    function Parent({ children }: { children?: React.ReactNode }) {
+      const [count, setCount] = React.useState(0);
+      return (
+        <>
+          <button type="button" onClick={() => setCount(count + 1)}>
+            Re-render {count}
+          </button>
+          <DataGrid
+            aria-label="People"
+            items={PEOPLE}
+            // A new `getRowId` on every render: the row ids are recomputed, the rows stay.
+            getRowId={(person) => person.id}
+            columns={PROFILED_COLUMNS}
+            selectionMode="multiple"
+          >
+            {children}
+          </DataGrid>
+        </>
+      );
+    }
+
+    function renderProfiledRow(person: Person) {
+      return (
+        <React.Profiler id={`row-${person.id}`} onRender={onRender}>
+          <DataGrid.Row>
+            <DataGrid.Cell>{person.name}</DataGrid.Cell>
+          </DataGrid.Row>
+        </React.Profiler>
+      );
+    }
+
+    it('does not re-render the rows from `columns` on a sort or a parent re-render', async () => {
+      const user = userEvent.setup();
+      render(<Parent />);
+      commits.length = 0;
+      await user.click(sortButton('Name'));
+      expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
+      await user.click(screen.getByRole('button', { name: /Re-render/ }));
+      await user.click(screen.getByRole('button', { name: /Re-render/ }));
+      expect(screen.getByRole('button', { name: 'Re-render 2' })).toBeInTheDocument();
+      expect(commits).toEqual([]);
+    });
+
+    it('does not re-render the rows of a render function on a sort or a parent re-render', async () => {
+      const user = userEvent.setup();
+      render(
+        <Parent>
+          <DataGrid.Body>{renderProfiledRow}</DataGrid.Body>
+        </Parent>,
+      );
+      commits.length = 0;
+      await user.click(sortButton('Name'));
+      await user.click(screen.getByRole('button', { name: /Re-render/ }));
+      expect(screen.getByRole('button', { name: 'Re-render 1' })).toBeInTheDocument();
+      expect(commits).toEqual([]);
+      // Selecting re-renders only the toggled row.
+      await user.click(screen.getByRole('checkbox', { name: 'Bob' }));
+      expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+      expect(new Set(commits)).toEqual(new Set(['row-2']));
+    });
+  });
+
+  it('gives no row id to the rows of a grid nested in a body row', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <DataGrid aria-label="People" items={PEOPLE.slice(0, 1)}>
+        <DataGrid.Body>
+          {() => (
+            <DataGrid.Row>
+              <DataGrid.Cell>
+                <DataGrid aria-label="Nested" selectionMode="multiple">
+                  <DataGrid.Body>
+                    <DataGrid.Row>
+                      <DataGrid.Cell>Nested row</DataGrid.Cell>
+                    </DataGrid.Row>
+                  </DataGrid.Body>
+                </DataGrid>
+              </DataGrid.Cell>
+            </DataGrid.Row>
+          )}
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.Row: a selectable grid needs a `rowId` on every row; this row has no selection control.',
+      ],
     ]);
   });
 });
@@ -2993,5 +3563,91 @@ describe('DataGrid types', () => {
       readonly string[] | undefined
     >();
     expectTypeOf<DataGridProps['columns']>().toEqualTypeOf<readonly DataGridColumn[] | undefined>();
+  });
+
+  it('types the columns, the items, the row ids and the body render function by the item', () => {
+    expectTypeOf<DataGridColumn<Person>['columnId']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<DataGridColumn<Person>['label']>().toEqualTypeOf<React.ReactNode>();
+    expectTypeOf<DataGridColumn<Person>['compare']>().toEqualTypeOf<
+      ((a: Person, b: Person) => number) | undefined
+    >();
+    expectTypeOf<DataGridColumn<Person>['renderCell']>().toEqualTypeOf<
+      ((item: Person) => React.ReactNode) | undefined
+    >();
+    expectTypeOf<DataGridColumn<Person>['renderHeaderCell']>().toEqualTypeOf<
+      (() => React.ReactNode) | undefined
+    >();
+    expectTypeOf<DataGridColumn<Person>['sortable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DataGridProps<Person>['items']>().toEqualTypeOf<readonly Person[] | undefined>();
+    expectTypeOf<DataGridProps<Person>['getRowId']>().toEqualTypeOf<
+      ((item: Person) => string) | undefined
+    >();
+    expectTypeOf<DataGridProps<Person>['columns']>().toEqualTypeOf<
+      readonly DataGridColumn<Person>[] | undefined
+    >();
+    expectTypeOf<DataGridBodyProps<Person>['children']>().toEqualTypeOf<
+      React.ReactNode | ((item: Person, index: number) => React.ReactNode)
+    >();
+    const NUMBER_COLUMNS: DataGridColumn<number>[] = [
+      { columnId: 'n', label: 'N', renderCell: (n) => n },
+    ];
+    // The item type is inferred from `items`.
+    const elements = [
+      <DataGrid
+        key="inferred"
+        aria-label="People"
+        items={PEOPLE}
+        getRowId={(person) => {
+          expectTypeOf(person).toEqualTypeOf<Person>();
+          return person.id;
+        }}
+        columns={[
+          {
+            columnId: 'name',
+            label: 'Name',
+            compare: (a, b) => {
+              expectTypeOf(a).toEqualTypeOf<Person>();
+              return a.name.localeCompare(b.name);
+            },
+            renderCell: (person) => {
+              expectTypeOf(person).toEqualTypeOf<Person>();
+              return person.name;
+            },
+          },
+        ]}
+      >
+        <DataGrid.Body>
+          {(person: Person, index) => {
+            expectTypeOf(index).toEqualTypeOf<number>();
+            return person.name;
+          }}
+        </DataGrid.Body>
+      </DataGrid>,
+      // @ts-expect-error — columns of another item type.
+      <DataGrid key="other-item" items={PEOPLE} columns={NUMBER_COLUMNS} />,
+      // @ts-expect-error — row ids are strings.
+      <DataGrid key="numeric-id" items={PEOPLE} getRowId={(person) => Number(person.id)} />,
+    ];
+    expect(elements).toHaveLength(3);
+  });
+
+  it('keeps 0.13 columns compiling: an untyped `DataGridColumn[]` with `id`, also extended', () => {
+    expectTypeOf<DataGridColumn>().toEqualTypeOf<DataGridColumn<unknown>>();
+    const columns: DataGridColumn[] = [
+      { id: 'name', label: 'Name', sortable: true },
+      { id: 'role', label: 'Role' },
+    ];
+    interface WidthColumn extends DataGridColumn {
+      width: number;
+    }
+    const sized: WidthColumn[] = [{ id: 'name', label: 'Name', width: 120 }];
+    const elements = [
+      <DataGrid key="untyped" aria-label="People" columns={columns}>
+        {null}
+      </DataGrid>,
+      // Untyped columns next to typed items.
+      <DataGrid key="items" aria-label="People" columns={sized} items={PEOPLE} />,
+    ];
+    expect(elements).toHaveLength(2);
   });
 });
