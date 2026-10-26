@@ -26,6 +26,7 @@ export {
   DataGridBody,
   DataGridRow,
   DataGridCell,
+  DataGridSelectionCell,
 } from './DataGrid';
 export type {
   DataGridProps,
@@ -41,7 +42,10 @@ export type {
   DataGridHeaderCellProps,
   DataGridBodyProps,
   DataGridRowProps,
+  DataGridRowSelectionCellProps,
   DataGridCellProps,
+  DataGridSelectionAppearance,
+  DataGridSelectionCellProps,
   DataGridSort,
   SortDirection,
   DataGridColumn,

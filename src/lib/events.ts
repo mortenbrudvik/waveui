@@ -1,7 +1,9 @@
 import type * as React from 'react';
+import { FOCUSABLE_SELECTOR } from './focus';
 
 /**
- * Event predicates shared by the menu, popover, hover and context-menu code. Server-safe: this
+ * Event predicates shared by the menu, popover, hover and context-menu code, and by the
+ * selectable containers that toggle on a click (List items, DataGrid rows). Server-safe: this
  * module imports nothing from React at run time.
  */
 
@@ -30,6 +32,80 @@ export function isDisabledTrigger(event: React.SyntheticEvent<HTMLElement>): boo
   const disabled =
     typeof target?.closest === 'function' ? target.closest('[aria-disabled="true"]') : null;
   return disabled !== null && event.currentTarget.contains(disabled);
+}
+
+/**
+ * Elements whose clicks and keys belong to themselves, not to a selectable container around them
+ * (a List item, a DataGrid row): every element that may take focus, labels, and the widget roles a
+ * script makes interactive.
+ */
+export const INTERACTIVE_SELECTOR = [
+  FOCUSABLE_SELECTOR,
+  'label',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="checkbox"]',
+  '[role="switch"]',
+  '[role="radio"]',
+  '[role="menuitem"]',
+  '[role="textbox"]',
+  '[role="combobox"]',
+  '[role="slider"]',
+  '[role="spinbutton"]',
+].join(', ');
+
+/** Options of {@link isForeignEvent}. */
+export interface ForeignEventOptions {
+  /** The elements whose events are their own. @default INTERACTIVE_SELECTOR */
+  interactive?: string;
+  /**
+   * Elements between the target and the container that never count as interactive, although
+   * they match `interactive`: the container's own parts, such as the cells of a grid row, which
+   * carry a `tabindex` for the grid's arrow keys.
+   */
+  isOwnPart?: (element: Element) => boolean;
+}
+
+/**
+ * Whether a selectable container (the element that handles the event, `currentTarget`: a List
+ * item, a DataGrid row) must leave `event` alone, so it toggles no selection: the event started
+ * outside the container's DOM ({@link isOwnEvent}), or inside an interactive element nested in it
+ * (`options.interactive`, every element from the target up to the container). React bubbles the
+ * events of a popup portaled from the container (a Popover, a Menu, a Dialog) through its handlers
+ * although their target lives elsewhere in the document; those are foreign too.
+ */
+export function isForeignEvent(
+  event: React.SyntheticEvent<HTMLElement>,
+  options: ForeignEventOptions = {},
+): boolean {
+  if (!isOwnEvent(event)) return true;
+  const { interactive = INTERACTIVE_SELECTOR, isOwnPart } = options;
+  const container = event.currentTarget;
+  const target = event.target as Node;
+  let node: Element | null =
+    target.nodeType === 1 ? (target as Element) : (target.parentElement ?? null);
+  for (; node && node !== container; node = node.parentElement) {
+    if (isOwnPart?.(node)) continue;
+    if (node.matches(interactive)) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether a click ended a text selection in the element that handles it (`currentTarget`): the
+ * pointer dragged across its text (or a double click chose a word), so the document holds a
+ * selection that is not collapsed and reaches into the element when the click arrives. Such a
+ * click selects text; it does not activate the element. A selection elsewhere in the document
+ * does not count.
+ */
+export function endsTextSelection(event: React.MouseEvent<HTMLElement>): boolean {
+  const element = event.currentTarget;
+  const selection = element.ownerDocument.defaultView?.getSelection() ?? null;
+  if (!selection || selection.isCollapsed) return false;
+  for (let index = 0; index < selection.rangeCount; index++) {
+    if (selection.getRangeAt(index).intersectsNode(element)) return true;
+  }
+  return false;
 }
 
 /** `<input>` types whose value is text the user edits (a missing or unknown type is `text`). */

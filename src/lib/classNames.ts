@@ -1460,6 +1460,14 @@ export const dataGridRowClassNames = {
 /** DataGrid.Cell: `root` on the `role="gridcell"` cell. */
 export const dataGridCellClassNames = { root: 'wave-data-grid-cell' } as const;
 
+/**
+ * DataGrid.SelectionCell: `root` on the cell, which also carries the selection cell part of its
+ * row (`dataGridRowClassNames.selectionCell`) or header (`dataGridHeaderClassNames.selectionCell`);
+ * its control carries `dataGridRowClassNames.selectionControl` or
+ * `dataGridHeaderClassNames.selectAllCheckbox`.
+ */
+export const dataGridSelectionCellClassNames = { root: 'wave-data-grid-selection-cell' } as const;
+
 // ---------------------------------------------------------------------------
 // typography, provider, portal
 // ---------------------------------------------------------------------------

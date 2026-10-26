@@ -11,6 +11,7 @@ import {
   DataGridHeader,
   DataGridHeaderCell,
   DataGridRow,
+  DataGridSelectionCell,
   createSelectionStore,
 } from '../DataGrid';
 import type {
@@ -22,7 +23,10 @@ import type {
   DataGridLabels,
   DataGridProps,
   DataGridRowProps,
+  DataGridRowSelectionCellProps,
   DataGridSelectedItemsChangeDetails,
+  DataGridSelectionAppearance,
+  DataGridSelectionCellProps,
   DataGridSort,
   DataGridSortChangeDetails,
   SortDirection,
@@ -31,7 +35,9 @@ import {
   dataGridBodyClassNames,
   dataGridCellClassNames,
   dataGridHeaderCellClassNames,
+  dataGridHeaderClassNames,
   dataGridRowClassNames,
+  dataGridSelectionCellClassNames,
 } from '../../../lib/classNames';
 import { getTabbableElements } from '../../../lib/focus';
 import type { Slot } from '../../../lib/slot';
@@ -4145,6 +4151,1045 @@ describe('DataGrid sub-component refs', () => {
     );
     expect(ref.current).toBe(screen.getByTestId('cell'));
     expect(ref.current!.tagName.toLowerCase()).toBe('td');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Row-click selection, selection appearance, selectionCellProps and DataGrid.SelectionCell
+// ---------------------------------------------------------------------------
+
+/** `details` of `onSelectedItemsChange` after a row click. */
+const CLICK_DETAILS = { event: expect.any(MouseEvent) };
+
+/** The grid's header plus one body row per person, each row with the props of its id. */
+function contentWithRowProps(rowProps: Record<string, Partial<DataGridRowProps>>) {
+  const [headerContent] = gridContent();
+  return [
+    headerContent,
+    <DataGrid.Body key="body">
+      {PEOPLE.map((person) => (
+        <DataGrid.Row key={person.id} rowId={person.id} {...rowProps[person.id]}>
+          <DataGrid.Cell>{person.name}</DataGrid.Cell>
+          <DataGrid.Cell>{person.role}</DataGrid.Cell>
+          <DataGrid.Cell>-</DataGrid.Cell>
+        </DataGrid.Row>
+      ))}
+    </DataGrid.Body>,
+  ];
+}
+
+/** The selection cell (`<td>`/`<th>`) around `control`. */
+function cellOf(control: HTMLElement): HTMLElement {
+  return control.closest('td, th') as HTMLElement;
+}
+
+describe('DataGrid selectOnRowClick', () => {
+  afterEach(() => {
+    document.getSelection()?.removeAllRanges();
+  });
+
+  function renderClickable(props: GridTestProps = {}) {
+    const onSelectedItemsChange = vi.fn();
+    renderGrid({
+      selectionMode: 'multiple',
+      selectOnRowClick: true,
+      onSelectedItemsChange,
+      ...props,
+    });
+    return onSelectedItemsChange;
+  }
+
+  it('leaves the selection to the controls without it (0.13)', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    renderGrid({ selectionMode: 'multiple', onSelectedItemsChange });
+    await user.click(cell('Alice'));
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    expect(bodyRows()[0]).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('toggles the row on a click in one of its cells, with the click in details', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = renderClickable();
+    await user.click(cell('Alice'));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1'], CLICK_DETAILS);
+    expect(bodyRows()[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('checkbox', { name: 'Alice' })).toBeChecked();
+    await user.click(cell('Designer'));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1', '2'], CLICK_DETAILS);
+    await user.click(cell('Alice'));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['2'], CLICK_DETAILS);
+    expect(onSelectedItemsChange).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-multiselectable', 'true');
+  });
+
+  it('selects the clicked row alone in single mode, and clears it on a second click', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = renderClickable({ selectionMode: 'single' });
+    await user.click(cell('Alice'));
+    await user.click(cell('Bob'));
+    expect(screen.getByRole('radio', { name: 'Bob' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Alice' })).not.toBeChecked();
+    await user.click(cell('Bob'));
+    expect(onSelectedItemsChange.mock.calls).toEqual([
+      [['1'], CLICK_DETAILS],
+      [['2'], CLICK_DETAILS],
+      [[], CLICK_DETAILS],
+    ]);
+  });
+
+  it('toggles once on a click on the row’s checkbox, and on a click on the cell around it', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = renderClickable();
+    const checkbox = screen.getByRole('checkbox', { name: 'Alice' });
+    await user.click(checkbox);
+    expect(onSelectedItemsChange.mock.calls).toEqual([[['1'], DETAILS]]);
+    await user.click(cellOf(checkbox));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith([], CLICK_DETAILS);
+    expect(onSelectedItemsChange).toHaveBeenCalledTimes(2);
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it('never toggles on a click on a button, a link, an input or a scripted widget; each still works', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const onEdit = vi.fn();
+    const onCustom = vi.fn();
+    render(
+      <DataGrid
+        aria-label="People"
+        selectionMode="multiple"
+        selectOnRowClick
+        onSelectedItemsChange={onSelectedItemsChange}
+      >
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+            <DataGrid.Cell>
+              <button type="button" onClick={onEdit}>
+                <span>Edit</span>
+              </button>
+            </DataGrid.Cell>
+            <DataGrid.Cell>
+              <a href="#alice">Profile</a>
+            </DataGrid.Cell>
+            <DataGrid.Cell>
+              <input aria-label="Note" />
+            </DataGrid.Cell>
+            <DataGrid.Cell>
+              <span role="button" tabIndex={-1} onClick={onCustom}>
+                Custom
+              </span>
+            </DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    await user.click(screen.getByText('Edit'));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('link', { name: 'Profile' }));
+    const note = screen.getByRole('textbox', { name: 'Note' });
+    await user.click(note);
+    await user.keyboard('a b');
+    expect(note).toHaveValue('a b');
+    await user.click(screen.getByRole('button', { name: 'Custom' }));
+    expect(onCustom).toHaveBeenCalledTimes(1);
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    expect(bodyRows()[0]).toHaveAttribute('aria-selected', 'false');
+
+    await user.click(cell('Alice'));
+    expect(onSelectedItemsChange).toHaveBeenCalledWith(['1'], CLICK_DETAILS);
+  });
+
+  it('never toggles on a click in a popup portaled from the row (a Menu, a plain portal)', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const onRename = vi.fn();
+    function PortalNote() {
+      return createPortal(<p>Portal note</p>, document.body);
+    }
+    render(
+      <DataGrid
+        aria-label="People"
+        selectionMode="multiple"
+        selectOnRowClick
+        onSelectedItemsChange={onSelectedItemsChange}
+      >
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            <DataGrid.Cell>
+              Alice
+              <PortalNote />
+            </DataGrid.Cell>
+            <DataGrid.Cell>
+              <Menu>
+                <Menu.Trigger>
+                  <MenuButton>Alice actions</MenuButton>
+                </Menu.Trigger>
+                <Menu.Popover>
+                  <Menu.Item onClick={onRename}>Rename</Menu.Item>
+                </Menu.Popover>
+              </Menu>
+            </DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    await user.click(screen.getByText('Portal note'));
+    await user.click(screen.getByRole('button', { name: 'Alice actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    expect(bodyRows()[0]).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('never toggles on a click on a header row written as `<tr>`', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = renderClickable();
+    await user.click(header('Notes'));
+    await user.click(cellOf(screen.getByRole('checkbox', { name: 'Select all rows' })));
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: 'Select all rows' })).not.toBeChecked();
+  });
+
+  it('never toggles on a click on a header row built from DataGrid.Row', async () => {
+    const user = userEvent.setup();
+    const onRowHeaderChange = vi.fn();
+    render(
+      <DataGrid
+        aria-label="People"
+        selectionMode="multiple"
+        selectOnRowClick
+        onSelectedItemsChange={onRowHeaderChange}
+      >
+        <DataGrid.Header>
+          <DataGrid.Row>
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </DataGrid.Row>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    await user.click(header('Name'));
+    expect(onRowHeaderChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: 'Select all rows' })).not.toBeChecked();
+  });
+
+  it('never toggles on a click that ends a text selection in the row', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = renderClickable();
+    const alice = cell('Alice');
+    const selection = document.getSelection()!;
+    // A drag across "Alice" selects it; the click that ends the drag selects text only.
+    selection.selectAllChildren(alice);
+    fireEvent.click(alice, { detail: 1 });
+    // A drag from one cell of the row to another.
+    selection.setBaseAndExtent(alice.firstChild!, 2, cell('Engineer').firstChild!, 3);
+    fireEvent.click(bodyRows()[0], { detail: 1 });
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+
+    // A selection in another row does not hold a click on this one back.
+    selection.selectAllChildren(cell('Bob'));
+    fireEvent.click(alice, { detail: 1 });
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1'], CLICK_DETAILS);
+    // A plain click collapses the selection where the pointer goes down.
+    await user.click(cell('Bob'));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1', '2'], CLICK_DETAILS);
+    expect(onSelectedItemsChange).toHaveBeenCalledTimes(2);
+
+    // The pointer presses in "Carol", drags across three characters and releases: a click on
+    // the cell that selects "Car".
+    const carol = cell('Carol');
+    await user.pointer([
+      { keys: '[MouseLeft>]', target: carol, offset: 0 },
+      { target: carol, offset: 3 },
+      { keys: '[/MouseLeft]', target: carol },
+    ]);
+    expect(selection.toString()).toBe('Car');
+    expect(onSelectedItemsChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs the row’s onClick first; its preventDefault() keeps the selection', async () => {
+    const user = userEvent.setup();
+    const calls: string[] = [];
+    let cancel = false;
+    const onRowClick = vi.fn((event: React.MouseEvent<HTMLTableRowElement>) => {
+      calls.push('row onClick');
+      if (cancel) event.preventDefault();
+    });
+    const onSelectedItemsChange = vi.fn(() => calls.push('selection'));
+    renderGrid({
+      selectionMode: 'multiple',
+      selectOnRowClick: true,
+      onSelectedItemsChange,
+      children: contentWithRowProps({ '1': { onClick: onRowClick } }),
+    });
+    await user.click(cell('Alice'));
+    expect(calls).toEqual(['row onClick', 'selection']);
+    cancel = true;
+    await user.click(cell('Alice'));
+    expect(calls).toEqual(['row onClick', 'selection', 'row onClick']);
+    expect(bodyRows()[0]).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps Space on a cell toggling the row, and the row click working next to it', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = renderClickable();
+    act(() => cell('Bob').focus());
+    await user.keyboard(' ');
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['2'], DETAILS);
+    expect(onSelectedItemsChange.mock.lastCall?.[1].event).toBeInstanceOf(KeyboardEvent);
+    await user.click(cell('Carol'));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['2', '3'], CLICK_DETAILS);
+  });
+
+  it('calls onSelectedItemsChange once per row click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <DataGrid
+          aria-label="People"
+          selectionMode="multiple"
+          selectOnRowClick
+          onSelectedItemsChange={onSelectedItemsChange}
+        >
+          {gridContent()}
+        </DataGrid>
+      </React.StrictMode>,
+    );
+    await user.click(cell('Alice'));
+    await user.click(cell('Bob'));
+    expect(onSelectedItemsChange.mock.calls).toEqual([
+      [['1'], CLICK_DETAILS],
+      [['1', '2'], CLICK_DETAILS],
+    ]);
+  });
+
+  it('does nothing in a grid without selection', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    renderGrid({ selectOnRowClick: true, onSelectedItemsChange });
+    await user.click(cell('Alice'));
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    expect(bodyRows()[0]).not.toHaveAttribute('aria-selected');
+  });
+});
+
+describe('DataGrid selectionAppearance', () => {
+  it('is brand by default: data-selection-appearance="brand" and the selected token (0.13)', () => {
+    renderGrid({ selectionMode: 'multiple', defaultSelectedItems: ['2'] });
+    expect(screen.getByRole('grid')).toHaveAttribute('data-selection-appearance', 'brand');
+    const row = bodyRows()[1];
+    expect(row).toHaveClass('data-[selected]:bg-selected', 'hover:bg-subtle-hover');
+    expect(row).not.toHaveClass('data-[selected]:bg-subtle-selected');
+  });
+
+  it('renders the attribute in every selection mode, none included', () => {
+    renderGrid({ selectionAppearance: 'neutral' });
+    expect(screen.getByRole('grid')).toHaveAttribute('data-selection-appearance', 'neutral');
+  });
+
+  it('fills a selected row with the subtle selected token for neutral', () => {
+    renderGrid({
+      selectionMode: 'multiple',
+      defaultSelectedItems: ['2'],
+      selectionAppearance: 'neutral',
+    });
+    expect(screen.getByRole('grid')).toHaveAttribute('data-selection-appearance', 'neutral');
+    const row = bodyRows()[1];
+    expect(row).toHaveAttribute('data-selected');
+    expect(row).toHaveClass('data-[selected]:bg-subtle-selected', 'hover:bg-subtle-hover');
+    expect(row).not.toHaveClass('data-[selected]:bg-selected');
+  });
+
+  it('gives a selected row no fill for none; aria-selected, the control and the forced-colors outline stay', () => {
+    renderGrid({
+      selectionMode: 'multiple',
+      defaultSelectedItems: ['2'],
+      selectionAppearance: 'none',
+    });
+    expect(screen.getByRole('grid')).toHaveAttribute('data-selection-appearance', 'none');
+    const row = bodyRows()[1];
+    expect(row).toHaveAttribute('aria-selected', 'true');
+    expect(row).toHaveAttribute('data-selected');
+    expect(row).not.toHaveClass('data-[selected]:bg-selected');
+    expect(row).not.toHaveClass('data-[selected]:bg-subtle-selected');
+    expect(row.className).not.toMatch(/(^|\s)data-\[selected\]:bg-/);
+    expect(row).toHaveClass('forced-colors:outline-[Highlight]', 'hover:bg-subtle-hover');
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+  });
+
+  it.each<DataGridSelectionAppearance>(['brand', 'neutral', 'none'])(
+    'has no accessibility violations (%s, a row selected)',
+    async (selectionAppearance) => {
+      renderGrid({ selectionMode: 'multiple', defaultSelectedItems: ['2'], selectionAppearance });
+      await expectNoA11yViolations();
+    },
+  );
+});
+
+describe('DataGrid subtleSelection', () => {
+  const SUBTLE_ROW = [
+    'opacity-0',
+    'group-hover/row:opacity-100',
+    'group-focus-within/row:opacity-100',
+    'forced-colors:opacity-100',
+    'pointer-coarse:opacity-100',
+    'transition-opacity',
+    'motion-reduce:transition-none',
+  ];
+  const SUBTLE_GRID = [
+    'opacity-0',
+    'group-hover/grid:opacity-100',
+    'group-focus-within/grid:opacity-100',
+    'forced-colors:opacity-100',
+    'pointer-coarse:opacity-100',
+    'transition-opacity',
+    'motion-reduce:transition-none',
+  ];
+
+  it('is off by default: no data-subtle-selection and every control drawn (0.13)', () => {
+    renderGrid({ selectionMode: 'multiple' });
+    expect(screen.getByRole('grid')).not.toHaveAttribute('data-subtle-selection');
+    for (const checkbox of screen.getAllByRole('checkbox')) {
+      expect(checkbox).not.toHaveClass('opacity-0');
+    }
+  });
+
+  it('hides an unchecked row control until its row is hovered or holds focus; forced colors and a coarse pointer always draw it', () => {
+    renderGrid({ selectionMode: 'multiple', subtleSelection: true, defaultSelectedItems: ['2'] });
+    expect(screen.getByRole('grid')).toHaveAttribute('data-subtle-selection', '');
+    expect(bodyRows()[0]).toHaveClass('group/row');
+    expect(screen.getByRole('checkbox', { name: 'Alice' })).toHaveClass(...SUBTLE_ROW);
+    // A checked control is always drawn.
+    const bob = screen.getByRole('checkbox', { name: 'Bob' });
+    expect(bob).toBeChecked();
+    expect(bob).not.toHaveClass('opacity-0');
+  });
+
+  it('hides the select-all checkbox while nothing is selected, until the grid is hovered or holds focus', async () => {
+    const user = userEvent.setup();
+    renderGrid({ selectionMode: 'multiple', subtleSelection: true });
+    const grid = screen.getByRole('grid');
+    expect(grid).toHaveClass('group/grid');
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
+    expect(selectAll).toHaveClass(...SUBTLE_GRID);
+    await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
+    expect(selectAll).toBePartiallyChecked();
+    expect(selectAll).not.toHaveClass('opacity-0');
+    await user.click(selectAll);
+    expect(selectAll).toBeChecked();
+    expect(selectAll).not.toHaveClass('opacity-0');
+  });
+
+  it('applies to the radios of single mode', () => {
+    renderGrid({ selectionMode: 'single', subtleSelection: true, defaultSelectedItems: ['1'] });
+    expect(screen.getByRole('radio', { name: 'Bob' })).toHaveClass(...SUBTLE_ROW);
+    expect(screen.getByRole('radio', { name: 'Alice' })).not.toHaveClass('opacity-0');
+  });
+
+  it('keeps a transparent control named and focusable: the grid focuses it', async () => {
+    const user = userEvent.setup();
+    renderGrid({ selectionMode: 'multiple', subtleSelection: true });
+    const alice = screen.getByRole('checkbox', { name: 'Alice' });
+    expect(alice).not.toHaveAttribute('aria-hidden');
+    expect(alice).toBeEnabled();
+    act(() => cell('Alice').focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(alice).toHaveFocus();
+  });
+
+  it('shows a row control once a row click selects it (selectOnRowClick)', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    renderGrid({
+      selectionMode: 'multiple',
+      subtleSelection: true,
+      selectOnRowClick: true,
+      onSelectedItemsChange,
+    });
+    const alice = screen.getByRole('checkbox', { name: 'Alice' });
+    await user.click(cell('Alice'));
+    expect(onSelectedItemsChange).toHaveBeenCalledWith(['1'], CLICK_DETAILS);
+    expect(alice).toBeChecked();
+    expect(alice).not.toHaveClass('opacity-0');
+    await user.click(cell('Alice'));
+    expect(alice).not.toBeChecked();
+    expect(alice).toHaveClass(...SUBTLE_ROW);
+  });
+
+  it('has no accessibility violations', async () => {
+    renderGrid({ selectionMode: 'multiple', subtleSelection: true, defaultSelectedItems: ['2'] });
+    await expectNoA11yViolations();
+  });
+});
+
+describe('DataGrid.Row selectionCellProps', () => {
+  it('disables the row’s control natively: neither a row click nor Space toggles the row', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    renderGrid({
+      selectionMode: 'multiple',
+      selectOnRowClick: true,
+      onSelectedItemsChange,
+      children: contentWithRowProps({ '2': { selectionCellProps: { disabled: true } } }),
+    });
+    const bob = screen.getByRole('checkbox', { name: 'Bob' });
+    expect(bob).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Alice' })).toBeEnabled();
+    await user.click(cell('Bob'));
+    act(() => cell('Designer').focus());
+    await user.keyboard(' ');
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    expect(bodyRows()[1]).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('makes the cell, not the disabled control, the grid’s focus target', async () => {
+    const user = userEvent.setup();
+    renderGrid({
+      selectionMode: 'multiple',
+      children: contentWithRowProps({ '2': { selectionCellProps: { disabled: true } } }),
+    });
+    act(() => cell('Bob').focus());
+    await user.keyboard('{ArrowLeft}');
+    const bob = screen.getByRole('checkbox', { name: 'Bob' });
+    expect(cellOf(bob)).toHaveFocus();
+    expect(bob).not.toHaveAttribute('tabindex', '0');
+  });
+
+  it('keeps a disabled row out of select-all: it selects and clears the other rows', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    renderGrid({
+      selectionMode: 'multiple',
+      onSelectedItemsChange,
+      children: contentWithRowProps({ '2': { selectionCellProps: { disabled: true } } }),
+    });
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
+    await user.click(selectAll);
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1', '3'], DETAILS);
+    expect(selectAll).toBeChecked();
+    expect(selectAll).not.toBePartiallyChecked();
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).not.toBeChecked();
+    await user.click(selectAll);
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith([], DETAILS);
+    expect(selectAll).not.toBeChecked();
+  });
+
+  it('keeps a selected disabled row selected through select-all, and out of its state', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    renderGrid({
+      selectionMode: 'multiple',
+      defaultSelectedItems: ['2'],
+      onSelectedItemsChange,
+      children: contentWithRowProps({ '2': { selectionCellProps: { disabled: true } } }),
+    });
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
+    // No row that select-all can change is selected.
+    expect(selectAll).not.toBeChecked();
+    expect(selectAll).not.toBePartiallyChecked();
+    await user.click(selectAll);
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1', '2', '3'], DETAILS);
+    expect(selectAll).toBeChecked();
+    await user.click(selectAll);
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['2'], DETAILS);
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+    expect(selectAll).not.toBeChecked();
+  });
+
+  it('updates select-all when a row’s selection becomes disabled or enabled', () => {
+    const { rerender } = render(
+      <DataGrid aria-label="People" selectionMode="multiple" defaultSelectedItems={['1', '3']}>
+        {contentWithRowProps({})}
+      </DataGrid>,
+    );
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
+    expect(selectAll).toBePartiallyChecked();
+    rerender(
+      <DataGrid aria-label="People" selectionMode="multiple" defaultSelectedItems={['1', '3']}>
+        {contentWithRowProps({ '2': { selectionCellProps: { disabled: true } } })}
+      </DataGrid>,
+    );
+    expect(selectAll).toBeChecked();
+    expect(selectAll).not.toBePartiallyChecked();
+    rerender(
+      <DataGrid aria-label="People" selectionMode="multiple" defaultSelectedItems={['1', '3']}>
+        {contentWithRowProps({})}
+      </DataGrid>,
+    );
+    expect(selectAll).toBePartiallyChecked();
+  });
+
+  it('hides the control with invisible, while a row click still selects the row', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    renderGrid({
+      selectionMode: 'multiple',
+      selectOnRowClick: true,
+      onSelectedItemsChange,
+      children: contentWithRowProps({ '1': { selectionCellProps: { invisible: true } } }),
+    });
+    const control = within(bodyRows()[0]).getByRole('checkbox', { hidden: true });
+    expect(control).toHaveClass('invisible');
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).not.toHaveClass('invisible');
+    await user.click(cell('Alice'));
+    expect(onSelectedItemsChange).toHaveBeenCalledWith(['1'], CLICK_DETAILS);
+  });
+
+  it('puts className on the cell and aria-label on the control (over selectionLabel)', () => {
+    renderGrid({
+      selectionMode: 'multiple',
+      children: contentWithRowProps({
+        '1': { selectionCellProps: { className: 'bg-muted', 'aria-label': 'Choose Alice' } },
+        '2': { selectionLabel: 'Bob row', selectionCellProps: { 'aria-label': 'Choose Bob' } },
+      }),
+    });
+    const alice = screen.getByRole('checkbox', { name: 'Choose Alice' });
+    expect(alice).not.toHaveAttribute('aria-labelledby');
+    expect(cellOf(alice)).toHaveClass('bg-muted', dataGridRowClassNames.selectionCell, 'w-10');
+    expect(alice).not.toHaveClass('bg-muted');
+    expect(screen.getByRole('checkbox', { name: 'Choose Bob' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Bob row' })).toBeNull();
+  });
+
+  it('applies to the select-all cell of a header row built from DataGrid.Row', () => {
+    render(
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Header>
+          <DataGrid.Row
+            selectionCellProps={{ className: 'bg-muted', 'aria-label': 'Choose every person' }}
+          >
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </DataGrid.Row>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    const selectAll = screen.getByRole('checkbox', { name: 'Choose every person' });
+    expect(cellOf(selectAll)).toHaveClass('bg-muted', dataGridHeaderClassNames.selectionCell);
+  });
+
+  it('has no accessibility violations with a disabled and an invisible control', async () => {
+    renderGrid({
+      selectionMode: 'multiple',
+      children: contentWithRowProps({
+        '1': { selectionCellProps: { invisible: true } },
+        '2': { selectionCellProps: { disabled: true } },
+      }),
+    });
+    await expectNoA11yViolations();
+  });
+});
+
+describe('DataGrid.SelectionCell', () => {
+  /** A selectable grid whose one body row holds the cell under test before its first cell. */
+  function SelectionCellRow({ children }: { children: React.ReactNode }) {
+    return (
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            {children}
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>
+    );
+  }
+
+  testSystemProps(DataGridSelectionCell, {
+    expectedTag: 'td',
+    displayName: 'DataGridSelectionCell',
+    control: { role: 'checkbox' },
+    conflictingClass: { className: 'w-12', overrides: 'w-10' },
+    wrapper: SelectionCellRow,
+  });
+
+  testCompoundExposure(DataGrid, ['SelectionCell']);
+
+  it('exports DataGridSelectionCell bound to DataGrid.SelectionCell', () => {
+    expect(DataGridSelectionCell).toBe(DataGrid.SelectionCell);
+  });
+
+  /** A grid whose header and body rows hold a DataGrid.SelectionCell as their last cell. */
+  function TrailingCells(
+    props: Partial<DataGridBaseProps> & { cellProps?: DataGridSelectionCellProps },
+  ) {
+    const { cellProps, ...gridProps } = props;
+    return (
+      <DataGrid aria-label="People" selectionMode="multiple" {...gridProps}>
+        <DataGrid.Header>
+          <tr>
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+            <DataGrid.SelectionCell />
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          {PEOPLE.map((person) => (
+            <DataGrid.Row key={person.id} rowId={person.id}>
+              <DataGrid.Cell>{person.name}</DataGrid.Cell>
+              <DataGrid.SelectionCell {...cellProps} />
+            </DataGrid.Row>
+          ))}
+        </DataGrid.Body>
+      </DataGrid>
+    );
+  }
+
+  it('is the select-all checkbox in a header row and the row toggle in a body row, in place of the automatic cells', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn');
+    const onSelectedItemsChange = vi.fn();
+    render(<TrailingCells onSelectedItemsChange={onSelectedItemsChange} />);
+    const [headerRow, ...rows] = screen.getAllByRole('row') as HTMLTableRowElement[];
+    expect(headerRow.cells).toHaveLength(2);
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
+    expect(headerRow.cells[1]).toContainElement(selectAll);
+    expect(headerRow.cells[1]).toHaveClass(
+      dataGridSelectionCellClassNames.root,
+      dataGridHeaderClassNames.selectionCell,
+    );
+    expect(selectAll).toHaveClass(dataGridHeaderClassNames.selectAllCheckbox);
+    expect(screen.getAllByRole('checkbox', { name: 'Select all rows' })).toHaveLength(1);
+
+    for (const row of rows) expect(row.cells).toHaveLength(2);
+    const alice = screen.getByRole('checkbox', { name: 'Alice' });
+    expect(rows[0].cells[1]).toContainElement(alice);
+    expect(rows[0].cells[1]).toHaveClass(
+      dataGridSelectionCellClassNames.root,
+      dataGridRowClassNames.selectionCell,
+    );
+    expect(rows[0].cells[1]).toHaveAttribute('role', 'gridcell');
+    expect(alice).toHaveClass(dataGridRowClassNames.selectionControl);
+
+    await user.click(alice);
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1'], DETAILS);
+    expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+    await user.click(selectAll);
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1', '2', '3'], DETAILS);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('is reached with the arrow keys like any cell, and works with selectOnRowClick and subtleSelection', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    render(
+      <TrailingCells
+        selectOnRowClick
+        subtleSelection
+        onSelectedItemsChange={onSelectedItemsChange}
+      />,
+    );
+    act(() => cell('Bob').focus());
+    await user.keyboard('{ArrowRight}');
+    const bob = screen.getByRole('checkbox', { name: 'Bob' });
+    expect(bob).toHaveFocus();
+    expect(bob).toHaveClass('opacity-0', 'group-focus-within/row:opacity-100');
+    await user.click(cell('Carol'));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3'], CLICK_DETAILS);
+    expect(screen.getByRole('checkbox', { name: 'Carol' })).not.toHaveClass('opacity-0');
+  });
+
+  it('is the hidden "Selection" header text in a single-mode header row, and a radio in a body row', () => {
+    render(<TrailingCells selectionMode="single" defaultSelectedItems={['2']} />);
+    const [headerRow] = screen.getAllByRole('row') as HTMLTableRowElement[];
+    expect(headerRow.cells).toHaveLength(2);
+    expect(within(headerRow.cells[1]).getByText('Selection')).toHaveClass('sr-only');
+    expect(screen.getByRole('radio', { name: 'Bob' })).toBeChecked();
+  });
+
+  it('takes disabled, invisible and aria-label like selectionCellProps, its own props winning', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    render(
+      <DataGrid
+        aria-label="People"
+        selectionMode="multiple"
+        onSelectedItemsChange={onSelectedItemsChange}
+      >
+        <DataGrid.Header>
+          <DataGrid.Row>
+            <DataGrid.SelectionCell aria-label="Choose all" />
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </DataGrid.Row>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1" selectionCellProps={{ disabled: true, className: 'from-row' }}>
+            <DataGrid.SelectionCell disabled={false} className="own" aria-label="Choose Alice" />
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+          <DataGrid.Row rowId="2">
+            <DataGrid.SelectionCell disabled />
+            <DataGrid.Cell>Bob</DataGrid.Cell>
+          </DataGrid.Row>
+          <DataGrid.Row rowId="3">
+            <DataGrid.SelectionCell invisible />
+            <DataGrid.Cell>Carol</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    const alice = screen.getByRole('checkbox', { name: 'Choose Alice' });
+    expect(alice).toBeEnabled();
+    expect(cellOf(alice)).toHaveClass('from-row', 'own');
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeDisabled();
+    expect(within(bodyRows()[2]).getByRole('checkbox', { hidden: true })).toHaveClass('invisible');
+    await user.click(screen.getByRole('checkbox', { name: 'Choose all' }));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1', '3'], DETAILS);
+  });
+
+  it('routes aria-labelledby and aria-describedby to the control; id, data-* and ref stay on the cell', () => {
+    const ref = React.createRef<HTMLTableCellElement>();
+    const controlRef = React.createRef<HTMLInputElement>();
+    render(
+      <>
+        <span id="alice-name">Alice Smith</span>
+        <span id="alice-hint">Selects the person</span>
+        <SelectionCellRow>
+          <DataGrid.SelectionCell
+            id="alice-select"
+            data-testid="selection-cell"
+            aria-labelledby="alice-name"
+            aria-describedby="alice-hint"
+            ref={ref}
+            controlRef={controlRef}
+          />
+        </SelectionCellRow>
+      </>,
+    );
+    const control = screen.getByRole('checkbox', { name: 'Alice Smith' });
+    expect(control).toHaveAccessibleDescription('Selects the person');
+    expect(controlRef.current).toBe(control);
+    const selectionCell = screen.getByTestId('selection-cell');
+    expect(ref.current).toBe(selectionCell);
+    expect(selectionCell).toHaveAttribute('id', 'alice-select');
+    expect(selectionCell).not.toHaveAttribute('aria-labelledby');
+    expect(selectionCell).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('is recognised inside a Fragment and as a lazy element type (a Server Component)', () => {
+    const LazySelectionCell = asClientReference(DataGrid.SelectionCell);
+    function grid(SelectionCell: typeof DataGrid.SelectionCell) {
+      return (
+        <DataGrid aria-label="People" selectionMode="multiple">
+          <DataGrid.Header>
+            <tr>
+              <>
+                <SelectionCell />
+                <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+              </>
+            </tr>
+          </DataGrid.Header>
+          <DataGrid.Body>
+            <DataGrid.Row rowId="1">
+              <>
+                <DataGrid.Cell>Alice</DataGrid.Cell>
+                <SelectionCell />
+              </>
+            </DataGrid.Row>
+          </DataGrid.Body>
+        </DataGrid>
+      );
+    }
+    const plain = renderToString(grid(DataGrid.SelectionCell));
+    expect(renderToString(grid(LazySelectionCell))).toBe(plain);
+    render(grid(LazySelectionCell));
+    for (const row of screen.getAllByRole('row') as HTMLTableRowElement[]) {
+      expect(row.cells).toHaveLength(2);
+    }
+    expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Alice' })).toBeInTheDocument();
+  });
+
+  it('gets the select-all control only in the first header row of a grouped header', () => {
+    render(
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Header>
+          <tr>
+            <DataGrid.SelectionCell />
+            <DataGrid.HeaderCell>Person</DataGrid.HeaderCell>
+          </tr>
+          <tr>
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    const thead = screen.getByRole('grid').querySelector('thead') as HTMLTableSectionElement;
+    expect(thead.rows[0].cells).toHaveLength(2);
+    expect(thead.rows[0].cells[0]).toContainElement(
+      screen.getByRole('checkbox', { name: 'Select all rows' }),
+    );
+    // The second row gets the automatic empty cell.
+    expect(thead.rows[1].cells).toHaveLength(2);
+    expect(thead.rows[1].cells[0]).toHaveAttribute('data-selection-cell');
+    expect(thead.rows[1].cells[0]).toBeEmptyDOMElement();
+    expect(screen.getAllByRole('checkbox', { name: 'Select all rows' })).toHaveLength(1);
+  });
+
+  it('renders nothing in a grid without selection, and warns once', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<TrailingCells selectionMode="none" />);
+    for (const row of screen.getAllByRole('row') as HTMLTableRowElement[]) {
+      expect(row.cells).toHaveLength(1);
+    }
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.SelectionCell: the grid has no row selection (`selectionMode` is "none"), so the cell renders nothing. Set `selectionMode` on the DataGrid, or remove the cell.',
+      ],
+    ]);
+  });
+
+  it('throws in development outside a DataGrid and in a body row that is not a DataGrid.Row', () => {
+    expectThrows(
+      <table>
+        <tbody>
+          <tr>
+            <DataGrid.SelectionCell />
+          </tr>
+        </tbody>
+      </table>,
+      '[WaveUI] DataGrid.SelectionCell must be used within DataGrid',
+    );
+    expectThrows(
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Body>
+          <tr>
+            <DataGrid.SelectionCell />
+          </tr>
+        </DataGrid.Body>
+      </DataGrid>,
+      '[WaveUI] DataGrid.SelectionCell must be used within DataGrid.Row',
+    );
+  });
+
+  it('warns when a component renders it, so its row cannot see it and adds its own cell', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    function MySelectionCell() {
+      return <DataGrid.SelectionCell />;
+    }
+    render(
+      <SelectionCellRow>
+        <MySelectionCell />
+      </SelectionCellRow>,
+    );
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.SelectionCell: rendered by another component, so its DataGrid.Row did not see it and added its own selection cell. Render DataGrid.SelectionCell as a child of DataGrid.Row (a Fragment is fine).',
+      ],
+    ]);
+  });
+
+  it('warns when a header row gets a second selection cell from a component that renders one', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    function MySelectionCell() {
+      return <DataGrid.SelectionCell />;
+    }
+    render(
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Header>
+          <tr>
+            <MySelectionCell />
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    // The automatic cell comes first, so it holds the one select-all control.
+    expect(screen.getAllByRole('checkbox', { name: 'Select all rows' })).toHaveLength(1);
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.Header: a header row has more than one selection cell. A DataGrid.SelectionCell rendered by another component is not seen, so the row also gets the automatic cell: render DataGrid.SelectionCell as a child of the row (a Fragment is fine).',
+      ],
+    ]);
+  });
+
+  it('puts ref, className and data-* on the header cell, and controlRef on select-all', () => {
+    const ref = React.createRef<HTMLTableCellElement>();
+    const controlRef = React.createRef<HTMLInputElement>();
+    render(
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Header>
+          <tr>
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+            <DataGrid.SelectionCell
+              ref={ref}
+              controlRef={controlRef}
+              className="w-12"
+              data-testid="select-all-cell"
+            />
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+            <DataGrid.SelectionCell />
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    const headerCell = screen.getByTestId('select-all-cell');
+    expect(headerCell.tagName.toLowerCase()).toBe('th');
+    expect(ref.current).toBe(headerCell);
+    expect(headerCell).toHaveClass('w-12', dataGridSelectionCellClassNames.root);
+    expect(headerCell).not.toHaveClass('w-10');
+    expect(controlRef.current).toBe(screen.getByRole('checkbox', { name: 'Select all rows' }));
+  });
+
+  it('has no accessibility violations in a header and in body rows, in both modes', async () => {
+    const { unmount } = render(<TrailingCells defaultSelectedItems={['2']} />);
+    await expectNoA11yViolations();
+    unmount();
+    render(<TrailingCells selectionMode="single" defaultSelectedItems={['2']} />);
+    await expectNoA11yViolations();
+  });
+});
+
+describe('DataGrid selection types (P9-04)', () => {
+  it('types the selection props', () => {
+    expectTypeOf<DataGridBaseProps['selectionAppearance']>().toEqualTypeOf<
+      DataGridSelectionAppearance | undefined
+    >();
+    expectTypeOf<DataGridSelectionAppearance>().toEqualTypeOf<'brand' | 'neutral' | 'none'>();
+    expectTypeOf<DataGridBaseProps['selectOnRowClick']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DataGridBaseProps['subtleSelection']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DataGridRowProps['selectionCellProps']>().toEqualTypeOf<
+      DataGridRowSelectionCellProps | undefined
+    >();
+    expectTypeOf<DataGridRowSelectionCellProps>().toEqualTypeOf<{
+      disabled?: boolean;
+      invisible?: boolean;
+      className?: string;
+      'aria-label'?: string;
+    }>();
+    expectTypeOf<DataGridSelectionCellProps['controlRef']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    // @ts-expect-error — a selection cell has no content of its own.
+    const withChildren = <DataGrid.SelectionCell>Select</DataGrid.SelectionCell>;
+    // @ts-expect-error — not an appearance.
+    const wrongAppearance = <DataGrid selectionAppearance="subtle">{null}</DataGrid>;
+    expect([withChildren, wrongAppearance]).toHaveLength(2);
   });
 });
 

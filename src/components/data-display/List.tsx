@@ -5,6 +5,7 @@ import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
+import { INTERACTIVE_SELECTOR, isForeignEvent, type ForeignEventOptions } from '../../lib/events';
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRingInset, forcedColors } from '../../lib/styles';
@@ -150,42 +151,19 @@ function childrenHaveAction(children: React.ReactNode): boolean {
   );
 }
 
-/** Elements whose events belong to themselves, not to the item that contains them. */
-const INTERACTIVE_SELECTOR = [
-  FOCUSABLE_SELECTOR,
-  '[data-list-action]',
-  'label',
-  '[role="button"]',
-  '[role="link"]',
-  '[role="checkbox"]',
-  '[role="switch"]',
-  '[role="radio"]',
-  '[role="menuitem"]',
-  '[role="textbox"]',
-  '[role="combobox"]',
-  '[role="slider"]',
-  '[role="spinbutton"]',
-].join(', ');
+/** Elements whose events belong to themselves, not to the item: also the item's action cell. */
+const ITEM_FOREIGN_EVENTS: ForeignEventOptions = {
+  interactive: `${INTERACTIVE_SELECTOR}, [data-list-action]`,
+};
 
 /**
  * Whether an item must leave `event` alone (no selection toggle): it started inside the action
- * container or a nested interactive element, or outside the item's DOM. React bubbles the events
- * of a popup portaled from an action (a Popover, Menu or Dialog) through the item's handlers
- * although their target lives elsewhere in the document; those never toggle the item (as in
- * Card).
+ * cell or a nested interactive element, or outside the item's DOM. React bubbles the events of a
+ * popup portaled from an action (a Popover, Menu or Dialog) through the item's handlers although
+ * their target lives elsewhere in the document; those never toggle the item (as in Card).
  */
-function isForeignEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
-  const item = event.currentTarget;
-  const target = event.target as Partial<Node> | null;
-  if (!target || typeof target.nodeType !== 'number' || !item.contains(target as Node)) {
-    return true;
-  }
-  let node: Element | null =
-    target.nodeType === Node.ELEMENT_NODE ? (target as Element) : (target.parentElement ?? null);
-  for (; node && node !== item; node = node.parentElement) {
-    if (node.matches(INTERACTIVE_SELECTOR)) return true;
-  }
-  return false;
+function isForeignItemEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
+  return isForeignEvent(event, ITEM_FOREIGN_EVENTS);
 }
 
 /**
@@ -552,12 +530,12 @@ export const ListItem = ({
   };
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    if (isForeignEvent(event)) return;
+    if (isForeignItemEvent(event)) return;
     activate();
   };
 
   const handleOptionKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (isForeignEvent(event)) return;
+    if (isForeignItemEvent(event)) return;
     if (isActivationKey(event)) {
       event.preventDefault();
       activate();
