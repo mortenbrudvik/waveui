@@ -2,7 +2,29 @@ import * as React from 'react';
 import { overflowClassNames, overflowItemClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
+import { useEventCallback } from '../../hooks/useEventCallback';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import type { Orientation } from '../../lib/types';
+
+/**
+ * Which end of the row overflows first: `'end'` hides the last items in DOM order first, `'start'`
+ * the first ones. Equal priorities follow it.
+ */
+export type OverflowDirection = 'end' | 'start';
+
+/**
+ * How much of an item group is shown: `'visible'` (every member), `'hidden'` (none) or `'overflow'`
+ * (some).
+ */
+export type OverflowGroupVisibility = 'visible' | 'hidden' | 'overflow';
+
+/** What {@link OverflowProps.onOverflowChange} reports besides the hidden ids. */
+export interface OverflowChangeDetails {
+  /** `itemId`s of the shown items, in DOM order. */
+  visibleItems: string[];
+  /** The visibility of each item group, by `groupId`. */
+  groupVisibility: Record<string, OverflowGroupVisibility>;
+}
 
 /** Properties for the Overflow component. */
 export interface OverflowProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -19,14 +41,64 @@ export interface OverflowProps extends React.HTMLAttributes<HTMLDivElement> {
    * measured: the container's whole content box is the room for them, so other content placed in
    * the row is not accounted for and could clip items that still count as visible. Keep fixed
    * content outside the Overflow (for example in a surrounding flex row), or wrap it in an
-   * `OverflowItem` (the first item is never hidden).
+   * `OverflowItem` and pin it with `pinned`.
    */
   children: React.ReactNode;
+  /**
+   * Which end of the row overflows first (`start` is the start of the DOM order, so the right side
+   * of a right-to-left row). Without a `priority` or `pinned` item the first item (`end`) or the
+   * last one (`start`) is never hidden, as in 0.13.
+   * @default 'end'
+   */
+  overflowDirection?: OverflowDirection;
+  /**
+   * The axis items are laid out on. `'vertical'` stacks them in a column and measures heights
+   * (Fluent's `overflowAxis`).
+   * @default 'horizontal'
+   */
+  orientation?: Orientation;
+  /**
+   * The number of items that stay visible however little room there is (pinned items count).
+   * @default 0
+   */
+  minimumVisible?: number;
+  /**
+   * Renders the overflow button before the first measurement (for example in the server HTML) so the
+   * row reserves its room; `overflowButton` then receives `0` and `[]`. It goes away after the
+   * first measurement when every item fits.
+   * @default false
+   */
+  hasHiddenItems?: boolean;
+  /**
+   * Called, from an effect, when the set of hidden items changes (not for the initial, empty set),
+   * with the hidden `itemId`s in DOM order and the {@link OverflowChangeDetails}. Called once per
+   * change in StrictMode.
+   */
+  onOverflowChange?: (hiddenItems: string[], details: OverflowChangeDetails) => void;
   ref?: React.Ref<HTMLDivElement>;
 }
 
+/**
+ * An item hides in ascending `priority` (higher overflows later, default 0), or it is `pinned` and
+ * never hides: `priority` or `pinned`, never both.
+ */
+export type OverflowItemPriorityProps =
+  | {
+      /** Items with a lower priority overflow first; equal priorities follow the direction. */
+      priority?: number;
+      pinned?: never;
+    }
+  | {
+      /** The item never overflows. */
+      pinned?: boolean;
+      priority?: never;
+    };
+
 /** Properties for the OverflowItem sub-component. */
-export interface OverflowItemProps extends React.HTMLAttributes<HTMLDivElement> {
+export type OverflowItemProps = OverflowItemBaseProps & OverflowItemPriorityProps;
+
+/** The props of an {@link OverflowItem} besides `priority` and `pinned`. */
+export interface OverflowItemBaseProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Identifier for tracking this item's overflow visibility, unique within the Overflow (a
    * duplicate warns in development: items that share one are hidden and shown together).
@@ -86,17 +158,64 @@ function warnDuplicateItemId(itemId: string): void {
 
 const noop = () => {};
 
-/** Width available to items: the content box of the container, and the flex gap between items. */
-function readContainer(container: HTMLElement): { available: number; gap: number } {
-  let paddingInline = 0;
+/** Room available to items: the content box of the container on the axis, and the flex gap. */
+function readContainer(
+  container: HTMLElement,
+  orientation: Orientation,
+): { available: number; gap: number } {
+  const vertical = orientation === 'vertical';
+  let padding = 0;
   let gap = 0;
   const view = container.ownerDocument.defaultView;
   if (view) {
     const style = view.getComputedStyle(container);
-    paddingInline = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-    gap = parseFloat(style.columnGap) || 0;
+    padding = vertical
+      ? (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)
+      : (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    gap = parseFloat(vertical ? style.rowGap : style.columnGap) || 0;
   }
-  return { available: container.clientWidth - paddingInline, gap };
+  return { available: (vertical ? container.clientHeight : container.clientWidth) - padding, gap };
+}
+
+/** What an item tells the store besides its id. */
+interface ItemMeta {
+  id: string;
+  priority: number | undefined;
+  pinned: boolean;
+}
+
+/** What the store was told by the root's props. */
+interface StoreConfig {
+  direction: OverflowDirection;
+  orientation: Orientation;
+  minimumVisible: number;
+  /** The first measurement is published too (it takes the reserved button away). */
+  hasHiddenItems: boolean;
+}
+
+/**
+ * Picks the next item to hide: the visible, hidable item with the lowest priority; among equals
+ * the last in DOM order for `end`, the first for `start`. `-1` when none is left.
+ */
+function pickVictim(
+  metas: readonly ItemMeta[],
+  hidden: readonly boolean[],
+  direction: OverflowDirection,
+  protectedIndex: number,
+): number {
+  let best = -1;
+  let bestPriority = Infinity;
+  for (let step = 0; step < metas.length; step++) {
+    const i = direction === 'end' ? metas.length - 1 - step : step;
+    const { priority, pinned } = metas[i];
+    if (hidden[i] || pinned || i === protectedIndex) continue;
+    const value = priority ?? 0;
+    if (value < bestPriority) {
+      best = i;
+      bestPriority = value;
+    }
+  }
+  return best;
 }
 
 /**
@@ -123,15 +242,28 @@ function readContainer(container: HTMLElement): { available: number; gap: number
 class OverflowStore {
   private container: HTMLElement | null = null;
   private button: HTMLElement | null = null;
-  private buttonWidth = 0;
-  private readonly items = new Map<HTMLElement, string>();
+  private buttonSize = 0;
+  /** The button is mounted and its size was read. */
+  private buttonMeasured = false;
+  private readonly items = new Map<HTMLElement, ItemMeta>();
   /** How many mounted items use each `itemId` (development only: a repeated one warns). */
   private readonly itemIdCounts = new Map<string, number>();
-  private readonly widths = new WeakMap<HTMLElement, number>();
+  /** The last visible size of each item on the measured axis. */
+  private sizes = new WeakMap<HTMLElement, number>();
   private readonly listeners = new Set<() => void>();
+  private config: StoreConfig = {
+    direction: 'end',
+    orientation: 'horizontal',
+    minimumVisible: 0,
+    hasHiddenItems: false,
+  };
   private hidden: string[] = NO_IDS;
-  /** The first item is wider than the room beside the button, so the button covers its end. */
-  private pinned = false;
+  /** Every item's id in DOM order, as of the last measurement. */
+  private itemIds: string[] = NO_IDS;
+  /** The visible items are wider than the room beside the button, so the button covers their end. */
+  private buttonCovers = false;
+  /** Whether a measurement has run (the server snapshot is `false`). */
+  private measured = false;
   /** The item elements of the last measurement, in the DOM order they had then. */
   private order: HTMLElement[] = [];
   private connected = false;
@@ -150,10 +282,42 @@ class OverflowStore {
 
   getServerSnapshot = (): string[] => NO_IDS;
 
-  getPinned = (): boolean => this.pinned;
+  getButtonCovers = (): boolean => this.buttonCovers;
 
-  getServerPinned = (): boolean => false;
+  getMeasured = (): boolean => this.measured;
 
+  getServerFlag = (): boolean => false;
+
+  /**
+   * Whether the hidden set is final: the first items to overflow are measured without the button
+   * that they bring in, so a set is provisional until a button that will render is measured.
+   */
+  isSettled(hasButton: boolean): boolean {
+    return this.hidden.length === 0 || !hasButton || this.buttonMeasured;
+  }
+
+  /** The ids of the shown items, in DOM order. */
+  getVisibleIds(): string[] {
+    const hidden = new Set(this.hidden);
+    return this.itemIds.filter((id) => !hidden.has(id));
+  }
+
+  /** Applies the root's props (layout effect); measures again when one changed. */
+  setConfig(config: StoreConfig): void {
+    const previous = this.config;
+    if (
+      previous.direction === config.direction &&
+      previous.orientation === config.orientation &&
+      previous.minimumVisible === config.minimumVisible &&
+      previous.hasHiddenItems === config.hasHiddenItems
+    ) {
+      return;
+    }
+    // Sizes of the other axis are of no use to hidden items.
+    if (previous.orientation !== config.orientation) this.sizes = new WeakMap();
+    this.config = config;
+    this.measure();
+  }
   /** Starts observing (root layout effect); returns the teardown. */
   connect = (): (() => void) => {
     this.connected = true;
@@ -219,15 +383,24 @@ class OverflowStore {
 
   /** Registers an item element; returns its unregistration. */
   registerItem(el: HTMLElement, id: string): () => void {
-    this.items.set(el, id);
+    this.items.set(el, { id, priority: undefined, pinned: false });
     this.observer?.observe(el);
     this.measure();
     return () => {
-      if (this.items.get(el) !== id) return;
+      if (this.items.get(el)?.id !== id) return;
       this.items.delete(el);
       this.observer?.unobserve(el);
       this.measure();
     };
+  }
+
+  /** Updates what a registered item says about its priority (layout effect of the item). */
+  setItemMeta(el: HTMLElement, priority: number | undefined, pinned: boolean): void {
+    const meta = this.items.get(el);
+    if (!meta || (meta.priority === priority && meta.pinned === pinned)) return;
+    meta.priority = priority;
+    meta.pinned = pinned;
+    this.measure();
   }
 
   /**
@@ -257,48 +430,66 @@ class OverflowStore {
   private measure(): void {
     const container = this.container;
     if (!this.connected || !container) return;
+    const { direction, orientation, minimumVisible } = this.config;
+    const vertical = orientation === 'vertical';
 
-    // Reads first: widths of the visible items, the button and the container.
+    // Reads first: sizes of the visible items, the button and the container.
     const entries = Array.from(this.items)
       .filter(([el]) => el.isConnected && container.contains(el))
       .sort(([a], [b]) => documentOrder(a, b));
     this.order = entries.map(([el]) => el);
     for (const [el] of entries) {
-      if (!el.hasAttribute('data-overflow-hidden')) this.widths.set(el, el.offsetWidth);
-    }
-    if (this.button?.isConnected) this.buttonWidth = this.button.offsetWidth;
-    const { available, gap } = readContainer(container);
-
-    const widths = entries.map(([el]) => this.widths.get(el) ?? 0);
-    const total = widths.reduce((sum, width, i) => sum + width + (i > 0 ? gap : 0), 0);
-
-    let next: string[] = NO_IDS;
-    let pinned = false;
-    if (total > available) {
-      // Items that fit next to the overflow button stay; the first item always stays.
-      const limit = available - (this.buttonWidth > 0 ? this.buttonWidth + gap : 0);
-      let used = 0;
-      let cut = entries.length;
-      for (let i = 0; i < entries.length; i++) {
-        const end = used + widths[i] + (i > 0 ? gap : 0);
-        if (i > 0 && end > limit) {
-          cut = i;
-          break;
-        }
-        used = end;
+      if (!el.hasAttribute('data-overflow-hidden')) {
+        this.sizes.set(el, vertical ? el.offsetHeight : el.offsetWidth);
       }
-      next = entries.slice(cut).map(([, id]) => id);
-      // The sticky button eats the gap before it first; it covers the first item only when the
-      // two do not fit side by side.
-      pinned = next.length > 0 && widths[0] + this.buttonWidth > available;
     }
+    this.buttonMeasured = false;
+    if (this.button?.isConnected) {
+      this.buttonSize = vertical ? this.button.offsetHeight : this.button.offsetWidth;
+      this.buttonMeasured = true;
+    }
+    const { available, gap } = readContainer(container, orientation);
+
+    const metas = entries.map(([, meta]) => meta);
+    const sizes = entries.map(([el]) => this.sizes.get(el) ?? 0);
+    const hiddenFlags = metas.map(() => false);
+    let visibleCount = metas.length;
+    let used = sizes.reduce((sum, size) => sum + size, 0) + gap * Math.max(0, visibleCount - 1);
+
+    if (used > available) {
+      // Items beside the overflow button stay. Until an item sets a priority or pins itself, the
+      // item at the far end from the hidden side stays too (0.13: the first item).
+      const reserve = this.buttonSize > 0 ? this.buttonSize + gap : 0;
+      const legacy = !metas.some((meta) => meta.pinned || meta.priority !== undefined);
+      const protectedIndex = legacy ? (direction === 'end' ? 0 : metas.length - 1) : -1;
+      while (used + reserve > available && visibleCount > minimumVisible) {
+        const victim = pickVictim(metas, hiddenFlags, direction, protectedIndex);
+        if (victim < 0) break;
+        hiddenFlags[victim] = true;
+        visibleCount--;
+        used -= sizes[victim] + (visibleCount > 0 ? gap : 0);
+      }
+    }
+
+    const next = metas.filter((_, i) => hiddenFlags[i]).map((meta) => meta.id);
+    // The sticky button eats the gap before it first; it covers the visible items only when the
+    // two do not fit side by side.
+    const covers = next.length > 0 && used + this.buttonSize > available;
 
     const hiddenChanged = !sameIds(next, this.hidden);
-    if (!hiddenChanged && pinned === this.pinned) return;
+    const itemIds = metas.map((meta) => meta.id);
+    const idsChanged = !sameIds(itemIds, this.itemIds);
+    if (!hiddenChanged && !idsChanged && covers === this.buttonCovers && this.measured) return;
     // The same hidden set keeps its array, so the items and useOverflowMenu() do not update.
     if (hiddenChanged) this.hidden = next.length > 0 ? next : NO_IDS;
-    this.pinned = pinned;
-    for (const listener of Array.from(this.listeners)) listener();
+    if (idsChanged) this.itemIds = itemIds;
+    const changed =
+      hiddenChanged ||
+      covers !== this.buttonCovers ||
+      (!this.measured && this.config.hasHiddenItems);
+    this.buttonCovers = covers;
+    this.measured = true;
+    if (changed) for (const listener of Array.from(this.listeners)) listener();
   }
 }
 
@@ -498,17 +689,47 @@ export function useIsOverflowing(
 // Components
 // ---------------------------------------------------------------------------
 
-const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: OverflowProps) => {
+const ROOT_ORIENTATION_CLASSES: Record<Orientation, string> = {
+  horizontal: 'items-center',
+  vertical: 'flex-col items-start',
+};
+
+// The button sticks to the end of the axis and keeps room inside for its own focus indicator while
+// it covers an item.
+const BUTTON_ORIENTATION_CLASSES: Record<Orientation, string> = {
+  horizontal:
+    'sticky -end-1 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1',
+  vertical:
+    'sticky -bottom-1 flex shrink-0 items-center self-stretch pt-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pb-1',
+};
+
+const OverflowRoot = ({
+  overflowButton,
+  overflowDirection = 'end',
+  orientation = 'horizontal',
+  minimumVisible = 0,
+  hasHiddenItems = false,
+  onOverflowChange,
+  children,
+  className,
+  ref,
+  ...rest
+}: OverflowProps) => {
   const [store] = React.useState(() => new OverflowStore());
   const hiddenIds = React.useSyncExternalStore(
     store.subscribe,
     store.getSnapshot,
     store.getServerSnapshot,
   );
+  const measured = React.useSyncExternalStore(
+    store.subscribe,
+    store.getMeasured,
+    store.getServerFlag,
+  );
   const pinned = React.useSyncExternalStore(
     store.subscribe,
-    store.getPinned,
-    store.getServerPinned,
+    store.getButtonCovers,
+    store.getServerFlag,
   );
   const setContainer = React.useCallback(
     (node: HTMLDivElement | null) => store.setContainer(node),
@@ -520,6 +741,12 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
   );
   const containerRef = useMergedRefs<HTMLDivElement>(ref, setContainer);
   const forceRender = useForceRender();
+
+  // The props the measurement depends on, before the observers connect (the effects of one
+  // component run in order), so the first measurement already uses them.
+  React.useLayoutEffect(() => {
+    store.setConfig({ direction: overflowDirection, orientation, minimumVisible, hasHiddenItems });
+  }, [store, overflowDirection, orientation, minimumVisible, hasHiddenItems]);
 
   // Observers are created once per instance (not per render or per children change). The first
   // measurement (in connect) re-renders from this layout effect, before paint: useSyncExternalStore
@@ -547,6 +774,23 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
 
   const hiddenCount = hiddenIds.length;
 
+  // Reported from an effect, once per change of the hidden set (the initial, empty set is no
+  // change). The last reported set outlives the StrictMode effect replay, so it reports once.
+  const emitOverflowChange = useEventCallback(onOverflowChange);
+  const reported = React.useRef<string[]>(NO_IDS);
+  const hasButton = overflowButton !== undefined;
+  React.useEffect(() => {
+    // The store's current set, not this render's: measuring the button that the first hidden
+    // items bring in can hide more before the browser paints.
+    const current = store.getSnapshot();
+    if (!store.isSettled(hasButton) || sameIds(current, reported.current)) return;
+    reported.current = current;
+    emitOverflowChange([...current], {
+      visibleItems: store.getVisibleIds(),
+      groupVisibility: {},
+    });
+  }, [store, hiddenIds, hasButton, emitOverflowChange]);
+
   return (
     <OverflowContext.Provider value={ctx}>
       <div
@@ -556,11 +800,17 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
         // row's box would then reach past its container, which a scroll container around an
         // edge-to-edge row (or the page) counts as overflow. The store measures the room without
         // the padding.
-        className={cn(overflowClassNames.root, 'flex items-center overflow-hidden p-1', className)}
+        className={cn(
+          overflowClassNames.root,
+          'flex overflow-hidden p-1',
+          ROOT_ORIENTATION_CLASSES[orientation],
+          className,
+        )}
+        data-orientation={orientation}
         {...rest}
       >
         {children}
-        {hiddenCount > 0 && overflowButton && (
+        {(hiddenCount > 0 || (hasHiddenItems && !measured)) && overflowButton && (
           // In the row's flow (it adds to the row height and follows justify-*), sticking to the
           // inline end when the first item is wider than the room beside it. Browsers stop a
           // sticky element at the scroll container's padding, so -end-1 lets it reach the
@@ -573,7 +823,7 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
             data-overflow-pinned={pinned ? '' : undefined}
             className={cn(
               overflowClassNames.overflowButton,
-              'sticky -end-1 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1',
+              BUTTON_ORIENTATION_CLASSES[orientation],
             )}
           >
             {overflowButton(hiddenCount, buttonIds)}
@@ -586,7 +836,9 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
 OverflowRoot.displayName = 'Overflow';
 
 /**
- * One entry of an {@link Overflow}. While it does not fit it stays mounted but is hidden
+ * One entry of an {@link Overflow}. `priority` (higher overflows later, default 0) or `pinned`
+ * (never overflows) decide when it hides; setting either on any item makes every item without
+ * `pinned` hidable, the first one included. While it does not fit it stays mounted but is hidden
  * (`data-overflow-hidden` and an inline `display: none` placed after the consumer's own `style`),
  * `aria-hidden` and `inert`. The inline style wins over the consumer's `style.display` and over
  * display utilities in any cascade layer (a prefixed Tailwind app's `tw:flex` included), so a
@@ -594,6 +846,8 @@ OverflowRoot.displayName = 'Overflow';
  */
 export const OverflowItem = ({
   itemId,
+  priority,
+  pinned = false,
   children,
   className,
   style,
@@ -610,7 +864,12 @@ export const OverflowItem = ({
     (node: HTMLDivElement | null) => (node ? store.registerItem(node, itemId) : undefined),
     [store, itemId],
   );
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, registerRef);
+  const elementRef = React.useRef<HTMLDivElement | null>(null);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, registerRef, elementRef);
+  // After the ref has registered the item: its priority or pinned state re-measures the row.
+  React.useLayoutEffect(() => {
+    if (elementRef.current) store.setItemMeta(elementRef.current, priority, pinned);
+  }, [store, itemId, priority, pinned]);
 
   return (
     <div
@@ -632,8 +891,12 @@ OverflowItem.displayName = 'OverflowItem';
  * A single row that hides the items which do not fit and shows an overflow button instead.
  *
  * Wrap each entry in {@link OverflowItem} with a unique `itemId`; the row holds only items (other
- * content is not measured, see `children`). Items are measured while visible, hidden from the end
- * (in DOM order; the first item always stays) and hidden items get `data-overflow-hidden`, an
+ * content is not measured, see `children`). Items are measured while visible and hidden while they
+ * do not fit: by ascending `priority` (equal priorities from the end of the DOM order, or from its
+ * start with `overflowDirection="start"`), never a `pinned` item and never below `minimumVisible`.
+ * Until an item sets `priority` or `pinned`, the first item (`end`) or the last one (`start`) always
+ * stays, as in 0.13. `orientation="vertical"` lays the items out in a column and measures heights.
+ * `onOverflowChange` reports the hidden `itemId`s when they change. Hidden items get `data-overflow-hidden`, an
  * inline `display: none`, `aria-hidden` and `inert`. Reordered items (for example a keyed sort) are
  * re-measured in their new order. `overflowButton(count, hiddenIds)` renders the button after the
  * visible items (its measured width is reserved); components inside it can use

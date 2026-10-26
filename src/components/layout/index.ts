@@ -61,7 +61,16 @@ export {
   useOverflowMenu,
   useIsOverflowItemVisible,
 } from './Overflow';
-export type { OverflowProps, OverflowItemProps, UseOverflowMenuResult } from './Overflow';
+export type {
+  OverflowProps,
+  OverflowItemProps,
+  OverflowItemBaseProps,
+  OverflowItemPriorityProps,
+  OverflowDirection,
+  OverflowGroupVisibility,
+  OverflowChangeDetails,
+  UseOverflowMenuResult,
+} from './Overflow';
 
 export { Stack } from './Stack';
 export type { StackProps, StackOwnProps } from './Stack';

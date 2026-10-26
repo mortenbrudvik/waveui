@@ -1,7 +1,16 @@
 import * as React from 'react';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { describe, it, expect, expectTypeOf, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  expectTypeOf,
+  vi,
+  beforeEach,
+  afterEach,
+  onTestFinished,
+} from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import {
   Overflow,
@@ -10,12 +19,21 @@ import {
   useIsOverflowItemVisible,
   useOverflowMenu,
 } from '../Overflow';
-import type { OverflowItemProps, OverflowProps, UseOverflowMenuResult } from '../Overflow';
+import type {
+  OverflowChangeDetails,
+  OverflowDirection,
+  OverflowGroupVisibility,
+  OverflowItemProps,
+  OverflowProps,
+  UseOverflowMenuResult,
+} from '../Overflow';
+import type { Orientation } from '../../../lib/types';
 import {
   installResizeObserverMock,
   testCompoundExposure,
   testSystemProps,
   expectThrows,
+  renderWithProviders,
 } from '../../../test-utils';
 import type { ResizeObserverMock } from '../../../test-utils';
 
@@ -1032,6 +1050,308 @@ describe('Overflow', () => {
       }
       expectThrows(<Menu />, '[WaveUI] useOverflowMenu must be used within Overflow');
       expectThrows(<Visible />, '[WaveUI] useIsOverflowItemVisible must be used within Overflow');
+    });
+  });
+});
+
+describe('Overflow - priority, pinned items, direction and orientation (P9-01)', () => {
+  interface Spec {
+    id: string;
+    priority?: number;
+    pinned?: boolean;
+  }
+
+  const fourItems = (specs: Spec[] = []): Spec[] =>
+    ['a', 'b', 'c', 'd'].map((id) => ({ id, ...specs.find((spec) => spec.id === id) }));
+
+  const samePriority = (): Spec[] => ['a', 'b', 'c', 'd'].map((id) => ({ id, priority: 1 }));
+
+  function Row({ items = fourItems(), ...props }: Partial<OverflowProps> & { items?: Spec[] }) {
+    return (
+      <Overflow data-testid="overflow" overflowButton={moreButton} {...props}>
+        {items.map(({ id, priority, pinned }) => {
+          const priorityProps = pinned ? { pinned } : { priority };
+          return (
+            <OverflowItem key={id} itemId={id} data-testid={`item-${id}`} {...priorityProps}>
+              {id.toUpperCase()}
+            </OverflowItem>
+          );
+        })}
+      </Overflow>
+    );
+  }
+
+  // 4 x 30 = 120 > 100: with the 20px button 80 are left, so two items must go.
+  const FOUR = {
+    overflow: 100,
+    'item-a': 30,
+    'item-b': 30,
+    'item-c': 30,
+    'item-d': 30,
+    button: 20,
+  };
+
+  it('hides by ascending priority, also the first item, once an item sets one', () => {
+    layoutWith({ ...FOUR });
+    render(
+      <Row
+        items={fourItems([
+          { id: 'a', priority: 3 },
+          { id: 'b', priority: 1 },
+          { id: 'c', priority: 2 },
+          { id: 'd', priority: 4 },
+        ])}
+      />,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
+  });
+
+  it('can hide the first item when only another item sets a priority', () => {
+    layoutWith({ overflow: 30, 'item-a': 50, 'item-b': 40, 'item-c': 40, button: 20 });
+    render(<Row items={[{ id: 'a' }, { id: 'b' }, { id: 'c', priority: 1 }]} />);
+    // Nothing fits beside the button and nothing is pinned: every item goes (0.13 kept the first).
+    expect(hiddenItems()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps the first item without priority or pinned (the 0.13 default)', () => {
+    layoutWith({ overflow: 30, 'item-a': 50, 'item-b': 40, 'item-c': 40, button: 20 });
+    render(<Row items={[{ id: 'a' }, { id: 'b' }, { id: 'c' }]} />);
+    expect(hiddenItems()).toEqual(['b', 'c']);
+  });
+
+  it('hides equal priorities last-in-DOM first for the end direction', () => {
+    layoutWith({ ...FOUR });
+    render(<Row items={samePriority()} />);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+  });
+
+  it('hides equal priorities first-in-DOM first for the start direction', () => {
+    layoutWith({ ...FOUR });
+    render(<Row overflowDirection="start" items={samePriority()} />);
+    expect(hiddenItems()).toEqual(['a', 'b']);
+  });
+
+  it('keeps the last item, not the first, without priority or pinned for the start direction', () => {
+    layoutWith({
+      overflow: 30,
+      'item-a': 40,
+      'item-b': 40,
+      'item-c': 50,
+      'item-d': 40,
+      button: 20,
+    });
+    render(<Row overflowDirection="start" />);
+    expect(hiddenItems()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('never hides pinned items and emits the hidden ids in DOM order', () => {
+    layoutWith({ ...FOUR });
+    const renderButton = vi.fn(moreButton);
+    render(
+      <Row
+        overflowButton={renderButton}
+        items={fourItems([
+          { id: 'a', pinned: true },
+          { id: 'd', pinned: true },
+        ])}
+      />,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    expect(renderButton).toHaveBeenLastCalledWith(2, ['b', 'c']);
+  });
+
+  it('stops hiding at minimumVisible', () => {
+    layoutWith({ overflow: 50, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 });
+    const items = fourItems().slice(0, 3);
+    const { unmount } = render(<Row items={items} />);
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    unmount();
+    render(<Row items={items} minimumVisible={2} />);
+    expect(hiddenItems()).toEqual(['c']);
+  });
+
+  it('measures heights and the row gap for orientation="vertical"', () => {
+    const heights: Record<string, number> = {
+      overflow: 100,
+      'item-a': 30,
+      'item-b': 30,
+      'item-c': 30,
+      'item-d': 30,
+      button: 20,
+    };
+    const heightOf = (el: Element): number => {
+      if (el.hasAttribute('data-overflow-hidden')) return 0;
+      const key = el.hasAttribute('data-overflow-button')
+        ? 'button'
+        : el.getAttribute('data-testid');
+      return key !== null && key in heights ? heights[key] : 0;
+    };
+    const targets: Array<[object, string]> = [
+      [HTMLElement.prototype, 'offsetHeight'],
+      [Element.prototype, 'clientHeight'],
+    ];
+    const saved = targets.map(([proto, name]) => Object.getOwnPropertyDescriptor(proto, name));
+    for (const [proto, name] of targets) {
+      Object.defineProperty(proto, name, {
+        configurable: true,
+        get(this: Element) {
+          return heightOf(this);
+        },
+      });
+    }
+    onTestFinished(() => {
+      targets.forEach(([proto, name], i) => {
+        const descriptor = saved[i];
+        if (descriptor) Object.defineProperty(proto, name, descriptor);
+        else Reflect.deleteProperty(proto, name);
+      });
+    });
+
+    const { unmount } = render(<Row orientation="vertical" />);
+    const row = screen.getByTestId('overflow');
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(row).toHaveAttribute('data-orientation', 'vertical');
+    expect(row).toHaveClass('flex-col');
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-bottom-1');
+    unmount();
+
+    // The row gap counts between items and before the button: 3 x 30 + 2 x 10 = 110 > 100.
+    render(
+      <Row orientation="vertical" style={{ rowGap: '10px' }} items={fourItems().slice(0, 3)} />,
+    );
+    expect(hiddenItems()).toEqual(['c']);
+  });
+
+  it('renders data-orientation="horizontal" by default', () => {
+    layoutWith({ ...FOUR });
+    render(<Row />);
+    expect(screen.getByTestId('overflow')).toHaveAttribute('data-orientation', 'horizontal');
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-end-1');
+  });
+
+  it('re-measures when a priority changes', () => {
+    layoutWith({ ...FOUR });
+    const { rerender } = render(<Row items={fourItems([{ id: 'a', priority: -1 }])} />);
+    expect(hiddenItems()).toEqual(['a', 'd']);
+    rerender(<Row items={fourItems([{ id: 'a', priority: 9 }])} />);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    rerender(<Row items={fourItems([{ id: 'a', pinned: true }])} />);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+  });
+
+  it('hides by priority in a right-to-left row with the start direction', () => {
+    layoutWith({ ...FOUR });
+    renderWithProviders(<Row overflowDirection="start" items={samePriority()} />, { dir: 'rtl' });
+    expect(hiddenItems()).toEqual(['a', 'b']);
+    // The button keeps the logical inline end, which flips with the direction.
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-end-1');
+  });
+
+  it('accepts priority or pinned, never both', () => {
+    expectTypeOf<{
+      itemId: string;
+      children: string;
+      priority: number;
+    }>().toExtend<OverflowItemProps>();
+    expectTypeOf<{
+      itemId: string;
+      children: string;
+      pinned: boolean;
+    }>().toExtend<OverflowItemProps>();
+    expectTypeOf<{
+      itemId: string;
+      children: string;
+      priority: number;
+      pinned: boolean;
+    }>().not.toExtend<OverflowItemProps>();
+    expectTypeOf<OverflowProps['overflowDirection']>().toEqualTypeOf<
+      OverflowDirection | undefined
+    >();
+    expectTypeOf<OverflowDirection>().toEqualTypeOf<'end' | 'start'>();
+    expectTypeOf<OverflowProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
+    expectTypeOf<OverflowGroupVisibility>().toEqualTypeOf<'visible' | 'hidden' | 'overflow'>();
+    expectTypeOf<OverflowProps['onOverflowChange']>().toEqualTypeOf<
+      ((hiddenItems: string[], details: OverflowChangeDetails) => void) | undefined
+    >();
+  });
+
+  describe('hasHiddenItems', () => {
+    it('renders the button in the server HTML so the row reserves its room', () => {
+      expect(renderToString(<Row hasHiddenItems />)).toContain('data-overflow-button');
+      expect(renderToString(<Row />)).not.toContain('data-overflow-button');
+    });
+
+    it('drops the reserved button after the first measure when everything fits', () => {
+      layoutWith({ ...FOUR, overflow: 200 });
+      render(<Row hasHiddenItems />);
+      expect(document.querySelector('[data-overflow-button]')).toBeNull();
+    });
+
+    it('keeps the button, with the real count, when items overflow', () => {
+      layoutWith({ ...FOUR });
+      render(<Row hasHiddenItems />);
+      expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
+    });
+  });
+
+  describe('onOverflowChange', () => {
+    it('reports the hidden ids and the visible ids once per change, after the commit', () => {
+      const resize = withResizeObserver();
+      const stub = layoutWith({ ...FOUR });
+      const hiddenWhenCalled: boolean[] = [];
+      const onChange = vi.fn(() => {
+        hiddenWhenCalled.push(document.querySelector('[data-overflow-hidden]') !== null);
+      });
+      render(<Row onOverflowChange={onChange} />);
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenLastCalledWith(['c', 'd'], {
+        visibleItems: ['a', 'b'],
+        groupVisibility: {},
+      });
+      expect(hiddenWhenCalled).toEqual([true]);
+
+      // The same hidden set after a resize: nothing is reported.
+      stub.widths.overflow = 101;
+      resize.trigger(screen.getByTestId('overflow'));
+      expect(onChange).toHaveBeenCalledTimes(1);
+
+      stub.widths.overflow = 200;
+      resize.trigger(screen.getByTestId('overflow'));
+      expect(onChange).toHaveBeenCalledTimes(2);
+      expect(onChange).toHaveBeenLastCalledWith([], {
+        visibleItems: ['a', 'b', 'c', 'd'],
+        groupVisibility: {},
+      });
+    });
+
+    it('does not report while nothing overflows', () => {
+      layoutWith({ ...FOUR, overflow: 200 });
+      const onChange = vi.fn();
+      render(<Row onOverflowChange={onChange} />);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('reports once per change in StrictMode', () => {
+      layoutWith({ ...FOUR });
+      const onChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Row onOverflowChange={onChange} />
+        </React.StrictMode>,
+      );
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenLastCalledWith(['c', 'd'], expect.anything());
+    });
+
+    it('does not report again when only the callback changes', () => {
+      layoutWith({ ...FOUR });
+      const first = vi.fn();
+      const second = vi.fn();
+      const { rerender } = render(<Row onOverflowChange={first} />);
+      rerender(<Row onOverflowChange={second} />);
+      expect(first).toHaveBeenCalledTimes(1);
+      expect(second).not.toHaveBeenCalled();
     });
   });
 });
