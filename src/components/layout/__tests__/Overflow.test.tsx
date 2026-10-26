@@ -2441,3 +2441,201 @@ describe('Overflow - groups, divider, hooks and asChild (P9-01)', () => {
     });
   });
 });
+
+describe('Overflow - button position (P9-02)', () => {
+  // 4 x 30 = 120 > 100: with the 20px button 80 are left, so two items must go.
+  const FOUR = {
+    overflow: 100,
+    'item-a': 30,
+    'item-b': 30,
+    'item-c': 30,
+    'item-d': 30,
+    button: 20,
+  };
+
+  function Row(props: Partial<OverflowProps>) {
+    return (
+      <Overflow data-testid="overflow" overflowButton={moreButton} {...props}>
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <OverflowItem key={id} itemId={id} data-testid={`item-${id}`}>
+            {id.toUpperCase()}
+          </OverflowItem>
+        ))}
+      </Overflow>
+    );
+  }
+
+  const buttonWrapper = () => document.querySelector<HTMLElement>('[data-overflow-button]');
+
+  it('renders the button after every item by default, as in 0.13', () => {
+    layoutWith({ ...FOUR });
+    render(<Row />);
+    const row = screen.getByTestId('overflow');
+    expect(row).toHaveAttribute('data-button-position', 'end');
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(row.lastElementChild).toBe(buttonWrapper());
+    expect(buttonWrapper()).toHaveClass('ps-1');
+  });
+
+  it('"before-hidden" renders the button just before the first hidden item', () => {
+    layoutWith({ ...FOUR });
+    const { unmount } = render(<Row buttonPosition="before-hidden" />);
+    const row = screen.getByTestId('overflow');
+    expect(row).toHaveAttribute('data-button-position', 'before-hidden');
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(buttonWrapper()?.previousElementSibling).toBe(screen.getByTestId('item-b'));
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+    // Between items it takes the row's gap, as they do.
+    expect(buttonWrapper()).not.toHaveClass('ps-1');
+    unmount();
+
+    layoutWith({ ...FOUR });
+    render(<Row buttonPosition="before-hidden" overflowDirection="start" />);
+    expect(hiddenItems()).toEqual(['a', 'b']);
+    expect(screen.getByTestId('overflow').firstElementChild).toBe(buttonWrapper());
+  });
+
+  it('renders no button while nothing is hidden, and the reserved one at the end', () => {
+    layoutWith({ ...FOUR, overflow: 200 });
+    render(<Row buttonPosition="before-hidden" />);
+    expect(buttonWrapper()).toBeNull();
+
+    const html = renderToString(<Row buttonPosition="before-hidden" hasHiddenItems />);
+    expect(html.indexOf('data-overflow-button=')).toBeGreaterThan(html.indexOf('item-d'));
+  });
+
+  it('moves the button without remounting it as the first hidden item changes', () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    const mounts = vi.fn();
+    function MoreButton({ count }: { count: number }) {
+      React.useEffect(() => {
+        mounts();
+      }, []);
+      return <button type="button">+{count}</button>;
+    }
+    render(
+      <Row
+        buttonPosition="before-hidden"
+        overflowButton={(count) => <MoreButton count={count} />}
+      />,
+    );
+    const button = screen.getByRole('button', { name: '+2' });
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+
+    // 70: only a stays beside the button (30 + 20).
+    stub.widths.overflow = 70;
+    resize.trigger(screen.getByTestId('overflow'));
+    expect(hiddenItems()).toEqual(['b', 'c', 'd']);
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-b'));
+    expect(screen.getByRole('button', { name: '+3' })).toBe(button);
+
+    stub.widths.overflow = 100;
+    resize.trigger(screen.getByTestId('overflow'));
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+    expect(screen.getByRole('button', { name: '+2' })).toBe(button);
+    expect(mounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the button before the hidden item in a right-to-left row', () => {
+    layoutWith({ ...FOUR });
+    renderWithProviders(<Row buttonPosition="before-hidden" />, { dir: 'rtl' });
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+    // It keeps the logical inline end to stick to, which flips with the direction.
+    expect(buttonWrapper()).toHaveClass('-end-1');
+  });
+
+  it('has no axe violations with the button between the list items of a list row', async () => {
+    layoutWith({ ...FOUR });
+    render(
+      <Overflow
+        data-testid="overflow"
+        role="list"
+        aria-label="Pages"
+        overflowButton={moreButton}
+        buttonPosition="before-hidden"
+      >
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <OverflowItem key={id} asChild itemId={id}>
+            <li data-testid={`item-${id}`}>{id.toUpperCase()}</li>
+          </OverflowItem>
+        ))}
+      </Overflow>,
+    );
+    const wrapper = buttonWrapper();
+    expect(wrapper).toHaveAttribute('role', 'listitem');
+    expect(wrapper?.previousElementSibling).toBe(screen.getByTestId('item-b'));
+    expect(screen.getAllByRole('listitem')).toEqual([
+      screen.getByTestId('item-a'),
+      screen.getByTestId('item-b'),
+      wrapper,
+    ]);
+    await expectNoA11yViolations();
+  });
+
+  it('finds items inside Fragments and items written in a Server Component', () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    const Item = asClientReference(OverflowItem);
+    render(
+      <Overflow data-testid="overflow" overflowButton={moreButton} buttonPosition="before-hidden">
+        <>
+          <OverflowItem itemId="a" data-testid="item-a">
+            A
+          </OverflowItem>
+          <OverflowItem itemId="b" data-testid="item-b">
+            B
+          </OverflowItem>
+        </>
+        <Item itemId="c" data-testid="item-c">
+          C
+        </Item>
+        <Item itemId="d" data-testid="item-d">
+          D
+        </Item>
+      </Overflow>,
+    );
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+    stub.widths.overflow = 70;
+    resize.trigger(screen.getByTestId('overflow'));
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-b'));
+  });
+
+  it('keeps the button at the end, and warns once, when the hidden item is no child of the row', () => {
+    layoutWith({ ...FOUR });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    function Wrapped({ id }: { id: string }) {
+      return (
+        <OverflowItem itemId={id} data-testid={`item-${id}`}>
+          {id.toUpperCase()}
+        </OverflowItem>
+      );
+    }
+    const row = (
+      <Overflow data-testid="overflow" overflowButton={moreButton} buttonPosition="before-hidden">
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <Wrapped key={id} id={id} />
+        ))}
+      </Overflow>
+    );
+    const { rerender } = render(row);
+    rerender(row);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(screen.getByTestId('overflow').lastElementChild).toBe(buttonWrapper());
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Overflow: buttonPosition="before-hidden" puts the button before the ' +
+          'first hidden item only when that item is a child of the Overflow (Fragments and ' +
+          'arrays are opened), not one rendered by another component; the button is rendered ' +
+          'after the items instead.',
+      ],
+    ]);
+  });
+
+  it('types the position', () => {
+    expectTypeOf<OverflowProps['buttonPosition']>().toEqualTypeOf<
+      'end' | 'before-hidden' | undefined
+    >();
+  });
+});

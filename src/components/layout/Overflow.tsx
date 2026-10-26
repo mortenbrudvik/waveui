@@ -4,6 +4,7 @@ import {
   overflowDividerClassNames,
   overflowItemClassNames,
 } from '../../lib/classNames';
+import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
@@ -59,6 +60,17 @@ export interface OverflowProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'end'
    */
   overflowDirection?: OverflowDirection;
+  /**
+   * Where the overflow button goes while items are hidden: `'end'` after every item, sticking to
+   * the end of the axis; `'before-hidden'` just before the first hidden item in DOM order, so it
+   * stands in for the hidden items (a breadcrumb trail), and takes the row's gap as the items do.
+   * With `'before-hidden'` the items must be children of the Overflow (Fragments and arrays are
+   * opened): when the first hidden item is rendered by another component the button stays at the
+   * end, with a development warning. The button moves without remounting. While nothing is
+   * hidden there is no button, except the one `hasHiddenItems` reserves, at the end.
+   * @default 'end'
+   */
+  buttonPosition?: 'end' | 'before-hidden';
   /**
    * The axis items are laid out on. `'vertical'` stacks them in a column and measures heights
    * (Fluent's `overflowAxis`); the column needs a definite height (a `height`, or a flex or grid
@@ -395,18 +407,65 @@ const ROOT_ORIENTATION_CLASSES: Record<Orientation, string> = {
 };
 
 // The button sticks to the end of the axis and keeps room inside for its own focus indicator while
-// it covers an item.
-const BUTTON_ORIENTATION_CLASSES: Record<Orientation, string> = {
-  horizontal:
-    'sticky -end-1 flex shrink-0 items-center self-stretch ps-1 ' +
-    'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1',
-  vertical:
-    'sticky -bottom-1 flex shrink-0 items-center self-stretch pt-1 ' +
-    'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pb-1',
-};
+// it covers an item. After the items it keeps 4px from the last one; between items it takes the
+// row's gap, as they do (its size never depends on where it stands).
+const BUTTON_CLASSES = {
+  end: {
+    horizontal:
+      'sticky -end-1 flex shrink-0 items-center self-stretch ps-1 ' +
+      'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1',
+    vertical:
+      'sticky -bottom-1 flex shrink-0 items-center self-stretch pt-1 ' +
+      'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pb-1',
+  },
+  'before-hidden': {
+    horizontal:
+      'sticky -end-1 flex shrink-0 items-center self-stretch ' +
+      'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1',
+    vertical:
+      'sticky -bottom-1 flex shrink-0 items-center self-stretch ' +
+      'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pb-1',
+  },
+} as const satisfies Record<
+  NonNullable<OverflowProps['buttonPosition']>,
+  Record<Orientation, string>
+>;
+
+/**
+ * The key of the button among the children of a `before-hidden` row; the keys of flattened
+ * children start with a dot.
+ */
+const BUTTON_KEY = 'wave-overflow-button';
+
+/**
+ * The children of a `before-hidden` row with the button just before the item `firstHiddenId`
+ * (Fragments and arrays opened, every child keyed, so the button moves without remounting), and
+ * whether that item could not be found (the button is then last).
+ */
+function placeButtonBeforeHidden(
+  children: React.ReactNode,
+  button: React.ReactElement | null,
+  firstHiddenId: string | undefined,
+): { nodes: React.ReactNode[]; missing: boolean } {
+  const nodes = flattenChildren(children).map(({ key, node }) =>
+    React.isValidElement(node) ? React.cloneElement(node, { key }) : node,
+  );
+  if (!button) return { nodes, missing: false };
+  const index =
+    firstHiddenId === undefined
+      ? -1
+      : nodes.findIndex(
+          (node) =>
+            isElementOfType<{ itemId?: string }>(node, OverflowItem) &&
+            node.props.itemId === firstHiddenId,
+        );
+  nodes.splice(index < 0 ? nodes.length : index, 0, button);
+  return { nodes, missing: firstHiddenId !== undefined && index < 0 };
+}
 
 const OverflowRoot = ({
   overflowButton,
+  buttonPosition = 'end',
   overflowDirection = 'end',
   orientation = 'horizontal',
   minimumVisible = 0,
@@ -507,6 +566,45 @@ const OverflowRoot = ({
     });
   }, [store, hiddenIds, hasButton, emitOverflowChange]);
 
+  const button =
+    (hiddenCount > 0 || (hasHiddenItems && !measured)) && overflowButton ? (
+      // In the row's flow (it adds to the row height and follows justify-*), sticking to the end
+      // of the axis when the visible items are wider than the room beside it. Browsers stop a
+      // sticky element at the scroll container's padding, so -end-1 lets it reach the clipping
+      // edge, and while pinned it keeps 4px inside for its own focus indicator. (WebKit stops a
+      // sticky element short of the inline end of a right-to-left row; it stays in the row.)
+      <div
+        key={BUTTON_KEY}
+        ref={setButton}
+        // A list row (role="list", a Breadcrumb trail) holds only list items.
+        role={rest.role === 'list' ? 'listitem' : undefined}
+        data-overflow-button=""
+        data-overflow-pinned={buttonCovers ? '' : undefined}
+        className={cn(
+          overflowClassNames.overflowButton,
+          BUTTON_CLASSES[buttonPosition][orientation],
+        )}
+      >
+        {overflowButton(hiddenCount, buttonIds)}
+      </div>
+    ) : null;
+  // `before-hidden`: the button stands just before the first hidden item (hiddenIds are in DOM
+  // order).
+  const placed =
+    buttonPosition === 'before-hidden'
+      ? placeButtonBeforeHidden(children, button, hiddenIds[0])
+      : null;
+  const unplaced = placed?.missing ?? false;
+  React.useEffect(() => {
+    if (!unplaced) return;
+    warnOnce(
+      'Overflow:button-position',
+      'Overflow: buttonPosition="before-hidden" puts the button before the first hidden ' +
+        'item only when that item is a child of the Overflow (Fragments and arrays are opened), ' +
+        'not one rendered by another component; the button is rendered after the items instead.',
+    );
+  }, [unplaced]);
+
   return (
     <OverflowContext.Provider value={ctx}>
       <div
@@ -524,30 +622,11 @@ const OverflowRoot = ({
         )}
         data-orientation={orientation}
         data-overflow-direction={overflowDirection}
+        data-button-position={buttonPosition}
         {...rest}
       >
-        {children}
-        {(hiddenCount > 0 || (hasHiddenItems && !measured)) && overflowButton && (
-          // In the row's flow (it adds to the row height and follows justify-*), sticking to the
-          // end of the axis when the visible items are wider than the room beside it. Browsers
-          // stop a sticky element at the scroll container's padding, so -end-1 lets it reach the
-          // clipping edge, and while pinned it keeps 4px inside for its own focus indicator.
-          // (WebKit stops a sticky element short of the inline end of a right-to-left row; it
-          // stays in the row.)
-          <div
-            ref={setButton}
-            // A list row (role="list", a Breadcrumb trail) holds only list items.
-            role={rest.role === 'list' ? 'listitem' : undefined}
-            data-overflow-button=""
-            data-overflow-pinned={buttonCovers ? '' : undefined}
-            className={cn(
-              overflowClassNames.overflowButton,
-              BUTTON_ORIENTATION_CLASSES[orientation],
-            )}
-          >
-            {overflowButton(hiddenCount, buttonIds)}
-          </div>
-        )}
+        {placed ? placed.nodes : children}
+        {placed ? null : button}
       </div>
     </OverflowContext.Provider>
   );
@@ -716,8 +795,9 @@ OverflowDivider.displayName = 'OverflowDivider';
  * is hidden. `onOverflowChange` reports the hidden `itemId`s and the group visibility when the
  * hidden items change. Hidden items get `data-overflow-hidden`, an inline `display: none`,
  * `aria-hidden` and `inert`. Reordered items (for example a keyed sort) are re-measured in their
- * new order. `overflowButton(count, hiddenIds)` renders the button after the visible items (its
- * measured size is reserved); components inside it can use {@link useOverflowMenu} to list the
+ * new order. `overflowButton(count, hiddenIds)` renders the button after the visible items, or
+ * just before the first hidden item with `buttonPosition="before-hidden"` (its measured size is
+ * reserved); components inside it can use {@link useOverflowMenu} to list the
  * hidden items (e.g. in a Menu), and {@link useIsOverflowItemVisible} reports a single item. In a
  * horizontal row the button sticks to the inline end, so a first item wider than the room beside
  * it cannot push it out of view: it then covers the end of that item and gets
