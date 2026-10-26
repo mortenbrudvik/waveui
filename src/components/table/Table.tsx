@@ -744,14 +744,16 @@ const TableCellLayout = ({
 TableCellLayout.displayName = 'TableCellLayout';
 
 /**
- * Where cell actions sit, over the end of their cell, and what they draw over the content under
- * them: an opaque background that follows the row's. That is the page background behind a row
- * without a fill, the row's hover color, the stripe of a striped table's odd body rows (as the
- * table's own zero-specificity rule) and the fill of a DataGrid's selected row (brand and
- * neutral appearances).
+ * Where cell actions sit, over the end of their cell from its top edge to its bottom edge (the
+ * buttons centred between them), and what they draw over the content under them: an opaque
+ * background that follows the row's, over the full height of the cell, so wrapped text or a
+ * layout with a description never shows above or below the buttons. That is the page background
+ * behind a row without a fill, the row's hover color, the stripe of a striped table's odd body
+ * rows (as the table's own zero-specificity rule) and the fill of a DataGrid's selected row
+ * (brand and neutral appearances).
  */
 const CELL_ACTIONS_CLASSES =
-  'absolute end-0 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 bg-background group-hover/table-row:bg-subtle-hover [:where([data-striped]>tbody>tr:nth-child(odd)>*)>&]:bg-card [[data-selection-appearance=brand]>tbody>[data-selected]>*>&]:bg-selected [[data-selection-appearance=neutral]>tbody>[data-selected]>*>&]:bg-subtle-selected transition-[opacity,background-color] motion-reduce:transition-none';
+  'absolute inset-y-0 end-0 flex items-center gap-1 px-1 bg-background group-hover/table-row:bg-subtle-hover [:where([data-striped]>tbody>tr:nth-child(odd)>*)>&]:bg-card [[data-selection-appearance=brand]>tbody>[data-selected]>*>&]:bg-selected [[data-selection-appearance=neutral]>tbody>[data-selected]>*>&]:bg-subtle-selected transition-[opacity,background-color] motion-reduce:transition-none';
 
 /**
  * Transparent until the row is hovered or holds focus, or focus is in the actions themselves;

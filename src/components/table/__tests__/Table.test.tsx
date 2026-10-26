@@ -1542,20 +1542,31 @@ describe('Table.CellActions', () => {
     );
   const actions = () => screen.getByTestId('actions');
 
-  it('sits over the logical end of its cell, centred; the cell is its positioning box', () => {
+  it('sits over the logical end of its cell, its buttons centred; the cell is its positioning box', () => {
     renderActions();
     expect(actions()).toHaveClass(
       tableCellActionsClassNames.root,
       'absolute',
       'end-0',
-      'top-1/2',
-      '-translate-y-1/2',
+      'inset-y-0',
       'flex',
       'items-center',
     );
     expect(screen.getByTestId('cell')).toHaveClass('relative');
     expect(screen.getByTestId('row')).toHaveClass('group/table-row');
     expect(screen.getByTestId('row')).not.toHaveClass('group/row');
+  });
+
+  it('covers the full height of its cell, not a centred band, so taller content never shows', () => {
+    renderActions();
+    const classes = actions().className.split(/\s+/);
+    // Both vertical insets: the opaque background spans the cell from its top edge to its bottom
+    // edge, also over wrapped text or a layout with a description.
+    expect(classes).toContain('inset-y-0');
+    expect(classes.filter((cls) => /^-?(top|bottom)-/.test(cls))).toEqual([]);
+    // No centring by translation: the flex column centres the buttons instead.
+    expect(classes.filter((cls) => /translate-y/.test(cls))).toEqual([]);
+    expect(actions()).toHaveClass('items-center');
   });
 
   it('places itself at the inline end in RTL with logical classes only', () => {
