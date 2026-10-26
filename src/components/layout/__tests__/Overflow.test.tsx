@@ -2308,6 +2308,78 @@ describe('Overflow - groups, divider, hooks and asChild (P9-01)', () => {
       expect(screen.queryByTestId('outer')).not.toBeInTheDocument();
       expect(screen.getByTestId('item-a').tagName).toBe('LI');
     });
+
+    describe('keeps priority, pinned and groupId when the element is replaced while mounted', () => {
+      // 3 x 30 in 70 beside a 20px button: a (priority 0) and c (priority 5) hide, the pinned b stays.
+      const WIDTHS = { overflow: 70, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 };
+
+      const PinnedRow = ({ asChild, child }: { asChild: boolean; child: 'li' | 'a' }) => {
+        const Child = child;
+        return (
+          <Overflow data-testid="overflow" overflowButton={moreButton}>
+            <OverflowItem itemId="a" data-testid="item-a" priority={0}>
+              A
+            </OverflowItem>
+            <OverflowItem
+              asChild={asChild}
+              itemId="b"
+              pinned
+              data-testid={asChild ? undefined : 'item-b'}
+            >
+              <Child key={child} data-testid={asChild ? 'item-b' : undefined}>
+                B
+              </Child>
+            </OverflowItem>
+            <OverflowItem itemId="c" data-testid="item-c" priority={5}>
+              C
+            </OverflowItem>
+          </Overflow>
+        );
+      };
+
+      it('when asChild is toggled', () => {
+        layoutWith(WIDTHS);
+        const { rerender } = render(<PinnedRow asChild={false} child="li" />);
+        expect(hiddenItems()).toEqual(['a', 'c']);
+        rerender(<PinnedRow asChild child="li" />);
+        expect(hiddenItems()).toEqual(['a', 'c']);
+        rerender(<PinnedRow asChild={false} child="li" />);
+        expect(hiddenItems()).toEqual(['a', 'c']);
+      });
+
+      it('when the type of the child changes', () => {
+        layoutWith(WIDTHS);
+        const { rerender } = render(<PinnedRow asChild child="li" />);
+        expect(hiddenItems()).toEqual(['a', 'c']);
+        rerender(<PinnedRow asChild child="a" />);
+        expect(screen.getByTestId('item-b').tagName).toBe('A');
+        expect(hiddenItems()).toEqual(['a', 'c']);
+      });
+
+      it('when the key of the child changes, and keeps the group', () => {
+        layoutWith({ overflow: 50, 'item-a': 30, 'item-b': 30, button: 20 });
+        function GroupRow({ childKey }: { childKey: string }) {
+          return (
+            <Overflow data-testid="overflow" overflowButton={moreButton}>
+              <OverflowItem asChild itemId="a" groupId="g">
+                <span key={childKey} data-testid="item-a">
+                  A<GroupProbe id="g" />
+                </span>
+              </OverflowItem>
+              <OverflowItem itemId="b" groupId="g" data-testid="item-b">
+                B
+              </OverflowItem>
+            </Overflow>
+          );
+        }
+        const { rerender } = render(<GroupRow childKey="x" />);
+        expect(hiddenItems()).toEqual(['b']);
+        expect(screen.getByTestId('group-g')).toHaveTextContent('overflow');
+        rerender(<GroupRow childKey="y" />);
+        expect(hiddenItems()).toEqual(['b']);
+        expect(screen.getByTestId('group-g')).toHaveTextContent('overflow');
+      });
+    });
   });
 
   describe('composition with a Toolbar', () => {

@@ -607,10 +607,13 @@ export const OverflowItem = ({
     elementRef,
     childRef as React.Ref<HTMLElement> | undefined,
   );
-  // After the ref has registered the item: its priority, pinned state or group re-measures the row.
+  // After the ref has registered the item: its priority, pinned state or group re-measures the
+  // row. Runs after every commit, not only when these change: registering an element (with asChild
+  // the element is replaced by a toggle, a child of another type or key) resets what the store
+  // knows about it, and the call is a no-op while nothing differs.
   React.useLayoutEffect(() => {
     if (elementRef.current) store.setItemMeta(elementRef.current, priority, pinned, groupId);
-  }, [store, itemId, priority, pinned, groupId]);
+  });
 
   const itemClassName = cn(overflowItemClassNames.root, 'shrink-0', className);
 
