@@ -370,12 +370,13 @@ export function checkedRows(tree: HTMLElement) {
 
 ## React Server Components
 
-- Every component and hook module of the package starts with `"use client"`. The entry point, `cn`, the slot helpers, the class-name constants (`buttonClassNames`, …), `hsvToHex`, `hexToHsv`, `createToaster`, the date helpers (`addDays`, `addMonths`, `isSameDay`, `startOfWeek`, `getWeekNumber`) and the types are server-safe, so a Server Component can import from `@mortenbrudvik/waveui`, read the constants, create a toaster handle, compute dates and render Wave components with serializable props.
+- Every component and hook module of the package starts with `"use client"`. The entry point, `cn`, the slot helpers, the class-name constants (`buttonClassNames`, …), `hsvToHex`, `hexToHsv`, `createToaster`, the date helpers (`addDays`, `addMonths`, `isSameDay`, `startOfWeek`, `getWeekNumber`), `getInitials`, `partitionAvatarGroupItems`, the breadcrumb helpers (`partitionBreadcrumbItems`, `truncateBreadcrumbLongName`, `truncateBreadcrumbLongTooltip`, `isTruncatableBreadcrumbContent`), `createTableColumn` and the types are server-safe, so a Server Component can import from `@mortenbrudvik/waveui`, read the constants, create a toaster handle, compute dates and render Wave components with serializable props. A DataGrid column with functions (`compare`, `renderCell`) is not serializable: define such columns in a client component.
 - A Server Component **cannot dot into a client component**: `Card.Header` throws "Cannot access Header on the server". Every sub-component is therefore also exported under a flat name. Use the flat names in Server Components and either form in client components.
-- Every compound can be composed in a Server Component. Parts written there reach the client as lazy references, and the compounds recognise them, so the server HTML and the client behaviour are the same as in a client file: Accordion items, Carousel slides, the options of Combobox, Dropdown and Listbox, the parts and options of TagPicker, DataGrid parts, Drawer and Menu triggers, the Drawer header, body and footer parts, the tags of a TagGroup and the halves of an InteractionTag, the header of a `Menu.Group`, the halves of a `Menu.SplitGroup`, List, TabList and Tree items, Nav items, categories, section headers, dividers and app items, the header, body and footer of a NavDrawer, the stars of a Rating or RatingDisplay, the parts of Toast and MessageBar, the ColorPicker parts, `SwatchPicker.Row` and the swatches (`ColorSwatch`, `ImageSwatch`, `EmptySwatch`, in rows of the grid layout or the implicit ones), `Tree.ItemPersonaLayout`, a `Label` or `InfoLabel` passed as the `label` of a Field, and a `Button` passed as a MessageBar, SearchBox or Tag dismiss slot.
+- Every compound can be composed in a Server Component. Parts written there reach the client as lazy references, and the compounds recognise them, so the server HTML and the client behaviour are the same as in a client file: Accordion items, Carousel slides, the options of Combobox, Dropdown and Listbox, the parts and options of TagPicker, DataGrid parts (`DataGrid.SelectionCell` included), the Table parts, Overflow items and dividers, Breadcrumb items (collapsed into the overflow menu too), the TeachingPopover parts, Drawer and Menu triggers, the Drawer header, body and footer parts, the tags of a TagGroup and the halves of an InteractionTag, the header of a `Menu.Group`, the halves of a `Menu.SplitGroup`, List, TabList and Tree items, Nav items, categories, section headers, dividers and app items, the header, body and footer of a NavDrawer, the stars of a Rating or RatingDisplay, the parts of Toast and MessageBar, the ColorPicker parts, `SwatchPicker.Row` and the swatches (`ColorSwatch`, `ImageSwatch`, `EmptySwatch`, in rows of the grid layout or the implicit ones), `Tree.ItemPersonaLayout`, a `Label` or `InfoLabel` passed as the `label` of a Field, and a `Button` passed as a MessageBar, SearchBox or Tag dismiss slot.
 - Event handlers and other functions cannot be passed from a Server Component; put interactive parts in a `'use client'` component.
 - A `Popover`, `Dialog`, overlay `Drawer` or `NavDrawer`, popup `Menu`, `Combobox`, `Dropdown`, `DatePicker`, `TimePicker` or `TagPicker` rendered on the server with `defaultOpen` (or `open`) is closed in the server HTML and opens once hydrated, so no ARIA reference points at a popup that is not there. `onOpenChange` is not called for it.
 - An inline `Drawer` or `NavDrawer` (`type="inline"`) renders in the server HTML: open, or `hidden` when it is closed and kept mounted (`unmountOnClose={false}`).
+- A TeachingPopover with a `TeachingPopover.Trigger` written directly inside it starts closed. One that points at its Trigger or a `target` renders its surface once hydrated (the surface sits in a portal). Write `TeachingPopover.Surface` directly inside TeachingPopover too: a Surface rendered by a component of yours is found only once it has mounted, so the server HTML holds the popover's own surface as well (two dialogs with the same title id) until then. A Surface with children of yours is named by its `TeachingPopover.Title` once mounted (as a Dialog is by `Dialog.Title`), so its server HTML has no `aria-labelledby`.
 
 ```tsx
 // app/layout.tsx (Server Component)
@@ -452,7 +453,7 @@ export function SaveArea() {
 | `Carousel`      | `CarouselItem`, `CarouselButton`                                                                                                                                                                   |
 | `ColorPicker`   | `ColorPickerHexField`, `ColorPickerSwatches`, `ColorPickerPreview`                                                                                                               |
 | `Combobox`      | `ComboboxOption`, `ComboboxOptionGroup` (also `Option`, `OptionGroup`)                                                                                                           |
-| `DataGrid`      | `DataGridHeader`, `DataGridHeaderCell`, `DataGridBody`, `DataGridRow`, `DataGridCell`                                                                                            |
+| `DataGrid`      | `DataGridHeader`, `DataGridHeaderCell`, `DataGridBody`, `DataGridRow`, `DataGridCell`, `DataGridSelectionCell`                                                                   |
 | `Dialog`        | `DialogTrigger`, `DialogContent`, `DialogTitle`, `DialogFooter`, `DialogClose`                                                                                                   |
 | `Drawer`        | `DrawerTrigger`, `DrawerTitle`, `DrawerClose`, `DrawerHeader`, `DrawerHeaderTitle`, `DrawerHeaderNavigation`, `DrawerBody`, `DrawerFooter`                                       |
 | `Dropdown`      | `DropdownOption`, `DropdownOptionGroup`                                                                                                                                          |
@@ -463,7 +464,7 @@ export function SaveArea() {
 | `MessageBar`    | `MessageBarTitle`, `MessageBarActions`                                                                                                                                           |
 | `Nav`           | `NavCategory`, `NavItem`, `NavSubItem`, `NavSectionHeader`, `NavDivider`, `NavAppItem`, `NavAppItemStatic`                                                                       |
 | `NavDrawer`     | `NavDrawerHeader`, `NavDrawerBody`, `NavDrawerFooter`                                                                                                                            |
-| `Overflow`      | `OverflowItem`                                                                                                                                                                   |
+| `Overflow`      | `OverflowItem`, `OverflowDivider`                                                                                                                                                |
 | `Popover`       | `PopoverTrigger`, `PopoverContent`                                                                                                                                               |
 | `RadioGroup`    | `RadioGroupItem` (also `RadioItem`)                                                                                                                                              |
 | `Rating`        | `RatingItem`                                                                                                                                                                     |
@@ -471,9 +472,10 @@ export function SaveArea() {
 | `Skeleton`      | `SkeletonGroup`                                                                                                                                                                  |
 | `Stepper`       | `StepperStep`                                                                                                                                                                    |
 | `SwatchPicker`  | `SwatchPickerRow`                                                                                                                                                                |
-| `Table`         | `TableHeader`, `TableHeaderCell`, `TableBody`, `TableRow`, `TableCell`                                                                                                           |
+| `Table`         | `TableHeader`, `TableHeaderCell`, `TableBody`, `TableRow`, `TableCell`, `TableSelectionCell`, `TableCellLayout`, `TableCellActions`                                              |
 | `TabList`       | `TabListTab`, `TabListPanel`, `TabListPanels`                                                                                                                                    |
 | `TagPicker`     | `TagPickerControl`, `TagPickerGroup`, `TagPickerInput`, `TagPickerButton`, `TagPickerList`, `TagPickerOption`, `TagPickerOptionGroup` (also `OptionGroup`)                       |
+| `TeachingPopover` | `TeachingPopoverTrigger`, `TeachingPopoverSurface`, `TeachingPopoverHeader`, `TeachingPopoverTitle`, `TeachingPopoverBody`, `TeachingPopoverFooter`, `TeachingPopoverCarousel`, `TeachingPopoverCarouselNav`, `TeachingPopoverCarouselPageCount`, `TeachingPopoverCarouselFooter` |
 | `Toast`         | `ToastTitle`, `ToastBody`, `ToastFooter`, `ToastClose`                                                                                                                           |
 | `Toolbar`       | `ToolbarButton`, `ToolbarToggleButton`, `ToolbarRadioGroup`, `ToolbarRadioButton`, `ToolbarGroup`, `ToolbarDivider`                                                              |
 | `Tree`          | `TreeItem`, `TreeItemPersonaLayout`                                                                                                                                              |
@@ -545,7 +547,7 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 | `Persona`       | Avatar with up to four lines of text (`primaryText` to `quaternaryText`), `textPosition` (`after`, `before`, `below`), `presenceOnly` and presence; sizes up to `huge`. |
 | `Divider`       | Horizontal or vertical separator, optionally labelled.                                                                                                                                                                                                                         |
 | `Image`         | `<img>` with `fit`, `shape`, `shadow`, `bordered`; warns in development when `alt` is missing. Never wider than its parent; with the default `fit` its height follows its width. `fit="none"` keeps the top-left corner in view, `"center"` the middle.                        |
-| `List`          | Plain list, selectable listbox (single or multiple) or, with item `action`s, a grid; in a selectable List item values are unique (development warning).                                                                                                                        |
+| `List`          | Plain list, selectable listbox (single or multiple) or, with item `action`s, a grid; `navigationMode` (`none`, `items`, `composite`) gives a list without selection arrow keys, or pins the grid; `List.Item onAction`, `disabledSelection` and check marks (`checkmark`); in a selectable or navigable List item values are unique (development warning; see [Lists](#lists)). |
 
 ### Typography
 
@@ -562,7 +564,7 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 | `TabList`   | Tabs (`TabList.Tab`, `.Panel`, `.Panels`) with automatic activation, or manual with `selectTabOnFocus={false}`; `orientation`, `appearance` (`transparent`, `subtle`, `subtle-circular`, `filled-circular`), `size`, a `Tab` `icon` (alone: icon-only); tab values are unique (development warning). |
 | `Tree`      | Hierarchical tree (`Tree.Item`) with expand/collapse and typeahead; single selection, or checkboxes with a cascading mixed state (`selectionMode="multiple"`); row `actions`, `aside` and `Tree.ItemPersonaLayout`; `navigationMode="treegrid"` (see [Trees](#trees)). Nested items are `Tree.Item` elements in their parent's children (directly, in Fragments or from a render function), not rendered by a recursive component; values are unique. |
 | `Carousel`  | Slides (`Carousel.Item` children, directly or in Fragments; a component that renders `Carousel.Item` is not a slide) with previous/next, a slide picker and optional auto-rotation with a pause control. `groupSize` (a number or `auto`) shows several at once, `draggable` drags them, `Carousel.Item` `thumbnail` shows thumbnails, `controlsLayout` places the buttons and `Carousel.Button` replaces one. |
-| `Overflow`  | Hides items that do not fit in one row and renders an overflow button (`useOverflowMenu` lists the hidden items); item ids are unique (development warning). The row has a 4px padding, so its items' focus rings are not clipped.                                                                                                                                                                                                                    |
+| `Overflow`  | Hides items that do not fit in one row (or column, `orientation="vertical"`) and renders an overflow button (`useOverflowMenu` lists the hidden items); items hide by `priority` unless `pinned`, from the end or the start (`overflowDirection`), in groups with `Overflow.Divider`; `buttonPosition`, `minimumVisible`, `asChild` items, `onOverflowChange`; item ids are unique (development warning). The row has a 4px padding, so its items' focus rings are not clipped (see [Overflow](#overflow)). |
 | `Grid`      | CSS grid with a column count and token gaps.                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `Stack`     | Vertical or horizontal stack (`orientation`, `gap`).                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `Flex`      | Flexbox container (`direction`, `wrap`, `align`, `justify`, `gap`).                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -581,7 +583,7 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 
 | Component    | Description                                                                                                                                                                                                                                                                                                               |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Breadcrumb` | Trail of links, buttons or text (`Breadcrumb.Item`, `current`).                                                                                                                                                                                                                                                           |
+| `Breadcrumb` | Trail of links, buttons or text (`Breadcrumb.Item`, `current`); `maxDisplayedItems` or `overflow="auto"` collapse the middle items into a "…" menu, `size`, `focusMode` (`tab`, `arrow`), `divider` (see [Breadcrumbs](#breadcrumbs)).                                                                                                                                                                                     |
 | `Menu`       | Popup menu (`Menu.Trigger`, `Menu.Popover`, which scrolls when it is taller than the viewport) or static menu; `Menu.Item`, `Menu.Divider`; checkbox, radio and switch items bound to `checkedValues`, `Menu.Group`, `Menu.ItemLink`, submenus, `Menu.SplitGroup`, hover opening and context menus (see [Menus](#menus)). |
 | `Nav`        | Side navigation with items, collapsible categories and sub-items; links or buttons; a collapsed category that holds the current page is marked. `Nav.SectionHeader` (a heading, `headingLevel`), `Nav.Divider` (decorative), `Nav.AppItem` and `Nav.AppItemStatic` (the app's name at the top), and `actions` on `Nav.Item` and `Nav.SubItem` (your buttons beside the link, shown on hover and focus). Every child of its list is a list item (a development warning says so). |
 | `NavDrawer`  | Nav in a drawer panel (see [Navigation drawers and app shells](#navigation-drawers-and-app-shells)): `type` `overlay` (a modal or non-modal dialog around a `<nav>`) or `inline` (part of the page layout), `position` (default `start`), `size` (default `small`, 320px), `separator`, `modalType`, `unmountOnClose`, `finalFocusRef`, `backdrop`, Nav's value and category props and `onItemSelect(value)` on every activation; `NavDrawer.Header`, `NavDrawer.Body` (`focusMode` `tab` or `arrow`) and `NavDrawer.Footer`. |
@@ -597,14 +599,14 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 | `Drawer`          | Side or bottom panel (see [Drawers](#drawers)): `type` `overlay` (`modalType` `modal`, `alert` or `non-modal`) or `inline`; `position` (`start`, `end`, `left`, `right`, `bottom`), `size` (`small` 320px, `medium`, `large`, `full`), `separator`, `backdrop`, `closeButton`, `closeLabel`, `unmountOnClose`; `Drawer.Trigger` (toggles), `Drawer.Title`, `Drawer.Close`, and the layout parts `Drawer.Header`, `Drawer.HeaderTitle`, `Drawer.HeaderNavigation`, `Drawer.Body` and `Drawer.Footer`, whose separators show while content is scrolled under them. |
 | `Popover`         | Non-modal popup anchored to `Popover.Trigger` or a `target`; `side`, `align`; hover cards (`openOnHover`) and context popovers (`openOnContext`).                                                 |
 | `Tooltip`         | Hover and focus text for its child, as a description or (`relationship="label"`) a name; `open`/`defaultOpen`/`onOpenChange`; `openDelay`, `closeDelay`.                                          |
-| `TeachingPopover` | Step-by-step onboarding popover, optionally pointing at a `target`.                                                                                                                               |
+| `TeachingPopover` | Step-by-step onboarding popover, optionally pointing at a `target`; `primaryAction` and `secondaryAction` replace its buttons, `footerLayout`, `onFinish`; composable from parts: `TeachingPopover.Trigger`, `.Surface`, `.Header`, `.Title`, `.Body`, `.Footer` and the carousel parts `.Carousel`, `.CarouselNav`, `.CarouselPageCount`, `.CarouselFooter` (see [Teaching popovers and tours](#teaching-popovers-and-tours)). |
 
 ### Tables
 
 | Component  | Description                                                                                                                                                      |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Table`    | Static table: `Table.Header`, `Table.HeaderCell`, `Table.Body`, `Table.Row`, `Table.Cell`; `striped`; scrolls horizontally.                                      |
-| `DataGrid` | Interactive grid (APG grid keyboard model) with row selection and sortable headers; header from children or `columns`; row ids are unique (development warning). |
+| `Table`    | Static table: `Table.Header`, `Table.HeaderCell` (`sortable`, with your sort state), `Table.Body`, `Table.Row`, `Table.Cell`, and the cell parts `Table.SelectionCell`, `Table.CellLayout` and `Table.CellActions`; `striped`; scrolls horizontally (see [Static tables](#static-tables)). |
+| `DataGrid` | Interactive grid (APG grid keyboard model) with row selection and sortable headers; header from children or `columns`, rows from `items` with typed columns (`createTableColumn`) that sort themselves; `selectOnRowClick`, `selectionAppearance`, `subtleSelection`, `DataGrid.SelectionCell`; row ids are unique (development warning; see [Sorting and selecting in a DataGrid](#sorting-and-selecting-in-a-datagrid)). |
 
 ### Provider
 
@@ -1080,7 +1082,7 @@ export function FruitList() {
 }
 ```
 
-- **Listbox or List.** Use `Listbox` for a choice among options (the option model of Dropdown and Combobox: typeahead, groups, disabled options, forms). Use `List` with `selectable` when each item needs real focus, actions of its own or interactive content.
+- **Listbox or List.** Use `Listbox` for a choice among options (the option model of Dropdown and Combobox: typeahead, groups, disabled options, forms). Use `List` with `selectable` (or, without selection, `navigationMode="items"`) when each item needs real focus, actions of its own or interactive content (see [Lists](#lists)).
 - **Focus and selection.** One Tab stop. The active option exists only while the list has focus: the selected option (with `multiselect`, the first selected one in list order), else the first; while no option can be active, the list draws its own focus ring. Space and Enter select, so the selection does not follow the active option; a single-select Listbox never deselects. A press on an option focuses the list and makes that option active without scrolling, so the click selects it even while the selected option is scrolled out of view. Tab, Escape and the Alt+arrow keys are left to the page: an enclosing Dialog closes on Escape.
 - **Props.** `multiselect` (an array value, announced toggles; see [Multi-select pickers](#multi-select-pickers)), `onActiveOptionChange` (`null` when focus leaves the list), `disabled` (out of the Tab order, selects and submits nothing), `disabledOptionsFocusable`, `autoFocus`, `name`, `form` and `required`, and Field wiring. It has no built-in height: give it one through `className` and it scrolls.
 - **Option groups.** `OptionGroup`'s `label` is optional and takes any text content (an icon next to the text is fine). Without one no heading renders, and `aria-label` or `aria-labelledby` names the group; these two always land on the `role="group"` list. A group without a name warns in development.
@@ -1458,6 +1460,63 @@ export function FormatBar() {
 - **Size and buttons.** `size` (default `'medium'`) is the default size of `Toolbar.Button`, `Toolbar.ToggleButton` and `Toolbar.RadioButton` and sets the toolbar's padding; a part's own `size` wins, and plain Buttons keep their own default. The three parts use the `subtle` appearance by default. `Toolbar.Button vertical` puts the icon above a caption-size label, for ribbons. `isAccessible` on the toggles and radios draws the pressed state as a brand fill (recommended for icon-only ones).
 - Any other focusable control still works inside a Toolbar, as in 0.6: Inputs, Comboboxes and MenuButtons join the arrow-key order, and text fields keep their own arrow keys.
 
+### Overflow
+
+`Overflow` hides the items that do not fit and renders `overflowButton(count, hiddenIds)` instead; `useOverflowMenu()` inside it lists the hidden ids, for a menu. Items with a lower `priority` hide first, a `pinned` item never does, and items with the same `groupId` form a group that an `Overflow.Divider` follows:
+
+```tsx
+import { Menu, MenuButton, Overflow, Toolbar, useOverflowMenu } from '@mortenbrudvik/waveui';
+
+function MoreTools() {
+  const { hiddenIds, count } = useOverflowMenu();
+  return (
+    <Menu>
+      <Menu.Trigger>
+        <MenuButton appearance="subtle">{`+${count}`}</MenuButton>
+      </Menu.Trigger>
+      <Menu.Popover>
+        {hiddenIds.map((id) => (
+          <Menu.Item key={id}>{id}</Menu.Item>
+        ))}
+      </Menu.Popover>
+    </Menu>
+  );
+}
+
+export function DocumentTools() {
+  return (
+    <Toolbar aria-label="Document tools">
+      <Overflow className="min-w-0 flex-1 gap-1" overflowButton={() => <MoreTools />}>
+        <Overflow.Item itemId="Undo" groupId="history" priority={2}>
+          <Toolbar.Button>Undo</Toolbar.Button>
+        </Overflow.Item>
+        <Overflow.Item itemId="Redo" groupId="history" priority={2}>
+          <Toolbar.Button>Redo</Toolbar.Button>
+        </Overflow.Item>
+        <Overflow.Divider groupId="insert">
+          <Toolbar.Divider />
+        </Overflow.Divider>
+        <Overflow.Item itemId="Image" groupId="insert" priority={1}>
+          <Toolbar.Button>Image</Toolbar.Button>
+        </Overflow.Item>
+        <Overflow.Item itemId="Table" groupId="insert" priority={1}>
+          <Toolbar.Button>Table</Toolbar.Button>
+        </Overflow.Item>
+        <Overflow.Item itemId="Share" pinned>
+          <Toolbar.Button>Share</Toolbar.Button>
+        </Overflow.Item>
+      </Overflow>
+    </Toolbar>
+  );
+}
+```
+
+- **Which item hides.** Items hide in ascending `priority` (default `0`); among equal priorities the last one in DOM order goes first, or the first one with `overflowDirection="start"`. `pinned` items never hide, and `minimumVisible` items always stay. While no item sets `priority` or `pinned`, the first item (with `start`, the last) always stays, as in 0.13; once one does, only `pinned` protects. The hidden items stay mounted with `data-overflow-hidden`, `display: none`, `aria-hidden` and `inert`, so arrow keys and Tab pass them.
+- **Groups.** A group is `'visible'` (every member shown), `'hidden'` or `'overflow'` (some members hidden): `useIsOverflowGroupVisible(groupId)` reads it, and an `Overflow.Divider` with the group's `groupId` hides while its group is hidden. `useHasHiddenItems()` tells whether anything is hidden. `onOverflowChange(hiddenItems, details)` reports the hidden ids in DOM order, with `details.visibleItems` and `details.groupVisibility`, once per change.
+- **The button.** `buttonPosition="end"` (the default) puts it after the items, sticking to the end of the row; `"before-hidden"` puts it just before the first hidden item, where the hidden items were (a breadcrumb trail does this), when the items are children of the Overflow (Fragments are fine). The button then moves as items hide and show, without remounting; a browser can still drop focus from a moved element, so focus on it can fall to the page while the row resizes, and switching `buttonPosition` on a mounted row remounts the items. `hasHiddenItems` renders the button before the first measurement, so the server HTML reserves its room.
+- **Without wrappers.** `Overflow.Item asChild` puts the item's props on its single element child, so `<Overflow role="list">` with `<li>` items is a list (the button's wrapper is then a list item).
+- **Columns.** `orientation="vertical"` stacks the items and measures heights; give the column a height.
+
 ### Dialogs and triggers
 
 ```tsx
@@ -1604,6 +1663,46 @@ export function Author() {
 - **Context popovers.** `openOnContext` works as on Menu, with Popover's focus rules: a right click opens the popover at the pointer and leaves focus where it is (Tab from that element enters the content); Shift+F10 or the ContextMenu key opens it at the focused element and moves focus into the content, and Escape returns focus to that element. The region gets no `aria-haspopup` or `aria-expanded`, so name the content with `title`, `aria-label` or `aria-labelledby`.
 - **`target`** on the Popover root (next to `side` and `align`; `PopupTarget`, as on `Menu.Popover`) places the content at an element held in state or at a `VirtualElement` instead of the trigger. A controlled popover with a `target` needs no trigger; a toggle button used as the target carries its own `aria-haspopup="dialog"`, `aria-expanded` and `aria-controls` (give `Popover.Content` an `id`), a press on it does not count as outside, and Tab from it enters the content. `Popover`, `Menu.Popover` and TeachingPopover take the same `target`: an element held in state, a `VirtualElement` or a ref object (a ref is read after each render of the popup, and the popup stays hidden while it holds no element).
 - **Tooltip timing.** `openDelay` (default 200ms) is how long the pointer rests on the child, or the child has keyboard focus, before the tooltip appears: unlike Menu's and Popover's `openDelay`, it applies to focus too. `closeDelay` (default 100ms) is how long it stays once the pointer has left the child and the tooltip; blur and Escape hide it at once. `delay` is the deprecated name of `openDelay` (it warns once in development).
+
+### Teaching popovers and tours
+
+`<TeachingPopover steps={steps} />` is a tour with Back, Next (Done on the last step) and Close. Built from parts, the same tour gets a trigger, a caption and interactive step buttons:
+
+```tsx
+import { Button, TeachingPopover } from '@mortenbrudvik/waveui';
+
+const steps = [
+  { title: 'Search', body: 'Type to filter the list.' },
+  { title: 'Filters', body: 'Narrow the results by owner or date.' },
+  { title: 'Share', body: 'Send the view to your team.' },
+];
+
+export function Tour({ onSeen }: { onSeen: () => void }) {
+  return (
+    <TeachingPopover steps={steps} onFinish={onSeen}>
+      <TeachingPopover.Trigger>
+        <Button>Take the tour</Button>
+      </TeachingPopover.Trigger>
+      <TeachingPopover.Surface>
+        <TeachingPopover.Header>Tip</TeachingPopover.Header>
+        <TeachingPopover.Carousel>
+          <TeachingPopover.Title />
+          <TeachingPopover.Body />
+          <TeachingPopover.CarouselFooter initialStepText="Not now" finalStepText="Got it">
+            <TeachingPopover.CarouselNav />
+          </TeachingPopover.CarouselFooter>
+        </TeachingPopover.Carousel>
+      </TeachingPopover.Surface>
+    </TeachingPopover>
+  );
+}
+```
+
+- **Footer actions.** `primaryAction` replaces Next (Done on the last step) and `secondaryAction` replaces Back, on the popover or on a step (the step's wins); a single-step tip, which has no Back, gets a second button this way ("Learn more" and "Got it"). An action is a label (drawn as a Button), a Button, `<button>` or `<a>` element, or a slot object (`{ as: 'a', href, children: 'Learn more' }` stays a Wave Button). Its `onClick` runs first, then the step's own action (Next, Done or Back) unless it called `preventDefault()`: a "Learn more" link on a later step calls it, or it also goes back. `footerLayout="vertical"` puts the buttons, full width, under the step dots.
+- **Done and `onFinish`.** Done, and a primary action on the last step whose click was not prevented, close the popover and call `onFinish`, then, through 0.x, `onDismiss`; Close, Escape and the Trigger call only `onDismiss`. From 1.0 Done no longer calls `onDismiss`.
+- **Parts.** `TeachingPopover.Trigger` opens and closes the popover (`aria-haspopup="dialog"`, `aria-expanded`, `aria-controls`). While `target` is unset the popover points at it and follows it in the Tab order, and focus returns to it when the popover closes. Written directly inside TeachingPopover (a Fragment is fine), it makes the popover start closed. `TeachingPopover.Surface` is the popover and takes the `className`, `style`, `ref` and other element props that the `steps` form takes on TeachingPopover. Inside it, `Header` (the Close button, an optional caption and `icon`; `dismissButton` replaces the Close glyph or merges a Button into the Close button, and `null` removes it), `Title` (`as`; it names the popover), `Body` (`media` above the text) and `Footer` each show their share of the current step unless you give them children; a Surface without children shows all four, which is what the `steps` form renders. The steps, labels, actions and callbacks stay on TeachingPopover.
+- **Carousel parts.** `TeachingPopover.Carousel` holds the current page (the title, the body and a `CarouselFooter`). `CarouselFooter` lays out an indicator and the buttons: `layout="offset"` (the default, the indicator at the start, as in the Footer) or `"centered"` (the indicator between the buttons; Fluent's default). `finalStepText` relabels Done, and `initialStepText` turns the first step's unavailable Back into an enabled button that dismisses the popover (`onOpenChange(false)`, then `onDismiss`; Fluent's calls `onFinish`). It is the same element as Back, so focus stays on it when Back leads to the first step, where a second press dismisses. The indicator is the decorative step dots unless you put `CarouselNav` there (a group of step buttons named "Step 2 of 3", each a Tab stop, the current one with `aria-current="step"`; `labels.nav` and `labels.navButton` translate them) or `CarouselPageCount` (a visible "2 of 3", worded by its render function child, `(current, total) => …`).
+- **Placement.** Write the Trigger and the Surface directly inside TeachingPopover. A Trigger nested deeper does not make the popover start closed, and an open popover renders in place until that Trigger has mounted (in the server HTML too), then moves next to it, with focus passing through the Trigger. A Surface inside a component of yours works once mounted, but the server HTML holds the popover's own surface as well until then; a second Surface renders a second popover (development warning `TeachingPopover.Surface:placement`).
 
 ### Custom overlays
 
@@ -1946,12 +2045,10 @@ export function Topics() {
 
 ### Sorting and selecting in a DataGrid
 
-Sorting is controlled: the grid reports the requested sort and **you reorder the rows**.
+Give the grid its data (`items`) and typed `columns`: it renders the header, the rows and their cells, and **sorts the rows itself** by the sorted column's `compare`.
 
 ```tsx
-import * as React from 'react';
-import { DataGrid } from '@mortenbrudvik/waveui';
-import type { DataGridColumn, DataGridSort } from '@mortenbrudvik/waveui';
+import { DataGrid, createTableColumn } from '@mortenbrudvik/waveui';
 
 interface Person {
   id: string;
@@ -1959,41 +2056,152 @@ interface Person {
   role: string;
 }
 
-const columns: DataGridColumn[] = [
-  { id: 'name', label: 'Name', sortable: true },
-  { id: 'role', label: 'Role' },
+// Outside the component (or memoised): the rows render again when the array changes.
+const columns = [
+  createTableColumn<Person>({
+    columnId: 'name',
+    label: 'Name',
+    compare: (a, b) => a.name.localeCompare(b.name),
+    renderCell: (person) => person.name,
+  }),
+  createTableColumn<Person>({ columnId: 'role', label: 'Role', renderCell: (person) => person.role }),
 ];
+const personId = (person: Person) => person.id;
 
 export function People({ people }: { people: Person[] }) {
-  const [sort, setSort] = React.useState<DataGridSort | null>(null);
-  const rows = React.useMemo(() => {
-    if (!sort) return people;
-    const sorted = [...people].sort((a, b) => a.name.localeCompare(b.name));
-    return sort.direction === 'ascending' ? sorted : sorted.reverse();
-  }, [people, sort]);
-
   return (
     <DataGrid
       aria-label="People"
+      items={people}
       columns={columns}
-      sort={sort}
-      onSortChange={setSort}
+      getRowId={personId}
+      defaultSort={{ columnId: 'name', direction: 'ascending' }}
       selectionMode="multiple"
-    >
-      <DataGrid.Body>
-        {rows.map((person) => (
-          <DataGrid.Row key={person.id} rowId={person.id}>
-            <DataGrid.Cell>{person.name}</DataGrid.Cell>
-            <DataGrid.Cell>{person.role}</DataGrid.Cell>
-          </DataGrid.Row>
-        ))}
-      </DataGrid.Body>
-    </DataGrid>
+      selectOnRowClick
+    />
   );
 }
 ```
 
-Row selection: with `selectionMode="single"`, pass at most one id in `selectedItems`/`defaultSelectedItems` (with several, the first one whose row is rendered is selected, with a development warning). Each row's selection control is named after the row's first `DataGrid.Cell`, `<td>` or `<th>` child (Fragments are looked into); a cell rendered by another component is not seen, so pass `selectionLabel` to `DataGrid.Row` then.
+- **Columns.** `createTableColumn` returns a `DataGridColumn<T>` with `sortable` resolved: a column with `compare` is a sort button unless `sortable: false`. `label` is any content, `renderHeaderCell()` replaces it, and `renderCell(item)` fills the column's cells. `columnId` names the column in the header and in the sort (`id` is its deprecated name). A column with functions cannot be passed from a Server Component: define the columns in a client component.
+- **Built-in sorting.** While the sort names a column with `compare` (the grid's own sort, from `defaultSort` and clicks, or a controlled `sort`), the rows are a stable sort of a copy of `items`, and descending negates `compare`: items that compare equal keep their order in `items` in both directions (a reversed ascending sort would also reverse them). A column without `compare` never reorders the rows, so leave it out when the server sorts, and fetch the sorted data in `onSortChange(sort, details)`. `sortIcon` on a `DataGrid.HeaderCell` replaces the arrow shown while the column is sorted (`false` shows none); `aria-sort` on the header tells the direction.
+- **Rows.** `getRowId(item)` gives each row its `rowId`, which selection follows across sorts and new `items`; without it, a row's id is the item's index in `items`, which changes with the data. To write the rows yourself, give `DataGrid.Body` a render function, `{(person: Person) => <DataGrid.Row>…</DataGrid.Row>}` (the second argument is the item's index in `items`); each row gets its `rowId`. Write `DataGrid.Header` and `DataGrid.Body` directly inside the grid (a Fragment is fine): one rendered by a component of yours is not seen, and a grid with `columns` then adds its own header (with `items`, its own body too). A row renders again only when its item changes, and a sort only moves it. Pass `items={data ?? []}` while the data loads: with `items`, `onSortChange` always receives the sort object and `details`.
+- **Your own row order.** A grid composed from `DataGrid.Header` and `DataGrid.Body` children without `items` keeps the 0.13 contract: it reports the requested sort and you order the rows. Negate the comparison for the descending order, so equal rows keep their order:
+
+```tsx
+const [sort, setSort] = React.useState<DataGridSort | null>(null);
+const rows = React.useMemo(() => {
+  if (!sort) return people;
+  const sign = sort.direction === 'ascending' ? 1 : -1;
+  return [...people].sort((a, b) => sign * a.name.localeCompare(b.name));
+}, [people, sort]);
+// <DataGrid aria-label="People" columns={[{ columnId: 'name', label: 'Name', sortable: true }]}
+//   sort={sort} onSortChange={setSort}> <DataGrid.Body>{rows.map(…)}</DataGrid.Body> </DataGrid>
+```
+
+- **Row selection.** `selectionMode` (`single`, `multiple`) with `selectedItems`, `defaultSelectedItems` and `onSelectedItemsChange(selectedItems, details)`. With `selectionMode="single"`, pass at most one id (with several, the first one whose row is rendered is selected, with a development warning). Each row's selection control is named after the row's first `DataGrid.Cell`, `<td>` or `<th>` child (Fragments are looked into); a cell rendered by another component is not seen, so pass `selectionLabel` to `DataGrid.Row` then.
+- **Selecting on a row click.** `selectOnRowClick` toggles a row when it is clicked (in single mode it selects the row alone, or clears it). The row's `onClick` runs first, and its `preventDefault()` keeps the selection. A click on a link, a button, an input or another interactive element in the row, a click from a popup opened from the row (a Menu in a cell), and a click that ends a text selection never toggle; Space on a cell toggles either way.
+- **Looks.** `selectionAppearance` fills a selected row with the selected token (`brand`, the default), the subtle one (`neutral`) or not at all (`none`; the control, `aria-selected` and the forced-colors outline still show it). `subtleSelection` draws an unchecked row control only while its row is hovered or holds focus, and the select-all while the grid is (always in forced colors and on touch screens); the controls stay focusable and named.
+- **Per row.** `DataGrid.Row selectionCellProps` takes `disabled` (a natively disabled control: row clicks, Space and select-all skip the row, and select-all counts the enabled rows only), `invisible` (no visible control; the row still selects), `className` and `aria-label`. `DataGrid.SelectionCell` places the selection cell where you write it in a row (the select-all in a header row), instead of the automatic first cell.
+- **Typing a wrapper.** A generic wrapper `function AppGrid<T>(props: DataGridProps<T>)` compiles and forwards every form, but an inline `onSortChange` passed to it next to `items` gets no contextual type: annotate its parameters, or type the wrapper's props as `DataGridBaseProps<T> & DataGridItemsSortProps<T>`.
+
+### Static tables
+
+`Table` keeps no state. A sortable `Table.HeaderCell` reports the click and shows the direction you give it; `Table.SelectionCell` is a native checkbox or radio driven by your state:
+
+```tsx
+import * as React from 'react';
+import { Avatar, Button, Table } from '@mortenbrudvik/waveui';
+
+type Member = { id: string; name: string; email: string };
+
+export function Members({ members }: { members: Member[] }) {
+  const [direction, setDirection] = React.useState<'ascending' | 'descending'>();
+  const [selected, setSelected] = React.useState<string[]>([]);
+  const sign = direction === 'descending' ? -1 : 1;
+  const rows = direction ? [...members].sort((a, b) => sign * a.name.localeCompare(b.name)) : members;
+  const all = selected.length === members.length ? true : selected.length > 0 ? 'mixed' : false;
+  return (
+    <Table aria-label="Members">
+      <Table.Header>
+        <Table.Row>
+          <Table.SelectionCell
+            aria-label="Select all members"
+            checked={all}
+            onCheckedChange={(checked) => setSelected(checked ? members.map((m) => m.id) : [])}
+          />
+          <Table.HeaderCell
+            sortable
+            sortDirection={direction}
+            onSortClick={() => setDirection(direction === 'ascending' ? 'descending' : 'ascending')}
+          >
+            Name
+          </Table.HeaderCell>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
+        {rows.map((member) => (
+          <Table.Row key={member.id}>
+            <Table.SelectionCell
+              subtle
+              aria-label={`Select ${member.name}`}
+              checked={selected.includes(member.id)}
+              onCheckedChange={(checked) =>
+                setSelected((prev) =>
+                  checked ? [...prev, member.id] : prev.filter((id) => id !== member.id),
+                )
+              }
+            />
+            <Table.Cell>
+              <Table.CellLayout
+                appearance="primary"
+                media={<Avatar name={member.name} decorative />}
+                description={member.email}
+              >
+                {member.name}
+              </Table.CellLayout>
+              <Table.CellActions>
+                <Button size="small" appearance="subtle">{`Edit ${member.name}`}</Button>
+              </Table.CellActions>
+            </Table.Cell>
+          </Table.Row>
+        ))}
+      </Table.Body>
+    </Table>
+  );
+}
+```
+
+- **Sortable headers.** `sortable` wraps the header's content in a `<button>` and puts `aria-sort` on the `<th>` (`"none"` while `sortDirection` is unset); `onSortClick(event)` runs on a click, Enter or Space. There are no grid semantics. `sortIcon` replaces the arrow (as on DataGrid), and `aside` puts content (a filter button) beside the sort button, outside its name.
+- **Selection cells.** `checked` (`true`, `false` or `'mixed'`, an indeterminate select-all), or `defaultChecked`; `onCheckedChange(checked, details)`; `type="radio"` with a shared `name` selects one row (uncontrolled radios uncheck each other); `name`, `value`, `form` and `required` submit the control. Its id, ARIA attributes and focus, key and change handlers go to the input, `className` and `ref` stay on the cell. Name every control (`aria-label` or `aria-labelledby`; a development warning asks for it). `subtle` draws an unchecked box only while its row is hovered or holds focus, and `invisible` keeps the cell's box without a control.
+- **Cell layout.** `Table.CellLayout` puts `media` (an icon, or an Avatar, which gets a 32px box) before the main text and a `description` under it; `truncate` keeps each line on one line where the column's width is bounded, and `appearance="primary"` marks the cell that names the row.
+- **Cell actions.** `Table.CellActions` covers the end of its cell (the cell is its positioning box) and shows its buttons while the row is hovered or holds focus, always in forced colors and on touch screens; `visible` keeps them (while a menu opened from one is open). Its background follows the library's own row fills: none, the row hover, a `striped` table's stripe and a DataGrid's selected rows. A row background of your own, or a table on another surface (a Card), needs the same background class on the actions, and the actions must be direct children of the cell for the stripe and selection fills to match.
+
+### Lists
+
+A `List` without selection is a plain list. `navigationMode="items"` makes its items one Tab stop with the arrow keys, Home, End and typeahead, and `onAction` gives an item an action of its own:
+
+```tsx
+import { List } from '@mortenbrudvik/waveui';
+
+export function RecentFiles({ open }: { open: (file: string) => void }) {
+  return (
+    <List navigationMode="items" aria-label="Recent files">
+      <List.Item value="report" onAction={() => open('report')}>
+        Report
+      </List.Item>
+      <List.Item value="budget" onAction={() => open('budget')}>
+        Budget
+      </List.Item>
+    </List>
+  );
+}
+```
+
+- **Navigation modes.** Unset, the list picks its mode as in 0.13: a plain list is `'none'`, a selectable one `'items'` (a listbox), and a selectable one whose items have actions `'composite'` (a grid), which remounts the items when the first action appears or the last one goes. `navigationMode="composite"` makes the grid from the first render (with or without selection), so nothing remounts. `'items'` on a selectable list whose items have actions acts as `'composite'`, and `'none'` on a selectable list is ignored (development warnings say so). The resolved mode is `data-navigation-mode`. A list without selection keeps the item that last had focus as its Tab stop.
+- **`onAction`** runs on a click and on Enter, and on Space where the item cannot be selected (a list without selection, an item without `value`); in a selectable item Space only toggles. It runs after the item's `onClick` and before the selection toggles: `event.preventDefault()` keeps the selection. Clicks and keys in the item's actions never run it. In a list that does not navigate its items it runs on clicks only, with a development warning.
+- **`disabledSelection`** keeps an item's selection as it is (click, Enter and Space) while the item stays focusable and in the arrow order; without `onAction` it is also `aria-disabled`.
+- **Check marks.** `checkmark` on a selectable List draws a decorative check at the start of each selected item; `List.Item checkmark` replaces it with your glyph or hides it (`false`).
 
 ### Trees
 
@@ -2040,6 +2248,31 @@ export function FileTree() {
 - **Dialogs opened from an action.** The actions also stay shown while a Menu, Popover or Dialog rendered inside them is open or has focus, so its focus return reaches the action. A Dialog rendered elsewhere and opened from an action through state (a "Delete…" menu item that opens a confirm Dialog outside the tree) closes after the actions have hidden again, on devices with hover and outside forced colors: a hidden action cannot take focus, so focus returns to the nearest element that can, normally the item. To return focus to the action, render the Dialog inside `actions`, with its `Dialog.Trigger` there or as a controlled `Dialog` next to the Menu that opens it (`finalFocusRef` cannot name the action, which is still hidden when the dialog closes).
 - **Navigation modes.** With `navigationMode="tree"` (the default), Tab from the focused item enters its actions (one stop; the arrow keys move inside them) and Shift+Tab returns. With `"treegrid"`, the "next" arrow (Right, Left in RTL) moves into the actions of an expanded parent or a leaf (a collapsed parent still expands first), "previous" returns, and Up and Down move between items from an action; the actions then take no Tab stop. This replaces APG's "next on an open item moves to its first child" (Down does that). The roles stay `tree` and `treeitem` in both modes, as in Fluent.
 - **Persona rows.** `Tree.ItemPersonaLayout` (flat `TreeItemPersonaLayout`, Fluent's name) lays out an item's label as a person: `media` (an Avatar of size 32 fits a row), the name as children and a `description` under it; the item is named by the name and described by the description.
+
+### Breadcrumbs
+
+```tsx
+import { Breadcrumb } from '@mortenbrudvik/waveui';
+
+export function Trail() {
+  return (
+    <Breadcrumb maxDisplayedItems={4} overflowLabel="More folders">
+      <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+      <Breadcrumb.Item href="/docs">Docs</Breadcrumb.Item>
+      <Breadcrumb.Item href="/docs/guides">Guides</Breadcrumb.Item>
+      <Breadcrumb.Item href="/docs/guides/tables">Tables</Breadcrumb.Item>
+      <Breadcrumb.Item href="/docs/guides/tables/sorting">Sorting</Breadcrumb.Item>
+      <Breadcrumb.Item current>Stable sorts</Breadcrumb.Item>
+    </Breadcrumb>
+  );
+}
+// Home › … › Tables › Sorting › Stable sorts; the "…" button opens a menu with Docs and Guides.
+```
+
+- **Collapse by count.** `maxDisplayedItems` is the most items shown, the "…" not counted; the middle items from `overflowIndex` (default `1`) go into a "…" button (`overflowLabel`, default "More items") that opens a Menu of them, in trail order: a link item becomes a `Menu.ItemLink` (an `asChild` link too), a button item a `Menu.Item`, and an unavailable item stays unavailable there. The first item and the last `current` item are never hidden (the hidden run moves past a current item in the middle). An item the menu cannot list (one without `href` or `onClick` is listed disabled; an element that is not a `Breadcrumb.Item` is left out) logs a development warning. `partitionBreadcrumbItems({ items, maxDisplayedItems, overflowIndex })` gives Fluent's split (`startDisplayedItems`, `overflowItems`, `endDisplayedItems`) for a trail you lay out yourself.
+- **Collapse by room.** `overflow="auto"` hides the middle items that do not fit, from the start of the trail, and puts a "…" list item with its own separator where they were ("Home › … › Parent › Page"); resizing wider shows them again in order. The first item and the last `current` item never hide; when even they do not fit, the "…" covers the end of the trail. The trail is then an `Overflow` (`role="list"`, with `wave-overflow` and 4px of padding) that measures with `ResizeObserver`, and `maxDisplayedItems` and `overflowIndex` do not apply. Its list element is a `<div role="list">` holding the `<li>` items: assistive technology reads a list, but the nesting is not valid HTML (an Overflow root rendered as a list element is deferred to a later release). The "…" list item is the Overflow's button wrapper (`wave-overflow__overflow-button`); the button in it carries `wave-breadcrumb__overflow-button` in both modes.
+- **Size, keys and divider.** `size` (`small`, `medium`, `large`) sets the text and the separator. `focusMode="arrow"` makes the trail one Tab stop (the last focused link or button, at first the first one) moved with Left and Right (mirrored in RTL), Home and End, the "…" button included and hidden items skipped. `divider` replaces the chevron (`"/"`, an icon; not mirrored), and `false` hides the separators.
+- **Long names.** `truncateBreadcrumbLongName(name)` shortens a name longer than 30 characters to its first 30 and adds `...` (a second argument changes the length), `truncateBreadcrumbLongTooltip(text)` does the same at 80 for a tooltip, and `isTruncatableBreadcrumbContent(text, maxLength)` tells whether a text would be cut, so you show the full name in a `Tooltip` only then. A collapsed item wrapped in a Tooltip is not a `Breadcrumb.Item` to the trail, so it is left out of the overflow menu (with a development warning): wrap only items that the collapse keeps, or leave the Tooltip out where the trail collapses.
 
 ### Navigation
 
@@ -2172,16 +2405,16 @@ export const Price = () => (
 
 A slot takes any `React.ReactNode`. Spread an attributes object typed by an interface into a new object (`image={{ ...imgProps }}` for a `React.ImgHTMLAttributes<HTMLImageElement>`).
 
-Icon slots are decorative (`aria-hidden`). Content that renders nothing (`''`, `[]`, `<></>`, or a collection of only `null`, booleans and `''`) counts as no content: a `contentAfter` that renders nothing takes no room, and SearchBox's `contentBefore` keeps the default search icon. The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag`, and the `closeButton` of `Dialog.Content` and Drawer, render their content inside the component's own button; the 0.4 form that passed a button object is deprecated. A Wave `Button` passed there is merged into that button, and its own props never reach the DOM: its `icon` and `iconPosition` place the icon, and `disabledFocusable` makes the built-in button unavailable but focusable. Content that renders nothing keeps the default icon, and a slot object without children (`{ className: 'text-error' }`) wraps it. A slot object that renders a component or a void element (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the icon itself. On `MessageBar`, `dismiss={null}` is the only value that hides the dismiss button (a boolean counts as no slot), and so is `closeButton={null}` for the Close button of a Dialog or Drawer.
+Icon slots are decorative (`aria-hidden`). Content that renders nothing (`''`, `[]`, `<></>`, or a collection of only `null`, booleans and `''`) counts as no content: a `contentAfter` that renders nothing takes no room, and SearchBox's `contentBefore` keeps the default search icon. The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag`, the `closeButton` of `Dialog.Content` and Drawer, and the `dismissButton` of `TeachingPopover.Header` render their content inside the component's own button; the 0.4 form that passed a button object is deprecated. A Wave `Button` passed there is merged into that button, and its own props never reach the DOM: its `icon` and `iconPosition` place the icon, and `disabledFocusable` makes the built-in button unavailable but focusable. Content that renders nothing keeps the default icon, and a slot object without children (`{ className: 'text-error' }`) wraps it. A slot object that renders a component or a void element (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the icon itself. On `MessageBar`, `dismiss={null}` is the only value that hides the dismiss button (a boolean counts as no slot), and so is `closeButton={null}` for the Close button of a Dialog or Drawer and `dismissButton={null}` for TeachingPopover's.
 
-The `backdrop` slot of `Dialog.Content` and Drawer takes content or a slot object with `appearance` (`'dimmed'`, `'transparent'`); `null` renders none, and booleans are no slot. Tag's `media` and `icon` (and an InteractionTag Primary's) are content slots: `media` is not hidden from assistive technology (pass `decorative` to an Avatar whose name repeats the tag's text), `icon` is decorative.
+The `backdrop` slot of `Dialog.Content` and Drawer takes content or a slot object with `appearance` (`'dimmed'`, `'transparent'`); `null` renders none, and booleans are no slot. Tag's `media` and `icon` (and an InteractionTag Primary's) are content slots: `media` is not hidden from assistive technology (pass `decorative` to an Avatar whose name repeats the tag's text), `icon` is decorative. So are the `media` of `Table.CellLayout` and `TeachingPopover.Body` (give a picture its `alt`), and `Table.HeaderCell`'s `aside`.
 
 Slots that replace a built-in glyph follow one rule per kind:
 
-- **Optional indicators** (`MenuButton.menuIcon`, the `expandIcon` of Combobox, Dropdown, TimePicker, TagPicker (and `TagPicker.Control`) and `Tree.Item`, `EmptySwatch.icon`): `null` or `undefined` keep the default glyph; `false` or any value that renders nothing hides it (for Combobox, TimePicker and TagPicker, the whole expand button; for Dropdown, the chevron and its room).
+- **Optional indicators** (`MenuButton.menuIcon`, the `expandIcon` of Combobox, Dropdown, TimePicker, TagPicker (and `TagPicker.Control`) and `Tree.Item`, `EmptySwatch.icon`, the `sortIcon` of `DataGrid.HeaderCell` and `Table.HeaderCell`, Breadcrumb's `divider`, `List.Item checkmark`): `null` or `undefined` keep the default glyph; `false` or any value that renders nothing hides it (for Combobox, TimePicker and TagPicker, the whole expand button; for Dropdown, the chevron and its room). A sort glyph shows only while its column is sorted, and a list check mark only on a selected item of a selectable List (`List.Item checkmark` content shows also without the List's `checkmark`).
 - **Required indicators** (`SplitButton.menuIcon`, `Option.checkIcon`, `Hamburger.icon`): the indicator always shows. A value that renders nothing keeps the default glyph, with a development warning. The check is the sign of an option's selection that does not rely on color, so Fluent's `checkIcon={null}`, which removes it, keeps it here.
 - **Status icons** (`MessageBar.icon`, `Toast.icon`, Field `validationMessageIcon`): only `undefined` keeps the default icon; `null` or a value that renders nothing shows none.
-- A glyph slot inside a built-in button (`expandIcon`, the `menuIcon` of SplitButton and MenuButton, the `icon` of `ColorSwatch`, `EmptySwatch` and `Hamburger`, and the children of `InteractionTag.Secondary`, which is itself the button) is decorative content. A `<button>` or `Button` passed there, or a slot object whose `as` is one, is not nested: its children become the glyph and its props are dropped, with a development warning.
+- A glyph slot inside a built-in button (`expandIcon`, the `menuIcon` of SplitButton and MenuButton, the `icon` of `ColorSwatch`, `EmptySwatch` and `Hamburger`, a header cell's `sortIcon`, and the children of `InteractionTag.Secondary`, which is itself the button) is decorative content. A `<button>` or `Button` passed there, or a slot object whose `as` is one, is not nested: its children become the glyph and its props are dropped, with a development warning.
 
 ### Built-in text
 
@@ -2190,7 +2423,8 @@ The names and hidden texts that components render themselves are English by defa
 | Component                   | Props                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Dialog.Content`, `Drawer`  | `closeLabel` (the Close button; on Drawer also the Close button of each `Drawer.HeaderTitle`; a text label of a button merged into `closeButton` names it instead)                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `TeachingPopover`           | `closeLabel` (the Close button), `labels` (`back`, `next`, `done`, `step(index, count)` with a zero-based index)                                                                                                                                                                                                                                                                                                                 |
+| `TeachingPopover`           | `closeLabel` (the Close button), `labels` (`back`, `next`, `done`, `step(index, count)` with a zero-based index, and for `TeachingPopover.CarouselNav` `nav` ("Choose step") and `navButton(index, count)` ("Step 2 of 3", zero-based index)); `TeachingPopover.CarouselPageCount` words its "2 of 3" with its render function child `(current, total)` (one-based) |
+| `Breadcrumb`                | `overflowLabel` (the "…" button of a collapsed trail, "More items")                                                                                                                                                                                                                                                                                                                                                              |
 | `MessageBar`, `Toast`       | `statusLabel` (the hidden severity text; also an option of both `dispatchToast` forms); `Toast` also `dismissLabel` (also an option of the text form)                                                                                                                                                                                                                                                                            |
 | `Tag`                       | `dismissLabel` ("Dismiss", with the tag's text)                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `InteractionTag.Secondary`  | `dismissLabel` ("Dismiss", with the primary text: "Dismiss Cherry") |
@@ -2223,11 +2457,11 @@ The names and hidden texts that components render themselves are English by defa
 
 Without a text prop, these defaults are replaced through `aria-label`: the PresenceBadge status names ("Available", …: `aria-label` on the badge), the MessageBar "Dismiss" and SearchBox "Clear search" button names (`dismiss={{ 'aria-label': 'Lukk' }}`, which keeps the default icon), and the names of the Breadcrumb, Pagination, Nav, Stepper, Carousel and Toaster regions ("Breadcrumb", "Pagination", "Navigation", "Progress", "Carousel", "Notifications"). The placeholders of Dropdown, DatePicker, TimePicker and SearchBox are `placeholder` props, and ColorPicker's default presets are replaced through `presets`.
 
-0.7 and 0.8 add no other built-in text: the submenu half of a `Menu.SplitGroup`, a context menu (`Menu.Popover`) and a `Toolbar.RadioGroup` are named by the `aria-label` you pass, a toast's container by its severity and title, and a tree row's actions toolbar by its item's label. Nor do 0.10 and 0.11, beyond the rows above: a `TagGroup` is named by the `aria-label` you pass, an inline Drawer by its title; a `Listbox`, a `Calendar` and a `ColorSwatch` or `ImageSwatch` are named by the `aria-label` you pass (or a `Field`'s label, or a `Tooltip` around the swatch), an `OptionGroup` by its label, and the month and year buttons by their text in `locale`.
+0.7 and 0.8 add no other built-in text: the submenu half of a `Menu.SplitGroup`, a context menu (`Menu.Popover`) and a `Toolbar.RadioGroup` are named by the `aria-label` you pass, a toast's container by its severity and title, and a tree row's actions toolbar by its item's label. Nor do 0.10 and 0.11, beyond the rows above: a `TagGroup` is named by the `aria-label` you pass, an inline Drawer by its title; a `Listbox`, a `Calendar` and a `ColorSwatch` or `ImageSwatch` are named by the `aria-label` you pass (or a `Field`'s label, or a `Tooltip` around the swatch), an `OptionGroup` by its label, and the month and year buttons by their text in `locale`. 0.14 adds none either beyond the rows above: a `Table.SelectionCell` control is named by the `aria-label` or `aria-labelledby` you pass (a development warning asks for one), and a `CarouselFooter`'s `initialStepText` and `finalStepText` are your text.
 
 ## Keyboard support
 
-As implemented in 0.11. Buttons, links, checkboxes, switches and the trigger buttons of Accordion, Carousel, Nav, Breadcrumb and Pagination are native elements: Tab to reach them, Enter or Space to activate. A Link or `Button as="a"` without `href`, and a Button or Link rendered as a `div` or `span`, are buttons: Tab reaches them, Enter (key down) and Space (key up) activate them. A `disabledFocusable` control stays in the Tab order but Enter, Space and clicks do nothing.
+As implemented in 0.11. Buttons, links, checkboxes, switches and the trigger buttons of Accordion, Carousel, Nav, Breadcrumb and Pagination are native elements: Tab to reach them, Enter or Space to activate. A Link or `Button as="a"` without `href`, and a Button or Link rendered as a `div` or `span`, are buttons: Tab reaches them, Enter (key down) and Space (key up) activate them. A `disabledFocusable` control stays in the Tab order but Enter, Space and clicks do nothing. The sort buttons of a sortable `Table.HeaderCell` and the step buttons of `TeachingPopover.CarouselNav` are native buttons too.
 
 | Component                             | Keys                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2242,7 +2476,7 @@ As implemented in 0.11. Buttons, links, checkboxes, switches and the trigger but
 | Rating                                | Right/Up one step more (a star, or half a star with `step={0.5}`), Left/Down one fewer (never below `step`), Home/End `step`/`max`; mirrored in RTL. A pointer click on a half-star Rating chooses the half or the whole star by position; Space and Enter on a focused radio choose that radio's own value.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | TabList                               | One Tab stop (the selected tab). Left/Right (Up/Down when vertical) move and select, Home/End; with `selectTabOnFocus={false}` they only move focus, and Enter or Space selects the focused tab; disabled tabs skipped; mirrored in RTL.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Tree                                  | One Tab stop. Up/Down, Home/End; Right expands or moves to the first child, Left collapses or moves to the parent (mirrored in RTL); Enter activates; Space activates, or in a checkbox tree (`selectionMode="multiple"`) toggles the focused item's check; `*` expands siblings; type to jump (a Space within 500 ms of a letter continues the search). Row actions: Tab from the focused item enters them and Shift+Tab returns (`navigationMode="tree"`); with `navigationMode="treegrid"` the "next" arrow moves into them (on an expanded parent too, instead of to its first child), "previous" returns, and Up/Down move between items.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| List (selectable)                     | One Tab stop. Up/Down (wrapping), Home/End, Enter/Space toggle, typeahead above 7 items (a Space within 500 ms of a letter continues the search). With item actions (grid): Up/Down between rows, Left/Right into the actions, Enter/F2 into a text field, Escape back.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| List (selectable, or `navigationMode="items"`) | One Tab stop (selectable: the first selected item, else the first; without selection: the item that last had focus). Up/Down (wrapping), Home/End, typeahead above 7 items (a Space within 500 ms of a letter continues the search). Enter toggles a selectable item and runs `onAction`; Space toggles a selectable item, or runs `onAction` on an item that cannot be selected. With item actions in a selectable list, or `navigationMode="composite"` (grid): Up/Down between rows, Left/Right into the actions (mirrored in RTL), Enter/F2 into a text field, Escape back. A plain List (`navigationMode` `none`) has no arrow keys: its items' controls are Tab stops. |
 | DataGrid                              | One Tab stop. Arrows between cells (Left/Right to the previous/next cell of the row, mirrored in RTL; Up/Down and PageUp/PageDown keep the visual column across `colSpan`/`rowSpan` cells of grouped headers), Home/End row start/end, Ctrl+Home/Ctrl+End grid start/end, PageUp/PageDown 10 rows; Enter/F2 into a cell's widgets, Escape back; Space on a cell toggles its row's selection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Menu                                  | Trigger: Enter/Space/Down open and focus the first item, Up opens on the last; a trigger with `aria-disabled="true"` (a `disabledFocusable` MenuButton or SplitButton) ignores them and its click. Menu: Up/Down (wrapping), Home/End, typeahead, Enter/Space activate (a Space within 500 ms of a letter continues the search); on a checkbox, radio or switch item Space changes it and keeps the menu open, Enter changes it and closes a popup menu; on `Menu.ItemLink` Enter is the browser's link activation. A submenu's item: Right (Left in RTL), Enter and Space open the submenu and focus its first item; in a submenu Left (Right in RTL) and Escape close only it and return focus to its item. `Menu.SplitGroup`: Right (Left in RTL) moves from the action to the submenu button, Left back. Escape closes and returns focus, Tab closes every level. Context menu (`openOnContext`): Shift+F10 or the ContextMenu key on the region opens it at the focused element; Escape and item activation return focus there, and Tab moves on from it.                                                                                                                                                                                                                                |
 | Combobox, TagPicker, TimePicker       | Down/Up open and move, Alt+Down opens, typing makes the first match active (not in a `freeform` Combobox), Enter commits the active option (with no active option, Enter submits the form; TimePicker instead never submits while its text is edited: a complete time within the bounds is committed, erased text clears the value, other text is kept and flagged invalid, and the list closes; leaving the input with edited text settles it the same way and closes the list), Alt+Up and Tab close, Escape closes and then discards typed text. The chevron button (Combobox, TimePicker) is not a Tab stop; the clear button (`clearable`) is a Tab stop after the input. Tab from erased TimePicker text clears the value first, so focus moves past the clear button that goes with it. TagPicker: Backspace in the empty input, and the previous arrow (Left, Right in RTL) with the caret at the start of the text and nothing selected, focus the last tag; on a tag's remove button Left/Right move between the tags (mirrored in RTL) and past the last one return to the trigger, and Delete, Backspace, Enter or Space remove it and focus the next tag's remove button, else the input (a click focuses the input). Typing makes the option whose label equals the text active, else the first match; with `allowCreate` Enter on the create option adds the text. `TagPicker.Button`: Down, Up and a typed letter open and move, Enter and Space add the active option. The chevron is not a Tab stop; the clear button is, after the trigger. Multi-select (`multiselect`, Combobox): Enter toggles the active option and keeps the list open; Tab, Escape and Alt+Up close without committing; focusing the input selects the shown labels, so typing replaces them with a query, and Backspace and Delete only edit the text. With `disabledOptionsFocusable` (Combobox) the arrow keys reach disabled options, but Enter does nothing on them. |
@@ -2255,9 +2489,10 @@ As implemented in 0.11. Buttons, links, checkboxes, switches and the trigger but
 | Dialog, Drawer (non-modal)            | Focus moves in on open. Tab and Shift+Tab leave the surface in the page's order right after the element that opened it; Escape closes it only while focus is inside; the trigger toggles; focus returns to the opener (or `finalFocusRef`) only when it was inside. |
 | Drawer (inline)                       | Page content: no trap, opening moves no focus, Escape and presses outside never close it; the trigger toggles; closing it while focus is inside returns focus to `finalFocusRef`, else the element that opened it, else the trigger. |
 | Nav                                   | Every item, category and app item is a Tab stop (Enter or Space activates; a category toggles); an item's `actions` follow it in the Tab order. |
+| Breadcrumb (`focusMode="arrow"`)      | One Tab stop: the last focused link or button, at first the first one. Left/Right move (mirrored in RTL, wrapping), Home/End jump; the "…" button is in the order, hidden items are not. With the default `focusMode="tab"` every link and button is a Tab stop. |
 | NavDrawer                             | An overlay as a Drawer (modal or non-modal); an inline one as page content. A Hamburger inside it toggles it, and focus goes to `finalFocusRef` (your page's Hamburger) when it closes with focus inside. |
 | NavDrawer.Body (`focusMode="arrow"`)  | One Tab stop: the last focused element, at first the current page (or the closed category that holds it), else the first item. Down/Right move to the next element and Up/Left to the previous one (Left and Right swap in RTL), wrapping; Home/End jump; item actions join the order. The footer's items stay Tab stops. |
-| Popover, TeachingPopover              | Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened; a close by hover moves no focus. In the Tab order the content follows its trigger (TeachingPopover with `target`: the target): Tab from the trigger enters it, Tab past its end continues after the trigger, Shift+Tab from the element after the trigger enters it at its last element. For a trigger outside the tab order it follows the tab stop before the trigger; with no tab stop before the trigger or target, it is reached at the end of the page. A Tab lap visits it once: Tab from the last element of the page leaves the page, and Shift+Tab from outside the page reaches the page's last element. Focus leaving it does not close it. A context popover (`openOnContext`): Shift+F10 or the ContextMenu key on the region opens it and moves focus into the content, and Escape returns focus to the element that had it; opened by a right click, it is reached by Tab from that element.                                                                                                                                                                                                                              |
+| Popover, TeachingPopover              | Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened (with a `TeachingPopover.Trigger`, to the Trigger, wherever focus was before); a close by hover moves no focus. In the Tab order the content follows its trigger (TeachingPopover with `target`: the target): Tab from the trigger enters it, Tab past its end continues after the trigger, Shift+Tab from the element after the trigger enters it at its last element. For a trigger outside the tab order it follows the tab stop before the trigger; with no tab stop before the trigger or target, it is reached at the end of the page. A Tab lap visits it once: Tab from the last element of the page leaves the page, and Shift+Tab from outside the page reaches the page's last element. Focus leaving it does not close it. A context popover (`openOnContext`): Shift+F10 or the ContextMenu key on the region opens it and moves focus into the content, and Escape returns focus to the element that had it; opened by a right click, it is reached by Tab from that element.                                                                                                                                                                                                                              |
 | Tooltip, InfoButton, InfoLabel        | Open on keyboard focus (Tooltip after `openDelay`); Escape closes. InfoButton and InfoLabel: a click pins the note; focus stays on the button when the note opens, Tab from the button enters the note's first focusable element (a link) and Tab past its last element continues after the button; Shift+Tab returns; Escape closes it and returns focus to the button when it was in the note. `openOnHover={false}` opens it on a click (Enter, Space) only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Card (selectable)                     | With the default `selectionControl="card"`: Enter (key down) or Space (key up) selects. With `"checkbox"`: the built-in checkbox.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Stepper                               | Each reachable step is a Tab stop; Enter/Space activate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -2268,7 +2503,7 @@ As implemented in 0.11. Buttons, links, checkboxes, switches and the trigger but
 
 Accordion and Carousel have no arrow-key navigation between their controls: their triggers and controls are Tab stops. With `groupSize` above 1 the slides of the shown page are one arrow-key group (the slide that last had focus is its Tab stop; an arrow past the end of the page shows the next one).
 
-Typeahead (Menu, selectable List, Tree, Dropdown, Listbox) accepts characters typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`); Ctrl+Alt with an arrow, Home, End or Space is left to the browser. An item that cannot take focus is passed over for the next match. Menu typeahead matches the item labels, not icons or shortcuts. Options and option groups with `hidden` are skipped like a native `<option hidden>`.
+Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accepts characters typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`); Ctrl+Alt with an arrow, Home, End or Space is left to the browser. An item that cannot take focus is passed over for the next match. Menu typeahead matches the item labels, not icons or shortcuts. Options and option groups with `hidden` are skipped like a native `<option hidden>`.
 
 ## Hooks and utilities
 
@@ -2301,6 +2536,10 @@ Typeahead (Menu, selectable List, Tree, Dropdown, Listbox) accepts characters ty
 | `useToastController()`                                                                                                                       | `dispatchToast` (content or options) / `dismissToast` / `dismissAllToasts` inside `<Toaster>`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `createToaster()`                                                                                                                            | A toast controller for code outside components; bind it with `<Toaster toaster={handle}>` (see [Toasts](#toasts)). Server-safe.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `useIsOverflowing(target)`, `useOverflowMenu()`, `useIsOverflowItemVisible(id)`                                                              | Overflow detection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `useIsOverflowGroupVisible(groupId)`, `useHasHiddenItems()` | Inside an `Overflow`: whether an item group is `'visible'`, `'hidden'` or `'overflow'` (some members hidden), and whether any item is hidden (see [Overflow](#overflow)). |
+| `createTableColumn<T>(options)` | A DataGrid column typed by the grid's items (`columnId`, `label`, `compare`, `renderCell`, `renderHeaderCell`), with `sortable` resolved (`true` with `compare`); see [Sorting and selecting in a DataGrid](#sorting-and-selecting-in-a-datagrid). Server-safe. |
+| `partitionBreadcrumbItems({ items, maxDisplayedItems, overflowIndex })` | Split a trail into `startDisplayedItems`, `overflowItems` and `endDisplayedItems`, by Fluent's rules (it hides `items.length - maxDisplayedItems` items from `overflowIndex`, default 1; a missing or non-positive `maxDisplayedItems` is 6); a trail that fits is all `startDisplayedItems`. Server-safe. |
+| `truncateBreadcrumbLongName(content, maxLength?)`, `truncateBreadcrumbLongTooltip(content, maxLength?)`, `isTruncatableBreadcrumbContent(content, maxLength)` | Shorten a breadcrumb name (default 30 characters) or its tooltip text (default 80) longer than `maxLength` to that length plus `...`, and tell whether a text is longer than `maxLength`. Server-safe. |
 | `hsvToHex(color)`, `hexToHsv(hex)`                                                                                                           | Convert between an `HsvColor` and a hex string (`#rrggbb`, or `#rrggbbaa` below full opacity); `hexToHsv` returns `null` for other text. Server-safe.                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `getInitials(name, options?)` | The initials Avatar shows (`dir`, `firstInitialOnly`); none for digits, emoji or scripts without letter initials. Server-safe. |
 | `partitionAvatarGroupItems({ items, maxInlineItems, layout })` | Split a list into the inline and overflow items of an AvatarGroup (`{ inlineItems, overflowItems }`); imports nothing. |
@@ -2311,6 +2550,20 @@ Typeahead (Menu, selectable List, Tree, Dropdown, Listbox) accepts characters ty
 | `mergeRefs(...refs)`                                                                                                                         | Merge refs outside components.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `resolveSlot`, `renderSlot`                                                                                                                  | The slot helpers the components use.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `getThemeClassName(theme)`                                                                                                                   | The theme classes of a theme.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+## Upgrading from 0.13
+
+0.14 removes nothing public, and every new behaviour is opt-in; these changes can still affect your types, tests and styles:
+
+1. **`DataGridColumn` and `DataGrid` are generic** (`T = unknown` without a type argument): a column's `label` widens to `ReactNode`, and its `id` is optional and deprecated (`column.id` is `string | undefined`; write `columnId`). `children` of `DataGrid` and `DataGrid.Body` is optional, and `DataGridBodyProps['children']` may be a render function.
+2. **`onSortChange(sort)` and `onSelectedItemsChange(items)` get a second argument, `details` (`{ event }`):** exact `toHaveBeenCalledWith` assertions need it. The 0.4 positional `onSortChange(columnId, direction)` is unchanged, but a grid with `items` always uses the object form, and the deprecated sort props next to `items` are type errors (ignored, with a warning, at run time).
+3. **A sorted DataGrid header shows an arrow icon** (`data-wave-icon="sort-arrow-up"` or `"sort-arrow-down"`, with `data-direction`) instead of the 0.13 triangle.
+4. **`OverflowItemProps` is a union type alias:** extend `OverflowItemBaseProps` instead.
+5. **TeachingPopover:** Done calls `onFinish` and, through 0.x, still `onDismiss`. Children passed to TeachingPopover, dropped in 0.13, now render. The `steps` form's Close button sits in a header `<div class="wave-teaching-popover-header">`, its heading, body and footer carry the new parts' classes, and the surface and footer carry `data-layout`: selectors that rely on the Close button being the surface's child, or on `:first-child`, change.
+6. **Table and DataGrid cells are `relative`** and their rows the group `group/table-row`: an absolutely positioned element in a cell is placed against it, and a `sticky` header of yours needs a `z-index` to stay over the body cells.
+7. **New attributes**, always rendered: Overflow `data-orientation`, `data-overflow-direction`, `data-button-position`; Breadcrumb `data-size`, `data-focus-mode`, `data-overflow`; DataGrid `data-selection-appearance`; List `data-navigation-mode`.
+
+The CHANGELOG's [0.14.0 section](CHANGELOG.md) lists the additions and the full upgrade notes.
 
 ## Upgrading from 0.12
 
