@@ -41,8 +41,11 @@ export type {
  *   `TeachingPopover.Trigger`)/`onOpenChange`; Close, Done, Escape (anywhere in the document) and
  *   the Trigger dismiss it and call `onDismiss`.
  * - The step is controllable with `activeStep`/`defaultActiveStep`/`onStepChange` and clamped to
- *   the available steps. The heading carries a visually hidden “step n of m”, the new step is
- *   announced politely, and Back stays focusable (`aria-disabled`) on the first step.
+ *   the available steps. An uncontrolled step starts again at `defaultActiveStep` each time the
+ *   popover opens, so a tour finished with Done or closed midway starts over (`onStepChange`
+ *   reports the move back); a controlled `activeStep` is left as it is. The heading carries a
+ *   visually hidden “step n of m”, the new step is announced politely, and Back stays focusable
+ *   (`aria-disabled`) on the first step.
  * - `primaryAction` and `secondaryAction` (on the popover, or on a step, which wins) replace Next/Done
  *   and Back: a label, a Button-like element or a slot object. The consumer's `onClick` runs first,
  *   then the step's normal action unless it called `preventDefault()`. Done calls `onFinish`

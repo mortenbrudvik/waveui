@@ -336,12 +336,15 @@ export const TeachingSurface = ({
     if (visible && surface) surface.focus({ preventScroll: hasTarget });
   }, [visible, surface, hasTarget]);
 
-  // Announce the new step politely after a step change (not on mount, and not while hidden: the
-  // heading, which carries the step position, is read when the popover shows and takes focus).
-  const announcedIndexRef = React.useRef(index);
+  // Announce the new step politely after a step change while the popover stays shown (not on
+  // mount, not while hidden, and not in the commit that shows it, such as an opening that starts
+  // the step over: the heading, which carries the step position, is read when the popover shows
+  // and takes focus).
+  const announcedRef = React.useRef({ index, visible });
   React.useEffect(() => {
-    if (announcedIndexRef.current === index) return;
-    announcedIndexRef.current = index;
+    const previous = announcedRef.current;
+    announcedRef.current = { index, visible };
+    if (previous.index === index || !previous.visible) return;
     if (visible && stepTitle !== undefined) {
       announce(`${stepTitle}, ${stepPosition}`);
     }

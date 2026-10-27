@@ -42,10 +42,14 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   steps: readonly TeachingPopoverStep[];
   /**
    * Controlled index of the displayed step. Out-of-range values are clamped to the first or last
-   * step (with a development warning).
+   * step (with a development warning). Opening the popover leaves it as it is.
    */
   activeStep?: number;
-  /** Initial step index for uncontrolled usage.
+  /**
+   * Initial step index for uncontrolled usage, and the step the popover starts on again each time
+   * it opens (after Done, Close, Escape or the Trigger closed it, or a controlled `open` turned it
+   * off), so a tour opened again starts over; `onStepChange` is called with it when the step was
+   * elsewhere.
    * @default 0
    */
   defaultActiveStep?: number;
@@ -55,7 +59,9 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   defaultCurrentStep?: number;
   /**
    * Called with the requested step index when Next, Back or a step button of
-   * `TeachingPopover.CarouselNav` is activated (the button of the current step requests nothing).
+   * `TeachingPopover.CarouselNav` is activated (the button of the current step requests nothing),
+   * and, while the step is uncontrolled, with the initial step when an opening moves the step back
+   * to it (see `defaultActiveStep`).
    */
   onStepChange?: (step: number) => void;
   /**
@@ -255,10 +261,35 @@ export const TeachingPopoverRoot = ({
       'defaultCurrentStep',
       'defaultActiveStep',
     ) ?? 0;
-  const [rawStep, setStep] = useControllable(controlledStep, initialStep, onStepChange);
+  const [storedStep, setStep, stepControlled] = useControllable(
+    controlledStep,
+    initialStep,
+    onStepChange,
+  );
   const parts = findParts(children);
   const [open, setOpen] = useControllable(openProp, defaultOpen ?? !parts.trigger, onOpenChange);
   const titleId = useId('teaching-popover-title');
+
+  // An uncontrolled step starts again at the initial step each time the popover opens (not on
+  // mount), whatever closed it and whatever opens it. The opening is noticed during render (C-HOOKS:
+  // a previous-value state), so the opened popover shows the initial step from its first render;
+  // the layout effect stores it through the setter (which calls `onStepChange` once, from the
+  // commit), and the render that reads it back ends the reset.
+  const [openSeen, setOpenSeen] = React.useState(open);
+  const [stepResetPending, setStepResetPending] = React.useState(false);
+  if (open !== openSeen) {
+    setOpenSeen(open);
+    if (open && !stepControlled && !Object.is(storedStep, initialStep)) {
+      setStepResetPending(true);
+    }
+  }
+  if (stepResetPending && (stepControlled || Object.is(storedStep, initialStep))) {
+    setStepResetPending(false);
+  }
+  React.useLayoutEffect(() => {
+    if (stepResetPending) setStep(initialStep);
+  }, [stepResetPending, initialStep, setStep]);
+  const rawStep = stepResetPending ? initialStep : storedStep;
 
   const count = steps.length;
   const shown = open && count > 0;
