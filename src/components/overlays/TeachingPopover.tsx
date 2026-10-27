@@ -4,6 +4,8 @@ import { teachingPopoverClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { DismissIcon } from '../../lib/icons';
+import { isElementOfType } from '../../lib/children';
+import { resolveSlot, slotRendersContent, type SlotObject } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { PopupAlign, PopupPositioning, PopupSide, VirtualElement } from '../../lib/types';
@@ -19,12 +21,35 @@ import { Button } from '../button/Button';
 import { Portal } from '../portal/Portal';
 import { getTabbableThrough, PopoverBeak, usePopoverTabOrder } from './Popover.shared';
 
+/**
+ * A footer action of a TeachingPopover (`primaryAction`, `secondaryAction`): the label content, or
+ * a Button-like slot (a `Button`, `<button>` or `<a>` element, or a slot object such as
+ * `{ as: 'a', href, children }`).
+ *
+ * The consumer's `onClick` runs first; then the step's normal action runs (Next or Done for the
+ * primary action, Back for the secondary one) unless the handler called `event.preventDefault()`.
+ */
+export type TeachingPopoverAction =
+  | React.ReactNode
+  | (SlotObject<'button'> &
+      Pick<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'target' | 'rel' | 'download'>);
+
 /** Defines a single step in a teaching popover sequence. */
 export interface TeachingPopoverStep {
   /** Title text for the step. */
   title: string;
   /** Body content for the step. */
   body: React.ReactNode;
+  /**
+   * Replaces the Next (or, on the last step, Done) button on this step; wins over the
+   * popover's `primaryAction`.
+   */
+  primaryAction?: TeachingPopoverAction;
+  /**
+   * Replaces the Back button on this step (also on a single-step popover, which has no Back);
+   * wins over the popover's `secondaryAction`.
+   */
+  secondaryAction?: TeachingPopoverAction;
 }
 
 /** The built-in text of a TeachingPopover, for localization (see `TeachingPopoverProps.labels`). */
@@ -74,8 +99,33 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   defaultCurrentStep?: number;
   /** Called with the requested step index when Next or Back is activated. */
   onStepChange?: (step: number) => void;
-  /** Called when the popover is dismissed with Close, Done or Escape. */
+  /**
+   * Called when the popover is dismissed with Close, Done or Escape.
+   *
+   * Done also calls it in 0.x, after `onFinish`, so that code written before `onFinish` keeps
+   * working; from 1.0 only Close and Escape will.
+   */
   onDismiss?: () => void;
+  /**
+   * Called when the tour is finished: Done, the button that replaces Next on the last step, or a
+   * `primaryAction` on the last step whose click was not prevented. The popover closes first.
+   * Close and Escape call only `onDismiss`. Fires on every activation, like `onStepChange`.
+   */
+  onFinish?: () => void;
+  /**
+   * Replaces the Next (or Done) button on every step that sets no `primaryAction` of its own.
+   */
+  primaryAction?: TeachingPopoverAction;
+  /**
+   * Replaces the Back button on every step that sets no `secondaryAction` of its own.
+   */
+  secondaryAction?: TeachingPopoverAction;
+  /**
+   * How the footer lays out the step dots and the buttons: side by side, or the dots above
+   * buttons that fill the width. Rendered as `data-layout`.
+   * @default 'horizontal'
+   */
+  footerLayout?: 'horizontal' | 'vertical';
   /** Controlled visibility of the teaching popover. */
   open?: boolean;
   /** Initial visibility for uncontrolled usage.
@@ -159,6 +209,62 @@ function resolveTarget(target: TeachingPopoverProps['target']): HTMLElement | nu
   return isRefObject(target) ? target.current : target;
 }
 
+const isButtonLikeElement = (action: unknown): action is React.ReactElement<ActionElementProps> =>
+  isElementOfType<ActionElementProps>(action as React.ReactNode, Button, 'button', 'a');
+
+interface ActionElementProps {
+  className?: string;
+  onClick?: React.MouseEventHandler<HTMLElement>;
+  appearance?: string;
+}
+
+/** The action a step shows: its own when it renders anything, else the popover's. */
+function pickAction(
+  own: TeachingPopoverAction | undefined,
+  fallback: TeachingPopoverAction | undefined,
+): TeachingPopoverAction | undefined {
+  if (slotRendersContent(own)) return own;
+  return slotRendersContent(fallback) ? fallback : undefined;
+}
+
+/**
+ * Renders a footer action as a button: content gets a Button around it, a slot object renders as
+ * a Button (or its `as`), and a Button-like element is used as given. Every form composes its own
+ * `onClick` before `onActivate`.
+ */
+function renderAction(
+  action: TeachingPopoverAction,
+  appearance: 'primary' | 'outline',
+  className: string,
+  onActivate: () => void,
+): React.ReactElement | null {
+  const activate = (event: React.MouseEvent<HTMLElement>) => {
+    if (!event.defaultPrevented) onActivate();
+  };
+  if (isButtonLikeElement(action)) {
+    const { className: own, onClick, appearance: ownAppearance } = action.props;
+    const isWaveButton = isElementOfType(action, Button);
+    return React.cloneElement(action, {
+      className: cn(className, own),
+      onClick: composeEventHandlers(onClick, activate),
+      ...(isWaveButton ? { appearance: ownAppearance ?? appearance } : undefined),
+    });
+  }
+  const resolved = resolveSlot<React.ElementType>(action, Button, className);
+  if (!resolved) return null;
+  const { onClick, ...props } = resolved.props as ActionElementProps & Record<string, unknown>;
+  return React.createElement(
+    resolved.Component,
+    {
+      // `appearance` is Button's own prop: a slot rendered as another element does not get it.
+      ...(resolved.Component === Button ? { appearance } : undefined),
+      ...props,
+      onClick: composeEventHandlers(onClick, activate),
+    },
+    resolved.children,
+  );
+}
+
 function clampStep(step: number, count: number): number {
   if (!Number.isFinite(step)) return 0;
   return Math.min(Math.max(Math.trunc(step), 0), count - 1);
@@ -173,6 +279,10 @@ function clampStep(step: number, count: number): number {
  * - The step is controllable with `activeStep`/`defaultActiveStep`/`onStepChange` and clamped to
  *   the available steps. The heading carries a visually hidden “step n of m”, the new step is
  *   announced politely, and Back stays focusable (`aria-disabled`) on the first step.
+ * - `primaryAction` and `secondaryAction` (on the popover, or on a step, which wins) replace Next/Done
+ *   and Back: a label, a Button-like element or a slot object. The consumer's `onClick` runs first,
+ *   then the step's normal action unless it called `preventDefault()`. Done calls `onFinish`
+ *   (and, in 0.x, `onDismiss`); `footerLayout` stacks the buttons.
  * - The built-in text is English: `labels` localizes Back, Next, Done and the step position, and
  *   `closeLabel` the Close button.
  * - Focus moves to the popover when it opens and returns to the element that had it when it
@@ -201,6 +311,10 @@ export const TeachingPopover = ({
   defaultCurrentStep,
   onStepChange,
   onDismiss,
+  onFinish,
+  primaryAction: primaryActionProp,
+  secondaryAction: secondaryActionProp,
+  footerLayout = 'horizontal',
   open: openProp,
   defaultOpen,
   onOpenChange,
@@ -326,6 +440,12 @@ export const TeachingPopover = ({
     setOpen(false);
     onDismiss?.();
   };
+  // Done: close, then `onFinish`. `onDismiss` still follows in 0.x (see its JSDoc).
+  const finish = () => {
+    setOpen(false);
+    onFinish?.();
+    onDismiss?.();
+  };
 
   const { layerId } = useDismiss({
     open: visible,
@@ -377,11 +497,16 @@ export const TeachingPopover = ({
 
   if (!shown || !step) return null;
 
-  const handleBack = () => setStep(index - 1);
+  const handleBack = () => {
+    if (!isFirst) setStep(index - 1);
+  };
   const handleNext = () => {
-    if (isLast) dismiss();
+    if (isLast) finish();
     else setStep(index + 1);
   };
+  const primaryAction = pickAction(step.primaryAction, primaryActionProp);
+  const secondaryAction = pickAction(step.secondaryAction, secondaryActionProp);
+  const vertical = footerLayout === 'vertical';
 
   return (
     <Portal disabled={!hasTarget} layerId={layerId}>
@@ -389,6 +514,7 @@ export const TeachingPopover = ({
         role="dialog"
         aria-labelledby={titleId}
         tabIndex={-1}
+        data-layout={footerLayout}
         {...rest}
         ref={elementRef}
         onKeyDown={composeEventHandlers(onKeyDown, onSurfaceKeyDown)}
@@ -449,10 +575,14 @@ export const TeachingPopover = ({
         <div
           className={cn(
             teachingPopoverClassNames.footer,
-            'flex items-center justify-between gap-2',
+            'flex gap-2',
+            vertical ? 'flex-col items-stretch gap-4' : 'items-center justify-between',
           )}
         >
-          <div aria-hidden="true" className="flex items-center gap-1.5">
+          <div
+            aria-hidden="true"
+            className={cn('flex items-center gap-1.5', vertical && 'justify-center')}
+          >
             {steps.map((_, i) => (
               <span
                 key={i}
@@ -469,23 +599,41 @@ export const TeachingPopover = ({
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            {count > 1 && (
+          <div className={cn('flex gap-2', vertical ? 'flex-col items-stretch' : 'items-center')}>
+            {secondaryAction
+              ? renderAction(
+                  secondaryAction,
+                  'outline',
+                  teachingPopoverClassNames.secondaryButton,
+                  handleBack,
+                )
+              : count > 1 && (
+                  <Button
+                    {...focusableDisabledProps(isFirst)}
+                    className={teachingPopoverClassNames.backButton}
+                    onClick={preventIfDisabled(isFirst, handleBack)}
+                  >
+                    {labels?.back ?? DEFAULT_BACK_LABEL}
+                  </Button>
+                )}
+            {primaryAction ? (
+              renderAction(
+                primaryAction,
+                'primary',
+                teachingPopoverClassNames.primaryButton,
+                handleNext,
+              )
+            ) : (
               <Button
-                {...focusableDisabledProps(isFirst)}
-                className={teachingPopoverClassNames.backButton}
-                onClick={preventIfDisabled(isFirst, handleBack)}
+                appearance="primary"
+                className={teachingPopoverClassNames.nextButton}
+                onClick={handleNext}
               >
-                {labels?.back ?? DEFAULT_BACK_LABEL}
+                {isLast
+                  ? (labels?.done ?? DEFAULT_DONE_LABEL)
+                  : (labels?.next ?? DEFAULT_NEXT_LABEL)}
               </Button>
             )}
-            <Button
-              appearance="primary"
-              className={teachingPopoverClassNames.nextButton}
-              onClick={handleNext}
-            >
-              {isLast ? (labels?.done ?? DEFAULT_DONE_LABEL) : (labels?.next ?? DEFAULT_NEXT_LABEL)}
-            </Button>
           </div>
         </div>
       </div>

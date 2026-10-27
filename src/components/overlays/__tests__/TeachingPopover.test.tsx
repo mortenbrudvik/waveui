@@ -4,13 +4,17 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import {
   TeachingPopover,
+  type TeachingPopoverAction,
   type TeachingPopoverLabels,
   type TeachingPopoverProps,
 } from '../TeachingPopover';
+import { Button } from '../../button/Button';
+import { teachingPopoverClassNames } from '../../../lib/classNames';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
 import { getOpenLayers, subscribeLayers } from '../../../lib/layers';
 import { FOCUSABLE_SELECTOR } from '../../../lib/focus';
 import {
+  expectNoA11yViolations,
   renderWithProviders,
   testComposedHandler,
   testNoImplicitSubmit,
@@ -1222,6 +1226,315 @@ describe('TeachingPopover', () => {
 
       rerender(<Harness step={2} withTarget />);
       await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Done, step 3 of 3'));
+    });
+  });
+
+  describe('footer actions and onFinish (P9-07)', () => {
+    const tip = [{ title: 'Tip', body: 'Press Ctrl+K.' }];
+
+    it('a single-step tip takes a secondary "Learn more" and a primary "Got it"', async () => {
+      const user = userEvent.setup();
+      const onLearn = vi.fn();
+      const onGotIt = vi.fn();
+      const onFinish = vi.fn();
+      render(
+        <TeachingPopover
+          steps={tip}
+          onFinish={onFinish}
+          secondaryAction={<Button onClick={onLearn}>Learn more</Button>}
+          primaryAction={{ children: 'Got it', onClick: onGotIt }}
+        />,
+      );
+      expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+      const learn = screen.getByRole('button', { name: 'Learn more' });
+      expect(learn).toHaveClass(teachingPopoverClassNames.secondaryButton);
+      await user.click(learn);
+      expect(onLearn).toHaveBeenCalledTimes(1);
+      expect(onFinish).not.toHaveBeenCalled();
+      const gotIt = screen.getByRole('button', { name: 'Got it' });
+      expect(gotIt).toHaveClass(teachingPopoverClassNames.primaryButton);
+      await user.click(gotIt);
+      expect(onGotIt).toHaveBeenCalledTimes(1);
+      expect(onFinish).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('accepts plain content: a string label becomes the button', async () => {
+      const user = userEvent.setup();
+      const onFinish = vi.fn();
+      render(<TeachingPopover steps={tip} onFinish={onFinish} primaryAction="Got it" />);
+      await user.click(screen.getByRole('button', { name: 'Got it' }));
+      expect(onFinish).toHaveBeenCalledTimes(1);
+    });
+
+    it('a Button-like element is used as given (no nested button) and a slot object can be a link', async () => {
+      const user = userEvent.setup();
+      render(
+        <TeachingPopover
+          steps={tip}
+          secondaryAction={{ as: 'a', href: '#docs', children: 'Docs' }}
+          primaryAction={<button type="button">Ok</button>}
+        />,
+      );
+      expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', '#docs');
+      expect(screen.getByRole('link', { name: 'Docs' })).not.toHaveAttribute('appearance');
+      const ok = screen.getByRole('button', { name: 'Ok' });
+      expect(ok.querySelector('button')).toBeNull();
+      expect(ok).toHaveClass(teachingPopoverClassNames.primaryButton);
+      await user.click(ok);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('step actions replace Next/Done and Back on that step only', async () => {
+      const user = userEvent.setup();
+      render(
+        <TeachingPopover
+          steps={[
+            { title: 'One', body: 'a' },
+            {
+              title: 'Two',
+              body: 'b',
+              primaryAction: 'Continue',
+              secondaryAction: 'Skip back',
+            },
+            { title: 'Three', body: 'c' },
+          ]}
+          defaultActiveStep={1}
+        />,
+      );
+      expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Skip back' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(heading()).toHaveTextContent(/^Three/);
+      expect(screen.getByRole('button', { name: 'Back' })).toHaveClass(
+        teachingPopoverClassNames.backButton,
+      );
+      expect(screen.getByRole('button', { name: 'Done' })).toHaveClass(
+        teachingPopoverClassNames.nextButton,
+      );
+      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    });
+
+    it('root actions are the defaults and a step action wins', async () => {
+      const user = userEvent.setup();
+      render(
+        <TeachingPopover
+          steps={[
+            { title: 'One', body: 'a' },
+            { title: 'Two', body: 'b', primaryAction: 'Own primary' },
+          ]}
+          primaryAction="Root primary"
+          secondaryAction="Root secondary"
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Root primary' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Root secondary' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Root primary' }));
+      expect(heading()).toHaveTextContent(/^Two/);
+      expect(screen.getByRole('button', { name: 'Own primary' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Root primary' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Root secondary' })).toBeInTheDocument();
+    });
+
+    it('an action that renders nothing falls back to the built-in buttons', () => {
+      render(
+        <TeachingPopover
+          steps={[
+            { title: 'One', body: 'a', primaryAction: null, secondaryAction: [] },
+            { title: 'Two', body: 'b' },
+          ]}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    });
+
+    it('the consumer onClick runs first; the step action follows', async () => {
+      const user = userEvent.setup();
+      const calls: string[] = [];
+      render(
+        <TeachingPopover
+          steps={steps}
+          onStepChange={() => calls.push('step')}
+          primaryAction={{ children: 'Go', onClick: () => calls.push('click') }}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Go' }));
+      expect(calls).toEqual(['click', 'step']);
+      expect(heading()).toHaveTextContent(/^Features/);
+    });
+
+    it('preventDefault() in the primary action keeps the step and the popover', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      const onFinish = vi.fn();
+      const onDismiss = vi.fn();
+      render(
+        <TeachingPopover
+          steps={steps}
+          activeStep={0}
+          onStepChange={onStepChange}
+          onFinish={onFinish}
+          onDismiss={onDismiss}
+          primaryAction={{ children: 'Stay', onClick: (event) => event.preventDefault() }}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Stay' }));
+      expect(onStepChange).not.toHaveBeenCalled();
+      expect(heading()).toHaveTextContent(/^Welcome/);
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(onFinish).not.toHaveBeenCalled();
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('preventDefault() on the last step keeps the popover open and skips onFinish', async () => {
+      const user = userEvent.setup();
+      const onFinish = vi.fn();
+      render(
+        <TeachingPopover
+          steps={tip}
+          onFinish={onFinish}
+          primaryAction={<Button onClick={(event) => event.preventDefault()}>Hold on</Button>}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Hold on' }));
+      expect(onFinish).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('a secondary action runs Back on a later step unless prevented', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      const { rerender } = render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          onStepChange={onStepChange}
+          secondaryAction="Previous tip"
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Previous tip' }));
+      expect(onStepChange).toHaveBeenCalledWith(0);
+      expect(heading()).toHaveTextContent(/^Welcome/);
+      onStepChange.mockClear();
+      rerender(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          onStepChange={onStepChange}
+          secondaryAction={{ children: 'Learn more', onClick: (event) => event.preventDefault() }}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Learn more' }));
+      expect(onStepChange).not.toHaveBeenCalled();
+    });
+
+    it('a secondary action on the first step does not step back', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      render(
+        <TeachingPopover steps={steps} onStepChange={onStepChange} secondaryAction="Learn more" />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Learn more' }));
+      expect(onStepChange).not.toHaveBeenCalled();
+      expect(heading()).toHaveTextContent(/^Welcome/);
+    });
+
+    it('Done calls onFinish, then onDismiss (kept in 0.x); Close and Escape only onDismiss', async () => {
+      const user = userEvent.setup();
+      const calls: string[] = [];
+      render(
+        <TeachingPopover
+          steps={steps}
+          activeStep={2}
+          open
+          onOpenChange={() => calls.push('open')}
+          onFinish={() => calls.push('finish')}
+          onDismiss={() => calls.push('dismiss')}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Done' }));
+      expect(calls).toEqual(['open', 'finish', 'dismiss']);
+      calls.length = 0;
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+      await user.keyboard('{Escape}');
+      expect(calls).toEqual(['open', 'dismiss', 'open', 'dismiss']);
+    });
+
+    it('fires onFinish once per Done under StrictMode', async () => {
+      const user = userEvent.setup();
+      const onFinish = vi.fn();
+      render(
+        <React.StrictMode>
+          <TeachingPopover steps={tip} onFinish={onFinish} />
+        </React.StrictMode>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Done' }));
+      expect(onFinish).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns focus to the opener after a custom primary action finishes the tour', async () => {
+      const user = userEvent.setup();
+      function Tour() {
+        const [open, setOpen] = React.useState(false);
+        return (
+          <>
+            <button type="button" onClick={() => setOpen(true)}>
+              Start tour
+            </button>
+            <TeachingPopover
+              steps={tip}
+              open={open}
+              onOpenChange={setOpen}
+              primaryAction="Got it"
+            />
+          </>
+        );
+      }
+      render(<Tour />);
+      await user.click(screen.getByRole('button', { name: 'Start tour' }));
+      await user.click(screen.getByRole('button', { name: 'Got it' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Start tour' })).toHaveFocus();
+    });
+
+    it('renders data-layout, horizontal by default, and stacks the buttons when vertical', () => {
+      const { rerender } = render(<TeachingPopover steps={steps} />);
+      expect(screen.getByRole('dialog')).toHaveAttribute('data-layout', 'horizontal');
+      expect(screen.getByRole('button', { name: 'Next' }).parentElement).not.toHaveClass(
+        'flex-col',
+      );
+      rerender(<TeachingPopover steps={steps} footerLayout="vertical" />);
+      expect(screen.getByRole('dialog')).toHaveAttribute('data-layout', 'vertical');
+      expect(screen.getByRole('button', { name: 'Next' }).parentElement).toHaveClass('flex-col');
+    });
+
+    it('has no axe violations with custom actions in both layouts', async () => {
+      const { rerender } = render(
+        <TeachingPopover steps={tip} secondaryAction="Learn more" primaryAction="Got it" />,
+      );
+      await expectNoA11yViolations();
+      rerender(
+        <TeachingPopover
+          steps={tip}
+          footerLayout="vertical"
+          secondaryAction={{ as: 'a', href: '#docs', children: 'Learn more' }}
+          primaryAction="Got it"
+        />,
+      );
+      await expectNoA11yViolations();
+    });
+
+    it('types the actions as slots', () => {
+      expectTypeOf<TeachingPopoverProps['primaryAction']>().toEqualTypeOf<
+        TeachingPopoverAction | undefined
+      >();
+      expectTypeOf<TeachingPopoverProps['footerLayout']>().toEqualTypeOf<
+        'horizontal' | 'vertical' | undefined
+      >();
+      expectTypeOf<TeachingPopoverProps['onFinish']>().toEqualTypeOf<(() => void) | undefined>();
     });
   });
 

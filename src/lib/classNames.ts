@@ -1371,8 +1371,9 @@ export const drawerFooterClassNames = { root: 'wave-drawer-footer' } as const;
 
 /**
  * TeachingPopover: `root` on the `role="dialog"` surface; `beak` on the arrow; `closeButton`,
- * `backButton` and `nextButton` on its buttons (which also carry Button's root); `title` on the
- * `<h3>`; `body` on the step body; `footer` on the bottom row; `dot` on each step dot.
+ * `backButton` and `nextButton` on its buttons (which also carry Button's root);
+ * `primaryButton` and `secondaryButton` on the buttons that a `primaryAction` and a
+ * `secondaryAction` render in place of Next/Done and Back; `title` on the `<h3>`; `body` on the step body; `footer` on the bottom row; `dot` on each step dot.
  */
 export const teachingPopoverClassNames = {
   root: 'wave-teaching-popover',
@@ -1384,6 +1385,8 @@ export const teachingPopoverClassNames = {
   dot: 'wave-teaching-popover__dot',
   backButton: 'wave-teaching-popover__back-button',
   nextButton: 'wave-teaching-popover__next-button',
+  primaryButton: 'wave-teaching-popover__primary-button',
+  secondaryButton: 'wave-teaching-popover__secondary-button',
 } as const;
 
 // ---------------------------------------------------------------------------

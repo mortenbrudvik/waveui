@@ -68,4 +68,5 @@ export type {
   TeachingPopoverProps,
   TeachingPopoverStep,
   TeachingPopoverLabels,
+  TeachingPopoverAction,
 } from './TeachingPopover';
