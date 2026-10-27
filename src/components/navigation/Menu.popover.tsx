@@ -1,7 +1,9 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { menuPopoverClassNames } from '../../lib/classNames';
+import { popupMotion } from '../../lib/motion';
 import type {
+  MotionSlot,
   PopupAlign,
   PopupPositioning,
   PopupSide,
@@ -16,8 +18,10 @@ import { isEditableTarget, isOwnEvent } from '../../lib/events';
 import { isConnectedAndFocusable } from '../../lib/focus';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { createHoverIntentGroup, type HoverIntentGroup } from '../../hooks/useHoverIntent';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
@@ -62,6 +66,19 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * @default `{ fitViewport: true }`
    */
   positioning?: PopupPositioning;
+  /**
+   * The menu's motion. By default it fades in and slides 4px away from its trigger, on the side
+   * it opened on (a submenu away from its parent menu), over 200 ms with a decelerating curve, and
+   * fades out and slides back over 100 ms with an accelerating curve; under reduced motion it
+   * appears and disappears at once. `null` turns the motion off (the surface still renders its
+   * `data-presence` phases, which then end at once); a class string or `{ className }` replaces
+   * the default classes with yours (see `MotionSlot`), also under a `WaveProvider` with
+   * `motion="none"`, which otherwise turns the default off. A `className` that holds
+   * `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default motion,
+   * your classes animate the surface. Fluent's `Menu` `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
   /** Menu items and dividers. */
   children: React.ReactNode;
   /**
@@ -152,11 +169,18 @@ export function useMenuListPointer(menu: MenuContextValue): {
  * the element focused at the gesture; it is not labelled by its region, so give it `aria-label`
  * (development warning otherwise), as for a menu placed at a `target` without `Menu.Trigger`.
  *
- * The surface mounts through the presence core (`usePresence`): it carries
- * `data-presence="entering" | "entered" | "exiting"` and, while it closes, `data-state="closed"`
- * and `inert`, so exit motion classes on `data-presence` keep it on screen until they end. Focus,
- * the dismiss layer and positioning follow the open state, not the exit. Without motion it unmounts
- * as soon as it closes.
+ * It moves in and out: the surface fades in and slides 4px away from its trigger over 200 ms, and
+ * fades out and slides back over 100 ms, on the side it opened on (`data-side`), so a submenu
+ * slides out of its parent menu; a menu open by default animates in when it mounts in the
+ * browser. Under reduced motion it appears and disappears at once. `motion` turns the motion off
+ * (`null`) or replaces its classes, and a `WaveProvider` with `motion="none"` turns the default
+ * off; a `className` with `data-[presence=…]` classes and no `motion` keeps 0.14's behaviour (your
+ * classes, no default motion). The surface mounts through the presence core (`usePresence`): it
+ * carries `data-presence="entering" | "entered" | "exiting"` and, while it closes,
+ * `data-state="closed"` and `inert`, so it stays on screen, where it was, until its exit motion
+ * ends. Focus, the dismiss layer and positioning follow the open state, not the exit: focus
+ * inside a closing menu leaves it in the commit that closes it. Without motion it unmounts as
+ * soon as it closes.
  *
  * Also exported as `MenuPopover` (import the flat name from React Server Components).
  */
@@ -166,6 +190,7 @@ export const MenuPopover = ({
   offset,
   target: targetProp,
   positioning,
+  motion,
   children,
   className,
   style,
@@ -216,9 +241,12 @@ export const MenuPopover = ({
     setSurface(element);
   }, []);
 
-  // The surface mounts and unmounts through the presence core; everything else below keys on
-  // `open`, so focus returns and the layer goes on close, not after an exit motion.
-  const { isMounted, ref: presenceRef, presenceProps } = usePresence(open);
+  // The surface mounts and unmounts through the presence core, and enters also when it mounts open
+  // (D9: a menu open by default animates in on a client render as after hydration); everything
+  // else below keys on `open`, so focus returns and the layer goes on close, not after the exit.
+  const { isMounted, ref: presenceRef, presenceProps } = usePresence(open, { appear: true });
+  // The motion classes (a `className` with presence variants keeps 0.14's own motion, D19).
+  const motionClassName = useMotionClasses(motion, popupMotion, className);
 
   const {
     setReference,
@@ -295,43 +323,6 @@ export const MenuPopover = ({
 
   const triggerFocusRef = useTriggerFocusRef(triggerRef);
 
-  // The element focused when the menu opened, captured as useRestoreFocus captures its opener: in
-  // the commit that opens the menu, before the initial focus moves into it; the trigger's focus
-  // target first (not in a context menu, whose region is no opener), else the focused element.
-  const openerRef = React.useRef<HTMLElement | null>(null);
-  const wasOpenRef = React.useRef(false);
-  const captureOpener = useEventCallback(() => {
-    const container = surfaceRef.current;
-    const doc = (triggerRef.current ?? container)?.ownerDocument ?? document;
-    const isCandidate = (el: Element | null | undefined): el is HTMLElement =>
-      !!el && el !== doc.body && el !== doc.documentElement && !container?.contains(el);
-    const trigger = openOnContext ? null : triggerFocusRef.current;
-    const active = doc.activeElement;
-    openerRef.current = isCandidate(trigger) ? trigger : isCandidate(active) ? active : null;
-  });
-  React.useInsertionEffect(() => {
-    const wasOpen = wasOpenRef.current;
-    wasOpenRef.current = open;
-    if (open && !wasOpen) captureOpener();
-  });
-  // Where focus goes when the menu closes with focus inside it (Escape, a close by the app): where
-  // useRestoreFocus would put it, in its order: the context opener, the element focused when the
-  // menu opened, then the return target (a menu with a `target` and no trigger returns focus to
-  // its opener, not to a focusable target element).
-  const getCloseFocus = useEventCallback((): HTMLElement | null => {
-    const container = surfaceRef.current;
-    const candidates = [
-      openOnContext ? contextOpener.current : null,
-      openerRef.current,
-      getReturnFocus(),
-    ];
-    return (
-      candidates.find(
-        (el): el is HTMLElement => !!el && isConnectedAndFocusable(el) && !container?.contains(el),
-      ) ?? null
-    );
-  });
-
   useRestoreFocus({
     enabled: open,
     container: surface,
@@ -391,34 +382,23 @@ export const MenuPopover = ({
     return () => registerSurface(null);
   }, [surface, open, registerSurface, focusFirst, focusLast, layerId, getReturnFocus]);
 
-  // Focus before close, on every close: when the menu closes with focus inside it, focus moves to
-  // where the restore would put it (`getCloseFocus`) in the closing commit's mutation phase (a
-  // layout effect cleanup), before a surface opened in the same update (a Dialog rendered after
-  // the menu, opened by the item that closed it) records the focused element as its opener. The
-  // closing surface is still in the document then (it unmounts once its exit phase ends), so that
-  // opener would be its item, gone by the time the Dialog closes. The surface is inert from this
-  // commit on, so in a browser React cannot put focus back on the item after the commit, and
-  // useRestoreFocus, which then finds focus outside, leaves it there: the two must agree on the
-  // target. Unmounting is left to useRestoreFocus.
-  const unmountingRef = React.useRef(false);
-  React.useLayoutEffect(() => {
-    unmountingRef.current = false;
-    return () => {
-      unmountingRef.current = true;
-    };
-  }, []);
-  const focusReturnTargetOnClose = useEventCallback(() => {
-    const surfaceElement = surfaceRef.current;
-    const active = surfaceElement?.ownerDocument.activeElement;
-    if (unmountingRef.current || !surfaceElement || !active || !surfaceElement.contains(active)) {
-      return;
-    }
-    getCloseFocus()?.focus({ preventScroll: true });
+  // Focus before close, on every close: when the menu closes with focus inside it, focus moves in
+  // the closing commit to where useRestoreFocus would put it, in its order: the context opener,
+  // the element focused when the menu opened (the trigger's focus target first, but not in a
+  // context menu, whose region is no opener), then the return target (a menu with a `target` and
+  // no trigger returns focus to its opener, not to a focusable target element). A Dialog opened
+  // by the item that closed the menu then records that element as its opener, not the item, which
+  // the exiting surface still holds. Unmounting is left to useRestoreFocus.
+  useFocusBeforeClose({
+    open,
+    surfaceRef,
+    captureOpener: () => (openOnContext ? null : triggerFocusRef.current),
+    candidates: (opener) => [
+      openOnContext ? contextOpener.current : null,
+      opener,
+      getReturnFocus(),
+    ],
   });
-  React.useLayoutEffect(() => {
-    if (!open) return undefined;
-    return focusReturnTargetOnClose;
-  }, [open, focusReturnTargetOnClose]);
 
   // Initial focus: the first (or last) enabled item, unless focus is already inside. A hover
   // opening moves no focus.
@@ -527,7 +507,7 @@ export const MenuPopover = ({
           onPointerLeave={composeEventHandlers(onPointerLeave, hoverSurfaceHandlers.onPointerLeave)}
           onPointerMove={composeEventHandlers(onPointerMove, listPointerMove)}
           onContextMenu={composeEventHandlers(onContextMenu, contextSurfaceHandlers.onContextMenu)}
-          className={cn(menuPopoverClassNames.root, menuPopoverClasses, className)}
+          className={cn(menuPopoverClassNames.root, menuPopoverClasses, motionClassName, className)}
         >
           {children}
         </div>

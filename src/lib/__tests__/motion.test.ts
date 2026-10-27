@@ -13,6 +13,9 @@
  * 3. a transition has a reduced-motion `transition-none`, an animation a reduced-motion
  *    animation;
  * 4. every class with the `starting` variant is gated on the entering phase;
+ * 5. a recipe of a positioned surface ({@link POSITIONED_RECIPES}) never transitions `transform`
+ *    (floating-ui positions the surface with it), and one that slides
+ *    ({@link SLIDING_POSITIONED_RECIPES}) lists `translate` in its transition;
  * 6. a backdrop exits with its surface's exit duration (D16: the core waits only for the surface,
  *    so a longer backdrop would be cut off), per pair of {@link BACKDROP_PAIRS}; a backdrop per
  *    size ({@link SIZED_BACKDROP_PAIRS}) takes its size's duration both ways and exits with its
@@ -341,6 +344,50 @@ function ungatedStarts(value: string): string[] {
 }
 
 /**
+ * Check 5 (D4): the recipes of positioned surfaces. floating-ui places them with an inline
+ * `transform`, so a transition of that property would slide them from their last position (or the
+ * viewport's corner) every time they move.
+ */
+const POSITIONED_RECIPES = ['popupMotion'];
+
+/** Check 5 (D4, plan ruling 3): the positioned recipes that slide, so must list `translate`. */
+const SLIDING_POSITIONED_RECIPES = ['popupMotion'];
+
+/** The transition utilities that transition `transform`: every property, or that one by name. */
+const TRANSFORM_TRANSITIONS = new Set(['transition', 'transition-all', 'transition-transform']);
+
+/** The properties an arbitrary transition utility lists (`transition-[opacity,translate]`). */
+function arbitraryTransitionList(utility: string): string[] {
+  const match = /^transition-\[(.+)\]$/.exec(utility);
+  return match ? match[1].split(',').map((property) => property.trim()) : [];
+}
+
+/**
+ * Check 5: the words of `value` that transition `transform`, under any variants: Tailwind's
+ * `transition`, `transition-all` and `transition-transform`, and an arbitrary list that holds
+ * `transform` or `all`.
+ */
+function transformTransitions(value: string): string[] {
+  return words(value).filter((word) => {
+    const { utility } = parseWord(word);
+    if (TRANSFORM_TRANSITIONS.has(utility)) return true;
+    return arbitraryTransitionList(utility).some(
+      (property) => property === 'transform' || property === 'all',
+    );
+  });
+}
+
+/** Check 5: whether a transition of `value` (not under reduced motion) lists `translate`. */
+function listsTranslate(value: string): boolean {
+  return words(value)
+    .map(parseWord)
+    .some(
+      ({ variants, utility }) =>
+        !isReduced(variants) && arbitraryTransitionList(utility).includes('translate'),
+    );
+}
+
+/**
  * The variants under which an inline drawer's structure lifts its panel's size cap: the children
  * of the element while it is not entered (while it enters or exits it is a grid whose track a
  * percentage cap would follow, squeezing the panel; entered, it has no box and the cap applies).
@@ -655,6 +702,47 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
 
     it('holds for every recipe', () => {
       expect(findings(ungatedStarts)).toEqual([]);
+    });
+  });
+
+  describe('5. a positioned surface never transitions transform (D4)', () => {
+    it('reports every transition that moves transform, under any variants', () => {
+      expect(
+        transformTransitions(
+          'transition transition-all data-[presence=exiting]:transition-transform transition-[opacity,transform] transition-[all] transition-[opacity,translate] transition-opacity motion-reduce:transition-none',
+        ),
+      ).toEqual([
+        'transition',
+        'transition-all',
+        'data-[presence=exiting]:transition-transform',
+        'transition-[opacity,transform]',
+        'transition-[all]',
+      ]);
+    });
+
+    it('reads whether a transition lists translate', () => {
+      expect(listsTranslate('transition-[opacity,translate] duration-wave-fast')).toBe(true);
+      expect(listsTranslate('data-[presence=exiting]:transition-[translate,opacity]')).toBe(true);
+      expect(listsTranslate('transition-[opacity,scale] data-[side=top]:translate-y-1')).toBe(
+        false,
+      );
+      expect(listsTranslate('transition-opacity motion-reduce:transition-[translate]')).toBe(false);
+    });
+
+    it('holds for every positioned recipe, a string export of the module', () => {
+      const exports: Readonly<Record<string, unknown>> = motion;
+      expect(POSITIONED_RECIPES.length).toBeGreaterThan(0);
+      for (const name of [...POSITIONED_RECIPES, ...SLIDING_POSITIONED_RECIPES]) {
+        expect(typeof exports[name], name).toBe('string');
+      }
+      expect(
+        POSITIONED_RECIPES.flatMap((name) =>
+          transformTransitions(String(exports[name])).map((word) => `${name}: ${word}`),
+        ),
+      ).toEqual([]);
+      expect(
+        SLIDING_POSITIONED_RECIPES.filter((name) => !listsTranslate(String(exports[name]))),
+      ).toEqual([]);
     });
   });
 
