@@ -102,10 +102,11 @@ export interface ListFocusLoss {
 /**
  * The registry behind a List's snapshot.
  *
- * Only a selectable List publishes (`setActive(true)` in its layout effect): a plain list never
- * reads the registry, so its items' registrations cost O(1) and cause no renders. The snapshot is
- * `null` while inactive and until the List's first commit, so the server and the first client
- * render treat every selected value as present.
+ * Only a List that navigates its items publishes (`setActive(true)` in its layout effect: a
+ * selectable list, or `navigationMode` `items` or `composite`): a plain list never reads the
+ * registry, so its items' registrations cost O(1) and cause no renders. The snapshot is `null`
+ * while inactive and until the List's first commit, so the server and the first client render
+ * treat every selected value as present.
  */
 export class ListRegistry {
   private readonly records = new Map<object, ListItemRecord>();
@@ -179,7 +180,7 @@ export class ListRegistry {
     this.publish();
   }
 
-  /** Called by the List after each commit that changes `selectable` (and on mount). */
+  /** Called by the List after each commit that changes whether it navigates (and on mount). */
   setActive(active: boolean): void {
     if (active === this.active) return;
     this.active = active;

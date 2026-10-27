@@ -288,13 +288,15 @@ export const imageClassNames = { root: 'wave-image' } as const;
 export const listClassNames = { root: 'wave-list' } as const;
 
 /**
- * List.Item: `root` on the `<li>` (the `role="row"` element of a list with actions); `content` on
- * the content element; `action` on the action cell.
+ * List.Item: `root` on the `<li>` (the `role="row"` element of a grid list); `content` on the
+ * content element; `action` on the action cell; `checkmark` on the check mark element of an item
+ * of a selectable list (the List's `checkmark`, or the item's own).
  */
 export const listItemClassNames = {
   root: 'wave-list-item',
   content: 'wave-list-item__content',
   action: 'wave-list-item__action',
+  checkmark: 'wave-list-item__checkmark',
 } as const;
 
 // ---------------------------------------------------------------------------
