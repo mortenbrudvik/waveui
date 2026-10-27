@@ -1650,11 +1650,19 @@ describe('0.14 collections, data grids and tours from the package entry', () => 
       visibleItems: string[];
       groupVisibility: Record<string, OverflowGroupVisibility>;
     }>();
-    // A handler of the hidden ids alone fits.
+    // `details` is optional until 1.0: a handler of the hidden ids alone fits, one that takes the
+    // details as optional too, and code that calls the prop may pass the ids only.
     type OnOverflowChange = NonNullable<OverflowProps['onOverflowChange']>;
     expectTypeOf<OnOverflowChange>().parameter(0).toEqualTypeOf<string[]>();
+    expectTypeOf<OnOverflowChange>()
+      .parameter(1)
+      .toEqualTypeOf<OverflowChangeDetails | undefined>();
     const hiddenOnly = (hiddenItems: string[]) => void hiddenItems;
+    const withDetails = (hiddenItems: string[], details?: OverflowChangeDetails) =>
+      void [hiddenItems, details?.groupVisibility];
     expectTypeOf(hiddenOnly).toExtend<OnOverflowChange>();
+    expectTypeOf(withDetails).toExtend<OnOverflowChange>();
+    expectTypeOf<OnOverflowChange>().toBeCallableWith(['a']);
 
     expectTypeOf<OverflowItemProps>().toEqualTypeOf<
       OverflowItemBaseProps & OverflowItemPriorityProps

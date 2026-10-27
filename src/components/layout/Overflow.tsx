@@ -93,9 +93,11 @@ export interface OverflowProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Called, from an effect, when the set of hidden items changes (not for the initial, empty set),
    * with the hidden `itemId`s in DOM order and the {@link OverflowChangeDetails}. Called once per
-   * change in StrictMode, and only for a set that has been rendered.
+   * change in StrictMode, and only for a set that has been rendered. The Overflow always passes
+   * `details`; it is typed optional until 1.0, as the second argument of every callback is, so a
+   * handler of the hidden ids alone fits.
    */
-  onOverflowChange?: (hiddenItems: string[], details: OverflowChangeDetails) => void;
+  onOverflowChange?: (hiddenItems: string[], details?: OverflowChangeDetails) => void;
   ref?: React.Ref<HTMLDivElement>;
 }
 
