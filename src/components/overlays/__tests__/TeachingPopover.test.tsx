@@ -1652,6 +1652,101 @@ describe('TeachingPopover', () => {
   });
 });
 
+/**
+ * The markup of the `steps` form, pinned byte for byte (spec D2: an unchanged call renders as it
+ * did): the surface's attributes and its `innerHTML`, ids normalized. Recorded from 0.14, whose
+ * parts render the steps form: the header element around the Close button and the classes of
+ * TeachingPopover.Header, Title, Body and Footer. Update it only for an intended markup change.
+ */
+describe('TeachingPopover steps form markup (D2)', () => {
+  const normalize = (html: string) => html.replace(/\b(id|aria-labelledby)="[^"]*"/g, '$1=""');
+  const surfaceAttributes = (el: HTMLElement) =>
+    Array.from(el.attributes, (attr): [string, string] => [
+      attr.name,
+      attr.name === 'aria-labelledby' ? '' : attr.value,
+    ]);
+
+  const BUTTON =
+    'wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  const SECONDARY = `${BUTTON} h-8 min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed`;
+  const PRIMARY = `${BUTTON} h-8 min-w-24 px-3 text-body-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed`;
+  const HEADER =
+    '<div class="wave-teaching-popover-header">' +
+    `<button aria-label="Close" type="button" class="${BUTTON} h-6 w-6 px-0 text-caption-1 border border-transparent bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__close-button absolute end-3 top-3">` +
+    '<span aria-hidden="true" class="wave-button__icon inline-flex shrink-0 items-center">' +
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 20 20" data-wave-icon="dismiss" fill="currentColor" aria-hidden="true" focusable="false">' +
+    '<path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"></path>' +
+    '</svg></span></button></div>';
+  const TITLE_OPEN =
+    '<h3 id="" class="wave-teaching-popover-title wave-teaching-popover__title mb-2 pe-8 text-subtitle-1 font-semibold text-foreground">';
+  const BODY_OPEN =
+    '<div class="wave-teaching-popover-body wave-teaching-popover__body mb-4 text-body-1 text-muted-foreground">';
+  const FOOTER_OPEN =
+    '<div data-layout="horizontal" class="wave-teaching-popover-footer wave-teaching-popover__footer flex gap-2 items-center justify-between">' +
+    '<div aria-hidden="true" class="flex items-center gap-1.5">';
+  const DOT =
+    'wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none';
+  const CURRENT_DOT = `<span data-wave-teaching-popover-dot="" aria-current="step" class="${DOT} w-4 bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none"></span>`;
+  const OTHER_DOT = `<span data-wave-teaching-popover-dot="" class="${DOT} w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none"></span>`;
+  const BUTTONS_OPEN = '</div><div class="flex gap-2 items-center">';
+  const FOOTER_CLOSE = '</div></div>';
+  const SURFACE_ATTRIBUTES = [
+    ['role', 'dialog'],
+    ['aria-labelledby', ''],
+    ['tabindex', '-1'],
+    ['data-layout', 'horizontal'],
+    [
+      'class',
+      'wave-teaching-popover relative w-80 rounded-md border border-border bg-background p-5 text-foreground shadow-8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+    ],
+  ];
+
+  it('the first of three steps: a focusable aria-disabled Back and Next', () => {
+    render(<TeachingPopover steps={steps} />);
+    const dialog = screen.getByRole('dialog');
+    expect(surfaceAttributes(dialog)).toEqual(SURFACE_ATTRIBUTES);
+    expect(normalize(dialog.innerHTML)).toBe(
+      HEADER +
+        `${TITLE_OPEN}Welcome<span class="sr-only">, step 1 of 3</span></h3>` +
+        `${BODY_OPEN}This is step one.</div>` +
+        FOOTER_OPEN +
+        CURRENT_DOT +
+        OTHER_DOT +
+        OTHER_DOT +
+        BUTTONS_OPEN +
+        `<button aria-disabled="true" data-disabled="" type="button" class="${SECONDARY} cursor-not-allowed opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:text-[GrayText] forced-colors:border-[GrayText] wave-teaching-popover__back-button">Back</button>` +
+        `<button type="button" class="${PRIMARY} wave-teaching-popover__next-button">Next</button>` +
+        FOOTER_CLOSE,
+    );
+  });
+
+  it('the last of two steps: Back and Done', () => {
+    render(
+      <TeachingPopover
+        steps={[
+          { title: 'Tip', body: 'Press Ctrl+K.' },
+          { title: 'Search', body: 'Type to filter.' },
+        ]}
+        activeStep={1}
+      />,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(surfaceAttributes(dialog)).toEqual(SURFACE_ATTRIBUTES);
+    expect(normalize(dialog.innerHTML)).toBe(
+      HEADER +
+        `${TITLE_OPEN}Search<span class="sr-only">, step 2 of 2</span></h3>` +
+        `${BODY_OPEN}Type to filter.</div>` +
+        FOOTER_OPEN +
+        OTHER_DOT +
+        CURRENT_DOT +
+        BUTTONS_OPEN +
+        `<button type="button" class="${SECONDARY} wave-teaching-popover__back-button">Back</button>` +
+        `<button type="button" class="${PRIMARY} wave-teaching-popover__next-button">Done</button>` +
+        FOOTER_CLOSE,
+    );
+  });
+});
+
 describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
   const PLACEMENT_WARNING =
     '[WaveUI] TeachingPopover.Surface: render one TeachingPopover.Surface in a TeachingPopover; a second Surface renders a second popover.';
