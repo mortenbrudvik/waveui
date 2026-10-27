@@ -1930,6 +1930,17 @@ describe('Overflow - groups, divider, hooks and asChild (P9-01)', () => {
       });
     });
 
+    it('reports groupVisibility without a prototype: a group id that names an Object member reads nothing', () => {
+      layoutWith({ ...GROUPS, overflow: 125 });
+      const onChange = vi.fn();
+      render(<Grouped onOverflowChange={onChange} />);
+      const details = onChange.mock.lastCall?.[1] as OverflowChangeDetails;
+      expect(Object.getPrototypeOf(details.groupVisibility)).toBeNull();
+      expect(details.groupVisibility['constructor']).toBeUndefined();
+      expect(details.groupVisibility['toString']).toBeUndefined();
+      expect(details.groupVisibility['two']).toBe('overflow');
+    });
+
     it('treats a group without members as visible', () => {
       layoutWith({ ...GROUPS });
       render(

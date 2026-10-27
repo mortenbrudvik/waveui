@@ -28,8 +28,9 @@ export interface OverflowChangeDetails {
   /** `itemId`s of the shown items, in DOM order. */
   visibleItems: string[];
   /**
-   * The visibility of each item group, by `groupId` (only groups with an item): `'visible'` when
-   * every member is shown, `'hidden'` when none is, `'overflow'` for a mix.
+   * The visibility of each item group, by `groupId` (only groups with an item; a record without a
+   * prototype): `'visible'` when every member is shown, `'hidden'` when none is, `'overflow'` for
+   * a mix.
    */
   groupVisibility: Record<string, OverflowGroupVisibility>;
 }
@@ -638,7 +639,12 @@ const OverflowRoot = ({
     reported.current = current;
     emitOverflowChange([...current], {
       visibleItems: store.getVisibleIds(),
-      groupVisibility: { ...store.getGroups() },
+      // The consumer's own copy, without a prototype as the store's record: a group id such as
+      // `constructor` or `__proto__` is an entry like any other, and an absent one reads nothing.
+      groupVisibility: Object.assign(
+        Object.create(null) as Record<string, OverflowGroupVisibility>,
+        store.getGroups(),
+      ),
     });
   }, [store, hiddenIds, hasButton, emitOverflowChange]);
 
