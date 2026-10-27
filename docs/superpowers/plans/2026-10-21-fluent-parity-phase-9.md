@@ -50,7 +50,7 @@
 
 **Files:** Modify `Overflow.tsx`; Test `src/components/layout/__tests__/Overflow.test.tsx`.
 
-**Interfaces:** Produces `OverflowProps.overflowDirection?: 'end'|'start'`, `orientation?: Orientation`, `minimumVisible?: number`, `hasHiddenItems?: boolean`, `onOverflowChange?(hiddenItems: string[], details: OverflowChangeDetails)`; `OverflowItemProps` union `{ priority?: number; pinned?: never } | { pinned?: boolean; priority?: never }`; types `OverflowChangeDetails`, `OverflowGroupVisibility`, `OverflowDirection` (group map is `{}` until Task 2).
+**Interfaces:** Produces `OverflowProps.overflowDirection?: 'end'|'start'`, `orientation?: Orientation`, `minimumVisible?: number`, `hasHiddenItems?: boolean`, `onOverflowChange?(hiddenItems: string[], details?: OverflowChangeDetails)` (typed optional through 0.x, D4); `OverflowItemProps` union `{ priority?: number; pinned?: never } | { pinned?: boolean; priority?: never }`; types `OverflowChangeDetails`, `OverflowGroupVisibility`, `OverflowDirection` (group map is `{}` until Task 2).
 
 - [ ] **Step 1:** Failing tests (ResizeObserver mock, stubbed widths): hide order by `priority` (lowest first, equal priorities last-in-DOM first for `end`, first-in-DOM first for `start`); `pinned` never hidden; `minimumVisible`; the default (no priority, no pinned) hides exactly as 0.13 on the existing fixtures and item 0 stays visible; once any item sets `priority`/`pinned` item 0 is hidable; `orientation="vertical"` measures heights; `hasHiddenItems` reserves the button before the first measure; `onOverflowChange(hidden, { visibleItems, groupVisibility })` fires once per change, once in StrictMode, never during render; RTL with `start`.
 - [ ] **Step 2:** Run `Overflow.test.tsx`; expect FAIL on the new cases only.
