@@ -1653,10 +1653,15 @@ describe('TeachingPopover', () => {
 });
 
 /**
- * The markup of the `steps` form, pinned byte for byte (spec D2: an unchanged call renders as it
- * did): the surface's attributes and its `innerHTML`, ids normalized. Recorded from 0.14, whose
- * parts render the steps form: the header element around the Close button and the classes of
- * TeachingPopover.Header, Title, Body and Footer. Update it only for an intended markup change.
+ * The markup of the `steps` form, pinned (spec D2: an unchanged call renders as it did): the
+ * surface's attributes and its `innerHTML`, ids normalized. Recorded from 0.14, whose parts render
+ * the steps form: the header element around the Close button and the classes of
+ * TeachingPopover.Header, Title, Body and Footer. TeachingPopover's own elements, classes, data
+ * attributes, ARIA and text are literal; Button's rendering is not pinned, so restyling Button
+ * leaves the fixture as it is: inside a `wave-button` element only the `wave-*` classes stay, the
+ * attributes are sorted (Button orders them) and an icon is its `data-wave-icon`. Each button's
+ * appearance is checked against reference Buttons rendered here, and the Close button's own
+ * placement classes separately. Update the fixture only for an intended markup change.
  */
 describe('TeachingPopover steps form markup (D2)', () => {
   const normalize = (html: string) => html.replace(/\b(id|aria-labelledby)="[^"]*"/g, '$1=""');
@@ -1666,17 +1671,72 @@ describe('TeachingPopover steps form markup (D2)', () => {
       attr.name === 'aria-labelledby' ? '' : attr.value,
     ]);
 
-  const BUTTON =
-    'wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
-  const SECONDARY = `${BUTTON} h-8 min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed`;
-  const PRIMARY = `${BUTTON} h-8 min-w-24 px-3 text-body-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed`;
+  /** The surface's `innerHTML` with Button's rendering reduced (see above), ids normalized. */
+  function surfaceMarkup(surface: HTMLElement): string {
+    const clone = surface.cloneNode(true) as HTMLElement;
+    for (const buttonEl of Array.from(clone.querySelectorAll(`.${buttonClassNames.root}`))) {
+      for (const el of [buttonEl, ...Array.from(buttonEl.querySelectorAll('*'))]) {
+        if (el.tagName.toLowerCase() === 'svg') {
+          const icon = el.getAttribute('data-wave-icon');
+          el.replaceChildren();
+          for (const name of el.getAttributeNames()) el.removeAttribute(name);
+          if (icon !== null) el.setAttribute('data-wave-icon', icon);
+          continue;
+        }
+        if (el.hasAttribute('class')) {
+          const stable = Array.from(el.classList).filter((cls) => cls.startsWith('wave-'));
+          el.setAttribute('class', stable.join(' '));
+        }
+        const attributes = Array.from(el.attributes, (attr) => [attr.name, attr.value] as const);
+        for (const [name] of attributes) el.removeAttribute(name);
+        for (const [name, value] of attributes.sort(([a], [b]) => a.localeCompare(b))) {
+          el.setAttribute(name, value);
+        }
+      }
+    }
+    return normalize(clone.innerHTML);
+  }
+
+  const APPEARANCES = ['primary', 'outline', 'subtle', 'transparent'] as const;
+
+  /**
+   * Which Button appearance each button of `surface` has, by its name: the appearance whose
+   * classes (those not shared by every appearance, read from reference Buttons) it carries.
+   */
+  function buttonAppearances(surface: HTMLElement): Array<[string, string]> {
+    const reference = render(
+      <>
+        {APPEARANCES.map((appearance) => (
+          <Button key={appearance} appearance={appearance}>
+            {appearance}
+          </Button>
+        ))}
+      </>,
+    );
+    const classes = Array.from(
+      reference.container.querySelectorAll('button'),
+      (el) => new Set(el.classList),
+    );
+    reference.unmount();
+    const own = classes.map((set) =>
+      [...set].filter((cls) => !classes.every((other) => other.has(cls))),
+    );
+    return Array.from(surface.querySelectorAll<HTMLElement>(`.${buttonClassNames.root}`), (el) => {
+      const matches = APPEARANCES.filter((_, i) =>
+        own[i].every((cls) => el.classList.contains(cls)),
+      );
+      return [
+        el.getAttribute('aria-label') ?? el.textContent ?? '',
+        matches.length === 1 ? matches[0] : `no single appearance (${matches.join(', ')})`,
+      ];
+    });
+  }
+
   const HEADER =
     '<div class="wave-teaching-popover-header">' +
-    `<button aria-label="Close" type="button" class="${BUTTON} h-6 w-6 px-0 text-caption-1 border border-transparent bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__close-button absolute end-3 top-3">` +
-    '<span aria-hidden="true" class="wave-button__icon inline-flex shrink-0 items-center">' +
-    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 20 20" data-wave-icon="dismiss" fill="currentColor" aria-hidden="true" focusable="false">' +
-    '<path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"></path>' +
-    '</svg></span></button></div>';
+    '<button aria-label="Close" class="wave-button wave-teaching-popover__close-button" type="button">' +
+    '<span aria-hidden="true" class="wave-button__icon"><svg data-wave-icon="dismiss"></svg></span>' +
+    '</button></div>';
   const TITLE_OPEN =
     '<h3 id="" class="wave-teaching-popover-title wave-teaching-popover__title mb-2 pe-8 text-subtitle-1 font-semibold text-foreground">';
   const BODY_OPEN =
@@ -1705,7 +1765,7 @@ describe('TeachingPopover steps form markup (D2)', () => {
     render(<TeachingPopover steps={steps} />);
     const dialog = screen.getByRole('dialog');
     expect(surfaceAttributes(dialog)).toEqual(SURFACE_ATTRIBUTES);
-    expect(normalize(dialog.innerHTML)).toBe(
+    expect(surfaceMarkup(dialog)).toBe(
       HEADER +
         `${TITLE_OPEN}Welcome<span class="sr-only">, step 1 of 3</span></h3>` +
         `${BODY_OPEN}This is step one.</div>` +
@@ -1714,10 +1774,16 @@ describe('TeachingPopover steps form markup (D2)', () => {
         OTHER_DOT +
         OTHER_DOT +
         BUTTONS_OPEN +
-        `<button aria-disabled="true" data-disabled="" type="button" class="${SECONDARY} cursor-not-allowed opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:text-[GrayText] forced-colors:border-[GrayText] wave-teaching-popover__back-button">Back</button>` +
-        `<button type="button" class="${PRIMARY} wave-teaching-popover__next-button">Next</button>` +
+        '<button aria-disabled="true" class="wave-button wave-teaching-popover__back-button" data-disabled="" type="button">Back</button>' +
+        '<button class="wave-button wave-teaching-popover__next-button" type="button">Next</button>' +
         FOOTER_CLOSE,
     );
+    expect(buttonAppearances(dialog)).toEqual([
+      ['Close', 'subtle'],
+      ['Back', 'outline'],
+      ['Next', 'primary'],
+    ]);
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveClass('absolute', 'end-3', 'top-3');
   });
 
   it('the last of two steps: Back and Done', () => {
@@ -1732,7 +1798,7 @@ describe('TeachingPopover steps form markup (D2)', () => {
     );
     const dialog = screen.getByRole('dialog');
     expect(surfaceAttributes(dialog)).toEqual(SURFACE_ATTRIBUTES);
-    expect(normalize(dialog.innerHTML)).toBe(
+    expect(surfaceMarkup(dialog)).toBe(
       HEADER +
         `${TITLE_OPEN}Search<span class="sr-only">, step 2 of 2</span></h3>` +
         `${BODY_OPEN}Type to filter.</div>` +
@@ -1740,10 +1806,15 @@ describe('TeachingPopover steps form markup (D2)', () => {
         OTHER_DOT +
         CURRENT_DOT +
         BUTTONS_OPEN +
-        `<button type="button" class="${SECONDARY} wave-teaching-popover__back-button">Back</button>` +
-        `<button type="button" class="${PRIMARY} wave-teaching-popover__next-button">Done</button>` +
+        '<button class="wave-button wave-teaching-popover__back-button" type="button">Back</button>' +
+        '<button class="wave-button wave-teaching-popover__next-button" type="button">Done</button>' +
         FOOTER_CLOSE,
     );
+    expect(buttonAppearances(dialog)).toEqual([
+      ['Close', 'subtle'],
+      ['Back', 'outline'],
+      ['Done', 'primary'],
+    ]);
   });
 });
 
