@@ -22,6 +22,13 @@ const sampleSteps = [
   },
 ];
 
+/** Decorative light bulb for the header (the header hides its icon slot from assistive technology). */
+const BulbGlyph = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+    <path d="M8 1a4.5 4.5 0 0 0-2.5 8.25V11h5V9.25A4.5 4.5 0 0 0 8 1zM6 12.5h4V14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z" />
+  </svg>
+);
+
 const meta = {
   title: 'Components/Overlays/TeachingPopover',
   component: TeachingPopover,
@@ -39,6 +46,7 @@ const meta = {
     steps: sampleSteps,
     onStepChange: fn(),
     onDismiss: fn(),
+    onFinish: fn(),
     onOpenChange: fn(),
   },
 } satisfies Meta<typeof TeachingPopover>;
@@ -143,4 +151,111 @@ export const MultiTargetTour: Story = {
       </div>
     );
   },
+};
+
+/**
+ * `primaryAction` and `secondaryAction` replace Next (Done on the last step) and Back, on every
+ * step or, as in `steps`, on one step (which wins). The consumer's `onClick` runs first and the
+ * normal action follows unless it calls `preventDefault()`. A slot object such as `{ as: 'a', href }`
+ * makes the action a link. Done, or the button that replaces it, calls `onFinish`.
+ */
+export const FooterActions: Story = {
+  args: {
+    steps: [
+      {
+        title: 'Welcome to the App',
+        body: 'This quick tour will help you get started with the key features.',
+        secondaryAction: { as: 'a', href: '#docs', children: 'Read the docs' },
+      },
+      sampleSteps[1],
+      {
+        title: "You're All Set!",
+        body: 'You now know the basics. Explore the app to discover more features.',
+        primaryAction: 'Finish setup',
+      },
+    ],
+    primaryAction: 'Continue',
+    onFinish: fn(),
+  },
+};
+
+/** `footerLayout="vertical"` stacks the step dots above buttons that fill the width. */
+export const VerticalFooter: Story = {
+  args: {
+    footerLayout: 'vertical',
+    onFinish: fn(),
+  },
+};
+
+const tourParts = (
+  <TeachingPopover.Surface>
+    <TeachingPopover.Header>Tip</TeachingPopover.Header>
+    <TeachingPopover.Carousel>
+      <TeachingPopover.Title />
+      <TeachingPopover.Body />
+      <TeachingPopover.CarouselFooter
+        layout="centered"
+        initialStepText="Not now"
+        finalStepText="Got it"
+      >
+        <TeachingPopover.CarouselNav />
+      </TeachingPopover.CarouselFooter>
+    </TeachingPopover.Carousel>
+  </TeachingPopover.Surface>
+);
+
+/**
+ * A tour built from the parts. The Trigger opens it (and, without `target`, is what it points at),
+ * `CarouselNav` makes the step indicators buttons, `initialStepText` turns the first step's Back
+ * into a button that dismisses the tour, and `finalStepText` relabels Done. `layout="centered"`
+ * puts the indicator between the buttons.
+ */
+export const TourFromParts: Story = {
+  args: {
+    onFinish: fn(),
+  },
+  render: (args) => (
+    <div style={{ paddingBottom: 320 }}>
+      <TeachingPopover {...args} defaultOpen>
+        <TeachingPopover.Trigger>
+          <Button appearance="primary">Take the tour</Button>
+        </TeachingPopover.Trigger>
+        {tourParts}
+      </TeachingPopover>
+    </div>
+  ),
+};
+
+/**
+ * `CarouselPageCount` is a visible count; its render function words it (and localizes it). Here
+ * it stands beside the interactive step buttons, with the header's icon and the body's media.
+ */
+export const PageCountHeaderAndMedia: Story = {
+  args: {
+    onFinish: fn(),
+  },
+  render: (args) => (
+    <div style={{ paddingBottom: 360 }}>
+      <TeachingPopover {...args} defaultOpen>
+        <TeachingPopover.Trigger>
+          <Button appearance="primary">Take the tour</Button>
+        </TeachingPopover.Trigger>
+        <TeachingPopover.Surface>
+          <TeachingPopover.Header icon={<BulbGlyph />}>Tip</TeachingPopover.Header>
+          <TeachingPopover.Carousel>
+            <TeachingPopover.Title />
+            <TeachingPopover.Body
+              media={<span className="block h-16 w-full rounded-md bg-card" />}
+            />
+            <TeachingPopover.CarouselFooter>
+              <TeachingPopover.CarouselNav />
+              <TeachingPopover.CarouselPageCount>
+                {(current, total) => `Step ${current} of ${total}`}
+              </TeachingPopover.CarouselPageCount>
+            </TeachingPopover.CarouselFooter>
+          </TeachingPopover.Carousel>
+        </TeachingPopover.Surface>
+      </TeachingPopover>
+    </div>
+  ),
 };

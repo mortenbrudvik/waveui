@@ -222,6 +222,34 @@ const portalOf = (el: Element) => el.closest<HTMLElement>('[data-wave-portal]');
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 const menuitem = (name: string) => screen.getByRole('menuitem', { name });
 
+/**
+ * jsdom has no layout: stubs the widths an Overflow measures, looked up by `data-testid` (the
+ * overflow button's wrapper, `data-overflow-button`, under the key `button`). A hidden item
+ * measures 0, as an element with `display: none` does. Returns `widths`: change a member and
+ * re-measure (a ResizeObserver mock's `trigger`, or a window `resize`) to resize. The spies are
+ * restored after each test.
+ */
+function stubOverflowWidths(widths: Record<string, number>): Record<string, number> {
+  const width = (el: Element) => {
+    if (el.hasAttribute('data-overflow-hidden')) return 0;
+    if (el.hasAttribute('data-overflow-button')) return widths.button ?? 0;
+    const id = el.getAttribute('data-testid');
+    return id !== null && id in widths ? widths[id] : 0;
+  };
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return width(this);
+  });
+  vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (this: Element) {
+    return width(this);
+  });
+  vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (this: Element) {
+    return width(this);
+  });
+  return widths;
+}
+
 // ---------------------------------------------------------------------------
 // Barrel
 // ---------------------------------------------------------------------------
@@ -282,8 +310,11 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'useIsClient',
       'useOverflowMenu',
       'useIsOverflowItemVisible',
+      'useIsOverflowGroupVisible',
+      'useHasHiddenItems',
       'RadioItem',
       'OverflowItem',
+      'OverflowDivider',
     ]) {
       expect(barrel[name], name).toBeTypeOf('function');
     }
@@ -351,6 +382,62 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     for (const name of ['focusRing', 'focusRingInset', 'inputFocus', 'inputFocusWithin']) {
       expect(barrel[name], name).toBeTypeOf('string');
     }
+  });
+
+  it('exports the 0.14 compound parts, each flat name equal to its dotted member, the Overflow hooks and the helpers', () => {
+    const members: Array<[string, string]> = [
+      ['Overflow', 'Divider'],
+      ['DataGrid', 'SelectionCell'],
+      ['Table', 'SelectionCell'],
+      ['Table', 'CellLayout'],
+      ['Table', 'CellActions'],
+      ['TeachingPopover', 'Trigger'],
+      ['TeachingPopover', 'Surface'],
+      ['TeachingPopover', 'Header'],
+      ['TeachingPopover', 'Title'],
+      ['TeachingPopover', 'Body'],
+      ['TeachingPopover', 'Footer'],
+      ['TeachingPopover', 'Carousel'],
+      ['TeachingPopover', 'CarouselNav'],
+      ['TeachingPopover', 'CarouselPageCount'],
+      ['TeachingPopover', 'CarouselFooter'],
+    ];
+    for (const [compound, member] of members) {
+      const flat = `${compound}${member}`;
+      expect(barrel[flat], flat).toBeTypeOf('function');
+      expect(barrel[flat], flat).toBe((barrel[compound] as Record<string, unknown>)[member]);
+    }
+    for (const name of [
+      'useIsOverflowGroupVisible',
+      'useHasHiddenItems',
+      'createTableColumn',
+      'partitionBreadcrumbItems',
+      'truncateBreadcrumbLongName',
+      'truncateBreadcrumbLongTooltip',
+      'isTruncatableBreadcrumbContent',
+    ]) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+    // Fluent's misspelled `truncateBreadcrumLongTooltip` has no alias.
+    expect(barrel['truncateBreadcrumLongTooltip']).toBeUndefined();
+
+    const compare = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+    expect(Wave.createTableColumn({ columnId: 'name', label: 'Name', compare })).toEqual({
+      columnId: 'name',
+      label: 'Name',
+      compare,
+      renderCell: undefined,
+      renderHeaderCell: undefined,
+      sortable: true,
+    });
+    expect(Wave.createTableColumn({ columnId: 'notes' }).sortable).toBe(false);
+    expect(Wave.partitionBreadcrumbItems({ items: [1, 2, 3, 4, 5], maxDisplayedItems: 3 })).toEqual(
+      { startDisplayedItems: [1], overflowItems: [2, 3], endDisplayedItems: [4, 5] },
+    );
+    const long = 'Quarterly planning documents for the platform team';
+    expect(Wave.isTruncatableBreadcrumbContent(long, 30)).toBe(true);
+    expect(Wave.truncateBreadcrumbLongName(long)).toBe('Quarterly planning documents f...');
+    expect(Wave.truncateBreadcrumbLongTooltip(long)).toBe(long);
   });
 
   it('keeps internal helpers out of the public API', () => {
@@ -468,6 +555,28 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'createOptionText',
       'findExactMatch',
       'tagListControls',
+      // 0.14 (spec D6): the parts the tables share, the Overflow store, the tour's context and
+      // surface, and the event predicates of the selectable containers.
+      'TableSelectionControl',
+      'TableSortButton',
+      'markTablePart',
+      'getTablePartKind',
+      'SELECTION_CELL_CLASSES',
+      'SortArrowUpIcon',
+      'SortArrowDownIcon',
+      'OverflowStore',
+      'NO_IDS',
+      'NO_GROUPS',
+      'sameIds',
+      'hasResizeObserver',
+      'TeachingPopoverRoot',
+      'TeachingPopoverContext',
+      'useTeachingPopoverContext',
+      'TeachingPopoverSurfaceContext',
+      'TeachingSurface',
+      'isForeignEvent',
+      'endsTextSelection',
+      'INTERACTIVE_SELECTOR',
     ];
     expect(internal.filter((name) => name in barrel)).toEqual([]);
   });
@@ -4778,6 +4887,252 @@ describe('compounds composed in a React Server Component', () => {
         expect(region.querySelector('[aria-live]')).toHaveTextContent('Slide 2 of 2');
       },
     }),
+    // 0.14: the Phase 9 compound members.
+    ssrCase({
+      name: 'Overflow (grouped items, an asChild item and a Divider)',
+      parts: { Item: OverflowItem, Divider: Wave.OverflowDivider },
+      tree: ({ Item, Divider }) => (
+        <Overflow
+          data-testid="tools"
+          overflowButton={(count) => <button type="button">{`+${count}`}</button>}
+        >
+          <Item itemId="a" groupId="one" data-testid="a">
+            Alpha
+          </Item>
+          <Item itemId="b" groupId="one" data-testid="b">
+            Beta
+          </Item>
+          <Divider groupId="two" data-testid="divider" />
+          <Item asChild itemId="c" groupId="two">
+            <button type="button" data-testid="c">
+              Gamma
+            </button>
+          </Item>
+        </Overflow>
+      ),
+      serverText: 'Gamma',
+      interact: async () => {
+        const divider = screen.getByTestId('divider');
+        expect(divider).toHaveClass(Wave.overflowDividerClassNames.root);
+        expect(divider).not.toHaveAttribute('data-overflow-hidden');
+        // 30 + 30 + 10 + 30 in 90 with a 20px button: Gamma goes, and its group's divider with it.
+        stubOverflowWidths({ tools: 90, a: 30, b: 30, c: 30, divider: 10, button: 20 });
+        act(() => {
+          window.dispatchEvent(new Event('resize'));
+        });
+        expect(screen.getByTestId('c')).toHaveAttribute('data-overflow-hidden');
+        expect(divider).toHaveAttribute('data-overflow-hidden');
+        expect(screen.getByTestId('b')).not.toHaveAttribute('data-overflow-hidden');
+        expect(button('+1')).toBeInTheDocument();
+      },
+    }),
+    ssrCase({
+      name: 'Breadcrumb (maxDisplayedItems: the collapsed items in a menu)',
+      parts: { Item: Wave.BreadcrumbItem },
+      tree: ({ Item }) => (
+        <Wave.Breadcrumb maxDisplayedItems={3}>
+          <Item href="/">Home</Item>
+          <Item href="/a">Alpha</Item>
+          <Item href="/b">Beta</Item>
+          <Item href="/c">Gamma</Item>
+          <Item current>Widget</Item>
+        </Wave.Breadcrumb>
+      ),
+      serverText: 'More items',
+      interact: async (user) => {
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+        expect(within(nav).queryByRole('link', { name: 'Alpha' })).toBeNull();
+        const more = within(nav).getByRole('button', { name: 'More items' });
+        await user.click(more);
+        const items = within(screen.getByRole('menu')).getAllByRole('menuitem');
+        expect(items.map((item) => [item.textContent, item.getAttribute('href')])).toEqual([
+          ['Alpha', '/a'],
+          ['Beta', '/b'],
+        ]);
+        await user.keyboard('{Escape}');
+        expect(more).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'DataGrid (SelectionCells in the header and the rows, selection on row click)',
+      parts: {
+        Header: DataGridHeader,
+        HeaderCell: DataGridHeaderCell,
+        Body: DataGridBody,
+        Row: DataGridRow,
+        Cell: DataGridCell,
+        SelectionCell: Wave.DataGridSelectionCell,
+      },
+      tree: ({ Header, HeaderCell, Body, Row, Cell, SelectionCell }) => (
+        <DataGrid
+          aria-label="People"
+          selectionMode="multiple"
+          selectOnRowClick
+          defaultSelectedItems={['2']}
+        >
+          <Header>
+            <tr>
+              <HeaderCell>Name</HeaderCell>
+              <SelectionCell />
+            </tr>
+          </Header>
+          <Body>
+            <Row rowId="1">
+              <Cell>Alice</Cell>
+              <SelectionCell />
+            </Row>
+            <Row rowId="2">
+              <Cell>Bob</Cell>
+              <SelectionCell />
+            </Row>
+          </Body>
+        </DataGrid>
+      ),
+      serverText: 'Select all rows',
+      interact: async (user) => {
+        // Each row holds its SelectionCell where it stands, and no automatic one.
+        for (const row of screen.getAllByRole('row') as HTMLTableRowElement[]) {
+          expect(row.cells).toHaveLength(2);
+          expect(row.cells[1]).toHaveClass(Wave.dataGridSelectionCellClassNames.root);
+        }
+        expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+        await user.click(screen.getByText('Alice'));
+        expect(screen.getByRole('checkbox', { name: 'Alice' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toBeChecked();
+      },
+    }),
+    ssrCase({
+      name: 'Table (a SelectionCell, a CellLayout with an Avatar and CellActions)',
+      parts: {
+        SelectionCell: Wave.TableSelectionCell,
+        CellLayout: Wave.TableCellLayout,
+        CellActions: Wave.TableCellActions,
+      },
+      tree: ({ SelectionCell, CellLayout, CellActions }) => (
+        <Table aria-label="People">
+          <Table.Body>
+            <Table.Row>
+              <SelectionCell aria-label="Select Ann Lee" />
+              <Table.Cell>
+                <CellLayout media={<Avatar name="Ann Lee" />} description="Designer">
+                  Ann Lee
+                </CellLayout>
+                <CellActions>
+                  <button type="button">Edit</button>
+                </CellActions>
+              </Table.Cell>
+            </Table.Row>
+          </Table.Body>
+        </Table>
+      ),
+      serverText: 'Designer',
+      interact: async (user) => {
+        const avatar = screen
+          .getByRole('img', { name: 'Ann Lee' })
+          .closest(`.${avatarClassNames.root}`);
+        expect(avatar).toHaveAttribute('data-size', '32');
+        const select = screen.getByRole('checkbox', { name: 'Select Ann Lee' });
+        await user.click(select);
+        expect(select).toBeChecked();
+        await user.tab();
+        expect(button('Edit')).toHaveFocus();
+        expect(button('Edit').parentElement).toHaveClass(Wave.tableCellActionsClassNames.root);
+      },
+    }),
+    ssrCase({
+      name: 'TeachingPopover (a Trigger, and a Surface of Header, Title, Body and Footer)',
+      parts: {
+        Trigger: Wave.TeachingPopoverTrigger,
+        Surface: Wave.TeachingPopoverSurface,
+        Header: Wave.TeachingPopoverHeader,
+        Title: Wave.TeachingPopoverTitle,
+        Body: Wave.TeachingPopoverBody,
+        Footer: Wave.TeachingPopoverFooter,
+      },
+      tree: ({ Trigger, Surface, Header, Title, Body, Footer }) => (
+        <TeachingPopover
+          steps={[
+            { title: 'Search', body: 'Press Ctrl+K.' },
+            { title: 'Filter', body: 'Type to filter.' },
+          ]}
+        >
+          <Trigger>
+            <Button>Take the tour</Button>
+          </Trigger>
+          <Surface>
+            <Header>Tip</Header>
+            <Title />
+            <Body />
+            <Footer />
+          </Surface>
+        </TeachingPopover>
+      ),
+      serverText: 'Take the tour',
+      interact: async (user) => {
+        // A Trigger among the children keeps the tour closed until it is activated.
+        expect(screen.queryByRole('dialog')).toBeNull();
+        const trigger = button('Take the tour');
+        await user.click(trigger);
+        const tour = await screen.findByRole('dialog', { name: 'Search, step 1 of 2' });
+        expect(within(tour).getByText('Tip')).toBeInTheDocument();
+        expect(within(tour).getByText('Press Ctrl+K.')).toBeInTheDocument();
+        await user.click(within(tour).getByRole('button', { name: 'Next' }));
+        expect(screen.getByRole('dialog', { name: 'Filter, step 2 of 2' })).toBeInTheDocument();
+        await user.click(within(tour).getByRole('button', { name: 'Done' }));
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(trigger).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'TeachingPopover (Carousel, CarouselNav, CarouselPageCount and CarouselFooter)',
+      parts: {
+        Surface: Wave.TeachingPopoverSurface,
+        Title: Wave.TeachingPopoverTitle,
+        Body: Wave.TeachingPopoverBody,
+        Carousel: Wave.TeachingPopoverCarousel,
+        CarouselNav: Wave.TeachingPopoverCarouselNav,
+        CarouselPageCount: Wave.TeachingPopoverCarouselPageCount,
+        CarouselFooter: Wave.TeachingPopoverCarouselFooter,
+      },
+      tree: ({
+        Surface,
+        Title,
+        Body,
+        Carousel,
+        CarouselNav,
+        CarouselPageCount,
+        CarouselFooter,
+      }) => (
+        <TeachingPopover
+          steps={[
+            { title: 'Welcome', body: 'This is step one.' },
+            { title: 'Features', body: 'Here are the features.' },
+            { title: 'Done', body: 'You are all set!' },
+          ]}
+        >
+          <Surface>
+            <Carousel>
+              <Title />
+              <Body />
+              <CarouselFooter initialStepText="Not now" finalStepText="Got it">
+                <CarouselNav />
+                <CarouselPageCount />
+              </CarouselFooter>
+            </Carousel>
+          </Surface>
+        </TeachingPopover>
+      ),
+      serverText: 'Not now',
+      interact: async (user) => {
+        const tour = screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' });
+        expect(within(tour).getByText('1 of 3')).toBeInTheDocument();
+        await user.click(within(tour).getByRole('button', { name: 'Step 3 of 3' }));
+        expect(screen.getByRole('dialog', { name: 'Done, step 3 of 3' })).toBeInTheDocument();
+        expect(within(tour).getByText('3 of 3')).toBeInTheDocument();
+        await user.click(within(tour).getByRole('button', { name: 'Got it' }));
+        expect(screen.queryByRole('dialog')).toBeNull();
+      },
+    }),
     ssrCase({
       name: 'Drawer',
       parts: { Trigger: DrawerTrigger, Title: DrawerTitle, Close: DrawerClose },
@@ -8509,5 +8864,517 @@ describe('Phase 8 parts across components (0.13)', () => {
     expect(screen.queryByText('Alan Turing')).toBeNull();
     expect(screen.getByRole('dialog', { name: 'Team' })).toBeInTheDocument();
     expect(overflow).toHaveFocus();
+  });
+});
+
+describe('Phase 9 parts across components (0.14)', () => {
+  it('a Breadcrumb collapses its middle into a menu and names a truncated item by its Tooltip', async () => {
+    // The Tooltip hides on a timer once the pointer leaves the link.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const long = 'Quarterly planning documents for the platform team';
+    render(
+      <Wave.Breadcrumb maxDisplayedItems={3}>
+        <Wave.Breadcrumb.Item href="/">Home</Wave.Breadcrumb.Item>
+        <Wave.Breadcrumb.Item href="/teams">Teams</Wave.Breadcrumb.Item>
+        <Wave.Breadcrumb.Item href="/teams/platform">Platform</Wave.Breadcrumb.Item>
+        <Tooltip content={long} relationship="label" openDelay={0}>
+          <Wave.Breadcrumb.Item href="/teams/platform/planning">
+            {Wave.truncateBreadcrumbLongName(long)}
+          </Wave.Breadcrumb.Item>
+        </Tooltip>
+        <Wave.Breadcrumb.Item current>Q3</Wave.Breadcrumb.Item>
+      </Wave.Breadcrumb>,
+    );
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(nav).queryByRole('link', { name: 'Teams' })).toBeNull();
+    // The Tooltip names the link with the whole name; the link shows the truncated one.
+    const planning = within(nav).getByRole('link', { name: long });
+    expect(planning).toHaveTextContent(/^Quarterly planning documents f\.\.\.$/);
+    expect(planning).toHaveAttribute('href', '/teams/platform/planning');
+    await user.hover(planning);
+    expect(tooltipSurface()).toHaveTextContent(long);
+    await user.unhover(planning);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(tooltipSurface()).toBeNull();
+
+    const more = within(nav).getByRole('button', { name: 'More items' });
+    await user.click(more);
+    const items = within(screen.getByRole('menu')).getAllByRole('menuitem');
+    expect(items.map((item) => [item.textContent, item.getAttribute('href')])).toEqual([
+      ['Teams', '/teams'],
+      ['Platform', '/teams/platform'],
+    ]);
+    await expectNoA11yViolations(document.body);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(more).toHaveFocus();
+  });
+
+  describe('an Overflow of Toolbar buttons in groups, with a divider', () => {
+    const LABELS: Record<string, string> = {
+      bold: 'Bold',
+      italic: 'Italic',
+      left: 'Align left',
+      center: 'Align center',
+    };
+    let resize: ReturnType<typeof installResizeObserverMock> | null = null;
+
+    afterEach(() => {
+      resize?.restore();
+      resize = null;
+    });
+
+    /** The overflow button: a menu of the hidden tools, a divider between the hidden groups. */
+    function MoreTools() {
+      const { hiddenIds, count } = useOverflowMenu();
+      const text = Wave.useIsOverflowGroupVisible('text');
+      const align = Wave.useIsOverflowGroupVisible('align');
+      const item = (id: string) => <Menu.Item key={id}>{LABELS[id]}</Menu.Item>;
+      return (
+        <Menu>
+          <Menu.Trigger>
+            <Toolbar.Button>{`+${count} more`}</Toolbar.Button>
+          </Menu.Trigger>
+          <Menu.Popover>
+            {hiddenIds.filter((id) => id === 'bold' || id === 'italic').map(item)}
+            {text !== 'visible' && align !== 'visible' && <Menu.Divider />}
+            {hiddenIds.filter((id) => id === 'left' || id === 'center').map(item)}
+          </Menu.Popover>
+        </Menu>
+      );
+    }
+
+    function Formatting() {
+      return (
+        <Toolbar aria-label="Formatting">
+          <Overflow data-testid="overflow" overflowButton={() => <MoreTools />}>
+            <OverflowItem asChild itemId="bold" groupId="text">
+              <Toolbar.Button data-testid="bold">Bold</Toolbar.Button>
+            </OverflowItem>
+            <OverflowItem asChild itemId="italic" groupId="text">
+              <Toolbar.Button data-testid="italic">Italic</Toolbar.Button>
+            </OverflowItem>
+            <Wave.OverflowDivider groupId="align" data-testid="divider">
+              <Toolbar.Divider />
+            </Wave.OverflowDivider>
+            <OverflowItem asChild itemId="left" groupId="align">
+              <Toolbar.Button data-testid="left">Align left</Toolbar.Button>
+            </OverflowItem>
+            <OverflowItem asChild itemId="center" groupId="align">
+              <Toolbar.Button data-testid="center">Align center</Toolbar.Button>
+            </OverflowItem>
+          </Overflow>
+        </Toolbar>
+      );
+    }
+
+    const menuLabels = () =>
+      Array.from(
+        screen.getByRole('menu').querySelectorAll('[role="menuitem"], [role="separator"]'),
+        (el) => (el.getAttribute('role') === 'separator' ? '—' : el.textContent),
+      );
+
+    it('hides the last group with its divider, lists it in the menu and skips it in the arrow order', async () => {
+      resize = installResizeObserverMock();
+      // Four 30px buttons and a 10px divider in 100, with a 20px overflow button.
+      const widths = stubOverflowWidths({
+        overflow: 100,
+        bold: 30,
+        italic: 30,
+        divider: 10,
+        left: 30,
+        center: 30,
+        button: 20,
+      });
+      const user = userEvent.setup();
+      render(<Formatting />);
+      expect(screen.getByTestId('left')).toHaveAttribute('data-overflow-hidden');
+      expect(screen.getByTestId('center')).toHaveAttribute('data-overflow-hidden');
+      expect(screen.getByTestId('divider')).toHaveAttribute('data-overflow-hidden');
+      expect(screen.getByTestId('italic')).not.toHaveAttribute('data-overflow-hidden');
+
+      act(() => screen.getByTestId('bold').focus());
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      const more = button('+2 more');
+      expect(more).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(menuLabels()).toEqual(['Align left', 'Align center']);
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{Escape}');
+      expect(more).toHaveFocus();
+
+      // Narrower: Italic goes too, so both groups have hidden tools in the menu. The Toolbar
+      // stamps its arrow order again from a MutationObserver (a microtask): flush it.
+      widths.overflow = 70;
+      resize.trigger(screen.getByTestId('overflow'));
+      await act(async () => {});
+      expect(screen.getByTestId('italic')).toHaveAttribute('data-overflow-hidden');
+      await user.click(button('+3 more'));
+      expect(menuLabels()).toEqual(['Italic', '—', 'Align left', 'Align center']);
+      await user.keyboard('{Escape}');
+
+      // Wide enough again: every tool and the divider are back, and the button is gone.
+      widths.overflow = 130;
+      resize.trigger(screen.getByTestId('overflow'));
+      await act(async () => {});
+      expect(screen.getByTestId('divider')).not.toHaveAttribute('data-overflow-hidden');
+      expect(screen.queryByRole('button', { name: /more$/ })).toBeNull();
+      expect(
+        within(screen.getByRole('toolbar', { name: 'Formatting' }))
+          .getAllByRole('button')
+          .map((el) => el.textContent),
+      ).toEqual(['Bold', 'Italic', 'Align left', 'Align center']);
+    });
+  });
+
+  it('a DataGrid from items sorts by a column, selects on a row click and leaves a Menu in a cell to itself', async () => {
+    interface Person {
+      id: string;
+      name: string;
+      role: string;
+    }
+    const people: readonly Person[] = [
+      { id: 'c', name: 'Carol', role: 'Engineer' },
+      { id: 'a', name: 'Alice', role: 'Designer' },
+      { id: 'b', name: 'Bob', role: 'Manager' },
+    ];
+    const onRename = vi.fn();
+    const columns = [
+      Wave.createTableColumn<Person>({
+        columnId: 'name',
+        label: 'Name',
+        compare: (x, y) => x.name.localeCompare(y.name),
+        renderCell: (person) => person.name,
+      }),
+      Wave.createTableColumn<Person>({
+        columnId: 'role',
+        label: 'Role',
+        renderCell: (person) => person.role,
+      }),
+      Wave.createTableColumn<Person>({
+        columnId: 'actions',
+        label: 'Actions',
+        renderCell: (person) => (
+          <Menu>
+            <Menu.Trigger>
+              <MenuButton appearance="subtle">{`${person.name} actions`}</MenuButton>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item onClick={() => onRename(person.id)}>Rename</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        ),
+      }),
+    ];
+    const onSortChange = vi.fn();
+    const onSelectedItemsChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DataGrid
+        aria-label="People"
+        items={people}
+        columns={columns}
+        getRowId={(person) => person.id}
+        selectionMode="multiple"
+        selectOnRowClick
+        onSortChange={onSortChange}
+        onSelectedItemsChange={onSelectedItemsChange}
+      />,
+    );
+    const names = () =>
+      Array.from(
+        screen.getByRole('grid').querySelectorAll('tbody > tr'),
+        (row) => row.querySelector('td:not([data-selection-cell])')?.textContent,
+      );
+    expect(names()).toEqual(['Carol', 'Alice', 'Bob']);
+    // A column without `compare` is no sort button.
+    const role = screen.getByRole('columnheader', { name: 'Role' });
+    expect(within(role).queryByRole('button')).toBeNull();
+
+    await user.click(button('Name'));
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+    expect(names()).toEqual(['Alice', 'Bob', 'Carol']);
+    expect(onSortChange.mock.calls).toEqual([
+      [{ columnId: 'name', direction: 'ascending' }, { event: expect.any(MouseEvent) }],
+    ]);
+
+    await user.click(screen.getByText('Manager'));
+    expect(onSelectedItemsChange.mock.calls).toEqual([[['b'], { event: expect.any(MouseEvent) }]]);
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+
+    // A click in the Menu of a row, portaled from its cell, selects nothing.
+    const aliceActions = button('Alice actions');
+    await user.click(aliceActions);
+    await user.click(menuitem('Rename'));
+    expect(onRename).toHaveBeenCalledExactlyOnceWith('a');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(aliceActions).toHaveFocus();
+    expect(onSelectedItemsChange).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('checkbox', { name: 'Alice' })).not.toBeChecked();
+
+    await user.click(button('Name'));
+    expect(names()).toEqual(['Carol', 'Bob', 'Alice']);
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('a static Table sorts from its header, selects from its selection cells and shows cell actions', async () => {
+    interface File {
+      name: string;
+      owner: string;
+    }
+    const files: readonly File[] = [
+      { name: 'Roadmap.pptx', owner: 'Ann Lee' },
+      { name: 'Budget.xlsx', owner: 'Bo Ek' },
+    ];
+    const onShare = vi.fn();
+    function Files() {
+      const [direction, setDirection] = React.useState<Wave.SortDirection>();
+      const [selected, setSelected] = React.useState<readonly string[]>([]);
+      const rows = direction
+        ? [...files].sort(
+            (a, b) => (direction === 'ascending' ? 1 : -1) * a.name.localeCompare(b.name),
+          )
+        : files;
+      const all = selected.length === files.length ? true : selected.length > 0 ? 'mixed' : false;
+      return (
+        <Table aria-label="Files">
+          <Table.Header>
+            <Table.Row>
+              <Wave.TableSelectionCell
+                aria-label="Select all files"
+                checked={all}
+                onCheckedChange={(checked) =>
+                  setSelected(checked ? files.map((file) => file.name) : [])
+                }
+              />
+              <Table.HeaderCell
+                sortable
+                sortDirection={direction}
+                onSortClick={() =>
+                  setDirection((current) => (current === 'ascending' ? 'descending' : 'ascending'))
+                }
+              >
+                Name
+              </Table.HeaderCell>
+              <Table.HeaderCell>Owner</Table.HeaderCell>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {rows.map((file) => (
+              <Table.Row key={file.name}>
+                <Wave.TableSelectionCell
+                  aria-label={`Select ${file.name}`}
+                  checked={selected.includes(file.name)}
+                  onCheckedChange={(checked) =>
+                    setSelected((current) =>
+                      checked ? [...current, file.name] : current.filter((n) => n !== file.name),
+                    )
+                  }
+                />
+                <Table.Cell>
+                  <Wave.TableCellLayout
+                    media={<Avatar name={file.owner} />}
+                    description="Updated today"
+                  >
+                    {file.name}
+                  </Wave.TableCellLayout>
+                  <Wave.TableCellActions>
+                    <Button appearance="subtle" onClick={() => onShare(file.name)}>
+                      {`Share ${file.name}`}
+                    </Button>
+                  </Wave.TableCellActions>
+                </Table.Cell>
+                <Table.Cell>{file.owner}</Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table>
+      );
+    }
+    const user = userEvent.setup();
+    render(<Files />);
+    const order = () =>
+      screen
+        .getAllByRole('checkbox', { name: /^Select (?!all)/ })
+        .map((box) => box.getAttribute('aria-label'));
+    const nameHeader = screen.getByRole('columnheader', { name: 'Name' });
+    expect(nameHeader).toHaveAttribute('aria-sort', 'none');
+    expect(order()).toEqual(['Select Roadmap.pptx', 'Select Budget.xlsx']);
+    await user.click(within(nameHeader).getByRole('button', { name: 'Name' }));
+    expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
+    expect(order()).toEqual(['Select Budget.xlsx', 'Select Roadmap.pptx']);
+    await user.click(within(nameHeader).getByRole('button', { name: 'Name' }));
+    expect(nameHeader).toHaveAttribute('aria-sort', 'descending');
+    expect(order()).toEqual(['Select Roadmap.pptx', 'Select Budget.xlsx']);
+
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all files' });
+    const budget = screen.getByRole('checkbox', { name: 'Select Budget.xlsx' });
+    await user.click(budget);
+    expect(budget).toBeChecked();
+    expect(selectAll).toBePartiallyChecked();
+    await user.click(selectAll);
+    expect(selectAll).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Select Roadmap.pptx' })).toBeChecked();
+
+    // The owner's Avatar takes the layout's 32px box; the actions are in the Tab order of the
+    // table, hidden until their row is hovered or holds focus.
+    expect(
+      screen.getByRole('img', { name: 'Bo Ek' }).closest(`.${avatarClassNames.root}`),
+    ).toHaveAttribute('data-size', '32');
+    const share = button('Share Budget.xlsx');
+    expect(share.parentElement).toHaveClass(Wave.tableCellActionsClassNames.root);
+    expect(share.parentElement).not.toHaveAttribute('data-visible');
+    act(() => budget.focus());
+    await user.tab();
+    expect(share).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onShare).toHaveBeenCalledExactlyOnceWith('Budget.xlsx');
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('a composite List in a Dialog runs onAction from its rows and leaves Escape to the Dialog', async () => {
+    const user = userEvent.setup();
+    const onOpenFile = vi.fn();
+    const onDelete = vi.fn();
+    render(
+      <Dialog>
+        <Dialog.Trigger>
+          <Button>Recent files</Button>
+        </Dialog.Trigger>
+        <Dialog.Content title="Recent files">
+          <Wave.List aria-label="Files" navigationMode="composite">
+            {['Budget.xlsx', 'Notes.docx'].map((name) => (
+              <Wave.List.Item
+                key={name}
+                value={name}
+                onAction={() => onOpenFile(name)}
+                action={
+                  <Button appearance="subtle" onClick={() => onDelete(name)}>
+                    {`Delete ${name}`}
+                  </Button>
+                }
+              >
+                {name}
+              </Wave.List.Item>
+            ))}
+          </Wave.List>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const trigger = button('Recent files');
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Recent files' });
+    const grid = within(dialog).getByRole('grid', { name: 'Files' });
+    // The roving hook stamps the actions out of the Tab order in a microtask.
+    await act(async () => {});
+    const budget = within(grid).getByRole('row', { name: /Budget/ });
+    act(() => budget.focus());
+    await user.keyboard('{Enter}');
+    expect(onOpenFile.mock.calls).toEqual([['Budget.xlsx']]);
+
+    await user.keyboard('{ArrowDown}');
+    const notes = within(grid).getByRole('row', { name: /Notes/ });
+    expect(notes).toHaveFocus();
+    await user.click(within(notes).getByText('Notes.docx'));
+    expect(onOpenFile.mock.calls).toEqual([['Budget.xlsx'], ['Notes.docx']]);
+
+    // The action is reached with ArrowRight and runs its own handler, not onAction.
+    await user.keyboard('{ArrowRight}');
+    const deleteNotes = within(dialog).getByRole('button', { name: 'Delete Notes.docx' });
+    expect(deleteNotes).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onDelete).toHaveBeenCalledExactlyOnceWith('Notes.docx');
+    expect(onOpenFile).toHaveBeenCalledTimes(2);
+    await expectNoA11yViolations(document.body);
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('a tour built from parts opens from its Trigger, keeps a Menu in a step to itself and finishes', async () => {
+    const user = userEvent.setup();
+    const onStepChange = vi.fn();
+    const onFinish = vi.fn();
+    const steps = [
+      { title: 'Share', body: 'Share the file with your team.' },
+      {
+        title: 'More actions',
+        body: (
+          <Menu>
+            <Menu.Trigger>
+              <MenuButton>File actions</MenuButton>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Copy link</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        ),
+      },
+      { title: 'Done', body: 'You are all set.' },
+    ];
+    render(
+      <TeachingPopover steps={steps} onStepChange={onStepChange} onFinish={onFinish}>
+        <TeachingPopover.Trigger>
+          <Button>Take the tour</Button>
+        </TeachingPopover.Trigger>
+        <TeachingPopover.Surface>
+          <TeachingPopover.Header icon={<svg data-testid="tip-icon" />}>Tip</TeachingPopover.Header>
+          <TeachingPopover.Carousel>
+            <TeachingPopover.Title />
+            <TeachingPopover.Body />
+            <TeachingPopover.CarouselFooter finalStepText="Got it">
+              <TeachingPopover.CarouselNav />
+            </TeachingPopover.CarouselFooter>
+          </TeachingPopover.Carousel>
+        </TeachingPopover.Surface>
+      </TeachingPopover>,
+    );
+    const trigger = button('Take the tour');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await user.click(trigger);
+    const tour = await screen.findByRole('dialog', { name: 'Share, step 1 of 3' });
+    await waitFor(() => expect(tour).toHaveFocus());
+    expect(trigger).toHaveAttribute('aria-controls', tour.id);
+    expect(within(tour).getByText('Tip')).toBeInTheDocument();
+    expect(within(tour).getByTestId('tip-icon').parentElement).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+
+    await user.click(within(tour).getByRole('button', { name: 'Step 2 of 3' }));
+    expect(onStepChange.mock.calls).toEqual([[1]]);
+    expect(within(tour).getByRole('heading', { level: 3 })).toHaveTextContent(
+      'More actions, step 2 of 3',
+    );
+    // Escape in the step's Menu closes only the menu; the tour stays open.
+    const fileActions = within(tour).getByRole('button', { name: 'File actions' });
+    await user.click(fileActions);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await expectNoA11yViolations(document.body);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'More actions, step 2 of 3' })).toBe(tour);
+    expect(fileActions).toHaveFocus();
+
+    await user.click(within(tour).getByRole('button', { name: 'Next' }));
+    await user.click(within(tour).getByRole('button', { name: 'Got it' }));
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 });

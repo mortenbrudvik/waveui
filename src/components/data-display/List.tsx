@@ -1,12 +1,15 @@
 import * as React from 'react';
+import { focusableDisabledProps } from '../../lib/aria';
 import { cn } from '../../lib/cn';
 import { listClassNames, listItemClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
+import { INTERACTIVE_SELECTOR, isForeignEvent, type ForeignEventOptions } from '../../lib/events';
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
-import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
+import { CheckIcon } from '../../lib/icons';
+import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import { focusRingInset, forcedColors } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -18,6 +21,16 @@ import { ListRegistry, type ListFocusLoss } from './List.registry';
 
 /** Selection modes of {@link List}: the shared `SelectionMode` plus the deprecated `'multi'`. */
 export type ListSelectionMode = SelectionMode | 'multi';
+
+/**
+ * How the keyboard reaches the items of a {@link List} (Fluent's `navigationMode`): `'none'`, no
+ * item is a Tab stop; `'items'`, the items are one Tab stop moved with the arrow keys; `'composite'`,
+ * a grid whose rows are moved with Up/Down and whose actions are reached with Right/Left.
+ */
+export type ListNavigationMode = 'none' | 'items' | 'composite';
+
+/** The event that activated a list item: a click, or Enter or Space on the focused item. */
+export type ListItemActionEvent = React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>;
 
 /**
  * Properties for the List component.
@@ -57,8 +70,38 @@ export interface ListProps<
   /** Single mode: called with the newly selected value, or `null` when it was deselected. */
   onSelectedItemChange?: M extends 'single' ? (item: string | null) => void : never;
   /**
+   * How the keyboard reaches the items. Unset, the list picks the mode itself: `'none'` for a plain
+   * list, `'items'` for a selectable one (a listbox) and `'composite'` (a grid) for a selectable
+   * list whose items have actions, which remounts the items when the first action appears or the
+   * last one disappears. An explicit value pins the structure:
+   *
+   * - `'none'`: a plain list; its items are no Tab stops (their actions stay in the Tab order). A
+   *   selectable list always navigates its items: there `'none'` is ignored, with a development
+   *   warning.
+   * - `'items'`: the items are one Tab stop (the first selected item, else the first item; in a
+   *   list without selection the item that last had focus), moved with ArrowUp/ArrowDown (wrapping)
+   *   and Home/End, with typeahead for more than 7 items. A plain list keeps `role="list"` and its
+   *   items carry no `aria-selected`; their actions stay in the Tab order. A selectable list whose
+   *   items have actions acts as `'composite'`, with a development warning.
+   * - `'composite'`: a grid (`role="grid"`, `row`s and `gridcell`s) from the first render, so the
+   *   items never remount when actions appear. One Tab stop; Up/Down move between the rows and
+   *   Right/Left (mirrored in right-to-left layouts) into and out of their actions, which leave
+   *   the Tab order. The rows of a list without selection carry no `aria-selected`.
+   *
+   * The resolved mode is rendered as `data-navigation-mode`. Changing it while mounted can switch
+   * between `ul`/`li` and `div` elements, which remounts the items (see {@link List}).
+   */
+  navigationMode?: ListNavigationMode;
+  /**
+   * Draws a check mark at the start of every item of a selectable list, shown while the item is
+   * selected (decorative: `aria-selected` carries the state). An item's own `checkmark` replaces
+   * or hides it. Renders `data-checkmark` on the list while it draws them.
+   * @default false
+   */
+  checkmark?: boolean;
+  /**
    * Ref to the root element: a `<ul>`, or a `<div role="grid">` for a selectable list whose items
-   * have actions.
+   * have actions and for `navigationMode="composite"`.
    */
   ref?: React.Ref<HTMLUListElement | HTMLDivElement>;
 }
@@ -79,9 +122,36 @@ export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
    * with the arrow keys, and their focusable elements (also ones added later) get
    * `tabindex="-1"`, except inside a nested composite widget such as a Toolbar, which keeps its own
    * Tab stop. When the first action appears or the last one disappears, the items remount (see
-   * {@link List}).
+   * {@link List}), unless the List's `navigationMode="composite"` keeps the grid.
    */
   action?: React.ReactNode;
+  /**
+   * Called when the item is activated: a click on it, or Enter on the focused item, and Space on
+   * an item that cannot be selected (in a list without selection, or without a `value`); in a
+   * selectable item Space only toggles the selection. Clicks and keys that start in an action or
+   * in interactive content never run it. It runs after the item's `onClick` (whose
+   * `preventDefault()` skips it) and before the selection toggles: call `event.preventDefault()`
+   * to keep the selection as it is. Fires on every activation. The items of a list that does not
+   * navigate them (`navigationMode` `'none'`, not selectable) cannot be reached with the keyboard:
+   * there it runs on clicks only, and a development warning says so.
+   */
+  onAction?: (event: ListItemActionEvent) => void;
+  /**
+   * In a selectable list: the item's selection cannot be toggled (click, Enter or Space; a
+   * selected item stays selected). The item stays focusable and in the arrow-key order and renders
+   * `data-disabled-selection`. Without `onAction` it is also `aria-disabled` (with `data-disabled`
+   * and `data-disabled-focusable`); with `onAction`, clicks and Enter still run the action, while
+   * Space, the selection key, does nothing. The item's `onClick` runs either way.
+   * @default false
+   */
+  disabledSelection?: boolean;
+  /**
+   * The item's check mark in a selectable list, a decorative `<span>` at the start of the item
+   * shown while it is selected. `null` and `undefined` follow the List's `checkmark` (the default
+   * check, or none); content replaces the glyph, also when the List draws none; `false`, or
+   * content that renders nothing, hides it.
+   */
+  checkmark?: Slot<'span'>;
   /** Ref to the item element: an `<li>`, or a `<div role="row">` in grid mode. */
   ref?: React.Ref<HTMLLIElement | HTMLDivElement>;
 }
@@ -90,11 +160,20 @@ export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
 /*  Context                                                            */
 /* ------------------------------------------------------------------ */
 
-/** `list`: plain list; `listbox`: selectable; `grid`: selectable with item actions. */
+/**
+ * The list's structure: `list` (`ul`/`li`, `role="list"`), `listbox` (selectable, `option`s) or
+ * `grid` (`div`s with `row`s: a selectable list with item actions, or `navigationMode="composite"`).
+ */
 type ListMode = 'list' | 'listbox' | 'grid';
 
 interface ListContextValue {
   mode: ListMode;
+  /** The items are the list's arrow-key stops (a selectable list, or `items`/`composite`). */
+  navigable: boolean;
+  /** The list is selectable: its items carry `aria-selected`. */
+  selection: boolean;
+  /** The List draws the default check mark on its items (a selectable list with `checkmark`). */
+  checkmark: boolean;
   selectedValues: ReadonlySet<string>;
   toggleItem: (value: string) => void;
   getTabIndex: (value: string) => 0 | -1;
@@ -109,6 +188,9 @@ let inertContext: ListContextValue | null = null;
 function getInertContext(): ListContextValue {
   inertContext ??= {
     mode: 'list',
+    navigable: false,
+    selection: false,
+    checkmark: false,
     selectedValues: new Set<string>(),
     toggleItem: () => {},
     getTabIndex: () => -1,
@@ -130,6 +212,23 @@ function useListContext(componentName: string): ListContextValue {
 
 const EMPTY: readonly string[] = [];
 
+/**
+ * The structure and the effective navigation mode of a list. Unset, a selectable list is a listbox,
+ * or a grid while an item has an action. In a selectable list, `'none'` is ignored and `'items'`
+ * with actions acts as `'composite'` (an option cannot hold interactive content); both warn.
+ */
+function resolveNavigation(
+  selectable: boolean,
+  hasActions: boolean,
+  navigationMode: ListNavigationMode | undefined,
+): { mode: ListMode; navigation: ListNavigationMode } {
+  if (navigationMode === 'composite' || (selectable && hasActions)) {
+    return { mode: 'grid', navigation: 'composite' };
+  }
+  if (selectable) return { mode: 'listbox', navigation: 'items' };
+  return { mode: 'list', navigation: navigationMode === 'items' ? 'items' : 'none' };
+}
+
 /** Items that share a value are selected together and share their roving value. */
 function warnDuplicateValue(value: string): void {
   warnOnce(
@@ -150,47 +249,24 @@ function childrenHaveAction(children: React.ReactNode): boolean {
   );
 }
 
-/** Elements whose events belong to themselves, not to the item that contains them. */
-const INTERACTIVE_SELECTOR = [
-  FOCUSABLE_SELECTOR,
-  '[data-list-action]',
-  'label',
-  '[role="button"]',
-  '[role="link"]',
-  '[role="checkbox"]',
-  '[role="switch"]',
-  '[role="radio"]',
-  '[role="menuitem"]',
-  '[role="textbox"]',
-  '[role="combobox"]',
-  '[role="slider"]',
-  '[role="spinbutton"]',
-].join(', ');
+/** Elements whose events belong to themselves, not to the item: also the item's action cell. */
+const ITEM_FOREIGN_EVENTS: ForeignEventOptions = {
+  interactive: `${INTERACTIVE_SELECTOR}, [data-list-action]`,
+};
 
 /**
  * Whether an item must leave `event` alone (no selection toggle): it started inside the action
- * container or a nested interactive element, or outside the item's DOM. React bubbles the events
- * of a popup portaled from an action (a Popover, Menu or Dialog) through the item's handlers
- * although their target lives elsewhere in the document; those never toggle the item (as in
- * Card).
+ * cell or a nested interactive element, or outside the item's DOM. React bubbles the events of a
+ * popup portaled from an action (a Popover, Menu or Dialog) through the item's handlers although
+ * their target lives elsewhere in the document; those never toggle the item (as in Card).
  */
-function isForeignEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
-  const item = event.currentTarget;
-  const target = event.target as Partial<Node> | null;
-  if (!target || typeof target.nodeType !== 'number' || !item.contains(target as Node)) {
-    return true;
-  }
-  let node: Element | null =
-    target.nodeType === Node.ELEMENT_NODE ? (target as Element) : (target.parentElement ?? null);
-  for (; node && node !== item; node = node.parentElement) {
-    if (node.matches(INTERACTIVE_SELECTOR)) return true;
-  }
-  return false;
+function isForeignItemEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
+  return isForeignEvent(event, ITEM_FOREIGN_EVENTS);
 }
 
 /**
- * Enter or Space without Ctrl, Alt or Meta: the keys that toggle an item. With a modifier (Ctrl+Alt
- * with Space included) the key is a shortcut, left to the page.
+ * Enter or Space without Ctrl, Alt or Meta: the keys that activate an item. With a modifier
+ * (Ctrl+Alt with Space included) the key is a shortcut, left to the page.
  */
 function isActivationKey(event: React.KeyboardEvent): boolean {
   if (event.ctrlKey || event.altKey || event.metaKey) return false;
@@ -308,6 +384,8 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     selectedItem,
     defaultSelectedItem,
     onSelectedItemChange,
+    navigationMode,
+    checkmark = false,
     className,
     children,
     ref,
@@ -347,9 +425,6 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   );
 
   const [registry] = React.useState(() => new ListRegistry());
-  React.useLayoutEffect(() => {
-    registry.setActive(selectable);
-  }, [registry, selectable]);
   const registered = React.useSyncExternalStore(
     registry.subscribe,
     registry.getSnapshot,
@@ -363,9 +438,19 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   );
   const selectedValues = React.useMemo<ReadonlySet<string>>(() => new Set(effective), [effective]);
 
+  // Only a selectable list without the `composite` pin decides its structure by its actions.
   const hasActions =
-    selectable && (registered ? registered.hasActions : childrenHaveAction(children));
-  const mode: ListMode = !selectable ? 'list' : hasActions ? 'grid' : 'listbox';
+    selectable &&
+    navigationMode !== 'composite' &&
+    (registered ? registered.hasActions : childrenHaveAction(children));
+  const { mode, navigation } = resolveNavigation(selectable, hasActions, navigationMode);
+  const navigable = navigation !== 'none';
+  const drawsCheckmark = selectable && checkmark;
+
+  // A navigable list reads its items' registrations (count, values, order); a plain one never does.
+  React.useLayoutEffect(() => {
+    registry.setActive(navigable);
+  }, [registry, navigable]);
 
   // The first selected item in DOM order (the registry keeps its values in DOM order).
   const tabStopValue = registered
@@ -373,10 +458,11 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     : (effective[0] ?? null);
 
   const { containerProps, getTabIndex } = useRovingTabIndex({
-    activeValue: tabStopValue,
+    activeValue: selectable ? tabStopValue : null,
     orientation: 'vertical',
     typeahead: (registered?.count ?? 0) > 7,
-    tabStop: 'active',
+    // A list without selection returns to the item that last had focus.
+    tabStop: selectable ? 'active' : 'last-focused',
     // The items are the root's children. A composite in an item action (a Toolbar, a radio group)
     // is part of its row, not an item: arrows and typeahead never move into it.
     itemSelector: ':scope > [data-roving-value]',
@@ -390,7 +476,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   const rootElementRef = React.useRef<HTMLUListElement | HTMLDivElement | null>(null);
   const rootRef = useMergedRefs<HTMLUListElement | HTMLDivElement>(
     ref,
-    selectable ? rovingRef : null,
+    navigable ? rovingRef : null,
     rootElementRef,
   );
 
@@ -408,6 +494,16 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     if (active && active !== doc.body && active.isConnected) return;
     getFocusRestoreTarget(root, loss)?.focus();
   }, [mode, registry]);
+
+  // A plain list that stops navigating (`items` to `none`) keeps its item elements, but they lose
+  // their tabindex: focus on one moves to its first focusable content, as after a remount.
+  React.useLayoutEffect(() => {
+    if (navigable) return;
+    const root = rootElementRef.current;
+    const active = root?.ownerDocument.activeElement;
+    if (!active || active.parentElement !== root || active.hasAttribute('tabindex')) return;
+    getFocusables(active as HTMLElement)[0]?.focus();
+  }, [navigable]);
 
   // After every commit (the items' layout effects ran first): keep the registered values in DOM
   // order, so `tabStopValue` is the first selected item in the DOM even after items were inserted
@@ -447,9 +543,44 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     }
   }, [selectable, multiple, selectedCount]);
 
+  const itemsWithActions = selectable && navigationMode === 'items' && hasActions;
+  const noneSelectable = selectable && navigationMode === 'none';
+  React.useEffect(() => {
+    if (itemsWithActions) {
+      warnOnce(
+        'List:items-with-actions',
+        'List: a selectable list whose items have actions is a grid (an option cannot hold interactive content), so navigationMode="items" acts as "composite". Set navigationMode="composite".',
+      );
+    }
+    if (noneSelectable) {
+      warnOnce(
+        'List:none-selectable',
+        'List: navigationMode="none" has no effect on a selectable list, whose items are always reached with the arrow keys. Remove it, or use "items" or "composite".',
+      );
+    }
+  }, [itemsWithActions, noneSelectable]);
+
   const contextValue = React.useMemo<ListContextValue>(
-    () => ({ mode, selectedValues, toggleItem, getTabIndex, registry }),
-    [mode, selectedValues, toggleItem, getTabIndex, registry],
+    () => ({
+      mode,
+      navigable,
+      selection: selectable,
+      checkmark: drawsCheckmark,
+      selectedValues,
+      toggleItem,
+      getTabIndex,
+      registry,
+    }),
+    [
+      mode,
+      navigable,
+      selectable,
+      drawsCheckmark,
+      selectedValues,
+      toggleItem,
+      getTabIndex,
+      registry,
+    ],
   );
 
   const Root = (mode === 'grid' ? 'div' : 'ul') as React.ElementType;
@@ -460,18 +591,20 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
       <Root
         role={role}
         aria-multiselectable={selectable && multiple ? true : undefined}
+        data-navigation-mode={navigation}
+        data-checkmark={drawsCheckmark ? '' : undefined}
         className={cn(listClassNames.root, 'm-0 list-none p-0', className)}
         {...rest}
         ref={rootRef}
-        data-roving-container={selectable ? '' : undefined}
-        onKeyDown={selectable ? composeEventHandlers(onKeyDown, rovingKeyDown) : onKeyDown}
+        data-roving-container={navigable ? '' : undefined}
+        onKeyDown={navigable ? composeEventHandlers(onKeyDown, rovingKeyDown) : onKeyDown}
         onKeyDownCapture={
-          selectable
+          navigable
             ? composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture)
             : onKeyDownCapture
         }
         onFocus={
-          selectable
+          navigable
             ? composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })
             : onFocus
         }
@@ -488,10 +621,48 @@ ListRoot.displayName = 'List';
 /* ------------------------------------------------------------------ */
 
 /**
+ * Forced colors: the check takes the `Highlight` of the selected item's outline, `GrayText` while
+ * its selection is disabled. Both opt the check (a leaf indicator) out of forced colors, so the
+ * system color reaches the glyph.
+ */
+const CHECKMARK_FORCED_COLORS =
+  'forced-colors:text-[Highlight] forced-colors:forced-color-adjust-none';
+const CHECKMARK_DISABLED_FORCED_COLORS =
+  'forced-colors:text-[GrayText] forced-colors:forced-color-adjust-none';
+
+/**
+ * The check mark of an item of a selectable list: decorative, kept in its place but not drawn while
+ * the item is not selected, so the item texts line up. It is the item's last element and is drawn
+ * first (flex order): the item's text, which typeahead reads, starts with its content. `glyph` is
+ * the item's `checkmark` when it renders content, else `undefined` for the default check.
+ */
+function renderCheckmark(
+  glyph: Slot<'span'> | undefined,
+  { selected, disabled }: { selected: boolean; disabled: boolean },
+): React.ReactNode {
+  const classes = cn(
+    listItemClassNames.checkmark,
+    'order-first me-2 inline-flex shrink-0 items-center justify-center',
+    disabled
+      ? ['text-muted-foreground', CHECKMARK_DISABLED_FORCED_COLORS]
+      : ['text-primary', CHECKMARK_FORCED_COLORS],
+    !selected && 'invisible',
+  );
+  return glyph === undefined ? (
+    <span aria-hidden="true" className={classes}>
+      <CheckIcon />
+    </span>
+  ) : (
+    renderSlot(glyph, 'span', classes, { 'aria-hidden': true })
+  );
+}
+
+/**
  * An item of a {@link List} (also available as `List.Item`). Renders an `<li>` (`listitem`, or
- * `option` in a selectable list), or a `<div role="row">` in a selectable list with actions. In a
- * selectable list, Enter and Space toggle the selection without calling `onClick`, which receives
- * pointer clicks.
+ * `option` in a selectable list), or a `<div role="row">` in a grid (a selectable list with
+ * actions, or `navigationMode="composite"`). In a selectable list, Enter and Space toggle the
+ * selection without calling `onClick`, which receives pointer clicks; `onAction` runs on clicks
+ * and Enter (and Space where the item cannot be selected), before the selection toggles.
  *
  * Exported under the flat name `ListItem` so React Server Components can import it; `List.Item`
  * (dotted access) needs a client module.
@@ -499,6 +670,9 @@ ListRoot.displayName = 'List';
 export const ListItem = ({
   value,
   action,
+  onAction,
+  disabledSelection = false,
+  checkmark,
   className,
   children,
   onClick,
@@ -506,7 +680,16 @@ export const ListItem = ({
   ref,
   ...rest
 }: ListItemProps) => {
-  const { mode, selectedValues, toggleItem, getTabIndex, registry } = useListContext('ListItem');
+  const {
+    mode,
+    navigable,
+    selection,
+    checkmark: listCheckmark,
+    selectedValues,
+    toggleItem,
+    getTabIndex,
+    registry,
+  } = useListContext('ListItem');
   const autoValue = useId('list-item');
   const selectableValue = value ? value : undefined;
   const rovingValue = selectableValue ?? autoValue;
@@ -544,24 +727,61 @@ export const ListItem = ({
     };
   }, [registry, selectableValue]);
 
-  const isSelected = selectableValue !== undefined && selectedValues.has(selectableValue);
-  const selectable = mode !== 'list';
+  // C-DEV: an item that is no Tab stop cannot be activated with the keyboard.
+  const actionNotNavigable = onAction !== undefined && !navigable;
+  React.useEffect(() => {
+    if (actionNotNavigable) {
+      warnOnce(
+        'List.Item:action-not-navigable',
+        'List.Item: `onAction` runs only on clicks here: the List does not navigate its items, so keyboard users cannot reach them. Set navigationMode="items" (or "composite") on the List, or make it selectable.',
+      );
+    }
+  }, [actionNotNavigable]);
 
-  const activate = () => {
-    if (selectableValue !== undefined) toggleItem(selectableValue);
+  const isSelected =
+    selection && selectableValue !== undefined && selectedValues.has(selectableValue);
+  // The item can be selected (a selectable list, and a value); `disabledSelection` keeps it as is.
+  const itemSelectable = selection && selectableValue !== undefined;
+  const selectionDisabled = selection && disabledSelection;
+  // Without an action, an item whose selection is disabled can do nothing: it is aria-disabled.
+  const ariaDisabled = selectionDisabled && onAction === undefined;
+
+  const toggle = () => {
+    if (selection && !disabledSelection && selectableValue !== undefined) {
+      toggleItem(selectableValue);
+    }
+  };
+
+  /** A click or Enter: `onAction`, then the selection unless `onAction` called preventDefault(). */
+  const activate = (event: ListItemActionEvent) => {
+    onAction?.(event);
+    if (!event.isDefaultPrevented()) toggle();
   };
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    if (isForeignEvent(event)) return;
-    activate();
+    if (isForeignItemEvent(event)) return;
+    activate(event);
+  };
+
+  /** Enter or Space on the focused item itself. */
+  const handleActivationKey = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === ' ' && itemSelectable) {
+      // Space is the selection key of an item that can be selected: it never runs onAction.
+      event.preventDefault();
+      toggle();
+      return;
+    }
+    // An item with nothing to activate leaves the key to the page.
+    if (!selection && onAction === undefined) return;
+    // Not prevented before: `onAction` may cancel the selection with preventDefault().
+    activate(event);
+    // Space would scroll the page.
+    event.preventDefault();
   };
 
   const handleOptionKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (isForeignEvent(event)) return;
-    if (isActivationKey(event)) {
-      event.preventDefault();
-      activate();
-    }
+    if (isForeignItemEvent(event)) return;
+    if (isActivationKey(event)) handleActivationKey(event);
   };
 
   const handleRowKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
@@ -572,8 +792,7 @@ export const ListItem = ({
     if (!cell || !cell.contains(target)) {
       if (target !== rowElement) return;
       if (isActivationKey(event)) {
-        event.preventDefault();
-        activate();
+        handleActivationKey(event);
         return;
       }
       const intent = getArrowIntent(event.key, {
@@ -626,34 +845,54 @@ export const ListItem = ({
   const ContentCell = (mode === 'grid' ? 'div' : 'span') as React.ElementType;
   const role = mode === 'grid' ? 'row' : mode === 'listbox' ? 'option' : 'listitem';
 
-  const interactiveProps: Record<string, unknown> = selectable
+  const interactiveProps: Record<string, unknown> = navigable
     ? {
-        'aria-selected': isSelected,
+        'aria-selected': selection ? isSelected : undefined,
         tabIndex: getTabIndex(rovingValue),
         'data-roving-value': rovingValue,
         'data-selected': isSelected ? '' : undefined,
+        // C-DISABLED: focusable, and kept in the arrow-key order.
+        ...focusableDisabledProps(ariaDisabled, { reachable: true }),
         onClick: composeEventHandlers(onClick, handleClick),
         onKeyDown: composeEventHandlers(
           onKeyDown,
           mode === 'grid' ? handleRowKeyDown : handleOptionKeyDown,
         ),
       }
-    : { onClick, onKeyDown };
+    : {
+        // Clicks only (see the warning above); an item without onAction is left as it is.
+        onClick: onAction ? composeEventHandlers(onClick, handleClick) : onClick,
+        onKeyDown,
+      };
+
+  // A selectable list's items are clickable unless their selection is disabled and they have no
+  // action; in a list without selection only the items with an action are.
+  const cursor = selection
+    ? ariaDisabled
+      ? 'cursor-default'
+      : 'cursor-pointer'
+    : onAction && 'cursor-pointer';
+  const hoverable = selection ? !ariaDisabled : onAction !== undefined;
+
+  // `checkmark` is an optional indicator (C-SLOTS): unset follows the List, content replaces the
+  // check, a value that renders nothing hides it.
+  const customCheckmark = checkmark != null && slotRendersContent(checkmark);
+  const showCheckmark = selection && (checkmark == null ? listCheckmark : customCheckmark);
 
   return (
     <Element
       role={role}
+      data-disabled-selection={selectionDisabled ? '' : undefined}
       className={cn(
         listItemClassNames.root,
         'flex items-center border-b border-border px-4 py-2 text-body-1',
-        selectable && ['relative cursor-pointer', focusRingInset],
-        selectable &&
-          (isSelected
-            ? [
-                'bg-subtle-selected before:absolute before:inset-y-2 before:start-0 before:w-0.5 before:rounded-full before:bg-primary',
-                forcedColors.selectedContainer,
-              ]
-            : 'hover:bg-subtle-hover'),
+        navigable ? ['relative', cursor, focusRingInset] : cursor,
+        isSelected
+          ? [
+              'bg-subtle-selected before:absolute before:inset-y-2 before:start-0 before:w-0.5 before:rounded-full before:bg-primary',
+              forcedColors.selectedContainer,
+            ]
+          : hoverable && 'hover:bg-subtle-hover',
         className,
       )}
       {...rest}
@@ -672,6 +911,11 @@ export const ListItem = ({
           {materialiseSlotContent(action)}
         </ListActionCell>
       )}
+      {showCheckmark &&
+        renderCheckmark(customCheckmark ? checkmark : undefined, {
+          selected: isSelected,
+          disabled: selectionDisabled,
+        })}
     </Element>
   );
 };
@@ -838,16 +1082,28 @@ ListActionCell.displayName = 'ListActionCell';
  *   a text-entry widget takes focus itself: Enter/F2 enter the widget, Escape returns to the cell.
  *   Clicks and keys that start inside an action, or inside a popup it opens (a Popover, a Menu),
  *   never toggle selection.
+ * - **Navigation without selection** (`navigationMode`): `'items'` makes the items of a plain list
+ *   one Tab stop (the item that last had focus) with the listbox's arrow keys, Home/End and
+ *   typeahead, keeping `role="list"`; `'composite'` renders the grid above from the first render,
+ *   for a selectable list too, so the items never remount when actions appear. The items of a
+ *   list without selection carry no `aria-selected`. The resolved mode is `data-navigation-mode`.
+ * - **Actions on the item itself** (`List.Item onAction`): clicks and Enter run it, and Space on
+ *   an item that cannot be selected; in a selectable item it runs before the selection toggles,
+ *   and its `preventDefault()` keeps the selection. `List.Item disabledSelection` keeps an item's
+ *   selection as it is while the item stays focusable and in the arrow-key order.
+ * - **Check marks** (`checkmark`, opt-in): a decorative check at the start of every item of a
+ *   selectable list, shown while the item is selected; `List.Item checkmark` replaces or hides it.
  * - **Switching semantics remounts the items.** Listbox/list and grid use different elements
  *   (`ul`/`li` and `div`), so when a selectable list gains its first item action, loses its last
- *   one, or `selectable` changes while items have actions, React remounts the items and their
- *   content: state inside them (an inline rename input's draft, an uncontrolled checkbox) is reset.
- *   Focus that is on an item or inside it when the list switches moves to the same item (by
- *   `value`, else by position; the next item when the focused one was removed), so the switch
- *   never drops it to `<body>`. This includes focus inside the last action when that action
- *   removes itself (an inline rename input that unmounts on Enter). An action that removes itself
- *   while focused without causing a switch drops focus, like any removed element. When the list
- *   may switch, keep such state in the parent (or keep an action on at least one item).
+ *   one, or `selectable` or `navigationMode` changes the structure, React remounts the items and
+ *   their content: state inside them (an inline rename input's draft, an uncontrolled checkbox) is
+ *   reset. Focus that is on an item or inside it when the list switches moves to the same item (by
+ *   `value`, else by position; the next item when the focused one was removed), or to its first
+ *   focusable content when the item is no Tab stop any more, so the switch never drops it to
+ *   `<body>`. This includes focus inside the last action when that action removes itself (an
+ *   inline rename input that unmounts on Enter). An action that removes itself while focused
+ *   without causing a switch drops focus, like any removed element. When the list may switch,
+ *   keep such state in the parent, or pin the grid with `navigationMode="composite"`.
  * - Selection: `selectionMode` `'single'` (default) or `'multiple'`; controlled with
  *   `selectedItems` (or `selectedItem` in single mode) or uncontrolled with the `default*` props.
  *   Values of items that are no longer rendered are dropped from the reported selection.
@@ -857,6 +1113,12 @@ ListActionCell.displayName = 'ListActionCell';
  * <List selectable selectionMode="multiple" aria-label="Fruits" onSelectionChange={setFruits}>
  *   <List.Item value="apple">Apple</List.Item>
  *   <List.Item value="banana">Banana</List.Item>
+ * </List>
+ *
+ * @example
+ * <List navigationMode="items" aria-label="Recent files">
+ *   <List.Item value="report" onAction={() => open('report')}>Report</List.Item>
+ *   <List.Item value="budget" onAction={() => open('budget')}>Budget</List.Item>
  * </List>
  */
 export const List = /* @__PURE__ */ Object.assign(ListRoot, {

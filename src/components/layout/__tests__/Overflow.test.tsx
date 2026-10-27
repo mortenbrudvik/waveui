@@ -1,21 +1,48 @@
 import * as React from 'react';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { describe, it, expect, expectTypeOf, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import {
+  describe,
+  it,
+  expect,
+  expectTypeOf,
+  vi,
+  beforeEach,
+  afterEach,
+  onTestFinished,
+} from 'vitest';
+import { act, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import {
   Overflow,
+  OverflowDivider,
   OverflowItem,
+  useHasHiddenItems,
+  useIsOverflowGroupVisible,
   useIsOverflowing,
   useIsOverflowItemVisible,
   useOverflowMenu,
 } from '../Overflow';
-import type { OverflowItemProps, OverflowProps, UseOverflowMenuResult } from '../Overflow';
+import type {
+  OverflowChangeDetails,
+  OverflowDirection,
+  OverflowDividerProps,
+  OverflowGroupVisibility,
+  OverflowItemProps,
+  OverflowProps,
+  UseOverflowMenuResult,
+} from '../Overflow';
+import type { Orientation } from '../../../lib/types';
+import { overflowDividerClassNames, overflowItemClassNames } from '../../../lib/classNames';
+import { Toolbar } from '../../button/Toolbar';
 import {
+  asClientReference,
+  expectNoA11yViolations,
   installResizeObserverMock,
   testCompoundExposure,
   testSystemProps,
   expectThrows,
+  renderWithProviders,
 } from '../../../test-utils';
 import type { ResizeObserverMock } from '../../../test-utils';
 
@@ -1036,6 +1063,361 @@ describe('Overflow', () => {
   });
 });
 
+describe('Overflow - priority, pinned items, direction and orientation (P9-01)', () => {
+  interface Spec {
+    id: string;
+    priority?: number;
+    pinned?: boolean;
+  }
+
+  const fourItems = (specs: Spec[] = []): Spec[] =>
+    ['a', 'b', 'c', 'd'].map((id) => ({ id, ...specs.find((spec) => spec.id === id) }));
+
+  const samePriority = (): Spec[] => ['a', 'b', 'c', 'd'].map((id) => ({ id, priority: 1 }));
+
+  function Row({ items = fourItems(), ...props }: Partial<OverflowProps> & { items?: Spec[] }) {
+    return (
+      <Overflow data-testid="overflow" overflowButton={moreButton} {...props}>
+        {items.map(({ id, priority, pinned }) => {
+          const priorityProps = pinned ? { pinned } : { priority };
+          return (
+            <OverflowItem key={id} itemId={id} data-testid={`item-${id}`} {...priorityProps}>
+              {id.toUpperCase()}
+            </OverflowItem>
+          );
+        })}
+      </Overflow>
+    );
+  }
+
+  // 4 x 30 = 120 > 100: with the 20px button 80 are left, so two items must go.
+  const FOUR = {
+    overflow: 100,
+    'item-a': 30,
+    'item-b': 30,
+    'item-c': 30,
+    'item-d': 30,
+    button: 20,
+  };
+
+  it('hides by ascending priority, also the first item, once an item sets one', () => {
+    layoutWith({ ...FOUR });
+    render(
+      <Row
+        items={fourItems([
+          { id: 'a', priority: 3 },
+          { id: 'b', priority: 1 },
+          { id: 'c', priority: 2 },
+          { id: 'd', priority: 4 },
+        ])}
+      />,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
+  });
+
+  it('can hide the first item when only another item sets a priority', () => {
+    layoutWith({ overflow: 30, 'item-a': 50, 'item-b': 40, 'item-c': 40, button: 20 });
+    render(<Row items={[{ id: 'a' }, { id: 'b' }, { id: 'c', priority: 1 }]} />);
+    // Nothing fits beside the button and nothing is pinned: every item goes (0.13 kept the first).
+    expect(hiddenItems()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps the first item without priority or pinned (the 0.13 default)', () => {
+    layoutWith({ overflow: 30, 'item-a': 50, 'item-b': 40, 'item-c': 40, button: 20 });
+    render(<Row items={[{ id: 'a' }, { id: 'b' }, { id: 'c' }]} />);
+    expect(hiddenItems()).toEqual(['b', 'c']);
+  });
+
+  it('hides equal priorities last-in-DOM first for the end direction', () => {
+    layoutWith({ ...FOUR });
+    render(<Row items={samePriority()} />);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+  });
+
+  it('hides equal priorities first-in-DOM first for the start direction', () => {
+    layoutWith({ ...FOUR });
+    render(<Row overflowDirection="start" items={samePriority()} />);
+    expect(hiddenItems()).toEqual(['a', 'b']);
+  });
+
+  it('keeps the last item, not the first, without priority or pinned for the start direction', () => {
+    layoutWith({
+      overflow: 30,
+      'item-a': 40,
+      'item-b': 40,
+      'item-c': 50,
+      'item-d': 40,
+      button: 20,
+    });
+    render(<Row overflowDirection="start" />);
+    expect(hiddenItems()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('never hides pinned items and emits the hidden ids in DOM order', () => {
+    layoutWith({ ...FOUR });
+    const renderButton = vi.fn(moreButton);
+    render(
+      <Row
+        overflowButton={renderButton}
+        items={fourItems([
+          { id: 'a', pinned: true },
+          { id: 'd', pinned: true },
+        ])}
+      />,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    expect(renderButton).toHaveBeenLastCalledWith(2, ['b', 'c']);
+  });
+
+  it('stops hiding at minimumVisible', () => {
+    layoutWith({ overflow: 50, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 });
+    const items = fourItems().slice(0, 3);
+    const { unmount } = render(<Row items={items} />);
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    unmount();
+    render(<Row items={items} minimumVisible={2} />);
+    expect(hiddenItems()).toEqual(['c']);
+  });
+
+  it('measures heights and the row gap for orientation="vertical"', () => {
+    const heights: Record<string, number> = {
+      overflow: 100,
+      'item-a': 30,
+      'item-b': 30,
+      'item-c': 30,
+      'item-d': 30,
+      button: 20,
+    };
+    const heightOf = (el: Element): number => {
+      if (el.hasAttribute('data-overflow-hidden')) return 0;
+      const key = el.hasAttribute('data-overflow-button')
+        ? 'button'
+        : el.getAttribute('data-testid');
+      return key !== null && key in heights ? heights[key] : 0;
+    };
+    const targets: Array<[object, string]> = [
+      [HTMLElement.prototype, 'offsetHeight'],
+      [Element.prototype, 'clientHeight'],
+    ];
+    const saved = targets.map(([proto, name]) => Object.getOwnPropertyDescriptor(proto, name));
+    for (const [proto, name] of targets) {
+      Object.defineProperty(proto, name, {
+        configurable: true,
+        get(this: Element) {
+          return heightOf(this);
+        },
+      });
+    }
+    onTestFinished(() => {
+      targets.forEach(([proto, name], i) => {
+        const descriptor = saved[i];
+        if (descriptor) Object.defineProperty(proto, name, descriptor);
+        else Reflect.deleteProperty(proto, name);
+      });
+    });
+
+    const { unmount } = render(<Row orientation="vertical" />);
+    const row = screen.getByTestId('overflow');
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(row).toHaveAttribute('data-orientation', 'vertical');
+    expect(row).toHaveClass('flex-col');
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-bottom-1');
+    unmount();
+
+    // The row gap counts between items and before the button: 3 x 30 + 2 x 10 = 110 > 100.
+    render(
+      <Row orientation="vertical" style={{ rowGap: '10px' }} items={fourItems().slice(0, 3)} />,
+    );
+    expect(hiddenItems()).toEqual(['c']);
+  });
+
+  it('renders data-orientation="horizontal" by default', () => {
+    layoutWith({ ...FOUR });
+    render(<Row />);
+    expect(screen.getByTestId('overflow')).toHaveAttribute('data-orientation', 'horizontal');
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-end-1');
+  });
+
+  it('renders the resolved overflow direction as data-overflow-direction', () => {
+    layoutWith({ ...FOUR });
+    const { unmount } = render(<Row />);
+    expect(screen.getByTestId('overflow')).toHaveAttribute('data-overflow-direction', 'end');
+    unmount();
+    render(<Row overflowDirection="start" />);
+    expect(screen.getByTestId('overflow')).toHaveAttribute('data-overflow-direction', 'start');
+  });
+
+  it('hides an item with an infinite priority last, but still hides it; pinned never hides', () => {
+    // 4 x 30 in 100 with a 20px button: two go. Infinity outlasts the others.
+    layoutWith({ ...FOUR });
+    const { unmount } = render(
+      <Row
+        items={fourItems([
+          { id: 'b', priority: Infinity },
+          { id: 'c', priority: Infinity },
+          { id: 'd', priority: Infinity },
+        ])}
+      />,
+    );
+    expect(hiddenItems()).toEqual(['a', 'd']);
+    unmount();
+
+    // Nothing but Infinity priorities left to hide: they are victims too (last in DOM first).
+    layoutWith({ ...FOUR, overflow: 50 });
+    const second = render(
+      <Row items={fourItems(['a', 'b', 'c', 'd'].map((id) => ({ id, priority: Infinity })))} />,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c', 'd']);
+    second.unmount();
+
+    layoutWith({ ...FOUR, overflow: 50 });
+    render(
+      <Row
+        items={fourItems([
+          { id: 'a', pinned: true },
+          ...['b', 'c', 'd'].map((id) => ({ id, priority: Infinity })),
+        ])}
+      />,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c', 'd']);
+    expect(screen.getByTestId('item-a')).not.toHaveAttribute('data-overflow-hidden');
+  });
+
+  it('re-measures when a priority changes', () => {
+    layoutWith({ ...FOUR });
+    const { rerender } = render(<Row items={fourItems([{ id: 'a', priority: -1 }])} />);
+    expect(hiddenItems()).toEqual(['a', 'd']);
+    rerender(<Row items={fourItems([{ id: 'a', priority: 9 }])} />);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    rerender(<Row items={fourItems([{ id: 'a', pinned: true }])} />);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+  });
+
+  it('hides by priority in a right-to-left row with the start direction', () => {
+    layoutWith({ ...FOUR });
+    renderWithProviders(<Row overflowDirection="start" items={samePriority()} />, { dir: 'rtl' });
+    expect(hiddenItems()).toEqual(['a', 'b']);
+    // The button keeps the logical inline end, which flips with the direction.
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-end-1');
+  });
+
+  it('accepts priority or pinned, never both', () => {
+    expectTypeOf<{
+      itemId: string;
+      children: string;
+      priority: number;
+    }>().toExtend<OverflowItemProps>();
+    expectTypeOf<{
+      itemId: string;
+      children: string;
+      pinned: boolean;
+    }>().toExtend<OverflowItemProps>();
+    expectTypeOf<{
+      itemId: string;
+      children: string;
+      priority: number;
+      pinned: boolean;
+    }>().not.toExtend<OverflowItemProps>();
+    expectTypeOf<OverflowProps['overflowDirection']>().toEqualTypeOf<
+      OverflowDirection | undefined
+    >();
+    expectTypeOf<OverflowDirection>().toEqualTypeOf<'end' | 'start'>();
+    expectTypeOf<OverflowProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
+    expectTypeOf<OverflowGroupVisibility>().toEqualTypeOf<'visible' | 'hidden' | 'overflow'>();
+    // `details` is optional until 1.0 (C-NAMING), as for the other callbacks of the phase.
+    expectTypeOf<OverflowProps['onOverflowChange']>().toEqualTypeOf<
+      ((hiddenItems: string[], details?: OverflowChangeDetails) => void) | undefined
+    >();
+    type OnOverflowChange = NonNullable<OverflowProps['onOverflowChange']>;
+    const withDetails = (hidden: string[], details?: OverflowChangeDetails) =>
+      void [hidden, details?.visibleItems];
+    const hiddenOnly = (hidden: string[]) => void hidden;
+    expectTypeOf(withDetails).toExtend<OnOverflowChange>();
+    expectTypeOf(hiddenOnly).toExtend<OnOverflowChange>();
+    expectTypeOf<OnOverflowChange>().toBeCallableWith(['a']);
+  });
+
+  describe('hasHiddenItems', () => {
+    it('renders the button in the server HTML so the row reserves its room', () => {
+      expect(renderToString(<Row hasHiddenItems />)).toContain('data-overflow-button');
+      expect(renderToString(<Row />)).not.toContain('data-overflow-button');
+    });
+
+    it('drops the reserved button after the first measure when everything fits', () => {
+      layoutWith({ ...FOUR, overflow: 200 });
+      render(<Row hasHiddenItems />);
+      expect(document.querySelector('[data-overflow-button]')).toBeNull();
+    });
+
+    it('keeps the button, with the real count, when items overflow', () => {
+      layoutWith({ ...FOUR });
+      render(<Row hasHiddenItems />);
+      expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
+    });
+  });
+
+  describe('onOverflowChange', () => {
+    it('reports the hidden ids and the visible ids once per change, after the commit', () => {
+      const resize = withResizeObserver();
+      const stub = layoutWith({ ...FOUR });
+      const hiddenWhenCalled: boolean[] = [];
+      const onChange = vi.fn(() => {
+        hiddenWhenCalled.push(document.querySelector('[data-overflow-hidden]') !== null);
+      });
+      render(<Row onOverflowChange={onChange} />);
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenLastCalledWith(['c', 'd'], {
+        visibleItems: ['a', 'b'],
+        groupVisibility: {},
+      });
+      expect(hiddenWhenCalled).toEqual([true]);
+
+      // The same hidden set after a resize: nothing is reported.
+      stub.widths.overflow = 101;
+      resize.trigger(screen.getByTestId('overflow'));
+      expect(onChange).toHaveBeenCalledTimes(1);
+
+      stub.widths.overflow = 200;
+      resize.trigger(screen.getByTestId('overflow'));
+      expect(onChange).toHaveBeenCalledTimes(2);
+      expect(onChange).toHaveBeenLastCalledWith([], {
+        visibleItems: ['a', 'b', 'c', 'd'],
+        groupVisibility: {},
+      });
+    });
+
+    it('does not report while nothing overflows', () => {
+      layoutWith({ ...FOUR, overflow: 200 });
+      const onChange = vi.fn();
+      render(<Row onOverflowChange={onChange} />);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('reports once per change in StrictMode', () => {
+      layoutWith({ ...FOUR });
+      const onChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Row onOverflowChange={onChange} />
+        </React.StrictMode>,
+      );
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenLastCalledWith(['c', 'd'], expect.anything());
+    });
+
+    it('does not report again when only the callback changes', () => {
+      layoutWith({ ...FOUR });
+      const first = vi.fn();
+      const second = vi.fn();
+      const { rerender } = render(<Row onOverflowChange={first} />);
+      rerender(<Row onOverflowChange={second} />);
+      expect(first).toHaveBeenCalledTimes(1);
+      expect(second).not.toHaveBeenCalled();
+    });
+  });
+});
+
 describe('Overflow - server rendering', () => {
   function Probe() {
     const ref = React.useRef<HTMLDivElement>(null);
@@ -1330,5 +1712,1215 @@ describe('useIsOverflowing', () => {
     }
     render(<ElementProbe />);
     expect(screen.getByTestId('el')).toHaveTextContent('overflowing');
+  });
+});
+
+describe('Overflow - cases around the priority loop (P9-01 review)', () => {
+  type Spec = { id: string; priority?: number; pinned?: boolean };
+
+  const Priorities = ({ items, ...props }: Partial<OverflowProps> & { items: Spec[] }) => (
+    <Overflow data-testid="overflow" overflowButton={moreButton} {...props}>
+      {items.map(({ id, priority, pinned }) => {
+        const priorityProps = pinned ? { pinned } : { priority };
+        return (
+          <OverflowItem key={id} itemId={id} data-testid={`item-${id}`} {...priorityProps}>
+            {id.toUpperCase()}
+          </OverflowItem>
+        );
+      })}
+    </Overflow>
+  );
+
+  it('hides by priority, not by width, when the items are unequal', () => {
+    layoutWith({
+      overflow: 100,
+      'item-a': 50,
+      'item-b': 20,
+      'item-c': 30,
+      'item-d': 10,
+      button: 20,
+    });
+    render(
+      <Priorities
+        items={[
+          { id: 'a', priority: 1 },
+          { id: 'b', priority: 2 },
+          { id: 'c', priority: 3 },
+          { id: 'd', priority: 0 },
+        ]}
+      />,
+    );
+    // d (10) goes first and 100 + 20 still does not fit; then a (50): 50 + 20 = 70.
+    expect(hiddenItems()).toEqual(['a', 'd']);
+  });
+
+  it('keeps every item when minimumVisible is larger than the item count', () => {
+    layoutWith({ overflow: 30, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 20 });
+    render(
+      <Priorities
+        minimumVisible={10}
+        items={[{ id: 'a', priority: 1 }, { id: 'b' }, { id: 'c', pinned: true }]}
+      />,
+    );
+    expect(hiddenItems()).toEqual([]);
+    expect(screen.queryByRole('button', { name: /^\+/ })).not.toBeInTheDocument();
+  });
+
+  it('switches a mounted row between the legacy rule and the priority rule', () => {
+    layoutWith({ overflow: 30, 'item-a': 50, 'item-b': 40, 'item-c': 40, button: 20 });
+    const { rerender } = render(<Priorities items={[{ id: 'a' }, { id: 'b' }, { id: 'c' }]} />);
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    rerender(<Priorities items={[{ id: 'a' }, { id: 'b' }, { id: 'c', priority: 1 }]} />);
+    expect(hiddenItems()).toEqual(['a', 'b', 'c']);
+    rerender(<Priorities items={[{ id: 'a' }, { id: 'b' }, { id: 'c' }]} />);
+    expect(hiddenItems()).toEqual(['b', 'c']);
+  });
+
+  it('keeps the legacy rule while every item says pinned={false}', () => {
+    layoutWith({ overflow: 30, 'item-a': 50, 'item-b': 40, 'item-c': 40, button: 20 });
+    render(
+      <Overflow overflowButton={moreButton}>
+        {['a', 'b', 'c'].map((id) => (
+          <OverflowItem key={id} itemId={id} pinned={false} data-testid={`item-${id}`}>
+            {id}
+          </OverflowItem>
+        ))}
+      </Overflow>,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c']);
+  });
+
+  it('applies priority and pinned once in StrictMode', () => {
+    layoutWith({
+      overflow: 100,
+      'item-a': 30,
+      'item-b': 30,
+      'item-c': 30,
+      'item-d': 30,
+      button: 20,
+    });
+    const onChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Priorities
+          onOverflowChange={onChange}
+          items={[
+            { id: 'a', priority: 1 },
+            { id: 'b', pinned: true },
+            { id: 'c', priority: 5 },
+            { id: 'd', priority: 0 },
+          ]}
+        />
+      </React.StrictMode>,
+    );
+    expect(hiddenItems()).toEqual(['a', 'd']);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(['a', 'd'], expect.anything());
+  });
+});
+
+describe('Overflow - groups, divider, hooks and asChild (P9-01)', () => {
+  const GROUPS = {
+    overflow: 100,
+    'item-a': 30,
+    'item-b': 30,
+    'item-c': 30,
+    'item-d': 30,
+    divider: 10,
+    button: 20,
+  };
+
+  function GroupProbe({ id }: { id: string }) {
+    const visibility = useIsOverflowGroupVisible(id);
+    return <span data-testid={`group-${id}`}>{visibility}</span>;
+  }
+
+  function HiddenProbe() {
+    return <span data-testid="has-hidden">{String(useHasHiddenItems())}</span>;
+  }
+
+  // Groups: "one" = a, b; "two" = the divider, c, d. The probes sit in a, which is never hidden.
+  function Grouped(props: Partial<OverflowProps>) {
+    return (
+      <Overflow data-testid="overflow" overflowButton={moreButton} {...props}>
+        <OverflowItem itemId="a" groupId="one" data-testid="item-a">
+          A<GroupProbe id="one" />
+          <GroupProbe id="two" />
+          <HiddenProbe />
+        </OverflowItem>
+        <OverflowItem itemId="b" groupId="one" data-testid="item-b">
+          B
+        </OverflowItem>
+        <OverflowDivider groupId="two" data-testid="divider">
+          |
+        </OverflowDivider>
+        <OverflowItem itemId="c" groupId="two" data-testid="item-c">
+          C
+        </OverflowItem>
+        <OverflowItem itemId="d" groupId="two" data-testid="item-d">
+          D
+        </OverflowItem>
+      </Overflow>
+    );
+  }
+
+  const dividerHidden = () => screen.getByTestId('divider').hasAttribute('data-overflow-hidden');
+
+  describe('groups and the divider', () => {
+    it('reports a group as visible when every member is shown, divider included', () => {
+      layoutWith({ ...GROUPS, overflow: 200 });
+      render(<Grouped />);
+      expect(screen.getByTestId('group-one')).toHaveTextContent('visible');
+      expect(screen.getByTestId('group-two')).toHaveTextContent('visible');
+      expect(screen.getByTestId('has-hidden')).toHaveTextContent('false');
+      expect(dividerHidden()).toBe(false);
+    });
+
+    it('reports a group as overflow when only some members are hidden; its divider stays', () => {
+      // a, b, divider, c, d = 130 > 125 - 20: d goes (100 + 20 = 120 <= 125).
+      layoutWith({ ...GROUPS, overflow: 125 });
+      render(<Grouped />);
+      expect(hiddenItems()).toEqual(['d']);
+      expect(screen.getByTestId('group-two')).toHaveTextContent('overflow');
+      expect(screen.getByTestId('group-one')).toHaveTextContent('visible');
+      expect(screen.getByTestId('has-hidden')).toHaveTextContent('true');
+      expect(dividerHidden()).toBe(false);
+    });
+
+    it('hides the divider with its group and reports the group as hidden', () => {
+      layoutWith({ ...GROUPS });
+      render(<Grouped />);
+      expect(hiddenItems()).toEqual(['c', 'd']);
+      expect(screen.getByTestId('group-two')).toHaveTextContent('hidden');
+      expect(screen.getByTestId('group-one')).toHaveTextContent('visible');
+      const divider = screen.getByTestId('divider');
+      expect(divider).toHaveAttribute('data-overflow-hidden');
+      expect(divider).toHaveAttribute('aria-hidden', 'true');
+      expect(divider).toHaveAttribute('inert');
+      expect(divider.style.display).toBe('none');
+    });
+
+    it('counts the room of a divider that is shown', () => {
+      // Without the divider (10), a, b and c (90) would fit beside the 20px button in 115.
+      layoutWith({ ...GROUPS, overflow: 115 });
+      render(<Grouped />);
+      expect(hiddenItems()).toEqual(['c', 'd']);
+    });
+
+    it('shows the divider and the group again when the container grows', () => {
+      const resize = withResizeObserver();
+      const stub = layoutWith({ ...GROUPS });
+      render(<Grouped />);
+      expect(dividerHidden()).toBe(true);
+      stub.widths.overflow = 200;
+      resize.trigger(screen.getByTestId('overflow'));
+      expect(dividerHidden()).toBe(false);
+      expect(screen.getByTestId('group-two')).toHaveTextContent('visible');
+      expect(screen.getByTestId('has-hidden')).toHaveTextContent('false');
+    });
+
+    it('reports groupVisibility in the details of onOverflowChange', () => {
+      layoutWith({ ...GROUPS, overflow: 125 });
+      const onChange = vi.fn();
+      render(<Grouped onOverflowChange={onChange} />);
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenLastCalledWith(['d'], {
+        visibleItems: ['a', 'b', 'c'],
+        groupVisibility: { one: 'visible', two: 'overflow' },
+      });
+    });
+
+    it('reports groupVisibility without a prototype: a group id that names an Object member reads nothing', () => {
+      layoutWith({ ...GROUPS, overflow: 125 });
+      const onChange = vi.fn();
+      render(<Grouped onOverflowChange={onChange} />);
+      const details = onChange.mock.lastCall?.[1] as OverflowChangeDetails;
+      expect(Object.getPrototypeOf(details.groupVisibility)).toBeNull();
+      expect(details.groupVisibility['constructor']).toBeUndefined();
+      expect(details.groupVisibility['toString']).toBeUndefined();
+      expect(details.groupVisibility['two']).toBe('overflow');
+    });
+
+    it('treats a group without members as visible', () => {
+      layoutWith({ ...GROUPS });
+      render(
+        <Overflow data-testid="overflow" overflowButton={moreButton}>
+          <OverflowItem itemId="a" data-testid="item-a">
+            <GroupProbe id="nobody" />
+          </OverflowItem>
+        </Overflow>,
+      );
+      expect(screen.getByTestId('group-nobody')).toHaveTextContent('visible');
+    });
+
+    // The group record has no prototype: a group id that names an Object.prototype member is
+    // neither read from it nor dropped.
+    it.each(['constructor', '__proto__', 'toString'])(
+      'treats the group id %s like any other',
+      (groupId) => {
+        layoutWith({ ...GROUPS });
+        const onChange = vi.fn();
+        render(
+          <Overflow data-testid="overflow" overflowButton={moreButton} onOverflowChange={onChange}>
+            <OverflowItem itemId="a" groupId="one" data-testid="item-a">
+              A<GroupProbe id={groupId} />
+            </OverflowItem>
+            <OverflowItem itemId="b" groupId="one" data-testid="item-b">
+              B
+            </OverflowItem>
+            <OverflowDivider groupId={groupId} data-testid="divider">
+              |
+            </OverflowDivider>
+            <OverflowItem itemId="c" groupId={groupId} data-testid="item-c">
+              C
+            </OverflowItem>
+            <OverflowItem itemId="d" groupId={groupId} data-testid="item-d">
+              D
+            </OverflowItem>
+          </Overflow>,
+        );
+        expect(hiddenItems()).toEqual(['c', 'd']);
+        expect(screen.getByTestId(`group-${groupId}`)).toHaveTextContent('hidden');
+        expect(dividerHidden()).toBe(true);
+        const details = onChange.mock.lastCall?.[1] as OverflowChangeDetails;
+        expect(Object.keys(details.groupVisibility)).toEqual(['one', groupId]);
+        expect(details.groupVisibility[groupId]).toBe('hidden');
+      },
+    );
+
+    it.each(['constructor', '__proto__', 'toString'])(
+      'treats a group %s without members as visible',
+      (groupId) => {
+        layoutWith({ ...GROUPS });
+        render(
+          <Overflow data-testid="overflow" overflowButton={moreButton}>
+            <OverflowItem itemId="a" groupId="one" data-testid="item-a">
+              <GroupProbe id={groupId} />
+            </OverflowItem>
+          </Overflow>,
+        );
+        expect(screen.getByTestId(`group-${groupId}`)).toHaveTextContent('visible');
+      },
+    );
+
+    it('follows a changed groupId of a mounted item', () => {
+      layoutWith({ ...GROUPS });
+      const Row = ({ group }: { group: string }) => (
+        <Overflow data-testid="overflow" overflowButton={moreButton}>
+          <OverflowItem itemId="a" groupId="one" data-testid="item-a">
+            <GroupProbe id="one" />
+            <GroupProbe id="two" />
+          </OverflowItem>
+          <OverflowItem itemId="b" groupId={group} data-testid="item-b">
+            B
+          </OverflowItem>
+          <OverflowItem itemId="c" groupId="two" data-testid="item-c">
+            C
+          </OverflowItem>
+          <OverflowItem itemId="d" groupId={group} data-testid="item-d">
+            D
+          </OverflowItem>
+        </Overflow>
+      );
+      // 4 x 30 in 100 with a 20px button: c and d go.
+      const { rerender } = render(<Row group="one" />);
+      expect(screen.getByTestId('group-one')).toHaveTextContent('overflow');
+      expect(screen.getByTestId('group-two')).toHaveTextContent('hidden');
+      rerender(<Row group="two" />);
+      expect(screen.getByTestId('group-one')).toHaveTextContent('visible');
+      expect(screen.getByTestId('group-two')).toHaveTextContent('overflow');
+    });
+
+    it('measures and reports once in StrictMode', () => {
+      layoutWith({ ...GROUPS });
+      const onChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Grouped onOverflowChange={onChange} />
+        </React.StrictMode>,
+      );
+      expect(hiddenItems()).toEqual(['c', 'd']);
+      expect(dividerHidden()).toBe(true);
+      expect(onChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders a div that takes rest props, a ref and the stable class', () => {
+      layoutWith({ ...GROUPS, overflow: 200 });
+      const ref = React.createRef<HTMLDivElement>();
+      render(
+        <Overflow>
+          <OverflowItem itemId="a" groupId="one">
+            A
+          </OverflowItem>
+          <OverflowDivider groupId="one" ref={ref} className="extra" data-testid="divider" id="x">
+            |
+          </OverflowDivider>
+        </Overflow>,
+      );
+      const divider = screen.getByTestId('divider');
+      expect(ref.current).toBe(divider);
+      expect(divider.tagName).toBe('DIV');
+      expect(divider).toHaveClass(overflowDividerClassNames.root, 'extra');
+      expect(divider).toHaveAttribute('id', 'x');
+    });
+
+    it('keeps a hidden divider at display: none whatever its own style', () => {
+      layoutWith({ ...GROUPS });
+      render(
+        <Overflow data-testid="overflow" overflowButton={moreButton}>
+          <OverflowItem itemId="a" groupId="one" data-testid="item-a">
+            A
+          </OverflowItem>
+          <OverflowItem itemId="b" groupId="one" data-testid="item-b">
+            B
+          </OverflowItem>
+          <OverflowItem itemId="c" groupId="two" data-testid="item-c">
+            C
+          </OverflowItem>
+          <OverflowItem itemId="d" groupId="two" data-testid="item-d">
+            D
+          </OverflowItem>
+          <OverflowDivider groupId="two" style={{ display: 'flex' }} data-testid="divider" />
+        </Overflow>,
+      );
+      expect(screen.getByTestId('divider').style.display).toBe('none');
+    });
+  });
+
+  describe('hooks', () => {
+    it('useIsOverflowGroupVisible and useHasHiddenItems update with the store', () => {
+      const resize = withResizeObserver();
+      const stub = layoutWith({ ...GROUPS });
+      render(<Grouped />);
+      expect(screen.getByTestId('group-two')).toHaveTextContent('hidden');
+      stub.widths.overflow = 125;
+      resize.trigger(screen.getByTestId('overflow'));
+      expect(screen.getByTestId('group-two')).toHaveTextContent('overflow');
+      expect(screen.getByTestId('has-hidden')).toHaveTextContent('true');
+      stub.widths.overflow = 400;
+      resize.trigger(screen.getByTestId('overflow'));
+      expect(screen.getByTestId('group-two')).toHaveTextContent('visible');
+      expect(screen.getByTestId('has-hidden')).toHaveTextContent('false');
+    });
+
+    it('useHasHiddenItems ignores the button that hasHiddenItems reserves', () => {
+      layoutWith({ ...GROUPS, overflow: 400 });
+      render(<Grouped hasHiddenItems />);
+      expect(screen.getByTestId('has-hidden')).toHaveTextContent('false');
+    });
+
+    it('throw outside an Overflow in development', () => {
+      expectThrows(
+        <GroupProbe id="one" />,
+        '[WaveUI] useIsOverflowGroupVisible must be used within Overflow',
+      );
+      expectThrows(<HiddenProbe />, '[WaveUI] useHasHiddenItems must be used within Overflow');
+      expectThrows(
+        <OverflowDivider groupId="one" />,
+        '[WaveUI] OverflowDivider must be used within Overflow',
+      );
+    });
+
+    it('log once and return inert values in production (C-CONTEXT)', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        <>
+          <GroupProbe id="one" />
+          <HiddenProbe />
+        </>,
+      );
+      expect(screen.getByTestId('group-one')).toHaveTextContent('visible');
+      expect(screen.getByTestId('has-hidden')).toHaveTextContent('false');
+      expect(error.mock.calls).toEqual([
+        ['[WaveUI] useIsOverflowGroupVisible must be used within Overflow'],
+        ['[WaveUI] useHasHiddenItems must be used within Overflow'],
+      ]);
+    });
+
+    it('have the documented types', () => {
+      expectTypeOf(useIsOverflowGroupVisible).parameters.toEqualTypeOf<[groupId: string]>();
+      expectTypeOf(useIsOverflowGroupVisible).returns.toEqualTypeOf<OverflowGroupVisibility>();
+      expectTypeOf(useHasHiddenItems).returns.toEqualTypeOf<boolean>();
+      expectTypeOf<OverflowItemProps['groupId']>().toEqualTypeOf<string | undefined>();
+      expectTypeOf<OverflowItemProps['asChild']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<OverflowDividerProps['groupId']>().toEqualTypeOf<string>();
+      expectTypeOf<OverflowDividerProps['ref']>().toEqualTypeOf<
+        React.Ref<HTMLDivElement> | undefined
+      >();
+    });
+  });
+
+  describe('compound and server components', () => {
+    testCompoundExposure(Overflow, ['Item', 'Divider']);
+
+    it('exports the flat names', () => {
+      expect(OverflowDivider).toBe(Overflow.Divider);
+      expect(OverflowItem).toBe(Overflow.Item);
+    });
+
+    it('renders the same server HTML for client references as for the plain parts', () => {
+      const Item = asClientReference(OverflowItem);
+      const Divider = asClientReference(OverflowDivider);
+      const plain = renderToString(
+        <Overflow>
+          <OverflowItem itemId="a" groupId="g">
+            A
+          </OverflowItem>
+          <OverflowDivider groupId="g" />
+          <OverflowItem itemId="b" groupId="g" asChild>
+            <li>B</li>
+          </OverflowItem>
+        </Overflow>,
+      );
+      const reference = renderToString(
+        <Overflow>
+          <Item itemId="a" groupId="g">
+            A
+          </Item>
+          <Divider groupId="g" />
+          <Item itemId="b" groupId="g" asChild>
+            <li>B</li>
+          </Item>
+        </Overflow>,
+      );
+      expect(reference).toBe(plain);
+      expect(plain).toContain('<li');
+    });
+  });
+
+  describe('asChild', () => {
+    const Items = (props: Partial<OverflowProps>) => (
+      <Overflow data-testid="overflow" role="list" aria-label="Pages" {...props}>
+        <OverflowItem asChild itemId="a">
+          <li data-testid="item-a">A</li>
+        </OverflowItem>
+        <OverflowItem asChild itemId="b">
+          <li data-testid="item-b">B</li>
+        </OverflowItem>
+        <OverflowItem asChild itemId="c">
+          <li data-testid="item-c">C</li>
+        </OverflowItem>
+      </Overflow>
+    );
+
+    it('renders no wrapper: the item props land on the single child', async () => {
+      layoutWith({ overflow: 200, 'item-a': 30, 'item-b': 30, 'item-c': 30 });
+      render(<Items />);
+      const item = screen.getByTestId('item-a');
+      expect(item.tagName).toBe('LI');
+      expect(item.parentElement).toHaveAttribute('role', 'list');
+      expect(item).toHaveClass(overflowItemClassNames.root);
+      await expectNoA11yViolations();
+    });
+
+    it('puts the hidden attributes on the child and keeps it mounted', async () => {
+      layoutWith({ overflow: 70, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 });
+      render(<Items overflowButton={moreButton} />);
+      const item = screen.getByTestId('item-c');
+      expect(item).toHaveAttribute('data-overflow-hidden');
+      expect(item).toHaveAttribute('aria-hidden', 'true');
+      expect(item).toHaveAttribute('inert');
+      expect(item.style.display).toBe('none');
+      expect(screen.getByTestId('item-b')).toHaveAttribute('data-overflow-hidden');
+      expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
+    });
+
+    it('makes the button wrapper a list item of a list row, so the list holds only list items', async () => {
+      layoutWith({ overflow: 70, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 });
+      render(<Items overflowButton={moreButton} />);
+      const wrapper = screen.getByRole('button', { name: '+2' }).parentElement;
+      expect(wrapper).toHaveAttribute('data-overflow-button');
+      expect(wrapper).toHaveAttribute('role', 'listitem');
+      expect(screen.getAllByRole('listitem')).toEqual([screen.getByTestId('item-a'), wrapper]);
+      await expectNoA11yViolations();
+    });
+
+    it('gives the button wrapper no role in a row that is not a list', () => {
+      layoutWith({ overflow: 70, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 });
+      render(<ThreeItems overflowButton={moreButton} />);
+      const wrapper = screen.getByRole('button', { name: '+2' }).parentElement;
+      expect(wrapper).toHaveAttribute('data-overflow-button');
+      expect(wrapper).not.toHaveAttribute('role');
+    });
+
+    it('lets the hidden state win over the child own style and aria-hidden', () => {
+      layoutWith({ overflow: 40, 'item-a': 30, 'item-b': 30, button: 20 });
+      render(
+        <Overflow data-testid="overflow" overflowButton={moreButton}>
+          <OverflowItem asChild itemId="a">
+            <li data-testid="item-a">A</li>
+          </OverflowItem>
+          <OverflowItem asChild itemId="b">
+            <li data-testid="item-b" style={{ display: 'flex', color: 'red' }} aria-hidden={false}>
+              B
+            </li>
+          </OverflowItem>
+        </Overflow>,
+      );
+      const item = screen.getByTestId('item-b');
+      expect(item.style.display).toBe('none');
+      expect(item.style.color).toBe('red');
+      expect(item).toHaveAttribute('aria-hidden', 'true');
+      expect(item).toHaveAttribute('inert');
+    });
+
+    it('keeps the child own style and aria-hidden while the item is shown', () => {
+      layoutWith({ overflow: 200, 'item-a': 30 });
+      render(
+        <Overflow data-testid="overflow">
+          <OverflowItem asChild itemId="a">
+            <li data-testid="item-a" style={{ display: 'flex' }} aria-hidden="true">
+              A
+            </li>
+          </OverflowItem>
+        </Overflow>,
+      );
+      const item = screen.getByTestId('item-a');
+      expect(item.style.display).toBe('flex');
+      expect(item).toHaveAttribute('aria-hidden', 'true');
+      expect(item).not.toHaveAttribute('inert');
+      expect(item).not.toHaveAttribute('data-overflow-hidden');
+    });
+
+    it('merges refs, handlers and classes of the item and its child', async () => {
+      layoutWith({ overflow: 200, 'item-a': 30 });
+      const itemRef = React.createRef<HTMLDivElement>();
+      const childRef = React.createRef<HTMLLIElement>();
+      const order: string[] = [];
+      const user = userEvent.setup();
+      render(
+        <Overflow role="list">
+          <OverflowItem
+            asChild
+            itemId="a"
+            ref={itemRef}
+            className="item-class"
+            onClick={() => order.push('item')}
+            data-extra="yes"
+          >
+            <li
+              data-testid="item-a"
+              ref={childRef}
+              className="child-class"
+              onClick={() => order.push('child')}
+            >
+              A
+            </li>
+          </OverflowItem>
+        </Overflow>,
+      );
+      const item = screen.getByTestId('item-a');
+      expect(itemRef.current).toBe(item);
+      expect(childRef.current).toBe(item);
+      expect(item).toHaveClass(overflowItemClassNames.root, 'item-class', 'child-class');
+      expect(item).toHaveAttribute('data-extra', 'yes');
+      await user.click(item);
+      expect(order).toEqual(['child', 'item']);
+    });
+
+    it('measures through the child element', () => {
+      layoutWith({ overflow: 80, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 });
+      render(<Items overflowButton={moreButton} />);
+      // 90 + 20 > 100: c goes.
+      expect(hiddenItems()).toEqual(['c']);
+    });
+
+    it('unwraps a single-element Fragment', () => {
+      layoutWith({ overflow: 200, 'item-a': 30 });
+      render(
+        <Overflow role="list">
+          <OverflowItem asChild itemId="a">
+            <>
+              <li data-testid="item-a">A</li>
+            </>
+          </OverflowItem>
+        </Overflow>,
+      );
+      expect(screen.getByTestId('item-a')).toHaveClass(overflowItemClassNames.root);
+    });
+
+    it('keeps the wrapper div by default and for asChild={false}', () => {
+      layoutWith({ overflow: 200, 'item-a': 30 });
+      render(
+        <Overflow>
+          <OverflowItem itemId="a" data-testid="item-a">
+            <span data-testid="inner">A</span>
+          </OverflowItem>
+          <OverflowItem itemId="b" asChild={false} data-testid="item-b">
+            <span>B</span>
+          </OverflowItem>
+        </Overflow>,
+      );
+      expect(screen.getByTestId('item-a').tagName).toBe('DIV');
+      expect(screen.getByTestId('inner').parentElement).toBe(screen.getByTestId('item-a'));
+      expect(screen.getByTestId('item-b').tagName).toBe('DIV');
+    });
+
+    it('falls back to the wrapper div, and warns once, for a child that cannot take props', () => {
+      layoutWith({ overflow: 200, 'item-a': 30 });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const row = (
+        <Overflow>
+          <OverflowItem asChild itemId="a" data-testid="item-a">
+            just text
+          </OverflowItem>
+        </Overflow>
+      );
+      const { rerender } = render(row);
+      const item = screen.getByTestId('item-a');
+      expect(item.tagName).toBe('DIV');
+      expect(item).toHaveTextContent('just text');
+      rerender(row);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Overflow.Item: asChild expects a single React element child (not text or ' +
+            'several elements); the children are rendered inside a <div> instead.',
+        ],
+      ]);
+    });
+
+    it('follows an asChild toggle on a mounted item', () => {
+      layoutWith({ overflow: 200, 'item-a': 30 });
+      const Row = ({ asChild }: { asChild: boolean }) => (
+        <Overflow>
+          <OverflowItem asChild={asChild} itemId="a" data-testid="outer">
+            <li data-testid="item-a">A</li>
+          </OverflowItem>
+        </Overflow>
+      );
+      const { rerender } = render(<Row asChild={false} />);
+      expect(screen.getByTestId('outer').tagName).toBe('DIV');
+      rerender(<Row asChild />);
+      expect(screen.queryByTestId('outer')).not.toBeInTheDocument();
+      expect(screen.getByTestId('item-a').tagName).toBe('LI');
+    });
+
+    describe('keeps priority, pinned and groupId when the element is replaced while mounted', () => {
+      // 3 x 30 in 70 beside a 20px button: a (priority 0) and c (priority 5) hide, the pinned b stays.
+      const WIDTHS = { overflow: 70, 'item-a': 30, 'item-b': 30, 'item-c': 30, button: 20 };
+
+      const PinnedRow = ({ asChild, child }: { asChild: boolean; child: 'li' | 'a' }) => {
+        const Child = child;
+        return (
+          <Overflow data-testid="overflow" overflowButton={moreButton}>
+            <OverflowItem itemId="a" data-testid="item-a" priority={0}>
+              A
+            </OverflowItem>
+            <OverflowItem
+              asChild={asChild}
+              itemId="b"
+              pinned
+              data-testid={asChild ? undefined : 'item-b'}
+            >
+              <Child key={child} data-testid={asChild ? 'item-b' : undefined}>
+                B
+              </Child>
+            </OverflowItem>
+            <OverflowItem itemId="c" data-testid="item-c" priority={5}>
+              C
+            </OverflowItem>
+          </Overflow>
+        );
+      };
+
+      it('when asChild is toggled', () => {
+        layoutWith(WIDTHS);
+        const { rerender } = render(<PinnedRow asChild={false} child="li" />);
+        expect(hiddenItems()).toEqual(['a', 'c']);
+        rerender(<PinnedRow asChild child="li" />);
+        expect(hiddenItems()).toEqual(['a', 'c']);
+        rerender(<PinnedRow asChild={false} child="li" />);
+        expect(hiddenItems()).toEqual(['a', 'c']);
+      });
+
+      it('when the type of the child changes', () => {
+        layoutWith(WIDTHS);
+        const { rerender } = render(<PinnedRow asChild child="li" />);
+        expect(hiddenItems()).toEqual(['a', 'c']);
+        rerender(<PinnedRow asChild child="a" />);
+        expect(screen.getByTestId('item-b').tagName).toBe('A');
+        expect(hiddenItems()).toEqual(['a', 'c']);
+      });
+
+      it('when the key of the child changes, and keeps the group', () => {
+        layoutWith({ overflow: 50, 'item-a': 30, 'item-b': 30, button: 20 });
+        function GroupRow({ childKey }: { childKey: string }) {
+          return (
+            <Overflow data-testid="overflow" overflowButton={moreButton}>
+              <OverflowItem asChild itemId="a" groupId="g">
+                <span key={childKey} data-testid="item-a">
+                  A<GroupProbe id="g" />
+                </span>
+              </OverflowItem>
+              <OverflowItem itemId="b" groupId="g" data-testid="item-b">
+                B
+              </OverflowItem>
+            </Overflow>
+          );
+        }
+        const { rerender } = render(<GroupRow childKey="x" />);
+        expect(hiddenItems()).toEqual(['b']);
+        expect(screen.getByTestId('group-g')).toHaveTextContent('overflow');
+        rerender(<GroupRow childKey="y" />);
+        expect(hiddenItems()).toEqual(['b']);
+        expect(screen.getByTestId('group-g')).toHaveTextContent('overflow');
+      });
+    });
+  });
+
+  describe('composition with a Toolbar', () => {
+    it('keeps hidden buttons and the hidden divider out of the arrow order', async () => {
+      layoutWith({
+        overflow: 100,
+        'btn-a': 30,
+        'btn-b': 30,
+        'btn-c': 30,
+        'btn-d': 30,
+        divider: 10,
+        button: 20,
+      });
+      const user = userEvent.setup();
+      render(
+        <Toolbar aria-label="Formatting">
+          <Overflow data-testid="overflow" overflowButton={moreButton}>
+            <OverflowItem asChild itemId="a" groupId="one">
+              <Toolbar.Button data-testid="btn-a">A</Toolbar.Button>
+            </OverflowItem>
+            <OverflowItem asChild itemId="b" groupId="one">
+              <Toolbar.Button data-testid="btn-b">B</Toolbar.Button>
+            </OverflowItem>
+            <OverflowDivider groupId="two" data-testid="divider" />
+            <OverflowItem asChild itemId="c" groupId="two">
+              <Toolbar.Button data-testid="btn-c">C</Toolbar.Button>
+            </OverflowItem>
+            <OverflowItem asChild itemId="d" groupId="two">
+              <Toolbar.Button data-testid="btn-d">D</Toolbar.Button>
+            </OverflowItem>
+          </Overflow>
+        </Toolbar>,
+      );
+      expect(screen.getByTestId('btn-c')).toHaveAttribute('data-overflow-hidden');
+      expect(screen.getByTestId('divider')).toHaveAttribute('data-overflow-hidden');
+      act(() => screen.getByTestId('btn-a').focus());
+      await user.keyboard('{ArrowRight}');
+      expect(screen.getByTestId('btn-b')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(screen.getByRole('button', { name: '+2' })).toHaveFocus();
+    });
+  });
+});
+
+describe('Overflow - button position (P9-02)', () => {
+  // 4 x 30 = 120 > 100: with the 20px button 80 are left, so two items must go.
+  const FOUR = {
+    overflow: 100,
+    'item-a': 30,
+    'item-b': 30,
+    'item-c': 30,
+    'item-d': 30,
+    button: 20,
+  };
+
+  function Row(props: Partial<OverflowProps>) {
+    return (
+      <Overflow data-testid="overflow" overflowButton={moreButton} {...props}>
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <OverflowItem key={id} itemId={id} data-testid={`item-${id}`}>
+            {id.toUpperCase()}
+          </OverflowItem>
+        ))}
+      </Overflow>
+    );
+  }
+
+  const buttonWrapper = () => document.querySelector<HTMLElement>('[data-overflow-button]');
+
+  it('renders the button after every item by default, as in 0.13', () => {
+    layoutWith({ ...FOUR });
+    render(<Row />);
+    const row = screen.getByTestId('overflow');
+    expect(row).toHaveAttribute('data-button-position', 'end');
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(row.lastElementChild).toBe(buttonWrapper());
+    expect(buttonWrapper()).toHaveClass('ps-1');
+  });
+
+  it('"before-hidden" renders the button just before the first hidden item', () => {
+    layoutWith({ ...FOUR });
+    const { unmount } = render(<Row buttonPosition="before-hidden" />);
+    const row = screen.getByTestId('overflow');
+    expect(row).toHaveAttribute('data-button-position', 'before-hidden');
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(buttonWrapper()?.previousElementSibling).toBe(screen.getByTestId('item-b'));
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+    // Between items it takes the row's gap, as they do.
+    expect(buttonWrapper()).not.toHaveClass('ps-1');
+    unmount();
+
+    layoutWith({ ...FOUR });
+    render(<Row buttonPosition="before-hidden" overflowDirection="start" />);
+    expect(hiddenItems()).toEqual(['a', 'b']);
+    expect(screen.getByTestId('overflow').firstElementChild).toBe(buttonWrapper());
+  });
+
+  it('renders no button while nothing is hidden, and the reserved one at the end', () => {
+    layoutWith({ ...FOUR, overflow: 200 });
+    render(<Row buttonPosition="before-hidden" />);
+    expect(buttonWrapper()).toBeNull();
+
+    const html = renderToString(<Row buttonPosition="before-hidden" hasHiddenItems />);
+    expect(html.indexOf('data-overflow-button=')).toBeGreaterThan(html.indexOf('item-d'));
+  });
+
+  it('moves the button without remounting it as the first hidden item changes', () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    const mounts = vi.fn();
+    function MoreButton({ count }: { count: number }) {
+      React.useEffect(() => {
+        mounts();
+      }, []);
+      return <button type="button">+{count}</button>;
+    }
+    render(
+      <Row
+        buttonPosition="before-hidden"
+        overflowButton={(count) => <MoreButton count={count} />}
+      />,
+    );
+    const button = screen.getByRole('button', { name: '+2' });
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+
+    // 70: only a stays beside the button (30 + 20).
+    stub.widths.overflow = 70;
+    resize.trigger(screen.getByTestId('overflow'));
+    expect(hiddenItems()).toEqual(['b', 'c', 'd']);
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-b'));
+    expect(screen.getByRole('button', { name: '+3' })).toBe(button);
+
+    stub.widths.overflow = 100;
+    resize.trigger(screen.getByTestId('overflow'));
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+    expect(screen.getByRole('button', { name: '+2' })).toBe(button);
+    expect(mounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the button before the hidden item in a right-to-left row', () => {
+    layoutWith({ ...FOUR });
+    renderWithProviders(<Row buttonPosition="before-hidden" />, { dir: 'rtl' });
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+    // It keeps the logical inline end to stick to, which flips with the direction.
+    expect(buttonWrapper()).toHaveClass('-end-1');
+  });
+
+  it('has no axe violations with the button between the list items of a list row', async () => {
+    layoutWith({ ...FOUR });
+    render(
+      <Overflow
+        data-testid="overflow"
+        role="list"
+        aria-label="Pages"
+        overflowButton={moreButton}
+        buttonPosition="before-hidden"
+      >
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <OverflowItem key={id} asChild itemId={id}>
+            <li data-testid={`item-${id}`}>{id.toUpperCase()}</li>
+          </OverflowItem>
+        ))}
+      </Overflow>,
+    );
+    const wrapper = buttonWrapper();
+    expect(wrapper).toHaveAttribute('role', 'listitem');
+    expect(wrapper?.previousElementSibling).toBe(screen.getByTestId('item-b'));
+    expect(screen.getAllByRole('listitem')).toEqual([
+      screen.getByTestId('item-a'),
+      screen.getByTestId('item-b'),
+      wrapper,
+    ]);
+    await expectNoA11yViolations();
+  });
+
+  it('finds items inside Fragments and items written in a Server Component', () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    const Item = asClientReference(OverflowItem);
+    render(
+      <Overflow data-testid="overflow" overflowButton={moreButton} buttonPosition="before-hidden">
+        <>
+          <OverflowItem itemId="a" data-testid="item-a">
+            A
+          </OverflowItem>
+          <OverflowItem itemId="b" data-testid="item-b">
+            B
+          </OverflowItem>
+        </>
+        <Item itemId="c" data-testid="item-c">
+          C
+        </Item>
+        <Item itemId="d" data-testid="item-d">
+          D
+        </Item>
+      </Overflow>,
+    );
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
+    stub.widths.overflow = 70;
+    resize.trigger(screen.getByTestId('overflow'));
+    expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-b'));
+  });
+
+  it('keeps the button at the end, and warns once, when the hidden item is no child of the row', () => {
+    layoutWith({ ...FOUR });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    function Wrapped({ id }: { id: string }) {
+      return (
+        <OverflowItem itemId={id} data-testid={`item-${id}`}>
+          {id.toUpperCase()}
+        </OverflowItem>
+      );
+    }
+    const row = (
+      <Overflow data-testid="overflow" overflowButton={moreButton} buttonPosition="before-hidden">
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <Wrapped key={id} id={id} />
+        ))}
+      </Overflow>
+    );
+    const { rerender } = render(row);
+    rerender(row);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    expect(screen.getByTestId('overflow').lastElementChild).toBe(buttonWrapper());
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Overflow: buttonPosition="before-hidden" puts the button before the ' +
+          'first hidden item only when that item is a child of the Overflow (Fragments and ' +
+          'arrays are opened), not one rendered by another component; the button is rendered ' +
+          'after the items instead.',
+      ],
+    ]);
+  });
+
+  it('types the position', () => {
+    expectTypeOf<OverflowProps['buttonPosition']>().toEqualTypeOf<
+      'end' | 'before-hidden' | undefined
+    >();
+  });
+});
+
+describe('Overflow - the divider stretches across the row (browser pass M3)', () => {
+  function Divided({ orientation }: { orientation?: Orientation }) {
+    return (
+      <Overflow data-testid="overflow" orientation={orientation}>
+        <OverflowItem itemId="a" groupId="one">
+          A
+        </OverflowItem>
+        <OverflowDivider groupId="two" data-testid="divider">
+          <span className="self-stretch" />
+        </OverflowDivider>
+        <OverflowItem itemId="b" groupId="two">
+          B
+        </OverflowItem>
+      </Overflow>
+    );
+  }
+
+  it('is a flex item of the row that stretches to its height and centres an explicitly sized child', () => {
+    layoutWith({ overflow: 200 });
+    render(<Divided />);
+    const divider = screen.getByTestId('divider');
+    expect(divider).toHaveClass(
+      overflowDividerClassNames.root,
+      'flex',
+      'shrink-0',
+      'items-center',
+      'self-stretch',
+    );
+    expect(divider).not.toHaveClass('flex-col');
+    expect(divider).not.toHaveAttribute('data-overflow-hidden');
+    expect(divider.style.display).toBe('');
+  });
+
+  it('in a vertical column it stretches to the width and keeps an explicitly sized child at the start', () => {
+    layoutWith({ overflow: 200 });
+    render(<Divided orientation="vertical" />);
+    expect(screen.getByTestId('divider')).toHaveClass(
+      overflowDividerClassNames.root,
+      'flex',
+      'flex-col',
+      'shrink-0',
+      'items-start',
+      'self-stretch',
+    );
+  });
+
+  it('stays hidden with its group over its flex display', () => {
+    // a (20), the divider (10) and b (20) need 50 of 30: b and its group's divider go.
+    layoutWith({ overflow: 30, 'item-a': 20, 'item-b': 20, divider: 10, button: 20 });
+    render(
+      <Overflow data-testid="overflow" overflowButton={moreButton}>
+        <OverflowItem itemId="a" groupId="one" data-testid="item-a">
+          A
+        </OverflowItem>
+        <OverflowDivider groupId="two" data-testid="divider" className="flex">
+          |
+        </OverflowDivider>
+        <OverflowItem itemId="b" groupId="two" data-testid="item-b">
+          B
+        </OverflowItem>
+      </Overflow>,
+    );
+    const divider = screen.getByTestId('divider');
+    expect(hiddenItems()).toEqual(['b']);
+    expect(divider).toHaveClass('flex', 'self-stretch');
+    expect(divider).toHaveAttribute('data-overflow-hidden');
+    expect(divider).toHaveAttribute('aria-hidden', 'true');
+    expect(divider).toHaveAttribute('inert');
+    expect(divider.style.display).toBe('none');
+  });
+
+  it('gives a self-stretching Toolbar.Divider a flex parent that spans the row', () => {
+    layoutWith({ overflow: 200 });
+    render(
+      <Toolbar aria-label="Formatting">
+        <Overflow data-testid="overflow">
+          <OverflowItem asChild itemId="a" groupId="one">
+            <Toolbar.Button>A</Toolbar.Button>
+          </OverflowItem>
+          <OverflowDivider groupId="two" data-testid="divider">
+            <Toolbar.Divider />
+          </OverflowDivider>
+          <OverflowItem asChild itemId="b" groupId="two">
+            <Toolbar.Button>B</Toolbar.Button>
+          </OverflowItem>
+        </Overflow>
+      </Toolbar>,
+    );
+    const divider = screen.getByTestId('divider');
+    expect(divider).toHaveClass('flex', 'items-center', 'self-stretch');
+    expect(within(divider).getByRole('separator')).toHaveClass('self-stretch');
+  });
+});
+
+describe('Overflow - focus when the overflow button goes away (browser pass M1)', () => {
+  // Four 30px items in 100 with the 20px button: two of them hide.
+  const FOUR = {
+    overflow: 100,
+    'item-a': 30,
+    'item-b': 30,
+    'item-c': 30,
+    'item-d': 30,
+    button: 20,
+  };
+
+  /** Each item holds a button named after it, unless `plain` lists it (plain text). */
+  function Row({ plain = [], ...props }: Partial<OverflowProps> & { plain?: string[] }) {
+    return (
+      <Overflow data-testid="overflow" overflowButton={moreButton} {...props}>
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <OverflowItem key={id} itemId={id} data-testid={`item-${id}`}>
+            {plain.includes(id) ? (
+              id.toUpperCase()
+            ) : (
+              <button type="button">{id.toUpperCase()}</button>
+            )}
+          </OverflowItem>
+        ))}
+      </Overflow>
+    );
+  }
+
+  /** Focuses the "+N" button, then gives the row room for every item. */
+  async function focusButtonAndWiden(stub: LayoutStub, resize: ResizeObserverMock) {
+    const more = screen.getByRole('button', { name: /^\+\d$/ });
+    act(() => more.focus());
+    expect(more).toHaveFocus();
+    stub.widths.overflow = 200;
+    resize.trigger(screen.getByTestId('overflow'));
+    await act(async () => {});
+    expect(hiddenItems()).toEqual([]);
+    expect(screen.queryByRole('button', { name: /^\+\d$/ })).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+  }
+
+  it('moves focus to the first item shown again, not to the body', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row />);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByRole('button', { name: 'C' })).toHaveFocus();
+  });
+
+  it('with the button before the hidden items at the start, focus goes to the first of them', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row buttonPosition="before-hidden" overflowDirection="start" />);
+    expect(hiddenItems()).toEqual(['a', 'b']);
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByRole('button', { name: 'A' })).toHaveFocus();
+  });
+
+  it('focuses an item element that is focusable itself (asChild)', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(
+      <Overflow data-testid="overflow" overflowButton={moreButton}>
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <OverflowItem key={id} asChild itemId={id}>
+            <button type="button" data-testid={`item-${id}`}>
+              {id.toUpperCase()}
+            </button>
+          </OverflowItem>
+        ))}
+      </Overflow>,
+    );
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByTestId('item-c')).toHaveFocus();
+  });
+
+  it('skips an item shown again with nothing focusable for the next one', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row plain={['c']} />);
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByRole('button', { name: 'D' })).toHaveFocus();
+  });
+
+  it('falls back to the nearest item before them when none of them can take focus', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row plain={['c', 'd']} />);
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByRole('button', { name: 'B' })).toHaveFocus();
+  });
+
+  it('keeps focus on the button while items stay hidden', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row />);
+    const more = screen.getByRole('button', { name: '+2' });
+    act(() => more.focus());
+    // 120 in 110: only d goes (90 + the 20px button fit).
+    stub.widths.overflow = 110;
+    resize.trigger(screen.getByTestId('overflow'));
+    await act(async () => {});
+    expect(hiddenItems()).toEqual(['d']);
+    expect(screen.getByRole('button', { name: '+1' })).toBe(more);
+    expect(more).toHaveFocus();
+  });
+
+  it('leaves focus where it is when the button did not have it', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row />);
+    const a = screen.getByRole('button', { name: 'A' });
+    act(() => a.focus());
+    stub.widths.overflow = 200;
+    resize.trigger(screen.getByTestId('overflow'));
+    await act(async () => {});
+    expect(screen.queryByRole('button', { name: /^\+\d$/ })).toBeNull();
+    expect(a).toHaveFocus();
   });
 });

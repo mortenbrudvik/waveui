@@ -59,4 +59,10 @@ export { Image } from './Image';
 export type { ImageProps, StrictImageProps, ImageFit, ImageShape } from './Image';
 
 export { List, ListItem } from './List';
-export type { ListProps, ListItemProps, ListSelectionMode } from './List';
+export type {
+  ListProps,
+  ListItemProps,
+  ListSelectionMode,
+  ListNavigationMode,
+  ListItemActionEvent,
+} from './List';

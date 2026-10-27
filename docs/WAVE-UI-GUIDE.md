@@ -605,7 +605,7 @@ export const Panel = /* @__PURE__ */ Object.assign(PanelRoot, { Header: PanelHea
 - **Component JSDoc** sits only on the exported `Object.assign(…)` const (the root gets none, also when it lives in a sibling module, as `MenuRoot` in `Menu.root.tsx` does; likewise on a wrapper-call export and on the first overload), so it reaches `index.d.ts`, and it names no internal symbol (`XRoot`) or spec label. Storybook autodocs read it from there (`.storybook/exportDocblocks.ts`), so stories never repeat it (no meta JSDoc, no `docs.description.component` for a compound): `.storybook/__tests__/exportDocblocks.test.ts` gates this, and verify-dist fails on an undocumented exported component.
 - A part rendered outside its root throws `[WaveUI] <Part> must be used within <Root>` in development; in production it logs that once per message and renders inert (`reportMissingContext` from `src/lib/dev.ts`).
 
-Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `ColorPicker`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Listbox`, `Menu`, `MessageBar`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Rating`, `RatingDisplay`, `Skeleton`, `Stepper`, `SwatchPicker`, `TabList`, `Table`, `Toast`, `Toolbar`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
+Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `ColorPicker`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Listbox`, `Menu`, `MessageBar`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Rating`, `RatingDisplay`, `Skeleton`, `Stepper`, `SwatchPicker`, `TabList`, `Table`, `TeachingPopover`, `Toast`, `Toolbar`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
 
 ### Pattern 3: Slot System
 
@@ -1143,6 +1143,8 @@ A compound that also has a one-prop form (`<TagPicker options={…} />`) makes t
 - Content the root needs before the parts render (the options' labels for the tags and the summary) is read from the children (`collectOptionLabels`), so the server HTML agrees with the client.
 - Routed props go to whichever trigger part renders (`TagPicker.Input` or `TagPicker.Button`), and exactly one trigger renders (`TagPicker:trigger`).
 
+TeachingPopover follows the pattern from the other side: its `steps` form renders the parts with their defaults (a Surface holding `Header`, `Title`, `Body` and `Footer`), so a part without children renders exactly the `steps` form's markup, and each part's stable class sits on the element that takes its `className` (that is why the 0.14 `steps` form gained a header element and the parts' classes). The surface hooks live once, in an internal surface both forms render. The root renders its own surface only while no `Surface` is a direct child and none has registered from deeper down (a Surface in a wrapper component registers once mounted, so the server HTML holds both surfaces; write parts directly inside the root where the server HTML matters), and a Title registers its id with the surface it sits in, so a surface with your own content is named by its Title wherever it is.
+
 ### Pattern 16: Custom Overlays on the Public Hooks
 
 The hooks behind the library's own surfaces are public, so a surface the library does not ship (a command palette, a full-screen overlay, a custom popup) behaves like a built-in one. Three pieces compose it:
@@ -1168,6 +1170,16 @@ A part that draws something sized by its host reads a context from the host inst
 - **Context files import no component** (the module-only rule of `TagGroup.context.ts`): they hold the context, its inert default and the hook, so the host and the part can both import it without a cycle.
 - **Defaults are inert.** A part used outside its host gets the default context, never an error: an `Avatar` outside a tag is an ordinary avatar. Contexts that a part cannot work without throw in development instead (C-CONTEXT).
 - **Memoize the value** (C-MEMO), and render an enumerated `data-*` attribute with the resolved value so the result is visible to selectors (`data-size`, `data-shape`).
+
+`Table.CellLayout` provides `AvatarSizeContext` too: an Avatar in its `media` gets a 32px box unless it sets its own `size`.
+
+### Pattern 18: Reveals on Named Groups
+
+Controls drawn only while their row is hovered or holds focus (Tree row actions, Nav item actions, DataGrid's subtle selection, `Table.CellActions`) use a Tailwind group variant on the row (`group-hover/<name>:`, `group-focus-within/<name>:`), and every family names its own group: Tree's rows are `group/row`, Nav's `group/nav-row`, Table and DataGrid rows `group/table-row`, and a DataGrid with `subtleSelection` is `group/grid` for its select-all. A shared name would make a component nested in a cell react to the outer row (a Tree with actions inside a DataGrid cell would show its actions while the grid row is hovered), so a new reveal picks a name of its own. A grid nested in a grid still shares `group/table-row`, a limit of CSS groups.
+
+- **Always drawn where hover is missing or colors are forced:** `pointer-coarse:` (DataGrid, Table) or `[@media(hover:none)]:` (Tree, Nav) and `forced-colors:` variants override the hidden state, and a `focus-within:` of the control's own keeps keyboard focus visible outside a group.
+- **Keep the room.** Hide with opacity or visibility, never `display: none`, so the row does not shift when the controls show; with opacity they also stay focusable and named (DataGrid's subtle controls, `Table.CellActions`, Nav's actions), and a fade carries `motion-reduce:` (C-MOTION).
+- **An opaque reveal over a row's fill** maps the library's row fills (`Table.CellActions`: the canvas, the row hover, a striped row, a DataGrid's selected rows) by selectors on the table's own attributes (`data-striped`, `data-selection-appearance`, `data-selected`); a consumer's own row background needs the same class on the revealed element.
 
 ### Props Interface Conventions
 
@@ -1200,7 +1212,7 @@ A part that draws something sized by its host reads a context from the host inst
 
 These describe what the components implement.
 
-#### Roving tab index (Toolbar, TagGroup, RadioGroup, SwatchPicker, TabList, Menu, List, Tree, NavDrawer.Body)
+#### Roving tab index (Toolbar, TagGroup, RadioGroup, SwatchPicker, TabList, Menu, List, Tree, NavDrawer.Body, Breadcrumb)
 
 Implemented with `useRovingTabIndex`:
 
@@ -1235,7 +1247,8 @@ In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab sto
 | SwatchPicker (`layout="grid"`) | Left/Right in reading order across the rows, Up/Down to the nearest swatch of the previous/next row, Home/End in the row, Ctrl+Home/End in the grid; stops at the ends; moving only focuses (Space, Enter or a click selects) |
 | TabList | Left/Right (Up/Down when vertical), wrapping; moving selects (automatic activation), or with `selectTabOnFocus={false}` only moves focus (manual activation: Enter or Space selects) |
 | Menu | Up/Down, wrapping; typeahead; Right/Left open and close submenus (mirrored in RTL) |
-| List (selectable) | Up/Down, wrapping; typeahead above 7 items; Enter/Space toggle selection |
+| List (selectable, or `navigationMode="items"`) | Up/Down, wrapping; typeahead above 7 items; Enter/Space toggle selection, and Enter (Space where the item cannot be selected) runs `onAction`; without selection the Tab stop is the item that last had focus |
+| Breadcrumb (`focusMode="arrow"`) | Left/Right, wrapping (mirrored in RTL), Home/End, over the links, buttons and the "…" button; the Tab stop is the last focused one |
 | TagGroup (toolbar) | Toolbar's: Left/Right (Up/Down when vertical), wrapping, Home/End; both buttons of an InteractionTag join the order; Delete/Backspace dismiss; `role="list"`: no arrows, every control a Tab stop |
 | NavDrawer.Body (`focusMode="arrow"`) | Down/Right next, Up/Left previous (Left and Right swap in RTL), wrapping, Home/End; the Tab stop starts at the current page; item actions join the order |
 | Tree | see below |
@@ -1251,7 +1264,7 @@ In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab sto
 </TabList>
 ```
 
-Wherever there is typeahead (Menu, selectable List, Tree, Dropdown), a Space typed within 500 ms of a character continues the search instead of activating or committing, so "new y" reaches "New York". Characters typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`), count; Ctrl+Alt with an arrow, Home, End or Space is left to the browser. An item that refuses focus (hidden by CSS) is passed over for the next match. Keys typed in content inside an item, such as a List row's action button, are not typeahead. Menu matches item labels only, never an icon's text or a shortcut.
+Wherever there is typeahead (Menu, a selectable or navigable List, Tree, Dropdown), a Space typed within 500 ms of a character continues the search instead of activating or committing, so "new y" reaches "New York". Characters typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`), count; Ctrl+Alt with an arrow, Home, End or Space is left to the browser. An item that refuses focus (hidden by CSS) is passed over for the next match. Keys typed in content inside an item, such as a List row's action button, are not typeahead. Menu matches item labels only, never an icon's text or a shortcut.
 
 #### Toolbar radio groups
 
@@ -1482,8 +1495,8 @@ Typed text in the DatePicker input is kept and marked invalid when it is not an 
 - **Card** (selectable, `selectionControl="card"`): Enter (key down) or Space (key up).
 - **Stepper**: every reachable step is a Tab stop; Enter/Space activate.
 - **Tooltip, InfoLabel, InfoButton**: open on keyboard focus (Tooltip after `openDelay`, 200ms by default; it hides `closeDelay` after the pointer leaves, and at once on blur); Escape closes. Focus, blur and pointer entry inside a popup that the Tooltip's child renders in a portal (a DatePicker calendar, a listbox) do not show or hide the tooltip or reach its `onFocus`/`onBlur`; `onMouseEnter`/`onMouseLeave` follow React's tree. An icon-only trigger named by `Tooltip relationship="label"` also names a Popover it opens.
-- **Popover, TeachingPopover**: Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened (with `target`, to the target when nothing had focus, such as a tour opened on page load; see [Focus Management](#focus-management)). A close by hover moves no focus. In the Tab order the portaled content follows its trigger (TeachingPopover with `target`: the target), like inline content: Tab from the trigger enters it, Tab past its last element continues after the trigger, Shift+Tab from its first element returns to the trigger (or, when nothing in the trigger can take focus, to the tab stop before it), and Shift+Tab from the element after the trigger enters it at its last element. For a trigger outside the tab order the content follows the tab stop before the trigger; with no tab stop before the trigger or target, it is reached where it is portaled, at the end of the page, in both directions. A Tab lap visits the content once: Tab from the last element of the page moves past the portaled content (it is hidden for that one Tab) and leaves the page, and Shift+Tab from the browser's own controls reaches the page's last element (outside every open popover) instead of the content. Content that the Tab from the page end still reaches follows the document order, so Tab never cycles. Focus leaving it does not close it (Escape or an outside press does). A hover card (`openOnHover`) opens without taking focus and is still entered by Tab from its trigger. A context popover (`openOnContext`) opened by Shift+F10 or the ContextMenu key moves focus into the content (its first tabbable element, else the surface), and Escape returns focus to the element that had it; one opened by a right click leaves focus where it is, and Tab from that element enters the content.
-- **Accordion, Carousel, Nav, Breadcrumb, Pagination**: native buttons and links (Tab, Enter, Space); no arrow-key navigation between the controls. A Carousel with `groupSize` above 1 makes the slides of the shown page one arrow-key group: the slide that last had focus is its Tab stop, and an arrow past the end of the page shows the next one.
+- **Popover, TeachingPopover**: Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened (with `target`, to the target when nothing had focus, such as a tour opened on page load; with a `TeachingPopover.Trigger`, to the Trigger; see [Focus Management](#focus-management)). A close by hover moves no focus. In the Tab order the portaled content follows its trigger (TeachingPopover with `target`: the target), like inline content: Tab from the trigger enters it, Tab past its last element continues after the trigger, Shift+Tab from its first element returns to the trigger (or, when nothing in the trigger can take focus, to the tab stop before it), and Shift+Tab from the element after the trigger enters it at its last element. For a trigger outside the tab order the content follows the tab stop before the trigger; with no tab stop before the trigger or target, it is reached where it is portaled, at the end of the page, in both directions. A Tab lap visits the content once: Tab from the last element of the page moves past the portaled content (it is hidden for that one Tab) and leaves the page, and Shift+Tab from the browser's own controls reaches the page's last element (outside every open popover) instead of the content. Content that the Tab from the page end still reaches follows the document order, so Tab never cycles. Focus leaving it does not close it (Escape or an outside press does). A hover card (`openOnHover`) opens without taking focus and is still entered by Tab from its trigger. A context popover (`openOnContext`) opened by Shift+F10 or the ContextMenu key moves focus into the content (its first tabbable element, else the surface), and Escape returns focus to the element that had it; one opened by a right click leaves focus where it is, and Tab from that element enters the content.
+- **Accordion, Carousel, Nav, Breadcrumb, Pagination**: native buttons and links (Tab, Enter, Space); no arrow-key navigation between the controls, except a Breadcrumb with `focusMode="arrow"` (one Tab stop, see the table above). A Carousel with `groupSize` above 1 makes the slides of the shown page one arrow-key group: the slide that last had focus is its Tab stop, and an arrow past the end of the page shows the next one.
 
 ### ARIA Patterns
 
@@ -1602,7 +1615,7 @@ Live regions must exist before their content changes. `Toaster` keeps two perman
 
 1. **Focus rings**: focusable controls use `focusRing` (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`), cells and rows `focusRingInset`; text inputs show a primary bottom border (`inputFocus`) with `focus:outline-hidden`, which keeps an outline in forced-colors mode. Never use `focus:outline-none`. A focusable control with the disabled look (`disabledFocusable`, a self-disabling boundary button) goes back to full opacity while its ring shows, so the ring keeps its contrast.
 2. **Moving focus into overlays**: Dialog and Drawer focus their first focusable element (or keep an `autoFocus` element, also when stacked over or nested in another dialog, and in a popover opened from one), Menu focuses its first item, the DatePicker calendar its focused day. Build custom overlays on these components, or on the public hooks of Pattern 16, rather than re-implementing traps.
-3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. A non-modal Dialog or Drawer, and an inline Drawer, move focus on close only when focus was inside them (`useRestoreFocus` with `requireFocusInside`; focus in a popup opened from them counts as inside). Popovers and menus return focus to their trigger (TeachingPopover: to where focus was) when focus was inside them (or lost to `<body>`) at close. A close by hover moves no focus, and neither does the close of a surface opened from inside one that closes by hover (a submenu, a hover card in a hover card). When a focused element disappears (a SearchBox clear button, a dismissed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`; TimePicker and DatePicker settle erased text on Tab before focus moves, so Tab never lands on the clear button that the commit removes.
+3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. A non-modal Dialog or Drawer, and an inline Drawer, move focus on close only when focus was inside them (`useRestoreFocus` with `requireFocusInside`; focus in a popup opened from them counts as inside). Popovers and menus return focus to their trigger (TeachingPopover: to where focus was, or to its `TeachingPopover.Trigger`) when focus was inside them (or lost to `<body>`) at close. A close by hover moves no focus, and neither does the close of a surface opened from inside one that closes by hover (a submenu, a hover card in a hover card). When a focused element disappears (a SearchBox clear button, a dismissed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`; TimePicker and DatePicker settle erased text on Tab before focus moves, so Tab never lands on the clear button that the commit removes.
 4. **Focus trapping**: modal and alert Dialogs and Drawers trap Tab (non-modal and inline ones do not), including the Toaster region and overlays opened from them. Tab inside a plain `<Portal>` rendered in a dialog is native and wraps to the dialog's first or last element at the portal's edges. Focus that lands outside the trap is returned in a microtask after the `focusin`.
 5. **Skip links**: for content-heavy pages, provide a "Skip to main content" link.
 
@@ -1952,6 +1965,8 @@ The category that contains the selected item (`value` or `defaultValue`) starts 
 
 Each element of a Fragment child (`{isAdmin && <>…</>}`) becomes its own crumb with a separator. With `asChild`, the item's props merge onto your element, and its `href` is passed as a default (the element's own `href` wins); give a router link its destination (`to`) on the link itself.
 
+A deep trail collapses its middle items into a "…" button with a menu of them: `maxDisplayedItems={4}` by count (from `overflowIndex`, default 1), or `overflow="auto"` by the room it has (the trail becomes an Overflow of its list items). The first item and the current one always show. `size`, `focusMode="arrow"` (one Tab stop) and `divider` set the look and the keys; `truncateBreadcrumbLongName` shortens a long name, and a Tooltip can show it in full (a collapsed item wrapped in a Tooltip is left out of the menu, with a development warning).
+
 **Tabs**:
 
 ```tsx
@@ -1993,49 +2008,55 @@ Use `Menu.Trigger` + `Menu.Popover` for menu buttons (not `Popover`, which has n
 
 ### Data Display Patterns
 
-**Sortable DataGrid** (sorting is controlled: reorder the rows yourself):
+**Sortable DataGrid** (typed columns and `items`: the grid sorts its own rows by the sorted column's `compare`):
 
 ```tsx
-import * as React from 'react';
-import { Badge, DataGrid } from '@mortenbrudvik/waveui';
-import type { DataGridSort } from '@mortenbrudvik/waveui';
+import { Badge, DataGrid, createTableColumn } from '@mortenbrudvik/waveui';
 
-const users = [
+interface User {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+const users: User[] = [
   { id: '1', name: 'Alice', active: true },
   { id: '2', name: 'Bob', active: false },
 ];
 
+const columns = [
+  createTableColumn<User>({
+    columnId: 'name',
+    label: 'Name',
+    compare: (a, b) => a.name.localeCompare(b.name),
+    renderCell: (user) => user.name,
+  }),
+  createTableColumn<User>({
+    columnId: 'status',
+    label: 'Status',
+    renderCell: (user) => (
+      <Badge appearance="tint" color={user.active ? 'success' : 'informative'}>
+        {user.active ? 'Active' : 'Inactive'}
+      </Badge>
+    ),
+  }),
+];
+const userId = (user: User) => user.id;
+
 export function Users() {
-  const [sort, setSort] = React.useState<DataGridSort | null>({ columnId: 'name', direction: 'ascending' });
-  const rows = [...users].sort((a, b) =>
-    sort?.direction === 'descending' ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name),
-  );
   return (
-    <DataGrid aria-label="Users" sort={sort} onSortChange={setSort}>
-      <DataGrid.Header>
-        <tr>
-          <DataGrid.HeaderCell columnId="name" sortable>
-            Name
-          </DataGrid.HeaderCell>
-          <DataGrid.HeaderCell columnId="status">Status</DataGrid.HeaderCell>
-        </tr>
-      </DataGrid.Header>
-      <DataGrid.Body>
-        {rows.map((user) => (
-          <DataGrid.Row key={user.id} rowId={user.id}>
-            <DataGrid.Cell>{user.name}</DataGrid.Cell>
-            <DataGrid.Cell>
-              <Badge appearance="tint" color={user.active ? 'success' : 'informative'}>
-                {user.active ? 'Active' : 'Inactive'}
-              </Badge>
-            </DataGrid.Cell>
-          </DataGrid.Row>
-        ))}
-      </DataGrid.Body>
-    </DataGrid>
+    <DataGrid
+      aria-label="Users"
+      items={users}
+      columns={columns}
+      getRowId={userId}
+      defaultSort={{ columnId: 'name', direction: 'ascending' }}
+    />
   );
 }
 ```
+
+The sort is stable and descending negates `compare`, so equal rows keep their order both ways; a column without `compare` (Status) is no sort button and never reorders the rows. A grid composed from `DataGrid.Header` and `DataGrid.Body` children without `items` reports the sort (`onSortChange(sort, details)`) and leaves the row order to you. `selectOnRowClick`, `selectionAppearance` and `subtleSelection` set how rows are selected and drawn; the static `Table` has sortable headers (`sortable`, `sortDirection`, `onSortClick`) and the cell parts `Table.SelectionCell`, `Table.CellLayout` and `Table.CellActions`, all driven by your state.
 
 **List with selection**:
 
@@ -2054,7 +2075,16 @@ export function FruitPicker() {
 }
 ```
 
-`rowId`s of a DataGrid, `value`s of a selectable List and `itemId`s of an Overflow are unique: items that share one are selected (or hidden) together, and a development warning names the duplicate.
+**List with an action and no selection** (`navigationMode="items"`: one Tab stop, the arrow keys and typeahead; `onAction` runs on a click, Enter and Space):
+
+```tsx
+<List navigationMode="items" aria-label="Recent files">
+  <List.Item value="report" onAction={() => open('report')}>Report</List.Item>
+  <List.Item value="budget" onAction={() => open('budget')}>Budget</List.Item>
+</List>
+```
+
+`rowId`s of a DataGrid, `value`s of a selectable or navigable List and `itemId`s of an Overflow are unique: items that share one are selected (or hidden) together, and a development warning names the duplicate.
 
 ### Feedback Patterns
 
@@ -2169,7 +2199,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Need | Component |
 |------|-----------|
 | Trigger an action | `Button`, `CompoundButton`, `SplitButton` |
-| Navigate to a page | `Link`, `Breadcrumb`, `Nav`, `NavDrawer` with `Hamburger` (an app shell), `Pagination` |
+| Navigate to a page | `Link`, `Breadcrumb` (collapses into a "…" menu with `maxDisplayedItems` or `overflow="auto"`; `partitionBreadcrumbItems` and the truncation helpers), `Nav`, `NavDrawer` with `Hamburger` (an app shell), `Pagination` |
 | Single-line text input | `Input`, `SearchBox` |
 | Multi-line text input | `Textarea` |
 | Select from options | `Dropdown` (select-only), `Combobox` (type to filter), `Listbox` (in the page), `Select` (native) |
@@ -2182,7 +2212,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Show user identity | `Avatar` (sizes 16 to 128, `shape`, named `color`, `active`, `initials`; `getInitials`), `AvatarGroup` (`stack`, `spread`, `pie`; `AvatarGroup.Item` and `AvatarGroup.Popover` with `partitionAvatarGroupItems`), `Persona` (up to four text lines, `textPosition`, `presenceOnly`) |
 | Categorize items | `Badge`, `Tag`, `TagGroup` (a set of tags, with dismissal and focus after a removal), `InteractionTag` (a tag with an action), `CounterBadge` |
 | Show status | `PresenceBadge` (`available`, `busy`, `away`, `offline`, `do-not-disturb`, `out-of-office`), `MessageBar` |
-| Display data | `Table`, `DataGrid`, `List` |
+| Display data | `Table` (sortable headers, `Table.SelectionCell`, `Table.CellLayout`, `Table.CellActions`; your state), `DataGrid` (`items` with `createTableColumn` columns that sort themselves, `selectOnRowClick`, `selectionAppearance`, `subtleSelection`, `DataGrid.SelectionCell`), `List` (`navigationMode`, `onAction`, `disabledSelection`, check marks) |
 | Organize content | `Card` (`appearance`, `size`, `orientation`, `Card.Preview`, header `image` and `action`, `floatingAction`), `Accordion`, `TabList` (`appearance`, `size`, icon tabs), `Tree`, `Grid`, `Stack`, `Flex` |
 | Overlay content | `Dialog`, `Drawer` (also non-modal, or inline in the page), `Popover`, `Tooltip` |
 | Offer actions in a popup | `Menu` with `MenuButton` or `SplitButton` |
@@ -2190,9 +2220,9 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Notify users | `Toast` / `Toaster` (`createToaster()` from outside components), `MessageBar` |
 | Pick a date | `DatePicker`, `Calendar` (in the page) |
 | Pick a time | `TimePicker` |
-| Guide users | `TeachingPopover` |
+| Guide users | `TeachingPopover` (`primaryAction`/`secondaryAction`, `onFinish`; a tour from parts with `TeachingPopover.Trigger`, `.Surface`, `.Header`, `.Title`, `.Body`, `.Footer` and the carousel parts) |
 | Show step progress | `Stepper` |
-| Handle overflow | `Overflow` / `OverflowItem` |
+| Handle overflow | `Overflow` / `OverflowItem` (`priority`, `pinned`, `overflowDirection`, groups with `Overflow.Divider`, `buttonPosition`, `asChild` items; `useIsOverflowGroupVisible`, `useHasHiddenItems`) |
 | Browse content | `Carousel` (`groupSize`, `draggable`, `Carousel.Item thumbnail`, `controlsLayout`, `Carousel.Button`) |
 | Rate items | `Rating`, `RatingDisplay` |
 | Label fields | `Label`, `InfoLabel`, `Field` |
@@ -2213,7 +2243,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 `Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `TagGroup` `InteractionTag` `Persona` `Divider` `InfoLabel` `InfoButton` `Image` `List` (plus `InteractionTag.Primary`, `InteractionTag.Secondary`)
 
 **Layout** (9)
-`Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex` (plus `Tree.ItemPersonaLayout`)
+`Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex` (plus `Tree.ItemPersonaLayout`, `Overflow.Item`, `Overflow.Divider`)
 
 **Navigation** (7)
 `Breadcrumb` `Menu` `Nav` `NavDrawer` `Hamburger` `Stepper` `Pagination` (plus the Menu parts `Menu.ItemCheckbox`, `Menu.ItemRadio`, `Menu.ItemSwitch`, `Menu.ItemLink`, `Menu.Group`, `Menu.GroupHeader`, `Menu.SplitGroup`, the Nav parts `Nav.SectionHeader`, `Nav.Divider`, `Nav.AppItem`, `Nav.AppItemStatic`, and `NavDrawer.Header`, `NavDrawer.Body`, `NavDrawer.Footer`)
@@ -2222,10 +2252,10 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 `MessageBar` `ProgressBar` `Spinner` `Skeleton` `Toast`/`Toaster` (plus `MessageBar.Title`, `MessageBar.Actions`, `Toast.Title`, `Toast.Body`, `Toast.Footer`, `Toast.Close`)
 
 **Overlays** (5)
-`Dialog` `Popover` `Tooltip` `Drawer` `TeachingPopover` (plus the Drawer parts `Drawer.Header`, `Drawer.HeaderTitle`, `Drawer.HeaderNavigation`, `Drawer.Body`, `Drawer.Footer`)
+`Dialog` `Popover` `Tooltip` `Drawer` `TeachingPopover` (plus the Drawer parts `Drawer.Header`, `Drawer.HeaderTitle`, `Drawer.HeaderNavigation`, `Drawer.Body`, `Drawer.Footer`, and the TeachingPopover parts `TeachingPopover.Trigger`, `TeachingPopover.Surface`, `TeachingPopover.Header`, `TeachingPopover.Title`, `TeachingPopover.Body`, `TeachingPopover.Footer`, `TeachingPopover.Carousel`, `TeachingPopover.CarouselNav`, `TeachingPopover.CarouselPageCount`, `TeachingPopover.CarouselFooter`)
 
 **Table** (2)
-`Table` `DataGrid`
+`Table` `DataGrid` (plus the cell parts `Table.SelectionCell`, `Table.CellLayout`, `Table.CellActions` and `DataGrid.SelectionCell`; `createTableColumn` builds typed DataGrid columns)
 
 **Typography** (1)
 `Text`
@@ -2313,12 +2343,16 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | `src/lib/toaster.ts` | `createToaster`, the toaster handle (public, server-safe) |
 | `src/components/feedback/Toast*.tsx`, `src/components/feedback/Toaster.tsx` | The Toast modules (compound, root, parts, context, the Toaster) |
 | `src/components/layout/Tree*.ts(x)` | The Tree modules (compound, root and items, context, the cascade model, the persona layout) |
+| `src/components/layout/Overflow.tsx`, `src/components/layout/Overflow.store.ts` | Overflow, its items, divider and hooks; the store that measures and picks the items to hide (internal) |
+| `src/components/table/Table.shared.tsx` | The sort button and glyphs, the selection control and the cell classes that Table and DataGrid share (internal) |
+| `src/components/overlays/TeachingPopover*.ts(x)` | The TeachingPopover modules (compound, root, context and public types, parts with the internal surface) |
+| `src/lib/breadcrumb.ts`, `src/lib/table.ts` | `partitionBreadcrumbItems` and the truncation helpers, `createTableColumn` (public, server-safe) |
 | `src/lib/composeEventHandlers.ts` | Consumer + internal handler composition |
 | `src/hooks/useControllable.ts` | Controlled/uncontrolled state hook |
 | `src/hooks/useRovingTabIndex.ts` | Roving tab index for composite widgets (`data-roving-transparent`) |
 | `src/hooks/usePresence.ts`, `src/components/motion/Presence.tsx` | The presence core (enter and exit phases) |
 | `src/hooks/useCheckedValues.ts` | `checkedValues` state of Menu and Toolbar (internal) |
-| `src/hooks/useHoverIntent.ts`, `src/hooks/useContextMenuAnchor.ts`, `src/lib/events.ts` | Hover opening and the safe zone, context gestures, event predicates (internal) |
+| `src/hooks/useHoverIntent.ts`, `src/hooks/useContextMenuAnchor.ts`, `src/lib/events.ts` | Hover opening and the safe zone, context gestures, event predicates (the foreign-event and text-selection rules of List items and DataGrid row clicks too; internal) |
 | `src/components/navigation/Menu.*.tsx` | The Menu modules (root, context, items, trigger, popover, item kinds, groups, links, split rows) |
 | `src/hooks/useFieldControl.ts` | `FieldContext` and the Field wiring for controls |
 | `src/hooks/useListbox.ts` | The listbox of Listbox, Combobox, Dropdown, TagPicker, TimePicker and custom pickers: `useListbox`, `useListboxOption`, `collectOptionLabels`, `markListboxElement` (public) |
@@ -2350,7 +2384,8 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | Tree | Tab (selected item) | Up/Down, Left/Right (collapse/expand), Home/End, typeahead; into a row's actions by Tab (`tree`) or Right (`treegrid`) | Enter/Space (Space toggles the check in a checkbox tree) | Tab |
 | Toaster | the app's `shortcuts.focus` key press | Tab through the toasts' controls | Enter/Space on a control | Escape (all toasts) / Delete, Backspace (the focused one) |
 | ColorArea | Tab (one stop) | Arrows, Shift+arrows, PageUp/PageDown, Home/End | – | Tab |
-| List (selectable) | Tab | Up/Down, Home/End | Enter/Space (toggle) | Tab |
+| List (selectable, or `navigationMode="items"`) | Tab | Up/Down, Home/End, typeahead | Enter/Space (toggle; Enter runs `onAction`) | Tab |
+| Breadcrumb (`focusMode="arrow"`) | Tab (the last focused link, at first the first) | Left/Right, Home/End | Enter (Space on a button) | Tab |
 | DataGrid | Tab (one tab stop) | Arrows, Home/End, Ctrl+Home/End, PageUp/PageDown | Enter/F2 (into cell), Space (select row) | Tab / Escape (from cell widgets) |
 | DatePicker calendar, Calendar | Alt+Down on the input, or the toggle (Calendar: Tab) | Arrows, PageUp/PageDown, Shift+PageUp/PageDown, Home/End; the heading button to the month and year views | Enter/Space | Escape (one view back; in the day view, closes a DatePicker) / Tab |
 | Dialog / Drawer (modal, alert) | Auto-focus | Tab (trapped) | Enter | Escape / the trigger (toggles) |
@@ -2359,7 +2394,7 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | TagGroup | Tab (last focused control) | Left/Right (Up/Down vertical), Home/End; `role="list"`: Tab | Enter/Space; Delete/Backspace dismiss | Tab |
 | NavDrawer.Body (`focusMode="arrow"`) | Tab (current page) | All arrows (wrapping), Home/End | Enter/Space | Tab |
 
-*RadioGroup, the row-layout SwatchPicker and Tabs use automatic activation: moving focus selects (Tabs with `selectTabOnFocus={false}` use manual activation). Accordion, Carousel, Nav, Breadcrumb and Pagination use plain Tab navigation between native buttons and links.*
+*RadioGroup, the row-layout SwatchPicker and Tabs use automatic activation: moving focus selects (Tabs with `selectTabOnFocus={false}` use manual activation). Accordion, Carousel, Nav, Breadcrumb (unless `focusMode="arrow"`) and Pagination use plain Tab navigation between native buttons and links.*
 
 ---
 
@@ -2378,7 +2413,8 @@ Deprecated names still work through 0.x, warn once in development and will be re
 | TeachingPopover `currentStep`, `defaultCurrentStep` | `activeStep`, `defaultActiveStep` |
 | List `selectionMode="multi"` | `selectionMode="multiple"` |
 | DataGrid `selectedKeys`, `defaultSelectedKeys`, `onSelectionChange` | `selectedItems`, `defaultSelectedItems`, `onSelectedItemsChange` |
-| DataGrid `sortColumn`, `sortDirection`, `defaultSortColumn`, `defaultSortDirection` | `sort`, `defaultSort` |
+| DataGrid `sortColumn`, `sortDirection`, `defaultSortColumn`, `defaultSortDirection` | `sort`, `defaultSort` (a grid with `items` ignores the deprecated props) |
+| `DataGridColumn` `id` | `columnId` |
 | `Table.Head`, `Table.HeadCell` (and the flat `TableHead`, `TableHeadCell`, deprecated from their introduction in 0.5) | `Table.Header`, `Table.HeaderCell` (`TableHeader`, `TableHeaderCell`) |
 | Stack `direction` | `orientation` |
 | Skeleton `variant` | `shape` |
@@ -2397,6 +2433,8 @@ Deprecated names still work through 0.x, warn once in development and will be re
 - The `details` parameter of Dialog and Drawer `onOpenChange` becomes required: read it as `details?.reason`.
 - The `details` parameter of Menu and Toolbar `onCheckedValuesChange` becomes required: read it as `details?.name`.
 - The `details` parameter of Tree `onCheckedItemsChange` becomes required: read it as `details?.value`.
+- The `details` parameters of Overflow `onOverflowChange`, DataGrid `onSortChange` and `onSelectedItemsChange`, and `Table.SelectionCell` `onCheckedChange` become required: read them as `details?.event` (or `details?.groupVisibility`).
+- TeachingPopover's Done stops calling `onDismiss`: put the work of a finished tour in `onFinish`.
 
 ---
 

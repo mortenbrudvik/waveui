@@ -288,13 +288,15 @@ export const imageClassNames = { root: 'wave-image' } as const;
 export const listClassNames = { root: 'wave-list' } as const;
 
 /**
- * List.Item: `root` on the `<li>` (the `role="row"` element of a list with actions); `content` on
- * the content element; `action` on the action cell.
+ * List.Item: `root` on the `<li>` (the `role="row"` element of a grid list); `content` on the
+ * content element; `action` on the action cell; `checkmark` on the check mark element of an item
+ * of a selectable list (the List's `checkmark`, or the item's own).
  */
 export const listItemClassNames = {
   root: 'wave-list-item',
   content: 'wave-list-item__content',
   action: 'wave-list-item__action',
+  checkmark: 'wave-list-item__checkmark',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -1000,6 +1002,9 @@ export const overflowClassNames = {
 /** Overflow.Item: `root` on the item element. */
 export const overflowItemClassNames = { root: 'wave-overflow-item' } as const;
 
+/** Overflow.Divider: `root` on the divider element. */
+export const overflowDividerClassNames = { root: 'wave-overflow-divider' } as const;
+
 /** Stack: `root` on the rendered element. */
 export const stackClassNames = { root: 'wave-stack' } as const;
 
@@ -1014,14 +1019,19 @@ export const gridClassNames = { root: 'wave-grid' } as const;
 // ---------------------------------------------------------------------------
 
 /**
- * Breadcrumb: `root` on the `<nav>`; `list` on its `<ol>`; `listItem` on each `<li>`; `divider`
- * on each separator `<svg>`.
+ * Breadcrumb: `root` on the `<nav>`; `list` on the trail's list element (its `<ol>`, or with
+ * `overflow="auto"` the Overflow's `role="list"` element); `listItem` on each `<li>`; `divider` on
+ * each separator (the default chevron `<svg>`, or the `<span>` of a custom `divider`);
+ * `overflowButton` on the "…" `<button>` that opens the menu of the collapsed items, with
+ * `maxDisplayedItems` and with `overflow="auto"`. With `overflow="auto"` the "…" list item is the
+ * Overflow's button wrapper, not an `<li>`, so it carries no `listItem` class.
  */
 export const breadcrumbClassNames = {
   root: 'wave-breadcrumb',
   list: 'wave-breadcrumb__list',
   listItem: 'wave-breadcrumb__list-item',
   divider: 'wave-breadcrumb__divider',
+  overflowButton: 'wave-breadcrumb__overflow-button',
 } as const;
 
 /**
@@ -1362,9 +1372,14 @@ export const drawerBodyClassNames = { root: 'wave-drawer-body' } as const;
 export const drawerFooterClassNames = { root: 'wave-drawer-footer' } as const;
 
 /**
- * TeachingPopover: `root` on the `role="dialog"` surface; `beak` on the arrow; `closeButton`,
- * `backButton` and `nextButton` on its buttons (which also carry Button's root); `title` on the
- * `<h3>`; `body` on the step body; `footer` on the bottom row; `dot` on each step dot.
+ * TeachingPopover: `root` on the `role="dialog"` surface (also when TeachingPopover.Surface
+ * renders it); `beak` on the arrow; `closeButton`, `backButton` and `nextButton` on its buttons
+ * (which also carry Button's root; `backButton` also on the first step's button that a
+ * TeachingPopover.CarouselFooter's `initialStepText` names); `primaryButton` and `secondaryButton`
+ * on the buttons that a `primaryAction` and a `secondaryAction` render in place of Next/Done and
+ * Back; `title` on the step title (an `<h3>`, or the element of TeachingPopover.Title's `as`);
+ * `body` on the step body; `footer` on the bottom row (TeachingPopover.Footer's, or
+ * TeachingPopover.CarouselFooter's); `dot` on each decorative step dot.
  */
 export const teachingPopoverClassNames = {
   root: 'wave-teaching-popover',
@@ -1376,6 +1391,78 @@ export const teachingPopoverClassNames = {
   dot: 'wave-teaching-popover__dot',
   backButton: 'wave-teaching-popover__back-button',
   nextButton: 'wave-teaching-popover__next-button',
+  primaryButton: 'wave-teaching-popover__primary-button',
+  secondaryButton: 'wave-teaching-popover__secondary-button',
+} as const;
+
+/**
+ * TeachingPopover.Surface: `root` on the `role="dialog"` surface it renders, which also carries
+ * TeachingPopover's `root`; the content of the current step it shows without children carries
+ * TeachingPopover's part classes.
+ */
+export const teachingPopoverSurfaceClassNames = { root: 'wave-teaching-popover-surface' } as const;
+
+/**
+ * TeachingPopover.Header: `root` on the header element (also the one the `steps` form renders
+ * around its Close button); `icon` on the element of its `icon` slot. Its Close button carries
+ * TeachingPopover's `closeButton`.
+ */
+export const teachingPopoverHeaderClassNames = {
+  root: 'wave-teaching-popover-header',
+  icon: 'wave-teaching-popover-header__icon',
+} as const;
+
+/**
+ * TeachingPopover.Title: `root` on the heading (also the one the `steps` form renders), which
+ * also carries TeachingPopover's `title`.
+ */
+export const teachingPopoverTitleClassNames = { root: 'wave-teaching-popover-title' } as const;
+
+/**
+ * TeachingPopover.Body: `root` on the body element (also the one the `steps` form renders), which
+ * also carries TeachingPopover's `body`; `media` on the element of its `media` slot.
+ */
+export const teachingPopoverBodyClassNames = {
+  root: 'wave-teaching-popover-body',
+  media: 'wave-teaching-popover-body__media',
+} as const;
+
+/**
+ * TeachingPopover.Footer: `root` on the footer element (also the one the `steps` form renders),
+ * which also carries TeachingPopover's `footer`.
+ */
+export const teachingPopoverFooterClassNames = { root: 'wave-teaching-popover-footer' } as const;
+
+/**
+ * TeachingPopover.Carousel: `root` on the element that holds the step content and the carousel
+ * footer.
+ */
+export const teachingPopoverCarouselClassNames = {
+  root: 'wave-teaching-popover-carousel',
+} as const;
+
+/**
+ * TeachingPopover.CarouselNav: `root` on the `role="group"` element of the step buttons; `button`
+ * on each step button; `indicator` on the dot inside it.
+ */
+export const teachingPopoverCarouselNavClassNames = {
+  root: 'wave-teaching-popover-carousel-nav',
+  button: 'wave-teaching-popover-carousel-nav__button',
+  indicator: 'wave-teaching-popover-carousel-nav__indicator',
+} as const;
+
+/** TeachingPopover.CarouselPageCount: `root` on the element of the visible step count. */
+export const teachingPopoverCarouselPageCountClassNames = {
+  root: 'wave-teaching-popover-carousel-page-count',
+} as const;
+
+/**
+ * TeachingPopover.CarouselFooter: `root` on the footer element, which also carries
+ * TeachingPopover's `footer`. Its buttons carry TeachingPopover's button classes, and its
+ * decorative step dots TeachingPopover's `dot`.
+ */
+export const teachingPopoverCarouselFooterClassNames = {
+  root: 'wave-teaching-popover-carousel-footer',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -1391,8 +1478,17 @@ export const tableClassNames = {
 /** Table.Header (and the deprecated Table.Head): `root` on the `<thead>`. */
 export const tableHeaderClassNames = { root: 'wave-table-header' } as const;
 
-/** Table.HeaderCell (and the deprecated Table.HeadCell): `root` on the `<th>`. */
-export const tableHeaderCellClassNames = { root: 'wave-table-header-cell' } as const;
+/**
+ * Table.HeaderCell (and the deprecated Table.HeadCell): `root` on the `<th>`; `button` on the sort
+ * button of a sortable header; `sortIcon` on its direction glyph (the default arrow `<svg>`, or the
+ * `<span>` of a `sortIcon` slot); `aside` on the aside `<span>`, outside the button.
+ */
+export const tableHeaderCellClassNames = {
+  root: 'wave-table-header-cell',
+  button: 'wave-table-header-cell__button',
+  sortIcon: 'wave-table-header-cell__sort-icon',
+  aside: 'wave-table-header-cell__aside',
+} as const;
 
 /** Table.Body: `root` on the `<tbody>`. */
 export const tableBodyClassNames = { root: 'wave-table-body' } as const;
@@ -1402,6 +1498,27 @@ export const tableRowClassNames = { root: 'wave-table-row' } as const;
 
 /** Table.Cell: `root` on the `<td>`. */
 export const tableCellClassNames = { root: 'wave-table-cell' } as const;
+
+/** Table.SelectionCell: `root` on the `<td>`; `control` on its checkbox or radio. */
+export const tableSelectionCellClassNames = {
+  root: 'wave-table-selection-cell',
+  control: 'wave-table-selection-cell__control',
+} as const;
+
+/**
+ * Table.CellLayout: `root` on the layout element; `media` on the media `<span>`; `content` on the
+ * column that holds the text; `main` on the main text; `description` on the description line.
+ */
+export const tableCellLayoutClassNames = {
+  root: 'wave-table-cell-layout',
+  media: 'wave-table-cell-layout__media',
+  content: 'wave-table-cell-layout__content',
+  main: 'wave-table-cell-layout__main',
+  description: 'wave-table-cell-layout__description',
+} as const;
+
+/** Table.CellActions: `root` on the element that holds the actions. */
+export const tableCellActionsClassNames = { root: 'wave-table-cell-actions' } as const;
 
 /** DataGrid: `root` on the grid element (`role="grid"`); `container` on the wrapper around it. */
 export const dataGridClassNames = {
@@ -1421,7 +1538,7 @@ export const dataGridHeaderClassNames = {
 
 /**
  * DataGrid.HeaderCell: `root` on the `<th>`; `button` on the sort button; `sortIcon` on its
- * direction `<svg>`.
+ * direction glyph (the default arrow `<svg>`, or the `<span>` of a `sortIcon` slot).
  */
 export const dataGridHeaderCellClassNames = {
   root: 'wave-data-grid-header-cell',
@@ -1444,6 +1561,14 @@ export const dataGridRowClassNames = {
 
 /** DataGrid.Cell: `root` on the `role="gridcell"` cell. */
 export const dataGridCellClassNames = { root: 'wave-data-grid-cell' } as const;
+
+/**
+ * DataGrid.SelectionCell: `root` on the cell, which also carries the selection cell part of its
+ * row (`dataGridRowClassNames.selectionCell`) or header (`dataGridHeaderClassNames.selectionCell`);
+ * its control carries `dataGridRowClassNames.selectionControl` or
+ * `dataGridHeaderClassNames.selectAllCheckbox`.
+ */
+export const dataGridSelectionCellClassNames = { root: 'wave-data-grid-selection-cell' } as const;
 
 // ---------------------------------------------------------------------------
 // typography, provider, portal

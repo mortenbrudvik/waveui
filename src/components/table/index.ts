@@ -7,6 +7,9 @@ export {
   TableBody,
   TableRow,
   TableCell,
+  TableSelectionCell,
+  TableCellLayout,
+  TableCellActions,
 } from './Table';
 export type {
   TableProps,
@@ -17,6 +20,10 @@ export type {
   TableBodyProps,
   TableRowProps,
   TableCellProps,
+  TableSelectionCellProps,
+  TableSelectionCellCheckedChangeDetails,
+  TableCellLayoutProps,
+  TableCellActionsProps,
 } from './Table';
 
 export {
@@ -26,18 +33,26 @@ export {
   DataGridBody,
   DataGridRow,
   DataGridCell,
+  DataGridSelectionCell,
 } from './DataGrid';
 export type {
   DataGridProps,
   DataGridBaseProps,
   DataGridControlledSortProps,
   DataGridUncontrolledSortProps,
+  DataGridItemsProps,
+  DataGridItemsSortProps,
   DataGridLegacySortProps,
+  DataGridSortChangeDetails,
+  DataGridSelectedItemsChangeDetails,
   DataGridHeaderProps,
   DataGridHeaderCellProps,
   DataGridBodyProps,
   DataGridRowProps,
+  DataGridRowSelectionCellProps,
   DataGridCellProps,
+  DataGridSelectionAppearance,
+  DataGridSelectionCellProps,
   DataGridSort,
   SortDirection,
   DataGridColumn,
