@@ -50,14 +50,15 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   with the min accelerating curve, so the space the panel takes in the layout opens and closes
  *   while the panel keeps its size. It holds no duration: the element adds its size's from
  *   `drawerDurations`.
- * - `popupMotion`, a positioned popup (Popover.Content, Menu.Popover and its submenus): opacity and
- *   translate. It enters from transparent and moved 4px toward its anchor, on the axis of the side
- *   it opened on (the resolved physical side the surface renders as `data-side`: a popup below
- *   its anchor starts 4px higher, one to its right 4px further left), over the normal duration
- *   (200 ms) with the mid decelerating curve, and exits back there over the faster duration
- *   (100 ms) with the min accelerating curve. It lists the properties it moves and never the one
- *   floating-ui places the popup with, so the popup never glides from its last position; a popup
- *   that renders no side only fades.
+ * - `popupMotion`, a positioned popup (Popover.Content, Menu.Popover and its submenus, the
+ *   InfoButton note and the TeachingPopover surface): opacity and translate. It enters from
+ *   transparent and moved 4px toward its anchor, on the axis of the side it opened on (the
+ *   resolved physical side the surface renders as `data-side`: a popup below its anchor starts
+ *   4px higher, one to its right 4px further left), over the normal duration (200 ms) with the mid
+ *   decelerating curve, and exits back there over the faster duration (100 ms) with the min
+ *   accelerating curve. It lists the properties it moves and never the one floating-ui places the
+ *   popup with, so the popup never glides from its last position; a popup that renders no side (a
+ *   TeachingPopover rendered in place, without a target) only fades.
  * - `tooltipMotion`, the Tooltip surface: opacity only. It fades in from transparent and back out
  *   over the faster duration (100 ms) with the easy-ease curve, both ways, and does not slide. Like
  *   the popups, it never lists the property floating-ui places the surface with.
@@ -143,8 +144,9 @@ export const inlineDrawerMotion: Readonly<Record<'width' | 'height', string>> = 
 };
 
 /**
- * The default motion of a positioned popup (Popover.Content, Menu.Popover and its submenus): a
- * fade and a 4px slide away from its anchor, by the side it opened on, 200 ms in and 100 ms out.
+ * The default motion of a positioned popup (Popover.Content, Menu.Popover and its submenus, the
+ * InfoButton note and the TeachingPopover surface): a fade and a 4px slide away from its anchor,
+ * by the side it opened on, 200 ms in and 100 ms out; only the fade without a side.
  */
 export const popupMotion =
   'transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-faster data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[side=top]:data-[presence=entering]:starting:translate-y-1 data-[side=top]:data-[presence=exiting]:translate-y-1 data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 data-[side=bottom]:data-[presence=exiting]:-translate-y-1 data-[side=left]:data-[presence=entering]:starting:translate-x-1 data-[side=left]:data-[presence=exiting]:translate-x-1 data-[side=right]:data-[presence=entering]:starting:-translate-x-1 data-[side=right]:data-[presence=exiting]:-translate-x-1'; // wave-allow-physical: data-side is the resolved physical side
