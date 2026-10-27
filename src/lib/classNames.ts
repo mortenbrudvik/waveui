@@ -1370,10 +1370,11 @@ export const drawerBodyClassNames = { root: 'wave-drawer-body' } as const;
 export const drawerFooterClassNames = { root: 'wave-drawer-footer' } as const;
 
 /**
- * TeachingPopover: `root` on the `role="dialog"` surface; `beak` on the arrow; `closeButton`,
- * `backButton` and `nextButton` on its buttons (which also carry Button's root);
- * `primaryButton` and `secondaryButton` on the buttons that a `primaryAction` and a
- * `secondaryAction` render in place of Next/Done and Back; `title` on the `<h3>`; `body` on the step body; `footer` on the bottom row; `dot` on each step dot.
+ * TeachingPopover: `root` on the `role="dialog"` surface (also when TeachingPopover.Surface
+ * renders it); `beak` on the arrow; `closeButton`, `backButton` and `nextButton` on its buttons
+ * (which also carry Button's root); `primaryButton` and `secondaryButton` on the buttons that a
+ * `primaryAction` and a `secondaryAction` render in place of Next/Done and Back; `title` on the
+ * `<h3>`; `body` on the step body; `footer` on the bottom row; `dot` on each step dot.
  */
 export const teachingPopoverClassNames = {
   root: 'wave-teaching-popover',
@@ -1388,6 +1389,13 @@ export const teachingPopoverClassNames = {
   primaryButton: 'wave-teaching-popover__primary-button',
   secondaryButton: 'wave-teaching-popover__secondary-button',
 } as const;
+
+/**
+ * TeachingPopover.Surface: `root` on the `role="dialog"` surface it renders, which also carries
+ * TeachingPopover's `root`; the content of the current step it shows without children carries
+ * TeachingPopover's part classes.
+ */
+export const teachingPopoverSurfaceClassNames = { root: 'wave-teaching-popover-surface' } as const;
 
 // ---------------------------------------------------------------------------
 // table

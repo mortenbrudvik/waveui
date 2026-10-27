@@ -1,21 +1,35 @@
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { afterEach, describe, it, expect, expectTypeOf, vi, onTestFinished } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   TeachingPopover,
+  TeachingPopoverSurface,
+  TeachingPopoverTrigger,
   type TeachingPopoverAction,
   type TeachingPopoverLabels,
   type TeachingPopoverProps,
+  type TeachingPopoverSurfaceProps,
+  type TeachingPopoverTriggerChildProps,
 } from '../TeachingPopover';
 import { Button } from '../../button/Button';
-import { buttonClassNames, teachingPopoverClassNames } from '../../../lib/classNames';
+import {
+  buttonClassNames,
+  teachingPopoverClassNames,
+  teachingPopoverSurfaceClassNames,
+} from '../../../lib/classNames';
+import { __resetWarnings } from '../../../lib/dev';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
 import { getOpenLayers, subscribeLayers } from '../../../lib/layers';
 import { FOCUSABLE_SELECTOR } from '../../../lib/focus';
 import {
+  asClientReference,
   expectNoA11yViolations,
+  expectThrows,
+  mockRect,
   renderWithProviders,
+  testCompoundExposure,
   testComposedHandler,
   testNoImplicitSubmit,
   testSystemProps,
@@ -1608,6 +1622,506 @@ describe('TeachingPopover', () => {
       assertInternalSuppressed: () => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
       },
+    });
+  });
+});
+
+describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
+  const PLACEMENT_WARNING =
+    '[WaveUI] TeachingPopover.Surface: render one TeachingPopover.Surface, directly inside TeachingPopover (a Fragment is fine). A second Surface, or one inside an element or a component of your own, renders a second popover.';
+  const SURFACE_PROPS_WARNING =
+    '[WaveUI] TeachingPopover: the props of the surface element on TeachingPopover (`className`, `style`, `ref`, `onKeyDown` and the other element props) are ignored next to a TeachingPopover.Surface: pass them to the Surface.';
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /** A rectangle for a `VirtualElement` target and for `mockRect`. */
+  const rect = {
+    x: 200,
+    y: 100,
+    width: 100,
+    height: 20,
+    top: 100,
+    right: 300,
+    bottom: 120,
+    left: 200,
+  };
+
+  /** Gives jsdom a viewport, so the positioning can place the popover. */
+  function stubViewport() {
+    const html = document.documentElement;
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+    onTestFinished(() => {
+      Reflect.deleteProperty(html, 'clientWidth');
+      Reflect.deleteProperty(html, 'clientHeight');
+    });
+  }
+
+  /** A tour opened from a Trigger, between two page buttons. */
+  function TriggerTour(props: Partial<TeachingPopoverProps>) {
+    return (
+      <>
+        <button type="button">Before</button>
+        <TeachingPopover steps={steps} {...props}>
+          <TeachingPopover.Trigger>
+            <Button>Take the tour</Button>
+          </TeachingPopover.Trigger>
+        </TeachingPopover>
+        <button type="button">After</button>
+      </>
+    );
+  }
+  const trigger = () => screen.getByRole('button', { name: 'Take the tour' });
+
+  testCompoundExposure(TeachingPopover, ['Trigger', 'Surface']);
+
+  it('exports the parts under their flat names for React Server Components (C-COMPOUND)', () => {
+    expect(TeachingPopoverTrigger).toBeTypeOf('function');
+    expect(TeachingPopoverTrigger).toBe(TeachingPopover.Trigger);
+    expect(TeachingPopoverSurface).toBeTypeOf('function');
+    expect(TeachingPopoverSurface).toBe(TeachingPopover.Surface);
+  });
+
+  it('types the parts', () => {
+    expectTypeOf<TeachingPopoverSurfaceProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<TeachingPopoverTriggerChildProps['aria-haspopup']>().toEqualTypeOf<'dialog'>();
+    expectTypeOf<TeachingPopoverTriggerChildProps['aria-expanded']>().toEqualTypeOf<boolean>();
+  });
+
+  describe('Trigger', () => {
+    it('starts closed as a direct child, toggles the popover and carries aria-haspopup, aria-expanded and aria-controls', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const onDismiss = vi.fn();
+      render(<TriggerTour onOpenChange={onOpenChange} onDismiss={onDismiss} />);
+      await act(async () => {});
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger()).not.toHaveAttribute('aria-controls');
+
+      await user.click(trigger());
+      const dialog = await screen.findByRole('dialog', { name: 'Welcome, step 1 of 3' });
+      expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+      expect(dialog.id).not.toBe('');
+      expect(trigger()).toHaveAttribute('aria-controls', dialog.id);
+      expect(onOpenChange.mock.calls).toEqual([[true]]);
+
+      await user.click(trigger());
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger()).not.toHaveAttribute('aria-controls');
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it('points the popover at the Trigger when target is unset: portaled next to it with a beak', async () => {
+      stubViewport();
+      const user = userEvent.setup();
+      render(<TriggerTour />);
+      mockRect(trigger(), rect);
+      await user.click(trigger());
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog.closest('[data-wave-portal]')).not.toBeNull();
+      expect(dialog).toHaveAttribute('data-side', 'bottom');
+      expect(dialog.querySelector('[data-wave-teaching-popover-arrow]')).not.toBeNull();
+      await waitFor(() => expect(dialog.style.transform).toBe('translate(250px, 132px)'));
+    });
+
+    it('takes its place in the keyboard order after the Trigger and returns focus to it', async () => {
+      const user = userEvent.setup();
+      render(<TriggerTour />);
+      await user.click(trigger());
+      const dialog = await screen.findByRole('dialog');
+      await waitFor(() => expect(dialog).toHaveFocus());
+      await user.tab({ shift: true });
+      expect(trigger()).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+      await user.tab();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+    }, 20_000);
+
+    it('returns focus to the Trigger after a custom primary action finishes the tour', async () => {
+      const user = userEvent.setup();
+      const onFinish = vi.fn();
+      const onOpenChange = vi.fn();
+      render(
+        <TriggerTour
+          steps={[{ title: 'Tip', body: 'Press Ctrl+K.' }]}
+          primaryAction="Got it"
+          onFinish={onFinish}
+          onOpenChange={onOpenChange}
+        />,
+      );
+      await user.click(trigger());
+      const dialog = await screen.findByRole('dialog');
+      await waitFor(() => expect(dialog).toHaveFocus());
+      await user.click(screen.getByRole('button', { name: 'Got it' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(onFinish).toHaveBeenCalledTimes(1);
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(trigger()).toHaveFocus();
+    });
+
+    it('a target wins over the Trigger, which still toggles the popover', async () => {
+      stubViewport();
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn');
+      render(
+        <TeachingPopover steps={steps} target={{ getBoundingClientRect: () => rect }}>
+          <TeachingPopover.Trigger>
+            <Button>Take the tour</Button>
+          </TeachingPopover.Trigger>
+        </TeachingPopover>,
+      );
+      await user.click(trigger());
+      const dialog = await screen.findByRole('dialog');
+      await waitFor(() => expect(dialog.style.transform).toBe('translate(250px, 132px)'));
+      expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+      await user.click(trigger());
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('defaultOpen is false with a direct Trigger, also in a Fragment; an explicit defaultOpen wins', async () => {
+      const tour = (defaultOpen?: boolean) => (
+        <TeachingPopover steps={steps} defaultOpen={defaultOpen}>
+          <>
+            <TeachingPopover.Trigger>
+              <Button>Take the tour</Button>
+            </TeachingPopover.Trigger>
+          </>
+        </TeachingPopover>
+      );
+      const closed = render(tour());
+      await act(async () => {});
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+      closed.unmount();
+
+      render(tour(true));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('a Trigger nested in an element leaves defaultOpen at true and is still the target', async () => {
+      render(
+        <TeachingPopover steps={steps}>
+          <div>
+            <TeachingPopover.Trigger>
+              <Button>Take the tour</Button>
+            </TeachingPopover.Trigger>
+          </div>
+        </TeachingPopover>,
+      );
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog.closest('[data-wave-portal]')).not.toBeNull();
+      await waitFor(() => expect(dialog).toHaveFocus());
+      expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('fires onOpenChange once per click under StrictMode', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <TriggerTour onOpenChange={onOpenChange} />
+        </React.StrictMode>,
+      );
+      await user.click(trigger());
+      await screen.findByRole('dialog');
+      expect(onOpenChange.mock.calls).toEqual([[true]]);
+    });
+
+    it('passes the trigger props to a render-prop child', async () => {
+      const user = userEvent.setup();
+      render(
+        <TeachingPopover steps={steps}>
+          <TeachingPopover.Trigger>
+            {(props) => (
+              <button type="button" {...props}>
+                Take the tour
+              </button>
+            )}
+          </TeachingPopover.Trigger>
+        </TeachingPopover>,
+      );
+      expect(trigger()).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+      await user.click(trigger());
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('has no axe violations closed and open', async () => {
+      const user = userEvent.setup();
+      render(<TriggerTour />);
+      await expectNoA11yViolations();
+      await user.click(trigger());
+      await screen.findByRole('dialog');
+      await expectNoA11yViolations();
+    });
+  });
+
+  describe('Surface', () => {
+    function InRoot({ children }: { children?: React.ReactNode }) {
+      return <TeachingPopover steps={steps}>{children}</TeachingPopover>;
+    }
+
+    testSystemProps(TeachingPopoverSurface, {
+      expectedTag: 'div',
+      displayName: 'TeachingPopoverSurface',
+      wrapper: InRoot,
+      conflictingClass: { className: 'w-96', overrides: 'w-80' },
+    });
+
+    it('is the one role="dialog" surface and carries the stable classes of both', () => {
+      render(
+        <InRoot>
+          <TeachingPopover.Surface />
+        </InRoot>,
+      );
+      const dialogs = screen.getAllByRole('dialog');
+      expect(dialogs).toHaveLength(1);
+      expect(dialogs[0]).toHaveClass(
+        teachingPopoverClassNames.root,
+        teachingPopoverSurfaceClassNames.root,
+      );
+    });
+
+    it('renders the content of the steps form when it has no children: one surface for both forms', () => {
+      const normalize = (html: string) => html.replace(/\b(id|aria-labelledby)="[^"]*"/g, '$1=""');
+      const attributes = (el: HTMLElement) => Array.from(el.attributes, (attr) => attr.name).sort();
+      const plain = render(
+        <TeachingPopover steps={steps} activeStep={1} footerLayout="vertical" />,
+      );
+      const expected = screen.getByRole('dialog');
+      const expectedHtml = normalize(expected.innerHTML);
+      const expectedAttributes = attributes(expected);
+      plain.unmount();
+
+      render(
+        <TeachingPopover steps={steps} activeStep={1} footerLayout="vertical">
+          <TeachingPopover.Surface />
+        </TeachingPopover>,
+      );
+      const dialog = screen.getByRole('dialog', { name: 'Features, step 2 of 3' });
+      expect(normalize(dialog.innerHTML)).toBe(expectedHtml);
+      expect(attributes(dialog)).toEqual(expectedAttributes);
+      expect(dialog).toHaveAttribute('data-layout', 'vertical');
+    });
+
+    it('shares one state with the root: steps, labels, focus, announcements and dismissal', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      const onDismiss = vi.fn();
+      render(
+        <TeachingPopover
+          steps={steps}
+          onStepChange={onStepChange}
+          onDismiss={onDismiss}
+          labels={{ next: 'Neste' }}
+        >
+          <TeachingPopover.Surface />
+        </TeachingPopover>,
+      );
+      expect(screen.getByRole('dialog')).toHaveFocus();
+      await user.click(screen.getByRole('button', { name: 'Neste' }));
+      expect(onStepChange).toHaveBeenLastCalledWith(1);
+      expect(heading()).toHaveTextContent('Features, step 2 of 3');
+      await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Features, step 2 of 3'));
+      await user.keyboard('{Escape}');
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('renders its children instead of the default content', () => {
+      render(
+        <InRoot>
+          <TeachingPopover.Surface aria-label="Shortcuts">
+            <p>Press Ctrl+K.</p>
+          </TeachingPopover.Surface>
+        </InRoot>,
+      );
+      const dialog = screen.getByRole('dialog', { name: 'Shortcuts' });
+      expect(dialog).toHaveTextContent('Press Ctrl+K.');
+      expect(dialog).not.toHaveAttribute('aria-labelledby');
+      expect(within(dialog).queryByRole('heading')).toBeNull();
+    });
+
+    it('with a Trigger: the anchored surface takes the Surface props, and aria-controls follows its id', async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<HTMLDivElement>();
+      render(
+        <TeachingPopover steps={steps}>
+          <TeachingPopover.Trigger>
+            <Button>Take the tour</Button>
+          </TeachingPopover.Trigger>
+          <TeachingPopover.Surface ref={ref} id="tour" className="w-96" data-testid="surface" />
+        </TeachingPopover>,
+      );
+      await user.click(trigger());
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toBe(ref.current);
+      expect(dialog).toBe(screen.getByTestId('surface'));
+      expect(dialog).toHaveClass('w-96');
+      expect(dialog).not.toHaveClass('w-80');
+      expect(dialog.closest('[data-wave-portal]')).not.toBeNull();
+      expect(dialog).toHaveAttribute('id', 'tour');
+      expect(trigger()).toHaveAttribute('aria-controls', 'tour');
+      await waitFor(() => expect(dialog).toHaveFocus());
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+    });
+
+    it('ignores the surface props of the root next to a Surface, with a development warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const ref = React.createRef<HTMLDivElement>();
+      render(
+        <TeachingPopover steps={steps} className="w-96" data-testid="root" ref={ref}>
+          <TeachingPopover.Surface />
+        </TeachingPopover>,
+      );
+      expect(screen.getByRole('dialog')).not.toHaveClass('w-96');
+      expect(screen.queryByTestId('root')).toBeNull();
+      expect(ref.current).toBeNull();
+      expect(warn.mock.calls).toEqual([[SURFACE_PROPS_WARNING]]);
+    });
+
+    it('warns TeachingPopover.Surface:placement for a Surface inside a component, and for a second Surface', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      function MySurface() {
+        return <TeachingPopover.Surface data-testid="mine" />;
+      }
+      const wrapped = render(
+        <InRoot>
+          <MySurface />
+        </InRoot>,
+      );
+      expect(screen.getAllByRole('dialog')).toHaveLength(2);
+      expect(warn.mock.calls).toEqual([[PLACEMENT_WARNING]]);
+      wrapped.unmount();
+      warn.mockClear();
+      __resetWarnings();
+
+      render(
+        <InRoot>
+          <TeachingPopover.Surface />
+          <TeachingPopover.Surface />
+        </InRoot>,
+      );
+      expect(warn.mock.calls).toEqual([[PLACEMENT_WARNING]]);
+    });
+  });
+
+  describe('outside a TeachingPopover (C-CONTEXT)', () => {
+    it('a part throws in development', () => {
+      expectThrows(
+        <TeachingPopover.Surface />,
+        '[WaveUI] TeachingPopover.Surface must be used within TeachingPopover',
+      );
+      expectThrows(
+        <TeachingPopover.Trigger>
+          <button type="button">Take the tour</button>
+        </TeachingPopover.Trigger>,
+        '[WaveUI] TeachingPopover.Trigger must be used within TeachingPopover',
+      );
+    });
+
+    it('in production, a part logs once and renders inert', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const ui = (tick: number) => (
+        <>
+          <TeachingPopover.Trigger>
+            <button type="button">Take the tour {tick}</button>
+          </TeachingPopover.Trigger>
+          <TeachingPopover.Surface />
+        </>
+      );
+      const { rerender } = render(ui(0));
+      rerender(ui(1));
+      expect(error.mock.calls).toEqual([
+        ['[WaveUI] TeachingPopover.Trigger must be used within TeachingPopover'],
+        ['[WaveUI] TeachingPopover.Surface must be used within TeachingPopover'],
+      ]);
+      expect(screen.getByRole('button', { name: 'Take the tour 1' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('parts written in a Server Component', () => {
+    // A client component written in a Server Component reaches the client as a lazy reference.
+    const plainParts = { Trigger: TeachingPopoverTrigger, Surface: TeachingPopoverSurface };
+    const lazyParts = {
+      Trigger: asClientReference(TeachingPopoverTrigger),
+      Surface: asClientReference(TeachingPopoverSurface),
+    };
+
+    function InlineTip({ parts }: { parts: typeof plainParts }) {
+      return (
+        <TeachingPopover steps={steps}>
+          <parts.Surface className="w-96" />
+        </TeachingPopover>
+      );
+    }
+
+    function Tour({ parts }: { parts: typeof plainParts }) {
+      return (
+        <TeachingPopover steps={steps}>
+          <parts.Trigger>
+            <Button>Take the tour</Button>
+          </parts.Trigger>
+          <parts.Surface />
+        </TeachingPopover>
+      );
+    }
+
+    it('server-renders the same HTML as with the plain part types', () => {
+      const tip = renderToString(<InlineTip parts={plainParts} />);
+      expect(tip).toContain('Welcome');
+      expect(tip.match(/role="dialog"/g)).toHaveLength(1);
+      expect(renderToString(<InlineTip parts={lazyParts} />)).toBe(tip);
+
+      const tour = renderToString(<Tour parts={plainParts} />);
+      expect(tour).toContain('Take the tour');
+      expect(tour).toContain('aria-expanded="false"');
+      expect(tour).not.toContain('role="dialog"');
+      expect(renderToString(<Tour parts={lazyParts} />)).toBe(tour);
+    });
+
+    it('a lazy Trigger and Surface start closed, open from the trigger and close like the plain parts', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn');
+      render(<Tour parts={lazyParts} />);
+      await act(async () => {});
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      await user.click(trigger());
+      const dialog = await screen.findByRole('dialog', { name: 'Welcome, step 1 of 3' });
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      expect(dialog.closest('[data-wave-portal]')).not.toBeNull();
+      await waitFor(() => expect(dialog).toHaveFocus());
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 });

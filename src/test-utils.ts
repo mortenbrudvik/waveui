@@ -433,6 +433,7 @@ export const VARIANT_BASES: Readonly<Record<string, readonly string[]>> = {
   tagPickerGroupClassNames: ['tagGroupClassNames'],
   navDrawerClassNames: ['drawerClassNames'],
   hamburgerClassNames: ['buttonClassNames'],
+  teachingPopoverSurfaceClassNames: ['teachingPopoverClassNames'],
 };
 
 /** A component's stable class names, from {@link getStableClassNames}. */
