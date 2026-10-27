@@ -2,10 +2,12 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { popoverContentClassNames } from '../../lib/classNames';
 import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
+import { popupMotion } from '../../lib/motion';
 import { slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusElement, getFirstTabbable, isConnectedAndFocusable } from '../../lib/focus';
 import type {
+  MotionSlot,
   PopupAlign,
   PopupPositioning,
   PopupSide,
@@ -17,7 +19,10 @@ import { useId } from '../../hooks/useId';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
 import { useContextMenuAnchor, type ContextMenuAnchor } from '../../hooks/useContextMenuAnchor';
 import { useDismiss } from '../../hooks/useDismiss';
+import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { useHoverIntent, type HoverIntent } from '../../hooks/useHoverIntent';
+import { useMotionClasses } from '../../hooks/useMotion';
+import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -188,6 +193,17 @@ export interface PopoverContentProps extends Omit<React.HTMLAttributes<HTMLDivEl
   title?: React.ReactNode;
   /** Id of the surface; the trigger's `aria-controls` follows it. Defaults to a generated id. */
   id?: string;
+  /**
+   * The popover's motion. By default it fades in and slides 4px away from its trigger, on the
+   * side it opened on, over 200 ms with a decelerating curve, and fades out and slides back over
+   * 100 ms with an accelerating curve; under reduced motion it appears and disappears at once.
+   * `null` turns the motion off (the surface still renders its `data-presence` phases, which then
+   * end at once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. Fluent's `Popover` `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
   /** Ref to the popover surface. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -533,6 +549,24 @@ const PopoverRoot = ({
     onlyIfFocusInside: true,
     isHoverClose,
   });
+  // Focus before close, on every close: the content stays mounted while it exits, so when the
+  // popover closes with focus inside it, focus moves in the closing commit to where
+  // useRestoreFocus would put it, in its order: the element focused at the gesture (context mode),
+  // the element focused when the popover opened (the trigger's focus target first, but not in
+  // context mode, whose region is no opener), then the focus resolver. A Dialog opened by a button
+  // of the content as it closes then records that element as its opener, not the button, which
+  // the exiting surface still holds. A hover close finds no focus inside (focus there blocks it),
+  // and unmounting is left to useRestoreFocus.
+  useFocusBeforeClose({
+    open,
+    surfaceRef,
+    captureOpener: () => (openOnContext ? null : triggerFocusRef.current),
+    candidates: (opener) => [
+      openOnContext ? contextOpener.current : null,
+      opener,
+      resolveFocusTarget(),
+    ],
+  });
   React.useLayoutEffect(() => {
     if (open) hoverCloseRef.current = false;
   }, [open]);
@@ -839,6 +873,20 @@ PopoverTrigger.displayName = 'PopoverTrigger';
  * `target` it is placed at the target and, without a trigger, follows a target element in the
  * keyboard order.
  *
+ * It moves in and out: the surface fades in and slides 4px away from its trigger over 200 ms, and
+ * fades out and slides back over 100 ms, on the side it opened on (`data-side`); a popover open by
+ * default animates in when it mounts in the browser. Under reduced motion it appears and
+ * disappears at once. `motion` turns the motion off (`null`) or replaces its classes, and a
+ * `WaveProvider` with `motion="none"` turns the default off. The surface mounts through the
+ * presence core (`usePresence`): it carries `data-presence="entering" | "entered" | "exiting"` and
+ * `data-state="open"`, and while it closes `data-state="closed"` and `inert`, so it stays on
+ * screen, where it was, until its exit motion ends. Focus, the dismiss layer, the trigger's
+ * `aria-expanded` and `aria-controls`, and positioning follow the open state, not the exit: focus
+ * inside a closing popover moves, in the commit that closes it, to where the popover returns
+ * focus (so a Dialog opened by a button of the popover as it closes returns focus there too, not
+ * to that button), and a hover close moves no focus. Without motion it unmounts as soon as it
+ * closes.
+ *
  * Also exported as `PopoverContent` for React Server Components, which cannot use the dotted
  * `Popover.Content` (that needs a client file).
  */
@@ -854,6 +902,7 @@ export const PopoverContent = ({
   onContextMenu,
   onPointerEnter,
   onPointerLeave,
+  motion,
   ref,
   ...rest
 }: PopoverContentProps) => {
@@ -878,7 +927,12 @@ export const PopoverContent = ({
     keyboardContext,
   } = usePopoverContext('Popover.Content');
   const titleId = useId('popover-title');
-  const elementRef = useMergedRefs<HTMLDivElement>(ref, surfaceElementRef);
+  // The surface mounts and unmounts through the presence core, and enters also when it mounts open
+  // (a popover open by default animates in on a client render as after hydration); the root keys
+  // everything else on `open`, so focus moves out and the layer goes on close, not after the exit.
+  const { isMounted, ref: presenceRef, presenceProps } = usePresence(open, { appear: true });
+  const motionClassName = useMotionClasses(motion, popupMotion);
+  const elementRef = useMergedRefs<HTMLDivElement>(ref, surfaceElementRef, presenceRef);
   const hasTitle = slotRendersContent(title);
   const unnamed = ariaLabelledBy === undefined && !ariaLabel && !hasTitle;
   // A context region is no popover button, and its whole text is no name: in context mode the
@@ -954,7 +1008,7 @@ export const PopoverContent = ({
     }
   }, [checkTrigger, resolvedTriggerId, triggerRef, triggerLabelId]);
 
-  if (!open) return null;
+  if (!isMounted) return null;
 
   const titleAndChildren = (
     <>
@@ -978,8 +1032,10 @@ export const PopoverContent = ({
         aria-labelledby={labelledBy}
         tabIndex={keyboardContext ? -1 : undefined}
         {...rest}
+        {...presenceProps}
         ref={elementRef}
         id={customId ?? contentId}
+        data-state={open ? 'open' : 'closed'}
         data-side={floatingProps['data-side']}
         data-align={floatingProps['data-align']}
         style={{ ...style, ...floatingProps.style }}
@@ -994,6 +1050,7 @@ export const PopoverContent = ({
         className={cn(
           popoverContentClassNames.root,
           'w-64 rounded-md border border-border bg-background p-4 text-body-1 font-normal text-foreground normal-case tracking-normal text-start shadow-4',
+          motionClassName,
           className,
         )}
       >
@@ -1037,6 +1094,8 @@ PopoverContent.displayName = 'PopoverContent';
  *   moving into the content). Name the content with `title` or `aria-label`.
  * - **Custom anchors:** `target` places it at another element or at a `VirtualElement` (a point, a
  *   text selection); with a controlled `open` it needs no trigger.
+ * - **Motion:** the content fades and slides in from its trigger and back out as it closes;
+ *   `Popover.Content`'s `motion` turns it off or replaces it.
  *
  * @example
  * <Popover>
