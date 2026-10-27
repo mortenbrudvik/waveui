@@ -26,9 +26,10 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
   /**
    * The most items the trail shows, the overflow button not counted. A longer trail collapses its
    * middle items, from `overflowIndex`, into a "…" button that opens a menu of them (a link item
-   * becomes a `Menu.ItemLink`, a button item a `Menu.Item`). The first item and the last `current`
-   * item are never hidden. Without it the whole trail is shown. A value below 1 means 6, as in
-   * `partitionBreadcrumbItems`. Ignored with `overflow="auto"`.
+   * becomes a `Menu.ItemLink`, an `asChild` router link without a string `href` a `Menu.ItemLink`
+   * rendered by the router link's own component and props, a button item a `Menu.Item`). The
+   * first item and the last `current` item are never hidden. Without it the whole trail is shown.
+   * A value below 1 means 6, as in `partitionBreadcrumbItems`. Ignored with `overflow="auto"`.
    */
   maxDisplayedItems?: number;
   /**
@@ -356,10 +357,31 @@ function isItemDisabled(
   ].some((value) => value === true || value === 'true');
 }
 
+/** The props of an `asChild` element that the overflow menu reads. */
+interface HiddenItemChildProps {
+  href?: unknown;
+  children?: React.ReactNode;
+  onClick?: React.MouseEventHandler<HTMLElement>;
+  [prop: string]: unknown;
+}
+
+/**
+ * Whether an `asChild` element is one of a component (a router link) rather than of a tag such as
+ * `<a>`: a function, or an object type (`forwardRef`, `memo`, `lazy`, a client reference).
+ */
+function isComponentElement(element: React.ReactElement): boolean {
+  return (
+    typeof element.type === 'function' ||
+    (typeof element.type === 'object' && element.type !== null)
+  );
+}
+
 /**
  * The menu item of a collapsed trail item: a `Menu.ItemLink` for a link (an `asChild` element
- * with an `href` too), a `Menu.Item` for a button. An item with neither is listed disabled, and an
- * element that is no `Breadcrumb.Item` is left out; both are not `mappable`.
+ * with an `href` too; the element's own `href` wins, as on the trail), the same component for an
+ * `asChild` component element without a string `href` (a router link's `to`), a `Menu.Item` for a
+ * button. An item with none of these is listed disabled, and an element that is no
+ * `Breadcrumb.Item` is left out; both are not `mappable`.
  */
 function overflowMenuItem(entry: BreadcrumbEntry): { node: React.ReactNode; mappable: boolean } {
   const item = entry.node;
@@ -367,13 +389,44 @@ function overflowMenuItem(entry: BreadcrumbEntry): { node: React.ReactNode; mapp
     return { node: null, mappable: false };
   }
   const { href: itemHref, icon, asChild, children, onClick } = item.props;
-  const inner =
-    asChild && React.isValidElement<{ href?: string; children?: React.ReactNode }>(children)
-      ? children
-      : null;
+  const inner = asChild && React.isValidElement<HiddenItemChildProps>(children) ? children : null;
   const label = inner ? inner.props.children : children;
   const disabled = isItemDisabled(item.props, inner);
-  const href = itemHref ?? inner?.props.href;
+  const href = inner?.props.href ?? itemHref;
+  if (inner && typeof href !== 'string' && isComponentElement(inner)) {
+    // A router link (`<Link to>`): the entry is rendered by the same component with its routing
+    // props, so its click navigates the router's way. The menu keeps the item's role, classes,
+    // icon, label and disabled state, and the props that belong to the trail element stay there
+    // (its id and ref, its tab order). Its own `onClick` runs before the item's, as on the trail.
+    const {
+      children: _children,
+      className: _className,
+      style: _style,
+      ref: _ref,
+      id: _id,
+      role: _role,
+      tabIndex: _tabIndex,
+      disabled: _disabled,
+      'aria-disabled': _ariaDisabled,
+      onClick: linkOnClick,
+      ...linkProps
+    } = inner.props;
+    return {
+      node: (
+        <Menu.ItemLink
+          key={entry.key}
+          {...linkProps}
+          as={inner.type as React.ElementType}
+          icon={icon}
+          disabled={disabled}
+          onClick={composeEventHandlers(linkOnClick, onClick)}
+        >
+          {label}
+        </Menu.ItemLink>
+      ),
+      mappable: true,
+    };
+  }
   if (typeof href === 'string') {
     return {
       node: (

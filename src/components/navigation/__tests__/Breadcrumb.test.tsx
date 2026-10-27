@@ -8,6 +8,7 @@ import type { BreadcrumbItemProps } from '../Breadcrumb';
 import type { Slot } from '../../../lib/types';
 import {
   breadcrumbClassNames,
+  menuItemLinkClassNames,
   overflowClassNames,
   overflowItemClassNames,
 } from '../../../lib/classNames';
@@ -48,6 +49,39 @@ const EMPTY_ICONS = [
 ] as Array<[string, () => Slot<'span'>]>;
 
 const separatorsIn = (el: HTMLElement) => el.querySelectorAll('[data-wave-breadcrumb-separator]');
+
+/**
+ * A router link, as React Router's `Link`: its `href` comes from `to`, and a click that nothing
+ * prevented navigates (`navigate(to)`) instead of following the `href`.
+ */
+function createRouterLink() {
+  const navigate = vi.fn<(to: string) => void>();
+  function RouterLink({
+    to,
+    onClick,
+    ref,
+    ...rest
+  }: { to: string; ref?: React.Ref<HTMLAnchorElement> } & Omit<
+    React.ComponentProps<'a'>,
+    'href' | 'ref'
+  >) {
+    return (
+      <a
+        ref={ref}
+        data-to={to}
+        href={`/r${to}`}
+        {...rest}
+        onClick={(event) => {
+          onClick?.(event);
+          if (event.defaultPrevented) return;
+          event.preventDefault();
+          navigate(to);
+        }}
+      />
+    );
+  }
+  return { RouterLink, navigate };
+}
 
 describe('Breadcrumb', () => {
   testSystemProps(Breadcrumb, {
@@ -1255,6 +1289,129 @@ describe('Breadcrumb', () => {
       await user.keyboard('{Escape}');
     });
 
+    it("lists an asChild link with the element's own href over the item's, as the trail does", async () => {
+      const user = userEvent.setup();
+      render(
+        <Breadcrumb maxDisplayedItems={2}>
+          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+          <Breadcrumb.Item asChild href="/ignored">
+            <a href="/guide">Guide</a>
+          </Breadcrumb.Item>
+          <Breadcrumb.Item asChild href="/docs">
+            <a>Docs</a>
+          </Breadcrumb.Item>
+          <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      await user.click(screen.getByRole('button', { name: 'More items' }));
+      expect(screen.getByRole('menuitem', { name: 'Guide' })).toHaveAttribute('href', '/guide');
+      expect(screen.getByRole('menuitem', { name: 'Docs' })).toHaveAttribute('href', '/docs');
+      await user.keyboard('{Escape}');
+    });
+
+    describe('a hidden router link (an asChild element without an href string)', () => {
+      const renderTrail = (item: React.ReactNode) =>
+        render(
+          <Breadcrumb maxDisplayedItems={2}>
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            {item}
+            <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+          </Breadcrumb>,
+        );
+
+      it('is an enabled menu item rendered by the router link: a click runs it and closes the menu', async () => {
+        const warn = vi.spyOn(console, 'warn');
+        const user = userEvent.setup();
+        const { RouterLink, navigate } = createRouterLink();
+        const onLinkClick = vi.fn();
+        const onItemClick = vi.fn();
+        renderTrail(
+          <Breadcrumb.Item asChild icon={<i data-testid="icon" />} onClick={onItemClick}>
+            <RouterLink to="/docs" className="link-class" onClick={onLinkClick}>
+              Docs
+            </RouterLink>
+          </Breadcrumb.Item>,
+        );
+        await user.click(screen.getByRole('button', { name: 'More items' }));
+        const item = screen.getByRole('menuitem', { name: 'Docs' });
+        expect(item).not.toHaveAttribute('aria-disabled');
+        // The router link's own markup, with the menu item's classes instead of the trail's.
+        expect(item).toHaveAttribute('data-to', '/docs');
+        expect(item).toHaveAttribute('href', '/r/docs');
+        expect(item).toHaveClass(menuItemLinkClassNames.root);
+        expect(item).not.toHaveClass('link-class');
+        expect(within(item).getByTestId('icon')).toBeInTheDocument();
+
+        await user.click(item);
+        // The element's own onClick, then the item's (the trail's order), then the navigation.
+        expect(onLinkClick).toHaveBeenCalledTimes(1);
+        expect(onItemClick).toHaveBeenCalledTimes(1);
+        expect(navigate.mock.calls).toEqual([['/docs']]);
+        expect(onLinkClick.mock.invocationCallOrder[0]).toBeLessThan(
+          onItemClick.mock.invocationCallOrder[0],
+        );
+        expect(onItemClick.mock.invocationCallOrder[0]).toBeLessThan(
+          navigate.mock.invocationCallOrder[0],
+        );
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(warn).not.toHaveBeenCalled();
+      });
+
+      it('follows the router link on Enter', async () => {
+        const user = userEvent.setup();
+        const { RouterLink, navigate } = createRouterLink();
+        renderTrail(
+          <Breadcrumb.Item asChild>
+            <RouterLink to="/docs">Docs</RouterLink>
+          </Breadcrumb.Item>,
+        );
+        const button = screen.getByRole('button', { name: 'More items' });
+        act(() => button.focus());
+        await user.keyboard('{Enter}');
+        expect(screen.getByRole('menuitem', { name: 'Docs' })).toHaveFocus();
+        await user.keyboard('{Enter}');
+        expect(navigate.mock.calls).toEqual([['/docs']]);
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(button).toHaveFocus();
+      });
+
+      it('stays unavailable when the item is disabled: the click navigates nowhere', async () => {
+        const warn = vi.spyOn(console, 'warn');
+        const user = userEvent.setup();
+        const { RouterLink, navigate } = createRouterLink();
+        renderTrail(
+          <Breadcrumb.Item asChild disabled>
+            <RouterLink to="/docs">Docs</RouterLink>
+          </Breadcrumb.Item>,
+        );
+        await user.click(screen.getByRole('button', { name: 'More items' }));
+        const item = screen.getByRole('menuitem', { name: 'Docs' });
+        expect(item).toHaveAttribute('aria-disabled', 'true');
+        await user.click(item);
+        expect(navigate).not.toHaveBeenCalled();
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+        expect(warn).not.toHaveBeenCalled();
+        await user.keyboard('{Escape}');
+      });
+
+      it('still lists an asChild element that is no component and has no href or onClick disabled, and warns', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const user = userEvent.setup();
+        renderTrail(
+          <Breadcrumb.Item asChild>
+            <span>Plain</span>
+          </Breadcrumb.Item>,
+        );
+        await user.click(screen.getByRole('button', { name: 'More items' }));
+        expect(screen.getByRole('menuitem', { name: 'Plain' })).toHaveAttribute(
+          'aria-disabled',
+          'true',
+        );
+        expect(warn.mock.calls).toEqual([[OVERFLOW_ITEM_WARNING]]);
+        await user.keyboard('{Escape}');
+      });
+    });
+
     it('warns once about a hidden item that cannot be listed', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const ui = (
@@ -1745,6 +1902,36 @@ describe('Breadcrumb', () => {
           ],
           [OVERFLOW_ITEM_WARNING],
         ]);
+      });
+
+      it('lists a hidden router link as an enabled menu item that runs it and closes the menu', async () => {
+        const warn = vi.spyOn(console, 'warn');
+        const user = userEvent.setup();
+        const { RouterLink, navigate } = createRouterLink();
+        const onLinkClick = vi.fn();
+        layoutWith(130);
+        render(
+          <Breadcrumb overflow="auto">
+            <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+            <Breadcrumb.Item asChild>
+              <RouterLink to="/docs" onClick={onLinkClick}>
+                Docs
+              </RouterLink>
+            </Breadcrumb.Item>
+            <Breadcrumb.Item href="/b">Beta</Breadcrumb.Item>
+            <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+          </Breadcrumb>,
+        );
+        expect(shownLabels()).toEqual(['Home', '…', 'Widget']);
+        await user.click(screen.getByRole('button', { name: 'More items' }));
+        const item = screen.getByRole('menuitem', { name: 'Docs' });
+        expect(item).not.toHaveAttribute('aria-disabled');
+        expect(item).toHaveAttribute('data-to', '/docs');
+        await user.click(item);
+        expect(onLinkClick).toHaveBeenCalledTimes(1);
+        expect(navigate.mock.calls).toEqual([['/docs']]);
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(warn).not.toHaveBeenCalled();
       });
 
       it('pins a current item written in a Server Component (C-COMPOUND)', () => {
