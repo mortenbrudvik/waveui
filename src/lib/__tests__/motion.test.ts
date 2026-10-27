@@ -7,11 +7,14 @@
  *
  * 1. every class word compiles with Tailwind and Wave's tokens and variants, as
  *    `scripts/build-css.mjs` builds (a typo such as a misspelt duration would ship nothing);
- * 2. a value with a transition has a Wave duration and a Wave curve (variants stripped); a recipe
- *    on {@link COMPOSED_DURATIONS} is checked once per duration it is composed with;
+ * 2. a value with a transition has a Wave duration and a Wave curve that apply to its enter (not
+ *    only under the reduced-motion or the exiting variant); a recipe on
+ *    {@link COMPOSED_DURATIONS} is checked once per duration it is composed with;
  * 3. a transition has a reduced-motion `transition-none`, an animation a reduced-motion
  *    animation;
  * 4. every class with the `starting` variant is gated on the entering phase;
+ * 6. a backdrop exits with its surface's exit duration (D16: the core waits only for the surface,
+ *    so a longer backdrop would be cut off), per pair of {@link BACKDROP_PAIRS};
  * 7. every export is a string, a record of strings or a function (the precondition of the dist
  *    probe of `scripts/verify-dist.mjs`, which reads the strings one level into records).
  *
@@ -171,6 +174,8 @@ const isTransition = (utility: string) =>
 const isAnimation = (utility: string) =>
   utility.startsWith('animate-') && utility !== 'animate-none';
 const isReduced = (variants: readonly string[]) => variants.includes('motion-reduce');
+/** The exiting phase's variant: a class under it times only the exit. */
+const EXITING = 'data-[presence=exiting]';
 
 /** Check 1: the words of `value` that yield no CSS rule. */
 function uncompiledWords(value: string, designSystem: DesignSystem): string[] {
@@ -179,16 +184,53 @@ function uncompiledWords(value: string, designSystem: DesignSystem): string[] {
   return list.filter((_, index) => !css[index]);
 }
 
-/** Check 2: the Wave timing utilities a value with a transition lacks (variants stripped). */
+/**
+ * Check 2: the Wave timing utilities a value with a transition lacks. A timing utility counts
+ * under any variant except the reduced-motion one (it times nothing while motion is allowed) and
+ * the exiting one (it leaves the enter on Tailwind's default timing).
+ */
 function missingTimingTokens(value: string): string[] {
   const parsed = words(value).map(parseWord);
   const moves = parsed.some(
     ({ variants, utility }) => !isReduced(variants) && isTransition(utility),
   );
   if (!moves) return [];
+  const times = (variants: readonly string[]) =>
+    !isReduced(variants) && !variants.includes(EXITING);
   return ['duration-wave-', 'ease-wave-']
-    .filter((prefix) => !parsed.some(({ utility }) => utility.startsWith(prefix)))
+    .filter(
+      (prefix) =>
+        !parsed.some(({ variants, utility }) => times(variants) && utility.startsWith(prefix)),
+    )
     .map((prefix) => `${prefix}*`);
+}
+
+/**
+ * Backdrop recipe → the recipe of its surface (check 6, D16): the presence core waits only for the
+ * surface's motion, so a backdrop that exits more slowly is cut off when the surface unmounts.
+ */
+const BACKDROP_PAIRS: Record<string, string> = { dialogBackdropMotion: 'dialogMotion' };
+
+/**
+ * Check 6: the exit duration of `value`: its duration utility under exactly the exiting variant,
+ * else its plain one (`undefined` without either).
+ */
+function exitDuration(value: string): string | undefined {
+  const parsed = words(value).map(parseWord);
+  const duration = (variant: string) =>
+    parsed.find(
+      ({ variants, utility }) => variants.join(':') === variant && utility.startsWith('duration-'),
+    )?.utility;
+  return duration(EXITING) ?? duration('');
+}
+
+/** Check 6: a finding when `backdrop` does not exit with the duration of `surface`. */
+function backdropExitMismatch(surface: string, backdrop: string): string[] {
+  const own = exitDuration(backdrop);
+  const surfaces = exitDuration(surface);
+  return own !== undefined && own === surfaces
+    ? []
+    : [`exits over ${own ?? 'no duration'}, its surface over ${surfaces ?? 'no duration'}`];
 }
 
 /**
@@ -319,13 +361,31 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       ]);
       expect(
         missingTimingTokens('transition-opacity data-[presence=exiting]:duration-wave-fast'),
-      ).toEqual(['ease-wave-*']);
+      ).toEqual(['duration-wave-*', 'ease-wave-*']);
     });
 
-    it('accepts them with variants, and needs none without a transition', () => {
+    it('reports a duration or a curve that times only the exit or only reduced motion', () => {
       expect(
         missingTimingTokens(
           'transition-opacity data-[presence=exiting]:duration-wave-fast ease-wave-easy-ease motion-reduce:transition-none',
+        ),
+      ).toEqual(['duration-wave-*']);
+      expect(
+        missingTimingTokens(
+          'transition-opacity duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none',
+        ),
+      ).toEqual(['ease-wave-*']);
+      expect(
+        missingTimingTokens(
+          'transition-opacity motion-reduce:duration-wave-fast motion-reduce:ease-wave-easy-ease motion-reduce:transition-none',
+        ),
+      ).toEqual(['duration-wave-*', 'ease-wave-*']);
+    });
+
+    it('accepts them next to an exit override, and needs none without a transition', () => {
+      expect(
+        missingTimingTokens(
+          'transition-opacity duration-wave-normal data-[presence=exiting]:duration-wave-fast ease-wave-easy-ease data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none',
         ),
       ).toEqual([]);
       expect(missingTimingTokens('animate-wave-indeterminate motion-reduce:animate-none')).toEqual(
@@ -431,6 +491,56 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
 
     it('holds for every recipe', () => {
       expect(findings(ungatedStarts)).toEqual([]);
+    });
+  });
+
+  describe('6. a backdrop exits with its surface (D16)', () => {
+    it('reads the exit duration: the exiting one, else the plain one', () => {
+      expect(
+        exitDuration(
+          'transition-opacity duration-wave-gentle data-[presence=exiting]:duration-wave-normal',
+        ),
+      ).toBe('duration-wave-normal');
+      expect(exitDuration('transition-opacity duration-wave-gentle')).toBe('duration-wave-gentle');
+      expect(
+        exitDuration(
+          'transition-opacity motion-reduce:duration-wave-fast motion-reduce:duration-0',
+        ),
+      ).toBeUndefined();
+    });
+
+    it('reports a backdrop that exits over another duration than its surface', () => {
+      const surface =
+        'transition-[opacity,scale] duration-wave-gentle data-[presence=exiting]:duration-wave-normal';
+      expect(backdropExitMismatch(surface, 'transition-opacity duration-wave-gentle')).toEqual([
+        'exits over duration-wave-gentle, its surface over duration-wave-normal',
+      ]);
+      expect(backdropExitMismatch(surface, 'transition-opacity')).toEqual([
+        'exits over no duration, its surface over duration-wave-normal',
+      ]);
+      expect(
+        backdropExitMismatch(
+          surface,
+          'transition-opacity duration-wave-slow data-[presence=exiting]:duration-wave-normal',
+        ),
+      ).toEqual([]);
+    });
+
+    it('holds for every pair, and every pair names two string recipes', () => {
+      const exports: Readonly<Record<string, unknown>> = motion;
+      const pairs = Object.entries(BACKDROP_PAIRS);
+      expect(pairs.length).toBeGreaterThan(0);
+      for (const [backdrop, surface] of pairs) {
+        expect(typeof exports[backdrop], backdrop).toBe('string');
+        expect(typeof exports[surface], surface).toBe('string');
+      }
+      expect(
+        pairs.flatMap(([backdrop, surface]) =>
+          backdropExitMismatch(String(exports[surface]), String(exports[backdrop])).map(
+            (finding) => `${backdrop}: ${finding}`,
+          ),
+        ),
+      ).toEqual([]);
     });
   });
 });

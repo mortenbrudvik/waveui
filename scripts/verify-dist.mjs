@@ -53,6 +53,12 @@
  *   - opt-in modules (0.8): an import of only `Button` contains none of {@link OPT_IN_MODULES}
  *     (the color parts and helpers, the toaster handle), and an import of only `Toaster`
  *     contains `hooks/usePresence`;
+ *   - motion (0.15, D23): an import of only `Button` contains neither `lib/motion` nor
+ *     `hooks/useMotion`, none of the recipe literals of `dist/lib/motion.mjs` (at least
+ *     {@link MOTION_RECIPE_MIN}, read at run time) and no string with a presence variant
+ *     (`[presence=`, matched in a minified bundle, so comments do not count); an import of only
+ *     `Dialog` contains both modules, the Dialog's two recipe literals and the presence variant,
+ *     which proves the same matchers;
  *   - 0.11: the exclusion probes of {@link EXCLUSION_PROBES_0_11} and the inclusion probes of
  *     {@link INCLUSION_PROBES_0_11} (tags, TagPicker, Dialog and Drawer, Nav, Hamburger and
  *     NavDrawer); no name of {@link MODULE_ONLY_NAMES} is exported from `dist/index.mjs` or
@@ -1804,11 +1810,20 @@ export async function probeTreeShaking(
 const MOTION_MODULE = 'lib/motion.mjs';
 
 /**
- * The fewest recipe literals {@link motionRecipeLiterals} accepts from {@link MOTION_MODULE}: 0
- * until a component imports the module; the Dialog package (P10-DLG) sets 2 and INTEGRATION the
- * release count of spec §2.2's table.
+ * The fewest recipe literals {@link motionRecipeLiterals} accepts from {@link MOTION_MODULE}: the
+ * Dialog's two (P10-DLG, the first package whose component imports the module); INTEGRATION raises
+ * it to the release count of spec §2.2's table.
  */
-export const MOTION_RECIPE_MIN = 0;
+export const MOTION_RECIPE_MIN = 2;
+
+/** The motion hook's module (spec §2.3, D23): only a component that animates imports it. */
+const MOTION_HOOK_MODULE = 'hooks/useMotion.mjs';
+
+/**
+ * The Dialog's recipes (exports of {@link MOTION_MODULE}): the positive control of the Button-only
+ * motion probe finds both literals in the bundle of an import of only Dialog (spec §2.10).
+ */
+const DIALOG_MOTION_RECIPES = ['dialogMotion', 'dialogBackdropMotion'];
 
 /**
  * The text one of which every motion literal holds (spec §2.10; `duration-wave-` because the drawer
@@ -1818,11 +1833,12 @@ const MOTION_RECIPE_MARKERS = ['[presence=', 'transition', 'animate-', 'duration
 
 /**
  * Every string value of the exports of `dist/lib/motion.mjs`, one level into records (exports in
- * the module's order, a record's values in key order), imported by file URL: the recipe literals
- * the Button-only probe must not find (`dropStrings`; spec D23). Functions (the resolver) are
- * skipped. Errors: the module does not exist (the probe would pass vacuously), it holds fewer than
- * `min` distinct literals, a value holds none of {@link MOTION_RECIPE_MARKERS} (not a recipe), or
- * an export is neither a string, a record of strings nor a function.
+ * name order, as a module namespace lists them, a record's values in key order), imported by file
+ * URL: the recipe literals the Button-only probe must not find (`dropStrings`; spec D23).
+ * Functions (the resolver) are skipped. Errors: the module does not exist (the probe would pass
+ * vacuously), it holds fewer than `min` distinct literals, a value holds none of
+ * {@link MOTION_RECIPE_MARKERS} (not a recipe), or an export is neither a string, a record of
+ * strings nor a function.
  */
 export async function motionRecipeLiterals(dist, { min = MOTION_RECIPE_MIN } = {}) {
   const file = join(realpathSync(resolve(dist)), MOTION_MODULE);
@@ -1863,6 +1879,26 @@ export async function motionRecipeLiterals(dist, { min = MOTION_RECIPE_MIN } = {
     );
   }
   return { literals, errors };
+}
+
+/**
+ * The values of the recipes `names` of `dist/lib/motion.mjs` (imported by file URL), in the order
+ * of `names`: the literals a positive control looks for in the bundle of the component that uses
+ * them (spec §2.10). Errors: the module does not exist, or a name is not a string export.
+ */
+export async function motionRecipeValues(dist, names) {
+  const file = join(realpathSync(resolve(dist)), MOTION_MODULE);
+  if (!existsSync(file)) {
+    return { strings: [], errors: [`${MOTION_MODULE} does not exist in dist`] };
+  }
+  const mod = await import(pathToFileURL(file).href);
+  const strings = [];
+  const errors = [];
+  for (const name of names) {
+    if (typeof mod[name] === 'string') strings.push(mod[name]);
+    else errors.push(`${MOTION_MODULE} exports no recipe string ${name}`);
+  }
+  return { strings, errors };
 }
 
 /**
@@ -2044,11 +2080,17 @@ export async function verifyDist(
         ...BUTTON_ONLY_STRINGS,
       })),
     );
+    // D23 (0.15): an import of only Button holds no presence core, no motion module, no recipe
+    // literal of lib/motion and no presence variant in any string.
+    const motion = await motionRecipeLiterals(distRoot);
+    errors.push(...motion.errors);
     errors.push(
       ...(await probeTreeShaking(distRoot, {
         keep: 'Button',
         drop: 'Presence',
-        dropModules: [PRESENCE_MODULE],
+        dropModules: [PRESENCE_MODULE, MOTION_MODULE, MOTION_HOOK_MODULE],
+        dropStrings: motion.literals,
+        dropSubstrings: ['[presence='],
       })),
     );
     errors.push(
@@ -2123,6 +2165,22 @@ export async function verifyDist(
     );
   } catch (error) {
     errors.push(`toaster include probe failed: ${error.message}`);
+  }
+  try {
+    // D23 (0.15): the positive control of the Button-only motion probe. The Dialog's own recipe
+    // literals prove its matchers (the resolver's literal alone holds the presence variant).
+    const dialogRecipes = await motionRecipeValues(distRoot, DIALOG_MOTION_RECIPES);
+    errors.push(...dialogRecipes.errors);
+    errors.push(
+      ...(await probeIncludes(distRoot, {
+        keep: 'Dialog',
+        modules: [MOTION_MODULE, MOTION_HOOK_MODULE],
+        strings: dialogRecipes.strings,
+        substrings: ['[presence='],
+      })),
+    );
+  } catch (error) {
+    errors.push(`motion include probe failed: ${error.message}`);
   }
   let budget = null;
   try {

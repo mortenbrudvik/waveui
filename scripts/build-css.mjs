@@ -14,7 +14,9 @@
  *     files are asserted by src/styles/__tests__/tokens.test.ts), and a declaration that is
  *     `!important` in the source (the `hidden` rule) is `!important` in the output too;
  *   - the `@keyframes wave-*` rules and the `animate-wave-*`, `bg-primary` and `text-body-1`
- *     utilities are present (the sources were scanned);
+ *     utilities are present (the sources were scanned), and so are two representatives of the
+ *     motion recipes of src/lib/motion.ts (`duration-wave-gentle`,
+ *     `data-[presence=exiting]:opacity-0`);
  *   - no top-level `@layer` other than Tailwind's `properties` fallback (the output is
  *     unlayered), and no Tailwind directive or `@import` survived;
  *   - no Tailwind theme variables leak (`--spacing:`, `--font-sans:`, `--color-red-500`,
@@ -75,6 +77,10 @@ const REQUIRED_UTILITIES = [
   'animate-wave-pulse',
   'animate-wave-indeterminate',
   'animate-wave-indeterminate-rtl',
+  // Representatives of the motion recipes of src/lib/motion.ts (0.15): a Wave duration token and
+  // an exit class keyed on the presence core's phase.
+  'duration-wave-gentle',
+  'data-[presence=exiting]:opacity-0',
 ];
 
 /** Tailwind theme variables that must never ship in the precompiled CSS. */

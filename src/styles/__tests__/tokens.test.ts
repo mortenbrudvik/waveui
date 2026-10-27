@@ -1683,7 +1683,12 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     ...['spin', 'spin-slow', 'pulse', 'indeterminate', 'indeterminate-rtl'].map(
       (name) => `.animate-wave-${name}{animation:var(--animate-wave-${name})}`,
     ),
+    // The representatives of the motion recipes (lib/motion, 0.15).
+    '.duration-wave-gentle{--tw-duration:var(--wave-duration-gentle);transition-duration:var(--wave-duration-gentle)}',
+    String.raw`.data-\[presence\=exiting\]\:opacity-0[data-presence=exiting]{opacity:0}`,
   ];
+  /** The library class string that uses the motion representatives of {@link UTILITIES}. */
+  const MOTION_CLASSES = 'duration-wave-gentle data-[presence=exiting]:opacity-0';
   const KEYFRAMES = ['wave-spin', 'wave-pulse', 'wave-indeterminate', 'wave-indeterminate-rtl'].map(
     (name) => `@keyframes ${name}{to{opacity:1}}`,
   );
@@ -1794,6 +1799,14 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     ]);
     expect(await gate(GATE_CSS.replace(UTILITIES[3], ''))).toEqual([
       'styles.css: missing utility .animate-wave-spin-slow',
+    ]);
+  });
+
+  it('rejects a stylesheet without the motion recipes’ representatives (lib/motion)', async () => {
+    const [duration, exit] = UTILITIES.slice(-2);
+    expect(await gate(GATE_CSS.replace(duration, '').replace(exit, ''))).toEqual([
+      'styles.css: missing utility .duration-wave-gentle',
+      'styles.css: missing utility .data-[presence=exiting]:opacity-0',
     ]);
   });
 
@@ -1908,6 +1921,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       ];
       const utilities: SourceText[] = [
         { content: "cn('bg-primary text-body-1')", extension: 'ts' },
+        { content: `const fade = '${MOTION_CLASSES}';`, extension: 'ts' },
       ];
       expect(await gate(css, { stories, library: utilities, libraryClasses })).toEqual([
         'styles.css: contains story-only classes: motion-reduce:animate-none',
@@ -2255,7 +2269,8 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       write(
         'src/components/Box.tsx',
         "/** Keeps its container. */\nexport const box = cn('bg-primary text-body-1');\n" +
-          "export const wide = cn('w-20');\n",
+          "export const wide = cn('w-20');\n" +
+          `export const fade = '${MOTION_CLASSES}';\n`,
       );
       // Excluded by `@source not '../components/**/__tests__'`.
       write('src/components/__tests__/Box.test.tsx', 'render(<i className="w-7" />);\n');
@@ -2336,6 +2351,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       "  if (getComputedStyle(el).visibility === 'collapse') return null;",
       "  return <i className={cn('bg-primary text-body-1 wave-rtl:-scale-x-100', open && 'grid')} />;",
       '}',
+      `export const fade = '${MOTION_CLASSES}';`,
       '',
     ].join('\n');
     let project = '';
@@ -2389,7 +2405,13 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       for (const word of ['container', 'blur', 'collapse', 'visible']) {
         expect(classes, word).not.toContain(word);
       }
-      for (const name of ['bg-primary', 'text-body-1', 'grid', 'wave-rtl:-scale-x-100']) {
+      for (const name of [
+        'bg-primary',
+        'text-body-1',
+        'grid',
+        'wave-rtl:-scale-x-100',
+        ...MOTION_CLASSES.split(' '),
+      ]) {
         expect(classes, name).toContain(name);
       }
       expect(missingDirectionVariant(css, ['wave-rtl:-scale-x-100'])).toEqual([]);

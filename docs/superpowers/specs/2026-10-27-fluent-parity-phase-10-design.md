@@ -438,7 +438,17 @@ Each package owns its recipe constants in `lib/motion.ts`, its class-name keys a
 
 ## 12. Implementation notes
 
-Empty until the build; as in Phase 9, each deliberate departure from §0–§11 is recorded here with its reason.
+Where the 0.15.0 code deliberately differs from §0–§11, and why, recorded by the package that makes the change. The build's task reports hold the evidence; the CHANGELOG describes each change for users.
+
+- **§2.10, the fourth recipe marker (P10-F).** `motionRecipeLiterals` accepts `duration-wave-` beside `[presence=`, `transition` and `animate-` (plan ruling 2): the `drawerDurations` values are recipes composed with the drawer motion at run time and hold none of the other three.
+- **§2.9 check 7, functions (P10-F).** Check 7 accepts function exports (`resolveMotion`, `usesLegacyMotion`) besides strings and records of strings; the dist probe skips them too. The module holds the resolver as well as the recipes (§2.2).
+- **§2.10, `dropSubstrings` (P10-F).** The fragment is matched in the whole minified code of the bundle, not only in its string literals: stricter than "no string literal", and the minifier has dropped the comments, so a comment never counts.
+- **§2.10, the generic `dropStrings` message (P10-F).** "(an unused constant was not tree-shaken)" replaces "(an unused class-name constant …)", since the recipe literals go through the same option; five existing exact-text assertions of `scripts/__tests__/verify-dist.test.mjs` changed with it.
+- **§2.9 check 2, enter timing (P10-DLG).** A duration or curve counts only when it is not under the reduced-motion or the exiting variant: a recipe whose only duration is the exit's would time its enter with Tailwind's default.
+- **§2.10, reading the control's literals (P10-DLG).** verify-dist reads the Dialog's two literals by name with a new exported helper, `motionRecipeValues(dist, names)` (an error when the module or a name is missing), so the positive control never depends on the order of `motionRecipeLiterals`. The fixture dist of `verify-dist.test.mjs` holds `lib/motion` and `hooks/useMotion` in both formats with `Math.max(MOTION_RECIPE_MIN, 2)` recipe literals, and its Dialog resolves both recipes.
+- **§4.1, the extended `backdrop-ignored` warning (P10-DLG).** The text names both props whichever was given: ``Dialog.Content: `backdrop` and `backdropMotion` are ignored with `modalType="non-modal"`: …``. A `backdropMotion` counts as given unless it is `undefined` (`null` included, unlike the `backdrop` slot, where `null` is no slot). The assertion of the old text in `Dialog.nonModal.test.tsx` changed with it, the edit of an existing suite that D2 allows for this text.
+- **§4.1, "out of the accessibility tree" in jsdom (P10-DLG).** Testing Library's role queries do not read `inert` (they read `hidden`, `aria-hidden` and the computed `display`/`visibility`), so `queryByRole('dialog')` still finds an exiting surface. The tests assert that the surface's nearest `inert` ancestor is the positioner and find it with `{ hidden: true }`; the real exclusion is a §14 check.
+- **§2.11, the build-css test fixtures (P10-DLG).** `REQUIRED_UTILITIES` gains `duration-wave-gentle` and `data-[presence=exiting]:opacity-0`, so the fixture stylesheet of `tokens.test.ts` (`UTILITIES`) and the library sources of its end-to-end and compile fixtures gain both classes, and so does the library source of the existing case "fails the gate on a story-only class that a style entry only names in a comment" (its expected report is unchanged).
 
 ---
 

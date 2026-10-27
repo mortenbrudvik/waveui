@@ -783,7 +783,7 @@ describe('Dialog modalType="non-modal" (P6-06 D87)', () => {
     const NON_MODAL_FULL =
       '[WaveUI] Dialog.Content: `size="full"` with `modalType="non-modal"` covers the whole page while leaving it usable, so Tab reaches controls hidden behind the dialog. Use `modalType="modal"`, or a smaller size with the page\'s controls kept clear of it.';
     const BACKDROP_IGNORED =
-      '[WaveUI] Dialog.Content: `backdrop` is ignored with `modalType="non-modal"`: a non-modal dialog has no backdrop, so the page behind it stays usable.';
+      '[WaveUI] Dialog.Content: `backdrop` and `backdropMotion` are ignored with `modalType="non-modal"`: a non-modal dialog has no backdrop, so the page behind it stays usable.';
 
     let warn: ReturnType<typeof vi.spyOn>;
     beforeEach(() => {

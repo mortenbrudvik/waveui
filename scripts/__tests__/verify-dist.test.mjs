@@ -49,6 +49,7 @@ import {
   MODULE_ONLY_NAMES,
   MOTION_RECIPE_MIN,
   motionRecipeLiterals,
+  motionRecipeValues,
   OPT_IN_MODULES,
   PENDING_FLAT_EXPORTS,
   probeIncludes,
@@ -133,7 +134,10 @@ function goodFiles() {
   const field = component('Field');
   const infoButton = component('InfoButton', [], 'infoButtonClassNames');
   const card = component('Card', ['Header']);
-  const dialog = component('Dialog', ['Trigger', 'Content']);
+  // The Dialog resolves its two recipes through the motion hook (0.15), so an import of only
+  // Dialog holds `lib/motion`, `hooks/useMotion` and both recipe literals.
+  const dialog = withDialogMotion(component('Dialog', ['Trigger', 'Content']));
+  const motion = fixtureMotionModules();
   // The presence core (0.7): a hook and a component on it, with React external.
   const usePresence = {
     esm:
@@ -311,6 +315,10 @@ function createToaster() {
           'dist/components/layout/Card.cjs': card.cjs,
           'dist/components/overlays/Dialog.mjs': dialog.esm,
           'dist/components/overlays/Dialog.cjs': dialog.cjs,
+          'dist/lib/motion.mjs': motion.module.esm,
+          'dist/lib/motion.cjs': motion.module.cjs,
+          'dist/hooks/useMotion.mjs': motion.hook.esm,
+          'dist/hooks/useMotion.cjs': motion.hook.cjs,
           'dist/hooks/usePresence.mjs': usePresence.esm,
           'dist/hooks/usePresence.cjs': usePresence.cjs,
           'dist/components/motion/Presence.mjs': presence.esm,
@@ -2612,51 +2620,110 @@ const MOTION_LITERALS = [
 ];
 
 /**
+ * The resolver of a fixture `lib/motion` (without its export), whose own literal holds the
+ * presence-variant text, as the real module's does.
+ */
+const MOTION_RESOLVER =
+  "const PRESENCE_VARIANT = '[presence=';\n" +
+  'function resolveMotion(slot, recipe, preference, legacyClassName) {\n' +
+  "  if (slot === null) return '';\n" +
+  "  if (slot !== undefined) return typeof slot === 'string' ? slot : slot.className;\n" +
+  "  if (preference === 'none') return '';\n" +
+  "  if (legacyClassName !== undefined && legacyClassName.includes(PRESENCE_VARIANT)) return '';\n" +
+  '  return recipe;\n' +
+  '}\n';
+
+/**
  * A fixture `lib/motion.mjs`: the recipes, the durations, `extra` exports and the resolver, whose
  * own literal holds the presence-variant text, as the real module's does.
  */
 function motionModule(extra = '') {
   return (
-    "const PRESENCE_VARIANT = '[presence=';\n" +
+    MOTION_RESOLVER +
     Object.entries(MOTION_RECIPES)
       .map(([name, value]) => `export const ${name} = '${value}';\n`)
       .join('') +
     `export const drawerDurations = ${JSON.stringify(MOTION_DURATIONS)};\n` +
     extra +
-    'export function resolveMotion(slot, recipe, preference, legacyClassName) {\n' +
-    "  if (slot === null) return '';\n" +
-    "  if (slot !== undefined) return typeof slot === 'string' ? slot : slot.className;\n" +
-    "  if (preference === 'none') return '';\n" +
-    "  if (legacyClassName !== undefined && legacyClassName.includes(PRESENCE_VARIANT)) return '';\n" +
-    '  return recipe;\n' +
-    '}\n'
+    'export { resolveMotion };\n'
   );
 }
 
 /**
- * The good files with the motion modules: `lib/motion`, `hooks/useMotion` on it, and a Dialog
- * that resolves its recipe through both (an import of only Dialog holds them), then `overrides`.
+ * The recipes of the good files' `lib/motion` (0.15): the Dialog's two, then generated ones up to
+ * {@link MOTION_RECIPE_MIN}, so `verifyDist`'s default minimum holds as INTEGRATION raises it.
  */
-function motionFixture(overrides = {}) {
-  const files = goodFiles();
-  const dialog = 'dist/components/overlays/Dialog.mjs';
-  return fixture({
-    'dist/lib/motion.mjs': motionModule(),
-    'dist/hooks/useMotion.mjs':
-      `${DIRECTIVE}import { resolveMotion } from '../lib/motion.mjs';\n` +
-      "export function useMotionClasses(slot, recipe) { return resolveMotion(slot, recipe, 'default'); }\n",
-    [dialog]: files[dialog]
+function fixtureMotionRecipes() {
+  const recipes = {
+    dialogMotion: MOTION_RECIPES.dialogMotion,
+    dialogBackdropMotion: MOTION_RECIPES.dialogBackdropMotion,
+  };
+  for (let i = Object.keys(recipes).length; i < Math.max(MOTION_RECIPE_MIN, 2); i++) {
+    recipes[`fixtureMotion${i}`] =
+      `transition-opacity duration-wave-fast ease-wave-easy-ease motion-reduce:transition-none data-[presence=exiting]:opacity-${i}`;
+  }
+  return recipes;
+}
+
+/**
+ * The good files' motion modules in both formats: `lib/motion` (the recipes of
+ * {@link fixtureMotionRecipes} and the resolver) and `hooks/useMotion` on it.
+ */
+function fixtureMotionModules() {
+  const recipes = Object.entries(fixtureMotionRecipes());
+  return {
+    module: {
+      esm:
+        MOTION_RESOLVER +
+        recipes.map(([name, value]) => `export const ${name} = '${value}';\n`).join('') +
+        'export { resolveMotion };\n',
+      cjs:
+        MOTION_RESOLVER +
+        recipes.map(([name, value]) => `exports.${name} = '${value}';\n`).join('') +
+        'exports.resolveMotion = resolveMotion;\n',
+    },
+    hook: {
+      esm:
+        `${DIRECTIVE}import { resolveMotion } from '../lib/motion.mjs';\n` +
+        "export function useMotionClasses(slot, recipe) { return resolveMotion(slot, recipe, 'default'); }\n",
+      cjs:
+        `${DIRECTIVE}const { resolveMotion } = require('../lib/motion.cjs');\n` +
+        "exports.useMotionClasses = function useMotionClasses(slot, recipe) { return resolveMotion(slot, recipe, 'default'); };\n",
+    },
+  };
+}
+
+/** The motion classes of the good files' Dialog: its surface's and its backdrop's recipe. */
+const DIALOG_MOTION_CALLS =
+  'useMotionClasses(props.motion, dialogMotion), useMotionClasses(props.backdropMotion, dialogBackdropMotion), ';
+
+/** `dialog` (the fixture's component modules) resolving its two recipes in its render. */
+function withDialogMotion(dialog) {
+  return {
+    esm: dialog.esm
       .replace(
         DIRECTIVE,
-        `${DIRECTIVE}import { dialogMotion } from '../../lib/motion.mjs';\n` +
+        `${DIRECTIVE}import { dialogBackdropMotion, dialogMotion } from '../../lib/motion.mjs';\n` +
           "import { useMotionClasses } from '../../hooks/useMotion.mjs';\n",
       )
+      .replace('return cn(', `return cn(${DIALOG_MOTION_CALLS}`),
+    cjs: dialog.cjs
       .replace(
-        /function \w+\(props\) \{ /,
-        (match) => `${match}useMotionClasses(props.motion, dialogMotion); `,
-      ),
-    ...overrides,
-  });
+        DIRECTIVE,
+        `${DIRECTIVE}const { dialogBackdropMotion, dialogMotion } = require('../../lib/motion.cjs');\n` +
+          "const { useMotionClasses } = require('../../hooks/useMotion.cjs');\n",
+      )
+      .replace('return cn(', `return cn(${DIALOG_MOTION_CALLS}`),
+  };
+}
+
+/**
+ * The good files (whose Dialog resolves its recipes through `hooks/useMotion`, so an import of
+ * only Dialog holds both motion modules) with the recipes and durations of {@link motionModule},
+ * then `overrides`.
+ */
+function motionFixture(overrides = {}) {
+  return fixture({ 'dist/lib/motion.mjs': motionModule(), ...overrides });
 }
 
 /** Button's module with `code` added to its render (before its `return`). */
@@ -2676,8 +2743,32 @@ describe('motionRecipeLiterals (spec §2.10, D23)', () => {
     });
   });
 
-  it('defaults to a non-negative minimum', () => {
-    expect(Number.isInteger(MOTION_RECIPE_MIN) && MOTION_RECIPE_MIN >= 0).toBe(true);
+  it('defaults to a minimum of at least the Dialog’s two recipes', () => {
+    expect(Number.isInteger(MOTION_RECIPE_MIN) && MOTION_RECIPE_MIN >= 2).toBe(true);
+  });
+
+  it('reads the good files’ recipes at the default minimum, exports in name order', async () => {
+    // A module namespace lists its exports sorted by name (code units).
+    const byName = Object.entries(fixtureMotionRecipes()).sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    );
+    expect(await motionRecipeLiterals(fixture().dist)).toEqual({
+      literals: byName.map(([, value]) => value),
+      errors: [],
+    });
+    expect(byName).toHaveLength(Math.max(MOTION_RECIPE_MIN, 2));
+  });
+
+  it('reports fewer literals than the default minimum', async () => {
+    const { dist } = fixture({
+      'dist/lib/motion.mjs': `export const dialogMotion = '${MOTION_RECIPES.dialogMotion}';\n`,
+    });
+    expect(await motionRecipeLiterals(dist)).toEqual({
+      literals: [MOTION_RECIPES.dialogMotion],
+      errors: [
+        `lib/motion.mjs holds 1 recipe literals, fewer than the minimum of ${MOTION_RECIPE_MIN}`,
+      ],
+    });
   });
 
   it('reports fewer literals than the minimum', async () => {
@@ -2704,8 +2795,37 @@ describe('motionRecipeLiterals (spec §2.10, D23)', () => {
     ]);
   });
 
+  it('motionRecipeValues reads named recipes: the Dialog’s, for the positive control', async () => {
+    expect(
+      await motionRecipeValues(fixture().dist, ['dialogMotion', 'dialogBackdropMotion']),
+    ).toEqual({
+      strings: [MOTION_RECIPES.dialogMotion, MOTION_RECIPES.dialogBackdropMotion],
+      errors: [],
+    });
+  });
+
+  it('motionRecipeValues reports a name that is no string export, and a missing module', async () => {
+    const { dist } = motionFixture();
+    expect(
+      await motionRecipeValues(dist, ['dialogMotion', 'drawerDurations', 'resolveMotion', 'gone']),
+    ).toEqual({
+      strings: [MOTION_RECIPES.dialogMotion],
+      errors: [
+        'lib/motion.mjs exports no recipe string drawerDurations',
+        'lib/motion.mjs exports no recipe string resolveMotion',
+        'lib/motion.mjs exports no recipe string gone',
+      ],
+    });
+    const { dist: bare } = fixture({ 'dist/lib/motion.mjs': null });
+    expect(await motionRecipeValues(bare, ['dialogMotion'])).toEqual({
+      strings: [],
+      errors: ['lib/motion.mjs does not exist in dist'],
+    });
+  });
+
   it('reports a dist without lib/motion.mjs (the probe would pass vacuously)', async () => {
-    expect(await motionRecipeLiterals(fixture().dist, { min: 0 })).toEqual({
+    const { dist } = fixture({ 'dist/lib/motion.mjs': null });
+    expect(await motionRecipeLiterals(dist, { min: 0 })).toEqual({
       literals: [],
       errors: ['lib/motion.mjs does not exist in dist'],
     });
@@ -2774,7 +2894,7 @@ describe('probeTreeShaking: the motion recipes of a Button-only bundle (spec §2
       'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
     ]);
     expect(await probeTreeShaking(inComment.dist, probe)).toEqual([]);
-  });
+  }, 30_000);
 });
 
 describe('probeIncludes: strings and substrings (the positive control of D23)', () => {
@@ -2790,13 +2910,14 @@ describe('probeIncludes: strings and substrings (the positive control of D23)', 
   });
 
   it('reports a literal the bundle lacks, matched whole', async () => {
+    // The Dialog reads no drawer duration, and a recipe's word is no literal of its own.
     expect(
       await probeIncludes(motionFixture().dist, {
         ...dialogMotion,
-        strings: [MOTION_RECIPES.dialogBackdropMotion, 'data-[presence=exiting]:opacity-0'],
+        strings: [MOTION_DURATIONS.large, 'data-[presence=exiting]:opacity-0'],
       }),
     ).toEqual([
-      `the bundle of an import of only Dialog lacks the string "${MOTION_RECIPES.dialogBackdropMotion}"`,
+      `the bundle of an import of only Dialog lacks the string "${MOTION_DURATIONS.large}"`,
       'the bundle of an import of only Dialog lacks the string "data-[presence=exiting]:opacity-0"',
     ]);
   });
@@ -2819,7 +2940,7 @@ describe('probeIncludes: strings and substrings (the positive control of D23)', 
     ).toEqual([
       'the bundle of an import of only Button lacks "[presence=" outside comments (its minified code)',
     ]);
-  });
+  }, 30_000);
 });
 
 describe('verifyDist and main', () => {
@@ -2893,6 +3014,55 @@ describe('verifyDist and main', () => {
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual([
       'hooks/usePresence.mjs is in the bundle of an import of only Button (Presence must be dropped)',
+    ]);
+  }, 30_000);
+
+  it('runs the motion probe: a Button bundle with a recipe literal fails (D23)', async () => {
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        `const motion = '${MOTION_RECIPES.dialogMotion}';`,
+      ).replace('cn(buttonClassNames.root, ', 'cn(buttonClassNames.root, motion, '),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      `the bundle of an import of only Button contains the string "${MOTION_RECIPES.dialogMotion}" (an unused constant was not tree-shaken)`,
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+  }, 30_000);
+
+  it('runs the motion probe: a Button bundle with the motion modules fails (D23)', async () => {
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        '',
+        "import { useMotionClasses } from '../../hooks/useMotion.mjs';\n",
+      ).replace(
+        'cn(buttonClassNames.root, ',
+        "cn(buttonClassNames.root, useMotionClasses(props.motion, ''), ",
+      ),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'hooks/useMotion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
+      'lib/motion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+  }, 30_000);
+
+  it('runs the motion control: a Dialog bundle without one of its recipes fails (D23)', async () => {
+    const dialog = 'dist/components/overlays/Dialog.mjs';
+    const files = goodFiles();
+    expect(files[dialog]).toContain(
+      'useMotionClasses(props.backdropMotion, dialogBackdropMotion), ',
+    );
+    const { dist } = fixture({
+      [dialog]: files[dialog].replace(
+        'useMotionClasses(props.backdropMotion, dialogBackdropMotion), ',
+        '',
+      ),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      `the bundle of an import of only Dialog lacks the string "${MOTION_RECIPES.dialogBackdropMotion}"`,
     ]);
   }, 30_000);
 
