@@ -58,6 +58,9 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   (100 ms) with the min accelerating curve. It lists the properties it moves and never the one
  *   floating-ui places the popup with, so the popup never glides from its last position; a popup
  *   that renders no side only fades.
+ * - `tooltipMotion`, the Tooltip surface: opacity only. It fades in from transparent and back out
+ *   over the faster duration (100 ms) with the easy-ease curve, both ways, and does not slide. Like
+ *   the popups, it never lists the property floating-ui places the surface with.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -145,6 +148,10 @@ export const inlineDrawerMotion: Readonly<Record<'width' | 'height', string>> = 
  */
 export const popupMotion =
   'transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-faster data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[side=top]:data-[presence=entering]:starting:translate-y-1 data-[side=top]:data-[presence=exiting]:translate-y-1 data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 data-[side=bottom]:data-[presence=exiting]:-translate-y-1 data-[side=left]:data-[presence=entering]:starting:translate-x-1 data-[side=left]:data-[presence=exiting]:translate-x-1 data-[side=right]:data-[presence=entering]:starting:-translate-x-1 data-[side=right]:data-[presence=exiting]:-translate-x-1'; // wave-allow-physical: data-side is the resolved physical side
+
+/** The Tooltip surface's default motion: a fade, 100 ms both ways, without a slide. */
+export const tooltipMotion =
+  'transition-opacity duration-wave-faster ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */
 const PRESENCE_VARIANT = '[presence=';

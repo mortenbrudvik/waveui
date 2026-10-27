@@ -14,8 +14,9 @@
  *    animation;
  * 4. every class with the `starting` variant is gated on the entering phase;
  * 5. a recipe of a positioned surface ({@link POSITIONED_RECIPES}) never transitions `transform`
- *    (floating-ui positions the surface with it), and one that slides
- *    ({@link SLIDING_POSITIONED_RECIPES}) lists `translate` in its transition;
+ *    (floating-ui positions the surface with it); one that slides
+ *    ({@link SLIDING_POSITIONED_RECIPES}) lists `translate` in the transition of its enter, and one
+ *    that only fades ({@link FADING_POSITIONED_RECIPES}) transitions `opacity` alone;
  * 6. a backdrop exits with its surface's exit duration (D16: the core waits only for the surface,
  *    so a longer backdrop would be cut off), per pair of {@link BACKDROP_PAIRS}; a backdrop per
  *    size ({@link SIZED_BACKDROP_PAIRS}) takes its size's duration both ways and exits with its
@@ -348,10 +349,13 @@ function ungatedStarts(value: string): string[] {
  * `transform`, so a transition of that property would slide them from their last position (or the
  * viewport's corner) every time they move.
  */
-const POSITIONED_RECIPES = ['popupMotion'];
+const POSITIONED_RECIPES = ['popupMotion', 'tooltipMotion'];
 
 /** Check 5 (D4, plan ruling 3): the positioned recipes that slide, so must list `translate`. */
 const SLIDING_POSITIONED_RECIPES = ['popupMotion'];
+
+/** Check 5 (plan ruling 3): the positioned recipes that only fade, so transition `opacity` alone. */
+const FADING_POSITIONED_RECIPES = ['tooltipMotion'];
 
 /** The transition utilities that transition `transform`: every property, or that one by name. */
 const TRANSFORM_TRANSITIONS = new Set(['transition', 'transition-all', 'transition-transform']);
@@ -377,14 +381,36 @@ function transformTransitions(value: string): string[] {
   });
 }
 
-/** Check 5: whether a transition of `value` (not under reduced motion) lists `translate`. */
+/**
+ * Check 5: whether a transition of `value` lists `translate` for the enter. A list counts under any
+ * variant except the reduced-motion one (it moves nothing while motion is allowed) and the exiting
+ * one (it would leave the enter without the slide), as check 2 counts timing.
+ */
 function listsTranslate(value: string): boolean {
   return words(value)
     .map(parseWord)
     .some(
       ({ variants, utility }) =>
-        !isReduced(variants) && arbitraryTransitionList(utility).includes('translate'),
+        !isReduced(variants) &&
+        !variants.includes(EXITING) &&
+        arbitraryTransitionList(utility).includes('translate'),
     );
+}
+
+/**
+ * Check 5: the properties the transitions of `value` name, under any variant except the
+ * reduced-motion one, in order: each entry of an arbitrary list, the property of a named utility
+ * (`opacity`, `colors`, `all`, …), and `default` for the bare utility (Tailwind's default list).
+ */
+function transitionedProperties(value: string): string[] {
+  return words(value)
+    .map(parseWord)
+    .filter(({ variants, utility }) => !isReduced(variants) && isTransition(utility))
+    .flatMap(({ utility }) => {
+      const list = arbitraryTransitionList(utility);
+      if (list.length > 0) return list;
+      return utility === 'transition' ? ['default'] : [utility.slice('transition-'.length)];
+    });
 }
 
 /**
@@ -720,19 +746,42 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       ]);
     });
 
-    it('reads whether a transition lists translate', () => {
+    it('reads whether a transition lists translate for the enter', () => {
       expect(listsTranslate('transition-[opacity,translate] duration-wave-fast')).toBe(true);
-      expect(listsTranslate('data-[presence=exiting]:transition-[translate,opacity]')).toBe(true);
+      expect(
+        listsTranslate('data-[side=top]:transition-[opacity,translate] duration-wave-fast'),
+      ).toBe(true);
+      expect(listsTranslate('data-[presence=exiting]:transition-[translate,opacity]')).toBe(false);
       expect(listsTranslate('transition-[opacity,scale] data-[side=top]:translate-y-1')).toBe(
         false,
       );
       expect(listsTranslate('transition-opacity motion-reduce:transition-[translate]')).toBe(false);
     });
 
+    it('reads the properties a recipe transitions, outside reduced motion', () => {
+      expect(
+        transitionedProperties(
+          'transition-opacity duration-wave-fast motion-reduce:transition-none data-[presence=exiting]:opacity-0',
+        ),
+      ).toEqual(['opacity']);
+      expect(
+        transitionedProperties(
+          'transition-[opacity,translate] data-[presence=exiting]:transition-colors transition motion-reduce:transition-[scale]',
+        ),
+      ).toEqual(['opacity', 'translate', 'colors', 'default']);
+      expect(transitionedProperties('duration-wave-fast motion-reduce:transition-none')).toEqual(
+        [],
+      );
+    });
+
     it('holds for every positioned recipe, a string export of the module', () => {
       const exports: Readonly<Record<string, unknown>> = motion;
       expect(POSITIONED_RECIPES.length).toBeGreaterThan(0);
-      for (const name of [...POSITIONED_RECIPES, ...SLIDING_POSITIONED_RECIPES]) {
+      // Every positioned recipe either slides or only fades, so a new one is checked for one of them.
+      expect([...POSITIONED_RECIPES].sort()).toEqual(
+        [...SLIDING_POSITIONED_RECIPES, ...FADING_POSITIONED_RECIPES].sort(),
+      );
+      for (const name of POSITIONED_RECIPES) {
         expect(typeof exports[name], name).toBe('string');
       }
       expect(
@@ -742,6 +791,14 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       ).toEqual([]);
       expect(
         SLIDING_POSITIONED_RECIPES.filter((name) => !listsTranslate(String(exports[name]))),
+      ).toEqual([]);
+      expect(
+        FADING_POSITIONED_RECIPES.flatMap((name) => {
+          const properties = transitionedProperties(String(exports[name]));
+          return properties.length === 1 && properties[0] === 'opacity'
+            ? []
+            : [`${name}: ${properties.join(', ') || 'nothing'}`];
+        }),
       ).toEqual([]);
     });
   });

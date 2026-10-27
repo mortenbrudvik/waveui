@@ -5,19 +5,22 @@ import { tooltipClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { FOCUSABLE_SELECTOR, getFirstTabbable } from '../../lib/focus';
+import { tooltipMotion } from '../../lib/motion';
 import {
   isCloneableElement,
   renderTrigger,
   STATE_ARIA,
   unwrapFragment,
 } from '../../lib/renderTrigger';
-import type { PopupAlign, PopupPositioningOptions, PopupSide } from '../../lib/types';
+import type { MotionSlot, PopupAlign, PopupPositioningOptions, PopupSide } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useDismiss } from '../../hooks/useDismiss';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
+import { usePresence } from '../../hooks/usePresence';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { Portal } from '../portal/Portal';
 
@@ -94,6 +97,17 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
    * @default `{ offset: 8 }`
    */
   positioning?: PopupPositioningOptions;
+  /**
+   * The motion of the tooltip's surface (the portaled box; `className` stays on the wrapper
+   * `<span>`). By default it fades in over 100 ms and out over 100 ms with the easy-ease curve,
+   * without a slide; under reduced motion it appears and disappears at once. `null` turns the
+   * motion off (the surface still renders its `data-presence` phases, which then end at once); a
+   * class string or `{ className }` replaces the default classes with yours (see `MotionSlot`),
+   * also under a `WaveProvider` with `motion="none"`, which otherwise turns the default off. A
+   * WaveUI addition: Fluent's Tooltip has no motion.
+   * @default the fade above
+   */
+  motion?: MotionSlot | null;
   /**
    * A single element that triggers the tooltip on hover and focus: it receives the
    * `aria-describedby`/`aria-labelledby`, plus any `id` and `aria-*` props given to the Tooltip
@@ -270,8 +284,13 @@ function useRelationshipTarget(
  * - The text is always present as a hidden `role="tooltip"` element referenced by the child's
  *   `aria-describedby` (or `aria-labelledby` with `relationship="label"`), so screen readers get
  *   it on focus without waiting for the delay; the child's own ids are kept.
- * - The visual surface is rendered in a portal only while visible (it is `aria-hidden`, a copy of
- *   the description), positioned on `side`/`align` with flipping and shifting to stay in view.
+ * - The visual surface is rendered in a portal while visible (it is `aria-hidden`, a copy of the
+ *   description), positioned on `side`/`align` with flipping and shifting to stay in view.
+ * - It fades in and out over 100 ms (see `motion`; at once under reduced motion). The surface
+ *   mounts through the presence core: it carries `data-presence` and `data-state="open"`, and
+ *   while it fades out `data-state="closed"` and `inert`, staying where it was until its exit
+ *   ends; the Escape layer goes as it hides, not after the fade. Shown again during its exit, the
+ *   same surface fades back in. The hidden description is unchanged in every phase.
  * - It appears `openDelay` after the pointer rests on the child or the child takes keyboard focus,
  *   stays visible while the pointer moves onto it, hides `closeDelay` after the pointer leaves or
  *   immediately on blur, and Escape hides it without closing an enclosing dialog or popover. Focus
@@ -320,6 +339,7 @@ export const Tooltip = ({
   side = 'top',
   align = 'center',
   positioning,
+  motion,
   children,
   className,
   onMouseEnter,
@@ -349,7 +369,12 @@ export const Tooltip = ({
   const surfaceRef = React.useRef<HTMLSpanElement | null>(null);
   const tooltipId = useId('tooltip');
 
+  // The surface mounts and unmounts through the presence core, and enters also when it mounts
+  // visible (a tooltip open by default fades in on a client render as after hydration); the
+  // positioning and the Escape layer key on `visible`, so they go as it hides, not after its exit.
   // Destructured: react-hooks/refs treats an object whose member is passed to `ref` as a ref.
+  const { isMounted, ref: presenceRef, presenceProps } = usePresence(visible, { appear: true });
+  const motionClassName = useMotionClasses(motion, tooltipMotion);
   const { setReference, setFloating, floatingProps } = usePopupPosition({
     open: visible,
     side,
@@ -357,7 +382,7 @@ export const Tooltip = ({
     ...resolvePositioning(positioning, { offset: 8 }),
   });
   const wrapperElementRef = useMergedRefs<HTMLSpanElement>(ref, wrapperRef, setReference);
-  const surfaceElementRef = useMergedRefs<HTMLSpanElement>(surfaceRef, setFloating);
+  const surfaceElementRef = useMergedRefs<HTMLSpanElement>(surfaceRef, setFloating, presenceRef);
 
   // Timer handlers are event callbacks (stable, latest state): they are composed with the
   // consumer's handlers during render but only run from events and timers.
@@ -460,14 +485,21 @@ export const Tooltip = ({
       <span id={tooltipId} role="tooltip" hidden>
         {content}
       </span>
-      {visible && (
+      {isMounted && (
         <Portal layer="tooltip">
           <span
             ref={surfaceElementRef}
             aria-hidden="true"
             data-wave-tooltip-surface=""
+            data-state={visible ? 'open' : 'closed'}
+            {...presenceProps}
             {...floatingProps}
-            className={cn(tooltipClassNames.content, surfaceClasses, appearanceClasses[appearance])}
+            className={cn(
+              tooltipClassNames.content,
+              surfaceClasses,
+              appearanceClasses[appearance],
+              motionClassName,
+            )}
           >
             {content}
           </span>
