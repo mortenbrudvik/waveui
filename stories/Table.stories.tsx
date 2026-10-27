@@ -335,17 +335,29 @@ const sharedFiles = [
 
 /**
  * `truncate` keeps the text and the description to one line each, ending in an ellipsis, where the
- * width of the column is bounded (here by a width on the cell).
+ * width of the column is bounded: here by the fixed table layout (`table-fixed`) and a width on
+ * the column's header cell. (In the automatic layout a cell's width is only a minimum: the column
+ * grows to fit the text that does not wrap.) Below its minimum width (`min-w-96`) the table
+ * scrolls, and `containerProps['aria-label']` names the scroll region.
  */
 export const TruncatedCellLayout: Story = {
-  args: { 'aria-label': 'Shared files' },
+  args: {
+    'aria-label': 'Shared files',
+    className: 'min-w-96 table-fixed',
+    containerProps: { 'aria-label': 'Shared files' },
+  },
   render: (args) => (
     <Table {...args}>
-      {header(['File', 'Owner'])}
+      <Table.Header>
+        <tr>
+          <Table.HeaderCell className="w-64">File</Table.HeaderCell>
+          <Table.HeaderCell>Owner</Table.HeaderCell>
+        </tr>
+      </Table.Header>
       <Table.Body>
         {sharedFiles.map((file) => (
           <Table.Row key={file.name}>
-            <Table.Cell className="max-w-64">
+            <Table.Cell>
               <Table.CellLayout truncate description={file.note} title={file.name}>
                 {file.name}
               </Table.CellLayout>

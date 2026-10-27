@@ -208,6 +208,9 @@ export const GroupsWithDividers: Story = {
 /**
  * A Toolbar around an Overflow: the toolbar keeps its single Tab stop and arrow-key order over the
  * items that are shown (hidden items are skipped), and the groups' dividers hide with their group.
+ * The Toolbar is a block-level flex row (`className="flex"`) as wide as its container, so the
+ * Overflow's room follows the container: an inline toolbar would shrink to the items it shows and
+ * never give the Overflow room to show the hidden ones again.
  */
 export const InToolbarWithGroups: Story = {
   args: {
@@ -241,7 +244,7 @@ export const InToolbarWithGroups: Story = {
   },
   render: (args) => (
     <div className="w-[420px] max-w-full">
-      <Toolbar aria-label="Document tools">
+      <Toolbar aria-label="Document tools" className="flex">
         <Overflow {...args} />
       </Toolbar>
     </div>
