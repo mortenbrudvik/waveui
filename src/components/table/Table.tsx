@@ -187,8 +187,9 @@ export interface TableSelectionCellProps extends Omit<
   /** The form must not be submitted while the control is unchecked (native validation). */
   required?: boolean;
   /**
-   * Draws an unchecked control only while its row (a `Table.Row`) is hovered or holds focus;
-   * forced colors and a coarse pointer (touch) always draw it. It stays focusable and named.
+   * Draws an unchecked control only while its row (a `Table.Row`) is hovered or holds focus; its
+   * own keyboard focus, forced colors and a coarse pointer (touch) always draw it. It stays
+   * focusable and named.
    * @default false
    */
   subtle?: boolean;

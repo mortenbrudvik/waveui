@@ -50,12 +50,12 @@ export const SELECTION_CELL_CLASSES = 'w-10 px-3 py-3 border-b border-border';
 
 /**
  * A subtle control is transparent while it is not checked, until the group named by `reveal` is
- * hovered or holds focus; forced colors and a coarse pointer (touch) always draw it. It stays
- * focusable and named.
+ * hovered or holds focus; its own keyboard focus, forced colors and a coarse pointer (touch) always
+ * draw it (a control outside such a group still shows its focus ring). It stays focusable and named.
  */
 const SUBTLE_CONTROL_CLASSES = {
-  row: 'opacity-0 group-hover/table-row:opacity-100 group-focus-within/table-row:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
-  grid: 'opacity-0 group-hover/grid:opacity-100 group-focus-within/grid:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
+  row: 'opacity-0 group-hover/table-row:opacity-100 group-focus-within/table-row:opacity-100 focus-visible:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
+  grid: 'opacity-0 group-hover/grid:opacity-100 group-focus-within/grid:opacity-100 focus-visible:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
 } as const;
 
 /** Properties of {@link TableSelectionControl}. */
@@ -69,7 +69,8 @@ export interface TableSelectionControlProps extends Omit<
   checked: boolean | 'mixed';
   /**
    * Transparent while not checked, until the group named by `reveal` is hovered or holds focus
-   * (forced colors and a coarse pointer always draw it). It stays focusable and named.
+   * (its own keyboard focus, forced colors and a coarse pointer always draw it). It stays focusable
+   * and named.
    * @default false
    */
   subtle?: boolean;

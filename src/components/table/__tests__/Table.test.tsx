@@ -1263,6 +1263,21 @@ describe('Table.SelectionCell', () => {
       expect(checkbox()).not.toHaveAttribute('tabindex', '-1');
     });
 
+    it('draws a subtle control while it has keyboard focus, also in a plain row', () => {
+      render(
+        <table>
+          <tbody>
+            <tr>
+              <Table.SelectionCell subtle aria-label="Select Alpha" />
+            </tr>
+          </tbody>
+        </table>,
+      );
+      // No `Table.Row` group around it: its own focus must lift it, or Tab lands on a control
+      // whose focus ring is drawn transparent.
+      expect(checkbox()).toHaveClass('opacity-0', 'focus-visible:opacity-100');
+    });
+
     it('draws no subtle classes by default', () => {
       render(
         <CellRow>

@@ -4643,6 +4643,18 @@ describe('DataGrid subtleSelection', () => {
     expect(selectAll).not.toHaveClass('opacity-0');
   });
 
+  it('draws a subtle control while it has keyboard focus', () => {
+    renderGrid({ selectionMode: 'multiple', subtleSelection: true });
+    expect(screen.getByRole('checkbox', { name: 'Alice' })).toHaveClass(
+      'opacity-0',
+      'focus-visible:opacity-100',
+    );
+    expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toHaveClass(
+      'opacity-0',
+      'focus-visible:opacity-100',
+    );
+  });
+
   it('applies to the radios of single mode', () => {
     renderGrid({ selectionMode: 'single', subtleSelection: true, defaultSelectedItems: ['1'] });
     expect(screen.getByRole('radio', { name: 'Bob' })).toHaveClass(...SUBTLE_ROW);
