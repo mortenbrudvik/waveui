@@ -674,8 +674,8 @@ export const OverflowItem = ({
   React.useEffect(() => {
     if (!wrapsChildren) return;
     warnOnce(
-      'OverflowItem:as-child-children',
-      'OverflowItem: asChild expects a single React element child (not text or several ' +
+      'Overflow.Item:as-child-children',
+      'Overflow.Item: asChild expects a single React element child (not text or several ' +
         'elements); the children are rendered inside a <div> instead.',
     );
   }, [wrapsChildren]);

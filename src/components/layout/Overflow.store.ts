@@ -76,11 +76,19 @@ export interface ItemMeta {
   groupId: string | undefined;
 }
 
-/** The visibility of each item group, by `groupId`. */
+/**
+ * The visibility of each item group, by `groupId`. Records have no prototype, so a `groupId` such
+ * as `constructor` or `__proto__` is an entry like any other.
+ */
 export type GroupVisibilityRecord = Record<string, OverflowGroupVisibility>;
 
+/** A new record without a prototype. */
+function groupRecord(): GroupVisibilityRecord {
+  return Object.create(null) as GroupVisibilityRecord;
+}
+
 /** The empty record. Like `NO_IDS`, records are compared by identity and never handed out. */
-export const NO_GROUPS: GroupVisibilityRecord = {};
+export const NO_GROUPS: GroupVisibilityRecord = /* @__PURE__ */ groupRecord();
 
 /** What the store was told by the root's props. */
 export interface StoreConfig {
@@ -476,7 +484,7 @@ export class OverflowStore {
     members: ReadonlyMap<string, number>,
     shown: ReadonlyMap<string, number>,
   ): GroupVisibilityRecord {
-    const next: GroupVisibilityRecord = {};
+    const next = groupRecord();
     for (const [groupId, total] of members) {
       const count = shown.get(groupId) ?? 0;
       next[groupId] = count === 0 ? 'hidden' : count === total ? 'visible' : 'overflow';

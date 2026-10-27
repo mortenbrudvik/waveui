@@ -1942,6 +1942,56 @@ describe('Overflow - groups, divider, hooks and asChild (P9-01)', () => {
       expect(screen.getByTestId('group-nobody')).toHaveTextContent('visible');
     });
 
+    // The group record has no prototype: a group id that names an Object.prototype member is
+    // neither read from it nor dropped.
+    it.each(['constructor', '__proto__', 'toString'])(
+      'treats the group id %s like any other',
+      (groupId) => {
+        layoutWith({ ...GROUPS });
+        const onChange = vi.fn();
+        render(
+          <Overflow data-testid="overflow" overflowButton={moreButton} onOverflowChange={onChange}>
+            <OverflowItem itemId="a" groupId="one" data-testid="item-a">
+              A<GroupProbe id={groupId} />
+            </OverflowItem>
+            <OverflowItem itemId="b" groupId="one" data-testid="item-b">
+              B
+            </OverflowItem>
+            <OverflowDivider groupId={groupId} data-testid="divider">
+              |
+            </OverflowDivider>
+            <OverflowItem itemId="c" groupId={groupId} data-testid="item-c">
+              C
+            </OverflowItem>
+            <OverflowItem itemId="d" groupId={groupId} data-testid="item-d">
+              D
+            </OverflowItem>
+          </Overflow>,
+        );
+        expect(hiddenItems()).toEqual(['c', 'd']);
+        expect(screen.getByTestId(`group-${groupId}`)).toHaveTextContent('hidden');
+        expect(dividerHidden()).toBe(true);
+        const details = onChange.mock.lastCall?.[1] as OverflowChangeDetails;
+        expect(Object.keys(details.groupVisibility)).toEqual(['one', groupId]);
+        expect(details.groupVisibility[groupId]).toBe('hidden');
+      },
+    );
+
+    it.each(['constructor', '__proto__', 'toString'])(
+      'treats a group %s without members as visible',
+      (groupId) => {
+        layoutWith({ ...GROUPS });
+        render(
+          <Overflow data-testid="overflow" overflowButton={moreButton}>
+            <OverflowItem itemId="a" groupId="one" data-testid="item-a">
+              <GroupProbe id={groupId} />
+            </OverflowItem>
+          </Overflow>,
+        );
+        expect(screen.getByTestId(`group-${groupId}`)).toHaveTextContent('visible');
+      },
+    );
+
     it('follows a changed groupId of a mounted item', () => {
       layoutWith({ ...GROUPS });
       const Row = ({ group }: { group: string }) => (
@@ -2313,7 +2363,7 @@ describe('Overflow - groups, divider, hooks and asChild (P9-01)', () => {
       rerender(row);
       expect(warn.mock.calls).toEqual([
         [
-          '[WaveUI] OverflowItem: asChild expects a single React element child (not text or ' +
+          '[WaveUI] Overflow.Item: asChild expects a single React element child (not text or ' +
             'several elements); the children are rendered inside a <div> instead.',
         ],
       ]);
