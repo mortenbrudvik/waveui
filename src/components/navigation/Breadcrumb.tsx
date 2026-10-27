@@ -398,16 +398,29 @@ interface OverflowMenuLinkProps {
   linkType: React.ElementType;
   /** The element's own `as` (a polymorphic link such as `<Link as={RouterLink}>`). */
   linkAs?: React.ElementType;
+  /** The element's own `disabled` (WaveUI's Link then renders no `href`, as on the trail). */
+  linkDisabled?: unknown;
   [prop: string]: unknown;
 }
 
 /**
  * The element a collapsed link component renders in the overflow menu (the `as` of its
  * `Menu.ItemLink`): the element's component with the menu item's props, and with the element's own
- * `as`, which the menu item's `as` would otherwise replace.
+ * `as` and `disabled`, which the menu item's own `as` and `disabled` would otherwise take.
  */
-function OverflowMenuLink({ linkType: LinkType, linkAs, ...props }: OverflowMenuLinkProps) {
-  return <LinkType {...props} {...(linkAs === undefined ? undefined : { as: linkAs })} />;
+function OverflowMenuLink({
+  linkType: LinkType,
+  linkAs,
+  linkDisabled,
+  ...props
+}: OverflowMenuLinkProps) {
+  return (
+    <LinkType
+      {...props}
+      {...(linkAs === undefined ? undefined : { as: linkAs })}
+      {...(linkDisabled === undefined ? undefined : { disabled: linkDisabled })}
+    />
+  );
 }
 
 /**
@@ -434,7 +447,8 @@ function overflowMenuItem(entry: BreadcrumbEntry): { node: React.ReactNode; mapp
     // the trail's does. The menu keeps the item's role, classes, icon, label and disabled state,
     // and the props that belong to the trail element stay there (its id and ref, its tab order).
     // The item's `href` is a default for the element, as on the trail. Its own `onClick` runs
-    // before the item's, as on the trail.
+    // before the item's, as on the trail. Its own `disabled` reaches it too, so a disabled
+    // WaveUI Link renders no `href` in the menu either.
     const {
       children: _children,
       className: _className,
@@ -443,7 +457,7 @@ function overflowMenuItem(entry: BreadcrumbEntry): { node: React.ReactNode; mapp
       id: _id,
       role: _role,
       tabIndex: _tabIndex,
-      disabled: _disabled,
+      disabled: linkDisabled,
       'aria-disabled': _ariaDisabled,
       onClick: linkOnClick,
       as: linkAs,
@@ -459,6 +473,7 @@ function overflowMenuItem(entry: BreadcrumbEntry): { node: React.ReactNode; mapp
           as={OverflowMenuLink as React.ElementType}
           linkType={inner.type as React.ElementType}
           linkAs={linkAs}
+          linkDisabled={linkDisabled}
           icon={icon}
           disabled={disabled}
           onClick={composeEventHandlers(linkOnClick, onClick)}

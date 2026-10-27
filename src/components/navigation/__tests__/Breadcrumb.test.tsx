@@ -5,10 +5,12 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Breadcrumb, BreadcrumbItem } from '../Breadcrumb';
 import type { BreadcrumbItemProps } from '../Breadcrumb';
+import { Button } from '../../button/Button';
 import { Link } from '../../button/Link';
 import type { Slot } from '../../../lib/types';
 import {
   breadcrumbClassNames,
+  buttonClassNames,
   linkClassNames,
   menuItemLinkClassNames,
   overflowClassNames,
@@ -1521,6 +1523,130 @@ describe('Breadcrumb', () => {
         expect(screen.queryByRole('menu')).not.toBeInTheDocument();
         expect(warn).not.toHaveBeenCalled();
       });
+
+      it.each([
+        [
+          'Link',
+          linkClassNames.root,
+          (onClick: () => void) => (
+            <Link disabled href="/docs" onClick={onClick}>
+              Docs
+            </Link>
+          ),
+        ],
+        [
+          'Button as="a"',
+          buttonClassNames.root,
+          (onClick: () => void) => (
+            <Button as="a" disabled href="/docs" onClick={onClick}>
+              Docs
+            </Button>
+          ),
+        ],
+      ])(
+        'a disabled %s gets its own disabled in the menu too: no href there, as on the trail',
+        async (_name, rootClass, link) => {
+          const warn = vi.spyOn(console, 'warn');
+          const user = userEvent.setup();
+          const onLinkClick = vi.fn();
+          const item = <Breadcrumb.Item asChild>{link(onLinkClick)}</Breadcrumb.Item>;
+          const trail = render(<Breadcrumb>{item}</Breadcrumb>);
+          expect(screen.getByRole('link', { name: 'Docs' })).not.toHaveAttribute('href');
+          trail.unmount();
+
+          renderTrail(item);
+          await user.click(screen.getByRole('button', { name: 'More items' }));
+          const entry = screen.getByRole('menuitem', { name: 'Docs' });
+          expect(entry).toHaveClass(rootClass);
+          expect(entry).toHaveAttribute('aria-disabled', 'true');
+          expect(entry).not.toHaveAttribute('href');
+          expect(fireEvent.click(entry)).toBe(false);
+          expect(onLinkClick).not.toHaveBeenCalled();
+          expect(screen.getByRole('menu')).toBeInTheDocument();
+          expect(warn).not.toHaveBeenCalled();
+          await user.keyboard('{Escape}');
+        },
+      );
+
+      it.each([
+        ['disabled on the item', { disabled: true }, {}],
+        ['aria-disabled on the element', {}, { 'aria-disabled': 'true' as const }],
+      ])(
+        'a link component with a string href stays unavailable with %s and keeps its href, as on the trail',
+        async (_case, itemProps, linkProps) => {
+          const warn = vi.spyOn(console, 'warn');
+          const user = userEvent.setup();
+          const { NextLink, push } = createNextLink();
+          const clicks = recordLinkClicks();
+          renderTrail(
+            <Breadcrumb.Item asChild {...itemProps}>
+              <NextLink href="/docs" {...linkProps}>
+                Docs
+              </NextLink>
+            </Breadcrumb.Item>,
+          );
+          await user.click(screen.getByRole('button', { name: 'More items' }));
+          const entry = screen.getByRole('menuitem', { name: 'Docs' });
+          expect(entry).toHaveAttribute('data-next-link');
+          expect(entry).toHaveAttribute('aria-disabled', 'true');
+          expect(entry).toHaveAttribute('href', '/docs');
+          await user.click(entry);
+          expect(push).not.toHaveBeenCalled();
+          // The click is cancelled: the browser does not follow the href either.
+          expect(clicks).toEqual([{ href: '/docs', defaultPrevented: true }]);
+          expect(screen.getByRole('menu')).toBeInTheDocument();
+          expect(warn).not.toHaveBeenCalled();
+          await user.keyboard('{Escape}');
+        },
+      );
+
+      it.each([
+        ['Enter', '{Enter}'],
+        ['Space', ' '],
+      ])(
+        '%s activates a polymorphic link entry and a Next-style entry once',
+        async (_key, keys) => {
+          const user = userEvent.setup();
+          const { RouterLink, navigate } = createRouterLink();
+          const { NextLink, push } = createNextLink();
+          const clicks = recordLinkClicks();
+          render(
+            <Breadcrumb maxDisplayedItems={2}>
+              <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+              <Breadcrumb.Item asChild>
+                <Link as={RouterLink} to="/docs">
+                  Docs
+                </Link>
+              </Breadcrumb.Item>
+              <Breadcrumb.Item asChild>
+                <NextLink href="/guide">Guide</NextLink>
+              </Breadcrumb.Item>
+              <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+            </Breadcrumb>,
+          );
+          const button = screen.getByRole('button', { name: 'More items' });
+          act(() => button.focus());
+          await user.keyboard('{Enter}');
+          expect(screen.getByRole('menuitem', { name: 'Docs' })).toHaveFocus();
+          await user.keyboard(keys);
+          expect(navigate.mock.calls).toEqual([['/docs']]);
+          expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+          expect(button).toHaveFocus();
+
+          await user.keyboard('{Enter}');
+          await user.keyboard('{ArrowDown}');
+          expect(screen.getByRole('menuitem', { name: 'Guide' })).toHaveFocus();
+          await user.keyboard(keys);
+          expect(push.mock.calls).toEqual([['/guide']]);
+          expect(navigate.mock.calls).toEqual([['/docs']]);
+          // One click each, both handled by the link component (no page load).
+          expect(clicks).toEqual([
+            { href: '/r/docs', defaultPrevented: true },
+            { href: '/guide', defaultPrevented: true },
+          ]);
+          expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        },
+      );
 
       it('unwraps a Fragment around the element', async () => {
         const warn = vi.spyOn(console, 'warn');
