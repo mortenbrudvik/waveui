@@ -20,6 +20,9 @@
  * 7. every export is a string, a record of strings or a function (the precondition of the dist
  *    probe of `scripts/verify-dist.mjs`, which reads the strings one level into records).
  *
+ * And one check of a single recipe: the structure of an inline drawer lifts its panel's size cap
+ * on the panel's axis while the element is not entered (D13), at every edge.
+ *
  * The file runs in the node environment: the compile check loads `@tailwindcss/node`.
  */
 import { join } from 'node:path';
@@ -333,6 +336,50 @@ function ungatedStarts(value: string): string[] {
   return words(value).filter((word) => {
     const { variants } = parseWord(word);
     return variants.includes('starting') && !variants.includes('data-[presence=entering]');
+  });
+}
+
+/**
+ * The variants under which an inline drawer's structure lifts its panel's size cap: the children
+ * of the element while it is not entered (while it enters or exits it is a grid whose track a
+ * percentage cap would follow, squeezing the panel; entered, it has no box and the cap applies).
+ */
+const NOT_ENTERED_CHILD = 'not-data-[presence=entered]:*';
+
+/** The utility that lifts the panel's size cap on the axis of each inline drawer edge. */
+const PANEL_CAP_LIFTS: Record<string, string> = {
+  start: 'max-w-none',
+  end: 'max-w-none',
+  left: 'max-w-none',
+  right: 'max-w-none',
+  bottom: 'max-h-none',
+};
+
+/**
+ * The inline drawer's panel cap: for each edge of `lifts`, a finding when `structures` has no
+ * value for it, when the value lacks the edge's lift under {@link NOT_ENTERED_CHILD}, or when it
+ * holds a lift (of either axis) under any other variants.
+ */
+function panelCapFindings(
+  structures: Readonly<Record<string, string>>,
+  lifts: Readonly<Record<string, string>>,
+): string[] {
+  const liftUtilities = new Set(Object.values(lifts));
+  return Object.entries(lifts).flatMap(([edge, lift]) => {
+    const value = Object.hasOwn(structures, edge) ? structures[edge] : undefined;
+    if (value === undefined) return [`${edge}: no structure`];
+    const parsed = words(value).map(parseWord);
+    const gated = parsed.some(
+      ({ variants, utility }) => utility === lift && variants.join(':') === NOT_ENTERED_CHILD,
+    );
+    const misplaced = parsed
+      .filter(
+        ({ variants, utility }) =>
+          liftUtilities.has(utility) &&
+          (utility !== lift || variants.join(':') !== NOT_ENTERED_CHILD),
+      )
+      .map(({ variants, utility }) => `${edge}: ${[...variants, utility].join(':')}`);
+    return (gated ? [] : [`${edge}: no ${NOT_ENTERED_CHILD}:${lift}`]).concat(misplaced);
   });
 }
 
@@ -667,6 +714,56 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
           ),
         ).toEqual([]);
       }
+    });
+  });
+
+  describe('the inline drawer structure lifts its panel’s size cap while not entered (D13)', () => {
+    it('reports a missing lift, an ungated one and one on the wrong axis', () => {
+      const lifts = { start: 'max-w-none', bottom: 'max-h-none' };
+      expect(
+        panelCapFindings(
+          {
+            start: 'grid overflow-hidden data-[presence=entered]:contents',
+            bottom: 'grid *:max-h-none not-data-[presence=entered]:*:max-w-none',
+          },
+          lifts,
+        ),
+      ).toEqual([
+        'start: no not-data-[presence=entered]:*:max-w-none',
+        'bottom: no not-data-[presence=entered]:*:max-h-none',
+        'bottom: *:max-h-none',
+        'bottom: not-data-[presence=entered]:*:max-w-none',
+      ]);
+      expect(panelCapFindings({ start: 'grid' }, lifts)).toEqual([
+        'start: no not-data-[presence=entered]:*:max-w-none',
+        'bottom: no structure',
+      ]);
+      expect(
+        panelCapFindings(
+          {
+            start: 'grid not-data-[presence=entered]:*:max-w-none',
+            bottom: 'grid not-data-[presence=entered]:*:max-h-none',
+          },
+          lifts,
+        ),
+      ).toEqual([]);
+    });
+
+    it('compiles the lift to the children of an element that is not entered', () => {
+      for (const [lift, property] of [
+        ['max-w-none', 'max-width: none'],
+        ['max-h-none', 'max-height: none'],
+      ] as const) {
+        const [css] = designSystem.candidatesToCss([`${NOT_ENTERED_CHILD}:${lift}`]);
+        expect(css).toContain(':not([data-presence="entered"]) > *');
+        expect(css).toContain(property);
+      }
+    });
+
+    it('holds for every edge of inlineDrawerStructure', () => {
+      const structures: Readonly<Record<string, string>> = motion.inlineDrawerStructure;
+      expect(Object.keys(structures).sort()).toEqual(Object.keys(PANEL_CAP_LIFTS).sort());
+      expect(panelCapFindings(structures, PANEL_CAP_LIFTS)).toEqual([]);
     });
   });
 });

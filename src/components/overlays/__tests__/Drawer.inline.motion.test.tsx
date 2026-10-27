@@ -36,6 +36,11 @@ const SIZES: readonly DrawerSize[] = ['small', 'medium', 'large', 'full'];
 const axisOf = (position: DrawerPosition) => (position === 'bottom' ? 'height' : 'width');
 /** The default wrapper motion: the default position (`end`) with the default size's duration. */
 const WRAPPER_RECIPE = `${inlineDrawerMotion.width} ${drawerDurations.small}`;
+/** The wrapper's class that lifts the panel's size cap on each axis while it is not entered. */
+const PANEL_CAP_LIFT = {
+  width: 'not-data-[presence=entered]:*:max-w-none',
+  height: 'not-data-[presence=entered]:*:max-h-none',
+} as const;
 
 /** No word of `recipe` on `el`, apart from the words in `except` (the consumer's own classes). */
 function expectNoWordOf(el: Element | null, recipe: string, except: readonly string[] = []) {
@@ -91,6 +96,10 @@ describe('inline Drawer collapse wrapper per position and size (§4.3, §3)', ()
       // The other axis's transition is not there.
       const otherAxis = axis === 'width' ? 'height' : 'width';
       expect(wrapper).not.toHaveClass(motionClasses(inlineDrawerMotion[otherAxis])[0]);
+      // While not entered (a grid), the panel's size cap on its axis is lifted, so the shrinking
+      // track clips the panel instead of squeezing it; entered, the cap applies as before.
+      expect(wrapper).toHaveClass(PANEL_CAP_LIFT[axis]);
+      expect(wrapper).not.toHaveClass(PANEL_CAP_LIFT[otherAxis]);
       // The panel carries none of the wrapper's motion.
       expectNoWordOf(aside(), `${inlineDrawerMotion[axis]} ${drawerDurations[size]}`);
       for (const element of [wrapper, aside()]) {

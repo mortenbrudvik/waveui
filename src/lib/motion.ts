@@ -37,7 +37,11 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   smaller than the panel, padding and borders included, and it keeps its size in a flex row. The
  *   panel sits against the inner edge of that track (the end at the start edge, the start at the
  *   end edge, the physical right and left at the left and right edges, the top at the bottom
- *   edge), so it reads as sliding out to its own edge.
+ *   edge), so it reads as sliding out to its own edge. While the element is not entered it also
+ *   lifts the panel's own maximum on that axis (its width at a side, its height at the bottom):
+ *   that maximum is a percentage, which inside the grid would follow the track and squeeze the
+ *   panel's content as the track narrows, where the track should only clip the panel. Entered,
+ *   the maximum applies again against the page, as before.
  * - `inlineDrawerMotion`, the motion of that element per axis: its track and its opacity. It
  *   enters from an empty, transparent track with the mid decelerating curve and exits back to one
  *   with the min accelerating curve, so the space the panel takes in the layout opens and closes
@@ -99,17 +103,17 @@ export const drawerBackdropMotion: Readonly<Record<SurfaceSize, string>> = {
 /**
  * The structure of the element around an inline drawer's panel, per edge: no box while open, a
  * clipping one-track grid on the panel's axis while it enters or exits, the panel against its
- * inner edge.
+ * inner edge and without its percentage maximum on that axis (so it is clipped, not squeezed).
  */
 export const inlineDrawerStructure: Readonly<Record<DrawerEdge, string>> = {
   start:
-    'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-end overflow-hidden data-[presence=entered]:contents',
-  end: 'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-start overflow-hidden data-[presence=entered]:contents',
-  left: 'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:right] overflow-hidden data-[presence=entered]:contents', // wave-allow-physical: the consumer asked for the physical left edge
+    'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-end overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
+  end: 'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
+  left: 'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:right] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical left edge
   right:
-    'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:left] overflow-hidden data-[presence=entered]:contents', // wave-allow-physical: the consumer asked for the physical right edge
+    'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:left] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical right edge
   bottom:
-    'grid shrink-0 grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents',
+    'grid shrink-0 grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-h-none',
 };
 
 /**
