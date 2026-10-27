@@ -17,7 +17,9 @@ import type {
   ComponentProps,
   Dispatch,
   HTMLAttributes,
+  KeyboardEvent as ReactKeyboardEvent,
   KeyboardEventHandler,
+  MouseEvent as ReactMouseEvent,
   MouseEventHandler,
   PointerEventHandler,
   ReactElement,
@@ -42,6 +44,7 @@ import type {
   BreadcrumbItemAnchorProps,
   BreadcrumbItemButtonProps,
   BreadcrumbItemOwnProps,
+  BreadcrumbProps,
   buttonClassNames,
   ButtonProps,
   CalendarLabels,
@@ -73,6 +76,19 @@ import type {
   CompoundButtonProps,
   CoreSize,
   CounterBadgeProps,
+  CreateTableColumnOptions,
+  DataGridBaseProps,
+  DataGridBodyProps,
+  DataGridColumn,
+  DataGridItemsProps,
+  DataGridItemsSortProps,
+  DataGridRowProps,
+  DataGridRowSelectionCellProps,
+  DataGridSelectedItemsChangeDetails,
+  DataGridSelectionAppearance,
+  DataGridSelectionCellProps,
+  DataGridSort,
+  DataGridSortChangeDetails,
   DatePickerLabels,
   DatePickerProps,
   DayOfWeek,
@@ -143,6 +159,10 @@ import type {
   ListboxSurface,
   ListboxSurfaceListProps,
   ListboxSurfaceProps,
+  ListItemActionEvent,
+  ListItemProps,
+  ListNavigationMode,
+  ListProps,
   markListboxElement,
   Menu,
   MenuButtonProps,
@@ -189,6 +209,16 @@ import type {
   OpenChangeDetails,
   OptionGroupProps,
   Orientation,
+  OverflowChangeDetails,
+  OverflowDirection,
+  OverflowDividerProps,
+  OverflowGroupVisibility,
+  OverflowItemBaseProps,
+  OverflowItemPriorityProps,
+  OverflowItemProps,
+  OverflowProps,
+  PartitionBreadcrumbItemsOptions,
+  PartitionBreadcrumbItemsResult,
   PopoverProps,
   PopoverTriggerChildProps,
   PopupRect,
@@ -216,6 +246,7 @@ import type {
   SliderProps,
   SliderSize,
   Slot,
+  SortDirection,
   SpinButton,
   SpinButtonAllowEmptyProps,
   SpinButtonBaseProps,
@@ -235,6 +266,11 @@ import type {
   SwitchLabelPosition,
   SwitchProps,
   SwitchSize,
+  TableCellActionsProps,
+  TableCellLayoutProps,
+  TableHeaderCellProps,
+  TableSelectionCellCheckedChangeDetails,
+  TableSelectionCellProps,
   TabListProps,
   TagAppearance,
   TagGroupProps,
@@ -252,7 +288,21 @@ import type {
   TagProps,
   TagShape,
   TagSize,
+  TeachingPopoverAction,
+  TeachingPopoverBodyProps,
+  TeachingPopoverCarouselFooterProps,
+  TeachingPopoverCarouselNavProps,
+  TeachingPopoverCarouselPageCountProps,
+  TeachingPopoverCarouselProps,
+  TeachingPopoverFooterProps,
+  TeachingPopoverHeaderProps,
   TeachingPopoverProps,
+  TeachingPopoverStep,
+  TeachingPopoverSurfaceProps,
+  TeachingPopoverTitleOwnProps,
+  TeachingPopoverTitleProps,
+  TeachingPopoverTriggerChildProps,
+  TeachingPopoverTriggerProps,
   TextareaProps,
   TimePickerInvalidReason,
   TimePickerLabels,
@@ -1578,6 +1628,261 @@ describe('0.11 tags, drawers and the app shell from the package entry', () => {
   it('ListboxSurface listProps (wave A)', () => {
     expectTypeOf<ListboxSurfaceProps['listProps']>().toEqualTypeOf<
       ListboxSurfaceListProps | undefined
+    >();
+  });
+});
+
+// The 0.14 additions (Phase 9), imported from the package entry (compile-time, `tsconfig.dev.json`).
+describe('0.14 collections, data grids and tours from the package entry', () => {
+  it('Overflow: direction, orientation, groups, the change details and the item props', () => {
+    expectTypeOf<OverflowDirection>().toEqualTypeOf<'end' | 'start'>();
+    expectTypeOf<OverflowGroupVisibility>().toEqualTypeOf<'visible' | 'hidden' | 'overflow'>();
+    expectTypeOf<OverflowProps['overflowDirection']>().toEqualTypeOf<
+      OverflowDirection | undefined
+    >();
+    expectTypeOf<OverflowProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
+    expectTypeOf<OverflowProps['minimumVisible']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<OverflowProps['hasHiddenItems']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<OverflowProps['buttonPosition']>().toEqualTypeOf<
+      'end' | 'before-hidden' | undefined
+    >();
+    expectTypeOf<OverflowChangeDetails>().toEqualTypeOf<{
+      visibleItems: string[];
+      groupVisibility: Record<string, OverflowGroupVisibility>;
+    }>();
+    // A handler of the hidden ids alone fits.
+    type OnOverflowChange = NonNullable<OverflowProps['onOverflowChange']>;
+    expectTypeOf<OnOverflowChange>().parameter(0).toEqualTypeOf<string[]>();
+    const hiddenOnly = (hiddenItems: string[]) => void hiddenItems;
+    expectTypeOf(hiddenOnly).toExtend<OnOverflowChange>();
+
+    expectTypeOf<OverflowItemProps>().toEqualTypeOf<
+      OverflowItemBaseProps & OverflowItemPriorityProps
+    >();
+    expectTypeOf<OverflowItemBaseProps['groupId']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<OverflowItemBaseProps['asChild']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<{ priority: number }>().toExtend<OverflowItemPriorityProps>();
+    expectTypeOf<{ pinned: boolean }>().toExtend<OverflowItemPriorityProps>();
+    // An item has a priority or is pinned, never both.
+    expectTypeOf<{ priority: number; pinned: boolean }>().not.toExtend<OverflowItemPriorityProps>();
+    expectTypeOf<OverflowDividerProps['groupId']>().toEqualTypeOf<string>();
+    expectTypeOf<OverflowDividerProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<Entry['useIsOverflowGroupVisible']>().toEqualTypeOf<
+      (groupId: string) => OverflowGroupVisibility
+    >();
+    expectTypeOf<Entry['useHasHiddenItems']>().toEqualTypeOf<() => boolean>();
+    expectTypeOf<Entry['Overflow']['Divider']>().toEqualTypeOf<Entry['OverflowDivider']>();
+  });
+
+  it('Breadcrumb: the collapse, size, focus mode and divider props and the helpers', () => {
+    expectTypeOf<BreadcrumbProps['maxDisplayedItems']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<BreadcrumbProps['overflowIndex']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<BreadcrumbProps['overflow']>().toEqualTypeOf<'none' | 'auto' | undefined>();
+    expectTypeOf<BreadcrumbProps['overflowLabel']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<BreadcrumbProps['size']>().toEqualTypeOf<CoreSize | undefined>();
+    expectTypeOf<BreadcrumbProps['focusMode']>().toEqualTypeOf<FocusMode | undefined>();
+    expectTypeOf<BreadcrumbProps['divider']>().toEqualTypeOf<Slot<'span'> | undefined>();
+
+    expectTypeOf<Entry['partitionBreadcrumbItems']>().toEqualTypeOf<
+      <T>(options: PartitionBreadcrumbItemsOptions<T>) => PartitionBreadcrumbItemsResult<T>
+    >();
+    expectTypeOf<PartitionBreadcrumbItemsOptions<number>>().toEqualTypeOf<{
+      items: readonly number[];
+      maxDisplayedItems?: number;
+      overflowIndex?: number;
+    }>();
+    expectTypeOf<PartitionBreadcrumbItemsResult<number>>().toEqualTypeOf<{
+      startDisplayedItems: number[];
+      overflowItems?: number[];
+      endDisplayedItems?: number[];
+    }>();
+    expectTypeOf<Entry['truncateBreadcrumbLongName']>().toEqualTypeOf<
+      (content: string, maxLength?: number) => string
+    >();
+    expectTypeOf<Entry['truncateBreadcrumbLongTooltip']>().toEqualTypeOf<
+      (content: string, maxLength?: number) => string
+    >();
+    expectTypeOf<Entry['isTruncatableBreadcrumbContent']>().toEqualTypeOf<
+      (content: string, maxLength: number) => boolean
+    >();
+  });
+
+  it('DataGrid: typed columns, items, the callback details, selection and the SelectionCell', () => {
+    interface Person {
+      id: string;
+      name: string;
+    }
+    expectTypeOf<Entry['createTableColumn']>().toEqualTypeOf<
+      <T>(options: CreateTableColumnOptions<T>) => DataGridColumn<T>
+    >();
+    expectTypeOf<CreateTableColumnOptions<Person>['columnId']>().toEqualTypeOf<string>();
+    expectTypeOf<CreateTableColumnOptions<Person>['compare']>().toEqualTypeOf<
+      ((a: Person, b: Person) => number) | undefined
+    >();
+    expectTypeOf<DataGridColumn<Person>['renderCell']>().toEqualTypeOf<
+      ((item: Person) => ReactNode) | undefined
+    >();
+    expectTypeOf<DataGridItemsProps<Person>['items']>().toEqualTypeOf<
+      readonly Person[] | undefined
+    >();
+    expectTypeOf<DataGridItemsSortProps<Person>['items']>().toEqualTypeOf<readonly Person[]>();
+    expectTypeOf<DataGridBaseProps<Person>['getRowId']>().toEqualTypeOf<
+      ((item: Person) => string) | undefined
+    >();
+    expectTypeOf<DataGridBaseProps<Person>['columns']>().toEqualTypeOf<
+      readonly DataGridColumn<Person>[] | undefined
+    >();
+    expectTypeOf<DataGridBodyProps<Person>['children']>().toEqualTypeOf<
+      ReactNode | ((item: Person, index: number) => ReactNode)
+    >();
+
+    expectTypeOf<DataGridBaseProps['selectOnRowClick']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DataGridBaseProps['subtleSelection']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DataGridBaseProps['selectionAppearance']>().toEqualTypeOf<
+      DataGridSelectionAppearance | undefined
+    >();
+    expectTypeOf<DataGridSelectionAppearance>().toEqualTypeOf<'brand' | 'neutral' | 'none'>();
+    expectTypeOf<DataGridSortChangeDetails>().toEqualTypeOf<{ event: Event }>();
+    expectTypeOf<DataGridSelectedItemsChangeDetails>().toEqualTypeOf<{ event: Event }>();
+    expectTypeOf<NonNullable<DataGridItemsSortProps['onSortChange']>>().toEqualTypeOf<
+      (sort: DataGridSort, details?: DataGridSortChangeDetails) => void
+    >();
+    expectTypeOf<NonNullable<DataGridBaseProps['onSelectedItemsChange']>>().toEqualTypeOf<
+      (selectedItems: string[], details?: DataGridSelectedItemsChangeDetails) => void
+    >();
+
+    expectTypeOf<DataGridRowProps['selectionCellProps']>().toEqualTypeOf<
+      DataGridRowSelectionCellProps | undefined
+    >();
+    expectTypeOf<DataGridSelectionCellProps>().toExtend<DataGridRowSelectionCellProps>();
+    expectTypeOf<DataGridSelectionCellProps['controlRef']>().toEqualTypeOf<
+      Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<Entry['DataGrid']['SelectionCell']>().toEqualTypeOf<
+      Entry['DataGridSelectionCell']
+    >();
+  });
+
+  it('Table: sortable headers, the selection cell, the cell layout and the cell actions', () => {
+    expectTypeOf<SortDirection>().toEqualTypeOf<'ascending' | 'descending'>();
+    expectTypeOf<TableHeaderCellProps['sortable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<TableHeaderCellProps['sortDirection']>().toEqualTypeOf<
+      SortDirection | undefined
+    >();
+    expectTypeOf<TableHeaderCellProps['onSortClick']>().toEqualTypeOf<
+      MouseEventHandler<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<TableHeaderCellProps['sortIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TableHeaderCellProps['aside']>().toEqualTypeOf<Slot<'span'> | undefined>();
+
+    expectTypeOf<TableSelectionCellProps['type']>().toEqualTypeOf<
+      'checkbox' | 'radio' | undefined
+    >();
+    expectTypeOf<TableSelectionCellProps['checked']>().toEqualTypeOf<
+      boolean | 'mixed' | undefined
+    >();
+    expectTypeOf<NonNullable<TableSelectionCellProps['onCheckedChange']>>().toEqualTypeOf<
+      (checked: boolean, details?: TableSelectionCellCheckedChangeDetails) => void
+    >();
+    expectTypeOf<TableSelectionCellCheckedChangeDetails>().toEqualTypeOf<{ event: Event }>();
+    expectTypeOf<TableSelectionCellProps['controlRef']>().toEqualTypeOf<
+      Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<TableCellLayoutProps['media']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TableCellLayoutProps['description']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TableCellLayoutProps['appearance']>().toEqualTypeOf<'primary' | undefined>();
+    expectTypeOf<TableCellActionsProps['visible']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<Entry['Table']['SelectionCell']>().toEqualTypeOf<Entry['TableSelectionCell']>();
+    expectTypeOf<Entry['Table']['CellLayout']>().toEqualTypeOf<Entry['TableCellLayout']>();
+    expectTypeOf<Entry['Table']['CellActions']>().toEqualTypeOf<Entry['TableCellActions']>();
+
+    // @ts-expect-error a sortable header is sorted ascending or descending, or not at all (absent)
+    const none: TableHeaderCellProps['sortDirection'] = 'none';
+    expect(none).toBe('none');
+  });
+
+  it('List: the navigation modes, onAction, disabledSelection and the check marks', () => {
+    expectTypeOf<ListNavigationMode>().toEqualTypeOf<'none' | 'items' | 'composite'>();
+    expectTypeOf<ListProps['navigationMode']>().toEqualTypeOf<ListNavigationMode | undefined>();
+    expectTypeOf<ListProps['checkmark']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<ListItemActionEvent>().toEqualTypeOf<
+      ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLElement>
+    >();
+    expectTypeOf<NonNullable<ListItemProps['onAction']>>().toEqualTypeOf<
+      (event: ListItemActionEvent) => void
+    >();
+    expectTypeOf<ListItemProps['disabledSelection']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<ListItemProps['checkmark']>().toEqualTypeOf<Slot<'span'> | undefined>();
+  });
+
+  it('TeachingPopover: the footer actions, onFinish, the footer layout and the parts', () => {
+    expectTypeOf<TeachingPopoverProps['primaryAction']>().toEqualTypeOf<
+      TeachingPopoverAction | undefined
+    >();
+    expectTypeOf<TeachingPopoverProps['secondaryAction']>().toEqualTypeOf<
+      TeachingPopoverAction | undefined
+    >();
+    expectTypeOf<TeachingPopoverStep['primaryAction']>().toEqualTypeOf<
+      TeachingPopoverAction | undefined
+    >();
+    expectTypeOf<TeachingPopoverStep['secondaryAction']>().toEqualTypeOf<
+      TeachingPopoverAction | undefined
+    >();
+    expectTypeOf<ReactNode>().toExtend<TeachingPopoverAction>();
+    expectTypeOf<{ as: 'a'; href: string; children: string }>().toExtend<TeachingPopoverAction>();
+    expectTypeOf<TeachingPopoverProps['onFinish']>().toEqualTypeOf<(() => void) | undefined>();
+    expectTypeOf<TeachingPopoverProps['footerLayout']>().toEqualTypeOf<
+      'horizontal' | 'vertical' | undefined
+    >();
+
+    expectTypeOf<TeachingPopoverTriggerProps['children']>().toEqualTypeOf<
+      ReactNode | ((props: TeachingPopoverTriggerChildProps) => ReactNode)
+    >();
+    expectTypeOf<TeachingPopoverTriggerProps['asChild']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<TeachingPopoverTriggerChildProps['aria-haspopup']>().toEqualTypeOf<'dialog'>();
+    expectTypeOf<TeachingPopoverTriggerChildProps['aria-expanded']>().toEqualTypeOf<boolean>();
+    expectTypeOf<TeachingPopoverSurfaceProps['ref']>().toEqualTypeOf<
+      Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<TeachingPopoverHeaderProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TeachingPopoverHeaderProps['dismissButton']>().toEqualTypeOf<
+      Slot<'span'> | undefined
+    >();
+    expectTypeOf<TeachingPopoverTitleProps>().toExtend<TeachingPopoverTitleOwnProps>();
+    expectTypeOf<TeachingPopoverTitleProps<'p'>['ref']>().toEqualTypeOf<
+      Ref<HTMLParagraphElement> | undefined
+    >();
+    expectTypeOf<TeachingPopoverBodyProps['media']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TeachingPopoverFooterProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<TeachingPopoverCarouselProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<TeachingPopoverCarouselNavProps>().not.toHaveProperty('children');
+    expectTypeOf<TeachingPopoverCarouselPageCountProps['children']>().toEqualTypeOf<
+      ((current: number, total: number) => ReactNode) | undefined
+    >();
+    expectTypeOf<TeachingPopoverCarouselFooterProps['layout']>().toEqualTypeOf<
+      'offset' | 'centered' | undefined
+    >();
+    expectTypeOf<TeachingPopoverCarouselFooterProps['initialStepText']>().toEqualTypeOf<
+      string | undefined
+    >();
+    expectTypeOf<TeachingPopoverCarouselFooterProps['finalStepText']>().toEqualTypeOf<
+      string | undefined
+    >();
+
+    type Popover = Entry['TeachingPopover'];
+    expectTypeOf<Popover['Trigger']>().toEqualTypeOf<Entry['TeachingPopoverTrigger']>();
+    expectTypeOf<Popover['Surface']>().toEqualTypeOf<Entry['TeachingPopoverSurface']>();
+    expectTypeOf<Popover['Header']>().toEqualTypeOf<Entry['TeachingPopoverHeader']>();
+    expectTypeOf<Popover['Title']>().toEqualTypeOf<Entry['TeachingPopoverTitle']>();
+    expectTypeOf<Popover['Body']>().toEqualTypeOf<Entry['TeachingPopoverBody']>();
+    expectTypeOf<Popover['Footer']>().toEqualTypeOf<Entry['TeachingPopoverFooter']>();
+    expectTypeOf<Popover['Carousel']>().toEqualTypeOf<Entry['TeachingPopoverCarousel']>();
+    expectTypeOf<Popover['CarouselNav']>().toEqualTypeOf<Entry['TeachingPopoverCarouselNav']>();
+    expectTypeOf<Popover['CarouselPageCount']>().toEqualTypeOf<
+      Entry['TeachingPopoverCarouselPageCount']
+    >();
+    expectTypeOf<Popover['CarouselFooter']>().toEqualTypeOf<
+      Entry['TeachingPopoverCarouselFooter']
     >();
   });
 });

@@ -345,6 +345,48 @@ export const HOOK_PROBES_0_13 = [
   },
 ];
 
+/** Component modules an import of only the table helper must not hold (0.14). */
+const TABLE_COMPONENT_MODULES = [
+  'components/table/DataGrid.mjs',
+  'components/table/Table.mjs',
+  'components/table/Table.shared.mjs',
+];
+
+/**
+ * Component modules an import of only a breadcrumb helper must not hold (0.14): the Breadcrumb,
+ * and the Menu and Overflow it is built on.
+ */
+const BREADCRUMB_COMPONENT_MODULES = [
+  'components/navigation/Breadcrumb.mjs',
+  'components/navigation/Menu.mjs',
+  'components/layout/Overflow.mjs',
+];
+
+/**
+ * The helper probes of 0.14 (spec D5): an import of only `createTableColumn`, or of only one of
+ * the breadcrumb helpers, pure functions of `src/lib`, holds its own module, no component of the
+ * table or the breadcrumb and no React module.
+ */
+export const HOOK_PROBES_0_14 = [
+  {
+    keep: 'createTableColumn',
+    modules: ['lib/table.mjs'],
+    dropModules: TABLE_COMPONENT_MODULES,
+    dropExternals: ['react', 'react/jsx-runtime'],
+  },
+  ...[
+    'partitionBreadcrumbItems',
+    'truncateBreadcrumbLongName',
+    'truncateBreadcrumbLongTooltip',
+    'isTruncatableBreadcrumbContent',
+  ].map((keep) => ({
+    keep,
+    modules: ['lib/breadcrumb.mjs'],
+    dropModules: BREADCRUMB_COMPONENT_MODULES,
+    dropExternals: ['react', 'react/jsx-runtime'],
+  })),
+];
+
 /**
  * The inclusion probes of 0.11 (spec §6.2): an import of only `keep` holds each of `modules`, so
  * the exclusion probes above cannot pass because a module is missing. A TagPicker is built on the
@@ -377,7 +419,10 @@ export const INCLUSION_PROBES_0_11 = [
  * Names that stay module-only (spec §4.5 of 0.11): `dist/index.mjs` exports none of them and the
  * rolled-up `dist/index.d.ts` exports none of them as a value or a type ({@link
  * checkModuleOnlyNames}). The foundation's seams, the tag seams, the drawer panel shell and the
- * overlay slots, the Nav seam, NavDrawer's contexts and TagPicker's internals. Sorted.
+ * overlay slots, the Nav seam, NavDrawer's contexts and TagPicker's internals; since 0.14 (spec
+ * D6) also the parts the tables share (`Table.shared`, the sort arrows), the Overflow store,
+ * TeachingPopover's root, context and surface, and the event predicates of the selectable
+ * containers. Sorted.
  */
 export const MODULE_ONLY_NAMES = [
   'AvatarSizeContext',
@@ -397,7 +442,10 @@ export const MODULE_ONLY_NAMES = [
   'DrawerScrollStateContext',
   'ExactMatchCandidate',
   'FocusWithin',
+  'ForeignEventOptions',
+  'GroupVisibilityRecord',
   'HeldFocus',
+  'INTERACTIVE_SELECTOR',
   'InteractionTagContext',
   'ModalBackdrop',
   'ModalBackdropProps',
@@ -417,11 +465,20 @@ export const MODULE_ONLY_NAMES = [
   'NavRovingContext',
   'NavRovingContextValue',
   'NavValueKind',
+  'OverflowStore',
   'ResolvedTagPickerLabels',
+  'SELECTION_CELL_CLASSES',
+  'SortArrowDownIcon',
+  'SortArrowUpIcon',
   'TAG_DISMISS_SELECTOR',
   'TAG_GROUP_SELECTOR',
   'TAG_ITEM_SELECTOR',
   'TOOLBAR_ITEM_SELECTOR',
+  'TablePartKind',
+  'TableSelectionControl',
+  'TableSelectionControlProps',
+  'TableSortButton',
+  'TableSortButtonProps',
   'TagGroupContext',
   'TagGroupContextValue',
   'TagGroupHostContext',
@@ -438,6 +495,13 @@ export const MODULE_ONLY_NAMES = [
   'TagPickerRoot',
   'TagPickerTriggerKind',
   'TagPickerTriggerProps',
+  'TeachingPopoverContext',
+  'TeachingPopoverContextValue',
+  'TeachingPopoverRoot',
+  'TeachingPopoverSurfaceContext',
+  'TeachingPopoverSurfaceContextValue',
+  'TeachingPopoverTarget',
+  'TeachingSurface',
   'UseNavRootStateOptions',
   'UseTagGroupItemOptions',
   'UseTagOverflowOptions',
@@ -445,13 +509,17 @@ export const MODULE_ONLY_NAMES = [
   'containsValue',
   'createCategoryStore',
   'createOptionText',
+  'endsTextSelection',
   'findCategoriesContaining',
   'findExactMatch',
   'getNavPartKind',
+  'getTablePartKind',
   'hasIsolatingModalBelow',
   'isDismissKey',
+  'isForeignEvent',
   'isRepeatedActivation',
   'markNavPart',
+  'markTablePart',
   'scrollSeparatorClasses',
   'tagListControls',
   'tagRootClasses',
@@ -473,6 +541,7 @@ export const MODULE_ONLY_NAMES = [
   'useTagOverflow',
   'useTagPickerContext',
   'useTagPickerControlContext',
+  'useTeachingPopoverContext',
   'useToolbarNavigation',
 ];
 
@@ -1892,6 +1961,13 @@ export async function verifyDist(
     }
   } catch (error) {
     errors.push(`0.13 helper probe failed: ${error.message}`);
+  }
+  try {
+    for (const probe of HOOK_PROBES_0_14) {
+      errors.push(...(await probeHook(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.14 helper probe failed: ${error.message}`);
   }
   try {
     for (const probe of INCLUSION_PROBES_0_11) {
