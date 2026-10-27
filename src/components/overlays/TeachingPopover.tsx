@@ -24,7 +24,7 @@ import { getTabbableThrough, PopoverBeak, usePopoverTabOrder } from './Popover.s
 /**
  * A footer action of a TeachingPopover (`primaryAction`, `secondaryAction`): the label content, or
  * a Button-like slot (a `Button`, `<button>` or `<a>` element, or a slot object such as
- * `{ as: 'a', href, children }`).
+ * `{ as: 'a', href, children }`; `as` changes the element, which stays a Wave Button).
  *
  * The consumer's `onClick` runs first; then the step's normal action runs (Next or Done for the
  * primary action, Back for the secondary one) unless the handler called `event.preventDefault()`.
@@ -253,12 +253,15 @@ function renderAction(
   const resolved = resolveSlot<React.ElementType>(action, Button, className);
   if (!resolved) return null;
   const { onClick, ...props } = resolved.props as ActionElementProps & Record<string, unknown>;
+  // The slot's `as` changes Button's element, never the component: Button keeps the link behaviour,
+  // `role="button"` and the keyboard activation of a non-interactive element, the focus ring and
+  // the look. `appearance` is Button's own prop, so it never reaches the DOM.
   return React.createElement(
-    resolved.Component,
+    Button as React.ElementType,
     {
-      // `appearance` is Button's own prop: a slot rendered as another element does not get it.
-      ...(resolved.Component === Button ? { appearance } : undefined),
+      appearance,
       ...props,
+      ...(resolved.Component === Button ? undefined : { as: resolved.Component }),
       onClick: composeEventHandlers(onClick, activate),
     },
     resolved.children,

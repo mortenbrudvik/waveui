@@ -9,7 +9,7 @@ import {
   type TeachingPopoverProps,
 } from '../TeachingPopover';
 import { Button } from '../../button/Button';
-import { teachingPopoverClassNames } from '../../../lib/classNames';
+import { buttonClassNames, teachingPopoverClassNames } from '../../../lib/classNames';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
 import { getOpenLayers, subscribeLayers } from '../../../lib/layers';
 import { FOCUSABLE_SELECTOR } from '../../../lib/focus';
@@ -1279,12 +1279,42 @@ describe('TeachingPopover', () => {
       );
       expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', '#docs');
       expect(screen.getByRole('link', { name: 'Docs' })).not.toHaveAttribute('appearance');
+      // The slot's `as` changes the element, never the component: it is still a Wave Button.
+      expect(screen.getByRole('link', { name: 'Docs' })).toHaveClass(
+        buttonClassNames.root,
+        teachingPopoverClassNames.secondaryButton,
+      );
       const ok = screen.getByRole('button', { name: 'Ok' });
       expect(ok.querySelector('button')).toBeNull();
       expect(ok).toHaveClass(teachingPopoverClassNames.primaryButton);
       await user.click(ok);
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+
+    it.each(['Enter', ' '])(
+      'a slot object rendered as a span is a keyboard-operable Button (%j)',
+      async (key) => {
+        const user = userEvent.setup();
+        const onFinish = vi.fn();
+        render(
+          <TeachingPopover
+            steps={tip}
+            onFinish={onFinish}
+            primaryAction={{ as: 'span', children: 'Got it' }}
+          />,
+        );
+        const gotIt = screen.getByRole('button', { name: 'Got it' });
+        expect(gotIt.tagName).toBe('SPAN');
+        expect(gotIt).toHaveClass(buttonClassNames.root, teachingPopoverClassNames.primaryButton);
+        expect(gotIt).not.toHaveAttribute('appearance');
+        await user.tab();
+        await user.tab();
+        expect(gotIt).toHaveFocus();
+        await user.keyboard(key === ' ' ? '[Space]' : '{Enter}');
+        expect(onFinish).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      },
+    );
 
     it('step actions replace Next/Done and Back on that step only', async () => {
       const user = userEvent.setup();
@@ -1387,6 +1417,32 @@ describe('TeachingPopover', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
       expect(onFinish).not.toHaveBeenCalled();
       expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('preventDefault() in a step-level action keeps that step and the popover', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      const onFinish = vi.fn();
+      render(
+        <TeachingPopover
+          steps={[
+            { title: 'One', body: 'a' },
+            {
+              title: 'Two',
+              body: 'b',
+              primaryAction: { children: 'Hold', onClick: (event) => event.preventDefault() },
+            },
+          ]}
+          defaultActiveStep={1}
+          onStepChange={onStepChange}
+          onFinish={onFinish}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Hold' }));
+      expect(onStepChange).not.toHaveBeenCalled();
+      expect(onFinish).not.toHaveBeenCalled();
+      expect(heading()).toHaveTextContent(/^Two/);
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 
     it('preventDefault() on the last step keeps the popover open and skips onFinish', async () => {
