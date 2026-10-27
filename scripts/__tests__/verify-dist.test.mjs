@@ -47,6 +47,8 @@ import {
   missingDeclarations,
   missingValueAndTypeDeclarations,
   MODULE_ONLY_NAMES,
+  MOTION_RECIPE_MIN,
+  motionRecipeLiterals,
   OPT_IN_MODULES,
   PENDING_FLAT_EXPORTS,
   probeIncludes,
@@ -1645,7 +1647,7 @@ describe('probeTreeShaking: a Field-only bundle (0.9)', () => {
     expect(await probeTreeShaking(dist, fieldDrop)).toEqual([
       'components/data-display/InfoButton.mjs is in the bundle of an import of only Field (InfoButton must be dropped)',
       'InfoButton code (displayName "InfoButton") is in the bundle of an import of only Field',
-      'the bundle of an import of only Field contains the string "wave-info-button" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Field contains the string "wave-info-button" (an unused constant was not tree-shaken)',
     ]);
   });
 
@@ -1661,7 +1663,7 @@ describe('probeTreeShaking: a Field-only bundle (0.9)', () => {
         .replace('return cn(', 'return cn(infoButtonClassNames.root, '),
     });
     expect(await probeTreeShaking(dist, fieldDrop)).toEqual([
-      'the bundle of an import of only Field contains the string "wave-info-button" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Field contains the string "wave-info-button" (an unused constant was not tree-shaken)',
     ]);
   });
 });
@@ -2281,7 +2283,7 @@ describe('the 0.11 probes (INTEGRATION)', () => {
     expect(await probeTreeShaking(dist, probe)).toEqual([
       'components/button/Toolbar.navigation.mjs is in the bundle of an import of only Tag (TagPicker must be dropped)',
       'components/data-display/TagGroup.mjs is in the bundle of an import of only Tag (TagPicker must be dropped)',
-      'the bundle of an import of only Tag contains the string "wave-tag-group" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Tag contains the string "wave-tag-group" (an unused constant was not tree-shaken)',
     ]);
   });
 
@@ -2562,7 +2564,7 @@ describe('probeTreeShaking: class-name strings (P3-00)', () => {
         ),
     });
     expect(await probeTreeShaking(dist, strings)).toEqual([
-      'the bundle of an import of only Button contains the string "wave-dialog-content" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Button contains the string "wave-dialog-content" (an unused constant was not tree-shaken)',
     ]);
   });
 
@@ -2586,6 +2588,236 @@ describe('probeTreeShaking: class-name strings (P3-00)', () => {
       }),
     ).toEqual([
       '"wave-gone", listed for the bundle of an import of only Button, occurs in no module of dist (the probe would pass vacuously)',
+    ]);
+  });
+});
+
+/**
+ * The motion recipes of the fixture (spec §2.10, D23): two recipe literals and a record of
+ * durations (the drawer durations hold no presence variant, no transition and no animation).
+ */
+const MOTION_RECIPES = {
+  dialogMotion:
+    'transition-[opacity,scale] duration-wave-gentle ease-wave-decelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+  dialogBackdropMotion:
+    'transition-opacity duration-wave-gentle ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+};
+const MOTION_DURATIONS = { small: 'duration-wave-gentle', large: 'duration-wave-slow' };
+/** The literals `motionRecipeLiterals` reads from the fixture: exports by name, records by key. */
+const MOTION_LITERALS = [
+  MOTION_RECIPES.dialogBackdropMotion,
+  MOTION_RECIPES.dialogMotion,
+  MOTION_DURATIONS.small,
+  MOTION_DURATIONS.large,
+];
+
+/**
+ * A fixture `lib/motion.mjs`: the recipes, the durations, `extra` exports and the resolver, whose
+ * own literal holds the presence-variant text, as the real module's does.
+ */
+function motionModule(extra = '') {
+  return (
+    "const PRESENCE_VARIANT = '[presence=';\n" +
+    Object.entries(MOTION_RECIPES)
+      .map(([name, value]) => `export const ${name} = '${value}';\n`)
+      .join('') +
+    `export const drawerDurations = ${JSON.stringify(MOTION_DURATIONS)};\n` +
+    extra +
+    'export function resolveMotion(slot, recipe, preference, legacyClassName) {\n' +
+    "  if (slot === null) return '';\n" +
+    "  if (slot !== undefined) return typeof slot === 'string' ? slot : slot.className;\n" +
+    "  if (preference === 'none') return '';\n" +
+    "  if (legacyClassName !== undefined && legacyClassName.includes(PRESENCE_VARIANT)) return '';\n" +
+    '  return recipe;\n' +
+    '}\n'
+  );
+}
+
+/**
+ * The good files with the motion modules: `lib/motion`, `hooks/useMotion` on it, and a Dialog
+ * that resolves its recipe through both (an import of only Dialog holds them), then `overrides`.
+ */
+function motionFixture(overrides = {}) {
+  const files = goodFiles();
+  const dialog = 'dist/components/overlays/Dialog.mjs';
+  return fixture({
+    'dist/lib/motion.mjs': motionModule(),
+    'dist/hooks/useMotion.mjs':
+      `${DIRECTIVE}import { resolveMotion } from '../lib/motion.mjs';\n` +
+      "export function useMotionClasses(slot, recipe) { return resolveMotion(slot, recipe, 'default'); }\n",
+    [dialog]: files[dialog]
+      .replace(
+        DIRECTIVE,
+        `${DIRECTIVE}import { dialogMotion } from '../../lib/motion.mjs';\n` +
+          "import { useMotionClasses } from '../../hooks/useMotion.mjs';\n",
+      )
+      .replace(
+        /function \w+\(props\) \{ /,
+        (match) => `${match}useMotionClasses(props.motion, dialogMotion); `,
+      ),
+    ...overrides,
+  });
+}
+
+/** Button's module with `code` added to its render (before its `return`). */
+function buttonWith(code, imports = '') {
+  const files = goodFiles();
+  return files['dist/components/button/Button.mjs']
+    .replace(DIRECTIVE, `${DIRECTIVE}${imports}`)
+    .replace('return cn(', `${code} return cn(`);
+}
+
+describe('motionRecipeLiterals (spec §2.10, D23)', () => {
+  it('reads every string export of lib/motion.mjs, one level into records', async () => {
+    const { dist } = motionFixture();
+    expect(await motionRecipeLiterals(dist, { min: 4 })).toEqual({
+      literals: MOTION_LITERALS,
+      errors: [],
+    });
+  });
+
+  it('defaults to a non-negative minimum', () => {
+    expect(Number.isInteger(MOTION_RECIPE_MIN) && MOTION_RECIPE_MIN >= 0).toBe(true);
+  });
+
+  it('reports fewer literals than the minimum', async () => {
+    const { dist } = motionFixture();
+    expect((await motionRecipeLiterals(dist, { min: 5 })).errors).toEqual([
+      'lib/motion.mjs holds 4 recipe literals, fewer than the minimum of 5',
+    ]);
+  });
+
+  it('reports a value with none of the recipe markers, and an export of another kind', async () => {
+    const { dist } = motionFixture({
+      'dist/lib/motion.mjs': motionModule(
+        "export const gridStructure = 'grid gap-2';\n" +
+          "export const byEdge = { start: 'transition-[translate] duration-wave-slow', end: 'p-0' };\n" +
+          'export const stagger = 40;\n',
+      ),
+    });
+    const { literals, errors } = await motionRecipeLiterals(dist, { min: 0 });
+    expect(literals).toContain('grid gap-2');
+    expect(errors).toEqual([
+      'lib/motion.mjs: byEdge.end ("p-0") holds none of [presence=, transition, animate-, duration-wave- (not a recipe)',
+      'lib/motion.mjs: gridStructure ("grid gap-2") holds none of [presence=, transition, animate-, duration-wave- (not a recipe)',
+      'lib/motion.mjs: stagger is neither a string, a record of strings nor a function',
+    ]);
+  });
+
+  it('reports a dist without lib/motion.mjs (the probe would pass vacuously)', async () => {
+    expect(await motionRecipeLiterals(fixture().dist, { min: 0 })).toEqual({
+      literals: [],
+      errors: ['lib/motion.mjs does not exist in dist'],
+    });
+  });
+});
+
+describe('probeTreeShaking: the motion recipes of a Button-only bundle (spec §2.10, D23)', () => {
+  const motionDrop = (literals) => ({
+    keep: 'Button',
+    drop: 'Presence',
+    dropModules: ['hooks/usePresence.mjs', 'lib/motion.mjs', 'hooks/useMotion.mjs'],
+    dropStrings: literals,
+    dropSubstrings: ['[presence='],
+  });
+
+  it('passes when Button reaches no motion code', async () => {
+    const { dist } = motionFixture();
+    const { literals } = await motionRecipeLiterals(dist, { min: 4 });
+    expect(await probeTreeShaking(dist, motionDrop(literals))).toEqual([]);
+  });
+
+  it('reports a recipe literal in the bundle, also without the motion module', async () => {
+    const { dist } = motionFixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        `const motion = '${MOTION_RECIPES.dialogMotion}';`,
+      ).replace('cn(buttonClassNames.root, ', 'cn(buttonClassNames.root, motion, '),
+    });
+    const { literals } = await motionRecipeLiterals(dist, { min: 4 });
+    expect(await probeTreeShaking(dist, motionDrop(literals))).toEqual([
+      `the bundle of an import of only Button contains the string "${MOTION_RECIPES.dialogMotion}" (an unused constant was not tree-shaken)`,
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+  });
+
+  it('reports the motion module and its recipe in the bundle of a Button that imports it', async () => {
+    const { dist } = motionFixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        '',
+        "import { dialogBackdropMotion } from '../../lib/motion.mjs';\n",
+      ).replace('cn(buttonClassNames.root, ', 'cn(buttonClassNames.root, dialogBackdropMotion, '),
+    });
+    const { literals } = await motionRecipeLiterals(dist, { min: 4 });
+    expect(await probeTreeShaking(dist, motionDrop(literals))).toEqual([
+      'lib/motion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
+      `the bundle of an import of only Button contains the string "${MOTION_RECIPES.dialogBackdropMotion}" (an unused constant was not tree-shaken)`,
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+  });
+
+  it('reports a presence variant in any string of the bundle, never in a comment', async () => {
+    const inString = motionFixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        "const legacy = 'p-0 data-[presence=exiting]:opacity-50';",
+      ).replace('cn(buttonClassNames.root, ', 'cn(buttonClassNames.root, legacy, '),
+    });
+    // A doc comment before a declaration survives in the plain bundle (a comment inside a body
+    // does not), so only the minified code tells it from a string.
+    const inComment = motionFixture({
+      'dist/components/button/Button.mjs': buttonWith('').replace(
+        'function ButtonRoot(props)',
+        '/** Animated by a data-[presence=exiting]:opacity-50 class in 0.14. */\nfunction ButtonRoot(props)',
+      ),
+    });
+    const probe = { keep: 'Button', drop: 'Dialog', dropSubstrings: ['[presence='] };
+    expect(await probeTreeShaking(inString.dist, probe)).toEqual([
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+    expect(await probeTreeShaking(inComment.dist, probe)).toEqual([]);
+  });
+});
+
+describe('probeIncludes: strings and substrings (the positive control of D23)', () => {
+  const dialogMotion = {
+    keep: 'Dialog',
+    modules: ['lib/motion.mjs', 'hooks/useMotion.mjs'],
+    strings: [MOTION_RECIPES.dialogMotion],
+    substrings: ['[presence='],
+  };
+
+  it('passes when the bundle holds the modules, the literals and the fragments', async () => {
+    expect(await probeIncludes(motionFixture().dist, dialogMotion)).toEqual([]);
+  });
+
+  it('reports a literal the bundle lacks, matched whole', async () => {
+    expect(
+      await probeIncludes(motionFixture().dist, {
+        ...dialogMotion,
+        strings: [MOTION_RECIPES.dialogBackdropMotion, 'data-[presence=exiting]:opacity-0'],
+      }),
+    ).toEqual([
+      `the bundle of an import of only Dialog lacks the string "${MOTION_RECIPES.dialogBackdropMotion}"`,
+      'the bundle of an import of only Dialog lacks the string "data-[presence=exiting]:opacity-0"',
+    ]);
+  });
+
+  it('reports a fragment the code lacks', async () => {
+    expect(
+      await probeIncludes(motionFixture().dist, {
+        ...dialogMotion,
+        substrings: ['[presence=', '[presence=gone'],
+      }),
+    ).toEqual([
+      'the bundle of an import of only Dialog lacks "[presence=gone" outside comments (its minified code)',
+    ]);
+    expect(
+      await probeIncludes(motionFixture().dist, {
+        keep: 'Button',
+        modules: [],
+        substrings: ['[presence='],
+      }),
+    ).toEqual([
+      'the bundle of an import of only Button lacks "[presence=" outside comments (its minified code)',
     ]);
   });
 });
@@ -2678,7 +2910,7 @@ describe('verifyDist and main', () => {
     expect(errors).toEqual([
       'components/data-display/InfoButton.mjs is in the bundle of an import of only Field (InfoButton must be dropped)',
       'InfoButton code (displayName "InfoButton") is in the bundle of an import of only Field',
-      'the bundle of an import of only Field contains the string "wave-info-button" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Field contains the string "wave-info-button" (an unused constant was not tree-shaken)',
     ]);
   }, 30_000);
 

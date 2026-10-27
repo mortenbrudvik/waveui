@@ -1,10 +1,13 @@
 /**
  * Conventions gate (spec §4.4, F6t). Scans every source file of `src/components` (tests
- * excluded) and, for raw colors only, every `stories/*.stories.tsx`, with one `it` per file named
- * after its path — filter with `npx vitest run src/__tests__/conventions.test.ts -t "<path>"`.
- * Each failure lists `file:line [rule] <offending text> — <fix>`.
+ * excluded), the motion recipes of `src/lib/motion.ts` and, for raw colors only, every
+ * `stories/*.stories.tsx`, with one `it` per file named after its path — filter with
+ * `npx vitest run src/__tests__/conventions.test.ts -t "<path>"`. Each failure lists
+ * `file:line [rule] <offending text> — <fix>`.
  *
- * Rules (components; stories: `raw-color` and `lexer` only):
+ * Rules (components; the recipe module `src/lib/motion.ts`: every rule but `class-names`, which
+ * reads a component's `displayName`, and `presence-class`, which keeps presence classes in that
+ * module; stories: `raw-color` and `lexer` only):
  * - `raw-color` (C-TOKENS): arbitrary hex `[#…]`, color functions (`rgb()/rgba()/hsl()/hsla()/
  *   hwb()/lab()/lch()/oklab()/oklch()` — Tailwind 4's palette is oklch — and `color(<space> …)`),
  *   CSS named colors in arbitrary color values (`text-[red]`, `bg-[color:white]`,
@@ -42,6 +45,13 @@
  *   transition, `motion-reduce:animate-*` for an animation (a `motion-reduce:animate-none` does not
  *   stop a `transition-colors`) — unless the line carries `wave-allow-motion: <reason>`.
  *   `motion-safe:` utilities need no reduction.
+ * - `presence-class` (C-MOTION, Phase 10 §2.8): a class whose variants hold a presence phase
+ *   (`data-[presence=…]`, `not-data-[presence=…]`, `group-data-[presence=…]/…`: a variant
+ *   containing `[presence=`) anywhere but `src/lib/motion.ts`. Motion lives in that one module, so
+ *   the dist probe of `scripts/verify-dist.mjs` and the reviews have one place to look.
+ * - `starting-gate` (C-MOTION, Phase 2 note 2): a class with the `starting` variant whose variants
+ *   do not include `data-[presence=entering]`. `@starting-style` also applies to an element that
+ *   mounts `entered` (`appear={false}`, hydration), so an ungated start animates it.
  * - `class-names` (C-CLASS, stable class names): a module that assigns the `displayName` of a
  *   component the class-name registry knows (`X.displayName = 'Button'`, looked up with
  *   `getStableClassNames` from `src/test-utils.ts`, which also knows the display names that
@@ -86,7 +96,8 @@
 
 import { getStableClassNames } from '../test-utils';
 
-type SourceKind = 'component' | 'story';
+/** `recipe`: `src/lib/motion.ts`, the one module that may hold presence classes. */
+type SourceKind = 'component' | 'recipe' | 'story';
 
 type RuleId =
   | 'raw-color'
@@ -98,6 +109,8 @@ type RuleId =
   | 'enabled-variant'
   | 'button-type'
   | 'motion'
+  | 'presence-class'
+  | 'starting-gate'
   | 'direction-variant'
   | 'class-names'
   | 'lexer';
@@ -125,6 +138,10 @@ const HINTS: Record<RuleId, string> = {
     "use Wave's `wave-rtl:` variant: Tailwind's `rtl:`/`ltr:` also match inside a subtree of the opposite direction. Write the left-to-right value as the base class and override it with `wave-rtl:` (C-LOGICAL)",
   motion:
     'add a `motion-reduce:` variant of the same kind (`motion-reduce:transition-none` for a transition, `motion-reduce:animate-*` for an animation) to the same class string, or `// wave-allow-motion: <reason>` (C-MOTION)',
+  'presence-class':
+    "move the motion to a recipe of `src/lib/motion.ts` and apply it through the part's motion slot (`useMotionClasses`); presence classes live only there (C-MOTION)",
+  'starting-gate':
+    'gate the start on the entering phase: `data-[presence=entering]:starting:…` (C-MOTION)',
   'class-names':
     "apply `<name>ClassNames.root` first in the root element's `cn()`, from `src/lib/classNames.ts` (C-CLASS, stable class names)",
   lexer:
@@ -703,6 +720,10 @@ const PHYSICAL_UTILITIES: RegExp[] = [
 ];
 const TRANSLATE_X = /^-?translate-x-/;
 const TRANSLATE_X_ZERO = /^-?translate-x-0$/;
+/** The text of a variant keyed on a presence phase (`data-[presence=…]` and its forms). */
+const PRESENCE_VARIANT = '[presence=';
+/** The variant every `starting` class must also carry. */
+const ENTERING_VARIANT = 'data-[presence=entering]';
 
 const MARKERS = {
   physical: /wave-allow-physical\b/,
@@ -1054,6 +1075,16 @@ function scanSource(source: string, kind: SourceKind, jsx = true): Violation[] {
     addToken(t, 'motion');
   }
 
+  // presence classes outside the recipe module, and starts not gated on the entering phase
+  for (const t of tokens) {
+    if (kind !== 'recipe' && t.variants.some((v) => v.includes(PRESENCE_VARIANT))) {
+      addToken(t, 'presence-class');
+    }
+    if (t.variants.includes('starting') && !t.variants.includes(ENTERING_VARIANT)) {
+      addToken(t, 'starting-gate');
+    }
+  }
+
   // forwardRef (code only)
   lexed.bare.forEach((lineText, index) => {
     const m = /\bforwardRef\s*[<(]/.exec(lineText);
@@ -1061,8 +1092,9 @@ function scanSource(source: string, kind: SourceKind, jsx = true): Violation[] {
   });
 
   // class-names: a module that assigns the displayName of a registered component reads that
-  // constant's root in code (C-CLASS, stable class names)
-  for (const m of lexed.bareText.matchAll(DISPLAY_NAME_ASSIGNMENT)) {
+  // constant's root in code (C-CLASS, stable class names); the recipe module has no component
+  const displayNames = kind === 'recipe' ? [] : lexed.bareText.matchAll(DISPLAY_NAME_ASSIGNMENT);
+  for (const m of displayNames) {
     const offset = m.index ?? 0;
     const displayName = stringLiteralAt(lexed.codeText, offset + m[0].length);
     if (displayName === null) continue;
@@ -1115,8 +1147,13 @@ const storySources = import.meta.glob<string>('../../stories/*.stories.tsx', {
   import: 'default',
   eager: true,
 });
+const recipeSources = import.meta.glob<string>('../lib/motion.ts', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
 
-/** Glob keys are relative to `src/__tests__/`: `../components/…` and `../../stories/…`. */
+/** Glob keys are relative to `src/__tests__/`: `../components/…`, `../lib/…` and `../../stories/…`. */
 const toRepoPath = (key: string) =>
   key.startsWith('../../') ? key.slice('../../'.length) : `src/${key.slice('../'.length)}`;
 
@@ -1126,6 +1163,9 @@ const componentFiles = Object.entries(componentSources)
 const storyFiles = Object.entries(storySources)
   .map(([key, source]) => [toRepoPath(key), source] as const)
   .sort(([a], [b]) => a.localeCompare(b));
+const recipeFiles = Object.entries(recipeSources).map(
+  ([key, source]) => [toRepoPath(key), source] as const,
+);
 
 // ---------------------------------------------------------------------------
 // Rule tests (fixtures are inline, valid TSX; this file itself is not scanned)
@@ -1142,6 +1182,11 @@ describe('conventions gate rules', () => {
     expect(componentFiles.map(([p]) => p)).toContain('src/components/button/Button.tsx');
     expect(storyFiles.length).toBeGreaterThan(50);
     expect(storyFiles.map(([p]) => p)).toContain('stories/Button.stories.tsx');
+  });
+
+  it('finds the recipe module', () => {
+    expect(recipeFiles.map(([p]) => p)).toEqual(['src/lib/motion.ts']);
+    expect(recipeFiles.every(([, source]) => source.length > 0)).toBe(true);
   });
 
   describe('raw-color', () => {
@@ -1673,6 +1718,82 @@ describe('conventions gate rules', () => {
     });
   });
 
+  describe('presence-class', () => {
+    it('flags a class whose variants hold a presence phase in a component source (C-MOTION)', () => {
+      const source = [
+        `const a = cn('data-[presence=exiting]:opacity-0');`,
+        `const b = 'p-2 not-data-[presence=entered]:overflow-hidden';`,
+        `const c = <div className="group-data-[presence=exiting]/row:hidden" />;`,
+        `const d = 'data-[state=open]:opacity-100 [presence=';`,
+        `// data-[presence=exiting]:opacity-0 in a comment`,
+      ].join('\n');
+      expect(rules(source)).toEqual([
+        '1:presence-class:data-[presence=exiting]:opacity-0',
+        '2:presence-class:not-data-[presence=entered]:overflow-hidden',
+        '3:presence-class:group-data-[presence=exiting]/row:hidden',
+      ]);
+    });
+
+    it('allows presence classes in the recipe module', () => {
+      const source = [
+        `export const a = 'data-[presence=exiting]:opacity-0 not-data-[presence=entered]:overflow-hidden';`,
+        `export const b = 'group-data-[presence=exiting]/row:hidden';`,
+      ].join('\n');
+      expect(rules(source, 'recipe', false)).toEqual([]);
+    });
+  });
+
+  describe('starting-gate', () => {
+    it('flags a starting: class not gated on the entering phase (C-MOTION)', () => {
+      const source = [
+        `const a = 'starting:opacity-0';`,
+        `const b = 'data-[presence=exiting]:starting:opacity-0';`,
+        `const c = 'data-[state=open]:starting:scale-95';`,
+      ].join('\n');
+      const expected = [
+        '1:starting-gate:starting:opacity-0',
+        '2:starting-gate:data-[presence=exiting]:starting:opacity-0',
+        '3:starting-gate:data-[state=open]:starting:scale-95',
+      ];
+      expect(rules(source).filter((r) => r.includes(':starting-gate:'))).toEqual(expected);
+      expect(rules(source, 'recipe', false)).toEqual(expected);
+    });
+
+    it('allows a starting: class gated on the entering phase, with other variants too', () => {
+      const source = [
+        `const a = 'data-[presence=entering]:starting:opacity-0';`,
+        `const b = 'data-[side=top]:data-[presence=entering]:starting:translate-y-1';`,
+      ].join('\n');
+      expect(rules(source, 'recipe', false)).toEqual([]);
+    });
+  });
+
+  describe('the recipe module (src/lib/motion.ts)', () => {
+    it('runs the component rules (motion, translate-x, physical, raw-color) on it', () => {
+      const source = [
+        `export const a = 'transition-opacity';`,
+        `export const b = 'data-[side=left]:data-[presence=entering]:starting:-translate-x-1';`,
+        `// wave-allow-physical: data-side is the resolved physical side`,
+        `export const c = 'data-[side=left]:data-[presence=entering]:starting:-translate-x-1';`,
+        `export const d = 'ml-2 bg-[#fff]';`,
+      ].join('\n');
+      expect(rules(source, 'recipe', false)).toEqual([
+        '1:motion:transition-opacity',
+        '2:translate-x:data-[side=left]:data-[presence=entering]:starting:-translate-x-1',
+        '5:physical:ml-2',
+        '5:raw-color:bg-[#fff]',
+      ]);
+    });
+
+    it('does not run class-names on it (the module assigns no displayName of a component)', () => {
+      const source = [`const Button = () => null;`, `Button.displayName = 'Button';`].join('\n');
+      expect(rules(source)).toEqual([
+        "2:class-names:Button.displayName = 'Button' → buttonClassNames.root",
+      ]);
+      expect(rules(source, 'recipe', false)).toEqual([]);
+    });
+  });
+
   describe('lexer', () => {
     it('keeps strings with // and treats apostrophes in JSX text as text', () => {
       const source = [
@@ -1834,6 +1955,15 @@ describe('conventions gate: src/components', () => {
   for (const [path, source] of componentFiles) {
     it(path, () => {
       const lines = report(path, scanSource(source, 'component', path.endsWith('.tsx')));
+      expect(lines.length, `\n${lines.join('\n')}\n`).toBe(0);
+    });
+  }
+});
+
+describe('conventions gate: src/lib/motion.ts', () => {
+  for (const [path, source] of recipeFiles) {
+    it(path, () => {
+      const lines = report(path, scanSource(source, 'recipe', false));
       expect(lines.length, `\n${lines.join('\n')}\n`).toBe(0);
     });
   }

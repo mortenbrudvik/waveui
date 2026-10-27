@@ -1667,14 +1667,29 @@ function quotedLiteral(text) {
 }
 
 /**
+ * The code of a minified bundle of an import of only `keep`: the minifier drops comments and keeps
+ * the contents of string literals, so a fragment found here is in code, not in a comment.
+ */
+async function minifiedCode(distRoot, keep) {
+  const chunks = await bundleImport(distRoot, [keep], { minify: true });
+  return chunks.map((chunk) => chunk.code).join('\n');
+}
+
+/**
  * Tree-shaking probe (repo-level#3): bundles an entry that imports only `keep` from
  * `dist/index.mjs` with Vite's `build()` API (no write, no minification, bare imports external)
  * and asserts that the bundle holds `keep`'s module, only it and its static imports, no code of
  * `drop` (its module or its `displayName`) and none of `dropModules` (dist-relative module paths,
  * such as `hooks/usePresence.mjs`; a listed module that does not exist in `dist` is an error, since
- * the probe would pass vacuously). `keepStrings` and `dropStrings` (the stable class names, P3-00)
- * are string literals, matched with their quotes, that the bundle must, or must not, contain; a
- * listed string that occurs in no JavaScript module of `dist` is an error for the same reason.
+ * the probe would pass vacuously). `keepStrings` and `dropStrings` (the stable class names, P3-00;
+ * the motion recipe literals, D23) are string literals, matched with their quotes, that the bundle
+ * must, or must not, contain; a listed string that occurs in no JavaScript module of `dist` is an
+ * error for the same reason. `dropSubstrings` are fragments that no code of the bundle may contain
+ * outside comments (`[presence=`: no string of a Button-only bundle may hold a presence variant),
+ * checked on a second, minified bundle of the same entry, which drops comments and keeps string
+ * contents. Since the motion resolver's own literal holds `[presence=`, a bundle that reaches
+ * `lib/motion` always contains it: the positive control of the recipes is
+ * {@link probeIncludes}'s `strings` (the recipe literals), never the fragment alone.
  *
  * The bundler reports module ids as real paths, so the probe imports and matches them through
  * the real path of `dist`: a dist reached through a symlink or a junction (a linked checkout or
@@ -1682,7 +1697,14 @@ function quotedLiteral(text) {
  */
 export async function probeTreeShaking(
   dist,
-  { keep = 'Button', drop = 'Dialog', dropModules = [], keepStrings = [], dropStrings = [] } = {},
+  {
+    keep = 'Button',
+    drop = 'Dialog',
+    dropModules = [],
+    keepStrings = [],
+    dropStrings = [],
+    dropSubstrings = [],
+  } = {},
 ) {
   const errors = [];
   const distRoot = realpathSync(resolve(dist));
@@ -1758,27 +1780,127 @@ export async function probeTreeShaking(
   for (const text of dropStrings) {
     if (foundStrings.has(text) && quotedLiteral(text).test(code)) {
       errors.push(
-        `the bundle of an import of only ${keep} contains the string "${text}" (an unused class-name constant was not tree-shaken)`,
+        `the bundle of an import of only ${keep} contains the string "${text}" (an unused constant was not tree-shaken)`,
       );
+    }
+  }
+  if (dropSubstrings.length > 0) {
+    const minified = await minifiedCode(distRoot, keep);
+    for (const text of dropSubstrings) {
+      if (minified.includes(text)) {
+        errors.push(
+          `the bundle of an import of only ${keep} contains "${text}" outside comments (its minified code)`,
+        );
+      }
     }
   }
   return errors;
 }
 
 /**
+ * The motion recipes' module (spec §2.2, D23): server-safe, so the probe imports it in Node.js.
+ * Vite emits it only once a component imports it.
+ */
+const MOTION_MODULE = 'lib/motion.mjs';
+
+/**
+ * The fewest recipe literals {@link motionRecipeLiterals} accepts from {@link MOTION_MODULE}: 0
+ * until a component imports the module; the Dialog package (P10-DLG) sets 2 and INTEGRATION the
+ * release count of spec §2.2's table.
+ */
+export const MOTION_RECIPE_MIN = 0;
+
+/**
+ * The text one of which every motion literal holds (spec §2.10; `duration-wave-` because the drawer
+ * durations, a recipe composed with the drawer motion at run time, hold none of the other three).
+ */
+const MOTION_RECIPE_MARKERS = ['[presence=', 'transition', 'animate-', 'duration-wave-'];
+
+/**
+ * Every string value of the exports of `dist/lib/motion.mjs`, one level into records (exports in
+ * the module's order, a record's values in key order), imported by file URL: the recipe literals
+ * the Button-only probe must not find (`dropStrings`; spec D23). Functions (the resolver) are
+ * skipped. Errors: the module does not exist (the probe would pass vacuously), it holds fewer than
+ * `min` distinct literals, a value holds none of {@link MOTION_RECIPE_MARKERS} (not a recipe), or
+ * an export is neither a string, a record of strings nor a function.
+ */
+export async function motionRecipeLiterals(dist, { min = MOTION_RECIPE_MIN } = {}) {
+  const file = join(realpathSync(resolve(dist)), MOTION_MODULE);
+  if (!existsSync(file)) {
+    return { literals: [], errors: [`${MOTION_MODULE} does not exist in dist`] };
+  }
+  const mod = await import(pathToFileURL(file).href);
+  const literals = [];
+  const errors = [];
+  const add = (label, value) => {
+    if (!MOTION_RECIPE_MARKERS.some((marker) => value.includes(marker))) {
+      errors.push(
+        `${MOTION_MODULE}: ${label} ("${value}") holds none of ${MOTION_RECIPE_MARKERS.join(', ')} (not a recipe)`,
+      );
+    }
+    if (!literals.includes(value)) literals.push(value);
+  };
+  for (const [name, value] of Object.entries(mod)) {
+    if (typeof value === 'function') continue;
+    if (typeof value === 'string') {
+      add(name, value);
+    } else if (
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      Object.values(value).every((item) => typeof item === 'string')
+    ) {
+      for (const [key, item] of Object.entries(value)) add(`${name}.${key}`, item);
+    } else {
+      errors.push(
+        `${MOTION_MODULE}: ${name} is neither a string, a record of strings nor a function`,
+      );
+    }
+  }
+  if (literals.length < min) {
+    errors.push(
+      `${MOTION_MODULE} holds ${literals.length} recipe literals, fewer than the minimum of ${min}`,
+    );
+  }
+  return { literals, errors };
+}
+
+/**
  * Inclusion probe: bundles an entry that imports only `keep` from `dist/index.mjs`, as the
  * tree-shaking probe does, and reports each of `modules` (dist-relative module paths) that is not
  * in the bundle — a probe that detects a module where it is used, so a check that it is dropped
- * elsewhere cannot pass because the module is missing.
+ * elsewhere cannot pass because the module is missing. `strings` are string literals, matched
+ * whole with their quotes, that the bundle must contain; `substrings` are fragments its code
+ * (minified, so comments are dropped and string contents kept) must contain: the same matchers as
+ * the tree-shaking probe's `dropStrings` and `dropSubstrings`, so a positive control proves they
+ * see what they look for (spec D23). The recipes' control lists their literals in `strings`: the
+ * motion resolver's own literal holds `[presence=`, so that fragment alone is found in any bundle
+ * that reaches `lib/motion`, recipes or not.
  */
-export async function probeIncludes(dist, { keep, modules }) {
+export async function probeIncludes(dist, { keep, modules, strings = [], substrings = [] }) {
   const distRoot = realpathSync(resolve(dist));
-  const included = new Set(
-    [...bundledModules(distRoot, await bundleImport(distRoot, [keep]))].map(fold),
-  );
-  return modules
+  const chunks = await bundleImport(distRoot, [keep]);
+  const included = new Set([...bundledModules(distRoot, chunks)].map(fold));
+  const errors = modules
     .filter((path) => !included.has(fold(path)))
     .map((path) => `${path} is not in the bundle of an import of only ${keep}`);
+  const code = chunks.map((chunk) => chunk.code).join('\n');
+  for (const text of strings) {
+    if (!quotedLiteral(text).test(code)) {
+      errors.push(`the bundle of an import of only ${keep} lacks the string "${text}"`);
+    }
+  }
+  if (substrings.length > 0) {
+    const minified = await minifiedCode(distRoot, keep);
+    for (const text of substrings) {
+      if (!minified.includes(text)) {
+        errors.push(
+          `the bundle of an import of only ${keep} lacks "${text}" outside comments (its minified code)`,
+        );
+      }
+    }
+  }
+  return errors;
 }
 
 /**
