@@ -6,6 +6,10 @@ import userEvent from '@testing-library/user-event';
 import {
   TeachingPopover,
   TeachingPopoverBody,
+  TeachingPopoverCarousel,
+  TeachingPopoverCarouselFooter,
+  TeachingPopoverCarouselNav,
+  TeachingPopoverCarouselPageCount,
   TeachingPopoverFooter,
   TeachingPopoverHeader,
   TeachingPopoverSurface,
@@ -13,6 +17,10 @@ import {
   TeachingPopoverTrigger,
   type TeachingPopoverAction,
   type TeachingPopoverBodyProps,
+  type TeachingPopoverCarouselFooterProps,
+  type TeachingPopoverCarouselNavProps,
+  type TeachingPopoverCarouselPageCountProps,
+  type TeachingPopoverCarouselProps,
   type TeachingPopoverFooterProps,
   type TeachingPopoverHeaderProps,
   type TeachingPopoverLabels,
@@ -25,6 +33,10 @@ import { Button } from '../../button/Button';
 import {
   buttonClassNames,
   teachingPopoverBodyClassNames,
+  teachingPopoverCarouselClassNames,
+  teachingPopoverCarouselFooterClassNames,
+  teachingPopoverCarouselNavClassNames,
+  teachingPopoverCarouselPageCountClassNames,
   teachingPopoverClassNames,
   teachingPopoverFooterClassNames,
   teachingPopoverHeaderClassNames,
@@ -2919,6 +2931,725 @@ describe('TeachingPopover parts: Header, Title, Body and Footer (P9-08)', () => 
       expect(heading()).toHaveTextContent('Features, step 2 of 3');
       await user.click(screen.getByRole('button', { name: 'Close' }));
       expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and CarouselFooter (P9-08)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const trigger = () => screen.getByRole('button', { name: 'Take the tour' });
+  const nav = () => screen.getByRole('group', { name: 'Choose step' });
+  const stepButtons = () => within(nav()).getAllByRole('button');
+
+  /**
+   * A three-step tour built only from parts: a caption, then the carousel with the step title and
+   * body and the carousel footer, whose indicator is the interactive step buttons by default.
+   */
+  function CarouselTour({
+    withTrigger = false,
+    footer,
+    indicator = <TeachingPopover.CarouselNav />,
+    ...props
+  }: Partial<Omit<TeachingPopoverProps, 'children'>> & {
+    withTrigger?: boolean;
+    footer?: Partial<TeachingPopoverCarouselFooterProps>;
+    indicator?: React.ReactNode;
+  }) {
+    return (
+      <TeachingPopover steps={steps} {...props}>
+        {withTrigger && (
+          <TeachingPopover.Trigger>
+            <Button>Take the tour</Button>
+          </TeachingPopover.Trigger>
+        )}
+        <TeachingPopover.Surface>
+          <TeachingPopover.Header>Tip</TeachingPopover.Header>
+          <TeachingPopover.Carousel>
+            <TeachingPopover.Title />
+            <TeachingPopover.Body />
+            <TeachingPopover.CarouselFooter {...footer}>{indicator}</TeachingPopover.CarouselFooter>
+          </TeachingPopover.Carousel>
+        </TeachingPopover.Surface>
+      </TeachingPopover>
+    );
+  }
+
+  /** A surface named by its own label, for a part tested on its own. */
+  function InSurface({ children }: { children?: React.ReactNode }) {
+    return (
+      <TeachingPopover steps={steps}>
+        <TeachingPopover.Surface aria-label="Tour">{children}</TeachingPopover.Surface>
+      </TeachingPopover>
+    );
+  }
+
+  testCompoundExposure(TeachingPopover, [
+    'Carousel',
+    'CarouselNav',
+    'CarouselPageCount',
+    'CarouselFooter',
+  ]);
+
+  it('exports the parts under their flat names for React Server Components (C-COMPOUND)', () => {
+    expect(TeachingPopoverCarousel).toBeTypeOf('function');
+    expect(TeachingPopoverCarousel).toBe(TeachingPopover.Carousel);
+    expect(TeachingPopoverCarouselNav).toBeTypeOf('function');
+    expect(TeachingPopoverCarouselNav).toBe(TeachingPopover.CarouselNav);
+    expect(TeachingPopoverCarouselPageCount).toBeTypeOf('function');
+    expect(TeachingPopoverCarouselPageCount).toBe(TeachingPopover.CarouselPageCount);
+    expect(TeachingPopoverCarouselFooter).toBeTypeOf('function');
+    expect(TeachingPopoverCarouselFooter).toBe(TeachingPopover.CarouselFooter);
+  });
+
+  it('types the parts', () => {
+    expectTypeOf<TeachingPopoverCarouselProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<TeachingPopoverCarouselNavProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- the step buttons come from `steps`, not from children
+    expectTypeOf<TeachingPopoverCarouselNavProps>().toHaveProperty('children');
+    expectTypeOf<TeachingPopoverCarouselPageCountProps['children']>().toEqualTypeOf<
+      ((current: number, total: number) => React.ReactNode) | undefined
+    >();
+    expectTypeOf<TeachingPopoverCarouselFooterProps['layout']>().toEqualTypeOf<
+      'offset' | 'centered' | undefined
+    >();
+    expectTypeOf<TeachingPopoverCarouselFooterProps['initialStepText']>().toEqualTypeOf<
+      string | undefined
+    >();
+    expectTypeOf<TeachingPopoverCarouselFooterProps['finalStepText']>().toEqualTypeOf<
+      string | undefined
+    >();
+    expectTypeOf<TeachingPopoverLabels['nav']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<TeachingPopoverLabels['navButton']>().toEqualTypeOf<
+      ((index: number, count: number) => string) | undefined
+    >();
+  });
+
+  it('a three-step tour built entirely from parts advances and finishes, then returns focus to the Trigger', async () => {
+    const user = userEvent.setup();
+    const onStepChange = vi.fn();
+    const onFinish = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <CarouselTour
+        withTrigger
+        footer={{ finalStepText: 'Got it' }}
+        onStepChange={onStepChange}
+        onFinish={onFinish}
+        onDismiss={onDismiss}
+      />,
+    );
+    await user.click(trigger());
+    const dialog = await screen.findByRole('dialog', { name: 'Welcome, step 1 of 3' });
+    await waitFor(() => expect(dialog).toHaveFocus());
+    expect(within(dialog).getByText('This is step one.')).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
+    expect(heading()).toHaveTextContent('Features, step 2 of 3');
+    expect(within(dialog).getByText('Here are the features.')).toBeInTheDocument();
+    await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Features, step 2 of 3'));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
+    expect(heading()).toHaveTextContent('Done, step 3 of 3');
+    expect(within(dialog).queryByRole('button', { name: 'Next' })).toBeNull();
+    await user.click(within(dialog).getByRole('button', { name: 'Got it' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onStepChange.mock.calls).toEqual([[1], [2]]);
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(trigger()).toHaveFocus();
+  });
+
+  describe('Carousel', () => {
+    testSystemProps(TeachingPopoverCarousel, {
+      expectedTag: 'div',
+      displayName: 'TeachingPopoverCarousel',
+      wrapper: InSurface,
+    });
+
+    it('without children shows the step title and body and the carousel footer', async () => {
+      const user = userEvent.setup();
+      render(
+        <TeachingPopover steps={steps}>
+          <TeachingPopover.Surface>
+            <TeachingPopover.Header />
+            <TeachingPopover.Carousel data-testid="carousel" />
+          </TeachingPopover.Surface>
+        </TeachingPopover>,
+      );
+      const carousel = screen.getByTestId('carousel');
+      expect(carousel).toHaveClass(teachingPopoverCarouselClassNames.root);
+      expect(screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' })).toBeInTheDocument();
+      expect(within(carousel).getByRole('heading', { level: 3 })).toBe(heading());
+      expect(within(carousel).getByText('This is step one.')).toBeInTheDocument();
+      const footer = carousel.querySelector(`.${teachingPopoverCarouselFooterClassNames.root}`);
+      expect(footer).not.toBeNull();
+      expect(dots()).toHaveLength(3);
+      expect(footer).toContainElement(dots()[0]);
+      expect(within(carousel).getByRole('button', { name: 'Back' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await user.click(within(carousel).getByRole('button', { name: 'Next' }));
+      expect(heading()).toHaveTextContent('Features, step 2 of 3');
+    });
+
+    it('children replace its default content', () => {
+      render(
+        <InSurface>
+          <TeachingPopover.Carousel>
+            <p>Press Ctrl+K.</p>
+          </TeachingPopover.Carousel>
+        </InSurface>,
+      );
+      expect(screen.getByText('Press Ctrl+K.').parentElement).toHaveClass(
+        teachingPopoverCarouselClassNames.root,
+      );
+      expect(screen.queryByRole('heading')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
+    });
+  });
+
+  describe('CarouselNav', () => {
+    testSystemProps(TeachingPopoverCarouselNav, {
+      expectedTag: 'div',
+      displayName: 'TeachingPopoverCarouselNav',
+      wrapper: InSurface,
+      conflictingClass: { className: 'inline-flex', overrides: 'flex' },
+    });
+
+    it('renders a group of step buttons, each named for its step, the current one with aria-current', () => {
+      render(<CarouselTour activeStep={1} />);
+      expect(nav()).toHaveClass(teachingPopoverCarouselNavClassNames.root);
+      const buttons = stepButtons();
+      expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+        'Step 1 of 3',
+        'Step 2 of 3',
+        'Step 3 of 3',
+      ]);
+      expect(buttons.map((button) => button.getAttribute('aria-current'))).toEqual([
+        null,
+        'step',
+        null,
+      ]);
+      for (const button of buttons) {
+        expect(button).toHaveAttribute('type', 'button');
+        expect(button).toHaveClass(teachingPopoverCarouselNavClassNames.button);
+        const indicator = button.firstElementChild;
+        expect(indicator).toHaveClass(teachingPopoverCarouselNavClassNames.indicator);
+        expect(indicator).toHaveAttribute('aria-hidden', 'true');
+      }
+      expect(buttons[1].firstElementChild).toHaveClass('w-4', 'bg-primary');
+      expect(buttons[0].firstElementChild).toHaveClass('w-1.5', 'bg-stroke-accessible');
+    });
+
+    it('keeps its indicators visible in forced colors, the current one in Highlight', () => {
+      render(<CarouselTour activeStep={1} />);
+      const [first, second, third] = stepButtons().map((button) => button.firstElementChild);
+      expect(second).toHaveClass(
+        'forced-colors:bg-[Highlight]',
+        'forced-colors:forced-color-adjust-none',
+      );
+      for (const indicator of [first, third]) {
+        expect(indicator).toHaveClass(
+          'forced-colors:bg-[ButtonText]',
+          'forced-colors:forced-color-adjust-none',
+        );
+        expect(indicator).not.toHaveClass('forced-colors:bg-[Highlight]');
+      }
+    });
+
+    it('makes every step button a Tab stop, between the Close button and Back', async () => {
+      const user = userEvent.setup();
+      render(<CarouselTour />);
+      expect(screen.getByRole('dialog')).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+      for (const name of ['Step 1 of 3', 'Step 2 of 3', 'Step 3 of 3', 'Back', 'Next']) {
+        await user.tab();
+        expect(screen.getByRole('button', { name })).toHaveFocus();
+      }
+    });
+
+    it('a step button jumps to its step: onStepChange, the announcement, and focus stays on it', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      render(<CarouselTour onStepChange={onStepChange} />);
+      const third = screen.getByRole('button', { name: 'Step 3 of 3' });
+      await user.click(third);
+      expect(heading()).toHaveTextContent('Done, step 3 of 3');
+      expect(third).toHaveFocus();
+      expect(third).toHaveAttribute('aria-current', 'step');
+      expect(screen.getByRole('button', { name: 'Step 1 of 3' })).not.toHaveAttribute(
+        'aria-current',
+      );
+      expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+      await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Done, step 3 of 3'));
+      expect(onStepChange.mock.calls).toEqual([[2]]);
+
+      await user.keyboard('{Enter}');
+      await user.click(screen.getByRole('button', { name: 'Step 3 of 3' }));
+      expect(onStepChange.mock.calls).toEqual([[2]]);
+      await user.click(screen.getByRole('button', { name: 'Step 1 of 3' }));
+      expect(heading()).toHaveTextContent('Welcome, step 1 of 3');
+      expect(onStepChange.mock.calls).toEqual([[2], [0]]);
+    });
+
+    it('a controlled activeStep only changes through the parent', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      render(<CarouselTour activeStep={0} onStepChange={onStepChange} />);
+      await user.click(screen.getByRole('button', { name: 'Step 2 of 3' }));
+      expect(onStepChange.mock.calls).toEqual([[1]]);
+      expect(heading()).toHaveTextContent('Welcome, step 1 of 3');
+    });
+
+    it('fires onStepChange once per step button under StrictMode', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <CarouselTour onStepChange={onStepChange} />
+        </React.StrictMode>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Step 2 of 3' }));
+      expect(onStepChange.mock.calls).toEqual([[1]]);
+    });
+
+    it('labels localizes the group and the step buttons (C-NAMING)', () => {
+      render(
+        <CarouselTour
+          labels={{
+            nav: 'Velg steg',
+            navButton: (index, count) => `Steg ${index + 1} av ${count}`,
+          }}
+        />,
+      );
+      const group = screen.getByRole('group', { name: 'Velg steg' });
+      expect(
+        within(group)
+          .getAllByRole('button')
+          .map((button) => button.getAttribute('aria-label')),
+      ).toEqual(['Steg 1 av 3', 'Steg 2 av 3', 'Steg 3 av 3']);
+    });
+
+    it('keeps the step order in RTL and jumps there too', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<CarouselTour />, { dir: 'rtl' });
+      expect(stepButtons().map((button) => button.getAttribute('aria-label'))).toEqual([
+        'Step 1 of 3',
+        'Step 2 of 3',
+        'Step 3 of 3',
+      ]);
+      await user.click(screen.getByRole('button', { name: 'Step 2 of 3' }));
+      expect(heading()).toHaveTextContent('Features, step 2 of 3');
+    });
+  });
+
+  describe('the 0.13 step dots without CarouselNav', () => {
+    it('the steps form keeps its decorative dots and has no step buttons', () => {
+      render(<TeachingPopover steps={steps} activeStep={1} />);
+      expect(dots()).toHaveLength(3);
+      expect(dots()[0].parentElement).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.queryByRole('group')).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Step \d of 3$/ })).toBeNull();
+    });
+
+    it('a CarouselFooter without children shows the same decorative dots as the steps form', () => {
+      const plain = render(<TeachingPopover steps={steps} activeStep={1} />);
+      const expected = dots()[0].parentElement?.outerHTML;
+      plain.unmount();
+
+      render(<CarouselTour activeStep={1} indicator={null} />);
+      expect(dots()[0].parentElement?.outerHTML).toBe(expected);
+      expect(screen.queryByRole('group')).toBeNull();
+    });
+  });
+
+  describe('CarouselPageCount', () => {
+    testSystemProps(TeachingPopoverCarouselPageCount, {
+      expectedTag: 'div',
+      displayName: 'TeachingPopoverCarouselPageCount',
+      wrapper: InSurface,
+      conflictingClass: { className: 'text-foreground', overrides: 'text-muted-foreground' },
+    });
+
+    it('shows the visible “n of m” and follows the step', async () => {
+      const user = userEvent.setup();
+      render(
+        <CarouselTour indicator={<TeachingPopover.CarouselPageCount data-testid="count" />} />,
+      );
+      const count = screen.getByTestId('count');
+      expect(count).toHaveClass(teachingPopoverCarouselPageCountClassNames.root);
+      expect(count).toHaveTextContent(/^1 of 3$/);
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      expect(count).toHaveTextContent(/^2 of 3$/);
+    });
+
+    it('a render function receives the one-based current step and the total', async () => {
+      const user = userEvent.setup();
+      const renderCount = vi.fn((current: number, total: number) => `Steg ${current} av ${total}`);
+      render(
+        <CarouselTour
+          indicator={
+            <TeachingPopover.CarouselPageCount data-testid="count">
+              {renderCount}
+            </TeachingPopover.CarouselPageCount>
+          }
+        />,
+      );
+      expect(screen.getByTestId('count')).toHaveTextContent(/^Steg 1 av 3$/);
+      expect(renderCount).toHaveBeenLastCalledWith(1, 3);
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      expect(screen.getByTestId('count')).toHaveTextContent(/^Steg 2 av 3$/);
+      expect(renderCount).toHaveBeenLastCalledWith(2, 3);
+    });
+
+    it('a render function that renders nothing keeps the default text', () => {
+      render(
+        <CarouselTour
+          indicator={
+            <TeachingPopover.CarouselPageCount data-testid="count">
+              {() => null}
+            </TeachingPopover.CarouselPageCount>
+          }
+        />,
+      );
+      expect(screen.getByTestId('count')).toHaveTextContent(/^1 of 3$/);
+    });
+
+    it('sits next to the step buttons', () => {
+      render(
+        <CarouselTour
+          indicator={
+            <>
+              <TeachingPopover.CarouselNav />
+              <TeachingPopover.CarouselPageCount data-testid="count" />
+            </>
+          }
+        />,
+      );
+      expect(stepButtons()).toHaveLength(3);
+      expect(screen.getByTestId('count')).toHaveTextContent('1 of 3');
+    });
+  });
+
+  describe('CarouselFooter', () => {
+    testSystemProps(TeachingPopoverCarouselFooter, {
+      expectedTag: 'div',
+      displayName: 'TeachingPopoverCarouselFooter',
+      wrapper: InSurface,
+      conflictingClass: { className: 'gap-4', overrides: 'gap-2' },
+    });
+
+    it('carries the footer classes and data-carousel-layout: the indicator first by default, between the buttons when centered', () => {
+      const footerOf = () =>
+        document.querySelector<HTMLElement>(`.${teachingPopoverCarouselFooterClassNames.root}`)!;
+      const order = () => {
+        const back = screen.getByRole('button', { name: 'Back' });
+        const next = screen.getByRole('button', { name: 'Next' });
+        const before = (a: Node, b: Node) =>
+          Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        return {
+          navFirst: before(nav(), back),
+          navBetween: before(back, nav()) && before(nav(), next),
+        };
+      };
+      const { rerender } = render(<CarouselTour footerLayout="vertical" />);
+      expect(footerOf()).toHaveClass(
+        teachingPopoverCarouselFooterClassNames.root,
+        teachingPopoverClassNames.footer,
+      );
+      expect(footerOf()).toHaveAttribute('data-carousel-layout', 'offset');
+      expect(footerOf()).not.toHaveAttribute('data-layout');
+      expect(order()).toEqual({ navFirst: true, navBetween: false });
+
+      rerender(<CarouselTour footerLayout="vertical" footer={{ layout: 'centered' }} />);
+      expect(footerOf()).toHaveAttribute('data-carousel-layout', 'centered');
+      expect(order()).toEqual({ navFirst: false, navBetween: true });
+    });
+
+    it('children replace the dots and keep the buttons; children that render nothing keep the dots', () => {
+      const { rerender } = render(<CarouselTour />);
+      expect(dots()).toHaveLength(0);
+      expect(stepButtons()).toHaveLength(3);
+      expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+      rerender(<CarouselTour indicator={false} />);
+      expect(dots()).toHaveLength(3);
+      expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+    });
+
+    it('finalStepText names the primary button on the last step only, and finishes the tour', async () => {
+      const user = userEvent.setup();
+      const onFinish = vi.fn();
+      const { rerender } = render(
+        <CarouselTour activeStep={0} footer={{ finalStepText: 'Got it' }} />,
+      );
+      expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+      rerender(
+        <CarouselTour activeStep={2} footer={{ finalStepText: 'Got it' }} onFinish={onFinish} />,
+      );
+      const gotIt = screen.getByRole('button', { name: 'Got it' });
+      expect(gotIt).toHaveClass(teachingPopoverClassNames.nextButton);
+      expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
+      await user.click(gotIt);
+      expect(onFinish).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('without finalStepText the last step keeps the Done label of labels', () => {
+      render(<CarouselTour activeStep={2} labels={{ done: 'Ferdig', next: 'Neste' }} />);
+      expect(screen.getByRole('button', { name: 'Ferdig' })).toBeInTheDocument();
+    });
+
+    it('without initialStepText, Back on the first step is aria-disabled, does nothing and keeps focus (0.13)', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      const onDismiss = vi.fn();
+      render(
+        <CarouselTour defaultActiveStep={1} onStepChange={onStepChange} onDismiss={onDismiss} />,
+      );
+      const back = screen.getByRole('button', { name: 'Back' });
+      await user.click(back);
+      expect(heading()).toHaveTextContent('Welcome, step 1 of 3');
+      expect(back).toHaveFocus();
+      expect(back).toHaveAttribute('aria-disabled', 'true');
+      await user.click(back);
+      expect(onStepChange.mock.calls).toEqual([[0]]);
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('initialStepText makes the first step’s secondary button an enabled button that dismisses', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const onDismiss = vi.fn();
+      const onFinish = vi.fn();
+      const onStepChange = vi.fn();
+      render(
+        <CarouselTour
+          footer={{ initialStepText: 'Not now' }}
+          onOpenChange={onOpenChange}
+          onDismiss={onDismiss}
+          onFinish={onFinish}
+          onStepChange={onStepChange}
+        />,
+      );
+      const notNow = screen.getByRole('button', { name: 'Not now' });
+      expect(notNow).not.toHaveAttribute('aria-disabled');
+      expect(notNow).not.toBeDisabled();
+      expect(notNow).toHaveClass(teachingPopoverClassNames.backButton);
+      expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+      await user.click(notNow);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(onOpenChange.mock.calls).toEqual([[false]]);
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(onFinish).not.toHaveBeenCalled();
+      expect(onStepChange).not.toHaveBeenCalled();
+    });
+
+    it('initialStepText leaves Back on the other steps; back on the first step, focus stays on that button', async () => {
+      const user = userEvent.setup();
+      render(<CarouselTour defaultActiveStep={1} footer={{ initialStepText: 'Not now' }} />);
+      const back = screen.getByRole('button', { name: 'Back' });
+      expect(back).not.toHaveAttribute('aria-disabled');
+      await user.click(back);
+      expect(heading()).toHaveTextContent('Welcome, step 1 of 3');
+      const notNow = screen.getByRole('button', { name: 'Not now' });
+      expect(notNow).toBe(back);
+      expect(notNow).toHaveFocus();
+      expect(notNow).not.toHaveAttribute('aria-disabled');
+    });
+
+    it('focus returns to the Trigger when initialStepText dismisses', async () => {
+      const user = userEvent.setup();
+      render(<CarouselTour withTrigger footer={{ initialStepText: 'Not now' }} />);
+      await user.click(trigger());
+      const dialog = await screen.findByRole('dialog');
+      await waitFor(() => expect(dialog).toHaveFocus());
+      await user.click(screen.getByRole('button', { name: 'Not now' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+    });
+
+    it('a single step shows initialStepText next to the final button', () => {
+      render(
+        <CarouselTour
+          steps={[{ title: 'Tip', body: 'Press Ctrl+K.' }]}
+          footer={{ initialStepText: 'Not now', finalStepText: 'Got it' }}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    });
+
+    it('a single step without initialStepText has no Back, as the steps form', () => {
+      render(<CarouselTour steps={[{ title: 'Tip', body: 'Press Ctrl+K.' }]} indicator={null} />);
+      expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+    });
+
+    it('the actions replace the buttons that the texts relabel', async () => {
+      const user = userEvent.setup();
+      const onFinish = vi.fn();
+      render(
+        <CarouselTour
+          steps={[{ title: 'Tip', body: 'Press Ctrl+K.' }]}
+          primaryAction="Finish"
+          secondaryAction="Skip"
+          footer={{ initialStepText: 'Not now', finalStepText: 'Got it' }}
+          onFinish={onFinish}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Skip' })).toHaveClass(
+        teachingPopoverClassNames.secondaryButton,
+      );
+      expect(screen.queryByRole('button', { name: 'Not now' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Got it' })).toBeNull();
+      await user.click(screen.getByRole('button', { name: 'Finish' }));
+      expect(onFinish).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('has no axe violations for a carousel tour built from parts', async () => {
+    const { rerender } = render(
+      <CarouselTour
+        activeStep={1}
+        footer={{ layout: 'centered' }}
+        indicator={
+          <>
+            <TeachingPopover.CarouselNav />
+            <TeachingPopover.CarouselPageCount />
+          </>
+        }
+      />,
+    );
+    expect(screen.getByRole('dialog', { name: 'Features, step 2 of 3' })).toBeInTheDocument();
+    await expectNoA11yViolations();
+    rerender(
+      <CarouselTour
+        activeStep={0}
+        footer={{ initialStepText: 'Not now', finalStepText: 'Got it' }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
+    await expectNoA11yViolations();
+  });
+
+  describe('outside a TeachingPopover (C-CONTEXT)', () => {
+    it('each part throws in development', () => {
+      expectThrows(
+        <TeachingPopover.Carousel />,
+        '[WaveUI] TeachingPopover.Carousel must be used within TeachingPopover',
+      );
+      expectThrows(
+        <TeachingPopover.CarouselNav />,
+        '[WaveUI] TeachingPopover.CarouselNav must be used within TeachingPopover',
+      );
+      expectThrows(
+        <TeachingPopover.CarouselPageCount />,
+        '[WaveUI] TeachingPopover.CarouselPageCount must be used within TeachingPopover',
+      );
+      expectThrows(
+        <TeachingPopover.CarouselFooter />,
+        '[WaveUI] TeachingPopover.CarouselFooter must be used within TeachingPopover',
+      );
+    });
+
+    it('in production, each part logs once and renders nothing', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const ui = (tick: number) => (
+        <div data-tick={tick}>
+          <TeachingPopover.Carousel />
+          <TeachingPopover.CarouselNav />
+          <TeachingPopover.CarouselPageCount />
+          <TeachingPopover.CarouselFooter />
+        </div>
+      );
+      const { container, rerender } = render(ui(0));
+      rerender(ui(1));
+      expect(error.mock.calls).toEqual([
+        ['[WaveUI] TeachingPopover.Carousel must be used within TeachingPopover'],
+        ['[WaveUI] TeachingPopover.CarouselNav must be used within TeachingPopover'],
+        ['[WaveUI] TeachingPopover.CarouselPageCount must be used within TeachingPopover'],
+        ['[WaveUI] TeachingPopover.CarouselFooter must be used within TeachingPopover'],
+      ]);
+      expect(container.firstElementChild).toBeEmptyDOMElement();
+    });
+  });
+
+  describe('parts written in a Server Component', () => {
+    // A client component written in a Server Component reaches the client as a lazy reference.
+    const plainParts = {
+      Surface: TeachingPopoverSurface,
+      Title: TeachingPopoverTitle,
+      Body: TeachingPopoverBody,
+      Carousel: TeachingPopoverCarousel,
+      CarouselNav: TeachingPopoverCarouselNav,
+      CarouselPageCount: TeachingPopoverCarouselPageCount,
+      CarouselFooter: TeachingPopoverCarouselFooter,
+    };
+    const lazyParts = {
+      Surface: asClientReference(TeachingPopoverSurface),
+      Title: asClientReference(TeachingPopoverTitle),
+      Body: asClientReference(TeachingPopoverBody),
+      Carousel: asClientReference(TeachingPopoverCarousel),
+      CarouselNav: asClientReference(TeachingPopoverCarouselNav),
+      CarouselPageCount: asClientReference(TeachingPopoverCarouselPageCount),
+      CarouselFooter: asClientReference(TeachingPopoverCarouselFooter),
+    };
+
+    function Tip({ parts, onFinish }: { parts: typeof plainParts; onFinish?: () => void }) {
+      return (
+        <TeachingPopover steps={steps} onFinish={onFinish}>
+          <parts.Surface>
+            <parts.Carousel>
+              <parts.Title />
+              <parts.Body />
+              <parts.CarouselFooter initialStepText="Not now" finalStepText="Got it">
+                <parts.CarouselNav />
+                <parts.CarouselPageCount />
+              </parts.CarouselFooter>
+            </parts.Carousel>
+          </parts.Surface>
+        </TeachingPopover>
+      );
+    }
+
+    it('server-renders the same HTML as with the plain part types', () => {
+      const html = renderToString(<Tip parts={plainParts} />);
+      expect(html).toContain('Welcome');
+      expect(html).toContain(teachingPopoverCarouselClassNames.root);
+      expect(html).toContain(teachingPopoverCarouselNavClassNames.root);
+      expect(html).toContain(teachingPopoverCarouselPageCountClassNames.root);
+      expect(html).toContain(teachingPopoverCarouselFooterClassNames.root);
+      expect(html).toContain('Step 2 of 3');
+      expect(html).toContain('Not now');
+      expect(renderToString(<Tip parts={lazyParts} />)).toBe(html);
+    });
+
+    it('lazy parts render the defaults, jump, advance and finish', async () => {
+      const user = userEvent.setup();
+      const onFinish = vi.fn();
+      render(<Tip parts={lazyParts} onFinish={onFinish} />);
+      await act(async () => {});
+      expect(screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' })).toBeInTheDocument();
+      expect(screen.getByText('1 of 3')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Step 2 of 3' }));
+      expect(heading()).toHaveTextContent('Features, step 2 of 3');
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      await user.click(screen.getByRole('button', { name: 'Got it' }));
+      expect(onFinish).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 });

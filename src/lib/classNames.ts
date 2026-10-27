@@ -1372,10 +1372,12 @@ export const drawerFooterClassNames = { root: 'wave-drawer-footer' } as const;
 /**
  * TeachingPopover: `root` on the `role="dialog"` surface (also when TeachingPopover.Surface
  * renders it); `beak` on the arrow; `closeButton`, `backButton` and `nextButton` on its buttons
- * (which also carry Button's root); `primaryButton` and `secondaryButton` on the buttons that a
- * `primaryAction` and a `secondaryAction` render in place of Next/Done and Back; `title` on the
- * step title (an `<h3>`, or the element of TeachingPopover.Title's `as`); `body` on the step body;
- * `footer` on the bottom row; `dot` on each step dot.
+ * (which also carry Button's root; `backButton` also on the first step's button that a
+ * TeachingPopover.CarouselFooter's `initialStepText` names); `primaryButton` and `secondaryButton`
+ * on the buttons that a `primaryAction` and a `secondaryAction` render in place of Next/Done and
+ * Back; `title` on the step title (an `<h3>`, or the element of TeachingPopover.Title's `as`);
+ * `body` on the step body; `footer` on the bottom row (TeachingPopover.Footer's, or
+ * TeachingPopover.CarouselFooter's); `dot` on each decorative step dot.
  */
 export const teachingPopoverClassNames = {
   root: 'wave-teaching-popover',
@@ -1428,6 +1430,38 @@ export const teachingPopoverBodyClassNames = {
  * which also carries TeachingPopover's `footer`.
  */
 export const teachingPopoverFooterClassNames = { root: 'wave-teaching-popover-footer' } as const;
+
+/**
+ * TeachingPopover.Carousel: `root` on the element that holds the step content and the carousel
+ * footer.
+ */
+export const teachingPopoverCarouselClassNames = {
+  root: 'wave-teaching-popover-carousel',
+} as const;
+
+/**
+ * TeachingPopover.CarouselNav: `root` on the `role="group"` element of the step buttons; `button`
+ * on each step button; `indicator` on the dot inside it.
+ */
+export const teachingPopoverCarouselNavClassNames = {
+  root: 'wave-teaching-popover-carousel-nav',
+  button: 'wave-teaching-popover-carousel-nav__button',
+  indicator: 'wave-teaching-popover-carousel-nav__indicator',
+} as const;
+
+/** TeachingPopover.CarouselPageCount: `root` on the element of the visible step count. */
+export const teachingPopoverCarouselPageCountClassNames = {
+  root: 'wave-teaching-popover-carousel-page-count',
+} as const;
+
+/**
+ * TeachingPopover.CarouselFooter: `root` on the footer element, which also carries
+ * TeachingPopover's `footer`. Its buttons carry TeachingPopover's button classes, and its
+ * decorative step dots TeachingPopover's `dot`.
+ */
+export const teachingPopoverCarouselFooterClassNames = {
+  root: 'wave-teaching-popover-carousel-footer',
+} as const;
 
 // ---------------------------------------------------------------------------
 // table

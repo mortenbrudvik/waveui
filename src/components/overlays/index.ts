@@ -71,6 +71,10 @@ export {
   TeachingPopoverTitle,
   TeachingPopoverBody,
   TeachingPopoverFooter,
+  TeachingPopoverCarousel,
+  TeachingPopoverCarouselNav,
+  TeachingPopoverCarouselPageCount,
+  TeachingPopoverCarouselFooter,
 } from './TeachingPopover';
 export type {
   TeachingPopoverProps,
@@ -85,4 +89,8 @@ export type {
   TeachingPopoverTitleProps,
   TeachingPopoverBodyProps,
   TeachingPopoverFooterProps,
+  TeachingPopoverCarouselProps,
+  TeachingPopoverCarouselNavProps,
+  TeachingPopoverCarouselPageCountProps,
+  TeachingPopoverCarouselFooterProps,
 } from './TeachingPopover';

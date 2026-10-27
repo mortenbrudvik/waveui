@@ -2,6 +2,10 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import {
   teachingPopoverBodyClassNames,
+  teachingPopoverCarouselClassNames,
+  teachingPopoverCarouselFooterClassNames,
+  teachingPopoverCarouselNavClassNames,
+  teachingPopoverCarouselPageCountClassNames,
   teachingPopoverClassNames,
   teachingPopoverFooterClassNames,
   teachingPopoverHeaderClassNames,
@@ -46,8 +50,10 @@ import {
  * the surface's hooks (positioning, dismissal, focus, keyboard order, announcements, the title
  * registry), so the `steps` form and `TeachingPopover.Surface` render one element the same way.
  * The content parts (Header, Title, Body, Footer) show the current step without children; the
- * `steps` form renders them that way (Pattern 15), so both forms render the same markup. Imports
- * the context module only (never the root or `TeachingPopover.tsx`).
+ * `steps` form renders them that way (Pattern 15), so both forms render the same markup. The
+ * carousel parts (Carousel, CarouselNav, CarouselPageCount, CarouselFooter) read the same state,
+ * and both footers share the step dots and the step buttons. Imports the context module only
+ * (never the root or `TeachingPopover.tsx`).
  */
 
 /**
@@ -789,74 +795,402 @@ TeachingPopoverFooter.displayName = 'TeachingPopoverFooter';
  * step (Back and Next or Done, or the actions that replace them).
  */
 function TeachingFooterContent({ context }: { context: TeachingPopoverContextValue }) {
-  const {
-    count,
-    index,
-    isFirst,
-    isLast,
-    goBack,
-    goNext,
-    primaryAction,
-    secondaryAction,
-    footerLayout,
-    backLabel,
-    nextLabel,
-    doneLabel,
-  } = context;
-  const vertical = footerLayout === 'vertical';
+  const vertical = context.footerLayout === 'vertical';
+  const { secondary, primary } = renderStepButtons(context);
 
   return (
     <>
-      <div
-        aria-hidden="true"
-        className={cn('flex items-center gap-1.5', vertical && 'justify-center')}
-      >
-        {Array.from({ length: count }, (_, i) => (
-          <span
-            key={i}
-            data-wave-teaching-popover-dot=""
-            aria-current={i === index ? 'step' : undefined}
-            className={cn(
-              teachingPopoverClassNames.dot,
-              'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
-              i === index
-                ? cn('w-4 bg-primary', forcedColors.fill)
-                : 'w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none',
-            )}
-          />
-        ))}
-      </div>
+      <TeachingStepDots
+        count={context.count}
+        index={context.index}
+        className={vertical && 'justify-center'}
+      />
 
       <div className={cn('flex gap-2', vertical ? 'flex-col items-stretch' : 'items-center')}>
-        {secondaryAction
-          ? renderAction(
-              secondaryAction,
-              'outline',
-              teachingPopoverClassNames.secondaryButton,
-              goBack,
-            )
-          : count > 1 && (
-              <Button
-                {...focusableDisabledProps(isFirst)}
-                className={teachingPopoverClassNames.backButton}
-                onClick={preventIfDisabled(isFirst, goBack)}
-              >
-                {backLabel}
-              </Button>
-            )}
-        {primaryAction ? (
-          renderAction(primaryAction, 'primary', teachingPopoverClassNames.primaryButton, goNext)
-        ) : (
-          <Button
-            appearance="primary"
-            className={teachingPopoverClassNames.nextButton}
-            onClick={goNext}
-          >
-            {isLast ? doneLabel : nextLabel}
-          </Button>
-        )}
+        {secondary}
+        {primary}
       </div>
     </>
   );
 }
 TeachingFooterContent.displayName = 'TeachingFooterContent';
+
+/**
+ * The decorative step dots (internal): one per step, the current one wider and marked
+ * `aria-current`, all hidden from assistive technology (the heading carries the step position).
+ * The default indicator of both footers.
+ */
+function TeachingStepDots({
+  count,
+  index,
+  className,
+}: {
+  count: number;
+  index: number;
+  className?: string | false;
+}) {
+  return (
+    <div aria-hidden="true" className={cn('flex items-center gap-1.5', className)}>
+      {Array.from({ length: count }, (_, i) => (
+        <span
+          key={i}
+          data-wave-teaching-popover-dot=""
+          aria-current={i === index ? 'step' : undefined}
+          className={cn(
+            teachingPopoverClassNames.dot,
+            'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
+            i === index
+              ? cn('w-4 bg-primary', forcedColors.fill)
+              : 'w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none',
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+TeachingStepDots.displayName = 'TeachingStepDots';
+
+/** What a TeachingPopover.CarouselFooter changes about the buttons of {@link renderStepButtons}. */
+interface StepButtonTexts {
+  /** The text of the first step's secondary button, which then dismisses the popover. */
+  initialStepText?: string;
+  /** The text of the primary button on the last step, in place of Done. */
+  finalStepText?: string;
+}
+
+/**
+ * The secondary and primary buttons of the current step (internal), shared by both footers: the
+ * actions that replace them, else Back (focusable and `aria-disabled` on the first step; none for
+ * a single step) and Next (Done on the last step). With `initialStepText`, the first step's
+ * secondary button shows it and dismisses the popover; with `finalStepText`, the last step's
+ * primary button shows it. Each stays in its place across steps, so a button that has focus
+ * keeps it when the step changes.
+ */
+function renderStepButtons(
+  context: TeachingPopoverContextValue,
+  { initialStepText, finalStepText }: StepButtonTexts = {},
+): { secondary: React.ReactNode; primary: React.ReactNode } {
+  const {
+    count,
+    isFirst,
+    isLast,
+    goBack,
+    goNext,
+    dismiss,
+    primaryAction,
+    secondaryAction,
+    backLabel,
+    nextLabel,
+    doneLabel,
+  } = context;
+
+  let secondary: React.ReactNode;
+  if (secondaryAction) {
+    secondary = renderAction(
+      secondaryAction,
+      'outline',
+      teachingPopoverClassNames.secondaryButton,
+      goBack,
+    );
+  } else if (isFirst && initialStepText) {
+    secondary = (
+      <Button className={teachingPopoverClassNames.backButton} onClick={dismiss}>
+        {initialStepText}
+      </Button>
+    );
+  } else if (count > 1) {
+    secondary = (
+      <Button
+        {...focusableDisabledProps(isFirst)}
+        className={teachingPopoverClassNames.backButton}
+        onClick={preventIfDisabled(isFirst, goBack)}
+      >
+        {backLabel}
+      </Button>
+    );
+  }
+
+  const primary = primaryAction ? (
+    renderAction(primaryAction, 'primary', teachingPopoverClassNames.primaryButton, goNext)
+  ) : (
+    <Button appearance="primary" className={teachingPopoverClassNames.nextButton} onClick={goNext}>
+      {isLast ? finalStepText || doneLabel : nextLabel}
+    </Button>
+  );
+
+  return { secondary, primary };
+}
+
+/** Properties for the TeachingPopoverCarousel sub-component. */
+export interface TeachingPopoverCarouselProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * The carousel's content. Without children (or with children that render nothing) the current
+   * step as a carousel page: `TeachingPopover.Title`, `TeachingPopover.Body` and
+   * `TeachingPopover.CarouselFooter` without children of their own.
+   */
+  children?: React.ReactNode;
+  /** Ref to the carousel element. */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * The tour as a carousel (Fluent's `TeachingPopoverCarousel`): it holds the current step's page
+ * and the carousel footer. The steps stay on TeachingPopover (its `steps` are the pages, so there
+ * is no card part), and so do the step state and the callbacks: the carousel parts read them
+ * wherever they are in the popover. Without children it shows the step title and body and a
+ * `TeachingPopover.CarouselFooter`.
+ *
+ * Also exported as `TeachingPopoverCarousel` for React Server Components, which cannot use the
+ * dotted `TeachingPopover.Carousel` (that needs a client file).
+ */
+export const TeachingPopoverCarousel = ({
+  className,
+  children,
+  ref,
+  ...rest
+}: TeachingPopoverCarouselProps) => {
+  const { step } = useTeachingPopoverContext('TeachingPopover.Carousel');
+  if (!step) return null;
+
+  return (
+    <div ref={ref} className={cn(teachingPopoverCarouselClassNames.root, className)} {...rest}>
+      {slotRendersContent(children) ? (
+        materialiseSlotContent(children)
+      ) : (
+        <>
+          <TeachingPopoverTitle />
+          <TeachingPopoverBody />
+          <TeachingPopoverCarouselFooter />
+        </>
+      )}
+    </div>
+  );
+};
+TeachingPopoverCarousel.displayName = 'TeachingPopoverCarousel';
+
+/** Properties for the TeachingPopoverCarouselNav sub-component. */
+export interface TeachingPopoverCarouselNavProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'children'
+> {
+  /** Ref to the element of the step buttons. */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * Interactive step buttons (Fluent's `TeachingPopoverCarouselNav`): a group named by
+ * `labels.nav` (“Choose step”) with one button per step, each named by `labels.navButton`
+ * (“Step 2 of 3”) and a Tab stop. The current step's button has `aria-current="step"`; activating
+ * another one shows its step (`onStepChange`, then the step announcement), and focus stays on it.
+ * Opt-in: the footers show decorative dots unless you place it, for example as the children of
+ * `TeachingPopover.CarouselFooter`.
+ *
+ * Also exported as `TeachingPopoverCarouselNav` for React Server Components, which cannot use the
+ * dotted `TeachingPopover.CarouselNav` (that needs a client file).
+ */
+export const TeachingPopoverCarouselNav = ({
+  className,
+  ref,
+  ...rest
+}: TeachingPopoverCarouselNavProps) => {
+  const { step, count, index, goToStep, navLabel, navButtonLabel } = useTeachingPopoverContext(
+    'TeachingPopover.CarouselNav',
+  );
+  if (!step) return null;
+
+  return (
+    <div
+      ref={ref}
+      role="group"
+      aria-label={navLabel}
+      className={cn(teachingPopoverCarouselNavClassNames.root, 'flex items-center', className)}
+      {...rest}
+    >
+      {Array.from({ length: count }, (_, i) => {
+        const current = i === index;
+        return (
+          <button
+            key={i}
+            type="button"
+            aria-label={navButtonLabel(i, count)}
+            aria-current={current ? 'step' : undefined}
+            onClick={() => goToStep(i)}
+            className={cn(
+              teachingPopoverCarouselNavClassNames.button,
+              'group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0',
+              focusRing,
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                teachingPopoverCarouselNavClassNames.indicator,
+                'block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
+                current
+                  ? cn('w-4 bg-primary', forcedColors.fill)
+                  : 'w-1.5 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
+              )}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+TeachingPopoverCarouselNav.displayName = 'TeachingPopoverCarouselNav';
+
+const defaultPageCount = (current: number, total: number) => `${current} of ${total}`;
+
+/** Properties for the TeachingPopoverCarouselPageCount sub-component. */
+export interface TeachingPopoverCarouselPageCountProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'children'
+> {
+  /**
+   * The text from the one-based number of the current step and the step count (Fluent's render
+   * function); it also localizes the text. A result that renders nothing keeps the default. A
+   * Server Component cannot pass a function: write the part with one in a client file.
+   * @default (current, total) => `${current} of ${total}`
+   */
+  children?: (current: number, total: number) => React.ReactNode;
+  /** Ref to the count element. */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * The visible step count (Fluent's `TeachingPopoverCarouselPageCount`), such as “2 of 3”: the
+ * current step and the step count, worded by a render function child. Place it in a footer,
+ * for example in `TeachingPopover.CarouselFooter` next to or instead of `TeachingPopover.CarouselNav`.
+ *
+ * Also exported as `TeachingPopoverCarouselPageCount` for React Server Components, which cannot
+ * use the dotted `TeachingPopover.CarouselPageCount` (that needs a client file).
+ */
+export const TeachingPopoverCarouselPageCount = ({
+  className,
+  children,
+  ref,
+  ...rest
+}: TeachingPopoverCarouselPageCountProps) => {
+  const { step, count, index } = useTeachingPopoverContext('TeachingPopover.CarouselPageCount');
+  if (!step) return null;
+
+  const text = children?.(index + 1, count);
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        teachingPopoverCarouselPageCountClassNames.root,
+        'shrink-0 text-caption-1 text-muted-foreground',
+        className,
+      )}
+      {...rest}
+    >
+      {slotRendersContent(text) ? materialiseSlotContent(text) : defaultPageCount(index + 1, count)}
+    </div>
+  );
+};
+TeachingPopoverCarouselPageCount.displayName = 'TeachingPopoverCarouselPageCount';
+
+/** Properties for the TeachingPopoverCarouselFooter sub-component. */
+export interface TeachingPopoverCarouselFooterProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * Where the indicator sits: `'offset'` puts it at the start and the buttons together at the
+   * end, as `TeachingPopover.Footer` does; `'centered'` puts it between the secondary button at
+   * the start and the primary button at the end. Rendered as `data-carousel-layout`. (Fluent's
+   * default is `'centered'`; WaveUI keeps its own footer's arrangement.) TeachingPopover's
+   * `footerLayout` applies to `TeachingPopover.Footer` only.
+   * @default 'offset'
+   */
+  layout?: 'offset' | 'centered';
+  /**
+   * The text of the first step's secondary button (“Not now”). Given, that button is enabled and
+   * dismisses the popover as Close does (`onOpenChange(false)`, then `onDismiss`; not
+   * `onFinish`), also on a single step. Without it the first step keeps Back, focusable and
+   * `aria-disabled`, and a single step has none. A `secondaryAction` replaces the button.
+   */
+  initialStepText?: string;
+  /**
+   * The text of the primary button on the last step (“Got it”), which finishes the tour as Done
+   * does. A `primaryAction` replaces the button.
+   * @default TeachingPopover's `labels.done` ('Done')
+   */
+  finalStepText?: string;
+  /**
+   * The indicator: without children (or with children that render nothing) the decorative step
+   * dots; give it `TeachingPopover.CarouselNav` for interactive step buttons, or
+   * `TeachingPopover.CarouselPageCount` for a visible count. The buttons always render.
+   */
+  children?: React.ReactNode;
+  /** Ref to the footer element. */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * The carousel's bottom row (Fluent's `TeachingPopoverCarouselFooter`): an indicator (the
+ * decorative step dots, or your children) and the buttons of the current step, as in
+ * `TeachingPopover.Footer`: Back and Next (Done on the last step), or the `secondaryAction` and
+ * `primaryAction` that replace them. `initialStepText` turns the first step's Back into a button
+ * that dismisses the popover (“Not now”), `finalStepText` relabels Done, and `layout` places the
+ * indicator. The steps, the actions and the callbacks stay on TeachingPopover.
+ *
+ * Also exported as `TeachingPopoverCarouselFooter` for React Server Components, which cannot use
+ * the dotted `TeachingPopover.CarouselFooter` (that needs a client file).
+ */
+export const TeachingPopoverCarouselFooter = ({
+  layout = 'offset',
+  initialStepText,
+  finalStepText,
+  className,
+  children,
+  ref,
+  ...rest
+}: TeachingPopoverCarouselFooterProps) => {
+  const context = useTeachingPopoverContext('TeachingPopover.CarouselFooter');
+  if (!context.step) return null;
+
+  const centered = layout === 'centered';
+  const { secondary, primary } = renderStepButtons(context, { initialStepText, finalStepText });
+  // In the centered layout the indicator takes the room between the buttons.
+  const indicator = slotRendersContent(children) ? (
+    <div className={cn('flex min-w-0 items-center gap-2', centered && 'flex-1 justify-center')}>
+      {materialiseSlotContent(children)}
+    </div>
+  ) : (
+    <TeachingStepDots
+      count={context.count}
+      index={context.index}
+      className={centered && 'flex-1 justify-center'}
+    />
+  );
+
+  return (
+    <div
+      ref={ref}
+      data-carousel-layout={layout}
+      className={cn(
+        teachingPopoverCarouselFooterClassNames.root,
+        teachingPopoverClassNames.footer,
+        'flex items-center justify-between gap-2',
+        className,
+      )}
+      {...rest}
+    >
+      {centered ? (
+        <>
+          {secondary}
+          {indicator}
+          {primary}
+        </>
+      ) : (
+        <>
+          {indicator}
+          <div className="flex items-center gap-2">
+            {secondary}
+            {primary}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+TeachingPopoverCarouselFooter.displayName = 'TeachingPopoverCarouselFooter';

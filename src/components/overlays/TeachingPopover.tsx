@@ -1,5 +1,9 @@
 import {
   TeachingPopoverBody,
+  TeachingPopoverCarousel,
+  TeachingPopoverCarouselFooter,
+  TeachingPopoverCarouselNav,
+  TeachingPopoverCarouselPageCount,
   TeachingPopoverFooter,
   TeachingPopoverHeader,
   TeachingPopoverSurface,
@@ -16,6 +20,10 @@ export type {
 export type { TeachingPopoverProps } from './TeachingPopover.root';
 export type {
   TeachingPopoverBodyProps,
+  TeachingPopoverCarouselFooterProps,
+  TeachingPopoverCarouselNavProps,
+  TeachingPopoverCarouselPageCountProps,
+  TeachingPopoverCarouselProps,
   TeachingPopoverFooterProps,
   TeachingPopoverHeaderProps,
   TeachingPopoverSurfaceProps,
@@ -70,11 +78,22 @@ export type {
  *   step unless given children; a Surface without children shows all four, which is what the
  *   `steps` form renders. Both forms share one state: the steps, the labels, the actions and the
  *   callbacks stay on TeachingPopover. A part outside a TeachingPopover throws in development.
+ * - **Carousel parts**: `TeachingPopover.Carousel` holds the current step's page (the title and
+ *   body) and `TeachingPopover.CarouselFooter`, the bottom row with the step buttons:
+ *   `initialStepText` turns the first step's Back into a button that dismisses the popover (“Not
+ *   now”), `finalStepText` relabels Done, and `layout` (`'offset'` or `'centered'`) places the
+ *   indicator. The indicator is the decorative step dots unless you place
+ *   `TeachingPopover.CarouselNav` (interactive step buttons, named by `labels.navButton`, each a
+ *   Tab stop, the current one with `aria-current="step"`) or `TeachingPopover.CarouselPageCount`
+ *   (a visible “2 of 3”, worded by a render function) there. `steps` stays the only source of
+ *   the pages, so there is no card part.
  *
  * The parts are also exported under flat names (`TeachingPopoverTrigger`,
  * `TeachingPopoverSurface`, `TeachingPopoverHeader`, `TeachingPopoverTitle`,
- * `TeachingPopoverBody`, `TeachingPopoverFooter`) for React Server Components, which cannot use
- * the dotted form; dotted access (`TeachingPopover.Trigger`) needs a client file.
+ * `TeachingPopoverBody`, `TeachingPopoverFooter`, `TeachingPopoverCarousel`,
+ * `TeachingPopoverCarouselNav`, `TeachingPopoverCarouselPageCount`,
+ * `TeachingPopoverCarouselFooter`) for React Server Components, which cannot use the dotted form;
+ * dotted access (`TeachingPopover.Trigger`) needs a client file.
  *
  * @example
  * <TeachingPopover steps={steps} onFinish={markTourSeen}>
@@ -88,6 +107,20 @@ export type {
  *     <TeachingPopover.Footer />
  *   </TeachingPopover.Surface>
  * </TeachingPopover>
+ *
+ * @example
+ * <TeachingPopover steps={steps} onFinish={markTourSeen}>
+ *   <TeachingPopover.Surface>
+ *     <TeachingPopover.Header>Tip</TeachingPopover.Header>
+ *     <TeachingPopover.Carousel>
+ *       <TeachingPopover.Title />
+ *       <TeachingPopover.Body />
+ *       <TeachingPopover.CarouselFooter initialStepText="Not now" finalStepText="Got it">
+ *         <TeachingPopover.CarouselNav />
+ *       </TeachingPopover.CarouselFooter>
+ *     </TeachingPopover.Carousel>
+ *   </TeachingPopover.Surface>
+ * </TeachingPopover>
  */
 export const TeachingPopover = /* @__PURE__ */ Object.assign(TeachingPopoverRoot, {
   Trigger: TeachingPopoverTrigger,
@@ -96,6 +129,10 @@ export const TeachingPopover = /* @__PURE__ */ Object.assign(TeachingPopoverRoot
   Title: TeachingPopoverTitle,
   Body: TeachingPopoverBody,
   Footer: TeachingPopoverFooter,
+  Carousel: TeachingPopoverCarousel,
+  CarouselNav: TeachingPopoverCarouselNav,
+  CarouselPageCount: TeachingPopoverCarouselPageCount,
+  CarouselFooter: TeachingPopoverCarouselFooter,
 });
 
 export {
@@ -105,4 +142,8 @@ export {
   TeachingPopoverTitle,
   TeachingPopoverBody,
   TeachingPopoverFooter,
+  TeachingPopoverCarousel,
+  TeachingPopoverCarouselNav,
+  TeachingPopoverCarouselPageCount,
+  TeachingPopoverCarouselFooter,
 };

@@ -32,7 +32,9 @@ import {
 const DEFAULT_BACK_LABEL = 'Back';
 const DEFAULT_NEXT_LABEL = 'Next';
 const DEFAULT_DONE_LABEL = 'Done';
+const DEFAULT_NAV_LABEL = 'Choose step';
 const defaultStepLabel = (index: number, count: number) => `step ${index + 1} of ${count}`;
+const defaultNavButtonLabel = (index: number, count: number) => `Step ${index + 1} of ${count}`;
 
 /** Properties for the TeachingPopover component. */
 export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -51,7 +53,10 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   currentStep?: number;
   /** @deprecated Use `defaultActiveStep`. */
   defaultCurrentStep?: number;
-  /** Called with the requested step index when Next or Back is activated. */
+  /**
+   * Called with the requested step index when Next, Back or a step button of
+   * `TeachingPopover.CarouselNav` is activated (the button of the current step requests nothing).
+   */
   onStepChange?: (step: number) => void;
   /**
    * Called when the popover is dismissed with Close, Done, Escape or a `TeachingPopover.Trigger`
@@ -79,6 +84,7 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   /**
    * How the footer lays out the step dots and the buttons: side by side, or the dots above
    * buttons that fill the width. Rendered as `data-layout` on the popover and on its footer.
+   * `TeachingPopover.CarouselFooter` has its own `layout` instead.
    * @default 'horizontal'
    */
   footerLayout?: 'horizontal' | 'vertical';
@@ -103,8 +109,9 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    */
   closeLabel?: string;
   /**
-   * Text of the Back, Next and Done buttons and the wording of the step position (“step 2 of 3”),
-   * for localization. Unset members keep their English defaults.
+   * Text of the Back, Next and Done buttons, the wording of the step position (“step 2 of 3”) and
+   * the names of `TeachingPopover.CarouselNav`'s step buttons, for localization. Unset members keep
+   * their English defaults.
    */
   labels?: TeachingPopoverLabels;
   /**
@@ -266,6 +273,8 @@ export const TeachingPopoverRoot = ({
   const backLabel = labels?.back ?? DEFAULT_BACK_LABEL;
   const nextLabel = labels?.next ?? DEFAULT_NEXT_LABEL;
   const doneLabel = labels?.done ?? DEFAULT_DONE_LABEL;
+  const navLabel = labels?.nav ?? DEFAULT_NAV_LABEL;
+  const navButtonLabel = labels?.navButton ?? defaultNavButtonLabel;
 
   // A Trigger is the target when neither `target` nor `positioning.target` is set: a direct one
   // from the first render (the surface stays hidden until its element attaches), a nested one
@@ -324,6 +333,12 @@ export const TeachingPopoverRoot = ({
     if (isLast) finish();
     else setStep(index + 1);
   });
+  // A step button of TeachingPopover.CarouselNav: the shown (clamped) step requests nothing.
+  const goToStep = useEventCallback((target: number) => {
+    if (count === 0) return;
+    const next = clampStep(target, count);
+    if (next !== index) setStep(next);
+  });
 
   // Next to a Surface the root renders no surface element, so its element props go nowhere.
   const ignoresSurfaceProps =
@@ -361,6 +376,7 @@ export const TeachingPopoverRoot = ({
       stepPosition,
       goBack,
       goNext,
+      goToStep,
       primaryAction,
       secondaryAction,
       footerLayout,
@@ -368,6 +384,8 @@ export const TeachingPopoverRoot = ({
       nextLabel,
       doneLabel,
       closeLabel,
+      navLabel,
+      navButtonLabel,
       titleId,
       target,
       side,
@@ -394,6 +412,7 @@ export const TeachingPopoverRoot = ({
       stepPosition,
       goBack,
       goNext,
+      goToStep,
       primaryAction,
       secondaryAction,
       footerLayout,
@@ -401,6 +420,8 @@ export const TeachingPopoverRoot = ({
       nextLabel,
       doneLabel,
       closeLabel,
+      navLabel,
+      navButtonLabel,
       titleId,
       target,
       side,

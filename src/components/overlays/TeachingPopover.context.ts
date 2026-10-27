@@ -60,6 +60,16 @@ export interface TeachingPopoverLabels {
    * @default (index, count) => `step ${index + 1} of ${count}`
    */
   step?: (index: number, count: number) => string;
+  /** Name of the group of step buttons that `TeachingPopover.CarouselNav` renders.
+   * @default 'Choose step'
+   */
+  nav?: string;
+  /**
+   * Name of the `TeachingPopover.CarouselNav` button that shows the step at `index` (zero-based,
+   * like `activeStep`) out of `count` steps.
+   * @default (index, count) => `Step ${index + 1} of ${count}`
+   */
+  navButton?: (index: number, count: number) => string;
 }
 
 /** What the surface points at: the `target` prop's forms (internal). */
@@ -77,7 +87,10 @@ export interface TeachingPopoverContextValue {
   shown: boolean;
   /** Opens the popover (the Trigger). */
   requestOpen: () => void;
-  /** Close, Escape and the Trigger: closes, then calls `onDismiss`. */
+  /**
+   * Close, Escape, the Trigger and a CarouselFooter's `initialStepText` button: closes, then calls
+   * `onDismiss`.
+   */
   dismiss: () => void;
   /** Done, or a primary action on the last step: closes, then calls `onFinish` (and `onDismiss`). */
   finish: () => void;
@@ -95,6 +108,8 @@ export interface TeachingPopoverContextValue {
   goBack: () => void;
   /** Next: the next step, or `finish` on the last one. */
   goNext: () => void;
+  /** A step button of TeachingPopover.CarouselNav: the step at `index` (nothing for the current one). */
+  goToStep: (index: number) => void;
   /** The current step's primary action: its own, else the popover's; `undefined` for Next/Done. */
   primaryAction: TeachingPopoverAction | undefined;
   /** The current step's secondary action: its own, else the popover's; `undefined` for Back. */
@@ -106,6 +121,9 @@ export interface TeachingPopoverContextValue {
   nextLabel: string;
   doneLabel: string;
   closeLabel: string;
+  /** The names of TeachingPopover.CarouselNav's group and of its step buttons (`labels`). */
+  navLabel: string;
+  navButtonLabel: (index: number, count: number) => string;
   /** The id of the step title's heading, which names the surface. */
   titleId: string;
   /**
@@ -151,6 +169,7 @@ const inertTeachingPopoverContext: TeachingPopoverContextValue = {
   stepPosition: '',
   goBack: () => {},
   goNext: () => {},
+  goToStep: () => {},
   primaryAction: undefined,
   secondaryAction: undefined,
   footerLayout: 'horizontal',
@@ -158,6 +177,8 @@ const inertTeachingPopoverContext: TeachingPopoverContextValue = {
   nextLabel: 'Next',
   doneLabel: 'Done',
   closeLabel: 'Close',
+  navLabel: 'Choose step',
+  navButtonLabel: (index, count) => `Step ${index + 1} of ${count}`,
   titleId: '',
   target: undefined,
   side: 'bottom',
