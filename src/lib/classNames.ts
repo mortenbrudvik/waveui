@@ -1374,7 +1374,8 @@ export const drawerFooterClassNames = { root: 'wave-drawer-footer' } as const;
  * renders it); `beak` on the arrow; `closeButton`, `backButton` and `nextButton` on its buttons
  * (which also carry Button's root); `primaryButton` and `secondaryButton` on the buttons that a
  * `primaryAction` and a `secondaryAction` render in place of Next/Done and Back; `title` on the
- * `<h3>`; `body` on the step body; `footer` on the bottom row; `dot` on each step dot.
+ * step title (an `<h3>`, or the element of TeachingPopover.Title's `as`); `body` on the step body;
+ * `footer` on the bottom row; `dot` on each step dot.
  */
 export const teachingPopoverClassNames = {
   root: 'wave-teaching-popover',
@@ -1396,6 +1397,37 @@ export const teachingPopoverClassNames = {
  * TeachingPopover's part classes.
  */
 export const teachingPopoverSurfaceClassNames = { root: 'wave-teaching-popover-surface' } as const;
+
+/**
+ * TeachingPopover.Header: `root` on the header element (also the one the `steps` form renders
+ * around its Close button); `icon` on the element of its `icon` slot. Its Close button carries
+ * TeachingPopover's `closeButton`.
+ */
+export const teachingPopoverHeaderClassNames = {
+  root: 'wave-teaching-popover-header',
+  icon: 'wave-teaching-popover-header__icon',
+} as const;
+
+/**
+ * TeachingPopover.Title: `root` on the heading (also the one the `steps` form renders), which
+ * also carries TeachingPopover's `title`.
+ */
+export const teachingPopoverTitleClassNames = { root: 'wave-teaching-popover-title' } as const;
+
+/**
+ * TeachingPopover.Body: `root` on the body element (also the one the `steps` form renders), which
+ * also carries TeachingPopover's `body`; `media` on the element of its `media` slot.
+ */
+export const teachingPopoverBodyClassNames = {
+  root: 'wave-teaching-popover-body',
+  media: 'wave-teaching-popover-body__media',
+} as const;
+
+/**
+ * TeachingPopover.Footer: `root` on the footer element (also the one the `steps` form renders),
+ * which also carries TeachingPopover's `footer`.
+ */
+export const teachingPopoverFooterClassNames = { root: 'wave-teaching-popover-footer' } as const;
 
 // ---------------------------------------------------------------------------
 // table

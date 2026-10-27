@@ -120,11 +120,16 @@ export interface TeachingPopoverContextValue {
   hasTrigger: boolean;
   /** The Trigger's ref callback: its element is the surface's target when `target` is unset. */
   triggerElementRef: React.RefCallback<HTMLElement>;
+  /** The Trigger's element (`null` without one), where focus returns when the popover closes. */
+  triggerRef: React.RefObject<HTMLElement | null>;
   /** The surface's id for the Trigger's `aria-controls`: the consumer's, else a generated one. */
   surfaceId: string;
-  /** A surface reports the consumer's `id` (`undefined` without one, or when it unmounts). */
+  /** A TeachingPopover.Surface reports its `id` (`undefined` without one, or when it unmounts). */
   setCustomSurfaceId: (id: string | undefined) => void;
-  /** A surface registers while it is mounted (the root checks that there is one). */
+  /**
+   * A TeachingPopover.Surface registers while it is mounted, wherever it is among the children:
+   * the root then renders no surface of its own, and warns when more than one registers.
+   */
   registerSurface: () => () => void;
 }
 
@@ -160,6 +165,7 @@ const inertTeachingPopoverContext: TeachingPopoverContextValue = {
   positioning: undefined,
   hasTrigger: false,
   triggerElementRef: () => {},
+  triggerRef: { current: null },
   surfaceId: '',
   setCustomSurfaceId: () => {},
   registerSurface: () => () => {},
@@ -176,3 +182,20 @@ export function useTeachingPopoverContext(componentName: string): TeachingPopove
   reportMissingContext(componentName, 'TeachingPopover');
   return inertTeachingPopoverContext;
 }
+
+/** The title registry of one surface (see {@link TeachingPopoverSurfaceContext}). */
+export interface TeachingPopoverSurfaceContextValue {
+  /** A TeachingPopover.Title registers its id while its element is mounted; returns the release. */
+  registerTitle: (id: string) => () => void;
+}
+
+/**
+ * What a surface with children of yours gives the titles among them: a TeachingPopover.Title
+ * registers its id, and the first registered one names the surface (`aria-labelledby`). `null`
+ * outside a surface and inside the content a surface shows without children, whose title id it
+ * knows while rendering. Optional (a title outside a surface names nothing), so there is no hook
+ * that reports a missing provider.
+ */
+export const TeachingPopoverSurfaceContext =
+  React.createContext<TeachingPopoverSurfaceContextValue | null>(null);
+TeachingPopoverSurfaceContext.displayName = 'TeachingPopoverSurfaceContext';

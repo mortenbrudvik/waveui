@@ -7,6 +7,7 @@ import type { PopupAlign, PopupPositioning, PopupSide, VirtualElement } from '..
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useTargetConflictWarning } from '../../hooks/useResolvedTarget';
 import {
   TeachingPopoverContext,
@@ -77,7 +78,7 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   secondaryAction?: TeachingPopoverAction;
   /**
    * How the footer lays out the step dots and the buttons: side by side, or the dots above
-   * buttons that fill the width. Rendered as `data-layout`.
+   * buttons that fill the width. Rendered as `data-layout` on the popover and on its footer.
    * @default 'horizontal'
    */
   footerLayout?: 'horizontal' | 'vertical';
@@ -148,9 +149,10 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   positioning?: PopupPositioning;
   /**
    * `TeachingPopover.Trigger` and `TeachingPopover.Surface` (Fluent's composition), rendered where
-   * they are written. Without a `TeachingPopover.Surface` among the direct children (a Fragment is
-   * fine), the popover renders its surface itself, after the children, with the element props
-   * given here (`className`, `style`, `ref`, …); with one, the Surface takes them instead.
+   * they are written. Without a `TeachingPopover.Surface` among them, the popover renders its
+   * surface itself, after the children, with the element props given here (`className`, `style`,
+   * `ref`, …); with one (best written directly inside, a Fragment is fine: see
+   * `TeachingPopover.Surface`), the Surface takes them instead.
    */
   children?: React.ReactNode;
   /**
@@ -177,7 +179,7 @@ function clampStep(step: number, count: number): number {
 /**
  * Which parts are direct children (Fragments flattened, lazy types of a Server Component
  * unwrapped): a Trigger closes `defaultOpen`, a Surface replaces the root's own surface. Runs
- * during render, so the server HTML agrees.
+ * during render, so the server HTML agrees (a Surface deeper down registers once mounted).
  */
 function findParts(children: React.ReactNode): { trigger: boolean; surface: boolean } {
   const found = { trigger: false, surface: false };
@@ -191,7 +193,7 @@ function findParts(children: React.ReactNode): { trigger: boolean; surface: bool
 
 const SURFACE_PLACEMENT_WARNING_KEY = 'TeachingPopover.Surface:placement';
 const SURFACE_PLACEMENT_WARNING =
-  'TeachingPopover.Surface: render one TeachingPopover.Surface, directly inside TeachingPopover (a Fragment is fine). A second Surface, or one inside an element or a component of your own, renders a second popover.';
+  'TeachingPopover.Surface: render one TeachingPopover.Surface in a TeachingPopover; a second Surface renders a second popover.';
 
 const SURFACE_PROPS_WARNING_KEY = 'TeachingPopover:surface-props';
 const SURFACE_PROPS_WARNING =
@@ -220,6 +222,7 @@ export const TeachingPopoverRoot = ({
   side = 'bottom',
   align = 'center',
   children,
+  id,
   className,
   style,
   onKeyDown,
@@ -271,11 +274,37 @@ export const TeachingPopoverRoot = ({
   const hasTrigger = parts.trigger || triggerElement !== null;
   const target =
     explicitTarget !== undefined ? explicitTarget : hasTrigger ? triggerElement : undefined;
+  // The Trigger's element also as a ref, where the surface returns focus.
+  const triggerRef = React.useRef<HTMLElement | null>(null);
+  const triggerElementRef = useMergedRefs<HTMLElement>(triggerRef, setTriggerElement);
 
-  // The Trigger's `aria-controls`: the id a surface's consumer gave it, else a generated one.
+  // Surfaces (TeachingPopover.Surface) register while mounted, wherever they are among the
+  // children: once one has, the root renders no surface of its own. A direct one is also found by
+  // the scan above, so it never renders next to the root's own; one inside a component of yours
+  // does in its first commit, until its registration re-renders the root. After every commit
+  // (every surface's layout effect has run) more than one warns.
+  const surfaceCountRef = React.useRef(0);
+  const [hasRegisteredSurface, setHasRegisteredSurface] = React.useState(false);
+  const registerSurface = React.useCallback(() => {
+    surfaceCountRef.current += 1;
+    setHasRegisteredSurface(true);
+    return () => {
+      surfaceCountRef.current -= 1;
+      if (surfaceCountRef.current === 0) setHasRegisteredSurface(false);
+    };
+  }, []);
+  const hasSurfacePart = parts.surface || hasRegisteredSurface;
+  React.useEffect(() => {
+    if (surfaceCountRef.current > 1) {
+      warnOnce(SURFACE_PLACEMENT_WARNING_KEY, SURFACE_PLACEMENT_WARNING);
+    }
+  });
+
+  // The Trigger's `aria-controls`: the surface's id (the root's own `id` on its own surface, or
+  // the id a Surface reports), else a generated one.
   const generatedSurfaceId = useId('teaching-popover');
   const [customSurfaceId, setCustomSurfaceId] = React.useState<string | undefined>(undefined);
-  const surfaceId = customSurfaceId ?? generatedSurfaceId;
+  const surfaceId = (hasSurfacePart ? customSurfaceId : id || undefined) ?? generatedSurfaceId;
 
   const requestOpen = useEventCallback(() => setOpen(true));
   const dismiss = useEventCallback(() => {
@@ -296,25 +325,11 @@ export const TeachingPopoverRoot = ({
     else setStep(index + 1);
   });
 
-  // Surfaces register while mounted; after every commit (every surface's layout effect has run)
-  // there must be one: a Surface the scan above did not find renders next to the root's own.
-  const surfaceCountRef = React.useRef(0);
-  const registerSurface = React.useCallback(() => {
-    surfaceCountRef.current += 1;
-    return () => {
-      surfaceCountRef.current -= 1;
-    };
-  }, []);
-  React.useEffect(() => {
-    if (surfaceCountRef.current > 1) {
-      warnOnce(SURFACE_PLACEMENT_WARNING_KEY, SURFACE_PLACEMENT_WARNING);
-    }
-  });
-
   // Next to a Surface the root renders no surface element, so its element props go nowhere.
   const ignoresSurfaceProps =
-    parts.surface &&
-    (className !== undefined ||
+    hasSurfacePart &&
+    (id !== undefined ||
+      className !== undefined ||
       style !== undefined ||
       onKeyDown !== undefined ||
       ref !== undefined ||
@@ -359,7 +374,8 @@ export const TeachingPopoverRoot = ({
       align,
       positioning,
       hasTrigger,
-      triggerElementRef: setTriggerElement,
+      triggerElementRef,
+      triggerRef,
       surfaceId,
       setCustomSurfaceId,
       registerSurface,
@@ -391,6 +407,7 @@ export const TeachingPopoverRoot = ({
       align,
       positioning,
       hasTrigger,
+      triggerElementRef,
       surfaceId,
       registerSurface,
     ],
@@ -399,10 +416,11 @@ export const TeachingPopoverRoot = ({
   return (
     <TeachingPopoverContext.Provider value={context}>
       {children}
-      {parts.surface ? null : (
+      {hasSurfacePart ? null : (
         <TeachingSurface
           context={context}
           rootClassName={teachingPopoverClassNames.root}
+          id={id}
           className={className}
           style={style}
           onKeyDown={onKeyDown}

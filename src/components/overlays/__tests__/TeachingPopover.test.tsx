@@ -5,21 +5,34 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import {
   TeachingPopover,
+  TeachingPopoverBody,
+  TeachingPopoverFooter,
+  TeachingPopoverHeader,
   TeachingPopoverSurface,
+  TeachingPopoverTitle,
   TeachingPopoverTrigger,
   type TeachingPopoverAction,
+  type TeachingPopoverBodyProps,
+  type TeachingPopoverFooterProps,
+  type TeachingPopoverHeaderProps,
   type TeachingPopoverLabels,
   type TeachingPopoverProps,
   type TeachingPopoverSurfaceProps,
+  type TeachingPopoverTitleProps,
   type TeachingPopoverTriggerChildProps,
 } from '../TeachingPopover';
 import { Button } from '../../button/Button';
 import {
   buttonClassNames,
+  teachingPopoverBodyClassNames,
   teachingPopoverClassNames,
+  teachingPopoverFooterClassNames,
+  teachingPopoverHeaderClassNames,
   teachingPopoverSurfaceClassNames,
+  teachingPopoverTitleClassNames,
 } from '../../../lib/classNames';
 import { __resetWarnings } from '../../../lib/dev';
+import type { Slot } from '../../../lib/slot';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
 import { getOpenLayers, subscribeLayers } from '../../../lib/layers';
 import { FOCUSABLE_SELECTOR } from '../../../lib/focus';
@@ -27,6 +40,7 @@ import {
   asClientReference,
   expectNoA11yViolations,
   expectThrows,
+  findDanglingIdRefs,
   mockRect,
   renderWithProviders,
   testCompoundExposure,
@@ -1628,7 +1642,7 @@ describe('TeachingPopover', () => {
 
 describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
   const PLACEMENT_WARNING =
-    '[WaveUI] TeachingPopover.Surface: render one TeachingPopover.Surface, directly inside TeachingPopover (a Fragment is fine). A second Surface, or one inside an element or a component of your own, renders a second popover.';
+    '[WaveUI] TeachingPopover.Surface: render one TeachingPopover.Surface in a TeachingPopover; a second Surface renders a second popover.';
   const SURFACE_PROPS_WARNING =
     '[WaveUI] TeachingPopover: the props of the surface element on TeachingPopover (`className`, `style`, `ref`, `onKeyDown` and the other element props) are ignored next to a TeachingPopover.Surface: pass them to the Surface.';
 
@@ -2002,13 +2016,14 @@ describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
       expect(warn.mock.calls).toEqual([[SURFACE_PROPS_WARNING]]);
     });
 
-    it('warns TeachingPopover.Surface:placement for a Surface inside a component, and for a second Surface', () => {
+    it('warns TeachingPopover.Surface:placement for a second Surface, also one inside a component', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       function MySurface() {
         return <TeachingPopover.Surface data-testid="mine" />;
       }
       const wrapped = render(
         <InRoot>
+          <TeachingPopover.Surface />
           <MySurface />
         </InRoot>,
       );
@@ -2122,6 +2137,788 @@ describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(trigger()).toHaveFocus();
       expect(warn).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('TeachingPopover parts: a Surface in your component, focus return and module imports (P9-08)', () => {
+  const SURFACE_PROPS_WARNING =
+    '[WaveUI] TeachingPopover: the props of the surface element on TeachingPopover (`className`, `style`, `ref`, `onKeyDown` and the other element props) are ignored next to a TeachingPopover.Surface: pass them to the Surface.';
+
+  const trigger = () => screen.getByRole('button', { name: 'Take the tour' });
+
+  /** A Surface rendered by a component of the consumer's, not a direct child of TeachingPopover. */
+  function MySurface(props: TeachingPopoverSurfaceProps) {
+    return <TeachingPopover.Surface data-testid="mine" {...props} />;
+  }
+
+  describe('a Surface rendered by your component', () => {
+    it("replaces the popover's own surface: one dialog, one title id, focused once, no warning", async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn');
+      const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+      const onDismiss = vi.fn();
+      render(
+        <TeachingPopover steps={steps} onDismiss={onDismiss}>
+          <MySurface />
+        </TeachingPopover>,
+      );
+      await act(async () => {});
+      const dialogs = screen.getAllByRole('dialog');
+      expect(dialogs).toHaveLength(1);
+      expect(dialogs[0]).toBe(screen.getByTestId('mine'));
+      expect(dialogs[0]).toHaveFocus();
+      const focusedDialogs = focus.mock.contexts.filter(
+        (element) => element instanceof HTMLElement && element.getAttribute('role') === 'dialog',
+      );
+      expect(focusedDialogs).toEqual([dialogs[0]]);
+      expect(document.querySelectorAll(`[id="${heading().id}"]`)).toHaveLength(1);
+
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      expect(heading()).toHaveTextContent('Features, step 2 of 3');
+      await user.keyboard('{Escape}');
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("drops the popover's own surface under StrictMode too", async () => {
+      render(
+        <React.StrictMode>
+          <TeachingPopover steps={steps}>
+            <MySurface />
+          </TeachingPopover>
+        </React.StrictMode>,
+      );
+      await act(async () => {});
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      expect(screen.getByTestId('mine')).toHaveFocus();
+    });
+
+    it('with a Trigger it is the anchored surface, and aria-controls follows its id, also when it mounts open', async () => {
+      const user = userEvent.setup();
+      render(
+        <TeachingPopover steps={steps} defaultOpen>
+          <TeachingPopover.Trigger>
+            <Button>Take the tour</Button>
+          </TeachingPopover.Trigger>
+          <MySurface id="tour" />
+        </TeachingPopover>,
+      );
+      const dialog = await screen.findByRole('dialog');
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      expect(dialog).toHaveAttribute('id', 'tour');
+      expect(dialog.closest('[data-wave-portal]')).not.toBeNull();
+      expect(trigger()).toHaveAttribute('aria-controls', 'tour');
+      await waitFor(() => expect(dialog).toHaveFocus());
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+    });
+
+    it("brings back the popover's own surface when it unmounts", async () => {
+      const { rerender } = render(
+        <TeachingPopover steps={steps}>
+          <MySurface />
+        </TeachingPopover>,
+      );
+      expect(screen.getByTestId('mine')).toBeInTheDocument();
+      rerender(<TeachingPopover steps={steps}>{null}</TeachingPopover>);
+      await act(async () => {});
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      expect(screen.queryByTestId('mine')).toBeNull();
+      expect(screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' })).toBeInTheDocument();
+    });
+
+    it("ignores the root's element props next to it, with the development warning", () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <TeachingPopover steps={steps} className="w-96">
+          <MySurface />
+        </TeachingPopover>,
+      );
+      expect(screen.getByRole('dialog')).not.toHaveClass('w-96');
+      expect(warn.mock.calls).toEqual([[SURFACE_PROPS_WARNING]]);
+    });
+  });
+
+  describe('focus return with a target and a Trigger', () => {
+    function stubViewport() {
+      const html = document.documentElement;
+      Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+      Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+      onTestFinished(() => {
+        Reflect.deleteProperty(html, 'clientWidth');
+        Reflect.deleteProperty(html, 'clientHeight');
+      });
+    }
+
+    it('returns focus to the Trigger, not to the target, as Popover.Trigger does', async () => {
+      stubViewport();
+      const user = userEvent.setup();
+      function Tour() {
+        const [anchor, setAnchor] = React.useState<HTMLElement | null>(null);
+        return (
+          <>
+            <button type="button" ref={setAnchor}>
+              Search
+            </button>
+            <TeachingPopover steps={steps} target={anchor}>
+              <TeachingPopover.Trigger>
+                <Button>Take the tour</Button>
+              </TeachingPopover.Trigger>
+            </TeachingPopover>
+          </>
+        );
+      }
+      render(<Tour />);
+      mockRect(screen.getByRole('button', { name: 'Search' }), {
+        x: 200,
+        y: 100,
+        width: 100,
+        height: 20,
+        top: 100,
+        right: 300,
+        bottom: 120,
+        left: 200,
+      });
+      // A click that does not focus the trigger (a button in Safari): nothing has focus at open.
+      fireEvent.click(trigger());
+      const dialog = await screen.findByRole('dialog');
+      await waitFor(() => expect(dialog).toHaveFocus());
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+    });
+  });
+
+  it('keeps the split one-way: nothing imports TeachingPopover.tsx, and the context module imports no component', () => {
+    const sources = import.meta.glob<string>(
+      [
+        '../../**/*.{ts,tsx}',
+        '../../../hooks/**/*.{ts,tsx}',
+        '../../../lib/**/*.{ts,tsx}',
+        '!**/__tests__/**',
+      ],
+      { query: '?raw', import: 'default', eager: true },
+    );
+    const entries = Object.entries(sources);
+    expect(entries.length).toBeGreaterThan(100);
+    const importers = entries
+      .filter(([path]) => !/\/index\.ts$/.test(path))
+      .filter(([, source]) => /from\s+['"][^'"]*\/TeachingPopover['"]/.test(source))
+      .map(([path]) => path);
+    expect(importers).toEqual([]);
+
+    const context = entries.find(([path]) => /\/TeachingPopover\.context\.ts$/.test(path));
+    expect(context).toBeDefined();
+    const specifiers = [...(context?.[1] ?? '').matchAll(/from\s+['"]([^'"]+)['"]/g)].map(
+      ([, specifier]) => specifier,
+    );
+    expect(specifiers.length).toBeGreaterThan(0);
+    expect(
+      specifiers.filter(
+        (specifier) =>
+          specifier !== 'react' &&
+          !specifier.startsWith('../../lib/') &&
+          !specifier.startsWith('../../hooks/'),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('TeachingPopover parts: Header, Title, Body and Footer (P9-08)', () => {
+  const MERGE_WARNING =
+    '[WaveUI] TeachingPopover.Header: `dismissButton` received a button element; its props were merged into the built-in Close button (buttons cannot be nested). Pass icon content instead, e.g. `dismissButton={<CloseIcon />}`.';
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /** The four parts without children: the content of the `steps` form. */
+  const defaultParts = (
+    <>
+      <TeachingPopover.Header />
+      <TeachingPopover.Title />
+      <TeachingPopover.Body />
+      <TeachingPopover.Footer />
+    </>
+  );
+
+  /** A tour whose surface is built from parts (the four parts without children by default). */
+  function PartsTour({
+    surface,
+    children = defaultParts,
+    ...props
+  }: Partial<TeachingPopoverProps> & { surface?: TeachingPopoverSurfaceProps }) {
+    return (
+      <TeachingPopover steps={steps} {...props}>
+        <TeachingPopover.Surface {...surface}>{children}</TeachingPopover.Surface>
+      </TeachingPopover>
+    );
+  }
+
+  /** A surface named by its own label, for a part tested on its own. */
+  function InSurface({ children }: { children?: React.ReactNode }) {
+    return (
+      <TeachingPopover steps={steps}>
+        <TeachingPopover.Surface aria-label="Tour">{children}</TeachingPopover.Surface>
+      </TeachingPopover>
+    );
+  }
+
+  testCompoundExposure(TeachingPopover, ['Header', 'Title', 'Body', 'Footer']);
+
+  it('exports the parts under their flat names for React Server Components (C-COMPOUND)', () => {
+    expect(TeachingPopoverHeader).toBeTypeOf('function');
+    expect(TeachingPopoverHeader).toBe(TeachingPopover.Header);
+    expect(TeachingPopoverTitle).toBeTypeOf('function');
+    expect(TeachingPopoverTitle).toBe(TeachingPopover.Title);
+    expect(TeachingPopoverBody).toBeTypeOf('function');
+    expect(TeachingPopoverBody).toBe(TeachingPopover.Body);
+    expect(TeachingPopoverFooter).toBeTypeOf('function');
+    expect(TeachingPopoverFooter).toBe(TeachingPopover.Footer);
+  });
+
+  it('types the parts', () => {
+    expectTypeOf<TeachingPopoverHeaderProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TeachingPopoverHeaderProps['dismissButton']>().toEqualTypeOf<
+      Slot<'span'> | undefined
+    >();
+    expectTypeOf<TeachingPopoverHeaderProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<TeachingPopoverBodyProps['media']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TeachingPopoverFooterProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<TeachingPopoverTitleProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLHeadingElement> | undefined
+    >();
+    expectTypeOf<TeachingPopoverTitleProps<'p'>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLParagraphElement> | undefined
+    >();
+    // @ts-expect-error -- a heading has no href; `as="a"` would take one
+    expectTypeOf<TeachingPopoverTitleProps>().toHaveProperty('href');
+    expectTypeOf<TeachingPopoverTitleProps<'a'>>().toHaveProperty('href');
+  });
+
+  describe('defaults from the current step (Pattern 15)', () => {
+    it.each<[string, Partial<TeachingPopoverProps>]>([
+      ['the first step', {}],
+      ['a middle step with the vertical footer', { activeStep: 1, footerLayout: 'vertical' }],
+      [
+        'the last step with actions',
+        { activeStep: 2, primaryAction: <Button>Finish</Button>, secondaryAction: 'Skip' },
+      ],
+      ['a single step', { steps: [{ title: 'Tip', body: 'Press Ctrl+K.' }] }],
+      ['localized text', { activeStep: 1, closeLabel: 'Lukk', labels: { next: 'Neste' } }],
+    ])('the parts without children render what the steps form renders: %s', (_name, props) => {
+      const normalize = (html: string) => html.replace(/\b(id|aria-labelledby)="[^"]*"/g, '$1=""');
+      const plain = render(<TeachingPopover steps={steps} {...props} />);
+      const expected = normalize(screen.getByRole('dialog').innerHTML);
+      const expectedName = heading().textContent;
+      plain.unmount();
+
+      render(<PartsTour {...props} />);
+      const dialog = screen.getByRole('dialog');
+      expect(normalize(dialog.innerHTML)).toBe(expected);
+      expect(dialog).toHaveAttribute('aria-labelledby', heading().id);
+      expect(heading().textContent).toBe(expectedName);
+    });
+
+    it('each part shows the current step and follows it', async () => {
+      const user = userEvent.setup();
+      render(<PartsTour closeLabel="Lukk" />);
+      const dialog = screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' });
+      expect(within(dialog).getByRole('button', { name: 'Lukk' })).toHaveClass(
+        teachingPopoverClassNames.closeButton,
+      );
+      expect(within(dialog).getByText('This is step one.')).toHaveClass(
+        teachingPopoverBodyClassNames.root,
+      );
+      expect(dots()).toHaveLength(3);
+      await user.click(within(dialog).getByRole('button', { name: 'Next' }));
+      expect(heading()).toHaveTextContent('Features, step 2 of 3');
+      expect(within(dialog).getByText('Here are the features.')).toBeInTheDocument();
+      expect(dots()[1]).toHaveAttribute('aria-current', 'step');
+      await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Features, step 2 of 3'));
+    });
+
+    it('children that render nothing keep the defaults', () => {
+      render(
+        <PartsTour>
+          <TeachingPopover.Header>{''}</TeachingPopover.Header>
+          <TeachingPopover.Title>{[]}</TeachingPopover.Title>
+          <TeachingPopover.Body>{false}</TeachingPopover.Body>
+          <TeachingPopover.Footer>{null}</TeachingPopover.Footer>
+        </PartsTour>,
+      );
+      expect(screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' })).toBeInTheDocument();
+      expect(screen.getByText('This is step one.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Close' }).parentElement).toHaveClass(
+        teachingPopoverHeaderClassNames.root,
+      );
+    });
+
+    it('children replace the default content of each part', () => {
+      render(
+        <PartsTour>
+          <TeachingPopover.Header>Tip</TeachingPopover.Header>
+          <TeachingPopover.Title>Search anything</TeachingPopover.Title>
+          <TeachingPopover.Body>
+            <p>Press Ctrl+K.</p>
+          </TeachingPopover.Body>
+          <TeachingPopover.Footer>
+            <Button>Got it</Button>
+          </TeachingPopover.Footer>
+        </PartsTour>,
+      );
+      const dialog = screen.getByRole('dialog', { name: 'Search anything, step 1 of 3' });
+      expect(within(dialog).getByText('Tip')).toHaveClass(teachingPopoverHeaderClassNames.root);
+      expect(within(dialog).queryByText('Welcome')).toBeNull();
+      expect(within(dialog).queryByText('This is step one.')).toBeNull();
+      expect(within(dialog).getByText('Press Ctrl+K.')).toBeInTheDocument();
+      expect(within(dialog).queryByRole('button', { name: 'Next' })).toBeNull();
+      expect(within(dialog).getByRole('button', { name: 'Got it' })).toBeInTheDocument();
+      expect(dots()).toHaveLength(0);
+      expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    });
+  });
+
+  describe('Header', () => {
+    testSystemProps(TeachingPopoverHeader, {
+      expectedTag: 'div',
+      displayName: 'TeachingPopoverHeader',
+      wrapper: InSurface,
+      defaultProps: { children: 'Tip' },
+      conflictingClass: { className: 'mb-4', overrides: 'mb-2' },
+    });
+
+    it('renders a decorative icon and its text in a row, with the Close button', () => {
+      render(
+        <PartsTour>
+          <TeachingPopover.Header icon={<svg data-testid="bulb" />}>Tip</TeachingPopover.Header>
+          <TeachingPopover.Title />
+        </PartsTour>,
+      );
+      const icon = screen.getByTestId('bulb').parentElement;
+      expect(icon).toHaveClass(teachingPopoverHeaderClassNames.icon);
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+      const header = icon?.parentElement;
+      expect(header).toHaveClass(teachingPopoverHeaderClassNames.root);
+      expect(header).toHaveTextContent('Tip');
+      expect(within(header as HTMLElement).getByRole('button', { name: 'Close' })).toHaveClass(
+        teachingPopoverClassNames.closeButton,
+        buttonClassNames.root,
+      );
+    });
+
+    it('an icon slot object keeps the icon class on its element', () => {
+      render(
+        <PartsTour>
+          <TeachingPopover.Header icon={{ as: 'i', children: '*', className: 'text-error' }}>
+            Tip
+          </TeachingPopover.Header>
+          <TeachingPopover.Title />
+        </PartsTour>,
+      );
+      const icon = screen.getByText('*');
+      expect(icon.tagName).toBe('I');
+      expect(icon).toHaveClass(teachingPopoverHeaderClassNames.icon, 'text-error');
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('dismisses from its Close button: closes, then onDismiss, once under StrictMode', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      const onOpenChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <PartsTour onDismiss={onDismiss} onOpenChange={onOpenChange} />
+        </React.StrictMode>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(onOpenChange.mock.calls).toEqual([[false]]);
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    describe('dismissButton (C-SLOTS dismiss slot)', () => {
+      it('renders icon content inside the wired Close button', async () => {
+        const user = userEvent.setup();
+        const onDismiss = vi.fn();
+        render(
+          <PartsTour onDismiss={onDismiss}>
+            <TeachingPopover.Header dismissButton={<svg data-testid="x" />} />
+            <TeachingPopover.Title />
+          </PartsTour>,
+        );
+        const close = screen.getByRole('button', { name: 'Close' });
+        expect(close).toContainElement(screen.getByTestId('x'));
+        expect(close.querySelector('[data-wave-icon]')).toBeNull();
+        await user.click(close);
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+      });
+
+      it('null renders no Close button; undefined keeps it', () => {
+        const { rerender } = render(
+          <PartsTour>
+            <TeachingPopover.Header dismissButton={null} />
+            <TeachingPopover.Title />
+          </PartsTour>,
+        );
+        expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+        rerender(
+          <PartsTour>
+            <TeachingPopover.Header dismissButton={undefined} />
+            <TeachingPopover.Title />
+          </PartsTour>,
+        );
+        expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+      });
+
+      it('merges a Button onto the wired Close button: its text names it (Label in Name) and its handler runs first', async () => {
+        const user = userEvent.setup();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const order: string[] = [];
+        render(
+          <PartsTour onDismiss={() => order.push('onDismiss')}>
+            <TeachingPopover.Header
+              dismissButton={
+                <Button
+                  data-testid="dismiss"
+                  className="ms-1"
+                  onClick={() => order.push('onClick')}
+                >
+                  Dismiss tip
+                </Button>
+              }
+            />
+            <TeachingPopover.Title />
+          </PartsTour>,
+        );
+        const close = screen.getByRole('button', { name: 'Dismiss tip' });
+        expect(close).toBe(screen.getByTestId('dismiss'));
+        expect(close).not.toHaveAttribute('aria-label');
+        expect(close.querySelector('button')).toBeNull();
+        expect(close).toHaveClass(teachingPopoverClassNames.closeButton, 'ms-1');
+        expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+        await user.click(close);
+        expect(order).toEqual(['onClick', 'onDismiss']);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(warn.mock.calls).toEqual([[MERGE_WARNING]]);
+      });
+
+      it('a merged button without a text label keeps closeLabel; its own aria-label wins', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { rerender } = render(
+          <PartsTour closeLabel="Lukk">
+            <TeachingPopover.Header
+              dismissButton={
+                <button type="button">
+                  <svg data-testid="x" />
+                </button>
+              }
+            />
+            <TeachingPopover.Title />
+          </PartsTour>,
+        );
+        expect(screen.getByRole('button', { name: 'Lukk' })).toContainElement(
+          screen.getByTestId('x'),
+        );
+        rerender(
+          <PartsTour closeLabel="Lukk">
+            <TeachingPopover.Header
+              dismissButton={<Button aria-label="Hide the tip" icon={<svg />} />}
+            />
+            <TeachingPopover.Title />
+          </PartsTour>,
+        );
+        expect(screen.getByRole('button', { name: 'Hide the tip' })).toBeInTheDocument();
+        expect(warn.mock.calls).toEqual([[MERGE_WARNING]]);
+      });
+    });
+  });
+
+  describe('Title', () => {
+    testSystemProps(TeachingPopoverTitle, {
+      expectedTag: 'h3',
+      displayName: 'TeachingPopoverTitle',
+      wrapper: InSurface,
+      polymorphic: true,
+      conflictingClass: { className: 'mb-4', overrides: 'mb-2' },
+    });
+
+    it('carries TeachingPopover’s title class and the hidden step position, also with children', async () => {
+      const user = userEvent.setup();
+      render(
+        <PartsTour labels={{ step: (index, count) => `steg ${index + 1} av ${count}` }}>
+          <TeachingPopover.Title>Search</TeachingPopover.Title>
+          <TeachingPopover.Footer />
+        </PartsTour>,
+      );
+      expect(heading()).toHaveClass(
+        teachingPopoverTitleClassNames.root,
+        teachingPopoverClassNames.title,
+      );
+      expect(heading()).toHaveTextContent('Search, steg 1 av 3');
+      expect(heading().querySelector('.sr-only')).toHaveTextContent(', steg 1 av 3');
+      expect(screen.getByRole('dialog', { name: 'Search, steg 1 av 3' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      expect(heading()).toHaveTextContent('Search, steg 2 av 3');
+    });
+
+    it('renders the element of `as`, which names the surface, and takes a ref', () => {
+      const ref = React.createRef<HTMLHeadingElement>();
+      render(
+        <PartsTour>
+          <TeachingPopover.Title as="h2" ref={ref} />
+        </PartsTour>,
+      );
+      const title = screen.getByRole('heading', { level: 2, name: 'Welcome, step 1 of 3' });
+      expect(ref.current).toBe(title);
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', title.id);
+    });
+
+    it('names a Surface with children by its id; without a Title the surface has no aria-labelledby', () => {
+      const { rerender } = render(
+        <PartsTour>
+          <TeachingPopover.Body>
+            <TeachingPopover.Title id="tip-title" />
+            Press Ctrl+K.
+          </TeachingPopover.Body>
+        </PartsTour>,
+      );
+      expect(screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' })).toHaveAttribute(
+        'aria-labelledby',
+        'tip-title',
+      );
+      rerender(
+        <PartsTour surface={{ 'aria-label': 'Tip' }}>
+          <TeachingPopover.Body>Press Ctrl+K.</TeachingPopover.Body>
+        </PartsTour>,
+      );
+      expect(screen.getByRole('dialog', { name: 'Tip' })).not.toHaveAttribute('aria-labelledby');
+      expect(findDanglingIdRefs()).toEqual([]);
+    });
+
+    it('the title of a popover inside another surface names only its own surface', () => {
+      // The inner popover comes first: a title of it registering with the outer surface would
+      // name the outer one.
+      render(
+        <PartsTour>
+          <TeachingPopover steps={[{ title: 'Inner', body: 'Nested tip.' }]} />
+          <TeachingPopover.Title id="outer-title" />
+        </PartsTour>,
+      );
+      const [outer, inner] = screen.getAllByRole('dialog');
+      expect(outer).toHaveAttribute('aria-labelledby', 'outer-title');
+      expect(inner).toHaveAccessibleName('Inner, step 1 of 1');
+    });
+  });
+
+  describe('Body', () => {
+    testSystemProps(TeachingPopoverBody, {
+      expectedTag: 'div',
+      displayName: 'TeachingPopoverBody',
+      wrapper: InSurface,
+      conflictingClass: { className: 'mb-2', overrides: 'mb-4' },
+    });
+
+    it('carries TeachingPopover’s body class and renders `media` before its content, as content', () => {
+      render(
+        <PartsTour>
+          <TeachingPopover.Title />
+          <TeachingPopover.Body media={<img src="tour.png" alt="The search box" />} />
+        </PartsTour>,
+      );
+      const body = screen.getByText('This is step one.');
+      expect(body).toHaveClass(teachingPopoverBodyClassNames.root, teachingPopoverClassNames.body);
+      const media = screen.getByRole('img', { name: 'The search box' }).parentElement;
+      expect(media?.tagName).toBe('SPAN');
+      expect(media).toHaveClass(teachingPopoverBodyClassNames.media);
+      expect(media).not.toHaveAttribute('aria-hidden');
+      expect(body.firstElementChild).toBe(media);
+    });
+
+    it('a media slot object keeps the media class on its element', () => {
+      render(
+        <PartsTour>
+          <TeachingPopover.Title />
+          <TeachingPopover.Body
+            media={{
+              as: 'figure',
+              className: 'aspect-video',
+              children: <img src="tour.png" alt="The search box" />,
+            }}
+          />
+        </PartsTour>,
+      );
+      const media = screen.getByRole('img', { name: 'The search box' }).parentElement;
+      expect(media?.tagName).toBe('FIGURE');
+      expect(media).toHaveClass(teachingPopoverBodyClassNames.media, 'aspect-video');
+    });
+  });
+
+  describe('Footer', () => {
+    testSystemProps(TeachingPopoverFooter, {
+      expectedTag: 'div',
+      displayName: 'TeachingPopoverFooter',
+      wrapper: InSurface,
+      conflictingClass: { className: 'gap-4', overrides: 'gap-2' },
+    });
+
+    it('carries TeachingPopover’s footer class and data-layout, with the step dots and buttons', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      const { rerender } = render(
+        <PartsTour onStepChange={onStepChange}>
+          <TeachingPopover.Title />
+          <TeachingPopover.Footer data-testid="footer" />
+        </PartsTour>,
+      );
+      const footer = screen.getByTestId('footer');
+      expect(footer).toHaveClass(
+        teachingPopoverFooterClassNames.root,
+        teachingPopoverClassNames.footer,
+      );
+      expect(footer).toHaveAttribute('data-layout', 'horizontal');
+      expect(within(footer).getByRole('button', { name: 'Back' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await user.click(within(footer).getByRole('button', { name: 'Next' }));
+      expect(onStepChange).toHaveBeenLastCalledWith(1);
+      rerender(
+        <PartsTour onStepChange={onStepChange} footerLayout="vertical">
+          <TeachingPopover.Title />
+          <TeachingPopover.Footer data-testid="footer" />
+        </PartsTour>,
+      );
+      expect(screen.getByTestId('footer')).toHaveAttribute('data-layout', 'vertical');
+    });
+  });
+
+  it('has no axe violations for a tour built from parts', async () => {
+    render(
+      <PartsTour activeStep={1}>
+        <TeachingPopover.Header icon={<svg />}>Tip</TeachingPopover.Header>
+        <TeachingPopover.Body media={<img src="tour.png" alt="The search box" />}>
+          <TeachingPopover.Title as="h2" />
+          <p>Press Ctrl+K.</p>
+        </TeachingPopover.Body>
+        <TeachingPopover.Footer />
+      </PartsTour>,
+    );
+    expect(screen.getByRole('dialog', { name: 'Features, step 2 of 3' })).toBeInTheDocument();
+    await expectNoA11yViolations();
+  });
+
+  describe('outside a TeachingPopover (C-CONTEXT)', () => {
+    it('each part throws in development', () => {
+      expectThrows(
+        <TeachingPopover.Header />,
+        '[WaveUI] TeachingPopover.Header must be used within TeachingPopover',
+      );
+      expectThrows(
+        <TeachingPopover.Title />,
+        '[WaveUI] TeachingPopover.Title must be used within TeachingPopover',
+      );
+      expectThrows(
+        <TeachingPopover.Body />,
+        '[WaveUI] TeachingPopover.Body must be used within TeachingPopover',
+      );
+      expectThrows(
+        <TeachingPopover.Footer />,
+        '[WaveUI] TeachingPopover.Footer must be used within TeachingPopover',
+      );
+    });
+
+    it('in production, each part logs once and renders nothing', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const ui = (tick: number) => (
+        <div data-tick={tick}>
+          <TeachingPopover.Header />
+          <TeachingPopover.Title />
+          <TeachingPopover.Body />
+          <TeachingPopover.Footer />
+        </div>
+      );
+      const { container, rerender } = render(ui(0));
+      rerender(ui(1));
+      expect(error.mock.calls).toEqual([
+        ['[WaveUI] TeachingPopover.Header must be used within TeachingPopover'],
+        ['[WaveUI] TeachingPopover.Title must be used within TeachingPopover'],
+        ['[WaveUI] TeachingPopover.Body must be used within TeachingPopover'],
+        ['[WaveUI] TeachingPopover.Footer must be used within TeachingPopover'],
+      ]);
+      expect(container.firstElementChild).toBeEmptyDOMElement();
+    });
+  });
+
+  describe('parts written in a Server Component', () => {
+    // A client component written in a Server Component reaches the client as a lazy reference.
+    const plainParts = {
+      Surface: TeachingPopoverSurface,
+      Header: TeachingPopoverHeader,
+      Title: TeachingPopoverTitle,
+      Body: TeachingPopoverBody,
+      Footer: TeachingPopoverFooter,
+    };
+    const lazyParts = {
+      Surface: asClientReference(TeachingPopoverSurface),
+      Header: asClientReference(TeachingPopoverHeader),
+      Title: asClientReference(TeachingPopoverTitle),
+      Body: asClientReference(TeachingPopoverBody),
+      Footer: asClientReference(TeachingPopoverFooter),
+    };
+
+    function Tip({ parts }: { parts: typeof plainParts }) {
+      return (
+        <TeachingPopover steps={steps} activeStep={1}>
+          <parts.Surface>
+            <parts.Header icon={<svg />}>Tip</parts.Header>
+            <parts.Title as="h2" />
+            <parts.Body media={<img src="tour.png" alt="" />} />
+            <parts.Footer />
+          </parts.Surface>
+        </TeachingPopover>
+      );
+    }
+
+    it('server-renders the same HTML as with the plain part types', () => {
+      const html = renderToString(<Tip parts={plainParts} />);
+      expect(html).toContain('Features');
+      expect(html).toContain(teachingPopoverHeaderClassNames.root);
+      expect(html).toContain(teachingPopoverFooterClassNames.root);
+      expect(renderToString(<Tip parts={lazyParts} />)).toBe(html);
+    });
+
+    it('lazy parts render the defaults, name the surface and dismiss', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      function LazyTour() {
+        return (
+          <TeachingPopover steps={steps} onDismiss={onDismiss}>
+            <lazyParts.Surface>
+              <lazyParts.Header />
+              <lazyParts.Title />
+              <lazyParts.Body />
+              <lazyParts.Footer />
+            </lazyParts.Surface>
+          </TeachingPopover>
+        );
+      }
+      render(<LazyTour />);
+      await act(async () => {});
+      expect(screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      expect(heading()).toHaveTextContent('Features, step 2 of 3');
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+      expect(onDismiss).toHaveBeenCalledTimes(1);
     });
   });
 });

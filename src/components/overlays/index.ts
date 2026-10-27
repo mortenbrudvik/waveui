@@ -63,7 +63,15 @@ export type {
   DrawerFooterProps,
 } from './Drawer';
 
-export { TeachingPopover, TeachingPopoverTrigger, TeachingPopoverSurface } from './TeachingPopover';
+export {
+  TeachingPopover,
+  TeachingPopoverTrigger,
+  TeachingPopoverSurface,
+  TeachingPopoverHeader,
+  TeachingPopoverTitle,
+  TeachingPopoverBody,
+  TeachingPopoverFooter,
+} from './TeachingPopover';
 export type {
   TeachingPopoverProps,
   TeachingPopoverStep,
@@ -72,4 +80,9 @@ export type {
   TeachingPopoverTriggerProps,
   TeachingPopoverTriggerChildProps,
   TeachingPopoverSurfaceProps,
+  TeachingPopoverHeaderProps,
+  TeachingPopoverTitleOwnProps,
+  TeachingPopoverTitleProps,
+  TeachingPopoverBodyProps,
+  TeachingPopoverFooterProps,
 } from './TeachingPopover';

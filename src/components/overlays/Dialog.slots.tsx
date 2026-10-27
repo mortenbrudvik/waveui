@@ -21,8 +21,9 @@ import { Button } from '../button/Button';
 import { BUTTON_OWN_PROP_KEYS, type UnwrappedButton } from '../button/Button.slots';
 
 /*
- * The Close button and backdrop slots of Dialog and Drawer (P6-06 D93–D95). Internal (not
- * exported from the package). Imports Button, never the reverse.
+ * The Close button and backdrop slots of Dialog and Drawer (P6-06 D93–D95); TeachingPopover.Header
+ * renders the Close button too. Internal (not exported from the package). Imports Button, never
+ * the reverse.
  */
 
 type UnknownProps = Record<string, unknown>;
@@ -183,10 +184,15 @@ function resolveCloseButton(closeButton: Slot<'span'> | undefined): CloseButtonP
 
 /** Properties of {@link ModalCloseButton}. */
 export interface ModalCloseButtonProps {
-  /** `'Dialog.Content'` or `'Drawer'`: the warning key and text. */
+  /** `'Dialog.Content'`, `'Drawer'` or `'TeachingPopover.Header'`: the warning key and text. */
   componentName: string;
   /** The `closeButton` slot. */
   closeButton: Slot<'span'> | undefined;
+  /**
+   * The slot's prop name, for the warning key and text (TeachingPopover.Header's `dismissButton`).
+   * @default 'closeButton'
+   */
+  slotName?: string;
   /** The Button's name unless the slot names it (`closeLabel`). */
   closeLabel: string;
   /** Asks to close with `'close-button'`. */
@@ -197,15 +203,17 @@ export interface ModalCloseButtonProps {
 
 /**
  * The built-in Close button with the `closeButton` slot rules (D95), shared by `Dialog.Content`,
- * the built-in Drawer header and every `Drawer.HeaderTitle`: a subtle, small Wave `Button` named
- * by `closeLabel`, holding the dismiss glyph or the slot's decorative content; a merged button's
- * text label (two letters or digits, `labelInName.ts`) names it instead, from the literal content
- * on the server and the first render and from the rendered text after mount. `null` when hidden.
- * Warns once, from an effect, when a button was merged.
+ * the built-in Drawer header, every `Drawer.HeaderTitle` and `TeachingPopover.Header` (its
+ * `dismissButton`): a subtle, small Wave `Button` named by `closeLabel`, holding the dismiss glyph
+ * or the slot's decorative content; a merged button's text label (two letters or digits,
+ * `labelInName.ts`) names it instead, from the literal content on the server and the first render
+ * and from the rendered text after mount. `null` when hidden. Warns once, from an effect, when a
+ * button was merged.
  */
 export function ModalCloseButton({
   componentName,
   closeButton,
+  slotName = 'closeButton',
   closeLabel,
   onClose,
   className,
@@ -215,10 +223,10 @@ export function ModalCloseButton({
   React.useEffect(() => {
     if (merged === null) return;
     warnOnce(
-      `${componentName}:closeButton-button-element`,
-      `${componentName}: \`closeButton\` received ${merged}; its props were merged into the built-in Close button (buttons cannot be nested). Pass icon content instead, e.g. \`closeButton={<CloseIcon />}\`.`,
+      `${componentName}:${slotName}-button-element`,
+      `${componentName}: \`${slotName}\` received ${merged}; its props were merged into the built-in Close button (buttons cannot be nested). Pass icon content instead, e.g. \`${slotName}={<CloseIcon />}\`.`,
     );
-  }, [merged, componentName]);
+  }, [merged, componentName, slotName]);
 
   const {
     ref: slotRef,

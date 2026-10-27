@@ -1,10 +1,23 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { teachingPopoverClassNames, teachingPopoverSurfaceClassNames } from '../../lib/classNames';
+import {
+  teachingPopoverBodyClassNames,
+  teachingPopoverClassNames,
+  teachingPopoverFooterClassNames,
+  teachingPopoverHeaderClassNames,
+  teachingPopoverSurfaceClassNames,
+  teachingPopoverTitleClassNames,
+} from '../../lib/classNames';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
-import { DismissIcon } from '../../lib/icons';
 import { isElementOfType } from '../../lib/children';
-import { resolveSlot, slotRendersContent } from '../../lib/slot';
+import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import {
+  materialiseSlotContent,
+  renderSlot,
+  resolveSlot,
+  slotRendersContent,
+  type Slot,
+} from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { VirtualElement } from '../../lib/types';
@@ -14,23 +27,27 @@ import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
-import { useTriggerElement } from '../../hooks/useTriggerElement';
+import { useTriggerElement, useTriggerFocusRef } from '../../hooks/useTriggerElement';
 import { Button } from '../button/Button';
 import { Portal } from '../portal/Portal';
+import { useTitleRegistry } from './Dialog.shared';
+import { ModalCloseButton } from './Dialog.slots';
 import { getTabbableThrough, PopoverBeak, usePopoverTabOrder } from './Popover.shared';
 import {
+  TeachingPopoverSurfaceContext,
   useTeachingPopoverContext,
   type TeachingPopoverAction,
   type TeachingPopoverContextValue,
-  type TeachingPopoverStep,
   type TeachingPopoverTarget,
 } from './TeachingPopover.context';
 
 /*
  * The TeachingPopover's parts and the surface they share with the root: `TeachingSurface` holds
- * the surface's hooks (positioning, dismissal, focus, keyboard order, announcements), so the
- * `steps` form and `TeachingPopover.Surface` render one element the same way. Imports the context
- * module only (never the root or `TeachingPopover.tsx`).
+ * the surface's hooks (positioning, dismissal, focus, keyboard order, announcements, the title
+ * registry), so the `steps` form and `TeachingPopover.Surface` render one element the same way.
+ * The content parts (Header, Title, Body, Footer) show the current step without children; the
+ * `steps` form renders them that way (Pattern 15), so both forms render the same markup. Imports
+ * the context module only (never the root or `TeachingPopover.tsx`).
  */
 
 /**
@@ -75,9 +92,12 @@ export interface TeachingPopoverTriggerProps extends Omit<
 export interface TeachingPopoverSurfaceProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * The popover's content. Without children (or with children that render nothing) the surface
-   * shows the current step as the `steps` form does: the Close button, the step title, its body
-   * and the footer with the step dots and the buttons. Children replace all of that; the surface
-   * is then named by your `aria-label` or `aria-labelledby`.
+   * shows the current step as the `steps` form does: `TeachingPopover.Header`, `Title`, `Body` and
+   * `Footer` without children of their own (the Close button, the step title, its body, and the
+   * footer with the step dots and the buttons). Children replace all of that: build it from those
+   * parts, each showing its share of the current step unless you give it children, or from your
+   * own content. A `TeachingPopover.Title` among the children (at any depth) names the surface;
+   * without one, name it with `aria-label` or `aria-labelledby`.
    */
   children?: React.ReactNode;
   /** Ref to the popover surface (`role="dialog"`). */
@@ -155,126 +175,6 @@ function renderAction(
   );
 }
 
-/** Properties of {@link TeachingDefaultContent}. */
-interface TeachingDefaultContentProps {
-  context: TeachingPopoverContextValue;
-  step: TeachingPopoverStep;
-}
-
-/**
- * The content of the current step (internal): the Close button, the title with the hidden step
- * position, the body and the footer with the step dots and the buttons. The `steps` form and a
- * `TeachingPopover.Surface` without children render it.
- */
-function TeachingDefaultContent({ context, step }: TeachingDefaultContentProps) {
-  const {
-    count,
-    index,
-    isFirst,
-    isLast,
-    stepPosition,
-    titleId,
-    dismiss,
-    goBack,
-    goNext,
-    primaryAction,
-    secondaryAction,
-    footerLayout,
-    backLabel,
-    nextLabel,
-    doneLabel,
-    closeLabel,
-  } = context;
-  const vertical = footerLayout === 'vertical';
-
-  return (
-    <>
-      <Button
-        appearance="subtle"
-        size="small"
-        icon={<DismissIcon />}
-        aria-label={closeLabel}
-        className={cn(teachingPopoverClassNames.closeButton, 'absolute end-3 top-3')}
-        onClick={dismiss}
-      />
-
-      <h3
-        id={titleId}
-        className={cn(
-          teachingPopoverClassNames.title,
-          'mb-2 pe-8 text-subtitle-1 font-semibold text-foreground',
-        )}
-      >
-        {step.title}
-        <span className="sr-only">{`, ${stepPosition}`}</span>
-      </h3>
-
-      <div className={cn(teachingPopoverClassNames.body, 'mb-4 text-body-1 text-muted-foreground')}>
-        {step.body}
-      </div>
-
-      <div
-        className={cn(
-          teachingPopoverClassNames.footer,
-          'flex gap-2',
-          vertical ? 'flex-col items-stretch gap-4' : 'items-center justify-between',
-        )}
-      >
-        <div
-          aria-hidden="true"
-          className={cn('flex items-center gap-1.5', vertical && 'justify-center')}
-        >
-          {Array.from({ length: count }, (_, i) => (
-            <span
-              key={i}
-              data-wave-teaching-popover-dot=""
-              aria-current={i === index ? 'step' : undefined}
-              className={cn(
-                teachingPopoverClassNames.dot,
-                'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
-                i === index
-                  ? cn('w-4 bg-primary', forcedColors.fill)
-                  : 'w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none',
-              )}
-            />
-          ))}
-        </div>
-
-        <div className={cn('flex gap-2', vertical ? 'flex-col items-stretch' : 'items-center')}>
-          {secondaryAction
-            ? renderAction(
-                secondaryAction,
-                'outline',
-                teachingPopoverClassNames.secondaryButton,
-                goBack,
-              )
-            : count > 1 && (
-                <Button
-                  {...focusableDisabledProps(isFirst)}
-                  className={teachingPopoverClassNames.backButton}
-                  onClick={preventIfDisabled(isFirst, goBack)}
-                >
-                  {backLabel}
-                </Button>
-              )}
-          {primaryAction ? (
-            renderAction(primaryAction, 'primary', teachingPopoverClassNames.primaryButton, goNext)
-          ) : (
-            <Button
-              appearance="primary"
-              className={teachingPopoverClassNames.nextButton}
-              onClick={goNext}
-            >
-              {isLast ? doneLabel : nextLabel}
-            </Button>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-TeachingDefaultContent.displayName = 'TeachingDefaultContent';
-
 /** Properties of {@link TeachingSurface}. */
 interface TeachingSurfaceProps extends React.HTMLAttributes<HTMLDivElement> {
   /** The context of the TeachingPopover the surface belongs to. */
@@ -287,9 +187,10 @@ interface TeachingSurfaceProps extends React.HTMLAttributes<HTMLDivElement> {
 /**
  * The popover surface (internal): the non-modal `role="dialog"` element, rendered in place, or
  * portaled and positioned next to the target with a beak, with its dismissal, focus, keyboard
- * order and step announcements. The root renders it with its own props when no
+ * order and step announcements. The root renders it with its own props while no
  * `TeachingPopover.Surface` is among its children; `TeachingPopover.Surface` renders it with its
- * props. Its children replace the content of the current step.
+ * props. Its children replace the content parts of the current step; a `TeachingPopover.Title`
+ * among them registers its id, which names the surface.
  */
 export const TeachingSurface = ({
   context,
@@ -315,11 +216,12 @@ export const TeachingSurface = ({
     footerLayout,
     dismiss,
     hasTrigger,
+    triggerRef,
     surfaceId,
-    setCustomSurfaceId,
-    registerSurface,
   } = context;
   const announce = useAnnounce();
+  // The titles among the children of a surface with content of its own (see the provider below).
+  const titles = useTitleRegistry();
   const stepTitle = step?.title;
   const hasTarget = target !== undefined;
 
@@ -403,9 +305,13 @@ export const TeachingSurface = ({
     outsidePress: false,
   });
 
+  // Focus returns to the Trigger when there is one (as `Popover.Trigger`), else to the element that
+  // had it, else to the target.
+  const triggerFocusRef = useTriggerFocusRef(triggerRef);
   useRestoreFocus({
     enabled: visible,
     container: surface,
+    triggerRef: triggerFocusRef,
     fallback: () => targetRef.current,
     onlyIfFocusInside: true,
   });
@@ -434,26 +340,19 @@ export const TeachingSurface = ({
     }
   }, [index, visible, stepTitle, stepPosition, announce]);
 
-  // The root checks after each commit that it has one surface.
-  React.useLayoutEffect(() => registerSurface(), [registerSurface]);
-
-  // The consumer's id names the surface for the Trigger's `aria-controls`.
-  const ownId = id || undefined;
-  React.useEffect(() => {
-    setCustomSurfaceId(ownId);
-    return () => setCustomSurfaceId(undefined);
-  }, [ownId, setCustomSurfaceId]);
-
   if (!shown || !step) return null;
 
-  // Children replace the step content, and with it the title that names the surface.
+  // Children replace the content parts of the step. The parts without children name the surface
+  // by the title id known while rendering (the server HTML too); with children of yours, the
+  // first TeachingPopover.Title that registers does, and no title means no `aria-labelledby`.
   const hasContent = slotRendersContent(children);
+  const ownId = id || undefined;
 
   return (
     <Portal disabled={!hasTarget} layerId={layerId}>
       <div
         role="dialog"
-        aria-labelledby={hasContent ? undefined : titleId}
+        aria-labelledby={hasContent ? titles.titleId : titleId}
         tabIndex={-1}
         data-layout={footerLayout}
         id={ownId ?? (hasTrigger ? surfaceId : undefined)}
@@ -488,7 +387,20 @@ export const TeachingSurface = ({
           />
         )}
 
-        {hasContent ? children : <TeachingDefaultContent context={context} step={step} />}
+        {/* Titles among your children register here; the default content's does not (its id is
+            known while rendering), and a popover nested inside provides its own registry. */}
+        <TeachingPopoverSurfaceContext.Provider value={hasContent ? titles.context : null}>
+          {hasContent ? (
+            children
+          ) : (
+            <>
+              <TeachingPopoverHeader />
+              <TeachingPopoverTitle />
+              <TeachingPopoverBody />
+              <TeachingPopoverFooter />
+            </>
+          )}
+        </TeachingPopoverSurfaceContext.Provider>
       </div>
     </Portal>
   );
@@ -507,11 +419,11 @@ TeachingSurface.displayName = 'TeachingSurface';
  * element in the tab order inside it.
  *
  * When TeachingPopover has no `target` (and no `positioning.target`), the popover points at the
- * trigger: it is portaled next to it with a beak, takes its place in the keyboard order right
- * after it, and focus returns to it. Place it directly inside TeachingPopover (a Fragment is
- * fine): the popover then starts closed unless `defaultOpen` says otherwise. A trigger nested
- * deeper still works, but leaves `defaultOpen` at `true` and becomes the target once it has
- * mounted.
+ * trigger: it is portaled next to it with a beak and takes its place in the keyboard order right
+ * after it. Focus returns to the trigger when the popover closes, with a `target` too (as with
+ * `Popover.Trigger`). Place it directly inside TeachingPopover (a Fragment is fine): the popover
+ * then starts closed unless `defaultOpen` says otherwise. A trigger nested deeper still works, but
+ * leaves `defaultOpen` at `true` and becomes the target once it has mounted.
  *
  * @example
  * <TeachingPopover steps={steps}>
@@ -561,26 +473,390 @@ TeachingPopoverTrigger.displayName = 'TeachingPopoverTrigger';
  * target with a beak; focus, dismissal, keyboard order and step announcements), so your
  * `className`, `style`, `ref` and other props reach the element the `steps` form gives
  * TeachingPopover's own. Without children it shows the current step as the `steps` form does;
- * children replace that content (name the surface with `aria-label` or `aria-labelledby` then).
+ * children replace that content: build it from `TeachingPopover.Header`, `Title`, `Body` and
+ * `Footer`, or from your own (then name the surface with `aria-label` or `aria-labelledby`).
  *
- * Render one, directly inside TeachingPopover (a Fragment is fine); TeachingPopover then renders
- * no surface of its own, and its own `className`, `style`, `ref` and other element props are
- * ignored (a development warning says so). A Surface inside an element or a component of yours is
- * not found there: TeachingPopover renders its own surface as well, and a development warning says
- * so.
+ * Render one inside TeachingPopover; TeachingPopover then renders no surface of its own, and its
+ * own `className`, `style`, `ref` and other element props are ignored (a development warning says
+ * so). Write it directly inside TeachingPopover (a Fragment is fine) where you can: there it is
+ * found while rendering. One inside an element or a component of yours is found once it has
+ * mounted, so until then TeachingPopover's own surface renders next to it: in the server HTML, and
+ * in the browser's first commit (before anything is painted or focused). A second Surface renders
+ * a second popover (a development warning says so).
  *
  * Also exported as `TeachingPopoverSurface` for React Server Components, which cannot use the
  * dotted `TeachingPopover.Surface` (that needs a client file).
  */
-export const TeachingPopoverSurface = ({ ref, ...rest }: TeachingPopoverSurfaceProps) => {
+export const TeachingPopoverSurface = ({ id, ref, ...rest }: TeachingPopoverSurfaceProps) => {
   const context = useTeachingPopoverContext('TeachingPopover.Surface');
+  const { registerSurface, setCustomSurfaceId } = context;
+  // Registered wherever it is among TeachingPopover's children: the root then drops its own
+  // surface (in the commit after this one when the root's scan did not find it), and warns when
+  // more than one registers.
+  React.useLayoutEffect(() => registerSurface(), [registerSurface]);
+  // Its id is the one the Trigger's `aria-controls` names.
+  const ownId = id || undefined;
+  React.useEffect(() => {
+    setCustomSurfaceId(ownId);
+    return () => setCustomSurfaceId(undefined);
+  }, [ownId, setCustomSurfaceId]);
+
   return (
     <TeachingSurface
       context={context}
       rootClassName={cn(teachingPopoverClassNames.root, teachingPopoverSurfaceClassNames.root)}
+      id={id}
       {...rest}
       ref={ref}
     />
   );
 };
 TeachingPopoverSurface.displayName = 'TeachingPopoverSurface';
+
+/** Properties for the TeachingPopoverHeader sub-component. */
+export interface TeachingPopoverHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * A short caption above the title, such as “Tip” or “New”. Without it (and without `icon`) the
+   * header holds only the Close button, as the `steps` form's does; with either, they sit in a row
+   * at the top of the popover, next to the Close button.
+   */
+  children?: React.ReactNode;
+  /**
+   * A decorative icon before the caption (`aria-hidden`), such as a light bulb. None by default
+   * (Fluent's header shows a light bulb). A value that renders nothing renders no element.
+   */
+  icon?: Slot<'span'>;
+  /**
+   * The Close button at the popover's top end, which dismisses it (`onOpenChange(false)`, then
+   * `onDismiss`) and is named by TeachingPopover's `closeLabel`. Content (an icon) replaces the
+   * dismiss glyph inside the built-in button. A `<button>` or a `Button`, or a slot object whose
+   * `as` is one, is merged into it, never nested: its props and handlers (called first) reach the
+   * built-in button, its content goes inside, and a development warning says so; a text label of
+   * two or more letters or digits in it names the button instead of `closeLabel` (WCAG 2.5.3,
+   * Label in Name), as does its own `aria-label`. `null` renders no Close button; `undefined` and
+   * booleans keep the default.
+   */
+  dismissButton?: Slot<'span'>;
+  /** Ref to the header element. */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * The top of the popover (Fluent's `TeachingPopoverHeader`): the Close button, and an optional
+ * caption with a decorative `icon` before the title. Without children it holds only the Close
+ * button, as the `steps` form does. Place it first in a `TeachingPopover.Surface`.
+ *
+ * Also exported as `TeachingPopoverHeader` for React Server Components, which cannot use the
+ * dotted `TeachingPopover.Header` (that needs a client file).
+ */
+export const TeachingPopoverHeader = ({
+  icon,
+  dismissButton,
+  className,
+  children,
+  ref,
+  ...rest
+}: TeachingPopoverHeaderProps) => {
+  const { step, closeLabel, dismiss } = useTeachingPopoverContext('TeachingPopover.Header');
+  if (!step) return null;
+
+  const hasIcon = slotRendersContent(icon);
+  const hasCaption = slotRendersContent(children);
+  return (
+    // The row lines up with the Close button, which keeps its place at the top end of the surface
+    // whether or not the header has a caption.
+    <div
+      ref={ref}
+      className={cn(
+        teachingPopoverHeaderClassNames.root,
+        (hasIcon || hasCaption) &&
+          '-mt-2 mb-2 flex min-h-6 items-center gap-1.5 pe-8 text-caption-1 font-semibold text-primary',
+        className,
+      )}
+      {...rest}
+    >
+      {hasIcon &&
+        renderSlot(
+          icon,
+          'span',
+          cn(teachingPopoverHeaderClassNames.icon, 'inline-flex shrink-0 items-center'),
+          { 'aria-hidden': true },
+        )}
+      {hasCaption && materialiseSlotContent(children)}
+      <ModalCloseButton
+        componentName="TeachingPopover.Header"
+        closeButton={dismissButton}
+        slotName="dismissButton"
+        closeLabel={closeLabel}
+        onClose={dismiss}
+        className={cn(teachingPopoverClassNames.closeButton, 'absolute end-3 top-3')}
+      />
+    </div>
+  );
+};
+TeachingPopoverHeader.displayName = 'TeachingPopoverHeader';
+
+/** The TeachingPopover.Title's own props (component-specific props only). */
+export interface TeachingPopoverTitleOwnProps {
+  /**
+   * The title text: the current step's `title` without children (or with children that render
+   * nothing). A visually hidden step position (“, step 2 of 3”, worded by `labels.step`) follows
+   * either, so the heading, which names the popover, says where the tour is.
+   */
+  children?: React.ReactNode;
+}
+
+/** Props of {@link TeachingPopoverTitle} rendered as `C` (default `'h3'`), including `ref`. */
+export type TeachingPopoverTitleProps<C extends React.ElementType = 'h3'> = PolymorphicProps<
+  C,
+  TeachingPopoverTitleOwnProps
+>;
+
+/** The props the implementation reads, for any `as` (the public typing is `PolymorphicComponent`). */
+type TeachingPopoverTitleImplProps = TeachingPopoverTitleOwnProps &
+  React.HTMLAttributes<HTMLElement> & {
+    as?: React.ElementType;
+    ref?: React.Ref<HTMLElement>;
+  };
+
+/**
+ * The step title (Fluent's `TeachingPopoverTitle`): an `<h3>` (another level, or any element,
+ * with `as`) holding the current step's `title`, or your children, and a visually hidden step
+ * position. It names the surface: the surface's `aria-labelledby` points at its `id` (yours, or a
+ * generated one), wherever it is among the Surface's children (inside `TeachingPopover.Body`, as
+ * in Fluent, works too).
+ *
+ * Also exported as `TeachingPopoverTitle` for React Server Components, which cannot use the
+ * dotted `TeachingPopover.Title` (that needs a client file).
+ */
+export const TeachingPopoverTitle: PolymorphicComponent<'h3', TeachingPopoverTitleOwnProps> = (
+  props,
+) => {
+  const {
+    as,
+    id: idProp,
+    className,
+    children,
+    ref,
+    ...rest
+  } = props as TeachingPopoverTitleImplProps;
+  const { step, stepPosition, titleId } = useTeachingPopoverContext('TeachingPopover.Title');
+  const registry = React.useContext(TeachingPopoverSurfaceContext);
+  const id = idProp || titleId;
+  // Registered while the element is mounted: the surface is named by the titles it renders.
+  const registerTitle = registry?.registerTitle;
+  const register = React.useCallback(
+    (node: HTMLElement | null) => (node && registerTitle ? registerTitle(id) : undefined),
+    [registerTitle, id],
+  );
+  const mergedRef = useMergedRefs<HTMLElement>(ref, register);
+  if (!step) return null;
+
+  const Component: React.ElementType = as ?? 'h3';
+  return (
+    <Component
+      id={id}
+      className={cn(
+        teachingPopoverTitleClassNames.root,
+        teachingPopoverClassNames.title,
+        'mb-2 pe-8 text-subtitle-1 font-semibold text-foreground',
+        className,
+      )}
+      {...rest}
+      ref={mergedRef}
+    >
+      {slotRendersContent(children) ? materialiseSlotContent(children) : step.title}
+      <span className="sr-only">{`, ${stepPosition}`}</span>
+    </Component>
+  );
+};
+TeachingPopoverTitle.displayName = 'TeachingPopoverTitle';
+
+/** Properties for the TeachingPopoverBody sub-component. */
+export interface TeachingPopoverBodyProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * The body content: the current step's `body` without children (or with children that render
+   * nothing).
+   */
+  children?: React.ReactNode;
+  /**
+   * Media above the content, such as a picture or a short video of the feature, inside a `<span>`
+   * (`media={<img src="…" alt="…" />}`; a slot object sets the span's own attributes). It is
+   * content, not decoration: give a picture its `alt` (`alt=""` when the text says it all). A
+   * value that renders nothing renders no element.
+   */
+  media?: Slot<'span'>;
+  /** Ref to the body element. */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * The step body (Fluent's `TeachingPopoverBody`): the current step's `body`, or your children,
+ * after an optional `media` element.
+ *
+ * Also exported as `TeachingPopoverBody` for React Server Components, which cannot use the
+ * dotted `TeachingPopover.Body` (that needs a client file).
+ */
+export const TeachingPopoverBody = ({
+  media,
+  className,
+  children,
+  ref,
+  ...rest
+}: TeachingPopoverBodyProps) => {
+  const { step } = useTeachingPopoverContext('TeachingPopover.Body');
+  if (!step) return null;
+
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        teachingPopoverBodyClassNames.root,
+        teachingPopoverClassNames.body,
+        'mb-4 text-body-1 text-muted-foreground',
+        className,
+      )}
+      {...rest}
+    >
+      {slotRendersContent(media) &&
+        renderSlot(
+          media,
+          'span',
+          cn(teachingPopoverBodyClassNames.media, 'mb-3 block overflow-hidden rounded-md'),
+        )}
+      {slotRendersContent(children) ? materialiseSlotContent(children) : step.body}
+    </div>
+  );
+};
+TeachingPopoverBody.displayName = 'TeachingPopoverBody';
+
+/** Properties for the TeachingPopoverFooter sub-component. */
+export interface TeachingPopoverFooterProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * The footer content. Without children (or with children that render nothing) the step dots and
+   * the buttons of the current step: Back and Next (Done on the last step), or the
+   * `primaryAction` and `secondaryAction` that replace them.
+   */
+  children?: React.ReactNode;
+  /** Ref to the footer element. */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * The bottom row (Fluent's `TeachingPopoverFooter`): the step dots and the buttons of the current
+ * step, laid out by TeachingPopover's `footerLayout` (rendered as `data-layout` here too), or your
+ * children. The steps, the actions and their labels stay on TeachingPopover.
+ *
+ * Also exported as `TeachingPopoverFooter` for React Server Components, which cannot use the
+ * dotted `TeachingPopover.Footer` (that needs a client file).
+ */
+export const TeachingPopoverFooter = ({
+  className,
+  children,
+  ref,
+  ...rest
+}: TeachingPopoverFooterProps) => {
+  const context = useTeachingPopoverContext('TeachingPopover.Footer');
+  const { step, footerLayout } = context;
+  if (!step) return null;
+
+  const vertical = footerLayout === 'vertical';
+  return (
+    <div
+      ref={ref}
+      data-layout={footerLayout}
+      className={cn(
+        teachingPopoverFooterClassNames.root,
+        teachingPopoverClassNames.footer,
+        'flex gap-2',
+        vertical ? 'flex-col items-stretch gap-4' : 'items-center justify-between',
+        className,
+      )}
+      {...rest}
+    >
+      {slotRendersContent(children) ? (
+        materialiseSlotContent(children)
+      ) : (
+        <TeachingFooterContent context={context} />
+      )}
+    </div>
+  );
+};
+TeachingPopoverFooter.displayName = 'TeachingPopoverFooter';
+
+/**
+ * The default content of the footer (internal): the step dots and the buttons of the current
+ * step (Back and Next or Done, or the actions that replace them).
+ */
+function TeachingFooterContent({ context }: { context: TeachingPopoverContextValue }) {
+  const {
+    count,
+    index,
+    isFirst,
+    isLast,
+    goBack,
+    goNext,
+    primaryAction,
+    secondaryAction,
+    footerLayout,
+    backLabel,
+    nextLabel,
+    doneLabel,
+  } = context;
+  const vertical = footerLayout === 'vertical';
+
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className={cn('flex items-center gap-1.5', vertical && 'justify-center')}
+      >
+        {Array.from({ length: count }, (_, i) => (
+          <span
+            key={i}
+            data-wave-teaching-popover-dot=""
+            aria-current={i === index ? 'step' : undefined}
+            className={cn(
+              teachingPopoverClassNames.dot,
+              'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
+              i === index
+                ? cn('w-4 bg-primary', forcedColors.fill)
+                : 'w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none',
+            )}
+          />
+        ))}
+      </div>
+
+      <div className={cn('flex gap-2', vertical ? 'flex-col items-stretch' : 'items-center')}>
+        {secondaryAction
+          ? renderAction(
+              secondaryAction,
+              'outline',
+              teachingPopoverClassNames.secondaryButton,
+              goBack,
+            )
+          : count > 1 && (
+              <Button
+                {...focusableDisabledProps(isFirst)}
+                className={teachingPopoverClassNames.backButton}
+                onClick={preventIfDisabled(isFirst, goBack)}
+              >
+                {backLabel}
+              </Button>
+            )}
+        {primaryAction ? (
+          renderAction(primaryAction, 'primary', teachingPopoverClassNames.primaryButton, goNext)
+        ) : (
+          <Button
+            appearance="primary"
+            className={teachingPopoverClassNames.nextButton}
+            onClick={goNext}
+          >
+            {isLast ? doneLabel : nextLabel}
+          </Button>
+        )}
+      </div>
+    </>
+  );
+}
+TeachingFooterContent.displayName = 'TeachingFooterContent';

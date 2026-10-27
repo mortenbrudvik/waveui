@@ -1,4 +1,11 @@
-import { TeachingPopoverSurface, TeachingPopoverTrigger } from './TeachingPopover.parts';
+import {
+  TeachingPopoverBody,
+  TeachingPopoverFooter,
+  TeachingPopoverHeader,
+  TeachingPopoverSurface,
+  TeachingPopoverTitle,
+  TeachingPopoverTrigger,
+} from './TeachingPopover.parts';
 import { TeachingPopoverRoot } from './TeachingPopover.root';
 
 export type {
@@ -8,7 +15,12 @@ export type {
 } from './TeachingPopover.context';
 export type { TeachingPopoverProps } from './TeachingPopover.root';
 export type {
+  TeachingPopoverBodyProps,
+  TeachingPopoverFooterProps,
+  TeachingPopoverHeaderProps,
   TeachingPopoverSurfaceProps,
+  TeachingPopoverTitleOwnProps,
+  TeachingPopoverTitleProps,
   TeachingPopoverTriggerChildProps,
   TeachingPopoverTriggerProps,
 } from './TeachingPopover.parts';
@@ -46,29 +58,51 @@ export type {
  *   With no control at or before the target, the popover is reached where it is portaled, at the
  *   end of the page: Tab from the page's last control and Shift+Tab from outside the page enter
  *   it.
- * - **Parts** (Fluent's composition): `TeachingPopover.Trigger` opens and closes the popover and,
- *   without a `target`, is what it points at; written directly inside TeachingPopover (a Fragment
- *   is fine), it makes the popover start closed (`defaultOpen` `false`). `TeachingPopover.Surface`
- *   is the surface itself: it takes the `className`, `style`, `ref` and other element props that
- *   the `steps` form takes on TeachingPopover, and without children shows the current step as the
- *   `steps` form does. Both forms share one state: the steps, the labels, the actions and the
+ * - **Parts** (Fluent's composition): `TeachingPopover.Trigger` opens and closes the popover, gets
+ *   focus back when it closes and, without a `target`, is what it points at; written directly
+ *   inside TeachingPopover (a Fragment is fine), it makes the popover start closed (`defaultOpen`
+ *   `false`). `TeachingPopover.Surface` is the surface itself: it takes the `className`, `style`,
+ *   `ref` and other element props that the `steps` form takes on TeachingPopover. Inside it,
+ *   `TeachingPopover.Header` (the Close button, with an optional caption and `icon`),
+ *   `TeachingPopover.Title` (the step title with the hidden step position; it names the popover),
+ *   `TeachingPopover.Body` (the step body, after an optional `media`) and
+ *   `TeachingPopover.Footer` (the step dots and the buttons) each show their share of the current
+ *   step unless given children; a Surface without children shows all four, which is what the
+ *   `steps` form renders. Both forms share one state: the steps, the labels, the actions and the
  *   callbacks stay on TeachingPopover. A part outside a TeachingPopover throws in development.
  *
  * The parts are also exported under flat names (`TeachingPopoverTrigger`,
- * `TeachingPopoverSurface`) for React Server Components, which cannot use the dotted form; dotted
- * access (`TeachingPopover.Trigger`) needs a client file.
+ * `TeachingPopoverSurface`, `TeachingPopoverHeader`, `TeachingPopoverTitle`,
+ * `TeachingPopoverBody`, `TeachingPopoverFooter`) for React Server Components, which cannot use
+ * the dotted form; dotted access (`TeachingPopover.Trigger`) needs a client file.
  *
  * @example
  * <TeachingPopover steps={steps} onFinish={markTourSeen}>
  *   <TeachingPopover.Trigger>
  *     <Button>Take the tour</Button>
  *   </TeachingPopover.Trigger>
- *   <TeachingPopover.Surface aria-describedby="tour-hint" />
+ *   <TeachingPopover.Surface>
+ *     <TeachingPopover.Header icon={<LightbulbIcon />}>Tip</TeachingPopover.Header>
+ *     <TeachingPopover.Title />
+ *     <TeachingPopover.Body media={<img src="/tour/search.png" alt="" />} />
+ *     <TeachingPopover.Footer />
+ *   </TeachingPopover.Surface>
  * </TeachingPopover>
  */
 export const TeachingPopover = /* @__PURE__ */ Object.assign(TeachingPopoverRoot, {
   Trigger: TeachingPopoverTrigger,
   Surface: TeachingPopoverSurface,
+  Header: TeachingPopoverHeader,
+  Title: TeachingPopoverTitle,
+  Body: TeachingPopoverBody,
+  Footer: TeachingPopoverFooter,
 });
 
-export { TeachingPopoverTrigger, TeachingPopoverSurface };
+export {
+  TeachingPopoverTrigger,
+  TeachingPopoverSurface,
+  TeachingPopoverHeader,
+  TeachingPopoverTitle,
+  TeachingPopoverBody,
+  TeachingPopoverFooter,
+};
