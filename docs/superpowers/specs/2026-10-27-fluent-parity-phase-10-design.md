@@ -1,0 +1,544 @@
+# WaveUI 0.15.0 — Fluent Parity Phase 10 Design (motion on components)
+
+> Date: 2026-10-27 · Branch: `feat/fluent-parity-phase-10` in `.claude/worktrees/fluent-parity-phase-10`, from `main` 5f55488 (0.14.1) · Package: `@mortenbrudvik/waveui` → **0.15.0**.
+> Scope: Phase 10 of [`docs/ROADMAP.md`](../../ROADMAP.md): P10-01 (enter and exit motion on overlays and disclosures) and P10-02 (motion slots and motion options).
+> Status: **draft for the maintainer's approval.** The maintainer opted out of a Q&A. The rulings R1–R13 of the phase brief are taken decisions and are recorded below as **Ruling**; two of them, R3 and R7, are the controller's own calls and are marked **(controller's call)** with what each costs if it is wrong. Choices that are this spec's author's are marked **(my call)**, each with its reason and its cost if wrong.
+> Inputs: the roadmap's Phase 10 section and gap ids; two read-only surveys (WaveUI's motion state at 5f55488, with 16 numbered risks; Fluent UI v9's component motion at Fluent commit `32c88c8`); the Phase 2 presence design (§1.4, notes 2–5) and the Phase 6 rulings D5, D7, D103–D106; and a Chromium 156 probe of the CSS techniques this design depends on (Appendix A).
+
+---
+
+## 0. Intent
+
+Phase 10 makes WaveUI's overlays and disclosures move: dialogs scale in, drawers slide from their edge, popups fade and slide away from their trigger, panels and tree groups collapse, toasts and message bars glide their neighbours out of the way, tabs slide their indicator. Since 0.7 every new surface mounts through the presence core (`usePresence`), so most of the work is class strings on `data-presence` phases; the rest moves the older surfaces (Popover, Tooltip, TeachingPopover, Accordion, Tree, Nav) onto the core.
+
+**Goals.** Close the twelve gap ids of P10-01 and P10-02 (§16). Ship a default motion for every surface in scope, with Fluent's motion tokens and a `motion-reduce:` counterpart; let each animated part turn its motion off or replace it (`motion`, `backdropMotion`, `expandIconMotion`, `indeterminateMotion`), and an app turn all of it off (`WaveProvider motion="none"`). Keep WaveUI's exit stricter than Fluent's: an exiting element is `inert`, and focus, layers, trap, isolation and scroll lock follow the open state, not the motion.
+**Non-goals.** Motion on the listbox popups (Combobox, Dropdown, TagPicker, TimePicker), the DatePicker calendar and the AvatarGroup popover (§10.2); Fluent's "tune by params" (`surfaceMotion={{ duration }}`) and its render-function replacement; a public presence group; WAAPI; Fluent's preview motion components (`foundation-17`, ROADMAP §1.3).
+**Anti-goals.** Runtime styles beyond the two inline-style cases named in D4; a new runtime dependency; new keyframes; a motion class in the Button-only bundle; an exit that holds focus, a layer, the trap or the scroll lock; removing any 0.14 prop, class name or attribute.
+
+---
+
+## 1. Rulings (cross-cutting)
+
+- **D1 — One phase, one branch, one release, built sequentially** (§12): the foundation first, then Dialog (already on the core: proves recipes, slots, provider and probes on one surface), then drawers, then the positioned popups (Menu first: it owns the focus-before-close pattern the others reuse), then the disclosures (Accordion lands the collapse recipe), Toast, MessageBarGroup, P10-02, INTEGRATION, DOCS.
+- **D2 — Additive, honestly.** Nothing public is removed and every type only widens. With no `motion` prop every surface in scope animates: that is the feature, so an unchanged call *looks* different in a browser. Every structural and timing change is listed in §13 "Upgrading from 0.14". Unit tests are unaffected by the motion itself: Vitest loads no CSS, so in jsdom every phase still ends at once (survey §4).
+- **D3 — Conventions.** CLAUDE.md applies (C-MOTION, C-POPUPS, C-NAMING, C-SLOTS, C-CLASS, C-DOCS, C-DEV, C-HOOKS, C-LOGICAL, C-TOKENS). Enumerated `data-*` always rendered; one stable class per new element a consumer may target; literal Tailwind class strings only; `motion-reduce:` on every transition and animation; warnings from effects through `warnOnce`.
+- **D4 — CSS-only mechanism (Ruling R1).** Motion is Tailwind class strings keyed on `data-presence`: the enter's start as `data-[presence=entering]:starting:…`, the exit as `data-[presence=exiting]:…`, timing with `duration-wave-*` and `ease-wave-*`, movement with the individual `translate-*`/`scale-*` properties. No WAAPI, no new keyframes, no runtime styles, with two written exceptions: the TabList indicator's FLIP custom properties (Ruling R12, §9.2) and Carousel's `motionDuration`, an inline `transition-duration` on the track, the same kind of inline style as the track's existing `transform` (§9.1, **(my call)**). **Positioned surfaces never transition `transform`**: floating-ui positions them with `transform: translate(…)`, so their recipes list `opacity`, `translate` and `scale` explicitly and never use the bare `transition`, `transition-all` or `transition-transform` (checked by §2.9; Appendix A, item 7).
+- **D5 — The motion slot (Ruling R2).** `type MotionSlot = string | { className: string }` (public, `src/lib/types.ts`). On a part's motion prop, typed `MotionSlot | null`: `undefined` is the default motion; `null` is no motion (the element still goes through the presence core and every phase ends at once); a value **replaces** the default motion classes with the consumer's. Names: `motion` on the primary animated part of each component, `backdropMotion` on backdrops, `expandIconMotion` on Nav.Category's expand icon, `indeterminateMotion` on ProgressBar. This is a ruling against C-NAMING's "Fluent's names are the default": Fluent's are `surfaceMotion`, `collapseMotion`, `backdropMotion`, `expandIconMotion`, `indeterminateMotion`, and each JSDoc names the Fluent prop it stands for. Tuning by parameters is out of scope (no class-only equivalent): an app tunes globally by redefining the `--wave-duration-*`/`--wave-curve-*` tokens in its own CSS, or per part by replacing the classes (§2.1).
+- **D6 — Global opt-out (Ruling R3, controller's call).** `WaveProvider motion?: MotionPreference` with `MotionPreference = 'default' | 'none'`, inherited by nested providers like `theme` and `dir`. `'none'` makes every motion slot below it behave as `null`, and turns off the other motion this phase adds (Nav item actions' reveal); a part's own `motion` value wins over the provider. *Cost if wrong:* an app that needs a three-way switch ("reduced", or per-family) gets a widening of the union later; nothing breaks.
+- **D7 — Exit semantics stay WaveUI's (Ruling R4).** The exiting element is `inert` (already in `usePresence`); dismiss layers, trap, isolation, scroll lock, positioning and focus restore key on `open`; focus leaves a closing surface in the closing commit (the `Menu.popover.tsx:394-421` pattern, made shared in D20; disclosures move focus to their trigger, §5). **Accepted consequences, documented:** an exiting surface is click-through (HTML `inert` hit-tests like `pointer-events: none`), so a second click during a backdrop fade reaches the page; the scroll lock lifts at close, so the page's scrollbar returns while the dialog still fades; an exiting popup keeps its last coordinates (positioning follows `open`, survey risk 12).
+- **D8 — Reduced motion (Ruling R5).** A phase ends at once under `prefers-reduced-motion: reduce` (the core's existing rule); every recipe carries `motion-reduce:transition-none` (or the same-kind animate reduction), so a delayed or staggered recipe (Toast's exit) has no delay either; no component adds media-query logic beyond `motion-reduce:` (TabList's FLIP reads the existing internal `usePrefersReducedMotion`, as `usePresence` and Carousel do, only to skip writing its custom properties); ProgressBar keeps its full-width opacity pulse; Carousel still starts paused.
+- **D9 — `appear` per surface (survey risk 11, my call).** Surfaces that report themselves closed until hydration (`open && isClient`: Dialog, overlay Drawer and NavDrawer, Menu, Popover, Tooltip, InfoButton, TeachingPopover) mount with `appear: true`, so a `defaultOpen` surface animates in after hydration *and* in a pure client render (0.14: only after hydration). In-flow content (inline Drawer and NavDrawer, Accordion, Tree, Nav, MessageBarGroup bars present at mount) never animates on mount, on the server or the client. Toasts keep `appear: true`. *Reason:* the same page behaves the same whichever way it rendered. *Cost if wrong:* a `defaultOpen` Dialog on a client-only page now scales in at load; `motion={null}` restores 0.14.
+- **D10 — Scope (Ruling R6).** In: Dialog (surface and backdrop), Drawer overlay and inline, NavDrawer, Menu.Popover and submenus, Popover (moves onto the core), InfoButton's note (same motion as Popover), Tooltip (moves onto the core; fade only, a WaveUI addition: Fluent's Tooltip has no motion), TeachingPopover (moves onto the core), Accordion panels, Tree groups, Nav categories (with an `expandIcon` slot and `expandIconMotion`) and Nav item actions, Toast containers, and the new `MessageBarGroup` with an internal keyed presence group. Out, with reasons and gap notes: §10.2.
+- **D11 — Numbers (Ruling R7, controller's calls).** The table in §3. Every row is a controller's call unless marked (my call); each lists its cost if wrong.
+- **D12 — Collapse is CSS-only (Ruling R8), refined (my call).** The grid technique with a **`minmax(0, …)` track** (`grid-template-rows: minmax(0, 0fr)` ↔ `minmax(0, 1fr)`; columns for side drawers): the track's minimum is 0, so the animated part itself can be the grid item, padding, border and definite width included. The collapse wrapper is **`display: contents` while `entered`**, so an open panel lays out exactly as in 0.14 (percentage widths, margins, flex and grid parents). Chromium evidence: Appendix A, items 1–6; Firefox and WebKit are §14 checks, with a one-class fallback (§2.5). *Reason:* plain `0fr` stops at the item's padding (12px left over in the probe) and, for columns, at a definite width (no collapse at all); an always-on grid wrapper resolves a percentage width against its track (0px in the probe).
+- **D13 — Inline drawers collapse their space; `full` does not move (my call, deviating from R8's wording).** R8 asks to animate the width between 0 and the size class with the inner panel kept at full size. A width animation on the panel itself cannot keep a consumer's `className` width (documented as replacing the size since 0.11) on the content without reflow. Instead the panel keeps its classes and size inside a new collapse wrapper (D12), so any length width collapses without reflow; `size="full"` and a percentage width in `className` have no space to animate from (their size is the container's), so a `full` inline drawer has no default motion. *Cost if wrong:* a full-width inline drawer appears and disappears at once; a consumer with a percentage width sees a resize glitch during the motion (layout is right when entered) and can pass `motion={null}`.
+- **D14 — Toast (Ruling R9).** The timer still starts at mount; pause, hover and focus behaviour unchanged. Motion is container-level (the presence element), siblings glide (the container collapses), and the region's 8px gap is compensated by a transitioned `-mb-2` while entering and exiting, so nothing jumps when an exited toast unmounts (Appendix A, item 5).
+- **D15 — Fixes that become visible once surfaces animate (Ruling R10).** TeachingPopover keeps its visibility through its exit (risk 1, §6.4); Popover, InfoButton and TeachingPopover move focus out in the closing commit (risk 2, D20); a stacked dialog's backdrop keeps its appearance through the exit (risk 7, §4.1); Dialog's title padding holds through the exit (risk 8, §4.1); `appear` (risk 11, D9); exiting positioning and the translate-not-transform rule (risk 12, D4, D7). **Documented limitations, ROADMAP §8.5 follow-ups:** a popup opened inside a Dialog or Drawer that closes while the popup is open stays on screen until the surface's exit ends and then disappears with it, without an exit of its own (risk 9: closing child layers with their parent is a change to `lib/layers` semantics, and the window is at most the drawer's 500 ms); toasts move back to their corner as a drawer starts closing, over the drawer still sliding out (risk 6: the offsets follow open layers by design; a glide would be new region motion for a cosmetic case).
+- **D16 — A backdrop never outlasts its surface (survey risk 5, my call on enforcement).** The core waits only for the presence element's own animations, and the backdrop is the surface's sibling. Default recipes pair each backdrop with its surface at the **same exit duration** (Dialog 200 ms; drawers by size), asserted by `motion.test.ts` (§2.9). A replaced `backdropMotion` longer than the surface's motion is cut off when the surface unmounts: the JSDoc says so. No runtime check: a development check would need `getAnimations()` timings, which jsdom cannot test. *Cost if wrong:* a consumer's long backdrop fade is cut, visibly but harmlessly.
+- **D17 — Tests and gates (Ruling R11).** Per surface: default classes, `null`, a replacement, the provider both ways; presence with `mockAnimations` (exit keeps the element, `inert`, out of the accessibility tree, layers and focus released at close); reduced motion mocked both ways. Gate additions are only the mechanical, zero-noise ones (§2.8): `presence-class` and `starting-gate`; recipe-level checks live in `src/lib/__tests__/motion.test.ts` (§2.9). Real-browser checklist §14.
+- **D18 — P10-02 (Ruling R12).** Motion slots on every animated part; Carousel `motion?: CarouselMotion | null` (`'slide' | 'fade'`) and `motionDuration?: number` in milliseconds; TabList's sliding indicator through FLIP custom properties (the one runtime-style ruling); ProgressBar `indeterminateMotion` (`null` = a static bar). §9.
+- **D19 — Compatibility with 0.14's motion-in-`className` (my call).** 0.14 documented animating `Menu.Popover`, `Dialog.Content`, Drawer and NavDrawer with `data-[presence=…]:` classes in `className`. On those parts, a `className` that contains `[presence=` while `motion` is `undefined` turns the default motion off (the part behaves as with `motion={null}`, keeping the consumer's classes), so 0.14 code keeps its own motion unmixed; for an inline drawer the core then waits for the panel element, as in 0.14. *Reason:* tailwind-merge would otherwise mix the two (the consumer's `transition-opacity` replaces the recipe's transition list, the recipe's slide snaps). *Cost if wrong:* a consumer who wants the default motion *and* a `data-[presence=…]` class of their own on the same element loses the default; they move the class to `motion` or their CSS.
+- **D20 — Focus before close is a shared internal hook (my call).** `Menu.popover.tsx:298-421` (opener capture in an insertion effect, focus move in the closing commit's layout-effect cleanup, skipped on unmount) moves to `src/hooks/useFocusBeforeClose.ts` (internal), used by Menu.Popover (no behaviour change, its tests pin it), Popover.Content, InfoButton and the TeachingPopover surface. *Reason:* Phase 2 note 20's race (a Dialog opened by an item of a closing surface records the inert item as its opener) now exists for every positioned surface that stays mounted while exiting.
+- **D21 — `MessageBarGroup` is a standalone component (my call).** Exported as `MessageBarGroup` (its flat name), not `MessageBar.Group`: a compound member would make every `MessageBar` import pull the presence core and the group. Fluent ships it as its own component too. *Cost if wrong:* adding `MessageBar.Group` later is additive.
+- **D22 — Every popup surface renders `data-state` (my call).** Popover.Content, the Tooltip surface and the TeachingPopover surface render `data-state="open"`, and `"closed"` while they exit, as Menu.Popover and InfoButton's note already do (C-CLASS: enumerated, always rendered).
+- **D23 — The bundle probe is not vacuous (Ruling R1, my call on design).** §2.10: the Button-only bundle drops `lib/motion.mjs` and `hooks/useMotion.mjs`; drops every recipe literal, read from `dist/lib/motion.mjs` at run time with a minimum count; and drops any string literal containing `[presence=` (comments excluded). A positive control proves the same matchers find them in a Dialog-only bundle.
+
+---
+
+## 2. Shared infrastructure (package P10-F, §11.1)
+
+### 2.1 Types (`src/lib/types.ts`, public through `export type * from './lib/types'`)
+
+```ts
+/**
+ * Replaces a part's default motion (its `motion`, `backdropMotion`, `expandIconMotion` or
+ * `indeterminateMotion` prop): a class string, or `{ className }`. `null` on the prop turns the
+ * motion off and `undefined` keeps the default. Write the phases as the default motion does: the
+ * enter's start with the starting variant gated on the entering phase (`data-[presence=entering]:starting:…`),
+ * the exit with `data-[presence=exiting]:…`, and a reduced-motion counterpart. The classes must
+ * exist in your CSS: the precompiled stylesheet holds only Wave's own classes, so without Tailwind
+ * pass a class of your own CSS written against `[data-presence]`.
+ */
+export type MotionSlot = string | { className: string };
+
+/** Motion below a `WaveProvider`: `'default'`, or `'none'` (every motion slot acts as `null`). */
+export type MotionPreference = 'default' | 'none';
+```
+
+The JSDoc uses only ellipsis forms, never a complete utility name (the bare-word rule of CLAUDE.md "Styling": `src/lib` is a source of the CSS build). The object form leaves room for later keys (`appear`) without a union change; `{}` is a type error.
+
+### 2.2 `src/lib/motion.ts` (internal, server-safe, imports nothing at run time)
+
+- **What it holds.** One exported constant per recipe (a plain string literal, or a `Readonly<Record<…, string>>` of plain literals), the collapse and toast *structure* constants (the classes that are not motion but key on `data-presence`), and one pure function, `resolveMotion`. No `cn`, no React, no imports except types: verify-dist imports the built module in Node (§2.10), and a Server Component may reach it through a component's module graph.
+- **The literal rule.** Every recipe is one string literal per value: no concatenation, template or `cn()` inside the module (components compose at run time). This is what lets verify-dist match whole literals and keeps every class a word of a library literal for build-css (§2.11).
+- **Comments.** The module's JSDoc describes each recipe in words (properties, token names such as "the gentle duration", the side it slides from) and never writes a class (the bare-word rule; the guide and README hold the class strings).
+- **Recipes** (exact strings follow §3; names fixed here):
+
+| Constant | Element | Package |
+|---|---|---|
+| `popupMotion` | Popover.Content, Menu.Popover, InfoButton note, TeachingPopover surface | MENU |
+| `tooltipMotion` | Tooltip surface | TIP |
+| `dialogMotion`, `dialogBackdropMotion` | Dialog surface, backdrop | DLG |
+| `drawerMotion: Record<DrawerEdge, string>`, `drawerDurations: Record<SurfaceSize, string>`, `drawerBackdropMotion: Record<SurfaceSize, string>` | overlay panel (slide per position + fade + curves), duration per size, backdrop | DRW-O |
+| `inlineDrawerStructure: Record<DrawerEdge, string>`, `inlineDrawerMotion: Record<'width' \| 'height', string>` | inline collapse wrapper (structure per position; motion per axis, durations from `drawerDurations`) | DRW-I |
+| `collapseStructure`, `collapseMotion` | Accordion, Tree, Nav collapse wrappers | ACC |
+| `expandIconMotion` | Nav.Category expand icon | NAV |
+| `navActionsRevealMotion` | Nav item actions group | NAV |
+| `toastStructure`, `toastMotion: Record<'top' \| 'bottom', string>` | toast container | TOAST |
+| `messageBarGroupItemStructure`, `messageBarGroupExitMotion`, `messageBarGroupEnterMotion` | MessageBarGroup item wrapper | MBG |
+| `carouselSlideMotion`, `carouselFadeMotion` | Carousel track, slides | CAR |
+| `tabIndicatorMotion` | TabList selected tab (its indicator) | TAB |
+| `progressIndeterminateMotion` | ProgressBar indeterminate bar | PROG |
+
+  `DrawerEdge` is a local type of the module, `'start' | 'end' | 'left' | 'right' | 'bottom'` (Drawer's `DrawerPosition` lives in a client component module; `lib` imports no component).
+
+- **The resolver.**
+
+```ts
+/**
+ * The motion classes of an animated part: `null` none; a string or `{ className }` the
+ * consumer's classes; `undefined` none under the provider's `'none'`, else `recipe`.
+ * `legacyClassName` (the parts of D19): a value containing `[presence=` keeps 0.14's behaviour,
+ * no default motion.
+ */
+export function resolveMotion(
+  slot: MotionSlot | null | undefined,
+  recipe: string,
+  preference: MotionPreference,
+  legacyClassName?: string,
+): string;
+```
+
+  Order: `null` → `''`; a value → its classes (wins over the provider, D6); `preference === 'none'` → `''`; `legacyClassName?.includes('[presence=')` → `''`; else `recipe`. Unit tests cover each branch, the object form, and the empty string (an explicit empty replacement: no motion).
+
+### 2.3 The motion preference and hook
+
+- **`WaveProvider`** (`src/components/provider/WaveProvider.tsx`): `motion?: MotionPreference`, `@default` the enclosing provider's, else `'default'`; JSDoc names Fluent's `MotionBehaviourProvider` (`'skip'`), which `@fluentui/react-components` does not export. `WaveContextValue` gains `motion: MotionPreference` (`DEFAULT_CONTEXT.motion = 'default'`; memoised with the rest). A "Types" note in the CHANGELOG: a hand-built `WaveContextValue` (a test mock) needs the member.
+- **`src/hooks/useMotion.ts`** (internal, `"use client"` by the build): `useMotionPreference(): MotionPreference` (reads `useWaveTheme().motion`) and `useMotionClasses(slot, recipe, legacyClassName?)` (calls `resolveMotion`). Only components that animate import it; Button never does (it imports no provider code today, survey §5), which §2.10 proves. The context is the existing `WaveContext` (it has a non-null default because a provider is optional, as for `theme`); C-CONTEXT's null-default rule is for compound contexts.
+- A part destructures its motion props so they never reach the DOM, and composes `cn(<stable class>, <base>, <motion classes>, className)`: the consumer's `className` still wins a same-variant conflict (a `transition-none` there turns the recipe's transition off; the JSDoc points to `motion` instead).
+
+### 2.4 The surface contract (every presence surface of this phase)
+
+1. Mount through `usePresence(open, { appear, unmountOnExit })` (D9); render while `isMounted`; spread `presenceProps` on every top-level element of the portal (C-MOTION); the presence ref on the element the recipe animates.
+2. Everything else keys on `open` (D7): layers, trap, isolation, scroll lock, `useRestoreFocus`, `usePopupPosition`, surface registration, hover intent, warnings that read the open state.
+3. Positioned surfaces: `data-side` (physical, from `usePopupPosition`: `top | bottom | left | right`) picks the slide direction in CSS; the recipe never transitions `transform` (D4).
+4. Focus that is inside the surface when it closes moves out in the closing commit (D20, or `useModalLayer` for Dialog and drawers, unchanged).
+5. Popups render `data-state` (`open`, `closed` while exiting; D22).
+
+### 2.5 The collapse primitive (D12)
+
+Markup: `[collapse wrapper] > [the part's own element]`. The wrapper is the presence element; the part keeps `className`, `ref`, `id`, role and its stable class.
+
+- `collapseStructure` (always on the wrapper): `grid grid-rows-[minmax(0,1fr)] overflow-hidden data-[presence=entered]:contents`.
+- `collapseMotion` (the default motion, replaceable): `transition-[grid-template-rows,opacity] duration-wave-normal ease-wave-easy-ease-max motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:opacity-0`.
+- `entered`: `display: contents`, so the wrapper has no box and the part sits in its parent exactly as in 0.14 (`overflow-hidden` has no effect without a box). `entering`/`exiting`: a one-track grid whose track interpolates between `minmax(0,0fr)` and `minmax(0,1fr)`; the part is clipped by the wrapper. With `motion={null}` the phases end in the layout effect of the commit that starts them, so the grid state is never painted.
+- **Focus** inside the part when it closes moves to the disclosure's own trigger (Accordion.Trigger's button, the Tree item, the Nav category button) in the closing commit, through `usePreserveFocus(partRef, getTrigger, { enabled: open })` (0.14: the content unmounted and focus fell to `<body>`).
+- **Fallback** (if §14 finds that an engine does not start the exit transition from `display: contents`): remove `data-[presence=entered]:contents` from `collapseStructure`, `inlineDrawerStructure` and `messageBarGroupItemStructure`. A one-word recipe change; the always-grid wrapper then breaks percentage widths of inline drawers (D13), which becomes a documented limitation.
+
+### 2.6 The keyed presence group (`src/hooks/usePresenceGroup.ts`, internal, not exported in 0.15)
+
+```ts
+/** One child of the group: shown, or kept while it exits. */
+export interface PresenceGroupEntry {
+  key: string;
+  element: React.ReactElement;
+  visible: boolean;
+  /** `false` for the children of the group's first render, else the group's `appear`. */
+  appear: boolean;
+}
+
+/** Keyed children of a group, with removed ones kept until their exit ends. */
+export function usePresenceGroup(
+  children: React.ReactNode,
+  options: { appear: boolean },
+): { entries: readonly PresenceGroupEntry[]; onExited: (key: string) => void };
+```
+
+- Children go through `flattenChildren` (C-COMPOUND: Fragments flattened, consumer keys kept); non-element children are left out of `entries` and returned to the caller to render as given (with the caller's warning).
+- The merge is derived during render with a previous-value state (C-HOOKS): the new children's order, each removed child kept (`visible: false`) right after the last kept child that preceded it before; a key that comes back while exiting is `visible` again with the same element (its phase returns to `entering`). `onExited(key)` drops the entry (a state update from the item's `onExited`).
+- Each entry is rendered by the caller as an item component that calls `usePresence(entry.visible, { appear: entry.appear, onExited })`.
+- Tests (`src/hooks/__tests__/usePresenceGroup.test.tsx`): first-render children do not appear; added ones do with `appear`; removal keeps the element with `mockAnimations` until `finishAll`, then drops it; order with removals in the middle; re-adding during exit; reduced motion removes at once; StrictMode (`onExited` once); Fragment children; `renderToString` renders every child `entered`.
+
+### 2.7 Class-name registry (`src/lib/classNames.ts`)
+
+| Constant | New key | Element |
+|---|---|---|
+| `accordionPanelClassNames` | `collapse: 'wave-accordion-panel__collapse'` | the collapse wrapper around the region |
+| `treeItemClassNames` | `collapse: 'wave-tree-item__collapse'` | the wrapper around the `role="group"` element |
+| `navCategoryClassNames` | `collapse: 'wave-nav-category__collapse'` | the wrapper around the category's `<ul>` |
+| `drawerClassNames` | `collapse: 'wave-drawer__collapse'` | the wrapper around an inline panel |
+| `navDrawerClassNames` | `collapse: 'wave-nav-drawer__collapse'` | the same wrapper of an inline NavDrawer (with Drawer's, the variant rule) |
+| `toasterClassNames` | `toastContent: 'wave-toaster__toast-content'` | the element inside each toast container |
+| `messageBarGroupClassNames` (new) | `root: 'wave-message-bar-group'`, `item: 'wave-message-bar-group__item'` | the group; each bar's wrapper |
+
+The JSDoc of each constant names the elements by role (registry bare-word rule). `classNames.test.ts` and `testSystemProps` cover the new keys; `PENDING_CLASS_NAMES` lists `messageBarGroupClassNames` until MBG lands.
+
+### 2.8 Conventions gate (`src/__tests__/conventions.test.ts`)
+
+- **Scope:** the gate also scans `src/lib/motion.ts` (every rule except `class-names`, which needs a `displayName`). Its physical-side lines (`data-[side=left]:…translate-x-…`) carry `// wave-allow-physical: data-side is the resolved physical side`.
+- **`presence-class` (new, C-MOTION):** a class whose variants contain `[presence=` (`data-[presence=…]`, `not-data-[presence=…]`, `group-data-[presence=…]/…`) in a file other than `src/lib/motion.ts`. Motion lives in one module, so the probe of §2.10 and the reviews have one place to look. Zero findings today (survey §3).
+- **`starting-gate` (new, C-MOTION):** a class with the `starting` variant whose variants do not include `data-[presence=entering]` (Phase 2 note 2). Zero findings today.
+- Fixture tests for both rules in the gate's own suite, as for the existing rules. Not gated (noise): `duration-wave-*`/`ease-wave-*` use in components (42 existing transition sites use Tailwind's defaults); it is checked for the recipes only (§2.9).
+
+### 2.9 `src/lib/__tests__/motion.test.ts`
+
+Mechanical checks over every export of `lib/motion.ts`:
+1. **Every class compiles.** The test compiles each recipe word with `@tailwindcss/node` (`compile` over `tailwindcss/theme.css` inline, `tokens.css`, `variants.css` and `tailwindcss/utilities.css`, as `scripts/build-css.mjs` builds) and fails on a word that yields no rule (a typo such as `duration-wave-gentel` would otherwise ship nothing).
+2. **Tokens:** a recipe with a transition has a `duration-wave-*` and an `ease-wave-*` class (the animate recipe of ProgressBar is exempt: its keyframes carry their timing).
+3. **Reduced motion:** every recipe with a transition or an animation has a same-kind `motion-reduce:` class (the gate's rule, restated per recipe).
+4. **Gated starts:** every `starting:` class is gated on `data-[presence=entering]`.
+5. **No transform on positioned surfaces:** `popupMotion` and `tooltipMotion` contain no `transition`, `transition-all` or `transition-transform` class and list `translate` explicitly.
+6. **Backdrops (D16):** `dialogBackdropMotion`'s exit duration class equals `dialogMotion`'s; for each size, `drawerBackdropMotion[size]`'s duration equals `drawerDurations[size]`.
+7. **Literals:** every export is a string or a record of strings (the probe's precondition).
+8. `resolveMotion`'s branches (§2.2).
+
+### 2.10 `scripts/verify-dist.mjs` (D23)
+
+- **Button-only exclusion.** The existing probe `probeTreeShaking(dist, { keep: 'Button', drop: 'Presence', dropModules: [...] })` lists `hooks/usePresence.mjs`, **`lib/motion.mjs`** and **`hooks/useMotion.mjs`** (each must exist in `dist`, the existing non-vacuity rule), and `dropStrings: motionRecipeLiterals(dist)`.
+- **`motionRecipeLiterals(dist)`** (new, exported for tests): imports `dist/lib/motion.mjs` by file URL, collects every string value of its exports (one level into records), and fails when it finds fewer than `MOTION_RECIPE_MIN` (the count of §2.2's table at release, set by INTEGRATION; FOUNDATION sets it to the count it ships) or a value without `[presence=`, `transition` or `animate-` (not a recipe). The probe's existing rule then requires each literal to occur in `dist` (whole-literal match).
+- **`dropSubstrings` (new option):** fragments that no *string literal* of the bundle may contain, checked on a second bundle of the same entry built with `minify: true` (esbuild keeps string contents and drops comments). The Button-only probe passes `['[presence=']`.
+- **Positive control.** `probeIncludes(dist, { keep: 'Dialog', modules: ['lib/motion.mjs', 'hooks/useMotion.mjs'], strings: [the Dialog recipe literals], substrings: ['[presence='] })` (new `strings`/`substrings` options on the existing probe) proves the matchers see motion where it is; INTEGRATION adds `keep: 'Accordion'` (collapse) and `keep: 'MessageBarGroup'`.
+- **MessageBar-only.** `probeTreeShaking(dist, { keep: 'MessageBar', drop: 'MessageBarGroup', dropModules: ['hooks/usePresence.mjs', 'hooks/usePresenceGroup.mjs'] })` (D21).
+- The presence budget (`PRESENCE_BUDGET`) is unchanged: `usePresence` and `Presence` do not change. No new budget gate: the CHANGELOG "Size" section reports the size of `lib/motion.mjs`, `dist/styles.css` and the Button-only and full-import probes against 0.14.
+- Tests in `scripts/__tests__/verify-dist.test.mjs` against fixture dists: a recipe literal in the bundle is reported; a `[presence=` literal is reported and a comment holding it is not; a motion module with too few recipes fails; the positive control reports a missing literal.
+
+### 2.11 `scripts/build-css.mjs`
+
+- No new assertion is needed for "no class that is not a word of a library string literal": every recipe class is a word of a literal in `src/lib/motion.ts` (D4's literal rule), so the check holds as written. Consumer replacements are not in the library's sources and never ship (the `MotionSlot` JSDoc says so).
+- `REQUIRED_UTILITIES` gains three representatives that prove the recipes were scanned: `duration-wave-gentle`, `data-[presence=exiting]:opacity-0`, `data-[presence=entered]:contents`. No new keyframes (`KEYFRAMES` unchanged).
+- The bare-word rule stays as CLAUDE.md states it: no complete utility name in comments of `src/components` or `src/lib`, `lib/motion.ts`'s JSDoc included (§2.2).
+
+### 2.12 Test helpers
+
+- No new helper is required: `mockAnimations({ animated })` targets the presence element (a collapse wrapper by its class constant, e.g. `(el) => el.classList.contains(accordionPanelClassNames.collapse)`), `mockMatchMedia({ '(prefers-reduced-motion: reduce)': true })` turns reduced motion on, and recipe constants are imported from `lib/motion` into tests (`expect(el).toHaveClass(...popupMotion.split(' '))`).
+- `src/test-utils.ts` gains `motionClasses(recipe: string): string[]` (a split that drops empty words), used by every package's tests, with its own case in `test-utils.test.tsx`.
+
+---
+
+## 3. Motion numbers (D11)
+
+All rows are the controller's calls (R7) unless marked. Durations are tokens (`duration-wave-*`); curves `ease-wave-*`. "In" is the enter, "out" the exit.
+
+| Surface | Properties | In | Out | Cost if wrong |
+|---|---|---|---|---|
+| Popover.Content, Menu.Popover and submenus, InfoButton note | opacity + 4px `translate` away from the trigger by `data-side` (starts 4px toward it; the exit slides back) | 200 ms `normal`, `decelerate-mid` | 100 ms `faster`, `accelerate-min` | Fluent uses 10px and 400 ms, enter only; ours reads snappier. One recipe to change. |
+| TeachingPopover surface **(my call)** | `popupMotion` (with a target: fade + slide by `data-side`; inline, with no `data-side`, only the fade applies) | as above | as above | The roadmap sketched "fade"; Fluent's TeachingPopover is a Popover (fade + slide). |
+| Tooltip | opacity | 100 ms `faster`, `easy-ease` (curve: my call, Fluent's Fade default) | 100 ms `faster`, `easy-ease` | A WaveUI addition; a slower fade delays reading. |
+| Dialog surface | opacity + `scale` 0.85 → 1 (`scale-85`) | 250 ms `gentle`, `decelerate-mid` | 200 ms `normal`, `accelerate-min` | Fluent's exit is 250 ms. |
+| Dialog backdrop | opacity | 250 ms `gentle`, `easy-ease` | 200 ms `normal`, `easy-ease` (= the surface's out, D16) | Fluent: 250/250. |
+| Drawer and NavDrawer overlay panel | `translate` by 100% of its own size from its edge (logical start/end with `wave-rtl:` counterparts; left/right physical; bottom `translate-y-full`) + opacity | small 250 `gentle`, medium 300 `slow`, large 400 `slower`, full 500 `ultra-slow`; `decelerate-mid` | same durations; `accelerate-min` | Fluent's values; a NavDrawer without `size` uses its own width with the small duration. |
+| Drawer backdrop | opacity | the size's duration, `linear` | the size's duration, `linear` | Fluent's. |
+| Inline Drawer and NavDrawer **(motion: my call, D13)** | the collapse of D12 on columns (bottom: rows) + opacity; the panel aligned to its inner edge (`justify-items-end` at start, `-start` at end, physical `[justify-items:right]`/`[justify-items:left]` at left/right; bottom `items-start`), so it reads as sliding out to its edge | the size's duration, `decelerate-mid` | same, `accelerate-min` | `full`: no motion (D13). |
+| Accordion panel, Tree group, Nav category list | the collapse of D12 (rows + opacity) | 200 ms `normal`, `easy-ease-max` | same | Fluent's Collapse. |
+| Nav.Category expand icon | `transition-transform` of its 180° turn | 150 ms `fast`, `easy-ease` | same | Fluent: 150 ms, exit `accelerate-max`; one curve here. |
+| Nav item actions | opacity reveal on row hover or focus within (`*:transition` on the actions' children, so a Button child keeps its colour transition; in the tab order as before) | 150 ms `fast`, `easy-ease` | same | `*:transition` sets the children's transition list; a child's own transition classes are replaced. |
+| Toast container | in: rows + `-mb-2` compensation + opacity + 8px vertical `translate` from its edge (`translate-y-2` at bottom positions, `-translate-y-2` at top) together; out: opacity first, then rows + margin (per-property delays) | 250 ms `gentle`, `decelerate-mid` | opacity 200 ms `normal` then rows and margin 200 ms after a 200 ms delay; `easy-ease` (curve: my call) | Fluent: no slide, 600 ms each way; ours is quicker. |
+| MessageBarGroup item | rows + `-mb-2` compensation + opacity, bar aligned to the end of its track (`items-end`), so an entering bar slides down into the opened space | `both` only: 250 ms `gentle`, `linear` | 250 ms `gentle`, `linear` | Fluent's exit is a fade only (siblings jump); R8 asks for the collapse. |
+| Carousel slide **(curve: my call)** | `transform` of the track (unchanged mechanism) | `motionDuration`, default 300 ms (`slow`), `easy-ease` | — | 0.14's `ease-in-out` becomes the `easy-ease` token. |
+| Carousel fade | opacity of the slides | `motionDuration`, `easy-ease` | — | — |
+| TabList indicator | `translate` + `scale` of the selected tab's `::after` (FLIP) | 300 ms `slow`, `decelerate-max` | — | Fluent's. |
+| ProgressBar indeterminate | unchanged keyframes (`animate-wave-indeterminate`, RTL variant, reduced-motion pulse) | — | — | — |
+
+---
+
+## 4. Dialog and drawers
+
+### 4.1 P10-DLG — Dialog (`Dialog.tsx`, `Dialog.slots.tsx`)
+
+- **API:** `Dialog.Content` gains `motion?: MotionSlot | null` (the surface; Fluent's `Dialog surfaceMotion`) and `backdropMotion?: MotionSlot | null` (Fluent's `DialogSurface backdropMotion`). Both destructured; D19's legacy rule on `motion` with the content's `className`.
+- **Classes:** surface `cn(root, base, sizeClasses[size], motionClasses, className)`; `ModalBackdrop` takes a new `motionClassName` prop placed after its base and before the slot's `className`. Non-modal: no backdrop, a given `backdropMotion` is ignored with the existing `Dialog.Content:backdrop-ignored` warning extended to name it.
+- **Presence:** `usePresence(open, { appear: true, unmountOnExit: unmountOnClose })` (D9). Kept mounted: unchanged (`hidden` + `inert` while exited; `@starting-style` applies when `hidden` is lifted in the opening commit, Appendix A item 4).
+- **Fixes:** (risk 7) `useBackdropAppearance(layerId, open)` holds the appearance it had while open through the exit: a previous-value state updated only while `open`, returned while closed; a stacked dialog's exiting backdrop stays transparent (0.14 flipped it to dimmed, double dimming for the exit). (risk 8) `useTitleActionsWidth(open || exiting ? area : null)`, `exiting` read from `presenceProps['data-presence']`, so the titles' end padding does not drop to the 2rem fallback while the surface still shows.
+- **Tests** (`Dialog.motion.test.tsx`): default classes on surface and backdrop; `null`; a string and `{ className }`; provider `'none'` with and without an own `motion`; D19 (a `className` with `data-[presence=exiting]:…` leaves the recipe out); with `mockAnimations({ animated: (el) => el.getAttribute('role') === 'dialog' })`: exit keeps the surface, `inert`, out of the accessibility tree (`queryByRole('dialog')` null, found with `{ hidden: true }`), `hasOpenModal()` false, the trap and scroll lock gone, focus on the trigger in the closing commit; reduced motion both ways; `appear` on a client mount with `defaultOpen` (`entering`, then `entered` on `finishAll`); stacked dialogs keep `data-appearance="transparent"` on the upper backdrop while it exits; the title padding custom property is unchanged during the exit (`installResizeObserverMock`); StrictMode `onOpenChange` once.
+
+### 4.2 P10-DRW-O — overlay Drawer and NavDrawer (`Drawer.panel.tsx`, `Drawer.root.tsx`, `NavDrawer.tsx`)
+
+- **API:** Drawer and NavDrawer gain `motion` and `backdropMotion` (`MotionSlot | null`; Fluent's `OverlayDrawer surfaceMotion`/`backdropMotion`), passed to `DrawerPanel` (`motion`, `backdropMotion` added to `DrawerPanelProps`, D108 contract extended).
+- **Classes:** overlay panel `cn(rootClassName, OVERLAY_PANEL_CLASSES, getOverlayPanelClasses(position, size), motionClasses, className)` where the default is `drawerMotion[position]` + `drawerDurations[size]` (two literals joined at run time). Start/end carry `wave-rtl:` counterparts on the same literal (the gate's `translate-x` rule); left/right carry the physical marker.
+- **Presence:** `appear: true` for overlays (D9).
+- **Tests** (`Drawer.motion.test.tsx`, `NavDrawer.motion.test.tsx`): recipe per position and size (`it.each`); RTL renders the same classes (the `wave-rtl:` variant decides in CSS); backdrop durations equal the panel's; exit keeps the panel `inert`, the layer released, focus returned; reduced motion both ways; kept-mounted overlays (`unmountOnClose={false}`) exit then hide.
+
+### 4.3 P10-DRW-I — inline Drawer and NavDrawer (`Drawer.panel.tsx`)
+
+- **Markup (D13):** `<div class="wave-drawer__collapse …" data-presence …>` (NavDrawer: plus `wave-nav-drawer__collapse`) around the unchanged `<aside>` (`<div>` for NavDrawer), which keeps `id`, `className`, `ref`, the stable root class and its `data-*`. `presenceProps` go on both elements (so a kept-closed panel is still `hidden` itself, as tests and 0.14 selectors expect); the presence ref goes on the wrapper, or, under D19's legacy rule, on the panel as in 0.14.
+- **Classes:** wrapper `cn(collapseClassName, inlineDrawerStructure[position], motionClasses)`, default motion `inlineDrawerMotion[axis]` + `drawerDurations[size]`; `size="full"` uses `inlineDrawerStructure` only (no motion, D13). `inlineDrawerStructure` holds `grid shrink-0 overflow-hidden data-[presence=entered]:contents` (`shrink-0`: during the motion the wrapper is the page row's flex item, as the panel is while open), the `minmax(0,1fr)` track on its axis and the alignment of §3.
+- **Focus:** unchanged (inline restore with `requireFocusInside`, keyed on `open`).
+- **Tests** (`Drawer.inline.motion.test.tsx`): wrapper class and structure per position; the aside keeps `className`, `ref` and its attributes; kept mounted: both `hidden`; `full` has no motion classes; legacy rule moves the presence ref (`mockAnimations` on the aside holds the phase); exit keeps the aside `inert`; reduced motion both ways; `renderToString` + hydration (inline drawers render on the server) with no warnings.
+
+---
+
+## 5. Disclosures
+
+### 5.1 P10-ACC — Accordion.Panel (`Accordion.tsx`)
+
+- **API:** `Accordion.Panel` gains `motion?: MotionSlot | null` (Fluent's `AccordionPanel collapseMotion`).
+- **Markup:** `[div.wave-accordion-panel__collapse] > [div role="region" class="wave-accordion-panel …"]`. The region keeps every 0.14 prop and attribute; its `data-state` reads `closed` while it exits. A misplaced panel (inside another panel) renders as in 0.14, without a wrapper or motion.
+- **Mounting:** `usePresence(item.isOpen)` (no `appear`, D9); the region is rendered while `isMounted`. Focus inside the region at close moves to the item's trigger button (§2.5).
+- **Tests** (`Accordion.motion.test.tsx`): wrapper and structure; exit keeps the region mounted and `inert` (`mockAnimations` on the wrapper class), its trigger already `aria-expanded="false"`; single mode: opening B while A exits; focus in A's region at close lands on A's trigger; reduced motion both ways; server HTML of an open panel has `data-presence="entered"` and hydrates without warnings; `findDanglingIdRefs` stays clean through the exit.
+
+### 5.2 P10-TREE — Tree groups (`Tree.core.tsx`, `Tree.context.ts`)
+
+- **API:** `Tree` gains `motion?: MotionSlot | null` (Fluent's `Tree collapseMotion`, applied to every nested group), read by `Tree.Item` from the tree context.
+- **Markup:** `[div.wave-tree-item__collapse] > [div role="group" class="wave-tree-item__group ps-4"]`. Roving already skips items under `[inert]` (`useRovingTabIndex.ts:643`), so an exiting group's items leave the arrow order at once.
+- **Focus:** focus inside a collapsing group (a click on the chevron with focus on a child) moves to the item that collapsed: `usePreserveFocus`'s fallback returns that item's `role="treeitem"` element, which the roving hook then treats as the focused item.
+- **Chevron:** unchanged (its transition predates this phase and is not a slot; provider `'none'` leaves it, §15 Q3).
+- **Tests:** as Accordion; plus nested groups collapsing together (the inner one goes with its parent, no second exit), typeahead skips an exiting group, multi-select cascades unaffected.
+
+### 5.3 P10-NAV — Nav categories, expand icon and item actions (`Nav.tsx`)
+
+- **API on `Nav.Category`:** `motion?: MotionSlot | null` (Fluent's `NavSubItemGroup collapseMotion`); `expandIcon?: Slot<'span'>` (optional-indicator rule, C-SLOTS: `null`/`undefined` keep the chevron, `false` or content that renders nothing hides it; a custom glyph renders as given and is **not** turned, as Tree's `expandIcon`, so a plus/minus pair works); `expandIconMotion?: MotionSlot | null` (Fluent's `NavCategoryItem expandIconMotion`; the transition of the default chevron's turn, or of your icon's span). The turn itself (`rotate-180` while open) is state, not motion: `null` makes it snap.
+- **Markup:** `<li class="wave-nav-category"> > button, [div.wave-nav-category__collapse] > ul.wave-nav-category__list`. `aria-controls` still points at the `<ul>` while open; `useNavListChildCheck` unchanged. Focus inside the list at close moves to the category button.
+- **Item actions:** `actionsClasses` gains `navActionsRevealMotion` unless the provider says `'none'` (no slot: Fluent has none, and the reveal is not a presence motion). Still opacity, still in the tab order; forced colours and `hover: none` keep them drawn.
+- **Tests:** collapse as Accordion (Nav and NavDrawer.Body with `focusMode="arrow"`: the exiting list's items leave the arrow order); `expandIcon` rule table (`undefined`, `null`, `false`, `''`, a custom node: not turned); `expandIconMotion` default, `null`, replacement; the actions' reveal classes, and none under provider `'none'`; RTL (chevron unchanged).
+
+---
+
+## 6. Positioned popups
+
+### 6.1 P10-MENU — Menu.Popover and submenus (`Menu.popover.tsx`, `src/hooks/useFocusBeforeClose.ts`)
+
+- **API:** `Menu.Popover` gains `motion?: MotionSlot | null` (Fluent's `Menu surfaceMotion`); legacy rule D19 with its `className`.
+- **Presence:** `usePresence(open, { appear: true })`. Submenus share the recipe; their `data-side` (left/right) makes them slide from the parent menu, mirrored in RTL by placement.
+- **D20:** extract `useFocusBeforeClose` (internal; options sketch `{ open, surfaceRef, captureOpener: () => HTMLElement | null, candidates: () => (HTMLElement | null)[] }`: captures the opener in an insertion effect when `open` turns true, as `Menu.popover.tsx:303-316`; on close with focus inside, focuses the first connected, focusable candidate outside the surface — the context opener, the captured opener, the return target — in the layout-effect cleanup, skipped on unmount). `Menu.Popover` uses it; no behaviour change: `Menu.presence.test.tsx`, `Menu.contextMenu.test.tsx` and integration case 8 stay green unedited. Hook tests in `src/hooks/__tests__/useFocusBeforeClose.test.tsx` (a Dialog opened by an item of a closing surface records the trigger, not the item).
+- **Tests:** recipe and slot cases; submenu chain exit (both exit together, one layer gone, focus on the root trigger); `ExitMotion` story's 0.14 classes still win (D19).
+
+### 6.2 P10-POP — Popover.Content onto the core (`Popover.tsx`)
+
+- **API:** `Popover.Content` gains `motion?: MotionSlot | null` (Fluent's `Popover surfaceMotion`).
+- **Change:** `if (!open) return null` (`Popover.tsx:957`) becomes `usePresence(open, { appear: true })` with the presence ref merged into the content's ref; the content renders `data-presence`, `inert` while exiting and `data-state` (D22). The trigger's `aria-controls` stays keyed on `open`. `useFocusBeforeClose` with Popover's resolver order (context opener, captured opener, the trigger's focus target, a focusable `target`).
+- **Tests:** a Popover button that opens a Dialog in the same update: the Dialog returns focus to the Popover's trigger on close (risk 2); hover close moves no focus during the exit; context popover exit keeps its point; the exiting content is not named twice (`aria-labelledby` stays valid: `findDanglingIdRefs`); reduced motion both ways.
+
+### 6.3 P10-INFO — InfoButton note and InfoLabel (`InfoButton.tsx`, `InfoLabel.tsx`)
+
+- **API:** `InfoButton motion?: MotionSlot | null` (the note); `InfoLabel motion` passed through, as `openOnHover` is (**my call**: the note has no `className` of its own, so this is its only motion hook).
+- **Change:** `usePresence(open, { appear: true })`, `popupMotion` on the note, `useFocusBeforeClose` (candidate: the button). The single copy of `info` stays inside the note through the exit (`isMounted`), unchanged.
+- **Tests:** recipe and slot cases, InfoLabel pass-through, the `info` element is in the document exactly once in every phase, exit `inert`, Escape returns focus to the button in the closing commit.
+
+### 6.4 P10-TIP — Tooltip onto the core (`Tooltip.tsx`)
+
+- **API:** `Tooltip motion?: MotionSlot | null` (the portaled surface; the Tooltip's `className` stays on its wrapper span).
+- **Change:** `{visible && <Portal …>}` becomes `usePresence(visible, { appear: true })`; the surface renders `data-presence`, `data-state`, `inert` while exiting, still `aria-hidden` (the inline hidden `role="tooltip"` copy stays the accessible one and is unchanged). A hover during the exit shows it again on the same element. The Escape layer keys on `visible`.
+- **Tests:** recipe and slot cases; re-show during exit (`entering`, no remount); the hidden description is unchanged in every phase and in the server HTML; reduced motion both ways.
+
+### 6.5 P10-TEACH — TeachingPopover onto the core (`TeachingPopover.parts.tsx`, `.root.tsx`)
+
+- **API:** `motion?: MotionSlot | null` wherever the surface's `className` is accepted (the root when it renders its own surface, and `TeachingPopover.Surface`; the existing `TeachingPopover:surface-props` rule covers the root's element props next to a Surface).
+- **Change:** `if (!shown || !step) return null` (`TeachingPopover.parts.tsx:353`) becomes `usePresence(shown, { appear: true })`; the last `step` stays rendered while exiting. **Risk 1:** `anchorReady` (`:277`) is held while exiting: a previous-value state of the last `anchorReady` seen while `shown`, used while closed, so floating-ui's reset of `isPositioned` on close does not hide the exit; the layer, restore, tab order and initial focus keep keying on `visible`. `useFocusBeforeClose` (candidates: the Trigger's focus target, the target element). An inline popover (no target) exits in place, in flow, for the exit duration.
+- **Tests:** an anchored popover's exit keeps `visibility` unset (the inline style has no `hidden` while exiting); Done and Close exit with focus already returned; reopening during the exit starts the steps over (0.14.1's fix) on the same element; inline exit; reduced motion both ways.
+
+---
+
+## 7. P10-TOAST — Toast containers (`Toaster.tsx`)
+
+- **API:** `Toaster motion?: MotionSlot | null` (every toast container; Fluent has no slot here). No per-dispatch motion.
+- **Markup:** the container (`div.wave-toaster__toast`, `role="group"`, focusable by script, the presence element) becomes the grid of `toastStructure` (`grid grid-rows-[minmax(0,1fr)] not-data-[presence=entered]:overflow-hidden`; never `display: contents`, since it takes focus) and wraps its content in a new `div.wave-toaster__toast-content` (the one grid item: the content may be several elements). The status text, the Toast and the consumer's content move into it, unchanged.
+- **Motion:** `toastMotion[edge]`, edge from `position` (`top-*` → `top`, `bottom-*` → `bottom`); the region keeps `gap-2` and the recipe's `-mb-2` compensates it (D14). Timer at mount, pause rules, `limit`, revive and keyboard unchanged (D14).
+- **Tests:** `mockAnimations({ animated: (el) => el.hasAttribute('data-wave-toast') })` keeps working (the container is still the presence element: the documented predicate is unchanged); edge recipe per position; content wrapper holds the status text and content; focus fallback skips an exiting toast (existing); reduced motion both ways (existing `Toast.parts.test.tsx:540` stays green).
+
+---
+
+## 8. P10-MBG — MessageBarGroup (`src/components/feedback/MessageBarGroup.tsx`, `src/hooks/usePresenceGroup.ts`)
+
+```ts
+export interface MessageBarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * Which changes animate: `'exit-only'` (a bar removed from the children fades and collapses
+   * out) or `'both'` (a bar added after mount also fades and slides in). Bars present at the
+   * group's first render never animate.
+   * @default 'exit-only'
+   */
+  animate?: 'exit-only' | 'both';
+  /** Replaces the bars' motion (both directions); `null` turns it off. */
+  motion?: MotionSlot | null;
+  /** MessageBar elements, each with a stable `key`. */
+  children?: React.ReactNode;
+  ref?: React.Ref<HTMLDivElement>;
+}
+```
+
+- **Markup:** `<div class="wave-message-bar-group flex flex-col gap-2" data-animate="exit-only" {...rest}>` (root classes **my call**: a vertical stack with the 8px gap the toasts use; `data-animate` enumerated, always rendered). Each child in a wrapper `<div class="wave-message-bar-group__item …">` (the presence element, `messageBarGroupItemStructure`: `grid grid-rows-[minmax(0,1fr)] items-end overflow-hidden data-[presence=entered]:contents`), so an entered bar is a direct flex item of the group. No role on the root (Fluent: a plain `div`); each MessageBar stays its own live region.
+- **Motion:** `messageBarGroupExitMotion`, plus `messageBarGroupEnterMotion` with `animate="both"` (and `appear: true` for bars added later, through the group's `appear`). `motion` replaces the composed default.
+- **Children:** any keyed element animates (MessageBar is the intended one; no type check, **my call**: Fluent throws for a non-MessageBar in development). A child without a consumer key, or non-element content (text), renders as given without motion and warns once from an effect (`MessageBarGroup:children`).
+- **Focus:** focus inside a bar that leaves moves, in the removing commit, to the first tabbable element of the next remaining bar, else the previous one's, else stays where the browser puts it (documented: the app moves focus when the last bar goes) — `usePreserveFocus` on the item with `enabled: visible`.
+- **Exports:** `MessageBarGroup`, `MessageBarGroupProps`, `messageBarGroupClassNames`; feedback barrel; flat name is its name (D21).
+- **Tests** (`MessageBarGroup.test.tsx`): `testSystemProps`; bars at mount render `entered` with no wrapper box (`data-presence="entered"`); removal keeps the bar `inert` until `finishAll`, then drops it; `both` vs `exit-only` (added bar's phase); order with a middle removal; re-adding a key during exit; the focus move; the children warning (asserted); reduced motion both ways; StrictMode; `renderToString` + hydration; axe with three bars; a Server Component composing the group (INTEGRATION).
+
+---
+
+## 9. P10-02 components
+
+### 9.1 P10-CAR — Carousel (`Carousel.tsx`, `Carousel.drag.ts`)
+
+- **API:** `export type CarouselMotion = 'slide' | 'fade'`; `motion?: CarouselMotion | null` (`@default 'slide'`; `null` turns the transition off; Fluent's `motion`, whose `{ kind: 'slide', duration }` object form is not offered); `motionDuration?: number` (`@default 300`, milliseconds; the JSDoc says Fluent's `duration` is Embla's unitless 20–60, so a value ported from Fluent is far too short). The root renders `data-motion` (`slide`, `fade` or `none`, enumerated). Provider `'none'` → `none` unless `motion` is set.
+- **Slide:** unchanged mechanism (track `transform`); its classes become `carouselSlideMotion` (`transition-transform duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none`, my call on the curve, §3). A `motionDuration` other than 300 is an inline `transitionDuration` on the track (D4).
+- **Fade (single-slide pages only):** the track becomes a one-cell grid (`grid`, slides `col-start-1 row-start-1`), no transform; inactive slides `opacity-0` (they are already `inert` and `aria-hidden`), `carouselFadeMotion` on each slide. With `groupSize` above 1 or `'auto'`, `motion="fade"` falls back to slide and warns once (`Carousel:fade-group`, **my call**). Dragging under fade still pages on release past the threshold; the slides do not follow the pointer (**my call**: there is no track to move).
+- **Unchanged (guards):** APG rotation control; autoplay starts stopped under reduced motion (`Carousel.test.tsx` reduced-motion cases stay green unedited).
+- **Tests:** `data-motion`; fade markup and classes; inactive slides `inert` in fade; `motionDuration` inline style only when not 300; fallback warning (asserted); provider; type tests (`CarouselMotion`).
+
+### 9.2 P10-TAB — TabList indicator (`TabList.tsx`)
+
+- **API:** `TabList motion?: MotionSlot | null` (the indicator's transition; Fluent has no opt-out). Applies to `appearance="transparent"` (the only appearance with an indicator line; the fills keep `transition-colors`).
+- **Indicator markup (look unchanged):** the selected tab keeps a 2px transparent border on its edge (`border-b-2 border-b-transparent`; vertical `border-s-2 border-s-transparent`), so its box is the 0.14 box, and draws the line as an `::after` exactly over that border: `relative after:absolute after:inset-x-0 after:-bottom-0.5 after:border-b-2 after:border-b-primary after:origin-left forced-colors:after:border-[Highlight]` (vertical: `after:inset-y-0 after:-start-0.5 after:border-s-2 after:border-s-primary after:origin-top`). `after:origin-left` carries the physical marker (the FLIP offset is measured in physical pixels). A border, not a background, so forced colours keep it.
+- **FLIP (Ruling R12, the runtime-style exception):** a layout effect in the TabList root keyed on the selected value measures the previously and newly selected tabs (`getBoundingClientRect`, physical) and sets state `{ value, offset, scale }` (horizontal: left difference and width ratio; vertical: top and height); the selected Tab renders `--wave-tab-indicator-offset` and `--wave-tab-indicator-scale` in its `style` (merged with the consumer's) and **no** transition classes for that commit; an effect schedules `requestAnimationFrame` and clears the state in its callback (C-HOOKS deferred update), so the next render drops the properties and adds the transition classes, and the line slides from the old tab. The `::after` reads `after:translate-x-[var(--wave-tab-indicator-offset,0px)] after:scale-x-[var(--wave-tab-indicator-scale,1)]` (vertical: the `-y` pair). Skipped (no properties written) on the first render, when the previous tab is gone, with `motion={null}`, under provider `'none'`, and under reduced motion (`usePrefersReducedMotion`); `tabIndicatorMotion` carries `motion-reduce:after:transition-none` too.
+- **Tests:** selection change writes then clears the two properties (fake timers or a `requestAnimationFrame` stub); none on mount, with `null`, provider `'none'`, reduced motion; vertical; RTL (physical measurement, same properties); the consumer `style` merged; forced-colours class present; axe.
+
+### 9.3 P10-PROG — ProgressBar (`ProgressBar.tsx`)
+
+- **API:** `indeterminateMotion?: MotionSlot | null` (Fluent's name). The indeterminate bar becomes `cn(bar, fill, forcedColors.selectedLeaf, 'w-full', motionClasses)`, with `progressIndeterminateMotion` = today's `w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse` (identical look). `null` (or provider `'none'`): a static full-width bar (**my call**: a static 40% segment would read as 40% done; `indeterminateMotion="w-2/5"` gives one). A replacement that uses keyframes of its own needs them in the consumer's CSS.
+- **Tests:** default classes (byte-identical to 0.14's list), `null`, replacement, provider; determinate bars unaffected.
+
+---
+
+## 10. Scope notes
+
+### 10.1 Unchanged
+
+`Presence`, `usePresence` (API and budget), Spinner, Skeleton, Switch, Checkbox and every other state transition; Accordion and Tree chevron transitions; `useRovingTabIndex`; the dismiss-layer stack.
+
+### 10.2 Deferred (ROADMAP §8.5 gap notes; no gap id of the phase depends on them)
+
+- **Combobox, Dropdown, TagPicker and TimePicker listbox popups:** the one `<ul role="listbox">` moves between an inline hidden spot and the portal (`Option.tsx:780-826`, `TimePicker.tsx:915-954`; `ListboxSurface`'s JSDoc rules out a second list "even for an exit animation"); an exit needs the list kept in the surface while closed with valid option ids and `aria-activedescendant`. A design of its own.
+- **DatePicker calendar:** a modal layer with a trap on its own code path (`DatePicker.tsx:595-609, 871-912`); it would move onto the core with the listbox work.
+- **AvatarGroup popover:** `{isOpen && <Portal>}` in `AvatarGroup.parts.tsx:315-345`; small, but it shares its focus logic with neither Popover nor Menu, so it waits for a pass over the remaining popups.
+
+---
+
+## 11. Packages, order and dependencies
+
+| # | Package | Content | Main files | Depends on |
+|---|---|---|---|---|
+| 1 | P10-F | §2: types, `lib/motion.ts` (resolver; structure constants land with their packages), `hooks/useMotion.ts`, `WaveProvider motion`, gate rules, `motion.test.ts`, verify-dist Button-only probe and machinery, `motionClasses` helper, `PENDING_*` entries | `src/lib/types.ts`, `src/lib/motion.ts`, `src/hooks/useMotion.ts`, `WaveProvider.tsx`, `conventions.test.ts`, `verify-dist.mjs`, `build-css.mjs` | — |
+| 2 | P10-DLG | §4.1, risks 7 and 8, D16 test, positive probe control | `Dialog.tsx`, `Dialog.slots.tsx` | 1 |
+| 3 | P10-DRW-O | §4.2 | `Drawer.panel.tsx`, `Drawer.root.tsx`, `NavDrawer.tsx` | 2 (`ModalBackdrop`) |
+| 4 | P10-DRW-I | §4.3 | `Drawer.panel.tsx`, `classNames.ts` | 3 |
+| 5 | P10-MENU | §6.1, `useFocusBeforeClose`, `popupMotion` | `Menu.popover.tsx`, `src/hooks/useFocusBeforeClose.ts` | 1 |
+| 6 | P10-POP | §6.2 | `Popover.tsx` | 5 |
+| 7 | P10-INFO | §6.3 | `InfoButton.tsx`, `InfoLabel.tsx` | 5 |
+| 8 | P10-TIP | §6.4 | `Tooltip.tsx` | 1 |
+| 9 | P10-TEACH | §6.5, risk 1 | `TeachingPopover.parts.tsx`, `.root.tsx` | 5 |
+| 10 | P10-ACC | §5.1, `collapseStructure`/`collapseMotion` | `Accordion.tsx` | 1 |
+| 11 | P10-TREE | §5.2 | `Tree.core.tsx`, `Tree.context.ts` | 10 |
+| 12 | P10-NAV | §5.3 | `Nav.tsx` | 10 |
+| 13 | P10-TOAST | §7 | `Toaster.tsx` | 1 |
+| 14 | P10-MBG | §8, `usePresenceGroup` | `MessageBarGroup.tsx`, `src/hooks/usePresenceGroup.ts` | 1 |
+| 15 | P10-CAR | §9.1 | `Carousel.tsx`, `Carousel.drag.ts` | 1 |
+| 16 | P10-TAB | §9.2 | `TabList.tsx` | 1 |
+| 17 | P10-PROG | §9.3 | `ProgressBar.tsx` | 1 |
+| 18 | INTEGRATION | barrels (`MessageBarGroup`, `MotionSlot`, `MotionPreference`, `CarouselMotion`), `public-types.test.ts`, `classNames.test.ts` (empty the `PENDING_*` lists), verify-dist (`MOTION_RECIPE_MIN`, positive controls for Accordion and MessageBarGroup, MessageBar-only probe), `integration.test.tsx` (below), Server Component cases | `src/index.ts`, barrels, `src/__tests__/*`, `scripts/verify-dist.mjs` | 2–17 |
+| 19 | DOCS | stories, guide, README, CHANGELOG, ROADMAP, CLAUDE.md, testing guide (below) | `stories/*`, `docs/*`, `README.md`, `CHANGELOG.md`, `CLAUDE.md` | 18 |
+| 20 | Lead | `/gate`, real-browser checklist (§14), final review, release | — | 19 |
+
+Each package owns its recipe constants in `lib/motion.ts`, its class-name keys and its tests; the build is sequential (D1), so shared files are edited in order. Each package ends with its focused tests, `npm run lint` and the conventions gate for its files; the lead commits per package.
+
+**INTEGRATION tests** (`src/__tests__/integration.test.tsx`): a Popover button and a Menu item each opening a Dialog in the same update while the opener exits (focus returns to the trigger, D20); two stacked Dialogs closing the upper one (backdrop appearance held, risk 7); a Toast over an exiting Dialog; an Accordion inside a Dialog closing with focus in the panel; `WaveProvider motion="none"` around one of each surface (no recipe classes anywhere, own `motion` still applied) and a nested `motion="default"` re-enabling; Field around nothing new. **Server Component cases:** `MessageBarGroup` with server-rendered MessageBar children; Accordion, Tree, Nav with open parts (collapse wrappers `entered` in the HTML, hydration clean); `asClientReference` cases for the parts whose markup changed.
+
+**DOCS:** a `Motion` story per surface in its stories file (Dialog, Drawer, NavDrawer, Menu, Popover, InfoButton, Tooltip, TeachingPopover, Accordion, Tree, Nav, Toast, MessageBar (the group), Carousel, TabList, ProgressBar), each with `motion` default, `null` and a replacement, and a `stories/Presence.stories.tsx` `ProviderMotionNone` story; the `Menu` `ExitMotion` story moves its classes to `motion`. Guide chapter 6 "Motion & Animation": a "Component motion" section (the §3 table with class strings, the slot rules, the provider, the collapse wrapper and `display: contents`, reduced motion, tuning through the tokens, the precompiled-CSS limit of replacements, the exit semantics of D7 and their consequences), and §8 Pattern 9 (overlays) updated. README: "Enter and exit motion" rewritten around the defaults, a `MessageBarGroup` section, the props in each component's section, the provider prop, Carousel and TabList notes. CHANGELOG `## [0.15.0] - Unreleased` with Upgrading from 0.14 (§13), Added, Changed, Deprecated (none expected), Fixed (risks 1, 2, 7, 8), Size. ROADMAP: Phase 10 marked, the spec linked, §8.5 follow-ups (risks 6 and 9, the deferred popups). CLAUDE.md: C-MOTION (components ship motion from `lib/motion.ts`; `data-[presence=…]` classes only there; the slot rule; the collapse wrapper), C-NAMING (motion slot names and the ruling), C-CLASS (`data-animate`, `data-motion`, the new part keys), Architecture (`lib/motion`, `useMotion`, `useFocusBeforeClose`, `usePresenceGroup`, `MessageBarGroup`), Testing (collapse wrappers in `mockAnimations`, the provider in tests). `docs/testing-best-practices.md`: a motion section.
+
+---
+
+## 12. Implementation notes
+
+Empty until the build; as in Phase 9, each deliberate departure from §0–§11 is recorded here with its reason.
+
+---
+
+## 13. Upgrading from 0.14
+
+1. **Surfaces animate by default** in a browser. A closed Dialog, Drawer, NavDrawer, Menu, Popover, InfoButton note, Tooltip or TeachingPopover stays in the document for its exit (100–500 ms, §3), `inert`, with `data-presence="exiting"` (and `data-state="closed"` on popups); focus, layers, trap, isolation and scroll lock are released at once (D7). End-to-end tests that look for an element's absence right after a close wait for it, or render under `<WaveProvider motion="none">`. Unit tests in jsdom are unaffected (no CSS loaded).
+2. **Popover.Content, the Tooltip surface and the TeachingPopover surface mount through the presence core**: they render `data-presence` and `data-state`, and `inert` while exiting.
+3. **`defaultOpen` surfaces animate in on a client render too** (D9); 0.14 animated them only after hydration.
+4. **New wrapper elements.** `div.wave-accordion-panel__collapse` around Accordion's region; `div.wave-tree-item__collapse` around a Tree group; `div.wave-nav-category__collapse` around a Nav category's list; `div.wave-drawer__collapse` (and `wave-nav-drawer__collapse`) around an inline panel; `div.wave-toaster__toast-content` inside each toast container. The first four are `display: contents` while open, so layout is unchanged; selectors with a child combinator across them (`.wave-accordion-item > [role=region]`, `li > ul`, `[role=treeitem] > [role=group]`, a flex rule on the inline drawer's parent's direct children during the motion) and tests that walk `parentElement` or `nextElementSibling` change. An inline drawer whose width or height in `className` is a percentage resizes oddly during its motion (correct once open): give it a length or pass `motion={null}`.
+5. **The toast container is a one-cell grid** around the new content element; its `data-wave-toast` marker, classes and attributes are unchanged.
+6. **A `className` with `data-[presence=…]` classes** on Menu.Popover, Dialog.Content, Drawer or NavDrawer keeps 0.14's behaviour (no default motion, D19). Moving those classes to `motion` is the recommended form.
+7. **TabList's selected indicator** is drawn by the selected tab's `::after` over a transparent 2px border (the tab's box is unchanged) and the tab is `relative`. A class that recoloured the indicator through the tab's bottom (start) border targets the `after:` border now.
+8. **Focus in a closing panel moves to its trigger** (Accordion, Tree, Nav); 0.14 left it on `<body>`.
+9. **Behaviour fixes visible during exits:** a stacked dialog's backdrop stays transparent while it fades; Dialog's title padding holds; TeachingPopover stays visible while it exits.
+10. **Carousel's slide curve** is the `easy-ease` token (was Tailwind's `ease-in-out`), same 300 ms; the root renders `data-motion`.
+11. **Nav item actions fade in** over 150 ms (were instant).
+12. **Types:** `WaveContextValue` has a new member `motion`; a hand-built value (a test mock of `useWaveTheme`) adds it.
+13. **New attributes**, always rendered: `data-presence` on the new wrappers and popups, `data-state` on Popover.Content, the Tooltip surface and the TeachingPopover surface, Carousel's `data-motion`. A test that compares full HTML or attribute lists changes.
+
+---
+
+## 14. Real-browser checklist (the lead, in Storybook; Chromium, Firefox and WebKit unless noted)
+
+1. Every surface's `Motion` story: default enter and exit look as §3; `null` snaps; the replacement story runs its own classes.
+2. **Reduced motion** (DevTools emulation): every surface appears and disappears at once; ProgressBar pulses; Carousel starts paused; TabList's indicator jumps.
+3. **RTL** (toolbar): drawers at `start`/`end` slide from the correct edge, `left`/`right` do not mirror; popups slide away from their trigger; inline drawers collapse toward their edge; Carousel slides the right way; TabList's indicator slides between the right tabs.
+4. **Stacked dialogs:** the upper one closes with no double dimming; the lower one stays dimmed; Escape twice.
+5. **`display: contents` exits** (D12, Appendix A item 2, Chromium only so far): Accordion, Tree, Nav, inline drawer and MessageBarGroup exits animate in Firefox and WebKit; if not, apply §2.5's fallback and record it in §12.
+6. **Grid track interpolation** of `minmax(0,0fr)` ↔ `minmax(0,1fr)` in Firefox and WebKit (Appendix A item 1 is Chromium).
+7. **Positioned popups:** no slide from the viewport corner on open (no `transform` transition); a submenu slides from its parent; a context menu at the pointer; an exiting popup during a scroll keeps its last position (accepted, D7).
+8. **Toasts:** dispatch three, dismiss the middle one: the others glide, nothing jumps at the end; top and bottom positions slide from their edge; a Drawer opening and closing (toasts move at close, D15 limitation).
+9. **MessageBarGroup:** `exit-only` and `both`; dismissing a bar with the keyboard moves focus to the next bar's button.
+10. **TabList:** horizontal and vertical, forced colours (Windows High Contrast or the emulation) show the indicator, sizes, a tab with an icon.
+11. **Inline drawers:** no content reflow during the collapse at each size; `full` appears at once; a kept-mounted one keeps its form state.
+12. **Provider `motion="none"`:** nothing moves; a part with its own `motion` still moves.
+13. **Click-through during exits (D7):** a second click on the page during a Dialog's exit reaches the page (accepted; confirm nothing worse, such as a re-open loop).
+14. 200% zoom and a narrow viewport: a `full` Dialog and a bottom drawer.
+
+## 15. Exit criteria
+
+- ROADMAP §3's process criteria: `npm run typecheck`, `lint`, `format:check`, `test`, `build`, `node scripts/verify-dist.mjs --final`, `check:package`, `test:pack`, `build-storybook`; CHANGELOG complete with Upgrading, Added, Changed, Fixed and Size; README, guide, testing guide and CLAUDE.md updated; no conventions-gate exception without a written reason; clean test output.
+- Every gap id of §16 closed by its package, with tests.
+- Every animated surface has presence and reduced-motion tests both ways (D17); every motion slot has `undefined`, `null`, string, object and provider cases.
+- verify-dist proves the Button-only bundle holds no `lib/motion.mjs`, no `hooks/useMotion.mjs`, no recipe literal and no `[presence=` literal, with the positive controls passing (D23); the MessageBar-only bundle holds no presence core.
+- `motion.test.ts` green (every recipe class compiles, tokens, reduced motion, gated starts, no transform on positioned surfaces, backdrop durations).
+- The guide chapter "Motion & Animation" covers component motion (ROADMAP exit criterion).
+- The real-browser checklist (§14) passed, with any fallback recorded in §12.
+
+## 16. Open questions (with the default this spec builds)
+
+1. **Publish the recipe constants?** They would let an app compose `cn(dialogMotion, …)` or put a surface's motion on its own element. *Default:* internal in 0.15 (the names would freeze before 1.0); the guide lists each class string.
+2. **Toast slide axis.** *Default:* 8px vertical from the edge the stack is anchored to. Horizontal from the screen edge is the alternative (it needs physical and logical variants per position).
+3. **Should `motion="none"` also stop the Accordion and Tree chevron turns and other state transitions?** *Default:* no; it covers the motion slots and the Nav actions' reveal (what this phase adds). Fluent's `MotionBehaviourProvider` also leaves CSS transitions alone.
+4. **`display: contents` support** outside Chromium (§14 item 5). *Default:* keep it; fallback in §2.5.
+5. **The D19 compatibility rule** forever, or a development notice in 0.16 recommending `motion`? *Default:* silent through 0.x, reviewed in P13-03 (the 1.0 notices).
+6. **`MessageBar.Group` as a compound member** in addition to the flat component? *Default:* no (D21).
+7. **Risk 9 (popups inside an exiting surface) and risk 6 (toast offsets during a drawer's exit):** fix in a later phase or keep as documented? *Default:* documented, ROADMAP §8.5 follow-ups (D15).
+
+## 17. Gap table
+
+| Gap id | Impact | Closed by | How |
+|---|---|---|---|
+| `foundation-13` | M | P10-DLG … P10-MBG (completed by INTEGRATION) | Enter and exit motion on every overlay and disclosure in scope (D10) |
+| `dialog-5` | L | P10-DLG | Surface scale + fade, backdrop fade |
+| `drw-4` | L | P10-DRW-O, P10-DRW-I | Overlay slide + fade, inline collapse |
+| `acc-6` | L | P10-ACC | Panel collapse |
+| `tree-4` | L | P10-TREE | Group collapse |
+| `toast-5` | L | P10-TOAST | Container slide, fade and collapse |
+| `nav-8` | L | P10-NAV | Category collapse, `expandIcon` slot, `expandIconMotion`, actions reveal |
+| `messagebargroup-1` | L | P10-MBG | `MessageBarGroup` with `animate` |
+| `foundation-15` | L | P10-F (type, resolver) and every package's slot | `MotionSlot`, `motion`/`backdropMotion`/`expandIconMotion`/`indeterminateMotion` |
+| `car-3` | L | P10-CAR | `motion` (`slide`/`fade`/`null`), `motionDuration` |
+| `tab-5` | L | P10-TAB | Sliding indicator |
+| `progress-6` | L | P10-PROG | `indeterminateMotion` |
+
+Related, already closed: `foundation-14` (presence primitives, 0.7) and `foundation-16` (motion tokens, 0.7). Not closed, by ROADMAP §1.3: `foundation-17` (Fluent's preview motion components).
+
+## 18. Where this spec departs from the roadmap's sketch and the brief
+
+| Sketch or brief | Spec | Why |
+|---|---|---|
+| Inline drawer: animate the width between 0 and its size class, inner panel at full size (R8) | A collapse wrapper around the unchanged panel; `full` has no motion (D13) | A consumer's `className` width (a documented replacement of the size) stays the content's width, with no reflow |
+| Collapse with `0fr`/`1fr` and an inner `min-h-0` element (R8) | `minmax(0, 0fr)`/`minmax(0, 1fr)` with the part as the grid item, wrapper `display: contents` while open (D12) | Plain `0fr` leaves the item's padding and cannot shrink a definite width (Appendix A); one element fewer per part; 0.14's layout while open |
+| Tooltip and TeachingPopover "fade" | Tooltip fades; TeachingPopover uses the popup recipe (fade + slide with a target, fade inline) | Fluent's TeachingPopover is a Popover |
+| `MessageBarGroup`, "flat name" | A standalone component (D21) | A `MessageBar` import does not pull the presence core |
+| Exit "focus restore on close" | Plus focus moved to the trigger when a disclosure collapses with focus inside (§2.5) | An `inert` exiting element cannot keep focus (D7) |
+| "No runtime styles" | Two inline-style cases: TabList's FLIP properties (R12) and Carousel's `motionDuration` (D4) | No class can carry a measured offset or an arbitrary number of milliseconds |
+
+---
+
+## Appendix A — Chromium probe (Playwright, Chrome 156, 2026-10-27)
+
+Plain CSS equivalent to the recipes, each element inserted the way the presence core sees it (a layout-effect-time `getAnimations()` call right after insertion or the attribute change):
+
+1. **Rows, `0fr`/`1fr`, a part with 12px bottom padding:** the transition starts (`grid-template-rows` and `opacity` running at insertion), but the wrapper starts and ends at 12px, the padding. **With `minmax(0,0fr)`/`minmax(0,1fr)`** and a part with 12px vertical padding and a 1px border: 0px → 124.7px → 0px. → D12.
+2. **`display: contents` → grid exit:** with the wrapper `display: contents` while `entered`, switching to `exiting` starts both transitions; 112px at the start, 51px half-way. → D12 (Chromium only).
+3. **Kept mounted:** removing `hidden` and setting `entering` in one change starts the `@starting-style` transition. → Dialog, drawers.
+4. **Columns, `0fr`/`1fr`, a part of definite 320px width:** no collapse (the wrapper stayed 320px). **With `minmax(0,…)`:** 0 → 147px half-way → 320px; the part keeps 320px (no reflow) and, with end alignment, is clipped from its start. → D13.
+5. **Gap compensation:** a 3-item flex column with an 8px gap (136px); an exiting item with a transitioned `margin-bottom: -8px`: the column is 88px at the end of the exit and 88px after removal; removing the first item after its exit moves the next one by 0px. → D14, §8.
+6. **Percentage width:** a 33% panel inside an always-grid wrapper resolves to 0px; inside the `display: contents` wrapper, 264px (33% of 800). → D12, D13.
+7. **Positioned popup:** with `transition-property: opacity, translate`, a change of the inline `transform` (floating-ui's position) starts no transition. → D4.
+
+Not checked here (§14): Firefox and WebKit for items 1–7, the TabList FLIP, and the exit's visual quality.
