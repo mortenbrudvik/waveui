@@ -8,6 +8,7 @@ import { Button } from '../components/button/Button';
 import { ToggleButton } from '../components/button/ToggleButton';
 import { RadioGroup, RadioItem } from '../components/input/RadioGroup';
 import { useWaveTheme } from '../components/provider/WaveProvider';
+import { useMotionPreference } from '../hooks/useMotion';
 import { Portal } from '../components/portal/Portal';
 import { DismissLayerProvider, useDismiss } from '../hooks/useDismiss';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -38,6 +39,7 @@ import {
   mockAnimations,
   mockMatchMedia,
   mockRect,
+  motionClasses,
   renderWithProviders,
   resetMatchMediaMock,
   testA11y,
@@ -1267,6 +1269,14 @@ describe('renderWithProviders', () => {
     renderWithProviders(<Probe />, { inputDefaults: { size: 'large' } });
     expect(screen.getByRole('status')).toHaveTextContent('large');
   });
+
+  it('renderWithProviders passes motion to the provider (Phase 10)', () => {
+    function Probe() {
+      return <output>{useMotionPreference()}</output>;
+    }
+    renderWithProviders(<Probe />, { motion: 'none' });
+    expect(screen.getByRole('status')).toHaveTextContent('none');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2187,4 +2197,12 @@ describe('resolveFieldTestContext', () => {
 
 it('type-level contracts compile (see typeContracts)', () => {
   expectTypeOf(typeContracts).toBeFunction();
+});
+
+describe('motionClasses (Phase 10)', () => {
+  it('splits a recipe on whitespace and drops empty words', () => {
+    expect(motionClasses('  a  b ')).toEqual(['a', 'b']);
+    expect(motionClasses('')).toEqual([]);
+    expect(motionClasses('a\n  b\tc')).toEqual(['a', 'b', 'c']);
+  });
 });

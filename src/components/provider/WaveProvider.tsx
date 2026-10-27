@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { waveProviderClassNames } from '../../lib/classNames';
 import { getThemeClassName, isWaveTheme, WAVE_THEMES, type WaveTheme } from '../../lib/theme';
-import type { CoreSize, InputAppearance } from '../../lib/types';
+import type { CoreSize, InputAppearance, MotionPreference } from '../../lib/types';
 
 // The theme helper lives in server-safe src/lib (no "use client"), so React Server Components can
 // call it; it stays exported from here too.
@@ -48,6 +48,16 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
    * @default the enclosing WaveProvider's defaults, else none (`medium`, `outline`)
    */
   inputDefaults?: InputDefaults;
+  /**
+   * Motion of the subtree. `'none'` makes every motion slot below it (a part's `motion`,
+   * `backdropMotion`, `expandIconMotion` or `indeterminateMotion` left unset) behave as `null` and
+   * turns off the other motion Wave adds, such as the reveal of Nav item actions; a part's own
+   * value still wins. Fluent's `MotionBehaviourProvider` with `'skip'` is the counterpart, which
+   * `@fluentui/react-components` does not export. A nested provider inherits an omitted `motion`
+   * like `theme`.
+   * @default the enclosing WaveProvider's motion, else 'default'
+   */
+  motion?: MotionPreference;
   /** Content rendered inside the themed container. */
   children: React.ReactNode;
   /** Ref to the themed root `<div>`. */
@@ -69,6 +79,8 @@ export interface WaveContextValue {
   portalContainer: HTMLElement | null;
   /** The merged input defaults of the providers above (`{}` outside a provider). */
   inputDefaults: InputDefaults;
+  /** The motion preference of the providers above (`'default'` outside a provider). */
+  motion: MotionPreference;
   /** `false` when no {@link WaveProvider} is above the caller (the defaults are returned). */
   hasProvider: boolean;
 }
@@ -79,6 +91,7 @@ const DEFAULT_CONTEXT: WaveContextValue = {
   themeClassName: '',
   portalContainer: null,
   inputDefaults: {},
+  motion: 'default',
   hasProvider: false,
 };
 
@@ -113,12 +126,15 @@ export function useWaveTheme(): WaveContextValue {
  * - `inputDefaults` nests differently: a nested provider's defined keys override the enclosing
  *   provider's, and an omitted key is inherited, so setting only `appearance` in a nested provider
  *   keeps the enclosing provider's `size`.
+ * - `motion="none"` turns the default motion of every animated part below it off (a part's own
+ *   `motion` still wins); a nested provider inherits an omitted `motion` like `theme`.
  */
 export const WaveProvider = ({
   theme: themeProp,
   dir: dirProp,
   portalContainer: portalContainerProp,
   inputDefaults: inputDefaultsProp,
+  motion: motionProp,
   children,
   className,
   ref,
@@ -130,6 +146,7 @@ export const WaveProvider = ({
   const parent = React.useContext(WaveContext);
   const theme = themeProp ?? parent.theme;
   const dir = dirProp ?? parent.dir;
+  const motion = motionProp ?? parent.motion;
   const portalContainer =
     portalContainerProp === undefined ? parent.portalContainer : portalContainerProp;
 
@@ -164,9 +181,10 @@ export const WaveProvider = ({
       themeClassName,
       portalContainer,
       inputDefaults,
+      motion,
       hasProvider: true,
     }),
-    [resolvedTheme, dir, themeClassName, portalContainer, inputDefaults],
+    [resolvedTheme, dir, themeClassName, portalContainer, inputDefaults, motion],
   );
 
   return (
