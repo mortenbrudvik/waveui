@@ -1200,13 +1200,15 @@ export const navAppItemStaticClassNames = {
 
 /**
  * NavDrawer (a Drawer variant: it also carries Drawer's root, and its backdrop Drawer's backdrop
- * class): `root` on the panel (the portaled `role="dialog"` element of an overlay drawer, the
- * panel element of an inline one); `backdrop` on the backdrop of a modal overlay; `nav` on the
- * navigation landmark that fills the panel.
+ * class, and its collapse element Drawer's collapse class): `root` on the panel (the portaled
+ * `role="dialog"` element of an overlay drawer, the panel element of an inline one); `backdrop` on
+ * the backdrop of a modal overlay; `collapse` on the element around an inline drawer's panel;
+ * `nav` on the navigation landmark that fills the panel.
  */
 export const navDrawerClassNames = {
   root: 'wave-nav-drawer',
   backdrop: 'wave-nav-drawer__backdrop',
+  collapse: 'wave-nav-drawer__collapse',
   nav: 'wave-nav-drawer__nav',
 } as const;
 
@@ -1324,16 +1326,19 @@ export const tooltipClassNames = {
 /**
  * Drawer: `root` on the panel (the portaled `role="dialog"` element of an overlay drawer, while it
  * is open or kept mounted, or the `<aside>` of an inline one); `backdrop` on the backdrop of a
- * modal or alert overlay drawer; `header` on the built-in header row (absent with a
- * Drawer.Header); `titleAction` on the element of the `titleAction` slot in that row;
- * `closeButton` on every built-in Close button (which also carries Button's root), in the built-in
- * header and in each Drawer.HeaderTitle; `body` on the scrolling body. The heading of its `title`
- * prop carries Drawer.Title's class. The panel carries `data-type`, `data-position` and
- * `data-size`; the body, the header and the footer carry `data-scroll-state`.
+ * modal or alert overlay drawer; `collapse` on the element around an inline drawer's panel (its
+ * only child), which carries the presence phases and the motion of an inline drawer; `header` on
+ * the built-in header row (absent with a Drawer.Header); `titleAction` on the element of the
+ * `titleAction` slot in that row; `closeButton` on every built-in Close button (which also
+ * carries Button's root), in the built-in header and in each Drawer.HeaderTitle; `body` on the
+ * scrolling body. The heading of its `title` prop carries Drawer.Title's class. The panel carries
+ * `data-type`, `data-position` and `data-size`; the body, the header and the footer carry
+ * `data-scroll-state`.
  */
 export const drawerClassNames = {
   root: 'wave-drawer',
   backdrop: 'wave-drawer__backdrop',
+  collapse: 'wave-drawer__collapse',
   header: 'wave-drawer__header',
   titleAction: 'wave-drawer__title-action',
   closeButton: 'wave-drawer__close-button',

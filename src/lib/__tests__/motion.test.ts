@@ -15,8 +15,8 @@
  * 4. every class with the `starting` variant is gated on the entering phase;
  * 6. a backdrop exits with its surface's exit duration (D16: the core waits only for the surface,
  *    so a longer backdrop would be cut off), per pair of {@link BACKDROP_PAIRS}; a backdrop per
- *    size ({@link SIZED_BACKDROP_PAIRS}) takes its size's duration and exits with its surface
- *    composed with that duration, at every edge;
+ *    size ({@link SIZED_BACKDROP_PAIRS}) takes its size's duration both ways and exits with its
+ *    surface composed with that duration, at every edge;
  * 7. every export is a string, a record of strings or a function (the precondition of the dist
  *    probe of `scripts/verify-dist.mjs`, which reads the strings one level into records).
  *
@@ -94,7 +94,10 @@ type DesignSystem = Awaited<ReturnType<typeof __unstable__loadDesignSystem>>;
  * of its own is composed at run time with the duration of the part's size, and check 2 runs on
  * each composition (`value + ' ' + durations[size]`).
  */
-const COMPOSED_DURATIONS: Record<string, string> = { drawerMotion: 'drawerDurations' };
+const COMPOSED_DURATIONS: Record<string, string> = {
+  drawerMotion: 'drawerDurations',
+  inlineDrawerMotion: 'drawerDurations',
+};
 
 /** The stylesheet the compile check builds against: the precompiled CSS's sources (build-css). */
 const COMPILE_CSS =
@@ -213,17 +216,26 @@ function missingTimingTokens(value: string): string[] {
  */
 const BACKDROP_PAIRS: Record<string, string> = { dialogBackdropMotion: 'dialogMotion' };
 
+/** Check 6: the duration utility of `value` under exactly the variants `variant` (`''`: none). */
+function durationUnder(value: string, variant: string): string | undefined {
+  return words(value)
+    .map(parseWord)
+    .find(
+      ({ variants, utility }) => variants.join(':') === variant && utility.startsWith('duration-'),
+    )?.utility;
+}
+
+/** Check 6: the plain duration of `value`, the one without a variant (it times the enter). */
+function plainDuration(value: string): string | undefined {
+  return durationUnder(value, '');
+}
+
 /**
  * Check 6: the exit duration of `value`: its duration utility under exactly the exiting variant,
  * else its plain one (`undefined` without either).
  */
 function exitDuration(value: string): string | undefined {
-  const parsed = words(value).map(parseWord);
-  const duration = (variant: string) =>
-    parsed.find(
-      ({ variants, utility }) => variants.join(':') === variant && utility.startsWith('duration-'),
-    )?.utility;
-  return duration(EXITING) ?? duration('');
+  return durationUnder(value, EXITING) ?? plainDuration(value);
 }
 
 /** Check 6: a finding when `backdrop` does not exit with the duration of `surface`. */
@@ -245,8 +257,9 @@ const SIZED_BACKDROP_PAIRS: Record<string, { surface: string; durations: string 
 
 /**
  * Check 6 per size: for each size of `durations`, a finding when `backdrops` has no recipe for it,
- * when that recipe's duration is not the size's, or when it does not exit with a surface of
- * `surfaces` (per edge) composed with the size's duration. Labelled `size` or `size, edge`.
+ * when that recipe's plain (enter) or exit duration is not the size's, or when it does not exit
+ * with a surface of `surfaces` (per edge) composed with the size's duration. Labelled `size` or
+ * `size, edge`.
  */
 function sizedBackdropMismatches(
   surfaces: Readonly<Record<string, string>>,
@@ -256,11 +269,14 @@ function sizedBackdropMismatches(
   return Object.entries(durations).flatMap(([size, duration]) => {
     const backdrop = Object.hasOwn(backdrops, size) ? backdrops[size] : undefined;
     if (backdrop === undefined) return [`${size}: no backdrop recipe`];
-    const own = exitDuration(backdrop);
-    const sizeFindings =
+    const sizeFindings = [
+      ['enters', plainDuration(backdrop)],
+      ['exits', exitDuration(backdrop)],
+    ].flatMap(([way, own]) =>
       own === duration
         ? []
-        : [`${size}: exits over ${own ?? 'no duration'}, the size's duration is ${duration}`];
+        : [`${size}: ${way} over ${own ?? 'no duration'}, the size's duration is ${duration}`],
+    );
     return sizeFindings.concat(
       Object.entries(surfaces).flatMap(([edge, surface]) =>
         backdropExitMismatch(`${surface} ${duration}`, backdrop).map(
@@ -547,6 +563,17 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       ).toBeUndefined();
     });
 
+    it('reads the plain duration: the one without a variant', () => {
+      expect(
+        plainDuration(
+          'transition-opacity data-[presence=exiting]:duration-wave-normal duration-wave-gentle',
+        ),
+      ).toBe('duration-wave-gentle');
+      expect(
+        plainDuration('transition-opacity data-[presence=exiting]:duration-wave-normal'),
+      ).toBeUndefined();
+    });
+
     it('reports a backdrop that exits over another duration than its surface', () => {
       const surface =
         'transition-[opacity,scale] duration-wave-gentle data-[presence=exiting]:duration-wave-normal';
@@ -581,7 +608,7 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       ).toEqual([]);
     });
 
-    it('reports a sized backdrop without its size’s duration, or that exits otherwise than a surface', () => {
+    it('reports a sized backdrop that enters or exits without its size’s duration, or exits otherwise than a surface', () => {
       const durations = { small: 'duration-wave-gentle', large: 'duration-wave-slow' };
       const surfaces = {
         start: 'transition-[translate] ease-wave-easy-ease motion-reduce:transition-none',
@@ -594,6 +621,7 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
         }),
       ).toEqual([
         'small, end: exits over duration-wave-gentle, its surface over duration-wave-fast',
+        "large: enters over duration-wave-gentle, the size's duration is duration-wave-slow",
         "large: exits over duration-wave-gentle, the size's duration is duration-wave-slow",
         'large, start: exits over duration-wave-gentle, its surface over duration-wave-slow',
         'large, end: exits over duration-wave-gentle, its surface over duration-wave-fast',
@@ -603,6 +631,16 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
           small: 'transition-opacity duration-wave-gentle',
         }),
       ).toEqual(['large: no backdrop recipe']);
+      // A backdrop that exits over its size's duration but enters over another one.
+      expect(
+        sizedBackdropMismatches({ start: surfaces.start }, durations, {
+          small:
+            'transition-opacity duration-wave-slow data-[presence=exiting]:duration-wave-gentle',
+          large: 'transition-opacity duration-wave-slow',
+        }),
+      ).toEqual([
+        "small: enters over duration-wave-slow, the size's duration is duration-wave-gentle",
+      ]);
       expect(
         sizedBackdropMismatches({ start: surfaces.start }, durations, {
           small: 'transition-opacity duration-wave-gentle',

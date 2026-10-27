@@ -48,6 +48,16 @@ const navigation = (name = 'Navigation') => screen.getByRole('navigation', { nam
 const panelOf = (nav: HTMLElement) => nav.parentElement as HTMLElement;
 const backdrop = () => document.querySelector<HTMLElement>('.' + navDrawerClassNames.backdrop);
 
+/**
+ * A wrapper without DOM for `testSystemProps`: since 0.15 (P10-DRW-I) the inline panel, which
+ * takes the rest props, is the only child of its collapse element, so it is no longer the
+ * outermost element; with a wrapper the rest-spread check asks only that it contains the
+ * navigation (`testForwardRef` still ties `data-testid` to the ref's element).
+ */
+function NoDomWrapper({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
 /** Body content: two items, a category with two sub-items and a disabled item. */
 const bodyItems = (
   <>
@@ -125,6 +135,7 @@ describe('NavDrawer', () => {
       },
       conflictingClass: { className: 'w-96', overrides: 'w-80' },
       control: { role: 'navigation' },
+      wrapper: NoDomWrapper,
       a11yVariants: [
         { name: 'overlay open', props: { type: 'overlay' } },
         { name: 'non-modal overlay', props: { type: 'overlay', modalType: 'non-modal' } },
@@ -262,7 +273,8 @@ describe('NavDrawer', () => {
           <NavDrawer.Body>{bodyItems}</NavDrawer.Body>
         </NavDrawer>,
       );
-      const panel = container.firstElementChild as HTMLElement;
+      // 0.15 (P10-DRW-I): the panel is the only child of its collapse element.
+      const panel = container.firstElementChild!.firstElementChild as HTMLElement;
       expect(panel.localName).toBe('div');
       expect(panel).not.toHaveAttribute('role');
       expect(panel).not.toHaveAttribute('aria-label');
@@ -886,7 +898,8 @@ describe('NavDrawer', () => {
       expect(findDanglingIdRefsInHtml(html)).toEqual([]);
       const parsed = document.createElement('div');
       parsed.innerHTML = html;
-      const panel = parsed.firstElementChild as HTMLElement;
+      // 0.15 (P10-DRW-I): the panel is the only child of its collapse element.
+      const panel = parsed.firstElementChild!.firstElementChild as HTMLElement;
       expect(panel).toHaveAttribute('data-type', 'inline');
       const settings = Array.from(parsed.querySelectorAll('button')).find(
         (element) => element.textContent === 'Settings',

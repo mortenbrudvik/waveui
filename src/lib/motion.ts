@@ -29,6 +29,20 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   large and the ultra-slow one (500 ms) when full.
  * - `drawerBackdropMotion`, the overlay drawer's backdrop per size: opacity only, with the linear
  *   curve and its size's duration both ways, so it ends with the panel.
+ * - `inlineDrawerStructure`, the element around an inline drawer's panel, per edge (not motion: it
+ *   is on the element whatever its motion slot holds). While the drawer is open the element
+ *   renders no box of its own, so the panel lays out in the page as it did before the element
+ *   existed; while it enters or exits, the element is a clipping grid of one track on the panel's
+ *   axis (columns at a side, rows at the bottom) whose minimum is zero, so the track can get
+ *   smaller than the panel, padding and borders included, and it keeps its size in a flex row. The
+ *   panel sits against the inner edge of that track (the end at the start edge, the start at the
+ *   end edge, the physical right and left at the left and right edges, the top at the bottom
+ *   edge), so it reads as sliding out to its own edge.
+ * - `inlineDrawerMotion`, the motion of that element per axis: its track and its opacity. It
+ *   enters from an empty, transparent track with the mid decelerating curve and exits back to one
+ *   with the min accelerating curve, so the space the panel takes in the layout opens and closes
+ *   while the panel keeps its size. It holds no duration: the element adds its size's from
+ *   `drawerDurations`.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -80,6 +94,33 @@ export const drawerBackdropMotion: Readonly<Record<SurfaceSize, string>> = {
   large:
     'transition-opacity duration-wave-slower ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
   full: 'transition-opacity duration-wave-ultra-slow ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+};
+
+/**
+ * The structure of the element around an inline drawer's panel, per edge: no box while open, a
+ * clipping one-track grid on the panel's axis while it enters or exits, the panel against its
+ * inner edge.
+ */
+export const inlineDrawerStructure: Readonly<Record<DrawerEdge, string>> = {
+  start:
+    'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-end overflow-hidden data-[presence=entered]:contents',
+  end: 'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-start overflow-hidden data-[presence=entered]:contents',
+  left: 'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:right] overflow-hidden data-[presence=entered]:contents', // wave-allow-physical: the consumer asked for the physical left edge
+  right:
+    'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:left] overflow-hidden data-[presence=entered]:contents', // wave-allow-physical: the consumer asked for the physical right edge
+  bottom:
+    'grid shrink-0 grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents',
+};
+
+/**
+ * The inline drawer's default motion per axis, on the element around its panel: the track opens
+ * from zero and closes back with a fade, timed by `drawerDurations` (composed at run time).
+ */
+export const inlineDrawerMotion: Readonly<Record<'width' | 'height', string>> = {
+  width:
+    'transition-[grid-template-columns,opacity] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:grid-cols-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-cols-[minmax(0,0fr)] data-[presence=exiting]:opacity-0',
+  height:
+    'transition-[grid-template-rows,opacity] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:opacity-0',
 };
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */

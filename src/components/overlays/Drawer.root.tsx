@@ -122,8 +122,9 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * viewport's width — or its height at the bottom (the same values; `full` the viewport's height).
    * It never exceeds the viewport. An inline panel takes the same sizes, where `full` is its
    * container's width (height), and never grows past its container. A width class in `className`
-   * (a height class for `bottom`) replaces it. It also times an overlay's motion: 250 ms small,
-   * 300 ms medium, 400 ms large, 500 ms full (see `motion`). Rendered as `data-size`. Fluent's
+   * (a height class for `bottom`) replaces it. It also times the motion, an overlay's slide and an
+   * inline drawer's collapse alike: 250 ms small, 300 ms medium, 400 ms large, 500 ms full (an
+   * inline drawer at `full` has no motion; see `motion`). Rendered as `data-size`. Fluent's
    * `size`.
    * @default 'small'
    */
@@ -157,18 +158,28 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    */
   backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
   /**
-   * Overlay drawers: the panel's motion. By default the panel slides in from beyond its edge and
-   * fades in with a decelerating curve, and slides back out and fades out with an accelerating
-   * curve, over a duration that follows `size` both ways: 250 ms small, 300 ms medium, 400 ms
-   * large, 500 ms full. The `start` and `end` edges follow the text direction, `left` and `right`
-   * do not mirror, and a `bottom` panel rises from below. Under reduced motion it appears and
-   * disappears at once. `null` turns the motion off (the panel still renders its `data-presence`
-   * phases, which then end at once); a class string or `{ className }` replaces the default
-   * classes with yours (see `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which
-   * otherwise turns the default off. A `className` that holds `data-[presence=…]` classes while
-   * `motion` is unset keeps 0.14's behaviour: no default motion, your classes animate the panel.
-   * Fluent's `OverlayDrawer` `surfaceMotion`.
-   * @default the slide and fade above
+   * The drawer's motion. By default an overlay panel slides in from beyond its edge and fades in
+   * with a decelerating curve, and slides back out and fades out with an accelerating curve; the
+   * `start` and `end` edges follow the text direction, `left` and `right` do not mirror, and a
+   * `bottom` panel rises from below. An inline drawer by default opens the space it takes in your
+   * layout from nothing (its width at a side, its height at the bottom) while its panel fades in,
+   * held at its size against its inner edge, so it reads as sliding out from that edge, with a
+   * decelerating curve; closing runs the same backwards with an accelerating curve. Both take a
+   * duration that follows `size` both ways: 250 ms small, 300 ms medium, 400 ms large, 500 ms
+   * full. An inline drawer at `full` has no motion, as its size is its container's (a value here
+   * does not apply to it either), and an inline drawer whose width (height at the bottom) in
+   * `className` is a percentage resizes oddly during the motion, correctly once open: give it a
+   * length, or pass `null`. Under reduced motion the drawer appears and disappears at once.
+   * `null` turns the motion off (the drawer still renders its `data-presence` phases, which then
+   * end at once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. They go on the overlay panel, or on the element around an inline drawer's
+   * `<aside>` (`wave-drawer__collapse`), whose phases the drawer waits for. A `className` that
+   * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
+   * motion, your classes animate the panel, and the drawer waits for the panel's motion (an
+   * inline one's `<aside>`, not the element around it). Fluent's `OverlayDrawer` and
+   * `InlineDrawer` `surfaceMotion`.
+   * @default the slide (overlay) or the collapse (inline) above
    */
   motion?: MotionSlot | null;
   /**
@@ -630,6 +641,7 @@ export const DrawerRoot = ({
       finalFocusRef={finalFocusRef}
       rootClassName={drawerClassNames.root}
       backdropClassName={drawerClassNames.backdrop}
+      collapseClassName={drawerClassNames.collapse}
       backdrop={backdrop}
       motion={motion}
       backdropMotion={backdropMotion}

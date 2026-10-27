@@ -6,9 +6,15 @@ import { Nav } from '../Nav';
 import { NavDrawer, type NavDrawerProps } from '../NavDrawer';
 import { Hamburger } from '../Hamburger';
 import type { DrawerPosition, DrawerSize } from '../../overlays/Drawer';
-import { navDrawerClassNames } from '../../../lib/classNames';
+import { drawerClassNames, navDrawerClassNames } from '../../../lib/classNames';
 import { hasOpenModal } from '../../../lib/layers';
-import { drawerBackdropMotion, drawerDurations, drawerMotion } from '../../../lib/motion';
+import {
+  drawerBackdropMotion,
+  drawerDurations,
+  drawerMotion,
+  inlineDrawerMotion,
+  inlineDrawerStructure,
+} from '../../../lib/motion';
 import type { MotionSlot } from '../../../lib/types';
 import {
   mockAnimations,
@@ -21,8 +27,9 @@ import {
  * P10-DRW-O (spec §4.2, §3, D7, D9, D19): an overlay NavDrawer moves as an overlay Drawer does, on
  * the same panel shell: the panel slides from its edge with its size's duration (`motion`), the
  * backdrop fades (`backdropMotion`), and the panel exits `inert` with its layer and focus released
- * at once. jsdom loads no CSS, so the phases wait only where `mockAnimations` gives the panel a
- * running animation.
+ * at once. An inline NavDrawer collapses as an inline Drawer does (P10-DRW-I, §4.3): its panel sits
+ * in a collapse wrapper that carries Drawer's and NavDrawer's collapse classes. jsdom loads no
+ * CSS, so the phases wait only where `mockAnimations` gives an element a running animation.
  */
 
 const panel = () => document.querySelector<HTMLElement>('.' + navDrawerClassNames.root);
@@ -311,6 +318,113 @@ describe('NavDrawer overlay presence (D7, D9)', () => {
       expect(element).toHaveAttribute('data-presence', 'exited');
       expect(element).toHaveAttribute('hidden');
       expect(element).toHaveAttribute('inert');
+    }
+  });
+});
+
+describe('inline NavDrawer collapse (§4.3, D13)', () => {
+  const collapse = () => document.querySelector<HTMLElement>('.' + navDrawerClassNames.collapse);
+  /** The presence element of an inline NavDrawer: its collapse wrapper. */
+  const isCollapse = (el: Element) => el.classList.contains(navDrawerClassNames.collapse);
+  /** The default wrapper motion: the default position (`start`) with the default size's duration. */
+  const WRAPPER_RECIPE = `${inlineDrawerMotion.width} ${drawerDurations.small}`;
+  const inline = (props: Partial<NavDrawerProps> = {}) => openDrawer({ type: 'inline', ...props });
+
+  it('wraps the panel in an element with Drawer’s and NavDrawer’s collapse classes and the default collapse', () => {
+    render(inline());
+    const wrapper = collapse()!;
+    expect(Array.from(wrapper.classList).slice(0, 2)).toEqual([
+      drawerClassNames.collapse,
+      navDrawerClassNames.collapse,
+    ]);
+    expect(wrapper).toHaveClass(
+      ...motionClasses(inlineDrawerStructure.start),
+      ...motionClasses(WRAPPER_RECIPE),
+    );
+    expect(Array.from(wrapper.children)).toEqual([panel()]);
+    expect(panel()).toHaveAttribute('data-type', 'inline');
+    expect(panel()).toContainElement(screen.getByRole('navigation', { name: 'Navigation' }));
+    expectNoWordOf(panel(), WRAPPER_RECIPE);
+    for (const element of [wrapper, panel()]) {
+      expect(element).toHaveAttribute('data-presence', 'entered');
+    }
+  });
+
+  it.each(POSITIONS)('at %s: the position’s structure and its axis’s collapse', (position) => {
+    render(inline({ position, size: 'medium' }));
+    expect(collapse()).toHaveClass(
+      ...motionClasses(inlineDrawerStructure[position]),
+      ...motionClasses(inlineDrawerMotion[position === 'bottom' ? 'height' : 'width']),
+      drawerDurations.medium,
+    );
+  });
+
+  it('size="full": the structure only', () => {
+    render(inline({ size: 'full' }));
+    expect(collapse()).toHaveClass(...motionClasses(inlineDrawerStructure.start));
+    expectNoWordOf(collapse(), `${inlineDrawerMotion.width} ${drawerDurations.full}`);
+  });
+
+  it.each([
+    ['null', null],
+    ['a replacement', 'my-motion'],
+  ] as const)('motion %s goes on the wrapper', (_, slot) => {
+    render(inline({ motion: slot }));
+    expectNoWordOf(collapse(), WRAPPER_RECIPE);
+    if (slot !== null) expect(collapse()).toHaveClass(slot);
+    expect(panel()).not.toHaveClass('my-motion');
+    expect(collapse()).toHaveAttribute('data-presence', 'entered');
+  });
+
+  it('a className with presence variants keeps 0.14’s motion on the panel (D19)', async () => {
+    const legacy = ['w-65', 'data-[presence=exiting]:opacity-0'];
+    const motion = mockAnimations({
+      animated: (el) => el.classList.contains(navDrawerClassNames.root),
+    });
+    const user = userEvent.setup();
+    render(<Page drawerProps={{ type: 'inline', className: legacy.join(' ') }} />);
+    await user.click(button('Open navigation'));
+    expectNoWordOf(collapse(), WRAPPER_RECIPE);
+    expect(panel()).toHaveClass(...legacy);
+    await finish(motion);
+    const element = panel()!;
+    await user.click(button('Open navigation'));
+    expect(panel()).toBe(element);
+    expect(element).toHaveAttribute('data-presence', 'exiting');
+    expect(element).toHaveAttribute('inert');
+    await finish(motion);
+    expect(panel()).toBeNull();
+    expect(collapse()).toBeNull();
+  });
+
+  it('exits on close: the wrapper and the panel stay, inert, then unmount', async () => {
+    const motion = mockAnimations({ animated: isCollapse });
+    const user = userEvent.setup();
+    render(<Page drawerProps={{ type: 'inline' }} />);
+    await user.click(button('Open navigation'));
+    expect(collapse()).toHaveAttribute('data-presence', 'entering');
+    await finish(motion);
+    const wrapper = collapse()!;
+    const element = panel()!;
+
+    await user.click(button('Open navigation'));
+    for (const node of [wrapper, element]) {
+      expect(node).toHaveAttribute('data-presence', 'exiting');
+      expect(node).toHaveAttribute('inert');
+    }
+    expect(hasOpenModal()).toBe(false);
+    expect(button('Open navigation')).toHaveFocus();
+    await finish(motion);
+    expect(collapse()).toBeNull();
+    expect(panel()).toBeNull();
+  });
+
+  it('kept mounted and closed: the wrapper and the panel are both hidden and inert', () => {
+    render(<Page drawerProps={{ type: 'inline', unmountOnClose: false }} />);
+    for (const element of [collapse(), panel()]) {
+      expect(element).toHaveAttribute('hidden');
+      expect(element).toHaveAttribute('inert');
+      expect(element).toHaveAttribute('data-presence', 'exited');
     }
   });
 });

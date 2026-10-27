@@ -730,11 +730,12 @@ describe('Drawer type="inline"', () => {
     ] as const)(
       'stays mounted and inert while its exit motion runs, focus already returned, then %s it',
       async (_, unmountOnClose) => {
-        const motion = mockAnimations();
+        // 0.15 (P10-DRW-I): the presence element is the collapse element around the <aside>.
+        const motion = mockAnimations({
+          animated: (el) => el.classList.contains(drawerClassNames.collapse),
+        });
         const user = userEvent.setup();
-        render(
-          <Page drawerProps={{ unmountOnClose, 'data-test-motion': '' } as Partial<DrawerProps>} />,
-        );
+        render(<Page drawerProps={{ unmountOnClose }} />);
         await user.click(button('Show details'));
         await act(async () => {
           await motion.finishAll();

@@ -116,9 +116,10 @@ export interface NavDrawerProps
    * The panel's width at a side (its height at the bottom), on Drawer's scale: `small` 320px,
    * `medium` 592px, `large` 940px, `full` the viewport (inline: the container). A width class in
    * `className` replaces it (Fluent's navigation pane is 260px wide: the width class of 65
-   * spacing steps). It also times an overlay's motion: 250 ms small, 300 ms medium, 400 ms large,
-   * 500 ms full (see `motion`), so a drawer without `size` takes 250 ms whatever width a class
-   * gives it. Rendered as `data-size`. Drawer's default too.
+   * spacing steps). It also times the motion, an overlay's slide and an inline drawer's collapse
+   * alike: 250 ms small, 300 ms medium, 400 ms large, 500 ms full (an inline drawer at `full` has
+   * no motion; see `motion`), so a drawer without `size` takes 250 ms whatever width a class gives
+   * it. Rendered as `data-size`. Drawer's default too.
    * @default 'small'
    */
   size?: DrawerSize;
@@ -163,18 +164,28 @@ export interface NavDrawerProps
    */
   backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
   /**
-   * Overlay drawers: the panel's motion, as Drawer's. By default the panel slides in from beyond
-   * its edge and fades in with a decelerating curve, and slides back out and fades out with an
-   * accelerating curve, over a duration that follows `size` both ways: 250 ms small (also without
-   * `size`), 300 ms medium, 400 ms large, 500 ms full. The `start` and `end` edges follow the text
-   * direction, `left` and `right` do not mirror, and a `bottom` panel rises from below. Under
-   * reduced motion it appears and disappears at once. `null` turns the motion off (the panel still
-   * renders its `data-presence` phases, which then end at once); a class string or
-   * `{ className }` replaces the default classes with yours (see `MotionSlot`), also under a
-   * `WaveProvider` with `motion="none"`, which otherwise turns the default off. A `className` that
-   * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
-   * motion, your classes animate the panel. Fluent's `OverlayDrawer` `surfaceMotion`.
-   * @default the slide and fade above
+   * The drawer's motion, as Drawer's. By default an overlay panel slides in from beyond its edge
+   * and fades in with a decelerating curve, and slides back out and fades out with an accelerating
+   * curve; the `start` and `end` edges follow the text direction, `left` and `right` do not
+   * mirror, and a `bottom` panel rises from below. An inline drawer by default opens the space it
+   * takes in your layout from nothing (its width at a side, its height at the bottom) while its
+   * panel fades in, held at its size against its inner edge, so it reads as sliding out from that
+   * edge, with a decelerating curve; closing runs the same backwards with an accelerating curve.
+   * Both take a duration that follows `size` both ways: 250 ms small (also without `size`), 300 ms
+   * medium, 400 ms large, 500 ms full. An inline drawer at `full` has no motion, as its size is
+   * its container's (a value here does not apply to it either), and an inline drawer whose width
+   * (height at the bottom) in `className` is a percentage resizes oddly during the motion,
+   * correctly once open: give it a length, or pass `null`. Under reduced motion the drawer appears
+   * and disappears at once. `null` turns the motion off (the drawer still renders its
+   * `data-presence` phases, which then end at once); a class string or `{ className }` replaces
+   * the default classes with yours (see `MotionSlot`), also under a `WaveProvider` with
+   * `motion="none"`, which otherwise turns the default off. They go on the overlay panel, or on
+   * the element around an inline drawer's panel (`wave-nav-drawer__collapse`), whose phases the
+   * drawer waits for. A `className` that holds `data-[presence=…]` classes while `motion` is unset
+   * keeps 0.14's behaviour: no default motion, your classes animate the panel, and the drawer
+   * waits for the panel's motion (inline too, not the element around it). Fluent's
+   * `OverlayDrawer` and `InlineDrawer` `surfaceMotion`.
+   * @default the slide (overlay) or the collapse (inline) above
    */
   motion?: MotionSlot | null;
   /**
@@ -385,6 +396,7 @@ const NavDrawerRoot = ({
       finalFocusRef={finalFocusRef}
       rootClassName={cn(drawerClassNames.root, navDrawerClassNames.root)}
       backdropClassName={cn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
+      collapseClassName={cn(drawerClassNames.collapse, navDrawerClassNames.collapse)}
       backdrop={backdrop}
       motion={motion}
       backdropMotion={backdropMotion}
@@ -579,10 +591,13 @@ NavDrawerFooter.displayName = 'NavDrawerFooter';
  * - **Motion:** an overlay slides in from its edge and fades in, and slides back and fades out,
  *   over 250 ms (`small`, the default), 300 ms (`medium`), 400 ms (`large`) or 500 ms (`full`),
  *   with its backdrop fading along; one open by default animates in when it mounts in the browser.
- *   Under reduced motion both appear and disappear at once. `motion` and `backdropMotion` turn
- *   each off (`null`) or replace it, and `WaveProvider motion="none"` turns both defaults off.
- *   While it exits the panel stays on screen, `inert`, and focus, the trap and the scroll lock
- *   are already released. An inline drawer has no default motion.
+ *   An inline drawer opens and closes the space it takes in the layout over the same durations,
+ *   in an element of its own around the panel (`wave-nav-drawer__collapse`, which has no box
+ *   while open); one open by default does not animate in, and one at `full` has no motion. Under
+ *   reduced motion every drawer appears and disappears at once. `motion` and `backdropMotion`
+ *   turn each off (`null`) or replace it, and `WaveProvider motion="none"` turns both defaults
+ *   off. While it exits the panel stays on screen, `inert`, and focus, the trap and the scroll
+ *   lock are already released.
  * - **Focus:** pass your page's Hamburger as `finalFocusRef`, so focus returns to it when a
  *   Hamburger inside the drawer closes it. An overlay moves focus in when it opens; an inline
  *   drawer does not.

@@ -91,6 +91,7 @@ function Shell({
       trigger={trigger}
       rootClassName={drawerClassNames.root}
       backdropClassName={drawerClassNames.backdrop}
+      collapseClassName={drawerClassNames.collapse}
       id={PANEL_ID}
       aria-label="Test panel"
       {...panelProps}
