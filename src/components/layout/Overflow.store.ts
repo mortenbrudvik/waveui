@@ -216,6 +216,19 @@ export class OverflowStore {
     return this.itemIds.filter((id) => !hidden.has(id));
   }
 
+  /**
+   * The item elements in the row now, in DOM order, with their ids (where focus goes when the
+   * overflow button that held it goes away).
+   */
+  getItemElements(): Array<{ element: HTMLElement; id: string }> {
+    const container = this.container;
+    if (!container) return [];
+    return Array.from(this.items)
+      .filter(([el]) => el.isConnected && container.contains(el))
+      .sort(([a], [b]) => documentOrder(a, b))
+      .map(([element, { id }]) => ({ element, id }));
+  }
+
   /** Applies the root's props (layout effect); measures again when one changed. */
   setConfig(config: StoreConfig): void {
     const previous = this.config;

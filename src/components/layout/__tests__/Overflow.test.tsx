@@ -11,7 +11,7 @@ import {
   afterEach,
   onTestFinished,
 } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   Overflow,
@@ -2695,5 +2695,221 @@ describe('Overflow - button position (P9-02)', () => {
     expectTypeOf<OverflowProps['buttonPosition']>().toEqualTypeOf<
       'end' | 'before-hidden' | undefined
     >();
+  });
+});
+
+describe('Overflow - the divider stretches across the row (browser pass M3)', () => {
+  function Divided({ orientation }: { orientation?: Orientation }) {
+    return (
+      <Overflow data-testid="overflow" orientation={orientation}>
+        <OverflowItem itemId="a" groupId="one">
+          A
+        </OverflowItem>
+        <OverflowDivider groupId="two" data-testid="divider">
+          <span className="self-stretch" />
+        </OverflowDivider>
+        <OverflowItem itemId="b" groupId="two">
+          B
+        </OverflowItem>
+      </Overflow>
+    );
+  }
+
+  it('is a flex item of the row that stretches to its height and centres an explicitly sized child', () => {
+    layoutWith({ overflow: 200 });
+    render(<Divided />);
+    const divider = screen.getByTestId('divider');
+    expect(divider).toHaveClass(
+      overflowDividerClassNames.root,
+      'flex',
+      'shrink-0',
+      'items-center',
+      'self-stretch',
+    );
+    expect(divider).not.toHaveClass('flex-col');
+    expect(divider).not.toHaveAttribute('data-overflow-hidden');
+    expect(divider.style.display).toBe('');
+  });
+
+  it('in a vertical column it stretches to the width and keeps an explicitly sized child at the start', () => {
+    layoutWith({ overflow: 200 });
+    render(<Divided orientation="vertical" />);
+    expect(screen.getByTestId('divider')).toHaveClass(
+      overflowDividerClassNames.root,
+      'flex',
+      'flex-col',
+      'shrink-0',
+      'items-start',
+      'self-stretch',
+    );
+  });
+
+  it('stays hidden with its group over its flex display', () => {
+    // a (20), the divider (10) and b (20) need 50 of 30: b and its group's divider go.
+    layoutWith({ overflow: 30, 'item-a': 20, 'item-b': 20, divider: 10, button: 20 });
+    render(
+      <Overflow data-testid="overflow" overflowButton={moreButton}>
+        <OverflowItem itemId="a" groupId="one" data-testid="item-a">
+          A
+        </OverflowItem>
+        <OverflowDivider groupId="two" data-testid="divider" className="flex">
+          |
+        </OverflowDivider>
+        <OverflowItem itemId="b" groupId="two" data-testid="item-b">
+          B
+        </OverflowItem>
+      </Overflow>,
+    );
+    const divider = screen.getByTestId('divider');
+    expect(hiddenItems()).toEqual(['b']);
+    expect(divider).toHaveClass('flex', 'self-stretch');
+    expect(divider).toHaveAttribute('data-overflow-hidden');
+    expect(divider).toHaveAttribute('aria-hidden', 'true');
+    expect(divider).toHaveAttribute('inert');
+    expect(divider.style.display).toBe('none');
+  });
+
+  it('gives a self-stretching Toolbar.Divider a flex parent that spans the row', () => {
+    layoutWith({ overflow: 200 });
+    render(
+      <Toolbar aria-label="Formatting">
+        <Overflow data-testid="overflow">
+          <OverflowItem asChild itemId="a" groupId="one">
+            <Toolbar.Button>A</Toolbar.Button>
+          </OverflowItem>
+          <OverflowDivider groupId="two" data-testid="divider">
+            <Toolbar.Divider />
+          </OverflowDivider>
+          <OverflowItem asChild itemId="b" groupId="two">
+            <Toolbar.Button>B</Toolbar.Button>
+          </OverflowItem>
+        </Overflow>
+      </Toolbar>,
+    );
+    const divider = screen.getByTestId('divider');
+    expect(divider).toHaveClass('flex', 'items-center', 'self-stretch');
+    expect(within(divider).getByRole('separator')).toHaveClass('self-stretch');
+  });
+});
+
+describe('Overflow - focus when the overflow button goes away (browser pass M1)', () => {
+  // Four 30px items in 100 with the 20px button: two of them hide.
+  const FOUR = {
+    overflow: 100,
+    'item-a': 30,
+    'item-b': 30,
+    'item-c': 30,
+    'item-d': 30,
+    button: 20,
+  };
+
+  /** Each item holds a button named after it, unless `plain` lists it (plain text). */
+  function Row({ plain = [], ...props }: Partial<OverflowProps> & { plain?: string[] }) {
+    return (
+      <Overflow data-testid="overflow" overflowButton={moreButton} {...props}>
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <OverflowItem key={id} itemId={id} data-testid={`item-${id}`}>
+            {plain.includes(id) ? (
+              id.toUpperCase()
+            ) : (
+              <button type="button">{id.toUpperCase()}</button>
+            )}
+          </OverflowItem>
+        ))}
+      </Overflow>
+    );
+  }
+
+  /** Focuses the "+N" button, then gives the row room for every item. */
+  async function focusButtonAndWiden(stub: LayoutStub, resize: ResizeObserverMock) {
+    const more = screen.getByRole('button', { name: /^\+\d$/ });
+    act(() => more.focus());
+    expect(more).toHaveFocus();
+    stub.widths.overflow = 200;
+    resize.trigger(screen.getByTestId('overflow'));
+    await act(async () => {});
+    expect(hiddenItems()).toEqual([]);
+    expect(screen.queryByRole('button', { name: /^\+\d$/ })).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+  }
+
+  it('moves focus to the first item shown again, not to the body', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row />);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByRole('button', { name: 'C' })).toHaveFocus();
+  });
+
+  it('with the button before the hidden items at the start, focus goes to the first of them', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row buttonPosition="before-hidden" overflowDirection="start" />);
+    expect(hiddenItems()).toEqual(['a', 'b']);
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByRole('button', { name: 'A' })).toHaveFocus();
+  });
+
+  it('focuses an item element that is focusable itself (asChild)', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(
+      <Overflow data-testid="overflow" overflowButton={moreButton}>
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <OverflowItem key={id} asChild itemId={id}>
+            <button type="button" data-testid={`item-${id}`}>
+              {id.toUpperCase()}
+            </button>
+          </OverflowItem>
+        ))}
+      </Overflow>,
+    );
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByTestId('item-c')).toHaveFocus();
+  });
+
+  it('skips an item shown again with nothing focusable for the next one', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row plain={['c']} />);
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByRole('button', { name: 'D' })).toHaveFocus();
+  });
+
+  it('falls back to the nearest item before them when none of them can take focus', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row plain={['c', 'd']} />);
+    await focusButtonAndWiden(stub, resize);
+    expect(screen.getByRole('button', { name: 'B' })).toHaveFocus();
+  });
+
+  it('keeps focus on the button while items stay hidden', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row />);
+    const more = screen.getByRole('button', { name: '+2' });
+    act(() => more.focus());
+    // 120 in 110: only d goes (90 + the 20px button fit).
+    stub.widths.overflow = 110;
+    resize.trigger(screen.getByTestId('overflow'));
+    await act(async () => {});
+    expect(hiddenItems()).toEqual(['d']);
+    expect(screen.getByRole('button', { name: '+1' })).toBe(more);
+    expect(more).toHaveFocus();
+  });
+
+  it('leaves focus where it is when the button did not have it', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    render(<Row />);
+    const a = screen.getByRole('button', { name: 'A' });
+    act(() => a.focus());
+    stub.widths.overflow = 200;
+    resize.trigger(screen.getByTestId('overflow'));
+    await act(async () => {});
+    expect(screen.queryByRole('button', { name: /^\+\d$/ })).toBeNull();
+    expect(a).toHaveFocus();
   });
 });

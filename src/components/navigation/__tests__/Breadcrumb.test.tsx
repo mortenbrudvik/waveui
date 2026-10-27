@@ -1776,6 +1776,54 @@ describe('Breadcrumb', () => {
         expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
       });
 
+      it('moves focus from the focused "More items" button to the first link shown again', async () => {
+        const layout = layoutWith(200);
+        render(<Trail overflow="auto" />);
+        expect(shownLabels()).toEqual(['Home', '…', 'Delta', 'Widget']);
+        const button = screen.getByRole('button', { name: 'More items' });
+        act(() => button.focus());
+        layout.resizeTo(300);
+        await act(async () => {});
+        expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Alpha' })).toHaveFocus();
+      });
+
+      it('moves focus to the first link shown again in "arrow" focus mode, which takes the Tab stop', async () => {
+        const layout = layoutWith(200);
+        render(<Trail overflow="auto" focusMode="arrow" />);
+        const button = screen.getByRole('button', { name: 'More items' });
+        act(() => button.focus());
+        layout.resizeTo(300);
+        await act(async () => {});
+        const alpha = screen.getByRole('link', { name: 'Alpha' });
+        expect(alpha).toHaveFocus();
+        expect(alpha).toHaveAttribute('tabindex', '0');
+      });
+
+      it('leaves focus on a link when the trail grows', async () => {
+        const layout = layoutWith(200);
+        render(<Trail overflow="auto" />);
+        const delta = screen.getByRole('link', { name: 'Delta' });
+        act(() => delta.focus());
+        layout.resizeTo(300);
+        await act(async () => {});
+        expect(screen.queryByRole('button', { name: 'More items' })).not.toBeInTheDocument();
+        expect(delta).toHaveFocus();
+      });
+
+      it('with the menu open, focus still goes to the first link shown again (the menu returns it)', async () => {
+        const user = userEvent.setup();
+        const layout = layoutWith(200);
+        render(<Trail overflow="auto" />);
+        await user.click(screen.getByRole('button', { name: 'More items' }));
+        await user.keyboard('{ArrowDown}');
+        expect(screen.getByRole('menuitem', { name: 'Beta' })).toHaveFocus();
+        layout.resizeTo(300);
+        await act(async () => {});
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Alpha' })).toHaveFocus();
+      });
+
       it('renders the trail as Overflow list items with both stable classes', () => {
         layoutWith(200);
         render(<Trail overflow="auto" size="large" />);

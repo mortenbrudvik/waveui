@@ -7,10 +7,12 @@ import {
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
+import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable } from '../../lib/focus';
 import { mergeProps } from '../../lib/mergeProps';
 import { isCloneableElement, unwrapFragment } from '../../lib/renderTrigger';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import type { Orientation } from '../../lib/types';
 import { NO_GROUPS, NO_IDS, OverflowStore, hasResizeObserver, sameIds } from './Overflow.store';
 import type {
@@ -408,6 +410,14 @@ const ROOT_ORIENTATION_CLASSES: Record<Orientation, string> = {
   vertical: 'flex-col items-start',
 };
 
+// The divider stretches across the row (to its height, or to a column's width) and lays its child
+// out on the row's cross axis: a child that stretches itself (Toolbar.Divider) spans the row, and
+// an explicitly sized child is centred in a row and kept at the start of a column.
+const DIVIDER_ORIENTATION_CLASSES: Record<Orientation, string> = {
+  horizontal: 'flex shrink-0 items-center self-stretch',
+  vertical: 'flex shrink-0 flex-col items-start self-stretch',
+};
+
 // The button sticks to the end of the axis and keeps room inside for its own focus indicator while
 // it covers an item. After the items it keeps 4px from the last one; between items it takes the
 // row's gap, as they do (its size never depends on where it stands).
@@ -438,6 +448,70 @@ const BUTTON_CLASSES = {
  * children start with a dot.
  */
 const BUTTON_KEY = 'wave-overflow-button';
+
+/** The element of an item that takes focus: the item itself, else a Tab stop or a focusable element in it. */
+function focusTargetIn(item: HTMLElement): HTMLElement | null {
+  if (isFocusable(item)) return item;
+  return (
+    getFirstTabbable(item) ??
+    Array.from(item.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).find(isFocusable) ??
+    null
+  );
+}
+
+/**
+ * Where focus goes when the overflow button held it and went away (C-DISABLED): the first item
+ * the button stood for (`wereHidden`, in DOM order) that can take focus; else the nearest item
+ * before them, then the items after them. Without such items, the nearest item to the end.
+ */
+function overflowFocusFallback(
+  items: ReadonlyArray<{ element: HTMLElement; id: string }>,
+  wereHidden: readonly string[],
+): HTMLElement | null {
+  const hidden = new Set(wereHidden);
+  const first = items.findIndex(({ id }) => hidden.has(id));
+  const candidates =
+    first < 0
+      ? [...items].reverse()
+      : [
+          ...items.filter(({ id }) => hidden.has(id)),
+          ...items.slice(0, first).reverse(),
+          ...items.slice(first).filter(({ id }) => !hidden.has(id)),
+        ];
+  for (const { element } of candidates) {
+    const target = focusTargetIn(element);
+    if (target) return target;
+  }
+  return null;
+}
+
+interface OverflowButtonSlotProps extends React.HTMLAttributes<HTMLDivElement> {
+  store: OverflowStore;
+  /** The items the button stands for. */
+  hiddenIds: string[];
+  /** The store's ref callback for the wrapper. */
+  buttonRef: (node: HTMLDivElement | null) => void;
+}
+
+/**
+ * The overflow button's wrapper (internal). When every item fits again it unmounts; focus that it
+ * held then moves to the first item it stood for (the items hidden at its last commit), so it
+ * never falls to the body (`usePreserveFocus`). Focus inside the button's menu is not inside the
+ * wrapper, so an open menu keeps its own focus return.
+ */
+function OverflowButtonSlot({ store, hiddenIds, buttonRef, ...rest }: OverflowButtonSlotProps) {
+  const elementRef = React.useRef<HTMLDivElement>(null);
+  const ref = useMergedRefs<HTMLDivElement>(buttonRef, elementRef);
+  const wereHiddenRef = React.useRef<readonly string[]>(NO_IDS);
+  React.useLayoutEffect(() => {
+    wereHiddenRef.current = hiddenIds;
+  });
+  usePreserveFocus(elementRef, () =>
+    overflowFocusFallback(store.getItemElements(), wereHiddenRef.current),
+  );
+  return <div ref={ref} {...rest} />;
+}
+OverflowButtonSlot.displayName = 'OverflowButtonSlot';
 
 /**
  * The children of a `before-hidden` row with the button just before the item `firstHiddenId`
@@ -575,9 +649,11 @@ const OverflowRoot = ({
       // sticky element at the scroll container's padding, so -end-1 lets it reach the clipping
       // edge, and while pinned it keeps 4px inside for its own focus indicator. (WebKit stops a
       // sticky element short of the inline end of a right-to-left row; it stays in the row.)
-      <div
+      <OverflowButtonSlot
         key={BUTTON_KEY}
-        ref={setButton}
+        store={store}
+        hiddenIds={hiddenIds}
+        buttonRef={setButton}
         // A list row (role="list", a Breadcrumb trail) holds only list items.
         role={rest.role === 'list' ? 'listitem' : undefined}
         data-overflow-button=""
@@ -588,7 +664,7 @@ const OverflowRoot = ({
         )}
       >
         {overflowButton(hiddenCount, buttonIds)}
-      </div>
+      </OverflowButtonSlot>
     ) : null;
   // `before-hidden`: the button stands just before the first hidden item (hiddenIds are in DOM
   // order).
@@ -741,9 +817,13 @@ OverflowItem.displayName = 'OverflowItem';
 
 /**
  * A divider between item groups of an {@link Overflow}, drawn by its children (for example a
- * vertical `Divider`; it renders a plain `<div>`). It is measured like an item and hidden, with
- * `data-overflow-hidden`, an inline `display: none`, `aria-hidden` and `inert`, while the group
- * `groupId` is `'hidden'` (none of its items is shown). Must be rendered inside `Overflow`.
+ * vertical `Divider` or a `Toolbar.Divider`). It renders a `<div>` that stretches across the row
+ * (to the row's height, or to a vertical column's width) and lays out its child on that axis, so
+ * a child that stretches itself, such as `Toolbar.Divider`, spans the row; an explicitly sized
+ * child is centred in a row and kept at the start of a column. It is measured like an item and
+ * hidden, with `data-overflow-hidden`, an inline `display: none`, `aria-hidden` and `inert`, while
+ * the group `groupId` is `'hidden'` (none of its items is shown). Must be rendered inside
+ * `Overflow`.
  */
 export const OverflowDivider = ({
   groupId,
@@ -755,7 +835,7 @@ export const OverflowDivider = ({
   inert,
   ...rest
 }: OverflowDividerProps) => {
-  const { store, groupVisibility } = useOverflowContext('OverflowDivider');
+  const { store, groupVisibility, orientation } = useOverflowContext('OverflowDivider');
   const isHidden = groupVisibility[groupId] === 'hidden';
   const registerRef = React.useCallback(
     (node: HTMLDivElement | null) => (node ? store.registerDivider(node, groupId) : undefined),
@@ -766,7 +846,11 @@ export const OverflowDivider = ({
   return (
     <div
       ref={mergedRef}
-      className={cn(overflowDividerClassNames.root, 'shrink-0', className)}
+      className={cn(
+        overflowDividerClassNames.root,
+        DIVIDER_ORIENTATION_CLASSES[orientation],
+        className,
+      )}
       {...rest}
       style={isHidden ? { ...style, display: 'none' } : style}
       aria-hidden={isHidden ? true : ariaHidden}
