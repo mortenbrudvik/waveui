@@ -37,11 +37,14 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   smaller than the panel, padding and borders included, and it keeps its size in a flex row. The
  *   panel sits against the inner edge of that track (the end at the start edge, the start at the
  *   end edge, the physical right and left at the left and right edges, the top at the bottom
- *   edge), so it reads as sliding out to its own edge. While the element is not entered it also
- *   lifts the panel's own maximum on that axis (its width at a side, its height at the bottom):
- *   that maximum is a percentage, which inside the grid would follow the track and squeeze the
- *   panel's content as the track narrows, where the track should only clip the panel. Entered,
- *   the maximum applies again against the page, as before.
+ *   edge), so it reads as sliding out to its own edge, and the track sits on that same side of the
+ *   element: while the collapse is partly open, the grid gives its track only that fraction of
+ *   the element, and a track left at the element's start would leave an empty strip between the
+ *   visible panel and the page wherever the panel aligns to the end. While the element is not
+ *   entered it also lifts the panel's own maximum on that axis (its width at a side, its height at
+ *   the bottom): that maximum is a percentage, which inside the grid would follow the track and
+ *   squeeze the panel's content as the track narrows, where the track should only clip the panel.
+ *   Entered, the maximum applies again against the page, as before.
  * - `inlineDrawerMotion`, the motion of that element per axis: its track and its opacity. It
  *   enters from an empty, transparent track with the mid decelerating curve and exits back to one
  *   with the min accelerating curve, so the space the panel takes in the layout opens and closes
@@ -102,16 +105,17 @@ export const drawerBackdropMotion: Readonly<Record<SurfaceSize, string>> = {
 
 /**
  * The structure of the element around an inline drawer's panel, per edge: no box while open, a
- * clipping one-track grid on the panel's axis while it enters or exits, the panel against its
- * inner edge and without its percentage maximum on that axis (so it is clipped, not squeezed).
+ * clipping one-track grid on the panel's axis while it enters or exits, the panel and the track
+ * against its inner edge (so no empty strip opens next to the page) and the panel without its
+ * percentage maximum on that axis (so it is clipped, not squeezed).
  */
 export const inlineDrawerStructure: Readonly<Record<DrawerEdge, string>> = {
   start:
-    'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-end overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
+    'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-end justify-end overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
   end: 'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
-  left: 'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:right] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical left edge
+  left: 'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:right] [justify-content:right] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical left edge
   right:
-    'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:left] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical right edge
+    'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:left] [justify-content:left] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical right edge
   bottom:
     'grid shrink-0 grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-h-none',
 };

@@ -20,8 +20,9 @@
  * 7. every export is a string, a record of strings or a function (the precondition of the dist
  *    probe of `scripts/verify-dist.mjs`, which reads the strings one level into records).
  *
- * And one check of a single recipe: the structure of an inline drawer lifts its panel's size cap
- * on the panel's axis while the element is not entered (D13), at every edge.
+ * And two checks of a single recipe, the structure of an inline drawer (D13), at every edge: it
+ * lifts its panel's size cap on the panel's axis while the element is not entered, and it lays
+ * its track on the side where it aligns the panel.
  *
  * The file runs in the node environment: the compile check loads `@tailwindcss/node`.
  */
@@ -380,6 +381,68 @@ function panelCapFindings(
       )
       .map(({ variants, utility }) => `${edge}: ${[...variants, utility].join(':')}`);
     return (gated ? [] : [`${edge}: no ${NOT_ENTERED_CHILD}:${lift}`]).concat(misplaced);
+  });
+}
+
+/**
+ * The alignment utilities of a grid, per axis: how the items sit in their track
+ * (`justify-items`, `align-items`) and how the track sits in the grid (`justify-content`,
+ * `align-content`), each as Tailwind's named utility or an arbitrary property.
+ */
+const GRID_ALIGNMENT = {
+  inline: {
+    track: /^grid-cols-/,
+    items: [/^justify-items-(.+)$/, /^\[justify-items:(.+)\]$/],
+    content: [
+      /^justify-(start|end|center|between|around|evenly|stretch|normal)$/,
+      /^\[justify-content:(.+)\]$/,
+    ],
+  },
+  block: {
+    track: /^grid-rows-/,
+    items: [/^items-(.+)$/, /^\[align-items:(.+)\]$/],
+    content: [
+      /^content-(start|end|center|between|around|evenly|stretch|normal)$/,
+      /^\[align-content:(.+)\]$/,
+    ],
+  },
+} as const;
+
+/** The value of the first plain (variant-free) utility of `utilities` that matches `patterns`. */
+function alignmentValue(
+  utilities: readonly string[],
+  patterns: readonly RegExp[],
+): string | undefined {
+  for (const utility of utilities) {
+    for (const pattern of patterns) {
+      const match = pattern.exec(utility);
+      if (match) return match[1];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The inline drawer's track alignment: for each structure with a column (row) track, a finding
+ * when it does not align its items on that axis, or when its track sits elsewhere than its items
+ * (an absent track alignment is the initial one, the start). The element is as large as the
+ * collapse has opened, but a grid whose flex factors add up to less than 1 gives its track only
+ * that fraction of the element, so a track left at the start while the panel sits at the end of
+ * it leaves an empty strip between the visible panel and the page.
+ */
+function trackAlignmentFindings(structures: Readonly<Record<string, string>>): string[] {
+  return Object.entries(structures).flatMap(([edge, value]) => {
+    const utilities = words(value)
+      .map(parseWord)
+      .filter(({ variants }) => variants.length === 0)
+      .map(({ utility }) => utility);
+    return Object.values(GRID_ALIGNMENT).flatMap(({ track, items, content }) => {
+      if (!utilities.some((utility) => track.test(utility))) return [];
+      const item = alignmentValue(utilities, items);
+      if (item === undefined) return [`${edge}: no item alignment`];
+      const placed = alignmentValue(utilities, content) ?? 'start';
+      return placed === item ? [] : [`${edge}: items ${item}, track ${placed}`];
+    });
   });
 }
 
@@ -764,6 +827,45 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       const structures: Readonly<Record<string, string>> = motion.inlineDrawerStructure;
       expect(Object.keys(structures).sort()).toEqual(Object.keys(PANEL_CAP_LIFTS).sort());
       expect(panelCapFindings(structures, PANEL_CAP_LIFTS)).toEqual([]);
+    });
+  });
+
+  describe('the inline drawer structure lays its track where it aligns the panel (D13)', () => {
+    it('reports a track left at the start of items aligned elsewhere, and no item alignment', () => {
+      expect(
+        trackAlignmentFindings({
+          start: 'grid grid-cols-[minmax(0,1fr)] justify-items-end overflow-hidden',
+          left: 'grid grid-cols-[minmax(0,1fr)] [justify-items:right] overflow-hidden',
+          end: 'grid grid-cols-[minmax(0,1fr)] justify-items-start justify-end',
+          bottom: 'grid grid-rows-[minmax(0,1fr)] items-end',
+          none: 'grid grid-cols-[minmax(0,1fr)] overflow-hidden',
+          gated: 'grid grid-cols-[minmax(0,1fr)] justify-items-end data-[x]:justify-end',
+        }),
+      ).toEqual([
+        'start: items end, track start',
+        'left: items right, track start',
+        'end: items start, track end',
+        'bottom: items end, track start',
+        'none: no item alignment',
+        'gated: items end, track start',
+      ]);
+    });
+
+    it('accepts a track aligned with its items, the initial start included, and no track', () => {
+      expect(
+        trackAlignmentFindings({
+          start: 'grid grid-cols-[minmax(0,1fr)] justify-items-end justify-end',
+          end: 'grid grid-cols-[minmax(0,1fr)] justify-items-start',
+          left: 'grid grid-cols-[minmax(0,1fr)] [justify-items:right] [justify-content:right]',
+          right: 'grid grid-cols-[minmax(0,1fr)] [justify-items:left] [justify-content:left]',
+          bottom: 'grid grid-rows-[minmax(0,1fr)] items-start',
+          flex: 'flex items-end',
+        }),
+      ).toEqual([]);
+    });
+
+    it('holds for every edge of inlineDrawerStructure', () => {
+      expect(trackAlignmentFindings(motion.inlineDrawerStructure)).toEqual([]);
     });
   });
 });
