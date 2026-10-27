@@ -53,6 +53,7 @@ import {
   expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
+  installResizeObserverMock,
   mockRect,
   renderWithProviders,
   testCompoundExposure,
@@ -3540,6 +3541,198 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
       rerender(<CarouselTour footerLayout="vertical" footer={{ layout: 'centered' }} />);
       expect(footerOf()).toHaveAttribute('data-carousel-layout', 'centered');
       expect(order()).toEqual({ navFirst: false, navBetween: true });
+    });
+
+    describe('layout: wrapping and centring (browser pass H1, H2, L9)', () => {
+      const footerOf = () =>
+        document.querySelector<HTMLElement>(`.${teachingPopoverCarouselFooterClassNames.root}`)!;
+      const slotsOf = (footer: HTMLElement) => Array.from(footer.children) as HTMLElement[];
+      const nextFrame = () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const navAndCount = (
+        <>
+          <TeachingPopover.CarouselNav />
+          <TeachingPopover.CarouselPageCount />
+        </>
+      );
+
+      /**
+       * jsdom has no layout: gives the footer its width and the secondary slot, the indicator and
+       * the primary slot of a centered footer their widths, then lets the footer's resize
+       * observer measure (in the next animation frame).
+       */
+      async function layOut(
+        resize: ReturnType<typeof installResizeObserverMock>,
+        widths: { footer: number; secondary?: number; indicator: number; primary: number },
+      ) {
+        const footer = footerOf();
+        const [first, second, third] = slotsOf(footer);
+        const [secondary, indicatorSlot, primary] = third
+          ? [first, second, third]
+          : [null, first, second];
+        mockRect(footer, { width: widths.footer });
+        if (secondary) mockRect(secondary, { width: widths.secondary ?? 0 });
+        mockRect(indicatorSlot.firstElementChild!, { width: widths.indicator });
+        mockRect(primary, { width: widths.primary });
+        resize.trigger(footer);
+        await act(async () => {
+          await nextFrame();
+        });
+      }
+
+      it('offset: the footer wraps, the indicator keeps its content width and the buttons keep to the end', () => {
+        render(<CarouselTour indicator={navAndCount} />);
+        const footer = footerOf();
+        expect(footer).toHaveAttribute('data-carousel-layout', 'offset');
+        expect(footer).toHaveClass('flex', 'flex-wrap', 'items-center', 'justify-between', 'gap-2');
+        expect(footer).not.toHaveAttribute('data-stacked');
+        const [indicator, buttons] = slotsOf(footer);
+        expect(indicator).toContainElement(nav());
+        expect(indicator).toHaveClass('flex', 'flex-wrap', 'items-center', 'gap-2');
+        expect(indicator).not.toHaveClass('min-w-0');
+        expect(buttons).toContainElement(screen.getByRole('button', { name: 'Back' }));
+        expect(buttons).toContainElement(screen.getByRole('button', { name: 'Next' }));
+        expect(buttons).toHaveClass(
+          'ms-auto',
+          'flex',
+          'flex-wrap',
+          'items-center',
+          'justify-end',
+          'gap-2',
+        );
+      });
+
+      it('offset without children keeps the decorative dots element of the steps form', () => {
+        render(<CarouselTour indicator={null} />);
+        const [indicator] = slotsOf(footerOf());
+        expect(indicator).toHaveAttribute('aria-hidden', 'true');
+        expect(indicator.getAttribute('class')).toBe('flex items-center gap-1.5');
+      });
+
+      it('centered: three columns, the indicator in the middle one between the buttons', () => {
+        render(<CarouselTour footer={{ layout: 'centered' }} />);
+        const footer = footerOf();
+        expect(footer).toHaveClass('grid', 'grid-cols-[1fr_auto_1fr]', 'items-center', 'gap-2');
+        expect(footer).not.toHaveClass('flex');
+        expect(footer).not.toHaveAttribute('data-stacked');
+        const [secondary, indicator, primary] = slotsOf(footer);
+        expect(secondary).toContainElement(screen.getByRole('button', { name: 'Back' }));
+        expect(secondary).toHaveClass('flex', 'w-max', 'max-w-full', 'col-start-1');
+        expect(secondary).toHaveClass('justify-self-start');
+        expect(indicator).toContainElement(nav());
+        expect(indicator).toHaveClass('flex', 'justify-center', 'col-start-2');
+        expect(indicator.firstElementChild).toHaveClass('w-max', 'max-w-full');
+        expect(primary).toContainElement(screen.getByRole('button', { name: 'Next' }));
+        expect(primary).toHaveClass('flex', 'w-max', 'max-w-full', 'col-start-3');
+        expect(primary).toHaveClass('justify-self-end');
+      });
+
+      it('centered without a secondary button keeps the indicator in the middle column (L9)', () => {
+        render(<CarouselTour steps={[steps[0]]} footer={{ layout: 'centered' }} />);
+        const footer = footerOf();
+        expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+        const [indicator, primary] = slotsOf(footer);
+        expect(slotsOf(footer)).toHaveLength(2);
+        expect(indicator).toContainElement(nav());
+        expect(indicator).toHaveClass('col-start-2');
+        expect(primary).toContainElement(screen.getByRole('button', { name: 'Done' }));
+        expect(primary).toHaveClass('col-start-3', 'justify-self-end');
+      });
+
+      it('centered stacks the indicator above the buttons while the row does not fit, and goes back', async () => {
+        const resize = installResizeObserverMock();
+        onTestFinished(() => resize.restore());
+        render(<CarouselTour footer={{ layout: 'centered' }} />);
+        const footer = footerOf();
+        const [secondary, indicator, primary] = slotsOf(footer);
+        const back = screen.getByRole('button', { name: 'Back' });
+        act(() => back.focus());
+
+        // 2 x 96 + 72 = 264 fits in 278: one row.
+        await layOut(resize, { footer: 278, secondary: 96, indicator: 72, primary: 96 });
+        expect(footer).not.toHaveAttribute('data-stacked');
+        expect(footer).toHaveClass('grid');
+
+        // ... not in 250: the indicator gets a row of its own, first, above the buttons.
+        await layOut(resize, { footer: 250, secondary: 96, indicator: 72, primary: 96 });
+        expect(footer).toHaveAttribute('data-stacked', '');
+        expect(footer).toHaveClass('flex', 'flex-wrap', 'items-center', 'gap-2');
+        expect(footer).not.toHaveClass('grid');
+        expect(indicator).toHaveClass('order-first', 'basis-full', 'flex', 'justify-center');
+        expect(indicator).not.toHaveClass('col-start-2');
+        expect(secondary).not.toHaveClass('col-start-1');
+        expect(primary).toHaveClass('ms-auto');
+        expect(primary).not.toHaveClass('col-start-3');
+        // The same elements in the same DOM order: the button keeps focus.
+        expect(slotsOf(footer)).toEqual([secondary, indicator, primary]);
+        expect(back).toHaveFocus();
+
+        await layOut(resize, { footer: 300, secondary: 96, indicator: 72, primary: 96 });
+        expect(footer).not.toHaveAttribute('data-stacked');
+        expect(footer).toHaveClass('grid');
+        expect(back).toHaveFocus();
+      });
+
+      it('centered counts the wider button on both sides, so a row it keeps is centred', async () => {
+        const resize = installResizeObserverMock();
+        onTestFinished(() => resize.restore());
+        render(<CarouselTour footer={{ layout: 'centered' }} />);
+        // 120 + 72 + 96 = 288 would fit in 300, but not with the indicator centred: 2 x 120 + 72.
+        await layOut(resize, { footer: 300, secondary: 120, indicator: 72, primary: 96 });
+        expect(footerOf()).toHaveAttribute('data-stacked', '');
+        await layOut(resize, { footer: 312, secondary: 120, indicator: 72, primary: 96 });
+        expect(footerOf()).not.toHaveAttribute('data-stacked');
+      });
+
+      it('centered without a secondary button measures the primary on both sides', async () => {
+        const resize = installResizeObserverMock();
+        onTestFinished(() => resize.restore());
+        render(<CarouselTour steps={[steps[0]]} footer={{ layout: 'centered' }} />);
+        // 2 x 96 + 72 = 264: the empty start column is as wide as the primary button's.
+        await layOut(resize, { footer: 264, indicator: 72, primary: 96 });
+        expect(footerOf()).not.toHaveAttribute('data-stacked');
+        await layOut(resize, { footer: 264, indicator: 72, primary: 100 });
+        expect(footerOf()).toHaveAttribute('data-stacked', '');
+      });
+
+      it('centered measures again after a step changes the buttons', async () => {
+        const user = userEvent.setup();
+        const resize = installResizeObserverMock();
+        onTestFinished(() => resize.restore());
+        render(<CarouselTour footer={{ layout: 'centered' }} />);
+        await layOut(resize, { footer: 278, secondary: 96, indicator: 72, primary: 96 });
+        expect(footerOf()).not.toHaveAttribute('data-stacked');
+        // The next step's primary button is wider; no resize is reported, the commit measures.
+        mockRect(slotsOf(footerOf())[2], { width: 120 });
+        await user.click(screen.getByRole('button', { name: 'Next' }));
+        expect(heading()).toHaveTextContent('Features, step 2 of 3');
+        expect(footerOf()).toHaveAttribute('data-stacked', '');
+      });
+
+      it('renders the one-row layout in the server HTML', () => {
+        const html = renderToString(<CarouselTour footer={{ layout: 'centered' }} />);
+        expect(html).toContain('data-carousel-layout="centered"');
+        expect(html).toContain('grid-cols-[1fr_auto_1fr]');
+        expect(html).not.toContain('data-stacked');
+      });
+
+      it.each(['offset', 'centered'] as const)(
+        '%s: the same logical classes in RTL as in LTR',
+        (layout) => {
+          const classes = () =>
+            [footerOf(), ...Array.from(footerOf().querySelectorAll('*'))].map((el) =>
+              el.getAttribute('class'),
+            );
+          const ltr = render(<CarouselTour indicator={navAndCount} footer={{ layout }} />);
+          const expected = classes();
+          ltr.unmount();
+          renderWithProviders(<CarouselTour indicator={navAndCount} footer={{ layout }} />, {
+            dir: 'rtl',
+          });
+          expect(classes()).toEqual(expected);
+          expect(footerOf().closest('[dir]')).toHaveAttribute('dir', 'rtl');
+        },
+      );
     });
 
     it('children replace the dots and keep the buttons; children that render nothing keep the dots', () => {

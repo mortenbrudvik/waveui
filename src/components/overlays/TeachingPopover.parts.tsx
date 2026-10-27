@@ -37,6 +37,7 @@ import { Portal } from '../portal/Portal';
 import { useTitleRegistry } from './Dialog.shared';
 import { ModalCloseButton } from './Dialog.slots';
 import { getTabbableThrough, PopoverBeak, usePopoverTabOrder } from './Popover.shared';
+import { useCarouselFooterStacked } from './TeachingPopover.stack';
 import {
   TeachingPopoverSurfaceContext,
   useTeachingPopoverContext,
@@ -1095,10 +1096,14 @@ TeachingPopoverCarouselPageCount.displayName = 'TeachingPopoverCarouselPageCount
 export interface TeachingPopoverCarouselFooterProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Where the indicator sits: `'offset'` puts it at the start and the buttons together at the
-   * end, as `TeachingPopover.Footer` does; `'centered'` puts it between the secondary button at
-   * the start and the primary button at the end. Rendered as `data-carousel-layout`. (Fluent's
-   * default is `'centered'`; WaveUI keeps its own footer's arrangement.) TeachingPopover's
-   * `footerLayout` applies to `TeachingPopover.Footer` only.
+   * end, as `TeachingPopover.Footer` does, and the buttons wrap to a row of their own (at the end)
+   * when both do not fit in one row; `'centered'` puts it between the secondary button at the
+   * start and the primary button at the end, in the middle of the footer whatever the buttons'
+   * widths (also without a secondary button), and when that row does not fit, the indicator takes
+   * a row of its own above the buttons and the footer gets `data-stacked`. The indicator never
+   * shrinks below its content. Rendered as `data-carousel-layout`. (Fluent's default is
+   * `'centered'`; WaveUI keeps its own footer's arrangement.) TeachingPopover's `footerLayout`
+   * applies to `TeachingPopover.Footer` only.
    * @default 'offset'
    */
   layout?: 'offset' | 'centered';
@@ -1131,7 +1136,8 @@ export interface TeachingPopoverCarouselFooterProps extends React.HTMLAttributes
  * `TeachingPopover.Footer`: Back and Next (Done on the last step), or the `secondaryAction` and
  * `primaryAction` that replace them. `initialStepText` turns the first step's Back into a button
  * that dismisses the popover (“Not now”), `finalStepText` relabels Done, and `layout` places the
- * indicator. The steps, the actions and the callbacks stay on TeachingPopover.
+ * indicator; the footer wraps instead of letting the indicator and the buttons overlap. The steps,
+ * the actions and the callbacks stay on TeachingPopover.
  *
  * Also exported as `TeachingPopoverCarouselFooter` for React Server Components, which cannot use
  * the dotted `TeachingPopover.CarouselFooter` (that needs a client file).
@@ -1146,50 +1152,94 @@ export const TeachingPopoverCarouselFooter = ({
   ...rest
 }: TeachingPopoverCarouselFooterProps) => {
   const context = useTeachingPopoverContext('TeachingPopover.CarouselFooter');
+  const centered = layout === 'centered';
+  const [footer, setFooter] = React.useState<HTMLDivElement | null>(null);
+  const footerRef = useMergedRefs<HTMLDivElement>(ref, setFooter);
+  const stacked = useCarouselFooterStacked(footer, centered && context.step !== undefined);
   if (!context.step) return null;
 
-  const centered = layout === 'centered';
   const { secondary, primary } = renderStepButtons(context, { initialStepText, finalStepText });
-  // In the centered layout the indicator takes the room between the buttons.
+  // The indicator is as wide as its content: it never shrinks under the buttons. Content wider
+  // than the whole footer wraps inside it.
   const indicator = slotRendersContent(children) ? (
-    <div className={cn('flex min-w-0 items-center gap-2', centered && 'flex-1 justify-center')}>
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-2',
+        centered && 'w-max max-w-full justify-center',
+      )}
+    >
       {materialiseSlotContent(children)}
     </div>
   ) : (
-    <TeachingStepDots
-      count={context.count}
-      index={context.index}
-      className={centered && 'flex-1 justify-center'}
-    />
+    <TeachingStepDots count={context.count} index={context.index} />
   );
 
+  if (!centered) {
+    // The indicator at the start and the buttons at the end; when both do not fit in one row, the
+    // buttons wrap to a row of their own, still at the end.
+    return (
+      <div
+        ref={footerRef}
+        data-carousel-layout={layout}
+        className={cn(
+          teachingPopoverCarouselFooterClassNames.root,
+          teachingPopoverClassNames.footer,
+          'flex flex-wrap items-center justify-between gap-2',
+          className,
+        )}
+        {...rest}
+      >
+        {indicator}
+        <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
+          {secondary}
+          {primary}
+        </div>
+      </div>
+    );
+  }
+
+  // Centered: one row of three columns, the outer two of equal width, so the indicator sits in
+  // the middle of the footer whatever the buttons' widths, with or without a secondary button.
+  // When that row does not fit (useCarouselFooterStacked measures it), the indicator takes a row
+  // of its own above the buttons. The DOM order stays secondary, indicator, primary in both, so
+  // a button keeps focus when the layout changes.
   return (
     <div
-      ref={ref}
+      ref={footerRef}
       data-carousel-layout={layout}
+      data-stacked={stacked ? '' : undefined}
       className={cn(
         teachingPopoverCarouselFooterClassNames.root,
         teachingPopoverClassNames.footer,
-        'flex items-center justify-between gap-2',
+        'items-center gap-2',
+        stacked ? 'flex flex-wrap' : 'grid grid-cols-[1fr_auto_1fr]',
         className,
       )}
       {...rest}
     >
-      {centered ? (
-        <>
+      {slotRendersContent(secondary) && (
+        <div
+          data-wave-carousel-footer-slot="secondary"
+          className={cn('flex w-max max-w-full', !stacked && 'col-start-1 justify-self-start')}
+        >
           {secondary}
-          {indicator}
-          {primary}
-        </>
-      ) : (
-        <>
-          {indicator}
-          <div className="flex items-center gap-2">
-            {secondary}
-            {primary}
-          </div>
-        </>
+        </div>
       )}
+      <div
+        data-wave-carousel-footer-slot="indicator"
+        className={cn('flex justify-center', stacked ? 'order-first basis-full' : 'col-start-2')}
+      >
+        {indicator}
+      </div>
+      <div
+        data-wave-carousel-footer-slot="primary"
+        className={cn(
+          'flex w-max max-w-full',
+          stacked ? 'ms-auto' : 'col-start-3 justify-self-end',
+        )}
+      >
+        {primary}
+      </div>
     </div>
   );
 };
