@@ -1019,10 +1019,12 @@ export const gridClassNames = { root: 'wave-grid' } as const;
 // ---------------------------------------------------------------------------
 
 /**
- * Breadcrumb: `root` on the `<nav>`; `list` on its `<ol>`; `listItem` on each `<li>`; `divider`
- * on each separator (the default chevron `<svg>`, or the `<span>` of a custom `divider`);
- * `overflowButton` on the "…" `<button>` that opens the menu of the items `maxDisplayedItems`
- * collapsed.
+ * Breadcrumb: `root` on the `<nav>`; `list` on the trail's list element (its `<ol>`, or with
+ * `overflow="auto"` the Overflow's `role="list"` element); `listItem` on each `<li>`; `divider` on
+ * each separator (the default chevron `<svg>`, or the `<span>` of a custom `divider`);
+ * `overflowButton` on the "…" `<button>` that opens the menu of the collapsed items, with
+ * `maxDisplayedItems` and with `overflow="auto"`. With `overflow="auto"` the "…" list item is the
+ * Overflow's button wrapper, not an `<li>`, so it carries no `listItem` class.
  */
 export const breadcrumbClassNames = {
   root: 'wave-breadcrumb',

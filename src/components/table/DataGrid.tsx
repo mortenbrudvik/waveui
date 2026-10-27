@@ -187,8 +187,8 @@ export interface DataGridItemsProps<T = unknown> {
    * children), the grid renders the rows and cells from the columns; a `DataGrid.Body` whose child
    * is a render function renders the row of each item. Each row's `rowId` comes from `getRowId`.
    * The grid reads the array and never changes it. With `items`, `onSortChange` receives a
-   * `DataGridSort` object and `details`, never the 0.4 arguments: pass `items={data ?? []}` while
-   * the data loads (or `sort`/`defaultSort`).
+   * `DataGridSort` object and `details`, never the 0.4 arguments. `items` may not be `undefined`
+   * unless `sort` or `defaultSort` is given; pass `items={data ?? []}` while loading.
    */
   items?: readonly T[];
 }

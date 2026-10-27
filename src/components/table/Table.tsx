@@ -153,7 +153,8 @@ export interface TableSelectionCellProps extends Omit<
   type?: 'checkbox' | 'radio';
   /**
    * Controlled checked state. `'mixed'` draws an indeterminate checkbox (a select-all whose rows
-   * are partly selected); a click on it checks it.
+   * are partly selected); a click on it checks it. `'mixed'` is for checkboxes only: on a radio it
+   * has no effect (the radio is drawn unchecked).
    */
   checked?: boolean | 'mixed';
   /**
