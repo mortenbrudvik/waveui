@@ -208,6 +208,7 @@ export const GroupsWithDividers: Story = {
 /**
  * A Toolbar around an Overflow: the toolbar keeps its single Tab stop and arrow-key order over the
  * items that are shown (hidden items are skipped), and the groups' dividers hide with their group.
+ * Each divider belongs to the group it closes, so no divider is left before the pinned Share.
  * The Toolbar is a block-level flex row (`className="flex"`) as wide as its container, so the
  * Overflow's room follows the container: an inline toolbar would shrink to the items it shows and
  * never give the Overflow room to show the hidden ones again.
@@ -222,7 +223,7 @@ export const InToolbarWithGroups: Story = {
       <OverflowItem key="Redo" itemId="Redo" groupId="history" priority={2}>
         <Toolbar.Button>Redo</Toolbar.Button>
       </OverflowItem>,
-      <OverflowDivider key="divider-insert" groupId="insert">
+      <OverflowDivider key="divider-history" groupId="history">
         <Toolbar.Divider />
       </OverflowDivider>,
       <OverflowItem key="Image" itemId="Image" groupId="insert" priority={1}>
@@ -234,7 +235,7 @@ export const InToolbarWithGroups: Story = {
       <OverflowItem key="Link" itemId="Link" groupId="insert" priority={1}>
         <Toolbar.Button>Link</Toolbar.Button>
       </OverflowItem>,
-      <OverflowDivider key="divider-share" groupId="share">
+      <OverflowDivider key="divider-insert" groupId="insert">
         <Toolbar.Divider />
       </OverflowDivider>,
       <OverflowItem key="Share" itemId="Share" groupId="share" pinned>
