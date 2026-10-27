@@ -2069,6 +2069,162 @@ describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
     });
   });
 
+  describe('opening again: an uncontrolled step starts over', () => {
+    type User = ReturnType<typeof userEvent.setup>;
+    const button = (name: string) => screen.getByRole('button', { name });
+    const openWithTrigger = async (user: User, name: string) => {
+      await user.click(trigger());
+      return screen.findByRole('dialog', { name });
+    };
+
+    it('a tour finished with Done starts on the first step when the Trigger opens it again', async () => {
+      const user = userEvent.setup();
+      render(<TriggerTour />);
+      await openWithTrigger(user, 'Welcome, step 1 of 3');
+      await user.click(button('Next'));
+      await user.click(button('Next'));
+      await user.click(button('Done'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+      const dialog = await openWithTrigger(user, 'Welcome, step 1 of 3');
+      await waitFor(() => expect(dialog).toHaveFocus());
+      expect(button('Back')).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it.each<[string, (user: User) => Promise<void>]>([
+      ['Close', (user) => user.click(button('Close'))],
+      ['Escape', (user) => user.keyboard('{Escape}')],
+      ['the Trigger', (user) => user.click(trigger())],
+    ])(
+      'a tour closed midway with %s starts on the first step when it opens again',
+      async (_name, close) => {
+        const user = userEvent.setup();
+        render(<TriggerTour />);
+        await openWithTrigger(user, 'Welcome, step 1 of 3');
+        await user.click(button('Next'));
+        expect(heading()).toHaveTextContent('Features, step 2 of 3');
+        await close(user);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+        await openWithTrigger(user, 'Welcome, step 1 of 3');
+        expect(heading()).toHaveTextContent('Welcome, step 1 of 3');
+      },
+    );
+
+    it('starts again on defaultActiveStep', async () => {
+      const user = userEvent.setup();
+      render(<TriggerTour defaultActiveStep={1} />);
+      await openWithTrigger(user, 'Features, step 2 of 3');
+      await user.click(button('Next'));
+      expect(heading()).toHaveTextContent('Done, step 3 of 3');
+      await user.click(button('Close'));
+
+      await openWithTrigger(user, 'Features, step 2 of 3');
+      expect(heading()).toHaveTextContent('Features, step 2 of 3');
+    });
+
+    it('a controlled open that opens it again shows the first step from its first commit and announces nothing', async () => {
+      const user = userEvent.setup();
+      // Every commit of a step body, by its step title.
+      const commits: string[] = [];
+      function Probe({ name }: { name: string }) {
+        React.useLayoutEffect(() => {
+          commits.push(name);
+        });
+        return <>{`${name} body`}</>;
+      }
+      const probedSteps = steps.map((step) => ({ ...step, body: <Probe name={step.title} /> }));
+      function Tour() {
+        const [open, setOpen] = React.useState(true);
+        return (
+          <>
+            <button type="button" onClick={() => setOpen(true)}>
+              Start tour
+            </button>
+            <TeachingPopover steps={probedSteps} open={open} onOpenChange={setOpen} />
+          </>
+        );
+      }
+      // The live region is written on the next animation frame: wait well past it.
+      const afterFrames = () => act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+      render(<Tour />);
+      await user.click(button('Next'));
+      await user.click(button('Next'));
+      await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Done, step 3 of 3'));
+      await user.click(button('Close'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      commits.length = 0;
+
+      await user.click(button('Start tour'));
+      const dialog = screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' });
+      expect(dialog).toHaveFocus();
+      expect(commits.length).toBeGreaterThan(0);
+      expect(new Set(commits)).toEqual(new Set(['Welcome']));
+      // The focused dialog's name carries the step position: opening is not a step change.
+      await afterFrames();
+      expect(__getAnnouncerText('polite')).toBe('Done, step 3 of 3');
+    });
+
+    it('leaves a controlled activeStep as it is', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      function Controlled() {
+        const [step, setStep] = React.useState(0);
+        return (
+          <TriggerTour
+            activeStep={step}
+            onStepChange={(next) => {
+              onStepChange(next);
+              setStep(next);
+            }}
+          />
+        );
+      }
+      render(<Controlled />);
+      await openWithTrigger(user, 'Welcome, step 1 of 3');
+      await user.click(button('Next'));
+      await user.click(button('Close'));
+
+      await openWithTrigger(user, 'Features, step 2 of 3');
+      expect(onStepChange.mock.calls).toEqual([[1]]);
+    });
+
+    it('calls onStepChange with the initial step once when opening moves the step back, also under StrictMode', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <TriggerTour onStepChange={onStepChange} />
+        </React.StrictMode>,
+      );
+      await openWithTrigger(user, 'Welcome, step 1 of 3');
+      expect(onStepChange).not.toHaveBeenCalled();
+      await user.click(button('Next'));
+      expect(onStepChange.mock.calls).toEqual([[1]]);
+      await user.click(button('Close'));
+
+      await openWithTrigger(user, 'Welcome, step 1 of 3');
+      expect(onStepChange.mock.calls).toEqual([[1], [0]]);
+
+      // Opening again on the initial step changes nothing, so nothing is called.
+      await user.click(button('Close'));
+      await openWithTrigger(user, 'Welcome, step 1 of 3');
+      expect(onStepChange.mock.calls).toEqual([[1], [0]]);
+    });
+
+    it('does not call onStepChange on the first mount', async () => {
+      const onStepChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <TeachingPopover steps={steps} defaultActiveStep={1} onStepChange={onStepChange} />
+        </React.StrictMode>,
+      );
+      expect(heading()).toHaveTextContent('Features, step 2 of 3');
+      await act(async () => {});
+      expect(onStepChange).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Surface', () => {
     function InRoot({ children }: { children?: React.ReactNode }) {
       return <TeachingPopover steps={steps}>{children}</TeachingPopover>;

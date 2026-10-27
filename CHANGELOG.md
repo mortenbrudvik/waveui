@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1] - Unreleased
+
+### Fixed
+
+- **TeachingPopover starts over when it opens again.** An uncontrolled step (no `activeStep`) kept its place while the popover was closed, so a tour finished with Done, or closed midway with Close, Escape or its Trigger, opened again on the step where it had been left. Each opening, by the Trigger or a controlled `open`, now shows `defaultActiveStep` (else the first step) from its first render, calls `onStepChange` with it once when the step was elsewhere, and announces no step change (the focused popover's name carries the position). A controlled `activeStep` is left as it is, and the first mount calls nothing.
+
 ## [0.14.0] - 2026-10-27
 
 The ninth Fluent UI v9 parity release: Phase 9 of the [roadmap](docs/ROADMAP.md), collections, data grids and guided tours. Overflow hides by priority and in groups, Breadcrumb collapses into a menu (by count or by the room it has), DataGrid renders and sorts its own rows from typed columns and selects on a row click, the static Table gets sortable headers, a selection cell, a cell layout and cell actions, List can be navigated without selecting and gets an action of its own, and TeachingPopover gets footer actions and Fluent's composable parts. Every addition is opt-in, and nothing public was removed; the type widenings and the few markup changes are under "Upgrading from 0.13".
