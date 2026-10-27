@@ -777,7 +777,7 @@ describe('Drawer type="inline"', () => {
       expect(document.querySelector('.' + drawerClassNames.backdrop)).toBeNull();
       expect(warn.mock.calls).toEqual([
         [
-          '[WaveUI] Drawer: `backdrop` is ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.',
+          '[WaveUI] Drawer: `backdrop` and `backdropMotion` are ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.',
         ],
       ]);
     } finally {

@@ -664,7 +664,7 @@ describe('DrawerPanel (the drawer panel shell)', () => {
     const NON_MODAL_FULL_WARNING =
       '[WaveUI] Test: `size="full"` with `modalType="non-modal"` covers the whole page while leaving it usable, so Tab reaches controls hidden behind the drawer. Use `modalType="modal"`, `type="inline"`, or a smaller size with its room reserved in the page layout.';
     const BACKDROP_IGNORED_WARNING =
-      '[WaveUI] Test: `backdrop` is ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.';
+      '[WaveUI] Test: `backdrop` and `backdropMotion` are ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.';
 
     it('warns <componentName>:non-modal-full once for an open full non-modal overlay', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

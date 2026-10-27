@@ -2,12 +2,14 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
+import { drawerBackdropMotion, drawerDurations, drawerMotion } from '../../lib/motion';
 import type { Slot, SlotObject } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
-import type { BackdropAppearance, ModalType } from '../../lib/types';
+import type { BackdropAppearance, ModalType, MotionSlot } from '../../lib/types';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { Portal } from '../portal/Portal';
@@ -197,6 +199,19 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
    * renders nothing and warns). `null` renders no backdrop.
    */
   backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
+  /**
+   * The overlay panel's motion slot: `undefined` the default slide from the panel's edge with the
+   * duration of its size, `null` none, a value replaces it (see `MotionSlot`). A `className` with
+   * presence variants keeps 0.14's own motion while it is `undefined`. An inline panel has no
+   * motion yet.
+   */
+  motion?: MotionSlot | null;
+  /**
+   * The backdrop's motion slot (overlay `modal` and `alert` only): `undefined` the default fade
+   * over the duration of the panel's size, `null` none, a value replaces it. Given on a non-modal
+   * or inline panel (`null` included), it is ignored with the `backdrop-ignored` warning.
+   */
+  backdropMotion?: MotionSlot | null;
   /** The panel's id (always set: triggers point `aria-controls` at it). */
   id: string;
   /** Merged with the shell's own ref and the presence ref. */
@@ -217,7 +232,9 @@ const OVERLAY_PANEL_CLASSES =
  * modal or non-modal machinery) or of an inline drawer (in place, with the inline focus restore),
  * on the presence core, with the placement, size, separator and safe-area classes and the
  * `data-type`, `data-position`, `data-size`, `data-modal-type`, `data-separator` and
- * `data-presence` attributes. Returns `null` while unmounted. Its hooks key on `open`.
+ * `data-presence` attributes. Returns `null` while unmounted. Its hooks key on `open`. An overlay
+ * enters also when it mounts open, and its panel and backdrop carry their motion classes
+ * (`motion`, `backdropMotion`); the presence core waits for the panel's.
  *
  * It renders its `children` raw and provides no context: no header, title registry, Close button
  * or padding. The component that renders it holds the open state (`useModalOpenState`, then
@@ -241,6 +258,8 @@ export const DrawerPanel = ({
   rootClassName,
   backdropClassName,
   backdrop,
+  motion,
+  backdropMotion,
   id,
   className,
   onKeyDown,
@@ -253,13 +272,23 @@ export const DrawerPanel = ({
   const nonModal = modalType === 'non-modal';
   const nonModalOverlay = overlay && nonModal;
   const keptMounted = !unmountOnClose;
-  // The panel mounts through the presence core (D5, D103), with no motion of its own: kept mounted
-  // while closed with `unmountOnClose={false}`, else removed once it has exited.
+  // The panel mounts through the presence core (D5, D103): kept mounted while closed with
+  // `unmountOnClose={false}`, else removed once it has exited. An overlay also enters when it
+  // mounts open (D9: an overlay open by default slides in on a client render as after hydration);
+  // an inline panel is page content and never animates on mount.
   const {
     isMounted,
     ref: presenceRef,
     presenceProps,
-  } = usePresence(open, { unmountOnExit: unmountOnClose });
+  } = usePresence(open, { appear: overlay, unmountOnExit: unmountOnClose });
+  // The overlay's motion classes: the panel slides from its edge over its size's duration (a
+  // `className` with presence variants keeps 0.14's own motion, D19), the backdrop fades with it.
+  const panelMotion = useMotionClasses(
+    motion,
+    `${drawerMotion[position]} ${drawerDurations[size]}`,
+    className,
+  );
+  const backdropMotionClassName = useMotionClasses(backdropMotion, drawerBackdropMotion[size]);
 
   // The panel element of each type, held in state through its own callback ref. A change of `type`
   // remounts the panel (D105): the overlay's hooks see only the portaled element and the inline
@@ -335,17 +364,16 @@ export const DrawerPanel = ({
   // A popup opened inside a kept-mounted panel that is still open when the panel closes (D106).
   useOpenInsideWarning(open, keptMounted, layer.layerId, componentName, panelRef);
   // A non-modal or inline panel has no backdrop: a given slot (not undefined, null or a boolean)
-  // is ignored.
+  // and a given backdrop motion (not undefined) are ignored.
   const backdropIgnored =
     (nonModal || inline) &&
-    backdrop !== undefined &&
-    backdrop !== null &&
-    typeof backdrop !== 'boolean';
+    ((backdrop !== undefined && backdrop !== null && typeof backdrop !== 'boolean') ||
+      backdropMotion !== undefined);
   React.useEffect(() => {
     if (!backdropIgnored) return;
     warnOnce(
       `${componentName}:backdrop-ignored`,
-      `${componentName}: \`backdrop\` is ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.`,
+      `${componentName}: \`backdrop\` and \`backdropMotion\` are ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.`,
     );
   }, [backdropIgnored, componentName]);
   // A full non-modal overlay covers the page it leaves usable (D87.8).
@@ -400,6 +428,7 @@ export const DrawerPanel = ({
           open={open}
           onMouseDown={backdropPress.onMouseDown}
           presenceProps={presenceProps}
+          motionClassName={backdropMotionClassName}
         />
       )}
       <div
@@ -418,6 +447,7 @@ export const DrawerPanel = ({
           rootClassName,
           OVERLAY_PANEL_CLASSES,
           getOverlayPanelClasses(position, size),
+          panelMotion,
           className,
         )}
       >

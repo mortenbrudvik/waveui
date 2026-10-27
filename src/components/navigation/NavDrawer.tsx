@@ -10,7 +10,7 @@ import {
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import type { Slot, SlotObject } from '../../lib/slot';
-import type { BackdropAppearance, FocusMode, ModalType } from '../../lib/types';
+import type { BackdropAppearance, FocusMode, ModalType, MotionSlot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
@@ -116,7 +116,9 @@ export interface NavDrawerProps
    * The panel's width at a side (its height at the bottom), on Drawer's scale: `small` 320px,
    * `medium` 592px, `large` 940px, `full` the viewport (inline: the container). A width class in
    * `className` replaces it (Fluent's navigation pane is 260px wide: the width class of 65
-   * spacing steps). Rendered as `data-size`. Drawer's default too.
+   * spacing steps). It also times an overlay's motion: 250 ms small, 300 ms medium, 400 ms large,
+   * 500 ms full (see `motion`), so a drawer without `size` takes 250 ms whatever width a class
+   * gives it. Rendered as `data-size`. Drawer's default too.
    * @default 'small'
    */
   size?: DrawerSize;
@@ -140,11 +142,11 @@ export interface NavDrawerProps
    */
   modalType?: Extract<ModalType, 'modal' | 'non-modal'>;
   /**
-   * Removes the panel when the drawer closes. `false` keeps it mounted while closed, out of view
-   * and `inert`, so the state of what is inside survives, and a Hamburger outside can point
-   * `aria-controls` at it at all times: always for an inline drawer, and once the page has
-   * hydrated for an overlay (whose panel is not in the server HTML). Fluent's `unmountOnClose`.
-   * Drawer's default too.
+   * Removes the panel when the drawer closes, once its exit motion has ended. `false` keeps it
+   * mounted while closed, out of view and `inert`, so the state of what is inside survives, and a
+   * Hamburger outside can point `aria-controls` at it at all times: always for an inline drawer,
+   * and once the page has hydrated for an overlay (whose panel is not in the server HTML).
+   * Fluent's `unmountOnClose`. Drawer's default too.
    * @default true
    */
   unmountOnClose?: boolean;
@@ -160,6 +162,33 @@ export interface NavDrawerProps
    * inline drawer.
    */
   backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
+  /**
+   * Overlay drawers: the panel's motion, as Drawer's. By default the panel slides in from beyond
+   * its edge and fades in with a decelerating curve, and slides back out and fades out with an
+   * accelerating curve, over a duration that follows `size` both ways: 250 ms small (also without
+   * `size`), 300 ms medium, 400 ms large, 500 ms full. The `start` and `end` edges follow the text
+   * direction, `left` and `right` do not mirror, and a `bottom` panel rises from below. Under
+   * reduced motion it appears and disappears at once. `null` turns the motion off (the panel still
+   * renders its `data-presence` phases, which then end at once); a class string or
+   * `{ className }` replaces the default classes with yours (see `MotionSlot`), also under a
+   * `WaveProvider` with `motion="none"`, which otherwise turns the default off. A `className` that
+   * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
+   * motion, your classes animate the panel. Fluent's `OverlayDrawer` `surfaceMotion`.
+   * @default the slide and fade above
+   */
+  motion?: MotionSlot | null;
+  /**
+   * The backdrop's motion (a modal overlay), as Drawer's. By default it fades in and out with a
+   * linear curve over the panel's duration (250 to 500 ms, by `size`), so it ends with the panel;
+   * under reduced motion it appears and disappears at once. `null` turns the motion off; a class
+   * string or `{ className }` replaces the default classes with yours (see `MotionSlot`), also
+   * under a `WaveProvider` with `motion="none"`, which otherwise turns the default off. The
+   * panel's motion decides when the drawer unmounts or hides: a replacement longer than the
+   * panel's exit is cut off there. Ignored, with a development warning, by a non-modal or inline
+   * drawer. Fluent's `OverlayDrawer` `backdropMotion`.
+   * @default the fade above
+   */
+  backdropMotion?: MotionSlot | null;
   /**
    * Name of the navigation landmark (and of an overlay's dialog). Localize it; rename it when the
    * page has another navigation landmark (two with one name are ambiguous). An `aria-labelledby`
@@ -263,6 +292,8 @@ const NavDrawerRoot = ({
   unmountOnClose = true,
   finalFocusRef,
   backdrop,
+  motion,
+  backdropMotion,
   value,
   defaultValue,
   onValueChange,
@@ -355,6 +386,8 @@ const NavDrawerRoot = ({
       rootClassName={cn(drawerClassNames.root, navDrawerClassNames.root)}
       backdropClassName={cn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
       backdrop={backdrop}
+      motion={motion}
+      backdropMotion={backdropMotion}
       id={panelId}
       {...panelNameProps}
       {...rest}
@@ -543,6 +576,13 @@ NavDrawerFooter.displayName = 'NavDrawerFooter';
  *   when an item is chosen is yours, in `onItemSelect`, which also fires when the current page is
  *   activated again. A non-modal overlay (`modalType="non-modal"`) covers the page, which keeps
  *   its Tab order: keep the page's controls clear of it, or use `type="inline"`.
+ * - **Motion:** an overlay slides in from its edge and fades in, and slides back and fades out,
+ *   over 250 ms (`small`, the default), 300 ms (`medium`), 400 ms (`large`) or 500 ms (`full`),
+ *   with its backdrop fading along; one open by default animates in when it mounts in the browser.
+ *   Under reduced motion both appear and disappear at once. `motion` and `backdropMotion` turn
+ *   each off (`null`) or replace it, and `WaveProvider motion="none"` turns both defaults off.
+ *   While it exits the panel stays on screen, `inert`, and focus, the trap and the scroll lock
+ *   are already released. An inline drawer has no default motion.
  * - **Focus:** pass your page's Hamburger as `finalFocusRef`, so focus returns to it when a
  *   Hamburger inside the drawer closes it. An overlay moves focus in when it opens; an inline
  *   drawer does not.

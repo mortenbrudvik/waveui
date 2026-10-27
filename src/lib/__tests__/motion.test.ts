@@ -14,7 +14,9 @@
  *    animation;
  * 4. every class with the `starting` variant is gated on the entering phase;
  * 6. a backdrop exits with its surface's exit duration (D16: the core waits only for the surface,
- *    so a longer backdrop would be cut off), per pair of {@link BACKDROP_PAIRS};
+ *    so a longer backdrop would be cut off), per pair of {@link BACKDROP_PAIRS}; a backdrop per
+ *    size ({@link SIZED_BACKDROP_PAIRS}) takes its size's duration and exits with its surface
+ *    composed with that duration, at every edge;
  * 7. every export is a string, a record of strings or a function (the precondition of the dist
  *    probe of `scripts/verify-dist.mjs`, which reads the strings one level into records).
  *
@@ -92,7 +94,7 @@ type DesignSystem = Awaited<ReturnType<typeof __unstable__loadDesignSystem>>;
  * of its own is composed at run time with the duration of the part's size, and check 2 runs on
  * each composition (`value + ' ' + durations[size]`).
  */
-const COMPOSED_DURATIONS: Record<string, string> = {};
+const COMPOSED_DURATIONS: Record<string, string> = { drawerMotion: 'drawerDurations' };
 
 /** The stylesheet the compile check builds against: the precompiled CSS's sources (build-css). */
 const COMPILE_CSS =
@@ -231,6 +233,42 @@ function backdropExitMismatch(surface: string, backdrop: string): string[] {
   return own !== undefined && own === surfaces
     ? []
     : [`exits over ${own ?? 'no duration'}, its surface over ${surfaces ?? 'no duration'}`];
+}
+
+/**
+ * Backdrop recipe per size → the recipe of its surface (per edge, carrying no duration of its own)
+ * and the record of durations per size both are composed with (check 6 per size, D16).
+ */
+const SIZED_BACKDROP_PAIRS: Record<string, { surface: string; durations: string }> = {
+  drawerBackdropMotion: { surface: 'drawerMotion', durations: 'drawerDurations' },
+};
+
+/**
+ * Check 6 per size: for each size of `durations`, a finding when `backdrops` has no recipe for it,
+ * when that recipe's duration is not the size's, or when it does not exit with a surface of
+ * `surfaces` (per edge) composed with the size's duration. Labelled `size` or `size, edge`.
+ */
+function sizedBackdropMismatches(
+  surfaces: Readonly<Record<string, string>>,
+  durations: Readonly<Record<string, string>>,
+  backdrops: Readonly<Record<string, string>>,
+): string[] {
+  return Object.entries(durations).flatMap(([size, duration]) => {
+    const backdrop = Object.hasOwn(backdrops, size) ? backdrops[size] : undefined;
+    if (backdrop === undefined) return [`${size}: no backdrop recipe`];
+    const own = exitDuration(backdrop);
+    const sizeFindings =
+      own === duration
+        ? []
+        : [`${size}: exits over ${own ?? 'no duration'}, the size's duration is ${duration}`];
+    return sizeFindings.concat(
+      Object.entries(surfaces).flatMap(([edge, surface]) =>
+        backdropExitMismatch(`${surface} ${duration}`, backdrop).map(
+          (finding) => `${size}, ${edge}: ${finding}`,
+        ),
+      ),
+    );
+  });
 }
 
 /**
@@ -541,6 +579,56 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
           ),
         ),
       ).toEqual([]);
+    });
+
+    it('reports a sized backdrop without its size’s duration, or that exits otherwise than a surface', () => {
+      const durations = { small: 'duration-wave-gentle', large: 'duration-wave-slow' };
+      const surfaces = {
+        start: 'transition-[translate] ease-wave-easy-ease motion-reduce:transition-none',
+        end: 'transition-[translate] ease-wave-easy-ease data-[presence=exiting]:duration-wave-fast motion-reduce:transition-none',
+      };
+      expect(
+        sizedBackdropMismatches(surfaces, durations, {
+          small: 'transition-opacity duration-wave-gentle',
+          large: 'transition-opacity duration-wave-gentle',
+        }),
+      ).toEqual([
+        'small, end: exits over duration-wave-gentle, its surface over duration-wave-fast',
+        "large: exits over duration-wave-gentle, the size's duration is duration-wave-slow",
+        'large, start: exits over duration-wave-gentle, its surface over duration-wave-slow',
+        'large, end: exits over duration-wave-gentle, its surface over duration-wave-fast',
+      ]);
+      expect(
+        sizedBackdropMismatches({ start: surfaces.start }, durations, {
+          small: 'transition-opacity duration-wave-gentle',
+        }),
+      ).toEqual(['large: no backdrop recipe']);
+      expect(
+        sizedBackdropMismatches({ start: surfaces.start }, durations, {
+          small: 'transition-opacity duration-wave-gentle',
+          large: 'transition-opacity duration-wave-slow',
+        }),
+      ).toEqual([]);
+    });
+
+    it('holds for every size of every sized pair, which names records of strings', () => {
+      const exports: Readonly<Record<string, unknown>> = motion;
+      const pairs = Object.entries(SIZED_BACKDROP_PAIRS);
+      expect(pairs.length).toBeGreaterThan(0);
+      for (const [backdrop, { surface, durations }] of pairs) {
+        for (const name of [backdrop, surface, durations]) {
+          expect(isRecordOfStrings(exports[name]), name).toBe(true);
+        }
+        const backdrops = exports[backdrop] as Readonly<Record<string, string>>;
+        const surfaces = exports[surface] as Readonly<Record<string, string>>;
+        const sizes = exports[durations] as Readonly<Record<string, string>>;
+        expect(Object.keys(backdrops).sort(), backdrop).toEqual(Object.keys(sizes).sort());
+        expect(
+          sizedBackdropMismatches(surfaces, sizes, backdrops).map(
+            (finding) => `${backdrop}: ${finding}`,
+          ),
+        ).toEqual([]);
+      }
     });
   });
 });

@@ -93,13 +93,21 @@ export type {
  *   each open of an overlay focuses the first focusable element again (an `autoFocus` inside never
  *   applies), and a kept overlay opened while another overlay is open stacks above it. A kept
  *   inline drawer is in the server HTML, hidden.
+ * - **Motion**: an overlay panel slides in from its edge and fades in, and slides back and fades
+ *   out, over 250 ms (`small`), 300 ms (`medium`), 400 ms (`large`) or 500 ms (`full`), and its
+ *   backdrop fades with it; an overlay open by default animates in when it mounts in the browser.
+ *   Under reduced motion both appear and disappear at once. `motion` (the panel) and
+ *   `backdropMotion` (the backdrop) turn each off (`null`) or replace it, and `WaveProvider
+ *   motion="none"` turns both defaults off. An inline drawer has no default motion:
+ *   `data-[presence=…]:` classes in `className` animate its `<aside>`.
  * - **Presence**: the panel and the backdrop mount through the presence core and render
- *   `data-presence` (`entered` while open, `exited` while kept closed); the backdrop and the
- *   panel (an inline drawer's `<aside>`) are `inert` while exiting and `hidden` and `inert` while
- *   kept closed. No motion ships:
- *   `data-[presence=…]:` classes in `className` animate the panel, whose motion a closed drawer
- *   waits for before it unmounts or hides (focus, the trap and the isolation follow the open
- *   state at once).
+ *   `data-presence` (`entering` and `exiting` while the panel's motion runs, `entered` while
+ *   open, `exited` while kept closed); the backdrop and the panel (an inline drawer's `<aside>`)
+ *   are `inert` while exiting and `hidden` and `inert` while kept closed. A closed drawer waits
+ *   for the panel's motion before it unmounts or hides, while focus, the trap, the isolation and
+ *   the scroll lock follow the open state at once: an exiting overlay lets clicks through to the
+ *   page (an `inert` element takes no pointer events). Opened again during its exit, the same
+ *   panel enters again.
  *
  * The sub-components are also exported under flat names (`DrawerTrigger`, `DrawerClose`,
  * `DrawerTitle`, `DrawerHeader`, `DrawerHeaderTitle`, `DrawerHeaderNavigation`, `DrawerBody`,

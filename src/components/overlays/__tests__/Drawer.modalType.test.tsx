@@ -965,7 +965,7 @@ describe('Drawer backdrop, closeButton and titleAction (P6-06 D93–D95, D98)', 
         expect(backdropElement()).toBeNull();
         expect(warn.mock.calls).toEqual([
           [
-            '[WaveUI] Drawer: `backdrop` is ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.',
+            '[WaveUI] Drawer: `backdrop` and `backdropMotion` are ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.',
           ],
         ]);
       } finally {

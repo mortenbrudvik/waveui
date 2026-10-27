@@ -1,4 +1,4 @@
-import type { MotionPreference, MotionSlot } from './types';
+import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
 
 /**
  * The motion of Wave's animated parts, in one server-safe module that imports nothing at run
@@ -18,6 +18,17 @@ import type { MotionPreference, MotionSlot } from './types';
  * - `dialogBackdropMotion`, the Dialog backdrop: opacity only, with the easy-ease curve. It fades in
  *   over the gentle duration and out over the normal duration, the surface's exit, so the backdrop
  *   never outlasts the surface (the presence core waits only for the surface).
+ * - `drawerMotion`, the overlay panel of Drawer and NavDrawer, per edge: opacity and translate. It
+ *   enters from transparent and moved out by its whole width (its whole height at the bottom)
+ *   beyond its edge, with the mid decelerating curve, and exits back there with the min
+ *   accelerating curve. The start and end edges follow the text direction (a right-to-left
+ *   counterpart on the same value), the left and right edges do not mirror. It holds no duration:
+ *   the panel adds its size's from `drawerDurations`.
+ * - `drawerDurations`, the duration of an overlay panel per size, the same both ways: the gentle
+ *   duration (250 ms) when small, the slow one (300 ms) when medium, the slower one (400 ms) when
+ *   large and the ultra-slow one (500 ms) when full.
+ * - `drawerBackdropMotion`, the overlay drawer's backdrop per size: opacity only, with the linear
+ *   curve and its size's duration both ways, so it ends with the panel.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -30,6 +41,46 @@ export const dialogMotion =
 /** The Dialog backdrop's default motion: a fade, 250 ms in and 200 ms out (the surface's exit). */
 export const dialogBackdropMotion =
   'transition-opacity duration-wave-gentle ease-wave-easy-ease data-[presence=exiting]:duration-wave-normal motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
+
+/**
+ * An edge a drawer is attached to (Drawer's `DrawerPosition`, which lives in a client component
+ * module that this module does not import).
+ */
+type DrawerEdge = 'start' | 'end' | 'left' | 'right' | 'bottom';
+
+/**
+ * The overlay drawer panel's default motion per edge: a slide from beyond its edge and a fade,
+ * timed by `drawerDurations` (composed at run time).
+ */
+export const drawerMotion: Readonly<Record<DrawerEdge, string>> = {
+  start:
+    'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:-translate-x-full data-[presence=exiting]:-translate-x-full wave-rtl:data-[presence=entering]:starting:translate-x-full wave-rtl:data-[presence=exiting]:translate-x-full',
+  end: 'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:translate-x-full data-[presence=exiting]:translate-x-full wave-rtl:data-[presence=entering]:starting:-translate-x-full wave-rtl:data-[presence=exiting]:-translate-x-full',
+  left: 'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:-translate-x-full data-[presence=exiting]:-translate-x-full', // wave-allow-physical: left and right drawers do not mirror
+  right:
+    'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:translate-x-full data-[presence=exiting]:translate-x-full', // wave-allow-physical: left and right drawers do not mirror
+  bottom:
+    'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:translate-y-full data-[presence=exiting]:translate-y-full',
+};
+
+/** The overlay drawer panel's duration per size: 250, 300, 400 and 500 ms, both ways. */
+export const drawerDurations: Readonly<Record<SurfaceSize, string>> = {
+  small: 'duration-wave-gentle',
+  medium: 'duration-wave-slow',
+  large: 'duration-wave-slower',
+  full: 'duration-wave-ultra-slow',
+};
+
+/** The overlay drawer backdrop's default motion per size: a linear fade over its size's duration. */
+export const drawerBackdropMotion: Readonly<Record<SurfaceSize, string>> = {
+  small:
+    'transition-opacity duration-wave-gentle ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+  medium:
+    'transition-opacity duration-wave-slow ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+  large:
+    'transition-opacity duration-wave-slower ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+  full: 'transition-opacity duration-wave-ultra-slow ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+};
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */
 const PRESENCE_VARIANT = '[presence=';

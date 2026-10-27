@@ -816,7 +816,7 @@ describe('NavDrawer', () => {
         );
         expect(warn.mock.calls).toEqual([
           [
-            '[WaveUI] NavDrawer: `backdrop` is ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.',
+            '[WaveUI] NavDrawer: `backdrop` and `backdropMotion` are ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.',
           ],
         ]);
       } finally {
