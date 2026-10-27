@@ -59,8 +59,11 @@ class CarouselFooterStackStore {
    * it is made in. The one row has three columns, the outer two of equal width: it fits when
    * twice the wider button, the indicator and the two gaps fit in the footer's content box. A row
    * that would need unequal columns stacks instead, so the indicator of a row is always centred.
+   * A footer without a box (not displayed, or not laid out yet) has no room to compare and keeps
+   * its layout.
    */
   measure(footer: HTMLElement): void {
+    if (!footer.clientWidth) return;
     const { secondary, indicator, primary } = measuredElements(footer);
     let padding = 0;
     let gap = 0;

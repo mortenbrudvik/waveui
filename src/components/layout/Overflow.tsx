@@ -879,7 +879,11 @@ OverflowDivider.displayName = 'OverflowDivider';
  * the end of the DOM order, or from its start with `overflowDirection="start"`), never a `pinned`
  * item and never below `minimumVisible`. Until an item sets `priority` or `pinned`, the first item
  * (`end`) or the last one (`start`) always stays, as in 0.13. `orientation="vertical"` lays the
- * items out in a column and measures heights; the column needs a definite height.
+ * items out in a column and measures heights; the column needs a definite height. The room is the
+ * row's own box, so it must not depend on the items shown: in a container as wide as its content,
+ * such as a Toolbar at its default width, the row narrows as items hide and never gets the room
+ * back to show them again; give the Overflow a width of its own, or put it in a row that takes its
+ * width from its parent and let it fill that row.
  *
  * Items with the same `groupId` form a group that is `'visible'`, `'hidden'` or `'overflow'` (some
  * members hidden): a divider with that `groupId` hides with a hidden group,

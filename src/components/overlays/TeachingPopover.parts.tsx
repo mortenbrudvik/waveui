@@ -1100,8 +1100,9 @@ export interface TeachingPopoverCarouselFooterProps extends React.HTMLAttributes
    * when both do not fit in one row; `'centered'` puts it between the secondary button at the
    * start and the primary button at the end, in the middle of the footer whatever the buttons'
    * widths (also without a secondary button), and when that row does not fit, the indicator takes
-   * a row of its own above the buttons and the footer gets `data-stacked`. The indicator never
-   * shrinks below its content. Rendered as `data-carousel-layout`. (Fluent's default is
+   * a row of its own above the buttons and the footer gets `data-stacked`. While stacked, the
+   * visual order differs from the Tab order, which stays the secondary button, the indicator's
+   * step buttons, then the primary button. The indicator never shrinks below its content. Rendered as `data-carousel-layout`. (Fluent's default is
    * `'centered'`; WaveUI keeps its own footer's arrangement.) TeachingPopover's `footerLayout`
    * applies to `TeachingPopover.Footer` only.
    * @default 'offset'

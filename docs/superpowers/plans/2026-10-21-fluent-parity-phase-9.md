@@ -124,7 +124,7 @@
 
 **Interfaces:** Consumes Task 6. Produces built-in stable sorting; `DataGrid.HeaderCell sortIcon?: Slot<'span'>`; `onSortChange(sort, details?: { event })`, `onSelectedItemsChange(items, details?: { event })`; internal `SortArrowUpIcon/SortArrowDownIcon` icons and the shared sort button in `Table.shared.tsx`.
 
-- [ ] **Step 1:** Failing tests: with `items` and `compare` the rows sort ascending/descending (descending negates `compare`, equal keys keep their order both ways); also when `sort` is controlled; a column without `compare` never sorts and the consumer's order stands; `aria-sort` on the header; `sortIcon` custom, `null`/`false` hides; `details.event` present and callbacks once in StrictMode; the legacy positional `onSortChange(columnId, direction)` and deprecated sort props still work (existing tests); no re-render storm (existing).
+- [ ] **Step 1:** Failing tests: with `items` and `compare` the rows sort ascending/descending (descending negates `compare`, equal keys keep their order both ways); also when `sort` is controlled; a column without `compare` never sorts and the consumer's order stands; `aria-sort` on the header; `sortIcon` custom, `null`/`undefined` keep the default arrow, `false` hides; `details.event` present and callbacks once in StrictMode; the legacy positional `onSortChange(columnId, direction)` and deprecated sort props still work (existing tests); no re-render storm (existing).
 - [ ] **Step 2:** Run; FAIL on new cases only.
 - [ ] **Step 3:** Implement `slice().sort`; move the sort button and glyph rendering into `Table.shared.tsx` and replace the inline triangle with the arrow icons.
 - [ ] **Step 4:** Run suite, tsc, eslint; update the README DataGrid example that used `reverse()` later in Task 17.

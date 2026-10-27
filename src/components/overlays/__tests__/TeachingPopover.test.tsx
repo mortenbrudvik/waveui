@@ -3695,6 +3695,21 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
         expect(footerOf()).toHaveAttribute('data-stacked', '');
       });
 
+      it('centered keeps its layout while the footer has no width (not laid out)', async () => {
+        const resize = installResizeObserverMock();
+        onTestFinished(() => resize.restore());
+        render(<CarouselTour footer={{ layout: 'centered' }} />);
+        await layOut(resize, { footer: 278, secondary: 96, indicator: 72, primary: 96 });
+        expect(footerOf()).not.toHaveAttribute('data-stacked');
+        // A footer without a box (an ancestor not displayed) has no room to compare: no stacking.
+        await layOut(resize, { footer: 0, secondary: 96, indicator: 72, primary: 96 });
+        expect(footerOf()).not.toHaveAttribute('data-stacked');
+        await layOut(resize, { footer: 250, secondary: 96, indicator: 72, primary: 96 });
+        expect(footerOf()).toHaveAttribute('data-stacked', '');
+        await layOut(resize, { footer: 0, secondary: 0, indicator: 0, primary: 0 });
+        expect(footerOf()).toHaveAttribute('data-stacked', '');
+      });
+
       it('centered measures again after a step changes the buttons', async () => {
         const user = userEvent.setup();
         const resize = installResizeObserverMock();
