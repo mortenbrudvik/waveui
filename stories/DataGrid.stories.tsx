@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { DataGrid } from '../src';
+import { DataGrid, Menu, MenuButton, createTableColumn } from '../src';
 import type { DataGridBaseProps, DataGridColumn, DataGridSort } from '../src';
 
 interface Member {
@@ -198,4 +198,166 @@ export const HorizontalScroll: Story = {
     containerProps: { className: 'max-w-md' },
     className: 'min-w-[48rem]',
   },
+};
+
+/** Columns typed by the grid's items; `compare` makes a column sortable and the grid sorts by it. */
+const MEMBER_COLUMNS: readonly DataGridColumn<Member>[] = [
+  createTableColumn<Member>({
+    columnId: 'name',
+    label: 'Name',
+    compare: (a, b) => a.name.localeCompare(b.name),
+    renderCell: (member) => member.name,
+  }),
+  createTableColumn<Member>({
+    columnId: 'role',
+    label: 'Role',
+    compare: (a, b) => a.role.localeCompare(b.role),
+    renderCell: (member) => member.role,
+  }),
+  createTableColumn<Member>({
+    columnId: 'location',
+    label: 'Location',
+    compare: (a, b) => a.location.localeCompare(b.location),
+    renderCell: (member) => member.location,
+  }),
+  createTableColumn<Member>({
+    columnId: 'status',
+    label: 'Status',
+    renderCell: (member) => member.status,
+  }),
+];
+
+/** The same columns plus one whose cells hold a Menu. */
+const MEMBER_COLUMNS_WITH_ACTIONS: readonly DataGridColumn<Member>[] = [
+  ...MEMBER_COLUMNS,
+  createTableColumn<Member>({
+    columnId: 'actions',
+    label: 'Actions',
+    renderCell: (member) => (
+      <Menu>
+        <Menu.Trigger>
+          <MenuButton appearance="subtle">{`${member.name} actions`}</MenuButton>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Message</Menu.Item>
+          <Menu.Item>Change role</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    ),
+  }),
+];
+
+const memberId = (member: Member) => member.id;
+
+type MemberGridProps = Omit<DataGridStoryArgs, 'columns' | 'getRowId'> & {
+  columns?: readonly DataGridColumn<Member>[];
+  defaultSort?: DataGridSort | null;
+};
+
+/** A grid rendered from `MEMBERS` and typed columns: the grid itself orders the rows. */
+function MemberGrid({ columns = MEMBER_COLUMNS, ...args }: MemberGridProps) {
+  return <DataGrid items={MEMBERS} columns={columns} getRowId={memberId} {...args} />;
+}
+
+/**
+ * `items` with typed columns (`createTableColumn`): the grid renders the header and the rows, and
+ * orders them by the sorted column's `compare`. Status has no `compare`, so it is no sort button.
+ */
+export const TypedColumnsAndSorting: Story = {
+  render: (args) => (
+    <MemberGrid {...args} defaultSort={{ columnId: 'name', direction: 'ascending' }} />
+  ),
+};
+
+/**
+ * `selectOnRowClick` selects a row with a click anywhere on it. A click on a control in the row
+ * (a link, a button) or one that ends a text selection selects nothing, and Space on a cell
+ * toggles the row either way.
+ */
+export const SelectOnRowClick: Story = {
+  args: {
+    selectionMode: 'multiple',
+    selectOnRowClick: true,
+    defaultSelectedItems: ['2'],
+  },
+  render: (args) => <MemberGrid {...args} />,
+};
+
+/** A Menu in a cell: opening it and choosing an item leaves the row's selection alone. */
+export const MenuInCell: Story = {
+  args: {
+    'aria-label': 'Team members with actions',
+    selectionMode: 'multiple',
+    selectOnRowClick: true,
+  },
+  render: (args) => <MemberGrid {...args} columns={MEMBER_COLUMNS_WITH_ACTIONS} />,
+};
+
+/**
+ * `selectionAppearance` fills a selected row with the selected token (`brand`, the default), the
+ * subtle one (`neutral`) or not at all (`none`): the control and `aria-selected` still show it.
+ */
+export const SelectionAppearances: Story = {
+  args: {
+    selectionMode: 'multiple',
+    defaultSelectedItems: ['1', '3'],
+  },
+  render: (args) => (
+    <div className="flex flex-col gap-6">
+      {(['brand', 'neutral', 'none'] as const).map((appearance) => (
+        <MemberGrid
+          key={appearance}
+          {...args}
+          aria-label={`Team members, ${appearance} selection`}
+          selectionAppearance={appearance}
+        />
+      ))}
+    </div>
+  ),
+};
+
+/**
+ * `subtleSelection` hides the unchecked controls until their row is hovered or holds focus (the
+ * select-all checkbox until the grid is); a touch screen and forced colors always draw them.
+ */
+export const SubtleSelection: Story = {
+  args: {
+    selectionMode: 'multiple',
+    subtleSelection: true,
+    selectOnRowClick: true,
+    defaultSelectedItems: ['4'],
+  },
+  render: (args) => <MemberGrid {...args} />,
+};
+
+/**
+ * `DataGrid.SelectionCell` places the selection column where you write it, here at the end of
+ * every row, and takes the cell's own props: the member on leave cannot be selected.
+ */
+export const SelectionCellAtTheEnd: Story = {
+  args: {
+    'aria-label': 'Team members, selection at the end',
+    selectionMode: 'multiple',
+    defaultSelectedItems: ['1'],
+  },
+  render: ({ onSortChange: _onSortChange, ...args }) => (
+    <DataGrid {...args}>
+      <DataGrid.Header>
+        <tr>
+          <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          <DataGrid.HeaderCell>Role</DataGrid.HeaderCell>
+          <DataGrid.SelectionCell />
+        </tr>
+      </DataGrid.Header>
+      <DataGrid.Body>
+        {MEMBERS.map((member) => (
+          <DataGrid.Row key={member.id} rowId={member.id}>
+            <DataGrid.Cell>{member.name}</DataGrid.Cell>
+            <DataGrid.Cell>{member.role}</DataGrid.Cell>
+            <DataGrid.SelectionCell disabled={member.status === 'On leave'} />
+          </DataGrid.Row>
+        ))}
+      </DataGrid.Body>
+    </DataGrid>
+  ),
 };
