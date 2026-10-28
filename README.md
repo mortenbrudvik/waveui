@@ -613,7 +613,7 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 
 | Component      | Description                                                                                                                                                     |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WaveProvider` | Theme (`light`, `dark`, `high-contrast`), direction, portal container and `inputDefaults` (the default `size` and `appearance` of the text inputs and pickers) and `motion` (`'none'` turns the default motion of every component below it off). |
+| `WaveProvider` | Theme (`light`, `dark`, `high-contrast`), direction, portal container and `inputDefaults` (the default `size` and `appearance` of the text inputs and pickers) and `motion` (`'none'` turns the default motion of every animated component below it off). |
 
 `Portal` renders its children into `document.body` (or the provider's `portalContainer`) inside a themed `wave-portal` wrapper; use it for your own overlays.
 
@@ -1786,7 +1786,7 @@ function Details() {
 
 ### Enter and exit motion
 
-Wave's overlays and disclosures animate in and out by default, with Fluent's motion tokens. The guide's "Component Motion" section lists the curves and every class.
+Dialog, Drawer, NavDrawer, Menu, Popover, InfoButton, Tooltip, TeachingPopover, Accordion, Tree, Nav, the toasts and MessageBarGroup animate in and out by default, with Fluent's motion tokens, and TabList, Carousel and ProgressBar take motion options. The listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar and the AvatarGroup popover (and a popup of your own on `ListboxSurface`) do not animate yet ([ROADMAP §8.5](docs/ROADMAP.md#85-follow-ups-outside-the-gap-list)). The guide's "Component Motion" section lists the curves and every class.
 
 | Part | Motion | In | Out |
 |---|---|---|---|
@@ -1840,7 +1840,7 @@ Wave's overlays and disclosures animate in and out by default, with Fluent's mot
 - **Replacements and the precompiled CSS.** The default motion works on both style paths. A replacement's classes must exist in your CSS: your Tailwind build generates them, but the precompiled `./styles` holds only Wave's own classes, so there pass a class of your own CSS written against `[data-presence]` (as in the CSS example below).
 - **Turning it all off.** `<WaveProvider motion="none">` makes every motion slot below it act as `null` and stops the Nav item actions' fade; a part's own value still wins, and a nested provider inherits `motion` like `theme` (`motion="default"` turns the defaults back on below it). It is Fluent's `MotionBehaviourProvider` with `'skip'`. End-to-end tests that expect a closed surface to be gone at once can render under it. Classes of yours on a `Presence` child are no motion slot and keep running.
 - **Tuning.** The durations and curves are the `--wave-duration-*` and `--wave-curve-*` variables: redefine one in your CSS to retime every motion that uses it (`:root { --wave-duration-gentle: 200ms; }`), or replace one part's classes. There is no parameter form (Fluent's `surfaceMotion={{ duration }}`).
-- **Reduced motion.** Under `prefers-reduced-motion: reduce` every surface and part appears and disappears at once: the presence core ends each phase at once, and every default class has a `motion-reduce:` counterpart. The indeterminate ProgressBar pulses at full width instead of sweeping, and a Carousel with `autoPlay` starts stopped.
+- **Reduced motion.** Under `prefers-reduced-motion: reduce` every animated surface and part appears and disappears at once: the presence core ends each phase at once, and every default class has a `motion-reduce:` counterpart. The indeterminate ProgressBar pulses at full width instead of sweeping, and a Carousel with `autoPlay` starts stopped.
 - **0.14's classes in `className`.** A `className` with `data-[presence=…]` classes on `Menu.Popover`, `Dialog.Content`, Drawer or NavDrawer, while `motion` is unset, turns that part's default motion off, so the classes animate it as before (its backdrop still fades by default). Prefer `motion`.
 - **Collapsing parts.** Accordion's region, a Tree group, a Nav category's list and an inline drawer's panel sit inside an element of their own, which carries the phases and the motion (`wave-accordion-panel__collapse`, `wave-tree-item__collapse`, `wave-nav-category__collapse`, `wave-drawer__collapse`). It renders no box while the part is open (`display: contents`), so the part lays out as without it, and is a clipping grid of one track while the part opens or closes, so the space changes while the part keeps its size.
 - **Mounting.** A surface that is open when it mounts (`defaultOpen`) animates in, after hydration and on a client render alike. In-flow content (inline drawers, Accordion panels, Tree groups, Nav categories, the bars a MessageBarGroup mounts with) never animates on mount, on the server or the client.
@@ -2648,7 +2648,7 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
 
 ## Upgrading from 0.14
 
-0.15 removes nothing public and every type only widens, but the overlays and disclosures now animate by default; these changes can affect your end-to-end tests, styles and type mocks:
+0.15 removes nothing public and every type only widens, but the overlays and disclosures of item 1 (not yet the listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar and the AvatarGroup popover) now animate by default; these changes can affect your end-to-end tests, styles and type mocks:
 
 1. **Surfaces animate by default** in a browser: a closed Dialog, Drawer, NavDrawer, Menu, Popover, InfoButton note, Tooltip or TeachingPopover stays in the document, `inert`, for its exit (100 to 500ms). End-to-end tests that look for its absence right after a close wait for it, or render under `<WaveProvider motion="none">`; unit tests in jsdom are unaffected. A `defaultOpen` surface animates in on a client render too.
 2. **Popover.Content, the Tooltip surface and the TeachingPopover surface** mount through the presence core and render `data-presence` and `data-state`.
