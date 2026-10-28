@@ -1552,10 +1552,15 @@ export const tableCellActionsClassNames = { root: 'wave-table-cell-actions' } as
  */
 export const tableResizeHandleClassNames = { root: 'wave-table-resize-handle' } as const;
 
-/** DataGrid: `root` on the grid element (`role="grid"`); `container` on the wrapper around it. */
+/**
+ * DataGrid: `root` on the grid element (`role="grid"`); `container` on the wrapper around it;
+ * `spacer` on each spacer row of a grid with a `virtualWindow` (the rows that stand in for the
+ * rows that are not rendered).
+ */
 export const dataGridClassNames = {
   root: 'wave-data-grid',
   container: 'wave-data-grid__container',
+  spacer: 'wave-data-grid__spacer',
 } as const;
 
 /**

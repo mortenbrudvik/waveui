@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, DataGrid, Menu, MenuButton, createTableColumn } from '../src';
+import { Button, DataGrid, Menu, MenuButton, createTableColumn, useVirtualWindow } from '../src';
 import type { DataGridBaseProps, DataGridColumn, DataGridSort } from '../src';
 
 interface Member {
@@ -496,4 +496,122 @@ export const ResizableControlled: Story = {
     onColumnWidthsChange: fn(),
   },
   render: (args) => <ControlledWidthsGrid {...args} />,
+};
+
+/** 10,000 members for the windowed story. */
+const TEN_THOUSAND_MEMBERS: Member[] = Array.from({ length: 10_000 }, (_, index) => ({
+  id: String(index + 1),
+  name: `Member ${String(index + 1).padStart(5, '0')}`,
+  role: ROLES[(index * 3) % ROLES.length],
+  location: LOCATIONS[(index * 7) % LOCATIONS.length],
+  status: index % 9 === 4 ? 'On leave' : 'Active',
+}));
+
+/** One collator for every comparison: sorting 10,000 rows calls `compare` about 130,000 times. */
+const collator = new Intl.Collator('en');
+
+const TEN_THOUSAND_COLUMNS: readonly DataGridColumn<Member>[] = [
+  createTableColumn<Member>({
+    columnId: 'name',
+    label: 'Name',
+    compare: (a, b) => collator.compare(a.name, b.name),
+    renderCell: (member) => member.name,
+  }),
+  createTableColumn<Member>({
+    columnId: 'role',
+    label: 'Role',
+    compare: (a, b) => collator.compare(a.role, b.role),
+    renderCell: (member) => member.role,
+  }),
+  createTableColumn<Member>({
+    columnId: 'location',
+    label: 'Location',
+    compare: (a, b) => collator.compare(a.location, b.location),
+    renderCell: (member) => member.location,
+  }),
+  createTableColumn<Member>({
+    columnId: 'status',
+    label: 'Status',
+    renderCell: (member) => member.status,
+  }),
+];
+
+/** The args of the windowed story: the grid's, and the window's row height. */
+type TenThousandRowsArgs = MemberGridProps & {
+  /** The height of every row in pixels: `useVirtualWindow({ itemSize })`. */
+  itemSize: number;
+};
+
+/** The height of the grid's header in `container`, followed with a ResizeObserver. */
+function useHeaderHeight(container: HTMLElement | null): number {
+  const [height, setHeight] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const header = container?.querySelector('thead');
+    if (!header || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => setHeight(header.offsetHeight));
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [container]);
+  return height;
+}
+
+/** Counts the body rows the grid in `container` has rendered (`tr[data-row-index]`). */
+function MountedRows({ container, total }: { container: HTMLElement | null; total: number }) {
+  const subscribe = React.useCallback(
+    (onChange: () => void) => {
+      if (!container) return () => {};
+      const observer = new MutationObserver(onChange);
+      observer.observe(container, { childList: true, subtree: true });
+      return () => observer.disconnect();
+    },
+    [container],
+  );
+  const mounted = React.useSyncExternalStore(
+    subscribe,
+    () => container?.querySelectorAll('tr[data-row-index]').length ?? 0,
+    () => 0,
+  );
+  return (
+    <p className="text-body-1 text-foreground">
+      Mounted rows: {mounted} of {total.toLocaleString('en')}
+    </p>
+  );
+}
+
+/** A grid of 10,000 members in a 480-pixel scroller, windowed by `useVirtualWindow`. */
+function TenThousandRowsGrid({ itemSize, ...args }: TenThousandRowsArgs) {
+  const [container, setContainer] = React.useState<HTMLDivElement | null>(null);
+  // The header sticks over the rows: keyboard moves bring rows into the area below it.
+  const headerHeight = useHeaderHeight(container);
+  const virtualWindow = useVirtualWindow({ itemSize, scrollPaddingStart: headerHeight });
+  return (
+    <div className="flex flex-col gap-3">
+      <DataGrid
+        items={TEN_THOUSAND_MEMBERS}
+        columns={TEN_THOUSAND_COLUMNS}
+        getRowId={memberId}
+        {...args}
+        virtualWindow={virtualWindow}
+        containerProps={{ ref: setContainer, className: 'h-120' }}
+      />
+      <MountedRows container={container} total={TEN_THOUSAND_MEMBERS.length} />
+    </div>
+  );
+}
+
+/**
+ * 10,000 members with `virtualWindow`: only the rows in view (and a few beyond) are rendered, as
+ * the line below the grid counts, in a scroller 480 pixels tall with rows 44 pixels tall. Sorting,
+ * select-all (every member), column resizing and the keyboard (Ctrl+End reaches the last member)
+ * work on the whole list; a focused row stays rendered when it is scrolled away.
+ */
+export const TenThousandRows: StoryObj<TenThousandRowsArgs> = {
+  args: {
+    'aria-label': 'Ten thousand members',
+    itemSize: 44,
+    selectionMode: 'multiple',
+    resizableColumns: true,
+    onColumnWidthsChange: fn(),
+  },
+  render: (args) => <TenThousandRowsGrid {...args} />,
 };

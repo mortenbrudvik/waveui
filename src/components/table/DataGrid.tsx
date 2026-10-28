@@ -27,6 +27,7 @@ import type { SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import {
   SELECTION_CELL_CLASSES,
   TableSelectionControl,
@@ -41,6 +42,14 @@ import {
   DataGridResizeContext,
   useDataGridColumnSizing,
 } from './DataGrid.sizing';
+import {
+  DataGridWindowContext,
+  DataGridWindowRowContext,
+  getWindowNavigationModel,
+  renderWindowRows,
+  useDataGridWindow,
+  type DataGridWindowRow,
+} from './DataGrid.window';
 import { useGridNavigation } from './useGridNavigation';
 import type { TableColumnWidthsChangeDetails } from './useTableColumnSizing';
 
@@ -296,6 +305,36 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
     details?: TableColumnWidthsChangeDetails,
   ) => void;
   /**
+   * Renders only the body rows in view, plus an overscan, of a grid with many `items`: pass the
+   * result of `useVirtualWindow({ itemSize })` (or an object of your own that implements
+   * `VirtualWindow`). The rows that are not rendered are replaced by spacer rows (`aria-hidden`,
+   * `data-virtual-spacer`) of their height. Fluent has no counterpart in its DataGrid.
+   *
+   * The grid's scroll wrapper (the element of `containerProps`) becomes the window's scroller, so
+   * give it a bounded height, a height or a maximum height in `containerProps`: without one the
+   * window measures the whole list and renders every row (a development warning says so). Every
+   * row has the window's `itemSize` as its height: the grid sets it on each body row, drops the
+   * vertical padding of its cells and keeps their text on one line, so a cell's content must fit
+   * in it. The columns are laid out from widths (as with `columnSizingOptions`), so they never
+   * change width as rows come and go. The header stays at the top of the scroller: pass its height
+   * as `scrollPaddingStart` to `useVirtualWindow`, so keyboard moves bring rows into the area below
+   * it.
+   *
+   * The keyboard moves by the data: ArrowUp/ArrowDown, PageUp/PageDown and Ctrl+Home/Ctrl+End
+   * scroll a target row that is not rendered into the window, then focus it, and the focused row
+   * stays rendered when it is scrolled away. When a data change (a sort, new `items`) makes the
+   * browser drop focus from the moved row, focus returns to the same row, or to the row nearest
+   * its place. Sorting, selection, select-all and column sizing work on every item, rendered or
+   * not. The grid carries `aria-rowcount` (the items plus the header rows), every row
+   * `aria-rowindex` (1-based, the header rows first, the body rows in the sorted order) and every
+   * body row `data-row-index` (its 0-based position in the sorted order); a grid without a window
+   * renders none of them.
+   *
+   * Needs `items` and `columns`, with the body rows rendered from them (no `DataGrid.Body` child,
+   * or one whose child is a render function); otherwise it is ignored, with a development warning.
+   */
+  virtualWindow?: VirtualWindow;
+  /**
    * Row selection mode. `'multiple'` adds a checkbox column with a "Select all rows" header
    * checkbox; `'single'` adds a radio column (its header reads "Selection" to assistive
    * technology). `labels` localizes both texts.
@@ -378,7 +417,8 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
   onSelectionChange?: (keys: Set<string>) => void;
   /**
    * Props for the wrapper `<div>` around the `<table>`: a horizontally scrollable container
-   * (`overflow-x-auto`). Use it for its className, style (e.g. a max height) or ref. The wrapper
+   * (`overflow-x-auto`). Use it for its className, style (e.g. a max height) or ref. With a
+   * `virtualWindow` it is the window's scroller, which needs a bounded height. The wrapper
    * is not a tab stop (the grid's own cell tab stop scrolls it) and has no role, so its
    * `aria-label`/`aria-labelledby` are applied only together with a `role` (e.g. `'region'`);
    * without one they are dropped with a development warning. Name the grid with `aria-label`.
@@ -1177,6 +1217,14 @@ function renderFlatChild({ key, node }: { key: string; node: React.ReactNode }):
   return <React.Fragment key={key}>{node}</React.Fragment>;
 }
 
+/**
+ * The rows of a `DataGrid.Header`'s children as the header sees them: every element child, also
+ * inside a Fragment (a `<tr>`, a `DataGrid.Row`, or a component that renders one row).
+ */
+function countHeaderRows(children: React.ReactNode): number {
+  return flattenChildren(children).filter(({ node }) => React.isValidElement(node)).length;
+}
+
 /** A column's id: `columnId`, else the deprecated `id` (warned once). */
 function columnIdOf<T>(column: DataGridColumn<T>): string | undefined {
   return resolveDeprecatedProp(
@@ -1257,6 +1305,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     columnWidths,
     defaultColumnWidths,
     onColumnWidthsChange,
+    virtualWindow,
     containerProps,
     children,
     className,
@@ -1484,22 +1533,24 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     });
   }, [items, getRowId]);
 
+  // A grid without selection reads no item's selection state: nothing per item at data scale.
+  const selectable = selectionMode !== 'none';
   const itemSelectionDisabled = React.useMemo<readonly boolean[] | null>(() => {
-    if (itemRows === null || !isSelectionDisabled) return null;
+    if (itemRows === null || !isSelectionDisabled || !selectable) return null;
     // The rows hold the items as `unknown`; `isSelectionDisabled` takes the grid's `T`.
     return itemRows.map((row) => isSelectionDisabled(row.item as T, row.index));
-  }, [itemRows, isSelectionDisabled]);
+  }, [itemRows, isSelectionDisabled, selectable]);
 
   // Select-all covers every row id of `items`, rendered or not, but those `isSelectionDisabled`
   // disables (a rendered row's own `disabled` is added by the row).
   const selectionUniverse = React.useMemo<SelectionUniverse | null>(() => {
-    if (itemRows === null) return null;
+    if (itemRows === null || !selectable) return null;
     const disabledIds = new Set<string>();
     if (itemSelectionDisabled) {
       for (const row of itemRows) if (itemSelectionDisabled[row.index]) disabledIds.add(row.rowId);
     }
     return { ids: itemRows.map((row) => row.rowId), disabled: disabledIds };
-  }, [itemRows, itemSelectionDisabled]);
+  }, [itemRows, itemSelectionDisabled, selectable]);
 
   const single = selectionMode === 'single';
   const [store] = React.useState(() => createSelectionStore(selected, single, selectionUniverse));
@@ -1605,10 +1656,6 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     ],
   );
 
-  // --- keyboard -------------------------------------------------------------
-  const { gridRef, gridProps } = useGridNavigation();
-  const mergedRef = useMergedRefs<HTMLTableElement>(ref, gridRef);
-
   // --- items (the rows of `items` are built with the selection above) -------------
   // Built-in sorting: by the `compare` of the sorted column (controlled `sort` included).
   const sortColumnId = sort?.columnId;
@@ -1663,6 +1710,54 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     }
   }, [columnWithoutId]);
 
+  // --- window (with `items`, `columns` and the body rows rendered from them) -------
+  const flatChildren = columns ? flattenChildren(children) : [];
+  const childOf = (part: unknown) =>
+    flatChildren.find(({ node }) => isElementOfType(node, part))?.node;
+  const headerChild = childOf(DataGridHeader);
+  const bodyChild = childOf(DataGridBody);
+  const bodyChildren = isElementOfType<DataGridBodyProps>(bodyChild, DataGridBody)
+    ? bodyChild.props.children
+    : undefined;
+  /** The window while it applies: the body rows are rendered from `items` (columns, a function). */
+  const activeWindow =
+    virtualWindow !== undefined &&
+    hasItems &&
+    columns !== undefined &&
+    (bodyChildren === undefined || typeof bodyChildren === 'function')
+      ? virtualWindow
+      : null;
+  const windowed = activeWindow !== null;
+  // A grid with `columns` has one generated header row unless a `DataGrid.Header` child is given.
+  const headerRowCount = isElementOfType<DataGridHeaderProps>(headerChild, DataGridHeader)
+    ? countHeaderRows(headerChild.props.children)
+    : 1;
+  const rowCount = items?.length ?? 0;
+
+  // --- keyboard -------------------------------------------------------------
+  // A windowed grid moves by the rows of the data: an unmounted target is scrolled in first.
+  const { gridRef, gridProps, activeRowIndex, pendingRowIndex } = useGridNavigation({
+    model: getWindowNavigationModel(activeWindow, rowCount, headerRowCount),
+  });
+  const windowState = useDataGridWindow({
+    virtualWindow: activeWindow,
+    ignored: virtualWindow !== undefined && !windowed,
+    rows: sortedRows,
+    headerRowCount,
+    columnCount: (columns?.length ?? 0) + (selectable ? 1 : 0),
+    activeRowIndex,
+    pendingRowIndex,
+  });
+  const mergedRef = useMergedRefs<HTMLTableElement>(ref, gridRef, windowState.tableRef);
+  const handleFocus = (event: React.FocusEvent<HTMLTableElement>) => {
+    gridProps.onFocus(event);
+    windowState.onFocus(event);
+  };
+  const handleBlur = (event: React.FocusEvent<HTMLTableElement>) => {
+    gridProps.onBlur(event);
+    windowState.onBlur(event);
+  };
+
   // --- column widths (with `columns` and `items`) --------------------------------
   const sizingRequested =
     resizableColumns ||
@@ -1680,7 +1775,8 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
       );
     }
   }, [sizingIgnored]);
-  const sizingEnabled = sizingRequested && !sizingIgnored;
+  // A windowed grid is laid out from widths too: its columns never follow the rendered rows.
+  const sizingEnabled = (sizingRequested && !sizingIgnored) || windowed;
   // Read (and the deprecated `id` warned) only when the widths are used.
   const columnIds = React.useMemo(
     () => (sizingEnabled && columns ? columns.map(columnIdOf) : NO_COLUMN_IDS),
@@ -1701,10 +1797,8 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
 
   // --- header and body from columns -------------------------------------------
   let content: React.ReactNode = children;
-  const flatChildren = columns ? flattenChildren(children) : [];
-  const hasChild = (part: unknown) => flatChildren.some(({ node }) => isElementOfType(node, part));
   const generatedHeader =
-    columns && !hasChild(DataGridHeader) ? (
+    columns && headerChild === undefined ? (
       <DataGridHeader key="wave-generated-header">
         <tr>
           {columns.map((column, index) => {
@@ -1724,7 +1818,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     ) : null;
   // Without children, the body renders the rows from `columns` (see DataGrid.Body).
   const generatedBody =
-    columns && hasItems && !hasChild(DataGridBody) ? (
+    columns && hasItems && bodyChild === undefined ? (
       <DataGridBody key="wave-generated-body" />
     ) : null;
   if (generatedHeader || generatedBody || sizing.colgroup) {
@@ -1750,8 +1844,15 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     className: containerClassName,
     'aria-label': containerLabel,
     'aria-labelledby': containerLabelledBy,
+    ref: containerRefProp,
     ...containerRest
   } = containerProps ?? {};
+  // With a window, the wrapper is its scroller.
+  const containerRef = useMergedRefs<HTMLDivElement>(
+    containerRefProp,
+    windowState.scrollerRef,
+    activeWindow?.scrollRef,
+  );
   // The wrapper has no role of its own, and a name is prohibited on a role-less `<div>`: the
   // consumer's name is kept only together with a role.
   const containerHasRole = containerRest.role !== undefined;
@@ -1781,6 +1882,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                   <DataGridFixedLayoutContext.Provider value={sizing.colgroup !== null}>
                     <div
                       {...containerRest}
+                      ref={containerRef}
                       aria-label={containerHasRole ? containerLabel : undefined}
                       aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
                       className={cn(
@@ -1793,6 +1895,8 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                         ref={mergedRef}
                         role="grid"
                         aria-multiselectable={selectionMode === 'multiple' || undefined}
+                        // With a window: every row of the data, rendered or not, and the header.
+                        aria-rowcount={windowed ? rowCount + headerRowCount : undefined}
                         data-selection-appearance={selectionAppearance}
                         data-subtle-selection={subtleSelection ? '' : undefined}
                         data-resizing={sizing.resizing ? '' : undefined}
@@ -1807,14 +1911,18 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                         style={sizing.tableStyle ? { ...sizing.tableStyle, ...style } : style}
                         {...rest}
                         onKeyDown={composeEventHandlers(onKeyDown, gridProps.onKeyDown)}
-                        onFocus={composeEventHandlers(onFocus, gridProps.onFocus, {
+                        onFocus={composeEventHandlers(onFocus, handleFocus, {
                           checkDefaultPrevented: false,
                         })}
-                        onBlur={composeEventHandlers(onBlur, gridProps.onBlur, {
+                        onBlur={composeEventHandlers(onBlur, handleBlur, {
                           checkDefaultPrevented: false,
                         })}
                       >
-                        {content}
+                        <DataGridWindowContext.Provider value={windowState.context}>
+                          <DataGridWindowRowContext.Provider value={null}>
+                            {content}
+                          </DataGridWindowRowContext.Provider>
+                        </DataGridWindowContext.Provider>
                       </table>
                     </div>
                   </DataGridFixedLayoutContext.Provider>
@@ -1992,21 +2100,23 @@ function DataGridSelectionHeaderSlot({
  * tells every row whether it is the header's first row: the cells of a `<tr>` and every other
  * element child (a `DataGrid.Row`, or a component that renders one). Every row gets the same child
  * shape in every selection mode, so switching `selectionMode` does not remount the header cells.
+ * In a windowed grid each row also gets its `aria-rowindex` (1-based, in order).
  */
 function withSelectionHeaderSlots(
   children: React.ReactNode,
   selectionMode: 'none' | SelectionMode,
+  windowed: boolean,
 ): React.ReactNode {
-  let first = true;
+  let position = 0;
   const visit = (nodes: React.ReactNode): React.ReactNode =>
     React.Children.map(nodes, (child) => {
       if (isElementOfType<{ children?: React.ReactNode }>(child, React.Fragment)) {
         return React.cloneElement(child, undefined, visit(child.props.children));
       }
       if (!React.isValidElement(child)) return child;
-      const isFirst = first;
-      first = false;
-      if (isElementOfType<{ children?: React.ReactNode }>(child, 'tr')) {
+      const isFirst = position === 0;
+      position += 1;
+      if (isElementOfType<React.HTMLAttributes<HTMLTableRowElement>>(child, 'tr')) {
         const cells = child.props.children;
         const slot =
           selectionMode === 'none' ||
@@ -2015,16 +2125,22 @@ function withSelectionHeaderSlots(
           );
         return React.cloneElement(
           child,
-          undefined,
+          windowed ? { 'aria-rowindex': position } : undefined,
           slot,
           <DataGridHeaderRowHintContext.Provider value={isFirst}>
             {cells}
           </DataGridHeaderRowHintContext.Provider>,
         );
       }
+      // A `DataGrid.Row` takes its `aria-rowindex` from the row context.
+      const windowRow: DataGridWindowRow | null = windowed
+        ? { index: undefined, ariaRowIndex: position, height: undefined }
+        : null;
       return (
         <DataGridHeaderRowHintContext.Provider value={isFirst}>
-          {child}
+          <DataGridWindowRowContext.Provider value={windowRow}>
+            {child}
+          </DataGridWindowRowContext.Provider>
         </DataGridHeaderRowHintContext.Provider>
       );
     });
@@ -2038,13 +2154,16 @@ function withSelectionHeaderSlots(
  * mode) or the "Selection" header (single mode; DataGrid's `labels` localizes both), later rows of
  * a grouped header an empty cell. A header row rendered by another component cannot get it (a
  * development warning says so): use `DataGrid.Row` for such a row, which adds the cell itself.
+ * In a grid with a `virtualWindow` the header stays at the top of the grid's scroll wrapper while
+ * the rows scroll under it, and each header row carries its `aria-rowindex`.
  */
 const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHeaderProps) => {
   const { selectionMode } = useDataGridContext('DataGrid.Header');
+  const windowed = React.useContext(DataGridWindowContext) !== null;
   const [thead, setThead] = React.useState<HTMLTableSectionElement | null>(null);
   const mergedRef = useMergedRefs<HTMLTableSectionElement>(ref, setThead);
   const [slots] = React.useState(createHeaderSlotRegistry);
-  const content = withSelectionHeaderSlots(children, selectionMode);
+  const content = withSelectionHeaderSlots(children, selectionMode, windowed);
 
   // Every commit, after the rows' slots registered: header rows can move without a slot mounting.
   React.useLayoutEffect(() => {
@@ -2090,6 +2209,9 @@ const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHeaderPro
             'bg-card',
             // While a column resize handle drags, the header cells ignore the pointer.
             'in-data-[resizing]:pointer-events-none',
+            // A windowed grid scrolls in its wrapper: the header stays at its top, over the rows
+            // (on the section: a header cell is positioned for its resize handle).
+            windowed && 'sticky top-0 z-1',
             className,
           )}
           {...rest}
@@ -2222,7 +2344,7 @@ DataGridHeaderCell.displayName = 'DataGridHeaderCell';
 /**
  * The row of one item of `items`, under its row id. Memoised, so a grid that renders again (a
  * sort, a parent update) renders the row again only when its item, its index, its
- * `isSelectionDisabled` or the render function change.
+ * `isSelectionDisabled`, the render function or, in a windowed grid, its place change.
  */
 const DataGridItemRow = React.memo(function DataGridItemRow({
   item,
@@ -2230,6 +2352,9 @@ const DataGridItemRow = React.memo(function DataGridItemRow({
   rowId,
   selectionDisabled,
   render,
+  position,
+  ariaRowIndex,
+  height,
 }: {
   item: unknown;
   index: number;
@@ -2237,11 +2362,26 @@ const DataGridItemRow = React.memo(function DataGridItemRow({
   /** `isSelectionDisabled` of the item; `undefined` without it. */
   selectionDisabled: boolean | undefined;
   render: DataGridRenderRow;
+  /** In a windowed grid: the row's position in the sorted order (`undefined` without a window). */
+  position?: number;
+  /** In a windowed grid: the row's `aria-rowindex`. */
+  ariaRowIndex?: number;
+  /** In a windowed grid: the row's height (the window's `itemSize`). */
+  height?: number;
 }) {
+  const windowRow = React.useMemo<DataGridWindowRow | null>(
+    () =>
+      position === undefined || ariaRowIndex === undefined
+        ? null
+        : { index: position, ariaRowIndex, height },
+    [position, ariaRowIndex, height],
+  );
   return (
     <DataGridRowIdContext.Provider value={rowId}>
       <DataGridItemSelectionDisabledContext.Provider value={selectionDisabled}>
-        {render(item, index)}
+        <DataGridWindowRowContext.Provider value={windowRow}>
+          {render(item, index)}
+        </DataGridWindowRowContext.Provider>
       </DataGridItemSelectionDisabledContext.Provider>
     </DataGridRowIdContext.Provider>
   );
@@ -2250,10 +2390,13 @@ const DataGridItemRow = React.memo(function DataGridItemRow({
 /**
  * The grid's `<tbody>`. Its child can also be a render function, called with each item of the
  * grid's `items` (and its index there) to render the item's row; without children, a grid with
- * `items` and `columns` renders the rows from the columns.
+ * `items` and `columns` renders the rows from the columns. In a grid with a `virtualWindow` it
+ * renders the rows of the window, the function being called for those rows only, and a spacer
+ * row for each run of rows it leaves out.
  */
 const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyProps<T>) => {
   const itemsContext = React.useContext(DataGridItemsContext);
+  const windowContext = React.useContext(DataGridWindowContext);
   const rows = itemsContext?.rows ?? null;
   const hasRenderFunction = typeof children === 'function';
 
@@ -2269,9 +2412,29 @@ const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyPro
   }, [renderWithoutItems]);
 
   const selectionDisabled = itemsContext?.selectionDisabled ?? null;
-  const renderRows = (render: DataGridRenderRow | null) =>
-    render &&
-    rows?.map((row) => (
+  const renderRows = (render: DataGridRenderRow | null) => {
+    if (!render || !rows) return null;
+    if (windowContext) {
+      // The rows of the window, at their place in the sorted order (after the header rows).
+      const { headerRowCount, virtualWindow } = windowContext;
+      return renderWindowRows(windowContext, rows.length, (position) => {
+        const row = rows[position];
+        return (
+          <DataGridItemRow
+            key={row.key}
+            item={row.item}
+            index={row.index}
+            rowId={row.rowId}
+            selectionDisabled={selectionDisabled?.[row.index]}
+            render={render}
+            position={position}
+            ariaRowIndex={position + headerRowCount + 1}
+            height={virtualWindow.itemSize}
+          />
+        );
+      });
+    }
+    return rows.map((row) => (
       <DataGridItemRow
         key={row.key}
         item={row.item}
@@ -2281,6 +2444,7 @@ const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyPro
         render={render}
       />
     ));
+  };
 
   let content: React.ReactNode;
   if (typeof children === 'function') {
@@ -2313,6 +2477,10 @@ DataGridBody.displayName = 'DataGridBody';
  * ancestor, so the rows of a grid nested in a cell
  * share it: hovering the outer row also draws the subtle controls of the nested grid (a limit of
  * CSS groups). A Tree in a cell keeps its own rows' group.
+ *
+ * In a grid with a `virtualWindow`, a row rendered for an item has the window's `itemSize` as its
+ * height (its own `style` height loses) and carries `aria-rowindex` and `data-row-index`; a header
+ * row carries `aria-rowindex`.
  */
 const DataGridRow = ({
   rowId: rowIdProp,
@@ -2320,6 +2488,7 @@ const DataGridRow = ({
   selectionCellProps,
   children,
   className,
+  style,
   onClick,
   onKeyDown,
   ref,
@@ -2327,6 +2496,8 @@ const DataGridRow = ({
 }: DataGridRowProps) => {
   const { selectionMode, store, toggleRow, selectOnRowClick, selectionAppearance } =
     useDataGridContext('DataGrid.Row');
+  // In a windowed grid: the row's place (and, for a body row, its fixed height).
+  const windowRow = React.useContext(DataGridWindowRowContext);
   // A row rendered for an item of `items` defaults to the item's row id.
   const itemRowId = React.useContext(DataGridRowIdContext);
   const rowId = rowIdProp ?? itemRowId ?? undefined;
@@ -2539,6 +2710,12 @@ const DataGridRow = ({
         aria-selected={selectable ? isSelected : undefined}
         data-selected={selectable && isSelected ? '' : undefined}
         {...rest}
+        // The window lays the rows out at its row height and finds them by their index.
+        style={windowRow?.height === undefined ? style : { ...style, height: windowRow.height }}
+        {...(windowRow && {
+          'aria-rowindex': windowRow.ariaRowIndex,
+          'data-row-index': windowRow.index,
+        })}
         onClick={composeEventHandlers(onClick, handleClick)}
         onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       >
@@ -2707,11 +2884,14 @@ markTablePart(DataGridSelectionCell, 'dataGridSelectionCell');
 /**
  * A grid cell (`<td>`), focusable through the grid's keyboard navigation. It is the positioning
  * box of a `Table.CellActions` inside it. In a grid that lays its columns out from widths (column
- * sizing), its text stays on one line and is truncated with an ellipsis, unless its class says
- * otherwise.
+ * sizing, a `virtualWindow`), its text stays on one line and is truncated with an ellipsis, unless
+ * its class says otherwise. In a body row of a grid with a `virtualWindow` it has no vertical
+ * padding: the row has the window's height, which its content must fit in.
  */
 const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) => {
   const fixedLayout = React.useContext(DataGridFixedLayoutContext);
+  // A body row of a windowed grid has the window's height: its cells add no vertical padding.
+  const windowedRow = React.useContext(DataGridWindowRowContext)?.index !== undefined;
   return (
     <td
       ref={ref}
@@ -2720,7 +2900,8 @@ const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) 
         dataGridCellClassNames.root,
         cellBase,
         'relative text-body-1',
-        fixedLayout && 'overflow-hidden text-ellipsis whitespace-nowrap',
+        (fixedLayout || windowedRow) && 'overflow-hidden text-ellipsis whitespace-nowrap',
+        windowedRow && 'py-0 align-middle',
         focusRingInset,
         className,
       )}
@@ -2775,6 +2956,15 @@ export {
  * instance to persist them (Fluent's `resizableColumns`, `columnSizingOptions` and
  * `onColumnResize`, whose data is in `details`). The grid then lays its columns out from the
  * widths and truncates its cells' text.
+ *
+ * With `items` and `columns`, a `virtualWindow` (from `useVirtualWindow`) renders only the rows in
+ * view of a long list, with spacer rows for the others: the scroll wrapper (`containerProps`)
+ * needs a bounded height, and every row has the window's fixed row height. The header stays at
+ * the top of the wrapper, the keyboard moves by the data (a row that is not rendered is scrolled
+ * in before it gets focus), the focused row stays rendered, and selection, select-all, sorting
+ * and column sizing still cover every item. The grid then carries `aria-rowcount` and its rows
+ * `aria-rowindex`, so assistive technology reads each row's place in the whole list. Fluent's
+ * DataGrid has no built-in counterpart.
  *
  * Sub-components are available as `DataGrid.Header`, `DataGrid.HeaderCell`, `DataGrid.Body`,
  * `DataGrid.Row`, `DataGrid.Cell` and `DataGrid.SelectionCell` in client components, and as the
