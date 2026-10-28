@@ -278,6 +278,7 @@ import type {
   TableCellActionsProps,
   TableCellLayoutProps,
   TableHeaderCellProps,
+  TableResizeHandleProps,
   TableSelectionCellCheckedChangeDetails,
   TableSelectionCellProps,
   TabListProps,
@@ -1814,6 +1815,11 @@ describe('0.14 collections, data grids and tours from the package entry', () => 
     expectTypeOf<Entry['Table']['SelectionCell']>().toEqualTypeOf<Entry['TableSelectionCell']>();
     expectTypeOf<Entry['Table']['CellLayout']>().toEqualTypeOf<Entry['TableCellLayout']>();
     expectTypeOf<Entry['Table']['CellActions']>().toEqualTypeOf<Entry['TableCellActions']>();
+    expectTypeOf<Entry['Table']['ResizeHandle']>().toEqualTypeOf<Entry['TableResizeHandle']>();
+    expectTypeOf<TableResizeHandleProps['width']>().toEqualTypeOf<number>();
+    expectTypeOf<TableResizeHandleProps['onResize']>().toEqualTypeOf<
+      (width: number, details: { event: Event }) => void
+    >();
 
     // @ts-expect-error a sortable header is sorted ascending or descending, or not at all (absent)
     const none: TableHeaderCellProps['sortDirection'] = 'none';

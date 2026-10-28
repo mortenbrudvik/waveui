@@ -1546,6 +1546,12 @@ export const tableCellLayoutClassNames = {
 /** Table.CellActions: `root` on the element that holds the actions. */
 export const tableCellActionsClassNames = { root: 'wave-table-cell-actions' } as const;
 
+/**
+ * Table.ResizeHandle: `root` on the separator element that resizes a column (placed in the `aside`
+ * of a header cell).
+ */
+export const tableResizeHandleClassNames = { root: 'wave-table-resize-handle' } as const;
+
 /** DataGrid: `root` on the grid element (`role="grid"`); `container` on the wrapper around it. */
 export const dataGridClassNames = {
   root: 'wave-data-grid',

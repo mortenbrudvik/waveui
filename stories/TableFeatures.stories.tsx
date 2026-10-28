@@ -79,6 +79,8 @@ interface FeaturesTableArgs {
   selectionMode: SelectionMode;
   /** How many members the table lists. */
   rowCount: number;
+  /** Puts a `Table.ResizeHandle` in each column header, for the pointer and the arrow keys. */
+  resizable: boolean;
   /** Called with the ids of every selected member. */
   onSelectedItemsChange: (selectedItems: string[]) => void;
   /** Called with the new sort. */
@@ -98,6 +100,7 @@ interface FeaturesTableArgs {
 function FeaturesTable({
   selectionMode,
   rowCount,
+  resizable,
   onSelectedItemsChange,
   onSortChange,
   onColumnWidthsChange,
@@ -141,6 +144,16 @@ function FeaturesTable({
               sortable
               sortDirection={sort.getSortDirection(column.columnId!)}
               onSortClick={(event) => sort.toggleColumnSort(column.columnId!, event.nativeEvent)}
+              // The handle is drawn along the cell's end edge, so the cell is its positioning box.
+              className={resizable ? 'relative' : undefined}
+              aside={
+                resizable ? (
+                  <Table.ResizeHandle
+                    {...columnSizing.getResizeHandleProps(column.columnId!)}
+                    label={`Resize the ${column.label} column`}
+                  />
+                ) : undefined
+              }
             >
               {column.label}
             </Table.HeaderCell>
@@ -173,6 +186,7 @@ const meta = {
   args: {
     selectionMode: 'multiple',
     rowCount: 200,
+    resizable: false,
     onSelectedItemsChange: fn(),
     onSortChange: fn(),
     onColumnWidthsChange: fn(),
@@ -189,7 +203,8 @@ type Story = StoryObj<typeof meta>;
 /**
  * 200 members in a static `Table`. Sorting, the selection (select-all included) and the column
  * widths come from `useTableFeatures` with its three plugins; select-all counts every member, and
- * the `<colgroup>` carries the widths. The header is plain here: it has no resize handle yet.
+ * the `<colgroup>` carries the widths. The header is plain here; the `ResizeHandle` story adds the
+ * handles.
  */
 export const Default: Story = {};
 
@@ -201,4 +216,15 @@ export const SingleSelection: Story = {
 /** A short list. */
 export const FewRows: Story = {
   args: { rowCount: 5 },
+};
+
+/**
+ * Every column header holds a `Table.ResizeHandle` in its `aside` slot, fed by
+ * `columnSizing.getResizeHandleProps(columnId)`. Drag a column's end edge with a mouse, a finger or
+ * a pen, or click the handle and press the arrow keys (20 pixels, 5 with Shift), Home (the
+ * column's minimum width) and End. The `<colgroup>` follows the widths, which are held at the
+ * column's minimum.
+ */
+export const ResizeHandle: Story = {
+  args: { resizable: true, rowCount: 20 },
 };

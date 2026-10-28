@@ -10,6 +10,7 @@ export {
   TableSelectionCell,
   TableCellLayout,
   TableCellActions,
+  TableResizeHandle,
 } from './Table';
 export type {
   TableProps,
@@ -24,6 +25,7 @@ export type {
   TableSelectionCellCheckedChangeDetails,
   TableCellLayoutProps,
   TableCellActionsProps,
+  TableResizeHandleProps,
 } from './Table';
 
 export {
