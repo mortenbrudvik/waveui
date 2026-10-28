@@ -1313,6 +1313,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     onKeyDown,
     onFocus,
     onBlur,
+    onPointerDownCapture,
     ref,
     ...rest
   } = props;
@@ -1917,6 +1918,10 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                         onBlur={composeEventHandlers(onBlur, handleBlur, {
                           checkDefaultPrevented: false,
                         })}
+                        onPointerDownCapture={composeEventHandlers(
+                          onPointerDownCapture,
+                          windowState.onPointerDownCapture,
+                        )}
                       >
                         <DataGridWindowContext.Provider value={windowState.context}>
                           <DataGridWindowRowContext.Provider value={null}>

@@ -150,12 +150,15 @@ export interface DataGridWindowState {
   /** Composed after the grid navigation's own focus handlers. */
   onFocus: (event: React.FocusEvent<HTMLTableElement>) => void;
   onBlur: (event: React.FocusEvent<HTMLTableElement>) => void;
+  /** The table's pointer press, composed after the consumer's (a prevented press gives no focus). */
+  onPointerDownCapture: () => void;
 }
 
 /**
  * The window of a DataGrid: the context its body renders the window from, the development checks
  * (a window that does not apply, a scroller without a bounded height), a focused row that the
- * sticky header covers scrolled below it, and focus kept through data changes. A sort, a filter
+ * sticky header covers scrolled below it (unless a pointer press gave the focus), and focus kept
+ * through data changes. A sort, a filter
  * or new `items` move the keyed rows, and a browser blurs a focused row that is moved (or
  * removed): when focus was in a data row before such a change and is lost after it, focus goes
  * back to the same row (by id) and column, else to the mounted row nearest to its old index.
@@ -308,7 +311,28 @@ export function useDataGridWindow(options: UseDataGridWindowOptions): DataGridWi
     else focusedRef.current = null;
   }, [rows, enabled, arm, restore]);
 
+  /**
+   * Set by a pointer press in the grid until the focus it gives (on mousedown; after the release
+   * for a touch tap), or until a key press: keyboard focus always follows one, so a press that
+   * gave no focus (on a spacer row) never keeps a later keyboard focus from being scrolled.
+   */
+  const pointerPressRef = React.useRef(false);
+  const onPointerDownCapture = useEventCallback(() => {
+    if (virtualWindow) pointerPressRef.current = true;
+  });
+  React.useEffect(() => {
+    const doc = tableElementRef.current?.ownerDocument;
+    if (!enabled || !doc) return;
+    const clear = () => {
+      pointerPressRef.current = false;
+    };
+    doc.addEventListener('keydown', clear, true);
+    return () => doc.removeEventListener('keydown', clear, true);
+  }, [enabled]);
+
   const onFocus = useEventCallback((event: React.FocusEvent<HTMLTableElement>) => {
+    const pointerFocus = pointerPressRef.current;
+    pointerPressRef.current = false;
     if (!virtualWindow) return;
     disarm();
     const cell = getOwnCell(event.currentTarget, event.target);
@@ -320,8 +344,9 @@ export function useDataGridWindow(options: UseDataGridWindowOptions): DataGridWi
         ? { rowId, index, column: Array.prototype.indexOf.call(row.cells, cell) }
         : null;
     // A browser scrolls a focused row to the top edge of the scroller, under the sticky header:
-    // bring it into the area below the header (a row in view does not move).
-    if (index !== null) virtualWindow.scrollToIndex(index, { align: 'auto' });
+    // bring it into the area below the header (a row in view does not move). Not for the focus
+    // of a pointer press: the row would move before the release, and the click off its target.
+    if (index !== null && !pointerFocus) virtualWindow.scrollToIndex(index, { align: 'auto' });
   });
 
   const onBlur = useEventCallback((event: React.FocusEvent<HTMLTableElement>) => {
@@ -349,5 +374,5 @@ export function useDataGridWindow(options: UseDataGridWindowOptions): DataGridWi
     });
   });
 
-  return { context, scrollerRef, tableRef, onFocus, onBlur };
+  return { context, scrollerRef, tableRef, onFocus, onBlur, onPointerDownCapture };
 }

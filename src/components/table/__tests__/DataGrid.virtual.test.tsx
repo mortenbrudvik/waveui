@@ -464,6 +464,26 @@ describe('DataGrid virtualWindow', () => {
       expect(scroller().scrollTop).toBe(10 * ITEM);
     });
 
+    it('does not scroll for the focus a pointer press gives, and scrolls the next focus without one', () => {
+      render(<Grid />);
+      scrollTo(10 * ITEM + 20);
+      // A browser focuses the pressed cell on mousedown: moving it would move the click off it.
+      fireEvent.pointerDown(cellOf(10, 0));
+      focus(cellOf(10, 0));
+      expect(scroller().scrollTop).toBe(10 * ITEM + 20);
+      focus(cellOf(10, 1));
+      expect(scroller().scrollTop).toBe(10 * ITEM);
+    });
+
+    it('scrolls a keyboard focus after a pointer press that gave no focus', () => {
+      render(<Grid />);
+      scrollTo(10 * ITEM + 20);
+      fireEvent.pointerDown(spacerRows()[0].cells[0]);
+      fireEvent.keyDown(document.body, { key: 'Tab' });
+      focus(cellOf(10, 0));
+      expect(scroller().scrollTop).toBe(10 * ITEM);
+    });
+
     it('keeps a focused row mounted while it is scrolled away, and focus on it when it scrolls back', () => {
       render(<Grid />);
       const cell = cellOf(3, 1);
