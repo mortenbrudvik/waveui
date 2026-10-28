@@ -2,7 +2,7 @@ import * as React from 'react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { isTextEntryElement, useGridNavigation } from '../useGridNavigation';
+import { isTextEntryElement, returnFocusToGridCell, useGridNavigation } from '../useGridNavigation';
 import { useRovingTabIndex } from '../../../hooks/useRovingTabIndex';
 import { getTabbableElements } from '../../../lib/focus';
 import { renderWithProviders } from '../../../test-utils';
@@ -162,8 +162,65 @@ function LargeHarness({ rows }: { rows: number }) {
   );
 }
 
+interface AuxiliaryHarnessProps {
+  onSort?: () => void;
+  /** `onKeyDown` of both separators. */
+  onSeparatorKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+}
+
+/**
+ * A header row with auxiliary widgets (`data-grid-auxiliary`), as a resizable DataGrid renders it:
+ * Name holds a sort button and a separator, Size its text and a separator, Kind only text; one body
+ * row below; and a button after the grid.
+ */
+function AuxiliaryHarness({ onSort, onSeparatorKeyDown }: AuxiliaryHarnessProps) {
+  const { gridRef, gridProps } = useGridNavigation();
+  const separator = (name: string) => (
+    <div
+      role="separator"
+      aria-label={`Resize ${name}`}
+      aria-orientation="vertical"
+      aria-valuenow={150}
+      tabIndex={0}
+      data-grid-auxiliary=""
+      onKeyDown={onSeparatorKeyDown}
+    />
+  );
+  return (
+    <>
+      <table role="grid" aria-label="Files" ref={gridRef} {...gridProps}>
+        <thead>
+          <tr>
+            <th scope="col" data-testid="name-header">
+              <button type="button" onClick={onSort}>
+                Name
+              </button>
+              {separator('Name')}
+            </th>
+            <th scope="col" data-testid="size-header">
+              Size
+              {separator('Size')}
+            </th>
+            <th scope="col">Kind</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-testid="alpha-name">Alpha</td>
+            <td data-testid="alpha-size">12</td>
+            <td>File</td>
+          </tr>
+        </tbody>
+      </table>
+      <button type="button">After</button>
+    </>
+  );
+}
+
 const cell = (id: string) => screen.getByTestId(id);
 const headerCell = (name: string) => screen.getByRole('columnheader', { name });
+const sortButton = () => screen.getByRole('button', { name: 'Name' });
+const separatorOf = (name: string) => screen.getByRole('separator', { name: `Resize ${name}` });
 
 function focus(el: HTMLElement) {
   act(() => el.focus());
@@ -673,6 +730,162 @@ describe('useGridNavigation', () => {
       for (const each of screen.getAllByRole('toolbar')) {
         expect(each.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
       }
+    });
+  });
+
+  describe('auxiliary widgets (data-grid-auxiliary)', () => {
+    it('leaves them out of a cell’s target and at tabindex="-1" in navigation mode', () => {
+      render(<AuxiliaryHarness />);
+      const grid = screen.getByRole('grid');
+      // The sort button stays the target of its cell: the separator beside it does not count.
+      expect(sortButton()).toHaveAttribute('tabindex', '0');
+      expect(cell('name-header')).not.toHaveAttribute('tabindex');
+      // A cell whose only widget is auxiliary is its own target.
+      expect(cell('size-header')).toHaveAttribute('tabindex', '-1');
+      // The separators render tabIndex 0, and the grid still has one Tab stop.
+      expect(separatorOf('Name')).toHaveAttribute('tabindex', '-1');
+      expect(separatorOf('Size')).toHaveAttribute('tabindex', '-1');
+      expect(grid.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      expect(getTabbableElements(grid)).toEqual([sortButton()]);
+    });
+
+    it('reaches the target widget with the arrow keys; Enter on it reaches the widget', async () => {
+      const user = userEvent.setup();
+      const onSort = vi.fn();
+      render(<AuxiliaryHarness onSort={onSort} />);
+      focus(cell('alpha-name'));
+      await user.keyboard('{ArrowUp}');
+      expect(sortButton()).toHaveFocus();
+      expect(fireEvent.keyDown(sortButton(), { key: 'Enter' })).toBe(true);
+      await user.keyboard('{Enter}');
+      expect(onSort).toHaveBeenCalledTimes(1);
+      expect(sortButton()).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(cell('size-header')).toHaveFocus();
+    });
+
+    it('F2 on the target widget enters the auxiliary widget, where the grid keys are off; Escape returns', async () => {
+      const user = userEvent.setup();
+      render(<AuxiliaryHarness />);
+      const grid = screen.getByRole('grid');
+      focus(cell('alpha-name'));
+      await user.keyboard('{ArrowUp}');
+      expect(fireEvent.keyDown(sortButton(), { key: 'F2' })).toBe(false);
+      expect(separatorOf('Name')).toHaveFocus();
+      expect(separatorOf('Name')).toHaveAttribute('tabindex', '0');
+
+      // Interaction mode: the keys are left to the separator.
+      for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'Home', 'End', 'F2']) {
+        expect(fireEvent.keyDown(separatorOf('Name'), { key })).toBe(true);
+      }
+      await user.keyboard('{ArrowRight}{ArrowDown}');
+      expect(separatorOf('Name')).toHaveFocus();
+
+      await user.keyboard('{Escape}');
+      expect(sortButton()).toHaveFocus();
+      expect(separatorOf('Name')).toHaveAttribute('tabindex', '-1');
+      expect(grid.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      // Navigation mode again.
+      await user.keyboard('{ArrowDown}');
+      expect(cell('alpha-name')).toHaveFocus();
+    });
+
+    it('a cell whose only widget is auxiliary: Enter and F2 both enter it, Escape returns to the cell', async () => {
+      const user = userEvent.setup();
+      render(<AuxiliaryHarness />);
+      focus(cell('alpha-size'));
+      await user.keyboard('{ArrowUp}');
+      expect(cell('size-header')).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(separatorOf('Size')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(cell('size-header')).toHaveFocus();
+      await user.keyboard('{F2}');
+      expect(separatorOf('Size')).toHaveFocus();
+      expect(cell('size-header')).toHaveAttribute('tabindex', '-1');
+      await user.keyboard('{Escape}');
+      expect(cell('size-header')).toHaveFocus();
+      expect(cell('size-header')).toHaveAttribute('tabindex', '0');
+      expect(separatorOf('Size')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('Tab in interaction mode moves between the cell’s widgets, its target included', async () => {
+      const user = userEvent.setup();
+      render(<AuxiliaryHarness />);
+      focus(cell('alpha-name'));
+      await user.keyboard('{ArrowUp}{F2}');
+      expect(separatorOf('Name')).toHaveFocus();
+
+      await user.tab({ shift: true });
+      expect(sortButton()).toHaveFocus();
+      // Still interaction mode: the grid keys stay off and the separator stays reachable.
+      expect(separatorOf('Name')).toHaveAttribute('tabindex', '0');
+      expect(fireEvent.keyDown(sortButton(), { key: 'ArrowRight' })).toBe(true);
+      expect(sortButton()).toHaveFocus();
+      await user.tab();
+      expect(separatorOf('Name')).toHaveFocus();
+      await user.tab({ shift: true });
+      // Escape on the target widget ends interaction mode, focus staying there.
+      await user.keyboard('{Escape}');
+      expect(sortButton()).toHaveFocus();
+      expect(separatorOf('Name')).toHaveAttribute('tabindex', '-1');
+      await user.keyboard('{ArrowRight}');
+      expect(cell('size-header')).toHaveFocus();
+
+      // Tab past the cell’s last widget leaves the grid and ends interaction mode.
+      await user.keyboard('{ArrowLeft}{F2}');
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+      expect(separatorOf('Name')).toHaveAttribute('tabindex', '-1');
+      expect(sortButton()).toHaveAttribute('tabindex', '0');
+    });
+
+    it('returnFocusToGridCell returns from a widget that handles Escape and Enter itself', async () => {
+      const user = userEvent.setup();
+      // Like Table.ResizeHandle with `onLeave`: the keys never reach the grid.
+      const onSeparatorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== 'Enter' && event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        returnFocusToGridCell(event.currentTarget);
+      };
+      render(<AuxiliaryHarness onSeparatorKeyDown={onSeparatorKeyDown} />);
+      const grid = screen.getByRole('grid');
+      focus(cell('alpha-name'));
+      await user.keyboard('{ArrowUp}{F2}');
+      expect(separatorOf('Name')).toHaveFocus();
+      await user.keyboard('{Enter}');
+      // To the cell's target widget, in navigation mode.
+      expect(sortButton()).toHaveFocus();
+      expect(separatorOf('Name')).toHaveAttribute('tabindex', '-1');
+      expect(grid.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+
+      await user.keyboard('{ArrowRight}{Enter}');
+      expect(separatorOf('Size')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      // To the cell, which is its own target.
+      expect(cell('size-header')).toHaveFocus();
+      expect(cell('size-header')).toHaveAttribute('tabindex', '0');
+      await user.keyboard('{ArrowDown}');
+      expect(cell('alpha-size')).toHaveFocus();
+    });
+
+    it('returnFocusToGridCell does nothing for an element in no grid of the hook', () => {
+      render(<AuxiliaryHarness />);
+      const after = screen.getByRole('button', { name: 'After' });
+      focus(after);
+      expect(returnFocusToGridCell(after)).toBe(false);
+      expect(after).toHaveFocus();
+      expect(returnFocusToGridCell(separatorOf('Size'))).toBe(true);
+      expect(cell('size-header')).toHaveFocus();
+    });
+
+    it('leaves F2 on a target widget alone in a cell without auxiliary widgets (0.15)', () => {
+      render(<Harness />);
+      const edit = screen.getByRole('button', { name: 'Edit 1' });
+      focus(edit);
+      expect(fireEvent.keyDown(edit, { key: 'F2' })).toBe(true);
+      expect(edit).toHaveFocus();
     });
   });
 

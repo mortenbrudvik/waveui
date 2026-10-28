@@ -76,6 +76,12 @@ const COMPOSITE_SELECTOR = [
 const WIDGET_CANDIDATE_SELECTOR = `${FOCUSABLE_SELECTOR}, ${COMPOSITE_SELECTOR}`;
 
 /**
+ * Marks an auxiliary widget (a column's resize handle): a widget of its cell that never decides the
+ * cell's target and is entered with F2.
+ */
+const AUXILIARY_ATTRIBUTE = 'data-grid-auxiliary';
+
+/**
  * Attributes whose changes can change a cell's widgets or the grid's rows. `aria-selected` on a row
  * signals a selection change, which can change the active cell's target (radio groups).
  */
@@ -89,6 +95,7 @@ const OBSERVED_ATTRIBUTES = [
   'role',
   'data-roving-container',
   'aria-selected',
+  AUXILIARY_ATTRIBUTE,
 ];
 
 /**
@@ -241,6 +248,63 @@ interface CellWidget {
   element: HTMLElement;
   /** A nested composite: the grid never writes `tabindex` on or inside it. */
   composite: boolean;
+  /** An auxiliary widget (`data-grid-auxiliary`): never the cell's target, entered with F2. */
+  auxiliary: boolean;
+}
+
+/** The element a widget is entered at: the widget, or a nested composite's entry. */
+function getWidgetEntry(widget: CellWidget): HTMLElement | null {
+  return widget.composite ? getCompositeEntry(widget.element) : widget.element;
+}
+
+/** The element F2 moves focus to: the entry of the cell's first auxiliary widget that has one. */
+function getAuxiliaryEntry(widgets: readonly CellWidget[]): HTMLElement | null {
+  for (const widget of widgets) {
+    const entry = widget.auxiliary ? getWidgetEntry(widget) : null;
+    if (entry) return entry;
+  }
+  return null;
+}
+
+/**
+ * Whether focus on `focused`, inside `cell` whose target is `target`, is interaction mode: on
+ * anything but the cell and its target; and on its target too while the widgets of a cell with an
+ * auxiliary widget are being interacted with (`interactionCell`), so Tab moves between all of them.
+ */
+function isInteractionFocus(
+  cell: HTMLTableCellElement,
+  focused: EventTarget | null,
+  target: HTMLElement,
+  widgets: readonly CellWidget[],
+  interactionCell: HTMLTableCellElement | null,
+): boolean {
+  if (focused === cell) return false;
+  if (focused !== target) return true;
+  return interactionCell === cell && widgets.some((widget) => widget.auxiliary);
+}
+
+/**
+ * The grids of mounted {@link useGridNavigation} hooks, each with the function that returns focus
+ * to one of its cells, as Escape does (see {@link returnFocusToGridCell}).
+ */
+const cellReturns = new WeakMap<Element, (cell: HTMLTableCellElement) => void>();
+
+/**
+ * Ends interaction mode in the grid cell that holds `element` and moves focus to the cell's target
+ * (the cell, or its target widget), as Escape does: for a widget that handles Escape, Enter or
+ * Space itself to leave (a DataGrid column's resize handle). Returns whether a grid of
+ * {@link useGridNavigation} holds `element` in one of its cells. Module-only.
+ */
+export function returnFocusToGridCell(element: Element): boolean {
+  for (let el = element.parentElement; el; el = el.parentElement) {
+    const returnTo = cellReturns.get(el);
+    if (!returnTo) continue;
+    const cell = getCell(el as HTMLTableElement, element);
+    if (!cell) return false;
+    returnTo(cell);
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -271,6 +335,16 @@ interface CellWidget {
  *   keys: its cell takes focus, and Enter/F2 enters the composite at its own tab stop. The grid never
  *   writes `tabindex` on or inside a composite (the composite manages its own), so a composite
  *   keeps its own Tab stop — the same documented limitation as `useRovingTabIndex`.
+ * - **Auxiliary widgets** (a widget that carries `data-grid-auxiliary`, such as a column's resize
+ *   handle) are left out when the cell's target is chosen, so a header with a sort button and a
+ *   resize handle keeps the button as its target (Enter sorts), and a cell whose only widget is
+ *   auxiliary is its own target. Like every widget they are at `tabindex="-1"` in navigation mode
+ *   and take part in interaction mode. F2 on a cell that has one, or on its target widget, enters
+ *   interaction mode at the first auxiliary widget (Enter on a cell that is its own target still
+ *   enters its first widget); Escape returns to the cell's target, the cell or its target widget.
+ *   While the widgets of such a cell are interacted with, its target widget is in interaction mode
+ *   too, so Tab moves between all of them and Escape on the target ends the mode. A cell without
+ *   auxiliary widgets behaves as described above.
  *
  * Keys are ignored when the event's default was prevented (a widget that handled the key, a
  * consumer handler), or with Alt/Meta held. The tab indexes are written to the DOM (layout effect
@@ -317,14 +391,24 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
         if (isNestedComposite(el)) {
           composite = el;
           const available = precise ? getCompositeEntry(el) !== null : isLikelyFocusable(el);
-          if (available) widgets.push({ element: el, composite: true });
+          if (available) {
+            widgets.push({
+              element: el,
+              composite: true,
+              auxiliary: el.hasAttribute(AUXILIARY_ATTRIBUTE),
+            });
+          }
           continue;
         }
         const tabIndex = el.getAttribute('tabindex');
         // An author tabindex="-1" (not written by this hook) opts the element out.
         if (tabIndex !== null && Number(tabIndex) < 0 && !stamped.has(el)) continue;
         if (precise ? isFocusable(el) : isLikelyFocusable(el)) {
-          widgets.push({ element: el, composite: false });
+          widgets.push({
+            element: el,
+            composite: false,
+            auxiliary: el.hasAttribute(AUXILIARY_ATTRIBUTE),
+          });
         }
       }
       return widgets;
@@ -335,12 +419,18 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
   /**
    * The element of `cell` that takes focus in navigation mode. `checkRadioGroup` applies the radio
    * group rule, which only decides where the tab stop goes (the cell that holds it); a focused
-   * lone radio is in navigation mode either way.
+   * lone radio is in navigation mode either way. Auxiliary widgets are not counted.
    */
   const getTarget = React.useCallback(
     (cell: HTMLTableCellElement, widgets: CellWidget[], checkRadioGroup: boolean): HTMLElement => {
-      if (widgets.length !== 1) return cell;
-      const [{ element, composite }] = widgets;
+      let only: CellWidget | null = null;
+      for (const widget of widgets) {
+        if (widget.auxiliary) continue;
+        if (only) return cell;
+        only = widget;
+      }
+      if (!only) return cell;
+      const { element, composite } = only;
       if (composite || isTextEntryElement(element)) return cell;
       if (
         checkRadioGroup &&
@@ -530,6 +620,16 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
     [activate, getTarget, getWidgets],
   );
 
+  // A widget that handles its leaving keys itself returns through `returnFocusToGridCell`.
+  React.useLayoutEffect(() => {
+    if (!grid) return;
+    const returnTo = (cell: HTMLTableCellElement) => focusCell(grid, cell);
+    cellReturns.set(grid, returnTo);
+    return () => {
+      if (cellReturns.get(grid) === returnTo) cellReturns.delete(grid);
+    };
+  }, [grid, focusCell]);
+
   const onKeyDown = React.useCallback<React.KeyboardEventHandler<HTMLTableElement>>(
     (event) => {
       const table = event.currentTarget;
@@ -542,7 +642,9 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       const widgetTarget = getTarget(cell, widgets, false);
       const onCell = event.target === cell;
 
-      if (!onCell && event.target !== widgetTarget) {
+      if (
+        isInteractionFocus(cell, event.target, widgetTarget, widgets, interactionCellRef.current)
+      ) {
         // Interaction mode: the widget keeps its keys; Escape returns to the cell.
         if (event.key === 'Escape') {
           event.preventDefault();
@@ -552,10 +654,19 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       }
       if (event.altKey || event.metaKey) return;
 
+      // F2 on a cell with an auxiliary widget, or on its target widget, enters the auxiliary one.
+      const auxiliaryEntry = event.key === 'F2' ? getAuxiliaryEntry(widgets) : null;
+      if (auxiliaryEntry) {
+        event.preventDefault();
+        activate(table, cell, true);
+        auxiliaryEntry.focus();
+        return;
+      }
+
       if ((event.key === 'Enter' || event.key === 'F2') && onCell) {
         let entry: HTMLElement | null = null;
         for (const widget of widgets) {
-          entry = widget.composite ? getCompositeEntry(widget.element) : widget.element;
+          entry = getWidgetEntry(widget);
           if (entry) break;
         }
         if (!entry) return;
@@ -643,8 +754,17 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       const target: EventTarget = event.target;
       const cell = getCell(table, target);
       if (!cell) return;
-      const interaction =
-        target !== cell && target !== getTarget(cell, getWidgets(cell, true), false);
+      let interaction = false;
+      if (target !== cell) {
+        const widgets = getWidgets(cell, true);
+        interaction = isInteractionFocus(
+          cell,
+          target,
+          getTarget(cell, widgets, false),
+          widgets,
+          interactionCellRef.current,
+        );
+      }
       activate(table, cell, interaction);
     },
     [activate, getTarget, getWidgets],

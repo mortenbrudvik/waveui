@@ -150,8 +150,9 @@ afterEach(() => {
 describe('DataGrid column sizing', () => {
   describe('types', () => {
     it('reports the widths and the details of a change, and takes localizable labels', () => {
+      // `details` is optional through 0.x (C-NAMING); the grid always passes it.
       expectTypeOf<DataGridBaseProps['onColumnWidthsChange']>().toEqualTypeOf<
-        | ((widths: Record<string, number>, details: TableColumnWidthsChangeDetails) => void)
+        | ((widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void)
         | undefined
       >();
       expectTypeOf<DataGridLabels['resizeColumn']>().toEqualTypeOf<string | undefined>();
@@ -307,6 +308,34 @@ describe('DataGrid column sizing', () => {
       );
       expect(handleOf('Part name')).toHaveAttribute('aria-valuenow', '150');
       expect(handleOf('Owner')).toHaveAttribute('aria-valuenow', '150');
+    });
+
+    it('keeps the name of a header cell whose wrapper forwards aria-labelledby={undefined}', () => {
+      render(
+        <Grid resizableColumns>
+          <DataGrid.Header>
+            <tr>
+              <DataGrid.HeaderCell columnId="item" sortable aria-labelledby={undefined}>
+                Item
+              </DataGrid.HeaderCell>
+              <DataGrid.HeaderCell columnId="owner" aria-labelledby={undefined}>
+                Owner
+              </DataGrid.HeaderCell>
+              <DataGrid.HeaderCell columnId="size" aria-label={undefined}>
+                Size
+              </DataGrid.HeaderCell>
+            </tr>
+          </DataGrid.Header>
+        </Grid>,
+      );
+      for (const name of ['Item', 'Owner', 'Size']) {
+        const th = screen.getByText(name).closest('th') as HTMLElement;
+        expect(th).toHaveAccessibleName(name);
+        expect(within(th).getByRole('separator', { name: 'Resize column' })).toHaveAttribute(
+          'aria-valuenow',
+          '150',
+        );
+      }
     });
 
     it('passes axe with handles, the selection column and a sorted column', async () => {
@@ -473,6 +502,34 @@ describe('DataGrid column sizing', () => {
       expect(grid()).not.toHaveAttribute('data-resizing');
     });
 
+    it('ignores a second primary pointer while a drag is under way', () => {
+      const onColumnWidthsChange = vi.fn();
+      render(
+        <Grid
+          resizableColumns
+          defaultColumnWidths={{}}
+          onColumnWidthsChange={onColumnWidthsChange}
+        />,
+      );
+      const handle = handleOf('Owner');
+      const PEN = { pointerId: 2, pointerType: 'pen', isPrimary: true } as const;
+      down(handle);
+      fireEvent.pointerDown(handle, { ...PEN, button: 0, clientX: 300 });
+      expect(grid()).toHaveAttribute('data-resizing', '');
+      move(handle, 120);
+      flushFrames();
+      // The mouse drag goes on from where it started.
+      expect(colWidths()).toEqual(['150px', '170px', '150px']);
+      expect(onColumnWidthsChange).toHaveBeenCalledTimes(1);
+
+      up(handle);
+      expect(grid()).not.toHaveAttribute('data-resizing');
+      expect(handle).not.toHaveAttribute('data-dragging');
+      fireEvent.pointerUp(handle, PEN);
+      expect(grid()).not.toHaveAttribute('data-resizing');
+      expect(onColumnWidthsChange).toHaveBeenCalledTimes(1);
+    });
+
     it('ignores a press that is not the primary button', () => {
       render(<Grid resizableColumns />);
       fireEvent.pointerDown(handleOf('Item'), { ...POINTER, button: 2, clientX: 100 });
@@ -585,6 +642,29 @@ describe('DataGrid column sizing', () => {
       expect(colWidths()).toEqual(['300px', '300px', '260px']);
     });
 
+    it('measures the column again at a key press, after the container resized under a focused handle', async () => {
+      const user = userEvent.setup();
+      const onColumnWidthsChange = vi.fn();
+      render(<Grid resizableColumns onColumnWidthsChange={onColumnWidthsChange} />);
+      mockRect(header('Item'), { width: 300 });
+      mockRect(header('Owner'), { width: 280 });
+      mockRect(header('Size'), { width: 260 });
+      const handle = handleOf('Owner');
+      act(() => handle.focus());
+      expect(handle).toHaveAttribute('aria-valuenow', '280');
+      // The container grows while the handle keeps focus: the columns are drawn wider.
+      mockRect(header('Item'), { width: 330 });
+      mockRect(header('Owner'), { width: 310 });
+      mockRect(header('Size'), { width: 290 });
+      await user.keyboard('{ArrowRight}');
+      expect(onColumnWidthsChange).toHaveBeenCalledTimes(1);
+      expect(onColumnWidthsChange).toHaveBeenCalledWith(
+        { item: 330, owner: 330, size: 290 },
+        { columnId: 'owner', width: 330, event: expect.any(Event) },
+      );
+      expect(handle).toHaveAttribute('aria-valuenow', '330');
+    });
+
     it('calls onColumnWidthsChange once in StrictMode', async () => {
       const user = userEvent.setup();
       const onColumnWidthsChange = vi.fn();
@@ -638,6 +718,144 @@ describe('DataGrid column sizing', () => {
       expect(colWidths()).toEqual(['220px', '150px', '150px']);
       await user.keyboard('{ArrowRight}{ArrowRight}');
       expect(colWidths()).toEqual(['180px', '150px', '150px']);
+    });
+  });
+
+  describe('the grid navigation (F2)', () => {
+    const sortButton = () => screen.getByRole('button', { name: 'Item' });
+    const tabStops = () => grid().querySelectorAll('[tabindex="0"]');
+
+    it('keeps one Tab stop: the handles are at tabindex="-1" in navigation mode', async () => {
+      const user = userEvent.setup();
+      render(<Grid resizableColumns selectionMode="multiple" />);
+      expect(tabStops()).toHaveLength(1);
+      expect(tabStops()[0]).toBe(screen.getByRole('checkbox', { name: 'Select all rows' }));
+      for (const handle of screen.getAllByRole('separator')) {
+        expect(handle).toHaveAttribute('tabindex', '-1');
+      }
+      act(() => header('Owner').focus());
+      await user.keyboard('{ArrowRight}');
+      expect(header('Size')).toHaveFocus();
+      expect(tabStops()).toHaveLength(1);
+      await user.keyboard('{F2}');
+      expect(handleOf('Size')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(header('Size')).toHaveFocus();
+      expect(tabStops()).toHaveLength(1);
+      expect(handleOf('Size')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('keeps the sort button the target of a sortable header: the arrows reach it and Enter sorts', async () => {
+      const user = userEvent.setup();
+      const onSortChange = vi.fn();
+      render(<Grid resizableColumns onSortChange={onSortChange} />);
+      expect(sortButton()).toHaveAttribute('tabindex', '0');
+      act(() => header('Owner').focus());
+      await user.keyboard('{ArrowLeft}');
+      expect(sortButton()).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(onSortChange).toHaveBeenCalledTimes(1);
+      expect(header('Item')).toHaveAttribute('aria-sort', 'ascending');
+      expect(sortButton()).toHaveFocus();
+    });
+
+    it('F2 on the sort button moves to the handle, whose arrows resize; Enter returns to the button', async () => {
+      const user = userEvent.setup();
+      const onColumnWidthsChange = vi.fn();
+      const onSortChange = vi.fn();
+      render(
+        <Grid
+          resizableColumns
+          defaultColumnWidths={{ item: 200 }}
+          onColumnWidthsChange={onColumnWidthsChange}
+          onSortChange={onSortChange}
+        />,
+      );
+      act(() => header('Owner').focus());
+      await user.keyboard('{ArrowLeft}{F2}');
+      expect(handleOf('Item')).toHaveFocus();
+      await user.keyboard('{ArrowRight}{ArrowRight}');
+      expect(colWidths()).toEqual(['240px', '150px', '150px']);
+      await user.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+      expect(colWidths()).toEqual(['235px', '150px', '150px']);
+      expect(handleOf('Item')).toHaveAttribute('aria-valuenow', '235');
+      // The grid's own keys are off: focus stays on the handle.
+      await user.keyboard('{ArrowDown}{ArrowUp}');
+      expect(handleOf('Item')).toHaveFocus();
+      expect(onColumnWidthsChange).toHaveBeenCalledTimes(3);
+      expect(onColumnWidthsChange).toHaveBeenLastCalledWith(
+        { item: 235, owner: 150, size: 150 },
+        { columnId: 'item', width: 235, event: expect.any(Event) },
+      );
+
+      await user.keyboard('{Enter}');
+      expect(sortButton()).toHaveFocus();
+      expect(onSortChange).not.toHaveBeenCalled();
+      expect(handleOf('Item')).toHaveAttribute('tabindex', '-1');
+      expect(tabStops()).toHaveLength(1);
+      // Navigation mode again.
+      await user.keyboard('{ArrowRight}');
+      expect(header('Owner')).toHaveFocus();
+    });
+
+    it('mirrors the arrow keys of the handle in RTL', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Grid resizableColumns defaultColumnWidths={{ item: 200 }} />, {
+        dir: 'rtl',
+      });
+      act(() => header('Owner').focus());
+      // ArrowRight moves toward the start of an RTL row: to the sort button of Item.
+      await user.keyboard('{ArrowRight}');
+      expect(sortButton()).toHaveFocus();
+      await user.keyboard('{F2}{ArrowLeft}{ArrowLeft}');
+      expect(colWidths()).toEqual(['240px', '150px', '150px']);
+      await user.keyboard('{ArrowRight}');
+      expect(colWidths()).toEqual(['220px', '150px', '150px']);
+      await user.keyboard('{Enter}');
+      expect(sortButton()).toHaveFocus();
+    });
+
+    it('enters the handle of a header without a sort button with Enter and F2, and leaves it with Escape and Space', async () => {
+      const user = userEvent.setup();
+      render(<Grid resizableColumns defaultColumnWidths={{}} />);
+      act(() => header('Owner').focus());
+      await user.keyboard('{Enter}');
+      expect(handleOf('Owner')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(colWidths()).toEqual(['150px', '170px', '150px']);
+      await user.keyboard('{Escape}');
+      expect(header('Owner')).toHaveFocus();
+      expect(header('Owner')).toHaveAttribute('tabindex', '0');
+
+      await user.keyboard('{F2}');
+      expect(handleOf('Owner')).toHaveFocus();
+      await user.keyboard(' ');
+      expect(header('Owner')).toHaveFocus();
+      expect(handleOf('Owner')).toHaveAttribute('tabindex', '-1');
+      await user.keyboard('{ArrowRight}');
+      expect(header('Size')).toHaveFocus();
+    });
+
+    it('moves between the sort button and the handle with Tab in interaction mode', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <Grid resizableColumns />
+          <button type="button">After</button>
+        </>,
+      );
+      act(() => header('Owner').focus());
+      await user.keyboard('{ArrowLeft}{F2}');
+      expect(handleOf('Item')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(sortButton()).toHaveFocus();
+      await user.tab();
+      expect(handleOf('Item')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(sortButton()).toHaveFocus();
+      expect(tabStops()).toHaveLength(1);
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
     });
   });
 

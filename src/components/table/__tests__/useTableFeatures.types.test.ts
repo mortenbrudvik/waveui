@@ -20,6 +20,10 @@ import {
   type TableSortState,
   type UseTableFeaturesOptions,
 } from '../useTableFeatures';
+import type {
+  TableColumnWidthsChangeDetails,
+  UseTableColumnSizingOptions,
+} from '../useTableColumnSizing';
 import { useTableSelection, type UseTableSelectionOptions } from '../useTableSelection';
 import { useTableSort, type UseTableSortOptions } from '../useTableSort';
 
@@ -200,5 +204,12 @@ describe('useTableFeatures types', () => {
     expectTypeOf<ReturnType<TableColumnSizingState['getColumnProps']>>().toEqualTypeOf<{
       style: CSSProperties;
     }>();
+  });
+
+  it('types the details of onColumnWidthsChange as optional, as every 0.x details argument', () => {
+    expectTypeOf<UseTableColumnSizingOptions['onColumnWidthsChange']>().toEqualTypeOf<
+      | ((widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void)
+      | undefined
+    >();
   });
 });

@@ -14,6 +14,7 @@ import { focusRingInset } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { TableResizeHandle } from './Table.resize';
+import { returnFocusToGridCell } from './useGridNavigation';
 import type { TableColumnWidthsChangeDetails } from './useTableColumnSizing';
 
 // The column sizing of a DataGrid (module-only): its width state, the `<colgroup>`, the table
@@ -39,7 +40,8 @@ export interface UseDataGridColumnSizingOptions {
   columnWidths: Record<string, number> | undefined;
   defaultColumnWidths: Record<string, number> | undefined;
   onColumnWidthsChange:
-    ((widths: Record<string, number>, details: TableColumnWidthsChangeDetails) => void) | undefined;
+    | ((widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void)
+    | undefined;
   /** `labels.resizeColumn` of the grid. */
   resizeColumnLabel: string | undefined;
   /** `labels.columnWidth` of the grid. */
@@ -121,11 +123,12 @@ function drawnWidth(el: Element | null | undefined): number {
 }
 
 /**
- * The width state and the layout of a DataGrid's columns. Widths are controlled (`columnWidths`) or not (`defaultColumnWidths`); until one is state the table is 100%
- * wide and at least as wide as its columns, so the browser spreads a wider container, and from
- * then on it is exactly as wide as its columns. The first change of an unresized grid adopts the
- * widths the columns are drawn at (their header cells measured, the selection column included,
- * every edge rounded once), so nothing moves but the changed column's end edge.
+ * The width state and the layout of a DataGrid's columns. Widths are controlled (`columnWidths`)
+ * or not (`defaultColumnWidths`); until one is state the table is 100% wide and at least as wide
+ * as its columns, so the browser spreads a wider container, and from then on it is exactly as wide
+ * as its columns. The first change of an unresized grid adopts the widths the columns are drawn at
+ * (their header cells measured, the selection column included, every edge rounded once), so
+ * nothing moves but the changed column's end edge.
  */
 export function useDataGridColumnSizing(
   options: UseDataGridColumnSizingOptions,
@@ -319,7 +322,9 @@ export function useDataGridColumnSizing(
 /**
  * The resize handle of a column's header cell. Before any width is state the column is drawn
  * wider than its width when the browser spreads the grid, so the handle measures its cell when it
- * gets focus and when a drag starts (before the drag reads the width), and starts from there.
+ * gets focus, at each key press and when a drag starts (before the handle reads the width), and
+ * starts from there. It is an auxiliary widget of the grid's navigation (entered with F2), and
+ * Enter, Space and Escape return focus to its cell's target.
  */
 export function DataGridColumnResizeHandle({
   columnId,
@@ -381,11 +386,20 @@ export function DataGridColumnResizeHandle({
       )}
       onResize={(next, { event }) => setColumnWidth(columnId, next, event)}
       onReset={({ event }) => resetColumnWidth(columnId, event)}
+      onLeave={() => {
+        if (handleRef.current) returnFocusToGridCell(handleRef.current);
+      }}
       onFocus={() => {
         if (!isSized) measure();
       }}
+      onKeyDownCapture={(event) => {
+        // The container may have resized since the handle got focus. Rendered before the
+        // handle's own key handler reads the width.
+        if (!isSized && event.target === event.currentTarget) flushSync(measure);
+      }}
       onPointerDown={(event) => {
-        if (event.button !== 0 || !event.isPrimary) return;
+        // A second pointer does not take over a drag under way.
+        if (event.button !== 0 || !event.isPrimary || pointerRef.current !== null) return;
         pointerRef.current = event.pointerId;
         if (isSized) {
           startDrag(columnId);

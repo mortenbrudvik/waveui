@@ -439,10 +439,12 @@ const MEMBER_COLUMN_SIZING = {
 
 /**
  * `resizableColumns` gives every column header a resize handle: drag the end edge of a header, or
- * focus its handle and press the arrow keys (5 pixels with Shift, Home for the minimum). The
- * columns start at their `defaultWidth` and the grid fills its container; the first resize keeps
- * the widths the columns are drawn at, and from then on the grid is as wide as its columns. A
- * double click sets a column back to its initial width.
+ * press F2 on a header (or its sort button) to move focus to its handle, then the arrow keys (20
+ * pixels, 5 with Shift, Home for the minimum) and Enter, Space or Escape to go back. The columns
+ * start at their `defaultWidth` and the grid fills its container; the first resize keeps the
+ * widths the columns are drawn at, and from then on the grid is as wide as its columns. Once any
+ * column has been resized, a double click on a handle sets its column back to its initial width
+ * (before the first resize it changes nothing).
  */
 export const Resizable: Story = {
   args: {

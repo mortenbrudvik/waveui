@@ -88,7 +88,7 @@ interface FeaturesTableArgs {
   /** Called with the widths of the columns when one changes. */
   onColumnWidthsChange: (
     widths: Record<string, number>,
-    details: TableColumnWidthsChangeDetails,
+    details?: TableColumnWidthsChangeDetails,
   ) => void;
 }
 

@@ -47,12 +47,13 @@ export interface UseTableColumnSizingOptions {
   defaultColumnWidths?: Record<string, number>;
   /**
    * Called with the width of every column and the details whenever a width changes (every step of
-   * a drag or key press). Setting the width a column already has does not call it, once a width is
-   * state.
+   * a drag or key press). The details are always passed; they are typed optional through 0.x, as
+   * every `details` argument. Setting the width a column already has does not call it, once a
+   * width is state.
    */
   onColumnWidthsChange?: (
     widths: Record<string, number>,
-    details: TableColumnWidthsChangeDetails,
+    details?: TableColumnWidthsChangeDetails,
   ) => void;
 }
 

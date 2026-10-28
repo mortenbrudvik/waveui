@@ -250,8 +250,11 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    * Gives the header cell of each column (of `columns`, by `columnId`; the last one included, the
    * selection column not) a resize handle: a focusable `role="separator"` with the column's width
    * as `aria-valuenow`. A drag (mouse, touch or pen) moves the column's end edge, mirrored in
-   * right-to-left grids; the arrow keys move it by 20 pixels (5 with Shift) and Home sets the
-   * minimum width; a double click sets the column back to its initial width once a width is state.
+   * right-to-left grids. From the keyboard, F2 on a header cell (or on its sort button) moves focus
+   * to its handle, which adds no Tab stop to the grid; there the arrow keys move the edge by 20
+   * pixels (5 with Shift, mirrored in right-to-left grids), Home sets the minimum width, and Enter,
+   * Space or Escape return focus to the header (its sort button, which Enter still activates
+   * directly). A double click sets the column back to its initial width once a width is state.
    * The grid carries `data-resizing` while a handle drags. Needs `columns` and `items`, as every
    * column width prop does: without them they are all ignored, with a development warning.
    * Fluent's `resizableColumns`.
@@ -283,13 +286,14 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
   /**
    * Called with the width of every column (by `columnId`) whenever a width changes, at every step
    * of a drag (at most once per animation frame) or key press, then `details`: `{ columnId,
-   * width, event }`, the resized column, its new width and the event behind it. Setting the width
-   * a column already has does not call it once a width is state. Fluent's `onColumnResize`, whose
-   * data is in `details`.
+   * width, event }`, the resized column, its new width and the event behind it. The grid always
+   * passes `details`; it is typed optional through 0.x, as every `details` argument. Setting the
+   * width a column already has does not call it once a width is state. Fluent's `onColumnResize`,
+   * whose data is in `details`.
    */
   onColumnWidthsChange?: (
     widths: Record<string, number>,
-    details: TableColumnWidthsChangeDetails,
+    details?: TableColumnWidthsChangeDetails,
   ) => void;
   /**
    * Row selection mode. `'multiple'` adds a checkbox column with a "Select all rows" header
@@ -299,8 +303,10 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    */
   selectionMode?: 'none' | SelectionMode;
   /**
-   * The name of the select-all checkbox and the header text of the selection column, for
-   * localization. Unset members keep their English defaults. Rows are named with their own
+   * The grid's built-in text, for localization: the name of the select-all checkbox
+   * (`selectAll`), the header text of the selection column (`selectionHeader`), and, with
+   * `resizableColumns`, the name of the resize handles (`resizeColumn`) and their value text
+   * (`columnWidth`). Unset members keep their English defaults. Rows are named with their own
    * `selectionLabel`.
    */
   labels?: DataGridLabels;
@@ -2105,6 +2111,8 @@ DataGridHeader.displayName = 'DataGridHeader';
  * of a column of `columns` (by `columnId`) also holds the column's resize handle, after its
  * content, along its end edge (the cell is positioned for it); the cell is then named by its
  * content alone (`aria-labelledby`, unless it has a name of its own), not by the handle's label.
+ * The handle is no target of the grid's navigation: a sortable cell's target stays its sort
+ * button, and F2 on the cell or the button moves focus to the handle.
  */
 const DataGridHeaderCell = ({
   columnId,
@@ -2113,6 +2121,8 @@ const DataGridHeaderCell = ({
   children,
   className,
   onClick,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
   ref,
   ...rest
 }: DataGridHeaderCellProps) => {
@@ -2131,11 +2141,10 @@ const DataGridHeaderCell = ({
     getColumnEntry(resize.widths, columnId) !== undefined
       ? columnId
       : undefined;
-  // The handle is content of the cell: without this, its label would join the cell's name.
+  // The handle is content of the cell: without this, its label would join the cell's name. A
+  // name prop given as `undefined` (forwarded by a wrapper) counts as none.
   const labelledByContent =
-    resizeColumnId !== undefined &&
-    rest['aria-label'] === undefined &&
-    rest['aria-labelledby'] === undefined;
+    resizeColumnId !== undefined && ariaLabel === undefined && ariaLabelledBy === undefined;
   const contentId = labelledByContent ? labelId : undefined;
 
   // The sort runs from the `<th>` once the button's click bubbled up to it, composed after the
@@ -2167,7 +2176,8 @@ const DataGridHeaderCell = ({
       ref={ref}
       scope="col"
       aria-sort={sortColumnId !== undefined ? (sortedDirection ?? 'none') : undefined}
-      aria-labelledby={contentId}
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy ?? contentId}
       className={cn(
         dataGridHeaderCellClassNames.root,
         cellBase,
@@ -2759,9 +2769,10 @@ export {
  *
  * With `items` and `columns`, the columns can be sized: `resizableColumns` gives each column
  * header a resize handle (a separator that a pointer drags and the arrow keys move, mirrored in
- * right-to-left grids), `columnSizingOptions` sets each column's initial and minimum width, and
- * `columnWidths` or `defaultColumnWidths` with `onColumnWidthsChange(widths, details)` hold the
- * widths, for instance to persist them (Fluent's `resizableColumns`, `columnSizingOptions` and
+ * right-to-left grids; F2 on a column header moves focus to it, and Enter, Space or Escape back),
+ * `columnSizingOptions` sets each column's initial and minimum width, and `columnWidths` or
+ * `defaultColumnWidths` with `onColumnWidthsChange(widths, details)` hold the widths, for
+ * instance to persist them (Fluent's `resizableColumns`, `columnSizingOptions` and
  * `onColumnResize`, whose data is in `details`). The grid then lays its columns out from the
  * widths and truncates its cells' text.
  *
