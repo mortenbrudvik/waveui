@@ -560,10 +560,17 @@ function isOwnKeyEvent(event: React.KeyboardEvent<HTMLElement>): boolean {
  * Whether a click landed on this treeitem's own row (or on the treeitem element itself). Clicks
  * in its child group, including the indentation gutter beside the nested rows, clicks on nested
  * items, on its checkbox and on its actions are not its own.
+ *
+ * While the child group exits, its collapse element is `inert`, which hit-tests like an element
+ * the pointer passes through: a pointer click in the group's box lands on the treeitem element
+ * itself, and is not its own either (it would expand the item again and activate it). A click
+ * without a pointer (`detail` 0: Enter on a focused item, a screen reader's click) still is.
  */
 function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
   const target = event.target as Element | null;
-  if (target === event.currentTarget) return true;
+  if (target === event.currentTarget) {
+    return event.detail === 0 || !event.currentTarget.querySelector(':scope > [inert]');
+  }
   if (target?.closest?.('[data-tree-checkbox], [data-tree-actions]')) return false;
   return target?.closest?.('[data-tree-row]')?.parentElement === event.currentTarget;
 }
@@ -703,7 +710,9 @@ TreeItemActions.displayName = 'TreeItemActions';
  * An item expanded by default appears without motion. After a collapse the group stays in the
  * document until the collapse ends, `inert` (its items leave the arrow keys and typeahead at once)
  * while the item already reports itself collapsed; expanding the item again during the collapse
- * keeps the same group. Focus inside the group when the item collapses moves to the item.
+ * keeps the same group. Focus inside the group when the item collapses moves to the item. A
+ * pointer click that falls through the exiting group onto the item (an `inert` element lets the
+ * pointer through) is not the item's: it neither expands nor activates it.
  *
  * Nested items must be `Tree.Item` elements among the item's own children: written directly, in
  * Fragments, or returned by a render function (`{node.children.map(renderNode)}`). A component

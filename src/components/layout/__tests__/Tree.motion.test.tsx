@@ -410,6 +410,106 @@ describe('focus inside a collapsing group (§2.5, §5.2)', () => {
   });
 });
 
+describe('a click through an exiting group (§14 item 13)', () => {
+  // An `inert` element hit-tests like `pointer-events: none`, so in a browser a pointer click in
+  // the box of an exiting group (or of its collapse wrapper) lands on the treeitem that collapsed.
+  // jsdom has no hit testing: the tests dispatch that click on the treeitem itself.
+
+  it('a pointer click that lands on the collapsed item while its group exits neither toggles nor activates it', async () => {
+    const motion = mockAnimations({ animated: isCollapse });
+    const user = userEvent.setup();
+    const onItemSelect = vi.fn();
+    const onExpandedItemsChange = vi.fn();
+    const onClick = vi.fn();
+    render(
+      <Tree
+        aria-label="Files"
+        defaultExpandedItems={['docs']}
+        onItemSelect={onItemSelect}
+        onExpandedItemsChange={onExpandedItemsChange}
+      >
+        <Tree.Item value="docs" onClick={onClick}>
+          Documents
+          <Tree.Item value="work">Work</Tree.Item>
+        </Tree.Item>
+      </Tree>,
+    );
+    await user.click(screen.getByText('Documents'));
+    expect(wrapperOf('Documents')).toHaveAttribute('data-presence', 'exiting');
+    onItemSelect.mockClear();
+    onExpandedItemsChange.mockClear();
+    onClick.mockClear();
+
+    fireEvent.click(item('Documents'), { detail: 1 });
+    await act(async () => {});
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'false');
+    expect(wrapperOf('Documents')).toHaveAttribute('data-presence', 'exiting');
+    expect(onItemSelect).not.toHaveBeenCalled();
+    expect(onExpandedItemsChange).not.toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
+
+    await finish(motion);
+    expect(groupOf('Documents')).toBeNull();
+  });
+
+  it('a click through an inner exiting group activates neither its item nor the parent', async () => {
+    const motion = mockAnimations({ animated: isCollapse });
+    const user = userEvent.setup();
+    const onItemSelect = vi.fn();
+    render(<Files defaultExpandedItems={['docs', 'work']} onItemSelect={onItemSelect} />);
+    await user.click(screen.getByText('Work'));
+    expect(wrapperOf('Work')).toHaveAttribute('data-presence', 'exiting');
+    onItemSelect.mockClear();
+
+    fireEvent.click(item('Work'), { detail: 1 });
+    await act(async () => {});
+    expect(item('Work')).toHaveAttribute('aria-expanded', 'false');
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+    expect(onItemSelect).not.toHaveBeenCalled();
+    await finish(motion);
+  });
+
+  it('a keyboard or assistive-technology click (detail 0) on the item still activates it during the exit', async () => {
+    const motion = mockAnimations({ animated: isCollapse });
+    const user = userEvent.setup();
+    const onItemSelect = vi.fn();
+    render(<Files defaultExpandedItems={['docs']} onItemSelect={onItemSelect} />);
+    await user.click(screen.getByText('Documents'));
+    const wrapper = wrapperOf('Documents');
+    expect(wrapper).toHaveAttribute('data-presence', 'exiting');
+    onItemSelect.mockClear();
+
+    fireEvent.click(item('Documents'), { detail: 0 });
+    await act(async () => {});
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+    expect(onItemSelect.mock.calls).toEqual([['docs']]);
+    // Expanded again during its exit, the same wrapper enters.
+    expect(wrapperOf('Documents')).toBe(wrapper);
+    expect(wrapper).toHaveAttribute('data-presence', 'entering');
+    await finish(motion);
+  });
+
+  it('a pointer click on the row during the exit, or on an item with no exiting group, still activates', async () => {
+    const motion = mockAnimations({ animated: isCollapse });
+    const user = userEvent.setup();
+    const onItemSelect = vi.fn();
+    render(<Files defaultExpandedItems={['docs']} onItemSelect={onItemSelect} />);
+    await user.click(screen.getByText('Documents'));
+    expect(wrapperOf('Documents')).toHaveAttribute('data-presence', 'exiting');
+    onItemSelect.mockClear();
+
+    fireEvent.click(item('Readme.md'), { detail: 1 });
+    await act(async () => {});
+    expect(onItemSelect.mock.calls).toEqual([['readme']]);
+
+    fireEvent.click(screen.getByText('Documents'), { detail: 1 });
+    await act(async () => {});
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+    expect(onItemSelect.mock.calls).toEqual([['readme'], ['docs']]);
+    await finish(motion);
+  });
+});
+
 describe('checks while a group exits (selectionMode="multiple")', () => {
   it.each([
     ['while its group exits', false],
