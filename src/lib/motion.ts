@@ -137,6 +137,14 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   the slow duration (300 ms) with the easy-ease curve, so the slide that leaves fades out while
  *   the one that comes fades in, in the same place. It keys on no phase either (the carousel hides
  *   the inactive slides by their opacity), and `motionDuration` replaces its duration the same way.
+ * - `tabIndicatorMotion`, the line of the selected tab of a TabList with the underline look (drawn
+ *   by the tab's after pseudo-element, not by the tab itself): the transition of its translate
+ *   and scale over the slow duration (300 ms) with the max decelerating curve, so the line slides
+ *   and stretches from the tab selected before to the new one. It keys on no phase: for one frame
+ *   after the selection moves, the TabList gives the new tab the line's start (the offset and the
+ *   size ratio of the previous tab, measured in physical pixels) as two custom properties without
+ *   this recipe, then clears them and adds it, so the line glides back to its own tab. Under
+ *   reduced motion the line's transition is off, and the TabList writes no start either.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -306,6 +314,13 @@ export const carouselSlideMotion =
 /** A fading Carousel slide's motion: it fades in or out in place, 300 ms. */
 export const carouselFadeMotion =
   'transition-opacity duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none';
+
+/**
+ * The default slide of a TabList's selection line, on the selected tab's after pseudo-element: it
+ * moves and stretches from the tab selected before, 300 ms.
+ */
+export const tabIndicatorMotion =
+  'after:transition-[translate,scale] after:duration-wave-slow after:ease-wave-decelerate-max motion-reduce:after:transition-none';
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */
 const PRESENCE_VARIANT = '[presence=';

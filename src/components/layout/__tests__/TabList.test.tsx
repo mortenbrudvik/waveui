@@ -1569,7 +1569,12 @@ describe('TabList - RTL layout (feedback-navigation#34)', () => {
     const tablist = screen.getByRole('tablist');
     expect(tablist).toHaveClass('flex-col', 'border-e');
     expect(tablist.className).not.toMatch(/border-(r|l)\b/);
-    expect(tab('Tab A')).toHaveClass('text-start', 'border-s-2', 'border-s-primary');
+    expect(tab('Tab A')).toHaveClass(
+      'text-start',
+      'border-s-2',
+      'border-s-transparent',
+      'after:border-s-primary',
+    );
     expect(tab('Tab A').className).not.toMatch(/text-left|border-l/);
   });
 });
@@ -1691,7 +1696,8 @@ describe('TabList - panels still loading inside their own Suspense', () => {
         'font-semibold',
         'text-primary',
         'border-b-2',
-        'border-b-primary',
+        'border-b-transparent',
+        'after:border-b-primary',
       );
       expect(tab('Tab B')).toHaveClass('text-muted-foreground');
       expect(tablist()).toHaveClass('flex', 'border-b', 'border-border');
@@ -1699,7 +1705,7 @@ describe('TabList - panels still loading inside their own Suspense', () => {
 
     it('the transparent selected indicator is kept visible in forced colors', () => {
       render(twoTabs());
-      expect(tab('Tab A')).toHaveClass('forced-colors:border-[Highlight]');
+      expect(tab('Tab A')).toHaveClass('forced-colors:after:border-[Highlight]');
     });
 
     it.each(APPEARANCES)('the %s appearance renders data-appearance', (appearance) => {
@@ -1760,7 +1766,11 @@ describe('TabList - panels still loading inside their own Suspense', () => {
 
     it('vertical transparent keeps the start border indicator, also in RTL', () => {
       renderWithProviders(twoTabs({ orientation: 'vertical' }), { dir: 'rtl' });
-      expect(tab('Tab A')).toHaveClass('border-s-2', 'border-s-primary');
+      expect(tab('Tab A')).toHaveClass(
+        'border-s-2',
+        'border-s-transparent',
+        'after:border-s-primary',
+      );
     });
 
     it('Tab renders an icon slot before its text, hidden from assistive technology', () => {

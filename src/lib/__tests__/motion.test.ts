@@ -11,7 +11,8 @@
  *    only under the reduced-motion or the exiting variant); a recipe on
  *    {@link COMPOSED_DURATIONS} is checked once per duration it is composed with;
  * 3. a transition has a reduced-motion `transition-none`, an animation a reduced-motion
- *    animation;
+ *    animation, on the same element (a motion of a pseudo-element or of the children needs its
+ *    reduction under the same element variant);
  * 4. every class with the `starting` variant is gated on the entering phase;
  * 5. a recipe of a positioned surface ({@link POSITIONED_RECIPES}) never transitions `transform`
  *    (floating-ui positions the surface with it); one that slides
@@ -322,27 +323,59 @@ function timingCases(
   });
 }
 
-/** Check 3: the motion kinds of `value` without a reduced-motion counterpart of the same kind. */
+/**
+ * Check 3: the variants that put a class on another element than the one that carries it (a
+ * pseudo-element, the children): a reduction stops a motion only on the same element.
+ */
+const ELEMENT_VARIANTS = new Set([
+  'before',
+  'after',
+  'backdrop',
+  'marker',
+  'placeholder',
+  'file',
+  'selection',
+  'first-letter',
+  'first-line',
+  '*',
+  '**',
+]);
+
+/** Check 3: the element a class with `variants` styles, as its element variants (`''`: its own). */
+const elementOf = (variants: readonly string[]) =>
+  variants.filter((variant) => ELEMENT_VARIANTS.has(variant)).join(':');
+
+/**
+ * Check 3: the motion kinds of `value` without a reduced-motion counterpart of the same kind on
+ * the same element, each labelled with that element's variants (`after:transition`).
+ */
 function missingReductions(value: string): string[] {
   const parsed = words(value).map(parseWord);
   const scoped = (variants: readonly string[]) =>
     isReduced(variants) || variants.includes('motion-safe');
-  const missing: string[] = [];
-  const transitions = parsed.some(
-    ({ variants, utility }) => !scoped(variants) && isTransition(utility),
-  );
-  const reducedTransitions = parsed.some(
-    ({ variants, utility }) => isReduced(variants) && utility === 'transition-none',
-  );
-  if (transitions && !reducedTransitions) missing.push('transition');
-  const animations = parsed.some(
-    ({ variants, utility }) => !scoped(variants) && isAnimation(utility),
-  );
-  const reducedAnimations = parsed.some(
-    ({ variants, utility }) => isReduced(variants) && utility.startsWith('animate-'),
-  );
-  if (animations && !reducedAnimations) missing.push('animate');
-  return missing;
+  const unreduced = (
+    kind: string,
+    moves: (utility: string) => boolean,
+    reduces: (utility: string) => boolean,
+  ) => {
+    const reduced = new Set(
+      parsed
+        .filter(({ variants, utility }) => isReduced(variants) && reduces(utility))
+        .map(({ variants }) => elementOf(variants)),
+    );
+    const moving = new Set(
+      parsed
+        .filter(({ variants, utility }) => !scoped(variants) && moves(utility))
+        .map(({ variants }) => elementOf(variants)),
+    );
+    return Array.from(moving)
+      .filter((element) => !reduced.has(element))
+      .map((element) => (element === '' ? kind : `${element}:${kind}`));
+  };
+  return [
+    ...unreduced('transition', isTransition, (utility) => utility === 'transition-none'),
+    ...unreduced('animate', isAnimation, (utility) => utility.startsWith('animate-')),
+  ];
 }
 
 /** Check 4: the words with the `starting` variant that are not gated on the entering phase. */
@@ -768,6 +801,33 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       expect(missingReductions('transition-opacity motion-reduce:duration-0')).toEqual([
         'transition',
       ]);
+    });
+
+    it('reports a reduction that does not reach the element the motion is on', () => {
+      expect(
+        missingReductions('after:transition-[translate,scale] motion-reduce:transition-none'),
+      ).toEqual(['after:transition']);
+      expect(missingReductions('*:transition motion-reduce:transition-none')).toEqual([
+        '*:transition',
+      ]);
+      expect(missingReductions('transition-opacity motion-reduce:after:transition-none')).toEqual([
+        'transition',
+      ]);
+      expect(missingReductions('after:animate-wave-pulse motion-reduce:animate-none')).toEqual([
+        'after:animate',
+      ]);
+    });
+
+    it('accepts a reduction on the same element, in either variant order', () => {
+      expect(
+        missingReductions(
+          'after:transition-[translate,scale] after:duration-wave-slow motion-reduce:after:transition-none',
+        ),
+      ).toEqual([]);
+      expect(
+        missingReductions('after:transition-[translate,scale] after:motion-reduce:transition-none'),
+      ).toEqual([]);
+      expect(missingReductions('*:transition motion-reduce:*:transition-none')).toEqual([]);
     });
 
     it('accepts the same-kind reduction, whatever the variants of the motion', () => {

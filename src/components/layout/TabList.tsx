@@ -14,13 +14,16 @@ import {
   warnDeprecated,
   warnOnce,
 } from '../../lib/dev';
+import { tabIndicatorMotion } from '../../lib/motion';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { disabledStyles, focusRing, focusRingInset, forcedColors } from '../../lib/styles';
-import type { CoreSize, Orientation, Slot } from '../../lib/types';
+import type { CoreSize, MotionSlot, Orientation, Slot } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
+import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { getPartId } from './disclosureIds';
 
@@ -126,6 +129,19 @@ interface TabListStructure {
 /** The look of a TabList: an underline, subtle fills, or circular subtle or filled tabs. */
 export type TabListAppearance = 'transparent' | 'subtle' | 'subtle-circular' | 'filled-circular';
 
+/**
+ * Where the selected tab's line starts its slide (FLIP), measured in physical pixels from the tab
+ * selected before: its offset along the list's axis and its size as a ratio of the new tab's.
+ */
+interface TabIndicatorStart {
+  /** The value of the tab that draws the line. */
+  value: string;
+  /** The previous tab's left (top when vertical) minus the new tab's, in pixels. */
+  offset: number;
+  /** The previous tab's width (height when vertical) divided by the new tab's. */
+  scale: number;
+}
+
 interface TabListContextValue {
   orientation: Orientation;
   appearance: TabListAppearance;
@@ -151,6 +167,13 @@ interface TabListContextValue {
    */
   getStaticPanelId: (value: string) => string | undefined;
   registry: TabListRegistry;
+  /**
+   * The line's start for the one frame after the selection moved, rendered by the tab with its
+   * value as custom properties (without `indicatorMotion`); `null` otherwise.
+   */
+  indicator: TabIndicatorStart | null;
+  /** The motion classes of the selected tab's line (`''`: none). */
+  indicatorMotion: string;
 }
 
 const TabListContext = React.createContext<TabListContextValue | null>(null);
@@ -166,6 +189,8 @@ const INERT_CONTEXT: TabListContextValue = {
   getStaticTabId: (value) => `wave-tablist-inert-tab-${value}`,
   getStaticPanelId: () => undefined,
   registry: INERT_REGISTRY,
+  indicator: null,
+  indicatorMotion: '',
 };
 
 /** C-CONTEXT: throws in development, logs once and returns an inert value in production. */
@@ -314,6 +339,21 @@ export interface TabListProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
    * @default true
    */
   selectTabOnFocus?: boolean;
+  /**
+   * Replaces the slide of the selected tab's line in the `transparent` appearance (the other
+   * appearances have no line and do not move): by default, when the selection moves, the line
+   * slides and stretches from the tab selected before to the new one, over the slow duration
+   * (300 ms) with the max decelerating curve. The classes go on the selected tab and time its
+   * line, the tab's after pseudo-element (write them with the after variant, and a reduced-motion
+   * counterpart); the line starts from the previous tab through two custom properties the
+   * TabList writes for one frame. `null` turns the slide off (the line moves at once); a class
+   * string or `{ className }` replaces the classes, written as `MotionSlot` describes. A
+   * `WaveProvider` with `motion="none"` turns the default off, and a value here still applies
+   * under it. The line also moves at once while the user prefers reduced motion. Fluent's
+   * TabList slides its indicator with no prop to turn it off: this prop is a WaveUI addition.
+   * @default the slide described above
+   */
+  motion?: MotionSlot | null;
   /** @deprecated Use `value`. */
   selectedValue?: string;
   /** @deprecated Use `defaultValue`. */
@@ -337,6 +377,7 @@ const TabListRoot = ({
   appearance = 'transparent',
   size = 'medium',
   selectTabOnFocus = true,
+  motion,
   selectedValue,
   defaultSelectedValue,
   onTabSelect,
@@ -430,6 +471,60 @@ const TabListRoot = ({
   // Runs after the layout effects of the Tabs and Panels mounted with the TabList, which have
   // registered by then: from here on the registry, not the static structure, decides the links.
   React.useLayoutEffect(() => registry.markReady(), [registry]);
+
+  const isVertical = orientation === 'vertical';
+  const indicatorMotion = useMotionClasses(motion, tabIndicatorMotion);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  // Only the underline look has a line, and only a motion slides it (spec §9.2).
+  const slidesIndicator =
+    appearance === 'transparent' && indicatorMotion !== '' && !prefersReducedMotion;
+  const [indicator, setIndicator] = React.useState<TabIndicatorStart | null>(null);
+  const tablistRef = React.useRef<HTMLDivElement>(null);
+  // The value of the tab that drew the line after the last selection change seen, `null` before
+  // the first one is seen (nothing slides on mount).
+  const lineValueRef = React.useRef<string | null>(null);
+
+  // The FLIP of the line (spec §9.2, Ruling R12), keyed on the selection (`isSelected` changes
+  // with it, the derived default included): once the newly selected tab is in the DOM, both tabs
+  // are measured (physical pixels, so right-to-left needs nothing of its own) and the new tab
+  // starts its line over the previous one for one frame. Tabs are matched by their value as a
+  // string, never through a selector built from it.
+  React.useLayoutEffect(() => {
+    const tablist = tablistRef.current;
+    if (!tablist) return;
+    const tabs = Array.from(tablist.querySelectorAll<HTMLElement>('[role="tab"]'));
+    const valueOf = (tab: HTMLElement) => tab.getAttribute('data-roving-value');
+    const next = tabs.find((tab) => {
+      const tabValue = valueOf(tab);
+      return tabValue !== null && isSelected(tabValue);
+    });
+    const nextValue = next ? valueOf(next) : null;
+    const previousValue = lineValueRef.current;
+    lineValueRef.current = nextValue;
+    if (!slidesIndicator || !next || nextValue === null || previousValue === null) return;
+    if (nextValue === previousValue) return;
+    const previous = tabs.find((tab) => valueOf(tab) === previousValue);
+    if (!previous) return;
+    const from = previous.getBoundingClientRect();
+    const to = next.getBoundingClientRect();
+    const size = isVertical ? to.height : to.width;
+    if (size === 0) return;
+    setIndicator({
+      value: nextValue,
+      offset: isVertical ? from.top - to.top : from.left - to.left,
+      scale: (isVertical ? from.height : from.width) / size,
+    });
+  }, [isSelected, slidesIndicator, isVertical]);
+
+  // The start is painted for one frame, then cleared (C-HOOKS deferred update): the next commit
+  // drops the properties and adds the motion, so the line glides back to its own tab. A newer
+  // start, or an unmount, cancels the frame of the one before.
+  React.useEffect(() => {
+    if (!indicator) return;
+    const frame = requestAnimationFrame(() => setIndicator(null));
+    return () => cancelAnimationFrame(frame);
+  }, [indicator]);
+
   const context = React.useMemo<TabListContextValue>(
     () => ({
       orientation,
@@ -447,11 +542,25 @@ const TabListRoot = ({
         return panel ?? getPartId(baseId, 'panel', tabValue);
       },
       registry,
+      indicator,
+      indicatorMotion,
     }),
-    [orientation, appearance, size, isSelected, select, getTabIndex, baseId, structure, registry],
+    [
+      orientation,
+      appearance,
+      size,
+      isSelected,
+      select,
+      getTabIndex,
+      baseId,
+      structure,
+      registry,
+      indicator,
+      indicatorMotion,
+    ],
   );
 
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref, tablistRef);
 
   const tabs: React.ReactNode[] = [];
   const panels: React.ReactNode[] = [];
@@ -460,7 +569,6 @@ const TabListRoot = ({
     (rendersAfterTablist(child) ? panels : tabs).push(keyed);
   });
 
-  const isVertical = orientation === 'vertical';
   return (
     <TabListContext.Provider value={context}>
       <div className={cn(isVertical && 'flex')}>
@@ -523,9 +631,23 @@ const tabText: Readonly<Record<CoreSize, string>> = {
 };
 
 /**
+ * The line of the selected tab with the underline look, per orientation. A transparent 2px border
+ * on the tab's edge keeps the tab's box, and the after pseudo-element draws the line exactly over
+ * it, as a border, so forced colors keep it (in Highlight). The line's translate and scale read
+ * the two custom properties of its FLIP start, so it begins over the tab selected before for one
+ * frame. Literal strings only.
+ */
+const tabIndicatorClasses: Readonly<Record<Orientation, string>> = {
+  horizontal:
+    'relative border-b-2 border-b-transparent after:absolute after:inset-x-0 after:-bottom-0.5 after:border-b-2 after:border-b-primary after:origin-left after:translate-x-[var(--wave-tab-indicator-offset,0px)] after:scale-x-[var(--wave-tab-indicator-scale,1)] forced-colors:after:border-[Highlight]', // wave-allow-physical: the FLIP offset is measured in physical pixels
+  vertical:
+    'relative border-s-2 border-s-transparent after:absolute after:inset-y-0 after:-start-0.5 after:border-s-2 after:border-s-primary after:origin-top after:translate-y-[var(--wave-tab-indicator-offset,0px)] after:scale-y-[var(--wave-tab-indicator-scale,1)] forced-colors:after:border-[Highlight]', // wave-allow-physical: the FLIP offset is measured in physical pixels
+};
+
+/**
  * The colors, fill and selected indicator of a tab per appearance. Literal strings only; hover and
  * pressed use the gated rules (a disabled tab keeps its look). In forced colors fills are dropped,
- * so every selected tab keeps a Highlight outline (or, for the underline, a Highlight border).
+ * so every selected tab keeps a Highlight outline (or, for the underline, a Highlight line).
  */
 function tabLookClasses(
   appearance: TabListAppearance,
@@ -551,12 +673,16 @@ function tabLookClasses(
           )
         : 'rounded-full bg-muted text-muted-foreground not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-muted-pressed';
     default:
-      return selected
-        ? cn(
-            'text-primary forced-colors:border-[Highlight]',
-            vertical ? 'border-s-2 border-s-primary' : 'border-b-2 border-b-primary',
-          )
-        : 'text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground';
+      // Every tab's own border has one color whether selected or not (forced colors would turn a
+      // transparent one into the text color, but keep a system color): the tab's color transition
+      // covers its border, so a color that changed with the selection would fade a second line in
+      // under the new tab while its line slides there.
+      return cn(
+        'border-transparent forced-colors:border-[Canvas]',
+        selected
+          ? cn('text-primary', tabIndicatorClasses[vertical ? 'vertical' : 'horizontal'])
+          : 'text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground',
+      );
   }
 }
 
@@ -580,10 +706,32 @@ export interface TabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
  * it). The selected tab references its panel with `aria-controls` only while a `TabList.Panel`
  * with its value is mounted.
  */
-const Tab = ({ value, id: idProp, icon, className, children, onClick, ref, ...rest }: TabProps) => {
+const Tab = ({
+  value,
+  id: idProp,
+  icon,
+  className,
+  style,
+  children,
+  onClick,
+  ref,
+  ...rest
+}: TabProps) => {
   const ctx = useTabListContext('TabList.Tab');
   const selected = ctx.isSelected(value);
   const isVertical = ctx.orientation === 'vertical';
+  // The selected tab's line: over the tab selected before for one frame after the selection moved
+  // (its FLIP start, without the motion), then on this tab with the motion, so it slides back.
+  const lineStart = selected && ctx.indicator?.value === value ? ctx.indicator : null;
+  const lineMotion =
+    selected && ctx.appearance === 'transparent' && !lineStart ? ctx.indicatorMotion : undefined;
+  const tabStyle = lineStart
+    ? ({
+        ...style,
+        '--wave-tab-indicator-offset': `${lineStart.offset}px`,
+        '--wave-tab-indicator-scale': String(lineStart.scale),
+      } as React.CSSProperties)
+    : style;
   const unavailable = isUnavailable(rest);
   const hasIcon = !!icon && slotRendersContent(icon);
   const iconOnly = hasIcon && !slotRendersContent(children);
@@ -628,8 +776,10 @@ const Tab = ({ value, id: idProp, icon, className, children, onClick, ref, ...re
         tabLookClasses(ctx.appearance, selected, isVertical),
         disabledStyles,
         focusRingInset,
+        lineMotion,
         className,
       )}
+      style={tabStyle}
       {...rest}
       id={id}
       aria-selected={selected}
@@ -748,6 +898,11 @@ TabPanels.displayName = 'TabPanels';
  * seen from the children: put that component inside `TabList.Panels` (a development warning names
  * a Panel that ends up inside the tablist). Content that is not a tab, such as a button next to
  * the tabs, does not belong in a tablist either: render it outside the TabList.
+ *
+ * In the `transparent` appearance the selected tab draws its line with its after pseudo-element,
+ * over a transparent 2px border on its bottom edge (its start edge when vertical), so the tab keeps
+ * the box it has without the line; a class that recolours the line targets that pseudo-element's
+ * border. When the selection moves, the line slides from the tab selected before (`motion`).
  *
  * Sub-components are also exported under flat names (`TabListTab`, `TabListPanel`,
  * `TabListPanels`) for React Server Components, which cannot use the dotted form.
