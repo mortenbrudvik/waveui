@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { TabList } from '../src';
 import { orientationArgType } from './_helpers';
+import { motionCases } from './_motion';
 
 const meta = {
   title: 'Components/Layout/TabList',
@@ -186,5 +187,31 @@ export const IconOnly: Story = {
         All
       </TabList.Tab>
     </TabList>
+  ),
+};
+
+/** The Motion story's line: it glides over 500ms with the max easy-ease curve. */
+const slowSlide =
+  'after:transition-[translate,scale] after:duration-wave-ultra-slow after:ease-wave-easy-ease-max motion-reduce:after:transition-none';
+
+/**
+ * `motion` of the selection line (the `transparent` appearance). By default, when the selection
+ * moves, the line slides and stretches from the tab selected before to the new one over 300ms,
+ * also in a vertical list (pick `orientation` in the controls) and right to left. `null` moves it
+ * at once; a class string replaces its timing, written for the line, the tab's `::after` (here a
+ * slower glide). Under reduced motion the line moves at once.
+ */
+export const Motion: Story = {
+  render: ({ 'aria-label': _label, ...args }) => (
+    <div className="flex flex-col gap-6">
+      {motionCases(slowSlide).map(({ label, motion }) => (
+        // The story renders one tab list per case; every other arg is forwarded.
+        <TabList key={label} {...args} aria-label={label} motion={motion}>
+          <TabList.Tab value="overview">Overview</TabList.Tab>
+          <TabList.Tab value="activity">Recent activity</TabList.Tab>
+          <TabList.Tab value="settings">Settings</TabList.Tab>
+        </TabList>
+      ))}
+    </div>
   ),
 };

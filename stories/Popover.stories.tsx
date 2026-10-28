@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Popover, Avatar, Button, Input, Tooltip } from '../src';
+import { motionCases } from './_motion';
 
 /** Decorative filter icon (the Button hides its icon slot from assistive technology). */
 const FilterIcon = () => (
@@ -241,6 +242,37 @@ export const AnchoredToTarget: Story = {
           </Popover.Content>
         </Popover>
       </>
+    );
+  },
+};
+
+/** The Motion story's popover: it zooms in from 95% as it fades in, and back out as it fades. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-95 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-95 data-[presence=exiting]:opacity-0';
+
+/**
+ * `Popover.Content motion`. By default the content fades in and slides 4px away from its trigger,
+ * on the side it opened on (pick another `side` in the controls), over 200ms, and fades out and
+ * slides back over 100ms. `null` turns it off; a class string replaces it (here a zoom). The
+ * content stays in place, `inert`, while it exits: focus is already back on the trigger. Under
+ * reduced motion every popover appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: function MotionPopovers({ children: _children, ...args }) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {motionCases(fadeAndZoom).map(({ label, motion }) => (
+          // The story renders one popover per case; every other arg is forwarded.
+          <Popover key={label} {...args}>
+            <Popover.Trigger>
+              <Button>{label}</Button>
+            </Popover.Trigger>
+            <Popover.Content title={label} motion={motion}>
+              <p style={{ margin: 0 }}>Press Escape or click outside to see the exit.</p>
+            </Popover.Content>
+          </Popover>
+        ))}
+      </div>
     );
   },
 };

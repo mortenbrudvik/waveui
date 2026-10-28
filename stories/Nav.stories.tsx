@@ -2,6 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Avatar, Menu, MenuButton, Nav, ToggleButton, Tooltip } from '../src';
+import { motionCases } from './_motion';
 
 /** A locally drawn app logo (tokens only: it takes the text colour). */
 const AppLogo = () => (
@@ -223,8 +224,9 @@ export const AppItem: Story = {
  * `ToggleButton` named by a `Tooltip` with `relationship="label"` and a "More options"
  * `MenuButton` with a `Menu`. They sit in a group named by the item, each a Tab stop after it, and
  * never select it. They are drawn while the row is hovered or has focus, while the pin is pressed
- * or the menu is open, and always on touch screens; with actions, the selected look covers the
- * whole row.
+ * or the menu is open, and always on touch screens, and fade in and out over 150ms (at once under
+ * reduced motion and below `WaveProvider motion="none"`); with actions, the selected look covers
+ * the whole row.
  */
 export const ItemActions: Story = {
   args: {
@@ -252,5 +254,107 @@ export const ItemActions: Story = {
         <Nav.Item value="settings">Settings</Nav.Item>
       </>
     ),
+  },
+};
+
+/** The Motion story's collapse: 400ms with the mid decelerating curve, without the fade. */
+const slowCollapse =
+  'transition-[grid-template-rows] duration-wave-slower ease-wave-decelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:grid-rows-[minmax(0,0fr)]';
+
+/** The Motion story's chevron: its turn takes 400ms with the max decelerating curve. */
+const slowTurn =
+  'transition-transform duration-wave-slower ease-wave-decelerate-max motion-reduce:transition-none';
+
+/**
+ * `Nav.Category motion` and `expandIconMotion`. By default a category's list opens from nothing
+ * and closes back to it while it fades (on the element around its `<ul>`,
+ * `wave-nav-category__collapse`), over 200ms, and the chevron's half turn takes 150ms. Focus in a
+ * closing list moves to the category's button. `null` turns both off (the chevron still turns, at
+ * once); class strings replace them (here a slower collapse and turn). Under reduced motion lists
+ * open and close at once.
+ */
+export const Motion: Story = {
+  args: {
+    defaultOpenCategories: ['settings'],
+  },
+  render: ({ children: _children, ...args }) => (
+    <div className="flex flex-wrap gap-6">
+      {motionCases(slowCollapse).map(({ label, motion }) => (
+        // The story renders one Nav per case; every other arg is forwarded.
+        <Nav key={label} {...args} aria-label={label}>
+          <Nav.Item value="home">Home</Nav.Item>
+          <Nav.Category
+            value="settings"
+            label="Settings"
+            motion={motion}
+            expandIconMotion={typeof motion === 'string' ? slowTurn : motion}
+          >
+            <Nav.SubItem value="profile">Profile</Nav.SubItem>
+            <Nav.SubItem value="account">Account</Nav.SubItem>
+            <Nav.SubItem value="privacy">Privacy</Nav.SubItem>
+          </Nav.Category>
+          <Nav.Category
+            value="docs"
+            label="Documentation"
+            motion={motion}
+            expandIconMotion={typeof motion === 'string' ? slowTurn : motion}
+          >
+            <Nav.SubItem value="getting-started">Getting Started</Nav.SubItem>
+            <Nav.SubItem value="api">API Reference</Nav.SubItem>
+          </Nav.Category>
+        </Nav>
+      ))}
+    </div>
+  ),
+};
+
+/** A plus or a minus for the CustomExpandIcon story, by the category's open state. */
+const SignGlyph = ({ open }: { open: boolean }) => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor">
+    <path d={open ? 'M3.5 8h9' : 'M3.5 8h9M8 3.5v9'} strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
+/**
+ * `Nav.Category expandIcon` replaces the chevron (decorative, inside the category's button). A
+ * glyph of yours is not turned, so one that shows the state itself works: here a plus or a minus,
+ * picked from the controlled `openCategories`. `false` hides the icon; `aria-expanded` still
+ * reports the state.
+ */
+export const CustomExpandIcon: Story = {
+  render: function CustomExpandIconNav({
+    children: _children,
+    defaultOpenCategories,
+    onOpenCategoriesChange,
+    ...args
+  }) {
+    const [openCategories, setOpenCategories] = React.useState<string[]>(
+      defaultOpenCategories ? [...defaultOpenCategories] : [],
+    );
+    return (
+      // The story owns the controlled pair; every other arg is forwarded.
+      <Nav
+        {...args}
+        openCategories={openCategories}
+        onOpenCategoriesChange={(next) => {
+          setOpenCategories(next);
+          onOpenCategoriesChange?.(next);
+        }}
+      >
+        <Nav.Item value="home">Home</Nav.Item>
+        <Nav.Category
+          value="settings"
+          label="Settings"
+          expandIcon={<SignGlyph open={openCategories.includes('settings')} />}
+        >
+          <Nav.SubItem value="profile">Profile</Nav.SubItem>
+          <Nav.SubItem value="account">Account</Nav.SubItem>
+        </Nav.Category>
+        <Nav.Category value="help" label="Help" expandIcon={false}>
+          <Nav.SubItem value="faq">FAQ</Nav.SubItem>
+          <Nav.SubItem value="contact">Contact</Nav.SubItem>
+        </Nav.Category>
+      </Nav>
+    );
   },
 };
