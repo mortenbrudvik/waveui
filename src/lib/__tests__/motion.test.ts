@@ -1024,13 +1024,21 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
         .filter(({ variants }) => variants.length === 0)
         .map(({ utility }) => utility);
 
-    it('reports a row track with no item alignment (the part stretched to the track)', () => {
+    it('reports a part stretched to the track, or placed away from where the track sits', () => {
       expect(
         trackAlignmentFindings({
-          collapseStructure:
-            'grid grid-rows-[minmax(0,1fr)] overflow-hidden data-[presence=entered]:contents',
+          // The plan's literal: no alignment, so the part stretches.
+          plan: 'grid grid-rows-[minmax(0,1fr)] overflow-hidden data-[presence=entered]:contents',
+          stretched: 'grid grid-rows-[minmax(0,1fr)] items-stretch overflow-hidden',
+          end: 'grid grid-rows-[minmax(0,1fr)] items-end overflow-hidden',
+          gated: 'grid grid-rows-[minmax(0,1fr)] data-[presence=exiting]:items-start',
         }),
-      ).toEqual(['collapseStructure: no item alignment']);
+      ).toEqual([
+        'plan: no item alignment',
+        'stretched: items stretch, track start',
+        'end: items end, track start',
+        'gated: no item alignment',
+      ]);
     });
 
     it('holds for collapseStructure: the part at the start of a track at the start', () => {
