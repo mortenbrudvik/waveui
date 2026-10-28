@@ -5,6 +5,122 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - Unreleased
+
+The tenth Fluent UI v9 parity release: Phase 10 of the [roadmap](docs/ROADMAP.md), motion on components. Dialogs scale and fade in, drawers slide from their edge and inline drawers open their space, popups fade and slide away from their trigger, Accordion panels, Tree groups and Nav categories collapse, toasts and the new `MessageBarGroup` let their neighbours glide when one comes or goes, TabList slides its selection line and Carousel can cross-fade. Every motion is Tailwind classes on the presence core's `data-presence` phases, timed with Fluent's motion tokens and off under `prefers-reduced-motion`; a bundle that animates nothing holds no motion code (`verify-dist` proves it for an import of only `Button`). Each animated part takes a motion slot (`motion`, `backdropMotion`, `expandIconMotion`, `indeterminateMotion`: unset is the default motion, `null` none, a class string or `{ className }` yours), and `WaveProvider motion="none"` turns every default off. An exiting surface is `inert`, and focus, dismiss layers, the focus trap, the isolation and the scroll lock are released when it closes, not when its motion ends. It closes the twelve gaps of P10-01 and P10-02 (`foundation-13`, `dialog-5`, `drw-4`, `acc-6`, `tree-4`, `toast-5`, `nav-8`, `messagebargroup-1`, `foundation-15`, `car-3`, `tab-5`, `progress-6`). Nothing public was removed and every type only widens, but with no `motion` prop the surfaces animate, so an unchanged page looks different in a browser: read "Upgrading from 0.14" before upgrading if your end-to-end tests wait for elements to disappear or your styles select Wave's DOM.
+
+### Upgrading from 0.14
+
+1. **Surfaces animate by default** in a browser. A closed Dialog, Drawer, NavDrawer, Menu, Popover, InfoButton note, Tooltip or TeachingPopover stays in the document for its exit (100 to 500 ms, by surface and size), `inert`, with `data-presence="exiting"` (and `data-state="closed"` on the popups); focus, the dismiss layer, the trap, the isolation and the scroll lock are released at once. End-to-end tests that look for an element's absence right after a close wait for it, or render under `<WaveProvider motion="none">`. Unit tests in jsdom are unaffected: Vitest loads no CSS, so every phase ends at once (hold one with `mockAnimations`).
+2. **Popover.Content, the Tooltip surface and the TeachingPopover surface mount through the presence core:** they render `data-presence` and `data-state` (`open`, and `closed` while they exit), and `inert` while they exit. A popover named by its trigger keeps no `aria-labelledby` while it exits (it is `inert` and out of the accessibility tree then).
+3. **`defaultOpen` surfaces animate in on a client render too** (0.14: only after hydration): Dialog, an overlay Drawer and NavDrawer, Menu, Popover, Tooltip, InfoButton and TeachingPopover mount with `appear`, so the same page behaves the same whichever way it rendered. `motion={null}` restores 0.14. In-flow content (inline drawers, Accordion, Tree, Nav, the bars a MessageBarGroup mounts with) never animates on mount.
+4. **New wrapper elements.** `div.wave-accordion-panel__collapse` around Accordion's region; `div.wave-tree-item__collapse` around a Tree group; `div.wave-nav-category__collapse` around a Nav category's list; `div.wave-drawer__collapse` (and `wave-nav-drawer__collapse` for NavDrawer) around an inline panel; `div.wave-toaster__toast-content` inside each toast container. The first four are `display: contents` while open, so layout is unchanged then; selectors with a child combinator across them (`.wave-accordion-item > [role=region]`, `li > ul`, `[role=treeitem] > [role=group]`, a flex rule on an inline drawer's parent's direct children during the motion) and tests that walk `parentElement` or `nextElementSibling` change. While a wrapper enters or exits it is a clipping grid of one track, whichever motion runs (the default, a `motion` of yours, or 0.14 classes on an inline drawer's `className`, item 6): a slide of yours on the part is clipped by it, and an inline drawer whose width (height at the bottom) is a percentage in `className`, or `size="full"` animated by 0.14 classes, resolves it against the track for that time and is right again once open. Give such a drawer a length, or pass `motion={null}`.
+5. **The toast container is a one-cell grid** around the new content element (`wave-toaster__toast-content`, which holds the status text and the content); its `data-wave-toast` marker, classes and attributes are unchanged. A test that reads the status text as the container's first child walks one level deeper.
+6. **A `className` with `data-[presence=…]` classes** on `Menu.Popover`, `Dialog.Content`, Drawer or NavDrawer keeps 0.14's behaviour while `motion` is unset: that part gets no default motion, so your classes animate it unmixed (an inline drawer's presence core waits for its `<aside>`, as in 0.14). Moving those classes to `motion` is the recommended form. The rule covers the part, not its backdrop: a Dialog, Drawer or NavDrawer animated that way now also fades its backdrop by default (`backdropMotion={null}` keeps 0.14's backdrop), and a backdrop animated through the `backdrop` slot's `className` gets the default fade beside your classes (move them to `backdropMotion`).
+7. **TabList's selected indicator** is drawn by the selected tab's `::after` over a transparent 2px border (the tab's box is unchanged), the tab is `relative`, and every tab of the `transparent` appearance carries `border-transparent forced-colors:border-[Canvas]`. A class that recoloured the indicator through the tab's bottom (start) border targets the `after:` border now (`after:border-b-…`, vertical `after:border-s-…`); a border colour of yours left on the tab shows at once under the newly selected tab while the line slides there.
+8. **Focus in a closing panel moves to its trigger** (Accordion's trigger, the Tree item, the Nav category's button), in the closing commit; 0.14 unmounted the content and focus fell to `<body>`.
+9. **Behaviour fixes visible during exits:** a stacked dialog's backdrop stays transparent while it fades, Dialog's title padding holds, and TeachingPopover stays visible while it exits (see Fixed).
+10. **Carousel's slide curve** is the `easy-ease` token (was Tailwind's `ease-in-out`), same 300 ms, and the root renders `data-motion`. **Nav.Category's chevron** turns with the `easy-ease` token too (was Tailwind's default curve), same 150 ms, and its transition is a motion slot (`expandIconMotion`): below `WaveProvider motion="none"` it turns at once, while Accordion's and Tree's chevrons, which have no slot, keep their transitions.
+11. **Nav item actions fade in** over 150 ms (were instant), and at once below `motion="none"` and under reduced motion. Their children's transition list is set by the reveal, so a transition class of yours on an action is replaced.
+12. **Types:** `WaveContextValue` has a new member, `motion` (`MotionPreference`); a hand-built value (a test mock of `useWaveTheme`) adds it.
+13. **New attributes**, always rendered: `data-presence` on the new wrappers and on Popover.Content, the Tooltip surface and the TeachingPopover surface; `data-state` on those three surfaces; Carousel's `data-motion`. A test that compares an element's full HTML or attribute list changes.
+
+### Added
+
+- **Default motion** on every overlay and disclosure, with Fluent's motion tokens (the guide's "Component Motion" section lists the classes):
+  - **Dialog:** the surface scales up from 85% and fades in over 250 ms (decelerating), and out over 200 ms (accelerating); the backdrop fades over the same times, so it never outlasts the surface.
+  - **Drawer and NavDrawer:** an overlay panel slides in from its edge by its own size (`start` and `end` mirrored in right-to-left layouts, `left` and `right` not) and fades, over 250, 300, 400 or 500 ms by `size`, both ways, with its backdrop fading over the same time; an inline drawer opens and closes the space it takes in the layout while its panel fades, held at its size against its inner edge, so the page beside it never reflows inside it (a `full` inline drawer has no motion: its size is its container's).
+  - **Popover.Content, `Menu.Popover` and its submenus, the InfoButton note and the TeachingPopover surface:** a fade and a 4px slide away from the anchor, on the side the surface opened on (`data-side`), 200 ms in, 100 ms out; a TeachingPopover rendered in place only fades. Positioned surfaces never transition `transform`, so they never glide from their last position.
+  - **Tooltip:** a fade, 100 ms both ways (Fluent's Tooltip has no motion). Shown again during its exit, it returns to `entering` on the same element.
+  - **Accordion panels, Tree groups and Nav categories:** the part's space opens from nothing and closes back while it fades, 200 ms both ways; the part keeps its width and its line breaks, and a nested Tree group goes with its parent.
+  - **Toasts:** a toast opens its place in the stack, fades in and slides 8px in from the stack's edge over 250 ms; dismissed, it fades over 200 ms, then its place closes over 200 ms more, so the toasts around it glide and nothing jumps when it unmounts. The timer still starts when the toast is shown.
+  - **Nav item actions** fade in and out over 150 ms as their row is hovered or takes focus.
+  - Under `prefers-reduced-motion: reduce` every surface and part appears and disappears at once, as the presence core already ended every phase at once.
+- **Motion slots** (`MotionSlot`: a class string or `{ className }`), each typed `MotionSlot | null`, named after the Fluent prop in its JSDoc: `motion` on `Dialog.Content`, Drawer, NavDrawer, `Menu.Popover`, `Popover.Content`, InfoButton, InfoLabel (passed to its button), Tooltip, TeachingPopover (the surface it renders) and `TeachingPopover.Surface`, `Accordion.Panel`, Tree (every group), `Nav.Category`, Toaster (every toast container), MessageBarGroup and TabList; `backdropMotion` on `Dialog.Content`, Drawer and NavDrawer; `expandIconMotion` on `Nav.Category`; `indeterminateMotion` on ProgressBar. Unset keeps the default; `null` turns it off (the element still renders its `data-presence` phases, which then end at once); a value replaces the default classes, also below `WaveProvider motion="none"`. A replacement's classes must exist in your CSS: on the precompiled `./styles` only Wave's own classes do, so there a replacement names a class of your own written against `[data-presence]`.
+- **`WaveProvider motion`** (`MotionPreference`: `'default'` or `'none'`, inherited by nested providers like `theme`): `'none'` makes every motion slot below it act as `null` and turns off the Nav item actions' reveal; a part's own value still wins (Fluent's `MotionBehaviourProvider` with `'skip'`). `useWaveTheme()` returns it as `motion`.
+- **`MessageBarGroup`** (`MessageBarGroupProps`; Fluent's `MessageBarGroup`), a component of its own so that an import of only MessageBar holds no presence code: a stack of MessageBars (8px gap) that keeps a removed bar in its place, `inert`, while it fades out and its row closes over 250 ms, so the bars below glide up; `animate` (`'exit-only'`, the default, or `'both'`: a bar added after mount opens its row and fades in) renders `data-animate`, and `motion` replaces the bars' motion (both directions). It follows its children by `key`: a reordered bar moves without a remount, and a bar that comes back during its exit is shown again. Bars present at its first render (on the server too) never animate. When a bar leaves with focus inside it, focus moves to the first tabbable element of the nearest remaining bar after it that has one, else before it. A child without a key of its own, or text, renders after the bars without motion, with a development warning.
+- **Carousel** `motion` (`CarouselMotion`: `'slide'`, the default, `'fade'`, or `null`; Fluent's `motion`) and `motionDuration` (milliseconds, `300` by default; Fluent's `duration` is Embla's unitless speed, so a value ported from Fluent is far too short). `fade` cross-fades the slides in place (one slide per page: with `groupSize` above 1 or `'auto'` the slides slide, with a development warning; a drag still pages on release, the slides do not follow the pointer). The root renders `data-motion` (`slide`, `fade` or `none`); below `WaveProvider motion="none"` the carousel moves only with its own `motion`.
+- **TabList** slides its selection line (the `transparent` appearance) from the tab selected before to the new one, over 300 ms with the max decelerating curve, horizontal and vertical, in both directions; `motion` replaces or (`null`) turns it off, a WaveUI addition (Fluent has no switch). The line starts from two custom properties the TabList writes for one frame (with Carousel's `motionDuration`, one of the two inline styles this release adds); under reduced motion it moves at once.
+- **ProgressBar** `indeterminateMotion` (Fluent's name): the default is 0.14's sweep, class for class; `null` (or `motion="none"`) draws a static full-width fill, never a partial one that would read as progress.
+- **`Nav.Category expandIcon`** (an optional indicator: `null` and `undefined` keep the chevron, `false` or content that renders nothing hides it; a glyph of yours is not turned, so a plus or a minus picked from `openCategories` works; a `<button>` or `Button` passed there is unwrapped, with a development warning) and `expandIconMotion` (the transition of the chevron's half turn, 150 ms; `null` makes the turn snap).
+- **Types** `MotionSlot`, `MotionPreference`, `CarouselMotion` and `MessageBarGroupProps`.
+- **Stable class names:** `messageBarGroupClassNames` (`root`, `item`: the element around each bar), and new keys `collapse` on `accordionPanelClassNames`, `treeItemClassNames`, `navCategoryClassNames`, `drawerClassNames` and `navDrawerClassNames` (an inline NavDrawer's element carries both), and `toastContent` on `toasterClassNames`.
+- **Development warnings** (keys): `MessageBarGroup:children`, `Carousel:fade-group`, `Nav.Category:expandIcon-button`.
+- **Stories:** a `Motion` story for every animated component (the default, `null` and a replacement; Drawer also `InlineMotion`), MessageBar's `GroupExitOnly`, `GroupAnimateBoth` and `GroupMotion`, Nav's `CustomExpandIcon` and Presence's `ProviderMotionNone`; Menu's `ExitMotion` passes its classes to `motion`.
+
+### Changed
+
+#### Behaviour
+
+- **Every overlay and disclosure in scope animates** and stays mounted, `inert`, while it exits (see "Upgrading from 0.14", 1 to 3). Positioning keeps its last coordinates while a popup exits; a second click during a Dialog's exit reaches the page (an exiting surface is click-through, as `inert` is); the page's scroll bar returns as a modal starts to fade, since the scroll lock lifts at close.
+- **Popover.Content, Tooltip and TeachingPopover mount through the presence core** (in 0.14 they unmounted at once), and Accordion, Tree and Nav collapse through it.
+- **Focus in a closing Accordion panel, Tree group or Nav category list** moves to its trigger in the closing commit; **focus in a closing Popover, InfoButton note or TeachingPopover** moves out in the closing commit, as `Menu.Popover`'s does (see Fixed).
+- **Carousel's slide curve, Nav's chevron curve and Nav item actions** (see "Upgrading from 0.14", 10 and 11).
+
+#### DOM structure
+
+- The wrappers, the toast content element, TabList's `::after` indicator and the new attributes of "Upgrading from 0.14", 4, 5, 7 and 13.
+
+#### Types
+
+- `WaveContextValue` gains `motion` ("Upgrading from 0.14", 12), and the components listed under Added gain optional props; no type narrows.
+
+#### Development messages
+
+- The texts of `Dialog.Content:backdrop-ignored`, `Drawer:backdrop-ignored` and `NavDrawer:backdrop-ignored` name `backdropMotion` next to `backdrop` (keys unchanged), and a `backdropMotion` counts as given unless it is `undefined`, so `backdropMotion={null}` on a non-modal or inline surface warns too. `TeachingPopover:surface-props` lists `motion` among the props a Surface takes instead (a test that asserts a full text updates it).
+
+#### Dev gates
+
+- The conventions gate scans `src/lib/motion.ts` too and gains two rules: `presence-class` (a `data-[presence=…]` class anywhere but `src/lib/motion.ts`, where every motion of the library lives) and `starting-gate` (a `starting:` class not gated on `data-[presence=entering]`); the stop hook runs it for `src/lib/motion.ts`.
+- `src/lib/__tests__/motion.test.ts` checks every recipe: each class compiles with `@tailwindcss/node` (now a devDependency), a transition has Wave's duration and curve tokens and a same-element `motion-reduce:` counterpart, every `starting:` class is gated, positioned surfaces never transition `transform`, backdrops end with their surface, and the grid structures pin both tracks at a zero minimum and align their track with their part.
+- `verify-dist`: an import of only `Button` holds no `lib/motion` or `hooks/useMotion` module, no recipe literal (`MOTION_RECIPE_MIN` of them are read from `dist/lib/motion.mjs`) and no `[presence=` in its code, with positive controls for Dialog, Accordion and MessageBarGroup; an import of only MessageBar holds no presence core and no presence group; the module-only list gains the motion internals. `build-css` requires three motion utilities in `dist/styles.css`.
+- Test helpers: `motionClasses(recipe)`, `honourInert()` (`focus()` that skips `inert` elements, as a browser does) and `renderWithProviders(ui, { motion })`.
+
+### Deprecated
+
+- Nothing new is deprecated.
+
+### Fixed
+
+- **A stacked dialog's backdrop stays transparent while it exits.** 0.14 flipped the upper dialog's backdrop to dimmed as it closed (its layer was gone), so a dialog animated with classes dimmed the page twice during its exit; the backdrop now keeps the appearance it had while open.
+- **Dialog's title padding holds through the exit.** The titles' end padding, which follows the width of the title actions, fell back to 2rem as the dialog closed, so a title could re-wrap while the surface faded.
+- **Focus leaves a closing Popover, InfoButton note or TeachingPopover in the closing commit** (as `Menu.Popover`'s has since 0.7), to its opener or its trigger. So a Dialog opened from a button in a popover, in the same update that closes it, records the popover's trigger as its opener and returns focus there, not to the `inert` button.
+- **TeachingPopover stays visible while it exits.** Its surface is hidden until floating-ui has placed it, and floating-ui resets that on close; the surface now keeps its last placement, and the last step it showed, through the exit.
+
+### Size
+
+Against 0.14.1 as published on npm, measured the way 0.8.0 to 0.11.0 were: `dist/styles.css` as built, and minified Vite builds of an entry that imports from `dist/index.mjs`, with bare imports external (`verify-dist`'s `probeSizeBudget`). Both versions were measured with this release's build tools (0.14.1 from its npm package). Sizes are in KiB (1,024 bytes):
+
+| Output | 0.14.1 | 0.15.0 |
+|---|---|---|
+| `dist/styles.css` | 82.4 KiB (14.0 KiB gzip) | 95.3 KiB (15.3 KiB gzip) |
+| `dist/lib/motion.mjs` (new, as built) | — | 9.7 KiB (1.4 KiB gzip) |
+| An import of only `Button` | 10.9 KiB (3.8 KiB gzip) | 10.9 KiB (3.8 KiB gzip) |
+| An import of only `Dialog` | 68.0 KiB (22.8 KiB gzip) | 69.1 KiB (23.2 KiB gzip) |
+| An import of only `Drawer` | 75.8 KiB (25.0 KiB gzip) | 80.8 KiB (25.8 KiB gzip) |
+| An import of only `NavDrawer` | 68.9 KiB (23.2 KiB gzip) | 73.9 KiB (23.9 KiB gzip) |
+| An import of only `Menu` | 84.0 KiB (28.4 KiB gzip) | 85.2 KiB (28.7 KiB gzip) |
+| An import of only `Popover` | 50.4 KiB (17.3 KiB gzip) | 55.2 KiB (18.9 KiB gzip) |
+| An import of only `Tooltip` | 21.9 KiB (8.5 KiB gzip) | 25.4 KiB (9.8 KiB gzip) |
+| An import of only `InfoButton` | 38.9 KiB (13.6 KiB gzip) | 40.8 KiB (14.0 KiB gzip) |
+| An import of only `TeachingPopover` | 65.3 KiB (22.4 KiB gzip) | 70.4 KiB (24.1 KiB gzip) |
+| An import of only `Accordion` | 10.3 KiB (4.3 KiB gzip) | 16.4 KiB (6.5 KiB gzip) |
+| An import of only `Tree` | 40.9 KiB (14.0 KiB gzip) | 46.1 KiB (15.8 KiB gzip) |
+| An import of only `Nav` | 18.5 KiB (6.7 KiB gzip) | 31.5 KiB (10.7 KiB gzip) |
+| An import of `Nav` and `Button` | 25.4 KiB (8.5 KiB gzip) | 31.5 KiB (10.7 KiB gzip) |
+| An import of only `Toaster` | 37.6 KiB (13.3 KiB gzip) | 39.5 KiB (13.7 KiB gzip) |
+| An import of only `MessageBar` | 26.2 KiB (9.1 KiB gzip) | 26.2 KiB (9.1 KiB gzip) |
+| An import of only `MessageBarGroup` | — | 12.1 KiB (4.8 KiB gzip) |
+| An import of only `Carousel` | 38.3 KiB (13.9 KiB gzip) | 39.0 KiB (14.2 KiB gzip) |
+| An import of only `TabList` | 30.6 KiB (11.0 KiB gzip) | 33.3 KiB (11.9 KiB gzip) |
+| An import of only `ProgressBar` | 6.2 KiB (2.5 KiB gzip) | 6.7 KiB (2.7 KiB gzip) |
+| An import of everything | 619.2 KiB (195.5 KiB gzip) | 636.1 KiB (199.6 KiB gzip) |
+
+- An import of only `Button` is byte for byte the size of 0.14.1's (11,195 bytes minified, 3,855 gzip), and `verify-dist` gates that it holds no motion module, no recipe and no presence class. An import of only `MessageBar` is unchanged too (26,831 bytes): the presence group is in `MessageBarGroup`.
+- A bundle holds only the recipes its components use: `lib/motion.mjs` is one module of plain strings, and the bundler drops the others. `dist/styles.css` grew by the motion classes (12.9 KiB, 1.3 KiB gzip).
+- Popover, Tooltip and TeachingPopover now hold the presence core (they moved onto it) and, the popups, the focus-before-close hook; Accordion, Tree and Nav hold the presence core, the collapse hook and `usePreserveFocus`.
+- `Nav` also holds Button's modules (`Button`, `Button.slots`, `Button.semantics`, `buttonStyles`): its new `expandIcon` unwraps a `<button>` or `Button` glyph through `unwrapButtonGlyph`, as every glyph slot does (C-SLOTS). An app that already renders a Button pays the rest only: `Nav` with `Button` grew from 25.4 to 31.5 KiB.
+
 ## [0.14.1] - 2026-10-27
 
 ### Fixed
