@@ -93,7 +93,8 @@
  *   last one test — call it inside the test or in `beforeEach`, never `beforeAll`),
  *   {@link mockRect}, {@link mockAnimations} (`getAnimations()` for the waiting phases of the
  *   presence core; it removes itself after the test — call it inside the test or in
- *   `beforeEach`).
+ *   `beforeEach`), {@link honourInert} (`focus()` does nothing inside an `inert` subtree, as in a
+ *   browser, for focus tests of exiting surfaces; one test, as `mockAnimations`).
  * - The environment machinery {@link mockMatchMedia}, {@link resetMatchMediaMock},
  *   {@link assertEmptyBody}, {@link assertOverlayStateReleased} and {@link describeElement} is
  *   **defined in `src/test-setup.ts`** and re-exported here — one instance, the one the setup
@@ -1288,6 +1289,50 @@ export function mockRect(el: Element, rect: Partial<DOMRect>): void {
   define('clientWidth', width);
   define('offsetHeight', height);
   define('clientHeight', height);
+}
+
+/** Whether {@link honourInert} is installed for the current test. */
+let honouringInert = false;
+
+/**
+ * Makes `HTMLElement.prototype.focus()` do nothing on an element inside an `inert` subtree (the
+ * element itself or an ancestor carries `inert`), as a browser does, for the current test; jsdom
+ * has no `inert` behaviour and focuses the element. Call it inside a test or a `beforeEach` (it
+ * registers its cleanup with Vitest's `onTestFinished`, which a `beforeAll` cannot use); a second
+ * call in the same test does nothing.
+ *
+ * Focus tests of an exiting surface need it: after a commit, React DOM focuses again the element
+ * that had focus before the commit when that element is still in the document. An exiting surface
+ * stays in the document, `inert`, so in jsdom that restore can undo a focus move out of it, or
+ * hide a missing one, where a browser leaves focus where the component put it. With the
+ * emulation, a test that expects focus out of a closing surface fails when the component does not
+ * move it. An element that already has focus keeps it when its subtree turns `inert` (a browser
+ * moves it to `<body>` only at its next rendering update, which jsdom never runs).
+ *
+ * @example
+ * honourInert();
+ * render(<Disclosure />);
+ * await user.click(button('Done')); // closes the panel, which exits inert
+ * expect(button('Shipping')).toHaveFocus();
+ */
+export function honourInert(): void {
+  if (honouringInert) return;
+  const proto = HTMLElement.prototype;
+  const previous = Object.getOwnPropertyDescriptor(proto, 'focus');
+  const focus = proto.focus;
+  Object.defineProperty(proto, 'focus', {
+    configurable: true,
+    writable: true,
+    value: function focusOutsideInert(this: HTMLElement, options?: FocusOptions): void {
+      if (!this.closest('[inert]')) focus.call(this, options);
+    },
+  });
+  honouringInert = true;
+  onTestFinished(() => {
+    if (previous) Object.defineProperty(proto, 'focus', previous);
+    else Reflect.deleteProperty(proto, 'focus');
+    honouringInert = false;
+  });
 }
 
 /** Options of {@link mockAnimations}. */

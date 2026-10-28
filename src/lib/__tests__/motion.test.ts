@@ -26,7 +26,9 @@
  *
  * And two checks of a single recipe, the structure of an inline drawer (D13), at every edge: it
  * lifts its panel's size cap on the panel's axis while the element is not entered, and it lays
- * its track on the side where it aligns the panel.
+ * its track on the side where it aligns the panel. The second also holds for the collapse
+ * structure of the disclosures (D12), which aligns its part to the start of the track rather than
+ * stretching it (a stretched part is squeezed to the track, shorter than the element shows).
  *
  * The file runs in the node environment: the compile check loads `@tailwindcss/node`.
  */
@@ -1011,6 +1013,29 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
 
     it('holds for every edge of inlineDrawerStructure', () => {
       expect(trackAlignmentFindings(motion.inlineDrawerStructure)).toEqual([]);
+    });
+  });
+
+  describe('the collapse structure clips its part instead of stretching it into the track (D12)', () => {
+    /** The variant-free utilities of a class string. */
+    const plainUtilities = (value: string) =>
+      words(value)
+        .map(parseWord)
+        .filter(({ variants }) => variants.length === 0)
+        .map(({ utility }) => utility);
+
+    it('reports a row track with no item alignment (the part stretched to the track)', () => {
+      expect(
+        trackAlignmentFindings({
+          collapseStructure:
+            'grid grid-rows-[minmax(0,1fr)] overflow-hidden data-[presence=entered]:contents',
+        }),
+      ).toEqual(['collapseStructure: no item alignment']);
+    });
+
+    it('holds for collapseStructure: the part at the start of a track at the start', () => {
+      expect(trackAlignmentFindings({ collapseStructure: motion.collapseStructure })).toEqual([]);
+      expect(plainUtilities(motion.collapseStructure)).toContain('items-start');
     });
   });
 });

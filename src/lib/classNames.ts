@@ -909,8 +909,14 @@ export const accordionTriggerClassNames = {
   expandIcon: 'wave-accordion-trigger__expand-icon',
 } as const;
 
-/** Accordion.Panel: `root` on the `role="region"` element. */
-export const accordionPanelClassNames = { root: 'wave-accordion-panel' } as const;
+/**
+ * Accordion.Panel: `root` on the `role="region"` element; `collapse` on the element around it
+ * (the element that opens and closes the region's space, 0.15).
+ */
+export const accordionPanelClassNames = {
+  root: 'wave-accordion-panel',
+  collapse: 'wave-accordion-panel__collapse',
+} as const;
 
 /** TabList: `root` on the `role="tablist"` element. */
 export const tabListClassNames = { root: 'wave-tab-list' } as const;

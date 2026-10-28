@@ -1686,9 +1686,11 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     // The representatives of the motion recipes (lib/motion, 0.15).
     '.duration-wave-gentle{--tw-duration:var(--wave-duration-gentle);transition-duration:var(--wave-duration-gentle)}',
     String.raw`.data-\[presence\=exiting\]\:opacity-0[data-presence=exiting]{opacity:0}`,
+    String.raw`.data-\[presence\=entered\]\:contents[data-presence=entered]{display:contents}`,
   ];
   /** The library class string that uses the motion representatives of {@link UTILITIES}. */
-  const MOTION_CLASSES = 'duration-wave-gentle data-[presence=exiting]:opacity-0';
+  const MOTION_CLASSES =
+    'duration-wave-gentle data-[presence=exiting]:opacity-0 data-[presence=entered]:contents';
   const KEYFRAMES = ['wave-spin', 'wave-pulse', 'wave-indeterminate', 'wave-indeterminate-rtl'].map(
     (name) => `@keyframes ${name}{to{opacity:1}}`,
   );
@@ -1803,10 +1805,13 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
   });
 
   it('rejects a stylesheet without the motion recipes’ representatives (lib/motion)', async () => {
-    const [duration, exit] = UTILITIES.slice(-2);
-    expect(await gate(GATE_CSS.replace(duration, '').replace(exit, ''))).toEqual([
+    const [duration, exit, entered] = UTILITIES.slice(-3);
+    expect(
+      await gate(GATE_CSS.replace(duration, '').replace(exit, '').replace(entered, '')),
+    ).toEqual([
       'styles.css: missing utility .duration-wave-gentle',
       'styles.css: missing utility .data-[presence=exiting]:opacity-0',
+      'styles.css: missing utility .data-[presence=entered]:contents',
     ]);
   });
 

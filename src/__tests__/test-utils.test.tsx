@@ -35,6 +35,7 @@ import {
   findDanglingIdRefs,
   findDanglingIdRefsInHtml,
   getStableClassNames,
+  honourInert,
   installResizeObserverMock,
   mockAnimations,
   mockMatchMedia,
@@ -1631,6 +1632,109 @@ describe('mockAnimations', () => {
     });
     it('finds no getAnimations in the next test (jsdom has none)', () => {
       seen.push({ installed: false, found: 'getAnimations' in Element.prototype });
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// honourInert (focus() inside an inert subtree, as in a browser)
+// ---------------------------------------------------------------------------
+
+describe('honourInert', () => {
+  it('jsdom focuses an element inside an inert subtree by default (what the helper emulates away)', () => {
+    render(
+      <div inert>
+        <button type="button">Inside</button>
+      </div>,
+    );
+    const inside = screen.getByRole('button', { name: 'Inside', hidden: true });
+    act(() => inside.focus());
+    expect(inside).toHaveFocus();
+  });
+
+  it('makes focus() do nothing inside an inert subtree, and work elsewhere', () => {
+    honourInert();
+    render(
+      <>
+        <button type="button">Outside</button>
+        <div inert>
+          <div>
+            <button type="button">Inside</button>
+          </div>
+        </div>
+        <button type="button" inert>
+          Itself inert
+        </button>
+      </>,
+    );
+    const outside = screen.getByRole('button', { name: 'Outside' });
+    act(() => outside.focus());
+    expect(outside).toHaveFocus();
+    act(() => screen.getByRole('button', { name: 'Inside', hidden: true }).focus());
+    act(() => screen.getByRole('button', { name: 'Itself inert', hidden: true }).focus());
+    expect(outside).toHaveFocus();
+  });
+
+  it('keeps an element that already has focus when its subtree turns inert (as a browser does until its next rendering update)', () => {
+    honourInert();
+    const { rerender } = render(
+      <div>
+        <button type="button">Inside</button>
+      </div>,
+    );
+    const inside = screen.getByRole('button', { name: 'Inside' });
+    act(() => inside.focus());
+    rerender(
+      <div inert>
+        <button type="button">Inside</button>
+      </div>,
+    );
+    expect(inside).toHaveFocus();
+  });
+
+  it('called twice in a test, still honours inert and focuses elsewhere', () => {
+    honourInert();
+    honourInert();
+    render(
+      <>
+        <button type="button">Outside</button>
+        <div inert>
+          <button type="button">Inside</button>
+        </div>
+      </>,
+    );
+    const outside = screen.getByRole('button', { name: 'Outside' });
+    act(() => outside.focus({ preventScroll: true }));
+    expect(outside).toHaveFocus();
+    act(() => screen.getByRole('button', { name: 'Inside', hidden: true }).focus());
+    expect(outside).toHaveFocus();
+  });
+
+  describe('the emulation lasts one test', () => {
+    // As for mockAnimations: afterAll checks each test against its role, in any order, and is
+    // skipped when a filter selects only one of them.
+    const seen: Array<{ installed: boolean; focused: boolean }> = [];
+    afterAll(() => {
+      if (seen.length !== 2) return;
+      expect(seen.find((entry) => entry.installed)?.focused).toBe(false);
+      expect(seen.find((entry) => !entry.installed)?.focused).toBe(true);
+    });
+    function focusInsideInert(): boolean {
+      render(
+        <div inert>
+          <button type="button">Inside</button>
+        </div>,
+      );
+      const inside = screen.getByRole('button', { name: 'Inside', hidden: true });
+      act(() => inside.focus());
+      return inside === document.activeElement;
+    }
+    it('honours inert in the test that calls it', () => {
+      honourInert();
+      seen.push({ installed: true, focused: focusInsideInert() });
+    });
+    it('focuses inside inert again in the next test (jsdom’s own behaviour)', () => {
+      seen.push({ installed: false, focused: focusInsideInert() });
     });
   });
 });

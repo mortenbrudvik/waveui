@@ -62,6 +62,20 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  * - `tooltipMotion`, the Tooltip surface: opacity only. It fades in from transparent and back out
  *   over the faster duration (100 ms) with the easy-ease curve, both ways, and does not slide. Like
  *   the popups, it never lists the property floating-ui places the surface with.
+ * - `collapseStructure`, the element around the part a disclosure opens and closes (Accordion's
+ *   region, a Tree group, a Nav category's list; not motion: it is on the element whatever its
+ *   motion slot holds). While the part is open the element renders no box of its own, so the part
+ *   lays out in its parent as it did before the element existed; while it enters or exits, the
+ *   element is a clipping grid of one row track whose minimum is zero, so the track can get
+ *   smaller than the part, padding and borders included. The part sits at the top of that track
+ *   at its own height rather than stretched to it: the track only clips the part, so a part that
+ *   scrolls shows no scroll bar and keeps its line breaks, and its background and border cover
+ *   all of its visible part (while the collapse is partly open, the grid gives its track only that
+ *   fraction of the element, so a stretched part would be shorter than what the element shows).
+ * - `collapseMotion`, the motion of that element: its row track and its opacity. It enters from
+ *   an empty, transparent track and exits back to one over the normal duration (200 ms) with the
+ *   max easy-ease curve, both ways, so the space the part takes opens and closes while the content
+ *   keeps its width.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -154,6 +168,22 @@ export const popupMotion =
 /** The Tooltip surface's default motion: a fade, 100 ms both ways, without a slide. */
 export const tooltipMotion =
   'transition-opacity duration-wave-faster ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
+
+/**
+ * The structure of the element around a disclosure's collapsing part (Accordion's region, a Tree
+ * group, a Nav category's list): no box while open, a clipping one-track grid of rows while it
+ * enters or exits, with the part at the top of the track at its own height (clipped, not
+ * squeezed).
+ */
+export const collapseStructure =
+  'grid grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents';
+
+/**
+ * A disclosure's default collapse, on the element around its part: the row track opens from zero
+ * and closes back with a fade, 200 ms both ways.
+ */
+export const collapseMotion =
+  'transition-[grid-template-rows,opacity] duration-wave-normal ease-wave-easy-ease-max motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:opacity-0';
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */
 const PRESENCE_VARIANT = '[presence=';

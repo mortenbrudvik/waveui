@@ -12,6 +12,7 @@ import { popupMotion } from '../../../lib/motion';
 import type { MotionSlot } from '../../../lib/types';
 import {
   findDanglingIdRefs,
+  honourInert,
   mockAnimations,
   mockMatchMedia,
   mockRect,
@@ -491,22 +492,9 @@ describe('TeachingPopover presence (D7, D9, D22)', () => {
 });
 
 describe('focus before close (D20)', () => {
-  /**
-   * Makes `focus()` do nothing on an element inside `inert`, as in a browser (jsdom focuses it).
-   * After a commit React puts focus back on the element that had it before, and in jsdom that
-   * would undo the closing commit's focus move out of the exiting (`inert`) surface, leaving the
-   * choice to useRestoreFocus. Undone by `vi.restoreAllMocks()` in `afterEach`.
-   */
-  function honourInert() {
-    const focus = HTMLElement.prototype.focus;
-    vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
-      this: HTMLElement,
-      options?: FocusOptions,
-    ) {
-      if (!this.closest('[inert]')) focus.call(this, options);
-    });
-  }
-
+  // `honourInert` (test-utils): after a commit React puts focus back on the element that had it
+  // before, and jsdom would let that undo the closing commit's focus move out of the exiting
+  // (`inert`) surface, leaving the choice to useRestoreFocus.
   it('without a Trigger, focus goes back to the element that opened it, not to a focusable target, in the closing commit', async () => {
     stubViewport();
     function Tour() {
