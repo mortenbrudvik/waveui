@@ -17,6 +17,7 @@ import {
   type UseVirtualWindowOptions,
   type VirtualWindow,
 } from '../useVirtualWindow';
+import { useMergedRefs } from '../useMergedRefs';
 import type { VirtualEntry } from '../../lib/virtual';
 import { installResizeObserverMock } from '../../test-utils';
 
@@ -76,24 +77,43 @@ interface HarnessProps extends UseVirtualWindowOptions {
   windowRef?: React.Ref<VirtualWindow>;
 }
 
-/** Renders `layout(count)`: items as `<div data-index>`, spacers as `<div data-spacer>`. */
+interface WindowedListProps {
+  virtualWindow: VirtualWindow;
+  count: number;
+  keep?: readonly number[];
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * Renders `virtualWindow.layout(count)`, items as `<div data-index>` and spacers as
+ * `<div data-spacer>`, the way a component given a `virtualWindow` prop does: the window object is
+ * used as is in render, its callback ref merged with the component's own (`npm run lint` checks
+ * this file).
+ */
+function WindowedList({ virtualWindow, count, keep, ref }: WindowedListProps) {
+  const scrollerRef = useMergedRefs(ref, virtualWindow.scrollRef);
+  return (
+    <div ref={scrollerRef} data-scroller="" data-testid="scroller">
+      {virtualWindow
+        .layout(count, { keep })
+        .map((entry) =>
+          entry.kind === 'item' ? (
+            <div key={entry.index} data-index={entry.index} />
+          ) : (
+            <div key={entry.key} data-spacer={entry.key} style={{ height: entry.size }} />
+          ),
+        )}
+    </div>
+  );
+}
+
+/** Holds the window (`onRender` counts its renders) and passes it to a {@link WindowedList}. */
 function Harness({ count, keep, mounted = true, onRender, windowRef, ...options }: HarnessProps) {
   const virtualWindow = useVirtualWindow(options);
   React.useImperativeHandle(windowRef, () => virtualWindow, [virtualWindow]);
   onRender?.();
   if (!mounted) return null;
-  const { scrollRef, layout } = virtualWindow;
-  return (
-    <div ref={scrollRef} data-scroller="" data-testid="scroller">
-      {layout(count, { keep }).map((entry) =>
-        entry.kind === 'item' ? (
-          <div key={entry.index} data-index={entry.index} />
-        ) : (
-          <div key={entry.key} data-spacer={entry.key} style={{ height: entry.size }} />
-        ),
-      )}
-    </div>
-  );
+  return <WindowedList virtualWindow={virtualWindow} count={count} keep={keep} />;
 }
 
 const scroller = () => screen.getByTestId('scroller');
@@ -410,6 +430,69 @@ describe('useVirtualWindow', () => {
     });
   });
 
+  describe('scrollPaddingStart', () => {
+    // A 44 px sticky header pinned at the top of a 440 px scroller leaves 396 px for the rows; the
+    // rows keep their offsets.
+    const HEADER = 44;
+    const AREA = 440 - HEADER;
+
+    it('shortens the visible area for end, center and auto, not for start or the layout', () => {
+      const ref = React.createRef<VirtualWindow>();
+      render(<Harness itemSize={ITEM} count={COUNT} scrollPaddingStart={HEADER} windowRef={ref} />);
+      expect(renderedIndexes()).toEqual(range(0, 16));
+
+      // Row 9 ends at 440 px, below the 396 px under the header: `auto` brings it up.
+      act(() => current(ref).scrollToIndex(9));
+      expect(scroller().scrollTop).toBe(10 * ITEM - AREA);
+
+      act(() => current(ref).scrollToIndex(20, { align: 'end' }));
+      expect(scroller().scrollTop).toBe(21 * ITEM - AREA);
+
+      act(() => current(ref).scrollToIndex(20, { align: 'start' }));
+      expect(scroller().scrollTop).toBe(20 * ITEM);
+
+      act(() => current(ref).scrollToIndex(20, { align: 'center' }));
+      expect(scroller().scrollTop).toBe(20 * ITEM + ITEM / 2 - AREA / 2);
+
+      // From 704 px the rows 16..24 are whole under the header: `auto` leaves row 24 and brings
+      // row 25 up to the bottom edge.
+      act(() => current(ref).scrollToIndex(24));
+      expect(scroller().scrollTop).toBe(704);
+      act(() => current(ref).scrollToIndex(25));
+      expect(scroller().scrollTop).toBe(26 * ITEM - AREA);
+    });
+
+    it('bounds the offset by the rows below the header', () => {
+      // A header that is not a whole number of rows: 30 px above 10,000 rows of 44 px.
+      contentHeight = 30 + COUNT * ITEM;
+      const ref = React.createRef<VirtualWindow>();
+      render(<Harness itemSize={ITEM} count={COUNT} scrollPaddingStart={30} windowRef={ref} />);
+      act(() => current(ref).scrollToIndex(COUNT - 1, { align: 'start' }));
+      // The browser's own bound: the content height less the viewport.
+      expect(scroller().scrollTop).toBe(contentHeight - 440);
+      expect(scroller().scrollTop).toBe(COUNT * ITEM - (440 - 30));
+    });
+
+    it('keeps one row of visible area under a header taller than the viewport', () => {
+      const ref = React.createRef<VirtualWindow>();
+      render(<Harness itemSize={ITEM} count={COUNT} scrollPaddingStart={1000} windowRef={ref} />);
+      act(() => current(ref).scrollToIndex(20, { align: 'end' }));
+      expect(scroller().scrollTop).toBe(20 * ITEM);
+    });
+
+    it.each([-10, Number.NaN, Number.POSITIVE_INFINITY])(
+      'treats a padding of %s as 0',
+      (padding) => {
+        const ref = React.createRef<VirtualWindow>();
+        render(
+          <Harness itemSize={ITEM} count={COUNT} scrollPaddingStart={padding} windowRef={ref} />,
+        );
+        act(() => current(ref).scrollToIndex(20, { align: 'end' }));
+        expect(scroller().scrollTop).toBe(21 * ITEM - 440);
+      },
+    );
+  });
+
   describe('server and mount', () => {
     it('renders the first window of the default viewport on the server, reading no DOM', () => {
       const scrollTopRead = vi.spyOn(Element.prototype, 'scrollTop', 'get');
@@ -527,6 +610,9 @@ describe('useVirtualWindow', () => {
   it('types its options and result', () => {
     expectTypeOf(useVirtualWindow).parameter(0).toEqualTypeOf<UseVirtualWindowOptions>();
     expectTypeOf(useVirtualWindow).returns.toEqualTypeOf<VirtualWindow>();
+    expectTypeOf<UseVirtualWindowOptions['scrollPaddingStart']>().toEqualTypeOf<
+      number | undefined
+    >();
     expectTypeOf<VirtualWindow['scrollRef']>().toEqualTypeOf<React.RefCallback<HTMLElement>>();
     expectTypeOf<ReturnType<VirtualWindow['layout']>>().toEqualTypeOf<readonly VirtualEntry[]>();
     const keep: readonly number[] = [1];

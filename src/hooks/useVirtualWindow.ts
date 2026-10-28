@@ -23,6 +23,14 @@ export interface UseVirtualWindowOptions {
    * @default 480
    */
   initialViewportSize?: number;
+  /**
+   * The height, in pixels, of content pinned over the top of the rows inside the scroller (a
+   * sticky header). `scrollToIndex` places rows in the area below it, and its content bound leaves
+   * it out; the rows' offsets and the layout do not change. A value that is not a finite number of
+   * 0 or more counts as 0.
+   * @default 0
+   */
+  scrollPaddingStart?: number;
 }
 
 /**
@@ -85,15 +93,18 @@ function isValidItemSize(itemSize: number): boolean {
  * server and the first render lay out the top of the list in `initialViewportSize`, and read no
  * DOM.
  *
- * Read `scrollRef` and `layout` off the window before rendering (destructure them): the React
- * Compiler's lint treats an object with a member named like a ref as a ref, and reports a method
- * call on it during render.
+ * Never write `ref={virtualWindow.scrollRef}` in JSX: the React Compiler's lint types a member
+ * read in the `ref` position as a ref, then reports that read and every call on the window during
+ * render (`virtualWindow.layout(count)` included). Merge the callback with the element's other
+ * refs through `useMergedRefs(ownRef, virtualWindow.scrollRef)`, or destructure it first
+ * (`const { scrollRef } = virtualWindow`); `virtualWindow.layout(count)` can then be called as is.
  *
  * @example
- * const { scrollRef, layout } = useVirtualWindow({ itemSize: 32 });
+ * const virtualWindow = useVirtualWindow({ itemSize: 32 });
+ * const { scrollRef } = virtualWindow;
  * return (
  *   <div ref={scrollRef} style={{ height: 320, overflowY: 'auto' }}>
- *     {layout(rows.length).map((entry) =>
+ *     {virtualWindow.layout(rows.length).map((entry) =>
  *       entry.kind === 'item' ? (
  *         <Row key={rows[entry.index].id} row={rows[entry.index]} />
  *       ) : (
@@ -107,8 +118,11 @@ export function useVirtualWindow({
   itemSize,
   overscan = 6,
   initialViewportSize = 480,
+  scrollPaddingStart = 0,
 }: UseVirtualWindowOptions): VirtualWindow {
   const size = isValidItemSize(itemSize) ? itemSize : 1;
+  const paddingStart =
+    Number.isFinite(scrollPaddingStart) && scrollPaddingStart > 0 ? scrollPaddingStart : 0;
   const [state, setState] = useState<WindowState>(UNMEASURED);
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   // The values last given to `setState`, so a frame inside the same row sets nothing (React may
@@ -139,15 +153,21 @@ export function useVirtualWindow({
 
   const scrollElementTo = useEventCallback((element: HTMLElement, request: ScrollRequest) => {
     const { scrollTop, scrollHeight, clientHeight } = element;
+    const viewport = clientHeight > 0 ? clientHeight : initialViewportSize;
     element.scrollTop = scrollOffsetForIndex({
       index: request.index,
       align: request.align,
       itemSize: size,
       // The browser bounds `scrollTop` by the content it laid out; its rows bound the request the
       // same way. Without layout (jsdom, a hidden scroller) only the start bounds it.
-      count: scrollHeight > 0 ? Math.floor(scrollHeight / size) : Number.MAX_SAFE_INTEGER,
+      count:
+        scrollHeight > 0
+          ? Math.floor((scrollHeight - paddingStart) / size)
+          : Number.MAX_SAFE_INTEGER,
       scrollTop,
-      viewportSize: clientHeight > 0 ? clientHeight : initialViewportSize,
+      // A sticky header covers the top of the viewport and leaves the rows where they are: the
+      // rows are seen in the area below it (at least one row tall).
+      viewportSize: Math.max(size, viewport - paddingStart),
     });
     measure(element);
   });
