@@ -13,14 +13,16 @@ import {
   subscribeLayers,
   type LayerRecord,
 } from '../../lib/layers';
+import { toastMotion, toastStructure } from '../../lib/motion';
 import { focusRing } from '../../lib/styles';
 import { bindToasterHandle, isToastOptions } from '../../lib/toaster';
 import type { ToasterHandle } from '../../lib/toaster';
-import type { Status } from '../../lib/types';
+import type { MotionSlot, Status } from '../../lib/types';
 import { useDirection } from '../../hooks/useDirection';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { Portal } from '../portal/Portal';
@@ -115,7 +117,8 @@ export interface ToastController {
   };
   /**
    * Dismisses the toast with this id and cancels its timer: a shown toast exits (it stays, inert,
-   * until an exit motion of yours ends), a waiting one is removed. Unknown ids are ignored.
+   * until its exit motion ends; see the Toaster's `motion`), a waiting one is removed. Unknown ids
+   * are ignored.
    */
   dismissToast: (id: string) => void;
   /**
@@ -439,6 +442,20 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
    * queues again until a Toaster binds it.
    */
   toaster?: ToasterHandle;
+  /**
+   * The motion of every toast's container (the `role="group"` element; `className` stays on the
+   * region). By default a toast opens its place in the stack, fades in and slides 8px in from the
+   * stack's edge (the top or bottom edge `position` names) over 250 ms with a decelerating curve,
+   * all together; dismissed, it fades out over 200 ms, then its place closes over 200 ms more,
+   * so the toasts around it glide together and nothing jumps when it unmounts (the timer still
+   * starts when the toast is shown). Under reduced motion it appears and disappears at once.
+   * `null` turns the motion off (the container still renders its `data-presence` phases, which
+   * then end at once); a class string or `{ className }` replaces the default classes with yours
+   * (see `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns
+   * the default off. A WaveUI addition: Fluent's Toaster has no motion slot.
+   * @default the slide, fade and collapse above
+   */
+  motion?: MotionSlot | null;
   /** Ref to the toast region (the portaled `<div role="region">`). */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -584,6 +601,8 @@ interface ToastContainerProps {
   getFocusFallback: (from: HTMLElement | null) => HTMLElement | null;
   announce: (id: string, announcement: Announcement) => void;
   registerContainer: (id: string, node: HTMLElement | null) => void;
+  /** The container's motion classes: the Toaster's `motion`, resolved for the stack's edge. */
+  motionClassName: string;
 }
 
 function isTitlePart(
@@ -775,7 +794,9 @@ function composeToastText(
  * One toast of the Toaster (D10): a `role="group"` container, focusable by script (no Tab stop),
  * named by the toast's severity text and title and described by its body while a Toast inside
  * has registered them (so no id reference dangles). It provides the per-toast context, pauses the
- * timers and keeps focus when the toast goes.
+ * timers and keeps focus when the toast goes. The container is the presence element and a
+ * one-cell grid, whose motion opens and closes the track around the content element, its only
+ * child (0.15).
  */
 function ToastContainer({
   entry,
@@ -785,6 +806,7 @@ function ToastContainer({
   getFocusFallback,
   announce,
   registerContainer,
+  motionClassName,
 }: ToastContainerProps) {
   const { id, dismissed } = entry;
   // Mounted through the presence core (D29): a dismissed toast exits, `inert`, and is removed when
@@ -934,25 +956,28 @@ function ToastContainer({
       data-wave-toast=""
       aria-labelledby={joinIds(severityId, titlePart?.id)}
       aria-describedby={bodyPart?.id}
-      className={cn(toasterClassNames.toast, 'rounded', focusRing)}
+      className={cn(toasterClassNames.toast, 'rounded', focusRing, toastStructure, motionClassName)}
       {...presenceProps}
       onKeyDown={handleKeyDown}
     >
-      {ownSeverityLabel ? <StatusText label={ownSeverityLabel} id={ownStatusTextId} /> : null}
-      <ToastContext.Provider value={context}>
-        {entry.form === 'options' ? (
-          <ToastRoot
-            status={entry.options.status}
-            statusLabel={entry.options.statusLabel}
-            title={entry.options.title}
-            dismissLabel={entry.options.dismissLabel}
-          >
-            {entry.options.body}
-          </ToastRoot>
-        ) : (
-          entry.content
-        )}
-      </ToastContext.Provider>
+      {/* The one grid item (the content may be several elements), clipped while it moves. */}
+      <div className={toasterClassNames.toastContent}>
+        {ownSeverityLabel ? <StatusText label={ownSeverityLabel} id={ownStatusTextId} /> : null}
+        <ToastContext.Provider value={context}>
+          {entry.form === 'options' ? (
+            <ToastRoot
+              status={entry.options.status}
+              statusLabel={entry.options.statusLabel}
+              title={entry.options.title}
+              dismissLabel={entry.options.dismissLabel}
+            >
+              {entry.options.body}
+            </ToastRoot>
+          ) : (
+            entry.content
+          )}
+        </ToastContext.Provider>
+      </div>
     </div>
   );
 }
@@ -999,6 +1024,10 @@ ToastContainer.displayName = 'ToastContainer';
  * - `limit` caps how many toasts show at once: the others wait in a queue, in dispatch order,
  *   unannounced and without a running timer, and appear as shown toasts go.
  *   `dismissAllToasts()` removes every toast, shown and queued.
+ * - **Motion:** a toast slides and fades in from the stack's edge while its place opens; a
+ *   dismissed one fades out, then its place closes and the others glide together. It stays in
+ *   the document, `inert`, until then; at once under reduced motion. `motion` replaces or turns
+ *   off the motion of every toast.
  *
  * @example
  * <Toaster position="bottom-end" limit={3}>
@@ -1010,6 +1039,7 @@ export const Toaster = ({
   limit: limitProp,
   shortcuts,
   toaster: handle,
+  motion,
   className,
   style,
   children,
@@ -1045,6 +1075,11 @@ export const Toaster = ({
     });
   }, []);
   const limit = resolveLimit(limitProp);
+  // Every container's motion, which slides from the edge of the stack the position names (D14).
+  const motionClassName = useMotionClasses(
+    motion,
+    toastMotion[position.startsWith('top') ? 'top' : 'bottom'],
+  );
   // Waiting toasts are shown here, during render, with the current limit (adjust state while
   // rendering, C-HOOKS): every path that frees a place or raises the limit promotes them, and a
   // lowered limit never hides a shown toast. `promoteQueued` returns the same array once settled.
@@ -1509,6 +1544,7 @@ export const Toaster = ({
               getFocusFallback={getFocusFallback}
               announce={announce}
               registerContainer={registerContainer}
+              motionClassName={motionClassName}
             />
           ))}
         </div>

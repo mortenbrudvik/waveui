@@ -73,8 +73,10 @@ describe('dispatchToast with content (P3-01, toast-1)', () => {
     dispatchContent(<p>Connection lost</p>, { status: 'warning', timeout: 0 });
     const [container] = getToasts();
     expect(container).toHaveAccessibleName('Warning:');
-    expect(container.firstElementChild).toHaveClass('sr-only');
-    expect(container.firstElementChild).toHaveTextContent('Warning:');
+    // First in the container's content element (0.15), its only child.
+    const content = container.firstElementChild;
+    expect(content?.firstElementChild).toHaveClass('sr-only');
+    expect(content?.firstElementChild).toHaveTextContent('Warning:');
     expect(container).toHaveTextContent(/^Warning:\s*Connection lost$/);
     // No Toast inside, so no Dismiss button (D11).
     expect(within(container).queryByRole('button', { name: 'Dismiss' })).toBeNull();

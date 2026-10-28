@@ -383,11 +383,13 @@ export const toastFooterClassNames = { root: 'wave-toast-footer' } as const;
 
 /**
  * Toaster: `root` on the portaled toast region; `toast` on the `role="group"` container the
- * Toaster renders around each toast.
+ * Toaster renders around each toast; `toastContent` on the element inside each container, its
+ * only child, which holds the toast's status text and content (0.15).
  */
 export const toasterClassNames = {
   root: 'wave-toaster',
   toast: 'wave-toaster__toast',
+  toastContent: 'wave-toaster__toast-content',
 } as const;
 
 // ---------------------------------------------------------------------------

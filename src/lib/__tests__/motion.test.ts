@@ -28,7 +28,9 @@
  * lifts its panel's size cap on the panel's axis while the element is not entered, and it lays
  * its track on the side where it aligns the panel. The second also holds for the collapse
  * structure of the disclosures (D12), which aligns its part to the start of the track rather than
- * stretching it (a stretched part is squeezed to the track, shorter than the element shows).
+ * stretching it (a stretched part is squeezed to the track, shorter than the element shows). A
+ * structure that is a grid in every phase (a toast's container, D14) has a zero-minimum track on
+ * both axes, so its content keeps the container's width and its row track can close.
  *
  * The file runs in the node environment: the compile check loads `@tailwindcss/node`.
  */
@@ -519,6 +521,41 @@ function trackAlignmentFindings(structures: Readonly<Record<string, string>>): s
       return placed === item ? [] : [`${edge}: items ${item}, track ${placed}`];
     });
   });
+}
+
+/**
+ * The structures that are a grid in every phase, entered included (a toast's container takes
+ * focus, so it never renders without a box), whose tracks must have a zero minimum on both axes.
+ */
+const ALWAYS_GRID_STRUCTURES = ['toastStructure'];
+
+/**
+ * The plain (variant-free) track template of `axis` that has a zero minimum: an arbitrary
+ * `minmax(0,…)` template, or Tailwind's `grid-cols-<n>`/`grid-rows-<n>` (each track
+ * `minmax(0,1fr)`).
+ */
+function hasZeroMinimumTrack(utilities: readonly string[], axis: 'cols' | 'rows'): boolean {
+  const arbitrary = new RegExp(`^grid-${axis}-\\[minmax\\(0,[^\\]]+\\)\\]$`);
+  const counted = new RegExp(`^grid-${axis}-\\d+$`);
+  return utilities.some((utility) => arbitrary.test(utility) || counted.test(utility));
+}
+
+/**
+ * The grid tracks of an always-grid structure (D14): for a value with a plain grid display, a
+ * finding per axis without a zero-minimum track. Without a template the axis has one implicit
+ * track sized by its content (an automatic minimum): a column then grows to the content's
+ * longest unbreakable line, past the container's width, and a row cannot get smaller than the
+ * content, so the container could not open from or close to nothing.
+ */
+function zeroMinimumTrackFindings(value: string): string[] {
+  const utilities = words(value)
+    .map(parseWord)
+    .filter(({ variants }) => variants.length === 0)
+    .map(({ utility }) => utility);
+  if (!utilities.includes('grid')) return [];
+  return (['cols', 'rows'] as const)
+    .filter((axis) => !hasZeroMinimumTrack(utilities, axis))
+    .map((axis) => `${axis}: no zero-minimum track`);
 }
 
 /** `check` over every recipe string of `lib/motion`, as `label: finding` lines. */
@@ -1044,6 +1081,58 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
     it('holds for collapseStructure: the part at the start of a track at the start', () => {
       expect(trackAlignmentFindings({ collapseStructure: motion.collapseStructure })).toEqual([]);
       expect(plainUtilities(motion.collapseStructure)).toContain('items-start');
+    });
+  });
+
+  describe('an always-grid structure keeps its content to its width and can close (D14)', () => {
+    it('reports an axis left to an implicit track, or a track with a minimum other than zero', () => {
+      // The plan's literal: no column template, so the column grows to the content.
+      expect(
+        zeroMinimumTrackFindings(
+          'grid grid-rows-[minmax(0,1fr)] not-data-[presence=entered]:overflow-hidden',
+        ),
+      ).toEqual(['cols: no zero-minimum track']);
+      expect(zeroMinimumTrackFindings('grid grid-cols-[minmax(0,1fr)] grid-rows-[1fr]')).toEqual([
+        'rows: no zero-minimum track',
+      ]);
+      expect(zeroMinimumTrackFindings('grid grid-cols-[auto] grid-rows-[minmax(0,1fr)]')).toEqual([
+        'cols: no zero-minimum track',
+      ]);
+      // A template under a variant leaves the other phases without one.
+      expect(
+        zeroMinimumTrackFindings(
+          'grid data-[presence=exiting]:grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]',
+        ),
+      ).toEqual(['cols: no zero-minimum track']);
+      expect(zeroMinimumTrackFindings('grid overflow-hidden')).toEqual([
+        'cols: no zero-minimum track',
+        'rows: no zero-minimum track',
+      ]);
+    });
+
+    it('accepts zero-minimum tracks on both axes, and a value that is no grid', () => {
+      expect(
+        zeroMinimumTrackFindings('grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]'),
+      ).toEqual([]);
+      expect(zeroMinimumTrackFindings('grid grid-cols-1 grid-rows-[minmax(0,0.5fr)]')).toEqual([]);
+      expect(zeroMinimumTrackFindings('flex flex-col')).toEqual([]);
+      expect(zeroMinimumTrackFindings('data-[presence=exiting]:grid')).toEqual([]);
+    });
+
+    it('holds for every always-grid structure, a string export that never renders without a box', () => {
+      const exports: Readonly<Record<string, unknown>> = motion;
+      expect(ALWAYS_GRID_STRUCTURES.length).toBeGreaterThan(0);
+      for (const name of ALWAYS_GRID_STRUCTURES) {
+        expect(typeof exports[name], name).toBe('string');
+        const value = String(exports[name]);
+        expect(words(value), name).toContain('grid');
+        expect(value, name).not.toContain(':contents');
+      }
+      expect(
+        ALWAYS_GRID_STRUCTURES.flatMap((name) =>
+          zeroMinimumTrackFindings(String(exports[name])).map((finding) => `${name}: ${finding}`),
+        ),
+      ).toEqual([]);
     });
   });
 });

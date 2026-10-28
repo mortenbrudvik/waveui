@@ -85,6 +85,24 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   of its direct children (so a button child keeps its colour transition, and its opacity fades)
  *   over the fast duration (150 ms) with the easy-ease curve, so an action fades in as its row is
  *   hovered or takes focus, and out again. It replaces any transition list of the children's own.
+ * - `toastStructure`, the container of each toast of a Toaster (not motion: it is on the element
+ *   whatever its motion slot holds): a grid of one cell around the one element that holds the
+ *   toast's content, both of whose tracks have a minimum of zero. The row track can so get
+ *   smaller than that content, and the column keeps the content to the container's width (a
+ *   column sized by its content would grow to the content's longest unbreakable line, such as a
+ *   long link, past the region's width). Unlike the elements of the disclosures it always has a
+ *   box of its own (it takes focus); it clips what it holds while it enters or exits, and no
+ *   longer once it is shown.
+ * - `toastMotion`, the motion of that container per edge of the stack (the top or bottom edge its
+ *   position names): its row track, its bottom margin, its opacity and translate. It enters over
+ *   the gentle duration (250 ms) with the mid decelerating curve, all together: the track opens
+ *   from empty, the margin returns from minus the region's 8px gap, and the toast fades in from
+ *   transparent while it slides 8px in from beyond the stack's edge (from below at the bottom,
+ *   from above at the top). It exits over the normal duration (200 ms) with the easy-ease curve:
+ *   the toast fades out in place first, then the track and the margin close after a delay of the
+ *   same normal duration, so the toasts around it glide together once it has faded. The margin
+ *   makes up for the gap the region keeps after each toast, so nothing moves when the exited
+ *   container unmounts. Under reduced motion nothing is transitioned, so the delay goes too.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -204,6 +222,24 @@ export const expandIconMotion =
  */
 export const navActionsRevealMotion =
   '*:transition *:duration-wave-fast *:ease-wave-easy-ease motion-reduce:*:transition-none';
+
+/**
+ * The structure of a toast's container: a one-cell grid around the toast's content element, its
+ * tracks with a zero minimum (the content keeps the container's width), clipping it while the
+ * container enters or exits.
+ */
+export const toastStructure =
+  'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] not-data-[presence=entered]:overflow-hidden';
+
+/**
+ * A toast container's default motion per edge of its stack: it opens, fades in and slides from
+ * that edge together, 250 ms; it fades out over 200 ms, then closes over 200 ms more.
+ */
+export const toastMotion: Readonly<Record<'top' | 'bottom', string>> = {
+  top: 'transition-[grid-template-rows,margin-bottom,opacity,translate] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-easy-ease data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:-translate-y-2 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0',
+  bottom:
+    'transition-[grid-template-rows,margin-bottom,opacity,translate] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-easy-ease data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:translate-y-2 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0',
+};
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */
 const PRESENCE_VARIANT = '[presence=';
