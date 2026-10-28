@@ -7,9 +7,11 @@ import { Field } from '../../input/Field';
 import { Input } from '../../input/Input';
 import { createFieldControlIdClaim } from '../../../hooks/useFieldControl';
 import type { ProgressBarColor, ProgressBarProps } from '../ProgressBar';
+import { progressIndeterminateMotion } from '../../../lib/motion';
 import {
   axe,
   expectNoA11yViolations,
+  motionClasses,
   renderWithProviders,
   testSystemProps,
 } from '../../../test-utils';
@@ -357,6 +359,68 @@ describe('ProgressBar', () => {
     it('does not animate a determinate fill', () => {
       render(<ProgressBar value={40} label="Upload" />);
       expect(fillOf(screen.getByRole('progressbar')).className).not.toMatch(/animate-/);
+    });
+
+    describe('indeterminateMotion', () => {
+      // 0.14's indeterminate class list, word for word (git show v0.14.1:ProgressBar.tsx).
+      const ZERO_FOURTEEN =
+        'w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse';
+      const MOTION_WORDS = motionClasses(ZERO_FOURTEEN);
+      const classesOf = (el: HTMLElement) => el.className.split(/\s+/).filter(Boolean);
+      const renderFill = (
+        props: Partial<ProgressBarProps>,
+        options?: Parameters<typeof renderWithProviders>[1],
+      ) => {
+        renderWithProviders(<ProgressBar label="Syncing" {...props} />, options);
+        return fillOf(screen.getByRole('progressbar'));
+      };
+
+      it("the recipe is 0.14's list, so the default output is unchanged", () => {
+        expect(progressIndeterminateMotion).toBe(ZERO_FOURTEEN);
+        const fill = renderFill({});
+        // The recipe ends the list, and its width class has merged the full width away.
+        expect(classesOf(fill).slice(-MOTION_WORDS.length)).toEqual(MOTION_WORDS);
+        expect(fill).not.toHaveClass('w-full');
+        expect(fill.style.width).toBe('');
+      });
+
+      it('null draws a static full-width bar', () => {
+        const fill = renderFill({ indeterminateMotion: null });
+        expect(fill).toHaveClass('w-full');
+        expect(fill.className).not.toMatch(/animate-/);
+        expect(fill.className).not.toMatch(/w-2\/5/);
+      });
+
+      it('a class string replaces the whole list', () => {
+        const fill = renderFill({ indeterminateMotion: 'w-2/5' });
+        expect(fill).toHaveClass('w-2/5');
+        expect(fill).not.toHaveClass('w-full');
+        expect(fill.className).not.toMatch(/animate-/);
+        expect(fill.className).not.toMatch(/motion-reduce:/);
+      });
+
+      it('the className form replaces the list too', () => {
+        const fill = renderFill({ indeterminateMotion: { className: 'w-1/2 animate-pulse' } });
+        expect(fill).toHaveClass('w-1/2', 'animate-pulse');
+        expect(fill.className).not.toMatch(/animate-wave/);
+      });
+
+      it("a provider's 'none' draws a static full-width bar", () => {
+        const fill = renderFill({}, { motion: 'none' });
+        expect(fill).toHaveClass('w-full');
+        expect(fill.className).not.toMatch(/animate-/);
+      });
+
+      it("the bar's own value still applies under 'none'", () => {
+        const fill = renderFill({ indeterminateMotion: 'w-2/5 animate-pulse' }, { motion: 'none' });
+        expect(fill).toHaveClass('w-2/5', 'animate-pulse');
+      });
+
+      it('a determinate bar keeps its inline width and takes no motion word', () => {
+        const fill = renderFill({ value: 40, indeterminateMotion: 'animate-pulse' });
+        expect(fill.style.width).toBe('40%');
+        expect(fill.className).not.toMatch(/animate-|w-full|w-2\/5/);
+      });
     });
 
     it('uses the RTL keyframes inside a right-to-left provider', () => {

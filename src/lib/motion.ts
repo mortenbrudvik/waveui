@@ -145,6 +145,10 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   size ratio of the previous tab, measured in physical pixels) as two custom properties without
  *   this recipe, then clears them and adds it, so the line glides back to its own tab. Under
  *   reduced motion the line's transition is off, and the TabList writes no start either.
+ * - `progressIndeterminateMotion`, the fill of an indeterminate ProgressBar (0.14's own list,
+ *   unchanged): a fill two fifths of the track wide that sweeps across it with Wave's indeterminate
+ *   keyframes, mirrored by the right-to-left counterpart on the same value. Under reduced motion
+ *   it becomes a full-width fill that pulses in place instead, in either direction.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -321,6 +325,13 @@ export const carouselFadeMotion =
  */
 export const tabIndicatorMotion =
   'after:transition-[translate,scale] after:duration-wave-slow after:ease-wave-decelerate-max motion-reduce:after:transition-none';
+
+/**
+ * An indeterminate ProgressBar fill's default motion: it sweeps across the track, mirrored in
+ * right-to-left, and pulses at full width under reduced motion.
+ */
+export const progressIndeterminateMotion =
+  'w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse';
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */
 const PRESENCE_VARIANT = '[presence=';
