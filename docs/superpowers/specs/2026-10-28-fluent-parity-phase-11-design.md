@@ -324,6 +324,8 @@ Order A, B, C, D, E, F, G, H, I; D and E may swap. Each package ends green on it
 
 (Empty. Each package appends here every deliberate departure from this spec and every existing test assertion it had to edit, with the reason.)
 
+- **Task 2, `useSelection`:** `toggleAll` does nothing in `single` mode (spec §3.2 is silent; a select-all has no meaning for one id, and `selectAllIds` would break the one-id invariant). `UseSelectionChangeDetails` is a named exported type of the public signature. `selectedItems` keeps its set by content, so a controlled parent that passes a new array of the same ids every render gets the same set.
+
 ## 17. Risks
 
 1. **Spacer rows and sticky header in native tables** differ across engines (§15.7). Mitigation: the browser pass early, before the List/Listbox/Tree packages; fallback is div rendering in 0.17.

@@ -64,6 +64,12 @@ export type {
   UsePresenceOptions,
   UsePresenceResult,
 } from './hooks/usePresence';
+export { useSelection } from './hooks/useSelection';
+export type {
+  UseSelectionChangeDetails,
+  UseSelectionOptions,
+  UseSelectionResult,
+} from './hooks/useSelection';
 export { useActiveDescendant } from './hooks/useActiveDescendant';
 export type {
   UseActiveDescendantOptions,
