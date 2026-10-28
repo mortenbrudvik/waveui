@@ -544,6 +544,8 @@ Since 0.15 the overlays and disclosures in the table below ship an enter and exi
 - A Tooltip renders its current `content` while it exits, so content reset in `onOpenChange(false)` (a "Copied" text) changes during the fade.
 - A popup opened inside a Dialog or Drawer that closes while the popup is open stays on screen until the surface's exit ends, and goes with it, without an exit of its own (at most the drawer's 500ms).
 - Toasts move back to their corner as an overlay drawer starts closing, over the drawer that still slides out (their offsets follow the open layers).
+- A popup whose placement flips (Popover, Menu, the InfoButton note, a pointed TeachingPopover; the Tooltip only fades) starts its enter slide from the side it asked for: it mounts with that `data-side`, `@starting-style` resolves at insertion, and floating-ui's flip lands 2–5 ms later, so the first frame is 4px off toward the anchor for the 200 ms enter. The exit uses the resolved side. Deferred to 0.16: keep the surface hidden until it is positioned.
+- A selection changed while TabList's line still slides measures the tabs, not the line, so the line first jumps to the previous tab (by 38.6px in Chromium, 19.7px in Firefox, 3.4px in WebKit in the browser pass), then slides.
 - A toast container clips while it is not entered, so its shadow is cut from the first frame of its exit, while it is still opaque.
 - `backdropMotion` counts as given unless it is `undefined`, so `backdropMotion={null}` on a non-modal Dialog or an inline drawer warns (`…:backdrop-ignored`), unlike `backdrop={null}`.
 - The Nav item actions' reveal sets the transition list of each action (`*:transition`), so a transition class of yours on one is replaced.
