@@ -72,13 +72,15 @@ interface DragState {
 
 /**
  * The drag handle of a column's edge: a vertical `role="separator"` with `aria-valuenow`, meant
- * for the `aside` slot of a `Table.HeaderCell` (or a `DataGrid.HeaderCell`) whose cell is
- * positioned, since the handle is drawn along the cell's end edge. A pointer drag (mouse, touch or
- * pen) resizes through `onResize`, with the movement mirrored in right-to-left tables; the arrow
- * keys move the edge by 20 pixels (5 with Shift), Home sets the minimum width and End the maximum
- * one. A double click calls `onReset`. The handle is a Tab stop (`tabIndex` 0), so the keys work in
- * a static table; a grid that manages its own tab stops overrides `tabIndex`. The handle carries `data-grid-auxiliary`, so a grid's cell
- * navigation does not take it for the cell's own widget.
+ * for the `aside` slot of a `Table.HeaderCell` whose cell is positioned, since the handle is drawn
+ * along the cell's end edge. A DataGrid with `resizableColumns` renders it in the header cell of
+ * each of its columns itself (a `DataGrid.HeaderCell` has no `aside` slot). A pointer drag (mouse,
+ * touch or pen) resizes through `onResize`, with the movement mirrored in right-to-left tables;
+ * the arrow keys move the edge by 20 pixels (5 with Shift), Home sets the minimum width and End
+ * the maximum one. A double click calls `onReset`. The handle is a Tab stop (`tabIndex` 0), so the
+ * keys work in a static table; a grid that manages its own tab stops overrides `tabIndex`. The
+ * handle carries `data-grid-auxiliary`, so a grid's cell navigation does not take it for the
+ * cell's own widget.
  *
  * It keeps no width: spread the result of `useTableColumnSizing`'s `getResizeHandleProps(columnId)`
  * onto it, or pass `width`, `minWidth` and `onResize` from your own state.

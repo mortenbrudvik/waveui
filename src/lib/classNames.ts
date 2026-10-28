@@ -1570,12 +1570,14 @@ export const dataGridHeaderClassNames = {
 
 /**
  * DataGrid.HeaderCell: `root` on the `<th>`; `button` on the sort button; `sortIcon` on its
- * direction glyph (the default arrow `<svg>`, or the `<span>` of a `sortIcon` slot).
+ * direction glyph (the default arrow `<svg>`, or the `<span>` of a `sortIcon` slot);
+ * `resizeHandle` on the column's resize handle (a `Table.ResizeHandle`, with resizable columns).
  */
 export const dataGridHeaderCellClassNames = {
   root: 'wave-data-grid-header-cell',
   button: 'wave-data-grid-header-cell__button',
   sortIcon: 'wave-data-grid-header-cell__sort-icon',
+  resizeHandle: 'wave-data-grid-header-cell__resize-handle',
 } as const;
 
 /** DataGrid.Body: `root` on the `<tbody>`. */

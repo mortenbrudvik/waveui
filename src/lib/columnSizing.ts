@@ -25,12 +25,34 @@ export const DEFAULT_COLUMN_WIDTH = 150;
 export const DEFAULT_MIN_COLUMN_WIDTH = 80;
 
 /**
+ * The entry of `record` for the column `columnId`, read only when it is the record's own: a column
+ * whose id names an inherited member (`constructor`, `toString`) has no entry unless it was set.
+ */
+export function getColumnEntry<V>(
+  record: Readonly<Record<string, V>> | undefined,
+  columnId: string,
+): V | undefined {
+  return record !== undefined && Object.hasOwn(record, columnId) ? record[columnId] : undefined;
+}
+
+/**
  * Holds a width at or above the column's `minWidth` (80 without one). There is no maximum. A
  * width that is not a finite number becomes the minimum.
  */
 export function clampColumnWidth(width: number, option?: ColumnSizingOption): number {
   const minWidth = option?.minWidth ?? DEFAULT_MIN_COLUMN_WIDTH;
   return Number.isFinite(width) ? Math.max(width, minWidth) : minWidth;
+}
+
+/**
+ * The width a column starts at: its `defaultWidth`, else its `idealWidth`, else 150, held at or
+ * above its `minWidth`.
+ */
+export function initialColumnWidth(option?: ColumnSizingOption): number {
+  return clampColumnWidth(
+    option?.defaultWidth ?? option?.idealWidth ?? DEFAULT_COLUMN_WIDTH,
+    option,
+  );
 }
 
 /**
@@ -45,14 +67,12 @@ export function resolveColumnWidths(
 ): Record<string, number> {
   const resolved: Record<string, number> = {};
   for (const id of columnIds) {
-    const option = options?.[id];
-    const given = widths?.[id];
-    resolved[id] = clampColumnWidth(
+    const option = getColumnEntry(options, id);
+    const given = getColumnEntry(widths, id);
+    resolved[id] =
       typeof given === 'number' && Number.isFinite(given)
-        ? given
-        : (option?.defaultWidth ?? option?.idealWidth ?? DEFAULT_COLUMN_WIDTH),
-      option,
-    );
+        ? clampColumnWidth(given, option)
+        : initialColumnWidth(option);
   }
   return resolved;
 }
@@ -63,6 +83,6 @@ export function totalWidth(
   widths: Readonly<Record<string, number>>,
 ): number {
   let total = 0;
-  for (const id of columnIds) total += widths[id] ?? 0;
+  for (const id of columnIds) total += getColumnEntry(widths, id) ?? 0;
   return total;
 }

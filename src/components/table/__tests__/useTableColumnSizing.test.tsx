@@ -73,6 +73,16 @@ describe('useTableColumnSizing', () => {
       expect(result.current.getColumnProps('ghost')).toEqual({ style: { width: 150 } });
       expect(result.current.getColumnWidth('ghost')).toBeUndefined();
     });
+
+    it('treats an unknown id named like an inherited member as any unknown id', () => {
+      const { result } = renderHook(() => useSizing());
+      expect(result.current.getColumnWidth('constructor')).toBeUndefined();
+      expect(result.current.getColumnWidth('toString')).toBeUndefined();
+      expect(result.current.getColumnProps('toString')).toEqual({ style: { width: 150 } });
+      expect(result.current.getResizeHandleProps('constructor')).toEqual(
+        expect.objectContaining({ width: 150, minWidth: 80 }),
+      );
+    });
   });
 
   describe('sized by the options', () => {
@@ -178,6 +188,19 @@ describe('useTableColumnSizing', () => {
         useSizing({ defaultColumnWidths: { name: 200 }, onColumnWidthsChange }),
       );
       act(() => result.current.setColumnWidth('name', 200));
+      expect(onColumnWidthsChange).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an empty defaultColumnWidths', { defaultColumnWidths: {} }],
+      ['an empty controlled columnWidths', { columnWidths: {} }],
+    ])('is sized by %s: the width a column shows is no change', (_, sizing) => {
+      const onColumnWidthsChange = vi.fn();
+      const { result } = renderHook(() => useSizing({ ...sizing, onColumnWidthsChange }));
+      expect(result.current.isSized).toBe(true);
+      act(() => result.current.setColumnWidth('name', 150, dragEvent()));
+      expect(onColumnWidthsChange).not.toHaveBeenCalled();
+      act(() => result.current.getResizeHandleProps('age').onReset?.({ event: dragEvent() }));
       expect(onColumnWidthsChange).not.toHaveBeenCalled();
     });
 
@@ -298,6 +321,21 @@ describe('useTableColumnSizing', () => {
 
       act(() => result.current.getResizeHandleProps('age').onReset?.({ event: dragEvent() }));
       expect(result.current.getColumnWidth('age')).toBe(90);
+    });
+
+    it('onReset changes nothing while the table has no width state (its initial layout)', () => {
+      const onColumnWidthsChange = vi.fn();
+      const { result } = renderHook(() =>
+        useSizing({ columnSizingOptions: { name: { defaultWidth: 220 } }, onColumnWidthsChange }),
+      );
+      act(() => result.current.getResizeHandleProps('name').onReset?.({ event: dragEvent() }));
+      expect(onColumnWidthsChange).not.toHaveBeenCalled();
+      expect(result.current.isSized).toBe(false);
+      expect(result.current.getTableProps().style).toEqual({
+        tableLayout: 'fixed',
+        width: '100%',
+        minWidth: 520,
+      });
     });
 
     it('onReset on a column already at its initial width is not a change once sized', () => {

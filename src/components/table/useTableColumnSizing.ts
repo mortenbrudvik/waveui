@@ -3,6 +3,8 @@ import { useControllable } from '../../hooks/useControllable';
 import {
   clampColumnWidth,
   DEFAULT_MIN_COLUMN_WIDTH,
+  getColumnEntry,
+  initialColumnWidth,
   resolveColumnWidths,
   totalWidth,
   type ColumnSizingOption,
@@ -21,7 +23,10 @@ export interface TableColumnWidthsChangeDetails {
   columnId: string;
   /** Its new width in pixels, held at or above its `minWidth`. */
   width: number;
-  /** The event behind the change (the drag, the key press); a new event when none was passed. */
+  /**
+   * The event behind the change (the drag, the key press); when none was passed, an untrusted
+   * `resize` event with no target.
+   */
   event: Event;
 }
 
@@ -94,19 +99,21 @@ export function useTableColumnSizing<T>(
       if (details) onColumnWidthsChange?.(next, details);
     },
   );
-  const isSized =
-    isControlled || defaultColumnWidths !== undefined || Object.keys(widths).length > 0;
+  // Until a width is state, an uncontrolled table without defaults holds `NO_WIDTHS` itself.
+  const isSized = isControlled || defaultColumnWidths !== undefined || widths !== NO_WIDTHS;
 
   const resize = useCallback(
     (ids: readonly string[], columnId: string, width: number, event: Event | undefined) => {
       if (!ids.includes(columnId) || !Number.isFinite(width)) return;
-      const clamped = clampColumnWidth(width, columnSizingOptions?.[columnId]);
+      const clamped = clampColumnWidth(width, getColumnEntry(columnSizingOptions, columnId));
       detailsRef.current = { columnId, width: clamped, event: event ?? new Event('resize') };
       try {
         setWidths((previous) => {
           const next = resolveColumnWidths(ids, columnSizingOptions, previous);
-          // The first width taken as state is a change even when it equals the initial one.
-          if (Object.keys(previous).length > 0 && next[columnId] === clamped) return previous;
+          // The first width taken as state is a change even when it equals the initial one (an
+          // earlier change of the same event already took one).
+          const sized = isSized || previous !== NO_WIDTHS;
+          if (sized && next[columnId] === clamped) return previous;
           next[columnId] = clamped;
           return next;
         });
@@ -114,7 +121,7 @@ export function useTableColumnSizing<T>(
         detailsRef.current = undefined;
       }
     },
-    [setWidths, columnSizingOptions],
+    [setWidths, columnSizingOptions, isSized],
   );
 
   return useMemo(
@@ -130,12 +137,13 @@ export function useTableColumnSizing<T>(
           const total = totalWidth(ids, resolved);
           const setColumnWidth: TableColumnSizingState['setColumnWidth'] = (id, width, event) =>
             resize(ids, id, width, event);
-          const widthOf = (id: string) =>
-            resolved[id] ?? resolveColumnWidths([id], columnSizingOptions, undefined)[id]!;
+          const initialWidthOf = (id: string) =>
+            initialColumnWidth(getColumnEntry(columnSizingOptions, id));
+          const widthOf = (id: string) => getColumnEntry(resolved, id) ?? initialWidthOf(id);
           const columnSizing: TableColumnSizingState = {
             columnWidths: resolved,
             isSized,
-            getColumnWidth: (id) => resolved[id],
+            getColumnWidth: (id) => getColumnEntry(resolved, id),
             setColumnWidth,
             getTableProps: () => ({
               style: isSized
@@ -145,14 +153,13 @@ export function useTableColumnSizing<T>(
             getColumnProps: (id) => ({ style: { width: widthOf(id) } }),
             getResizeHandleProps: (id) => ({
               width: widthOf(id),
-              minWidth: columnSizingOptions?.[id]?.minWidth ?? DEFAULT_MIN_COLUMN_WIDTH,
+              minWidth:
+                getColumnEntry(columnSizingOptions, id)?.minWidth ?? DEFAULT_MIN_COLUMN_WIDTH,
               onResize: (width, { event }) => setColumnWidth(id, width, event),
-              onReset: ({ event }) =>
-                setColumnWidth(
-                  id,
-                  resolveColumnWidths([id], columnSizingOptions, undefined)[id]!,
-                  event,
-                ),
+              // A table without width state is in its initial layout: nothing to reset.
+              onReset: ({ event }) => {
+                if (isSized) setColumnWidth(id, initialWidthOf(id), event);
+              },
             }),
           };
           return { ...state, columnSizing };

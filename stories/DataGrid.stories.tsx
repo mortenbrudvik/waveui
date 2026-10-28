@@ -428,3 +428,70 @@ export const Paging: Story = {
   },
   render: (args) => <PagedGrid {...args} />,
 };
+
+/** The initial widths of the member columns; Name is never narrower than 120 pixels. */
+const MEMBER_COLUMN_SIZING = {
+  name: { minWidth: 120, defaultWidth: 220 },
+  role: { defaultWidth: 160 },
+  location: { defaultWidth: 160 },
+  status: { defaultWidth: 140 },
+};
+
+/**
+ * `resizableColumns` gives every column header a resize handle: drag the end edge of a header, or
+ * focus its handle and press the arrow keys (5 pixels with Shift, Home for the minimum). The
+ * columns start at their `defaultWidth` and the grid fills its container; the first resize keeps
+ * the widths the columns are drawn at, and from then on the grid is as wide as its columns. A
+ * double click sets a column back to its initial width.
+ */
+export const Resizable: Story = {
+  args: {
+    'aria-label': 'Team members, resizable columns',
+    resizableColumns: true,
+    columnSizingOptions: MEMBER_COLUMN_SIZING,
+    onColumnWidthsChange: fn(),
+  },
+  render: (args) => <MemberGrid {...args} />,
+};
+
+/** Widths of the controlled story, by `columnId`. */
+const INITIAL_MEMBER_WIDTHS: Record<string, number> = {
+  name: 220,
+  role: 160,
+  location: 160,
+  status: 140,
+};
+
+/** Holds the column widths in state, as an app that persists them would, and shows them. */
+function ControlledWidthsGrid({ onColumnWidthsChange, ...args }: MemberGridProps) {
+  const [widths, setWidths] = React.useState(INITIAL_MEMBER_WIDTHS);
+  const handleColumnWidthsChange: NonNullable<DataGridBaseProps['onColumnWidthsChange']> = (
+    next,
+    details,
+  ) => {
+    setWidths(next);
+    onColumnWidthsChange?.(next, details);
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <MemberGrid {...args} columnWidths={widths} onColumnWidthsChange={handleColumnWidthsChange} />
+      <p className="text-body-1 text-foreground">
+        Widths:{' '}
+        {MEMBER_COLUMNS.map(({ columnId = '' }) => `${columnId} ${widths[columnId]}`).join(', ')}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Controlled widths: `columnWidths` comes from state and `onColumnWidthsChange` stores every
+ * change there (where an app would persist it); the line below the grid shows the state.
+ */
+export const ResizableControlled: Story = {
+  args: {
+    'aria-label': 'Team members, controlled column widths',
+    resizableColumns: true,
+    onColumnWidthsChange: fn(),
+  },
+  render: (args) => <ControlledWidthsGrid {...args} />,
+};

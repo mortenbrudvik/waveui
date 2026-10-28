@@ -3,6 +3,8 @@ import {
   clampColumnWidth,
   DEFAULT_COLUMN_WIDTH,
   DEFAULT_MIN_COLUMN_WIDTH,
+  getColumnEntry,
+  initialColumnWidth,
   resolveColumnWidths,
   totalWidth,
 } from '../columnSizing';
@@ -96,6 +98,14 @@ describe('resolveColumnWidths', () => {
   it('returns an empty map for no columns', () => {
     expect(resolveColumnWidths([], undefined, { a: 100 })).toEqual({});
   });
+
+  it('never takes an inherited member of the options or the widths for a column', () => {
+    const options: Record<string, { minWidth?: number }> = {};
+    expect(resolveColumnWidths(['constructor', 'toString'], options, {})).toEqual({
+      constructor: 150,
+      toString: 150,
+    });
+  });
 });
 
 describe('totalWidth', () => {
@@ -106,5 +116,30 @@ describe('totalWidth', () => {
   it('counts a column without a width as 0, and no column as 0', () => {
     expect(totalWidth(['a', 'x'], { a: 100 })).toBe(100);
     expect(totalWidth([], { a: 100 })).toBe(0);
+  });
+
+  it('counts a column named like an inherited member as 0 when it has no width', () => {
+    expect(totalWidth(['a', 'constructor', 'toString'], { a: 100 })).toBe(100);
+  });
+});
+
+describe('getColumnEntry', () => {
+  it('returns the own entry of a column and never an inherited member', () => {
+    const widths: Record<string, number> = { a: 100 };
+    expect(getColumnEntry(widths, 'a')).toBe(100);
+    expect(getColumnEntry(widths, 'b')).toBeUndefined();
+    expect(getColumnEntry(widths, 'constructor')).toBeUndefined();
+    expect(getColumnEntry(widths, 'toString')).toBeUndefined();
+    expect(getColumnEntry(undefined, 'a')).toBeUndefined();
+  });
+});
+
+describe('initialColumnWidth', () => {
+  it('is defaultWidth, else idealWidth, else 150, held at the minimum', () => {
+    expect(initialColumnWidth()).toBe(150);
+    expect(initialColumnWidth({ idealWidth: 120 })).toBe(120);
+    expect(initialColumnWidth({ idealWidth: 120, defaultWidth: 200 })).toBe(200);
+    expect(initialColumnWidth({ defaultWidth: 50 })).toBe(80);
+    expect(initialColumnWidth({ defaultWidth: 90, minWidth: 100 })).toBe(100);
   });
 });

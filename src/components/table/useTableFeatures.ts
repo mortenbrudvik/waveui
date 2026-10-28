@@ -79,7 +79,10 @@ export interface TableResizeHandleBindings {
   minWidth: number;
   /** Sets the column's width in pixels (held at or above `minWidth`). */
   onResize(width: number, details: { event: Event }): void;
-  /** Sets the column back to its initial width (a double click on the handle). */
+  /**
+   * Sets the column back to its initial width (a double click on the handle). It changes nothing
+   * while no width is state, since the table is then in its initial layout.
+   */
   onReset?(details: { event: Event }): void;
 }
 
@@ -88,13 +91,19 @@ export interface TableResizeHandleBindings {
  * `useTableColumnSizing`. Without that plugin no width is set and the functions do nothing.
  */
 export interface TableColumnSizingState {
-  /** The width of each sized column in pixels, by `columnId`. */
+  /**
+   * The width of every column in pixels, by `columnId`: the width that is state, else the
+   * column's initial width.
+   */
   columnWidths: Readonly<Record<string, number>>;
   /** Whether a width is state (set, controlled or given as a default). */
   isSized: boolean;
-  /** The width of the column `columnId` in pixels, or `undefined` when it has none. */
+  /** The width of the column `columnId` in pixels, or `undefined` when it is no column. */
   getColumnWidth(columnId: string): number | undefined;
-  /** Sets the width of the column `columnId` in pixels. */
+  /**
+   * Sets the width of the column `columnId` in pixels. Without `event`, the change's details carry
+   * an untrusted `resize` event with no target.
+   */
   setColumnWidth(columnId: string, width: number, event?: Event): void;
   /** Props for the table element: its fixed layout and width style. */
   getTableProps(): { style: CSSProperties };

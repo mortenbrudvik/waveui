@@ -18,6 +18,7 @@ import {
   warnDeprecated,
   warnOnce,
 } from '../../lib/dev';
+import { getColumnEntry, type ColumnSizingOption } from '../../lib/columnSizing';
 import { endsTextSelection, isForeignEvent } from '../../lib/events';
 import { clearIds, selectAllIds, summarizeSelection, toggleId } from '../../lib/selection';
 import type { Slot } from '../../lib/slot';
@@ -34,7 +35,14 @@ import {
   markTablePart,
 } from './Table.shared';
 import type { SortDirection } from './Table.shared';
+import {
+  DataGridColumnResizeHandle,
+  DataGridFixedLayoutContext,
+  DataGridResizeContext,
+  useDataGridColumnSizing,
+} from './DataGrid.sizing';
 import { useGridNavigation } from './useGridNavigation';
+import type { TableColumnWidthsChangeDetails } from './useTableColumnSizing';
 
 export type { SortDirection };
 
@@ -117,6 +125,16 @@ export interface DataGridLabels {
    * @default 'Selection'
    */
   selectionHeader?: string;
+  /**
+   * Accessible name of each column's resize handle (`resizableColumns`).
+   * @default 'Resize column'
+   */
+  resizeColumn?: string;
+  /**
+   * Builds the value text of a resize handle (`aria-valuetext`) from the column's width in pixels.
+   * @default (width) => `${width} pixels`
+   */
+  columnWidth?: (width: number) => string;
 }
 
 const DEFAULT_SELECT_ALL_LABEL = 'Select all rows';
@@ -228,6 +246,51 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    * memoised).
    */
   columns?: readonly DataGridColumn<T>[];
+  /**
+   * Gives the header cell of each column (of `columns`, by `columnId`; the last one included, the
+   * selection column not) a resize handle: a focusable `role="separator"` with the column's width
+   * as `aria-valuenow`. A drag (mouse, touch or pen) moves the column's end edge, mirrored in
+   * right-to-left grids; the arrow keys move it by 20 pixels (5 with Shift) and Home sets the
+   * minimum width; a double click sets the column back to its initial width once a width is state.
+   * The grid carries `data-resizing` while a handle drags. Needs `columns` and `items`, as every
+   * column width prop does: without them they are all ignored, with a development warning.
+   * Fluent's `resizableColumns`.
+   * @default false
+   */
+  resizableColumns?: boolean;
+  /**
+   * The sizing of each column, by `columnId`: `minWidth` (`@default 80`), and the width it starts
+   * at, `defaultWidth`, else `idealWidth`, else 150 (never below `minWidth`). With it, or with
+   * `columnWidths` or `defaultColumnWidths`, the grid lays its columns out from these widths
+   * (a `<colgroup>` and a fixed table layout) with or without `resizableColumns`, and its cells
+   * truncate their text with an ellipsis unless a cell's class says otherwise. Until a width is
+   * state the grid is 100% wide and at least as wide as its columns, so a wider container spreads
+   * them (the selection column too); the first change takes the widths the columns are drawn at,
+   * so nothing jumps, and from then on the grid is exactly as wide as its columns (slack shows
+   * after the last one). There is no maximum width and no fitting to the container. Ids that are
+   * not columns are ignored; it may be written inline. Fluent's `columnSizingOptions`.
+   */
+  columnSizingOptions?: Record<string, ColumnSizingOption>;
+  /**
+   * The column widths in pixels (controlled), by `columnId`; a column without an entry has its
+   * initial width (see `columnSizingOptions`), and a width below the column's minimum is held at
+   * it. The grid is exactly as wide as its columns. Pair it with `onColumnWidthsChange`; a parent
+   * that ignores a change leaves the column where it is.
+   */
+  columnWidths?: Record<string, number>;
+  /** The column widths in pixels at first render (uncontrolled; see `columnWidths`). */
+  defaultColumnWidths?: Record<string, number>;
+  /**
+   * Called with the width of every column (by `columnId`) whenever a width changes, at every step
+   * of a drag (at most once per animation frame) or key press, then `details`: `{ columnId,
+   * width, event }`, the resized column, its new width and the event behind it. Setting the width
+   * a column already has does not call it once a width is state. Fluent's `onColumnResize`, whose
+   * data is in `details`.
+   */
+  onColumnWidthsChange?: (
+    widths: Record<string, number>,
+    details: TableColumnWidthsChangeDetails,
+  ) => void;
   /**
    * Row selection mode. `'multiple'` adds a checkbox column with a "Select all rows" header
    * checkbox; `'single'` adds a radio column (its header reads "Selection" to assistive
@@ -1068,6 +1131,7 @@ function useDataGridSortContext(component: string): DataGridSortContextValue {
 // ---------------------------------------------------------------------------
 
 const EMPTY_ITEMS: readonly string[] = [];
+const NO_COLUMN_IDS: readonly (string | undefined)[] = [];
 
 function toItems(
   keys: ReadonlySet<string> | readonly string[] | undefined,
@@ -1182,9 +1246,15 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     selectionAppearance = 'brand',
     subtleSelection = false,
     columns,
+    resizableColumns = false,
+    columnSizingOptions,
+    columnWidths,
+    defaultColumnWidths,
+    onColumnWidthsChange,
     containerProps,
     children,
     className,
+    style,
     onKeyDown,
     onFocus,
     onBlur,
@@ -1587,6 +1657,42 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     }
   }, [columnWithoutId]);
 
+  // --- column widths (with `columns` and `items`) --------------------------------
+  const sizingRequested =
+    resizableColumns ||
+    columnSizingOptions !== undefined ||
+    columnWidths !== undefined ||
+    defaultColumnWidths !== undefined;
+  const sizingIgnored = sizingRequested && !(columns && hasItems);
+  React.useEffect(() => {
+    if (sizingIgnored) {
+      warnOnce(
+        'DataGrid:resizable-columns-require-columns',
+        'DataGrid: `resizableColumns`, `columnSizingOptions`, `columnWidths` and ' +
+          '`defaultColumnWidths` need the `columns` prop together with `items`, and are ignored ' +
+          'without them. Render the grid from `items` and `columns`.',
+      );
+    }
+  }, [sizingIgnored]);
+  const sizingEnabled = sizingRequested && !sizingIgnored;
+  // Read (and the deprecated `id` warned) only when the widths are used.
+  const columnIds = React.useMemo(
+    () => (sizingEnabled && columns ? columns.map(columnIdOf) : NO_COLUMN_IDS),
+    [sizingEnabled, columns],
+  );
+  const sizing = useDataGridColumnSizing({
+    enabled: sizingEnabled,
+    resizable: resizableColumns,
+    columnIds,
+    selectionColumn: selectionMode !== 'none',
+    columnSizingOptions,
+    columnWidths,
+    defaultColumnWidths,
+    onColumnWidthsChange,
+    resizeColumnLabel: labels?.resizeColumn,
+    columnWidthText: labels?.columnWidth,
+  });
+
   // --- header and body from columns -------------------------------------------
   let content: React.ReactNode = children;
   const flatChildren = columns ? flattenChildren(children) : [];
@@ -1615,9 +1721,9 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     columns && hasItems && !hasChild(DataGridBody) ? (
       <DataGridBody key="wave-generated-body" />
     ) : null;
-  if (generatedHeader || generatedBody) {
-    // A `<caption>` stays the table's first child, before the generated header; a generated body
-    // goes before a `<tfoot>`, which ends the table.
+  if (generatedHeader || generatedBody || sizing.colgroup) {
+    // A `<caption>` stays the table's first child, before the column widths and the generated
+    // header; a generated body goes before a `<tfoot>`, which ends the table.
     const isCaption = ({ node }: { node: React.ReactNode }) => isElementOfType(node, 'caption');
     const others = flatChildren.filter((child) => !isCaption(child));
     const footerIndex = generatedBody
@@ -1626,6 +1732,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     const bodyIndex = footerIndex >= 0 ? footerIndex : others.length;
     content = [
       ...flatChildren.filter(isCaption).map(renderFlatChild),
+      sizing.colgroup,
       generatedHeader,
       ...others.slice(0, bodyIndex).map(renderFlatChild),
       generatedBody,
@@ -1664,41 +1771,48 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
           <DataGridRowContext.Provider value={null}>
             <DataGridRowIdContext.Provider value={null}>
               <DataGridItemSelectionDisabledContext.Provider value={undefined}>
-                <div
-                  {...containerRest}
-                  aria-label={containerHasRole ? containerLabel : undefined}
-                  aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
-                  className={cn(
-                    dataGridClassNames.container,
-                    'overflow-x-auto rounded-md border border-border',
-                    containerClassName,
-                  )}
-                >
-                  <table
-                    ref={mergedRef}
-                    role="grid"
-                    aria-multiselectable={selectionMode === 'multiple' || undefined}
-                    data-selection-appearance={selectionAppearance}
-                    data-subtle-selection={subtleSelection ? '' : undefined}
-                    className={cn(
-                      dataGridClassNames.root,
-                      'w-full border-separate border-spacing-0',
-                      // The group whose hover or focus draws the subtle select-all checkbox.
-                      subtleSelection && 'group/grid',
-                      className,
-                    )}
-                    {...rest}
-                    onKeyDown={composeEventHandlers(onKeyDown, gridProps.onKeyDown)}
-                    onFocus={composeEventHandlers(onFocus, gridProps.onFocus, {
-                      checkDefaultPrevented: false,
-                    })}
-                    onBlur={composeEventHandlers(onBlur, gridProps.onBlur, {
-                      checkDefaultPrevented: false,
-                    })}
-                  >
-                    {content}
-                  </table>
-                </div>
+                <DataGridResizeContext.Provider value={sizing.resizeContext}>
+                  <DataGridFixedLayoutContext.Provider value={sizing.colgroup !== null}>
+                    <div
+                      {...containerRest}
+                      aria-label={containerHasRole ? containerLabel : undefined}
+                      aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
+                      className={cn(
+                        dataGridClassNames.container,
+                        'overflow-x-auto rounded-md border border-border',
+                        containerClassName,
+                      )}
+                    >
+                      <table
+                        ref={mergedRef}
+                        role="grid"
+                        aria-multiselectable={selectionMode === 'multiple' || undefined}
+                        data-selection-appearance={selectionAppearance}
+                        data-subtle-selection={subtleSelection ? '' : undefined}
+                        data-resizing={sizing.resizing ? '' : undefined}
+                        className={cn(
+                          dataGridClassNames.root,
+                          'w-full border-separate border-spacing-0',
+                          // The group whose hover or focus draws the subtle select-all checkbox.
+                          subtleSelection && 'group/grid',
+                          className,
+                        )}
+                        // The widths are runtime data: the layout and the width are inline.
+                        style={sizing.tableStyle ? { ...sizing.tableStyle, ...style } : style}
+                        {...rest}
+                        onKeyDown={composeEventHandlers(onKeyDown, gridProps.onKeyDown)}
+                        onFocus={composeEventHandlers(onFocus, gridProps.onFocus, {
+                          checkDefaultPrevented: false,
+                        })}
+                        onBlur={composeEventHandlers(onBlur, gridProps.onBlur, {
+                          checkDefaultPrevented: false,
+                        })}
+                      >
+                        {content}
+                      </table>
+                    </div>
+                  </DataGridFixedLayoutContext.Provider>
+                </DataGridResizeContext.Provider>
               </DataGridItemSelectionDisabledContext.Provider>
             </DataGridRowIdContext.Provider>
           </DataGridRowContext.Provider>
@@ -1965,7 +2079,13 @@ const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHeaderPro
       <DataGridHeaderSlotsContext.Provider value={slots}>
         <thead
           ref={mergedRef}
-          className={cn(dataGridHeaderClassNames.root, 'bg-card', className)}
+          className={cn(
+            dataGridHeaderClassNames.root,
+            'bg-card',
+            // While a column resize handle drags, the header cells ignore the pointer.
+            'in-data-[resizing]:pointer-events-none',
+            className,
+          )}
           {...rest}
         >
           {content}
@@ -1981,7 +2101,10 @@ DataGridHeader.displayName = 'DataGridHeader';
  * `<button type="button">` that toggles the sort, followed by the direction glyph (`sortIcon`)
  * while its column is sorted; the `<th>` carries `aria-sort`. A consumer `onClick` (on the `<th>`)
  * runs before the sort, and calling `preventDefault()` in it cancels the sort (also for
- * Enter/Space on the button, which click it).
+ * Enter/Space on the button, which click it). In a grid with `resizableColumns`, the header cell
+ * of a column of `columns` (by `columnId`) also holds the column's resize handle, after its
+ * content, along its end edge (the cell is positioned for it); the cell is then named by its
+ * content alone (`aria-labelledby`, unless it has a name of its own), not by the handle's label.
  */
 const DataGridHeaderCell = ({
   columnId,
@@ -1994,14 +2117,31 @@ const DataGridHeaderCell = ({
   ...rest
 }: DataGridHeaderCellProps) => {
   const { sort, requestSort } = useDataGridSortContext('DataGrid.HeaderCell');
+  const resize = React.useContext(DataGridResizeContext);
+  const fixedLayout = React.useContext(DataGridFixedLayoutContext);
+  const labelId = useId('wave-datagrid-header-label');
   /** The column this header sorts, or `undefined` when it is not sortable. */
   const sortColumnId = sortable && columnId ? columnId : undefined;
   const sortedDirection =
     sortColumnId !== undefined && sort?.columnId === sortColumnId ? sort.direction : null;
+  /** The column whose resize handle this cell holds. */
+  const resizeColumnId =
+    resize !== null &&
+    columnId !== undefined &&
+    getColumnEntry(resize.widths, columnId) !== undefined
+      ? columnId
+      : undefined;
+  // The handle is content of the cell: without this, its label would join the cell's name.
+  const labelledByContent =
+    resizeColumnId !== undefined &&
+    rest['aria-label'] === undefined &&
+    rest['aria-labelledby'] === undefined;
+  const contentId = labelledByContent ? labelId : undefined;
 
   // The sort runs from the `<th>` once the button's click bubbled up to it, composed after the
   // consumer's `onClick` (C-COMPOSE): the consumer runs first and can cancel with preventDefault().
-  // The sort button is the `<th>`'s only child; clicks elsewhere in the cell do not sort.
+  // The sort button is the `<th>`'s first child (a resize handle may follow it); clicks elsewhere
+  // in the cell, the handle included, do not sort.
   const sortOnButtonClick = (event: React.MouseEvent<HTMLTableCellElement>) => {
     const button = event.currentTarget.firstElementChild;
     if (
@@ -2027,12 +2167,17 @@ const DataGridHeaderCell = ({
       ref={ref}
       scope="col"
       aria-sort={sortColumnId !== undefined ? (sortedDirection ?? 'none') : undefined}
+      aria-labelledby={contentId}
       className={cn(
         dataGridHeaderCellClassNames.root,
         cellBase,
         'text-start align-middle font-semibold text-caption-1 uppercase tracking-wider',
         focusRingInset,
         sortColumnId !== undefined && 'p-0 hover:bg-subtle-hover',
+        // Columns laid out from widths: what does not fit is clipped, not drawn over the next.
+        fixedLayout && 'overflow-hidden',
+        // The box the resize handle is drawn in, along the end edge.
+        resizeColumnId !== undefined && 'relative',
         className,
       )}
       {...rest}
@@ -2042,6 +2187,7 @@ const DataGridHeaderCell = ({
     >
       {sortColumnId !== undefined ? (
         <TableSortButton
+          id={contentId}
           component="DataGrid.HeaderCell"
           direction={sortedDirection}
           sortIcon={sortIcon}
@@ -2051,7 +2197,12 @@ const DataGridHeaderCell = ({
           {children}
         </TableSortButton>
       ) : (
-        <span className="inline-flex items-center gap-1">{children}</span>
+        <span id={contentId} className="inline-flex items-center gap-1">
+          {children}
+        </span>
+      )}
+      {resizeColumnId !== undefined && resize !== null && (
+        <DataGridColumnResizeHandle columnId={resizeColumnId} context={resize} />
       )}
     </th>
   );
@@ -2545,24 +2696,30 @@ markTablePart(DataGridSelectionCell, 'dataGridSelectionCell');
 
 /**
  * A grid cell (`<td>`), focusable through the grid's keyboard navigation. It is the positioning
- * box of a `Table.CellActions` inside it.
+ * box of a `Table.CellActions` inside it. In a grid that lays its columns out from widths (column
+ * sizing), its text stays on one line and is truncated with an ellipsis, unless its class says
+ * otherwise.
  */
-const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) => (
-  <td
-    ref={ref}
-    role="gridcell"
-    className={cn(
-      dataGridCellClassNames.root,
-      cellBase,
-      'relative text-body-1',
-      focusRingInset,
-      className,
-    )}
-    {...rest}
-  >
-    {children}
-  </td>
-);
+const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) => {
+  const fixedLayout = React.useContext(DataGridFixedLayoutContext);
+  return (
+    <td
+      ref={ref}
+      role="gridcell"
+      className={cn(
+        dataGridCellClassNames.root,
+        cellBase,
+        'relative text-body-1',
+        fixedLayout && 'overflow-hidden text-ellipsis whitespace-nowrap',
+        focusRingInset,
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </td>
+  );
+};
 DataGridCell.displayName = 'DataGridCell';
 
 export {
@@ -2599,6 +2756,14 @@ export {
  * checkbox cover every item (`isSelectionDisabled` leaves items out), and ids of rows that are
  * filtered out, on another page or not rendered stay selected through row clicks, select-all and
  * sorting, and are reported by `onSelectedItemsChange`.
+ *
+ * With `items` and `columns`, the columns can be sized: `resizableColumns` gives each column
+ * header a resize handle (a separator that a pointer drags and the arrow keys move, mirrored in
+ * right-to-left grids), `columnSizingOptions` sets each column's initial and minimum width, and
+ * `columnWidths` or `defaultColumnWidths` with `onColumnWidthsChange(widths, details)` hold the
+ * widths, for instance to persist them (Fluent's `resizableColumns`, `columnSizingOptions` and
+ * `onColumnResize`, whose data is in `details`). The grid then lays its columns out from the
+ * widths and truncates its cells' text.
  *
  * Sub-components are available as `DataGrid.Header`, `DataGrid.HeaderCell`, `DataGrid.Body`,
  * `DataGrid.Row`, `DataGrid.Cell` and `DataGrid.SelectionCell` in client components, and as the
