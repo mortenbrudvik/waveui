@@ -10,6 +10,7 @@ import { popupMotion } from '../../../lib/motion';
 import type { MotionSlot } from '../../../lib/types';
 import {
   findDanglingIdRefs,
+  honourInert,
   mockAnimations,
   mockMatchMedia,
   motionClasses,
@@ -280,6 +281,23 @@ describe('Popover.Content presence (D7, D9, D22)', () => {
     expect(trigger()).toHaveFocus();
   });
 
+  it('without reduced motion the phases wait for the surface’s motion', async () => {
+    const motion = mockAnimations({ animated: isPopover });
+    mockMatchMedia({ '(prefers-reduced-motion: reduce)': false });
+    const user = userEvent.setup();
+    render(<DetailsPopover />);
+    await user.click(trigger());
+    const popover = surface()!;
+    expect(popover).toHaveAttribute('data-presence', 'entering');
+    await finish(motion);
+    expect(popover).toHaveAttribute('data-presence', 'entered');
+    await user.keyboard('{Escape}');
+    expect(surface()).toBe(popover);
+    expect(popover).toHaveAttribute('data-presence', 'exiting');
+    await finish(motion);
+    expect(surface()).toBeNull();
+  });
+
   it('under StrictMode calls onOpenChange once per change', async () => {
     const motion = mockAnimations({ animated: isPopover });
     const onOpenChange = vi.fn();
@@ -415,6 +433,44 @@ describe('focus before close (D20, survey risk 2)', () => {
     await finish(motion);
     expect(surface()).toBeNull();
     expect(button('Filters')).toHaveFocus();
+  });
+
+  it('a popover without a Trigger, placed at another element than its opener, returns focus to the opener, not its target', async () => {
+    /** Help for a field, placed at the field and opened by a button next to it. */
+    function AmountHelp() {
+      const [open, setOpen] = React.useState(false);
+      const [field, setField] = React.useState<HTMLInputElement | null>(null);
+      return (
+        <>
+          <input ref={setField} aria-label="Amount" />
+          <button type="button" onClick={() => setOpen((current) => !current)}>
+            Show help
+          </button>
+          <Popover open={open} onOpenChange={setOpen} target={field}>
+            <Popover.Content aria-label="Amount help">
+              <button type="button">Got it</button>
+            </Popover.Content>
+          </Popover>
+        </>
+      );
+    }
+
+    // The candidates' order decides here: the opener (the button) before the focus resolver,
+    // which gives the focusable target (the field). With focus() honouring inert, React's restore
+    // of the button inside the exiting surface cannot mask a wrong order.
+    honourInert();
+    const motion = mockAnimations({ animated: isPopover });
+    const user = userEvent.setup();
+    render(<AmountHelp />);
+    await user.click(button('Show help'));
+    await finish(motion);
+    await user.click(button('Got it'));
+    await user.keyboard('{Escape}');
+    expect(surface()).toHaveAttribute('data-presence', 'exiting');
+    expect(button('Show help')).toHaveFocus();
+    await finish(motion);
+    expect(surface()).toBeNull();
+    expect(button('Show help')).toHaveFocus();
   });
 });
 

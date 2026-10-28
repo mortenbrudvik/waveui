@@ -220,6 +220,10 @@ describe('presence (D7, the presence pair on the wrapper)', () => {
     expect(el).toHaveAttribute('data-state', 'closed');
     expect(button('Shipping')).toHaveAttribute('aria-expanded', 'false');
     expect(button('Shipping')).toHaveAttribute('data-state', 'closed');
+    // findDanglingIdRefs skips aria-controls (a closed popup need not be rendered): the trigger
+    // still names the exiting region, which keeps its id.
+    expect(el.id).not.toBe('');
+    expect(button('Shipping')).toHaveAttribute('aria-controls', el.id);
     expect(findDanglingIdRefs()).toEqual([]);
 
     await finish(motion);
@@ -253,6 +257,13 @@ describe('presence (D7, the presence pair on the wrapper)', () => {
     expect(region('Returns')).toHaveAttribute('data-state', 'open');
     expect(button('Shipping')).toHaveAttribute('aria-expanded', 'false');
     expect(button('Returns')).toHaveAttribute('aria-expanded', 'true');
+    // Each trigger names its own region, the exiting one included (findDanglingIdRefs skips
+    // aria-controls).
+    for (const name of ['Shipping', 'Returns']) {
+      const id = region(name)?.id ?? '';
+      expect(id, name).not.toBe('');
+      expect(button(name)).toHaveAttribute('aria-controls', id);
+    }
     expect(findDanglingIdRefs()).toEqual([]);
 
     await finish(motion);

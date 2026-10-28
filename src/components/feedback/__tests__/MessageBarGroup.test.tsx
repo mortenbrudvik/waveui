@@ -132,6 +132,12 @@ async function finish(motion: ReturnType<typeof mockAnimations>) {
   });
 }
 
+/** `actual` holds the very nodes of `expected`, in order (`toEqual` compares nodes by content). */
+function expectSameNodes(actual: readonly Node[], expected: readonly Node[]) {
+  expect(actual).toHaveLength(expected.length);
+  expected.forEach((node, index) => expect(actual[index], `node ${index}`).toBe(node));
+}
+
 /** No word of `recipe` on `el`. */
 function expectNoWordOf(el: Element, recipe: string) {
   const words = motionClasses(recipe);
@@ -164,7 +170,7 @@ describe('markup (§8)', () => {
     expect(el).toHaveAttribute('data-animate', 'exit-only');
     expect(el).not.toHaveAttribute('role');
     // The items are the root's only children, one per bar.
-    expect(Array.from(el?.children ?? [])).toEqual(items());
+    expectSameNodes(Array.from(el?.children ?? []), items());
     expect(order()).toEqual(['a', 'b', 'c']);
   });
 
@@ -354,13 +360,10 @@ describe('keyed reorders (Review Focus 4)', () => {
     const [a, b, c] = items();
     const bars = ['a', 'b', 'c'].map(barOf);
     rerender(group(['c', 'a', 'b'], { animate: 'both' }));
-    expect(items()).toEqual([c, a, b]);
-    expect(items()[0]).toBe(c);
-    expect(items()[1]).toBe(a);
-    expect(items()[2]).toBe(b);
-    expect(['a', 'b', 'c'].map(barOf)).toEqual(bars);
+    expectSameNodes(items(), [c, a, b]);
+    expectSameNodes(['a', 'b', 'c'].map(barOf), bars);
     expect(phases()).toEqual(['c:entered', 'a:entered', 'b:entered']);
-    expect(Array.from(root()?.children ?? [])).toEqual([c, a, b]);
+    expectSameNodes(Array.from(root()?.children ?? []), [c, a, b]);
     expect(motion.started).toBe(0);
   });
 
@@ -370,13 +373,11 @@ describe('keyed reorders (Review Focus 4)', () => {
     const [a, b, c] = items();
     const bars = ['a', 'b', 'c'].map(barOf);
     rerender(group(['c', 'a']));
-    expect(items()[0]).toBe(c);
-    expect(items()[1]).toBe(a);
-    expect(items()[2]).toBe(b);
-    expect(['a', 'b', 'c'].map(barOf)).toEqual(bars);
+    expectSameNodes(items(), [c, a, b]);
+    expectSameNodes(['a', 'b', 'c'].map(barOf), bars);
     expect(phases()).toEqual(['c:entered', 'a:entered', 'b:exiting']);
     await finish(motion);
-    expect(Array.from(root()?.children ?? [])).toEqual([c, a]);
+    expectSameNodes(Array.from(root()?.children ?? []), [c, a]);
   });
 });
 
@@ -515,6 +516,24 @@ describe('children (§8)', () => {
       </MessageBarGroup>,
     );
     expect(order()).toEqual(['intro', 'x', 'y', 'z']);
+  });
+
+  it('a bar behind a condition that is an empty string renders nothing and does not warn', () => {
+    const error: string = '';
+    render(
+      <MessageBarGroup>
+        {error && (
+          <MessageBar key="error" status="error">
+            {error}
+          </MessageBar>
+        )}
+        <MessageBar key="a" data-bar="a">
+          Message a
+        </MessageBar>
+      </MessageBarGroup>,
+    );
+    expect(order()).toEqual(['a']);
+    expect(root()?.childNodes).toHaveLength(1);
   });
 });
 

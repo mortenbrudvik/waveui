@@ -125,10 +125,12 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Lets the pointer drag the slides (mouse, touch and pen). The track follows the pointer and,
    * on release, the page changes when the drag passed a quarter of the width or left fast, else
-   * it snaps back; the direction follows the carousel's. The click that ends a drag is not
-   * delivered to the slide, and a vertical swipe still scrolls the page. Dragging pauses
-   * autoplay like the pointer over the carousel does. The buttons and the keyboard stay the way
-   * to operate the carousel without a pointer.
+   * it snaps back; the direction follows the carousel's. Under `motion="fade"` the slides do not
+   * follow the pointer (they share one place): the same drag still changes the page on release,
+   * and the slides cross-fade. The click that ends a drag is not delivered to the slide, and a
+   * vertical swipe still scrolls the page. Dragging pauses autoplay like the pointer over the
+   * carousel does. The buttons and the keyboard stay the way to operate the carousel without a
+   * pointer.
    * @default false
    */
   draggable?: boolean;

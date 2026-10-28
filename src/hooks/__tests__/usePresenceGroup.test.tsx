@@ -66,7 +66,7 @@ interface GroupProps {
 function Group({ children, appear = false, onItemExited }: GroupProps) {
   const { entries, skipped, onExited } = usePresenceGroup(children, { appear });
   return (
-    <div data-testid="group" data-entries={entries.length}>
+    <div data-testid="group" data-entries={entries.length} data-skipped={skipped.length}>
       {entries.map((entry) => (
         <Item
           key={entry.key}
@@ -351,6 +351,18 @@ describe('children (C-COMPOUND)', () => {
     expect(skipped).toHaveTextContent('Looseno key7in a Fragment');
     expect(Array.from(skipped.children).map((el) => el.localName)).toEqual(['em', 'strong']);
     expect(entryCount()).toBe(1);
+  });
+
+  it('an empty string (a falsy condition such as `{error && …}` with error === "") is no child', () => {
+    const error = '';
+    render(
+      <Group>
+        {error && <span key="error">{error}</span>}
+        <span key="a">a</span>
+      </Group>,
+    );
+    expect(order()).toEqual(['a']);
+    expect(screen.getByTestId('group')).toHaveAttribute('data-skipped', '0');
   });
 
   it('a removed child that comes back after it was dropped is a new entry', async () => {

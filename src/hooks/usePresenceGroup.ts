@@ -51,6 +51,9 @@ function partitionChildren(children: React.ReactNode): {
   const keyed: Array<{ key: string; element: React.ReactElement }> = [];
   const skipped: React.ReactNode[] = [];
   for (const { key, node } of flattenChildren(children)) {
+    // `toArray` keeps an empty string (`{error && <Bar key="error" />}` with `error === ''`),
+    // which renders nothing: no child, so it neither renders nor warns.
+    if (node === '') continue;
     if (isValidElement(node) && hasConsumerKey(key)) keyed.push({ key, element: node });
     // Keyed by its flattened key, unique across Fragments (its own key repeats in each one).
     else skipped.push(isValidElement(node) ? cloneElement(node, { key }) : node);
@@ -95,7 +98,8 @@ function mergeEntries(
  * - **Children** go through `flattenChildren` (Fragments flattened, consumer keys kept). An
  *   element with a key of the consumer's is an entry, also inside a Fragment or an array; any
  *   other child (text, a number, an element without a key) is in `skipped`, as given (an element
- *   with its flattened key, so the list renders without duplicate keys).
+ *   with its flattened key, so the list renders without duplicate keys). An empty string, which
+ *   renders nothing, is neither.
  * - **Merging**, derived during render from the previous entries: the keyed children in their
  *   order, shown; a removed child kept, not shown, right after the child that preceded it (a run
  *   of removed children in its order), or first; a key that comes back while it exits is shown

@@ -229,6 +229,24 @@ describe('InfoButton note presence (D7, D9, D22)', () => {
     expect(infoCopies()).toHaveLength(1);
   });
 
+  it('without reduced motion the phases wait for the note’s motion', async () => {
+    const motion = mockAnimations({ animated: isNote });
+    mockMatchMedia({ '(prefers-reduced-motion: reduce)': false });
+    const user = userEvent.setup();
+    render(<InfoButton info={INFO} openOnHover={false} />);
+    await user.click(button());
+    const el = note()!;
+    expect(el).toHaveAttribute('data-presence', 'entering');
+    await finish(motion);
+    expect(el).toHaveAttribute('data-presence', 'entered');
+    await user.keyboard('{Escape}');
+    expect(note()).toBe(el);
+    expect(el).toHaveAttribute('data-presence', 'exiting');
+    await finish(motion);
+    expect(note()).toBeNull();
+    expect(infoCopies()).toHaveLength(1);
+  });
+
   it('animates in a note that opens on a client render (appear)', async () => {
     const motion = mockAnimations({ animated: isNote });
     const user = userEvent.setup();

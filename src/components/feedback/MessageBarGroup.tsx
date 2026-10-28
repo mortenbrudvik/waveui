@@ -121,8 +121,9 @@ MessageBarGroupItem.displayName = 'MessageBarGroupItem';
  *   opens or closes. An exiting bar is `inert`. See `motion` for the default and how to replace
  *   or turn it off; under `prefers-reduced-motion: reduce` a bar is added and removed at once.
  * - **Focus.** When a bar leaves with focus inside it (its Dismiss button was pressed), focus moves
- *   in the same commit to the first tabbable element of the next bar that stays, else of the
- *   previous one. When the last bar leaves, the app decides where focus goes.
+ *   in the same commit to the first tabbable element of the nearest bar after it that stays and
+ *   holds a tabbable element, else of the nearest such bar before it. When no such bar is left,
+ *   the app decides where focus goes.
  * - **Markup.** A plain `<div>` without a role stacking the bars with an 8px gap; each MessageBar
  *   stays its own live region. MessageBarGroup is a component of its own rather than a part of
  *   MessageBar, so a page that imports only MessageBar does not load the group's motion.

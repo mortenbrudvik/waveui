@@ -1295,6 +1295,15 @@ export function mockRect(el: Element, rect: Partial<DOMRect>): void {
 let honouringInert = false;
 
 /**
+ * jsdom's own `HTMLElement.prototype.focus`, read when this module loads (before any test can spy
+ * on it), which {@link honourInert} puts back; `undefined` in the Node.js environment.
+ */
+const NATIVE_FOCUS: PropertyDescriptor | undefined =
+  typeof HTMLElement === 'undefined'
+    ? undefined
+    : Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'focus');
+
+/**
  * Makes `HTMLElement.prototype.focus()` do nothing on an element inside an `inert` subtree (the
  * element itself or an ancestor carries `inert`), as a browser does, for the current test; jsdom
  * has no `inert` behaviour and focuses the element. Call it inside a test or a `beforeEach` (it
@@ -1309,6 +1318,12 @@ let honouringInert = false;
  * move it. An element that already has focus keeps it when its subtree turns `inert` (a browser
  * moves it to `<body>` only at its next rendering update, which jsdom never runs).
  *
+ * A spy on `focus()` works with it in either order: one made before the call is called through,
+ * one made after it wraps the emulation. The cleanup puts back jsdom's own `focus()`, read when
+ * this module loads, never the method it found, so a spy made before the call (and restored by
+ * the suite's `vi.restoreAllMocks()`, which runs before `onTestFinished`) does not outlive the
+ * test.
+ *
  * @example
  * honourInert();
  * render(<Disclosure />);
@@ -1318,7 +1333,6 @@ let honouringInert = false;
 export function honourInert(): void {
   if (honouringInert) return;
   const proto = HTMLElement.prototype;
-  const previous = Object.getOwnPropertyDescriptor(proto, 'focus');
   const focus = proto.focus;
   Object.defineProperty(proto, 'focus', {
     configurable: true,
@@ -1329,7 +1343,7 @@ export function honourInert(): void {
   });
   honouringInert = true;
   onTestFinished(() => {
-    if (previous) Object.defineProperty(proto, 'focus', previous);
+    if (NATIVE_FOCUS) Object.defineProperty(proto, 'focus', NATIVE_FOCUS);
     else Reflect.deleteProperty(proto, 'focus');
     honouringInert = false;
   });

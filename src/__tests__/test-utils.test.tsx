@@ -1737,6 +1737,32 @@ describe('honourInert', () => {
       seen.push({ installed: false, focused: focusInsideInert() });
     });
   });
+
+  describe('a spy on focus() made before the call', () => {
+    // jsdom's own focus(), read when the suite is collected (before any test spies on it).
+    const nativeFocus = HTMLElement.prototype.focus;
+    // The second test checks what the first left behind (skipped when a filter selects one).
+    const after: Array<{ focus: unknown }> = [];
+    afterAll(() => {
+      if (after.length !== 1) return;
+      expect(vi.isMockFunction(after[0].focus)).toBe(false);
+      expect(after[0].focus).toBe(nativeFocus);
+    });
+    it('is called through while the emulation is installed, and restored by the test', () => {
+      const spy = vi.spyOn(HTMLElement.prototype, 'focus');
+      honourInert();
+      render(<button type="button">Outside</button>);
+      const outside = screen.getByRole('button', { name: 'Outside' });
+      act(() => outside.focus());
+      expect(outside).toHaveFocus();
+      expect(spy).toHaveBeenCalledTimes(1);
+      // As a suite's `vi.restoreAllMocks()` in an afterEach does, before the emulation's cleanup.
+      spy.mockRestore();
+    });
+    it('does not outlive the test: the next one has jsdom’s own focus() again', () => {
+      after.push({ focus: HTMLElement.prototype.focus });
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

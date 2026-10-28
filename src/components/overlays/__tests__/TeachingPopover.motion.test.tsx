@@ -470,6 +470,25 @@ describe('TeachingPopover presence (D7, D9, D22)', () => {
     expect(trigger()).toHaveFocus();
   });
 
+  it('without reduced motion the phases wait for the surface’s motion', async () => {
+    const motion = mockAnimations({ animated: isSurface });
+    mockMatchMedia({ '(prefers-reduced-motion: reduce)': false });
+    const user = userEvent.setup();
+    render(<TriggerTour />);
+    await user.click(trigger());
+    const el = surface()!;
+    expect(el).toHaveAttribute('data-presence', 'entering');
+    await finish(motion);
+    expect(el).toHaveAttribute('data-presence', 'entered');
+    await waitFor(() => expect(el).toHaveFocus());
+    await user.keyboard('{Escape}');
+    expect(surface()).toBe(el);
+    expect(el).toHaveAttribute('data-presence', 'exiting');
+    expect(trigger()).toHaveFocus();
+    await finish(motion);
+    expect(surface()).toBeNull();
+  });
+
   it('under StrictMode calls onOpenChange once per change', async () => {
     const motion = mockAnimations({ animated: isSurface });
     const onOpenChange = vi.fn();

@@ -98,7 +98,8 @@ function isName(value: unknown): value is string {
  *   a Field's wrapper element, the bar gets an id of its own and leaves the Field's
  *   `<label htmlFor>` to that control.
  * - The indeterminate animation follows the writing direction and becomes a full-width pulse for
- *   reduced motion; `indeterminateMotion` replaces or removes it. In forced-colors mode the fill uses `Highlight` and the track gets a border.
+ *   reduced motion; `indeterminateMotion` replaces or removes it. In forced-colors mode the fill
+ *   uses `Highlight` and the track gets a border.
  *
  * @example
  * <ProgressBar value={uploaded} max={total} label="Uploading photos" showLabel />
