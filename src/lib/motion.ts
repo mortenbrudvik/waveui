@@ -76,6 +76,15 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   an empty, transparent track and exits back to one over the normal duration (200 ms) with the
  *   max easy-ease curve, both ways, so the space the part takes opens and closes while the content
  *   keeps its width.
+ * - `expandIconMotion`, the expand icon of a Nav category (its default chevron, or the span of a
+ *   custom glyph): the transition of its transform over the fast duration (150 ms) with the
+ *   easy-ease curve, both ways, so the chevron's half turn as the category opens and closes is
+ *   animated. The turn itself is state, not motion: without this recipe the chevron still turns,
+ *   at once.
+ * - `navActionsRevealMotion`, the group of a Nav item's actions: the default transition on each
+ *   of its direct children (so a button child keeps its colour transition, and its opacity fades)
+ *   over the fast duration (150 ms) with the easy-ease curve, so an action fades in as its row is
+ *   hovered or takes focus, and out again. It replaces any transition list of the children's own.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -184,6 +193,17 @@ export const collapseStructure =
  */
 export const collapseMotion =
   'transition-[grid-template-rows,opacity] duration-wave-normal ease-wave-easy-ease-max motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:opacity-0';
+
+/** The default motion of a Nav category's expand icon: its turn is animated, 150 ms both ways. */
+export const expandIconMotion =
+  'transition-transform duration-wave-fast ease-wave-easy-ease motion-reduce:transition-none';
+
+/**
+ * The default reveal of a Nav item's actions, on their group: each action fades in and out as
+ * its row is hovered or takes focus, 150 ms both ways.
+ */
+export const navActionsRevealMotion =
+  '*:transition *:duration-wave-fast *:ease-wave-easy-ease motion-reduce:*:transition-none';
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */
 const PRESENCE_VARIANT = '[presence=';

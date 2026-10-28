@@ -1141,8 +1141,9 @@ export const navClassNames = {
 
 /**
  * Nav.Category: `root` on its `<li>`; `button` on the toggle button; `icon` on the icon span;
- * `label` on the label span; `expandIcon` on the chevron `<svg>`; `list` on the `<ul>` of its
- * sub-items.
+ * `label` on the label span; `expandIcon` on the chevron `<svg>` (or on the span of your
+ * `expandIcon`); `list` on the `<ul>` of its sub-items; `collapse` on the element around that
+ * list (the element that opens and closes the list's space, 0.15).
  */
 export const navCategoryClassNames = {
   root: 'wave-nav-category',
@@ -1151,6 +1152,7 @@ export const navCategoryClassNames = {
   label: 'wave-nav-category__label',
   expandIcon: 'wave-nav-category__expand-icon',
   list: 'wave-nav-category__list',
+  collapse: 'wave-nav-category__collapse',
 } as const;
 
 /**
