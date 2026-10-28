@@ -277,11 +277,15 @@ export type FirstWeekOfYear = 'first-day' | 'first-full-week' | 'first-four-day-
 /**
  * Replaces a part's default motion (its `motion`, `backdropMotion`, `expandIconMotion` or
  * `indeterminateMotion` prop): a class string, or `{ className }`. `null` on the prop turns the
- * motion off and `undefined` keeps the default. Write the phases as the default motion does: the
- * enter's start with the starting variant gated on the entering phase (`data-[presence=entering]:starting:…`),
- * the exit with `data-[presence=exiting]:…`, and a reduced-motion counterpart. The classes must
- * exist in your CSS: the precompiled stylesheet holds only Wave's own classes, so without Tailwind
- * pass a class of your own CSS written against `[data-presence]`.
+ * motion off and `undefined` keeps the default. On a part with presence phases (a surface, a
+ * backdrop, a collapsing part, a toast, a bar of a MessageBarGroup), write the phases as the
+ * default motion does: the enter's start with the starting variant gated on the entering phase
+ * (`data-[presence=entering]:starting:…`), the exit with `data-[presence=exiting]:…`, and a
+ * reduced-motion counterpart. The other parts (a Nav category's expand icon, ProgressBar's
+ * indeterminate fill, TabList's selection line) have no phases: give them plain transition or
+ * animation classes with a reduced-motion counterpart. The classes must exist in your CSS: the
+ * precompiled stylesheet holds only Wave's own classes, so without Tailwind pass a class of your
+ * own CSS (written against `[data-presence]` for a part with phases).
  */
 export type MotionSlot = string | { className: string };
 

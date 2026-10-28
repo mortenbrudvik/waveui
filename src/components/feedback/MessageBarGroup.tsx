@@ -29,7 +29,8 @@ export interface MessageBarGroupProps extends React.HTMLAttributes<HTMLDivElemen
    * Replaces the bars' motion (both directions); `null` turns it off. The motion is on the element
    * around each bar (`className` stays on the root). By default a removed bar fades out while its
    * row and its bottom margin close over 250 ms with the linear curve, so the bars after it glide
-   * up and nothing jumps when it unmounts (the margin makes up for the group's 8px gap); with
+   * up and nothing jumps when it unmounts (the margin makes up for the group's 8px gap, so a
+   * different gap in `className` needs a `motion` whose margin matches it); with
    * `animate="both"`, a bar added after mount opens its row and fades in the same way. Under
    * reduced motion bars appear and disappear at once. `null` turns the motion off (the element
    * still renders its `data-presence` phases, which then end at once); a class string or

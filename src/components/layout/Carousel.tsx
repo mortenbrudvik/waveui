@@ -187,7 +187,8 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
    * `fade` a drag still changes the page on release, but the slides do not follow the pointer.
    * Below a `WaveProvider` with `motion="none"` the carousel does not move unless this prop is
    * set. Either motion is off while the user prefers reduced motion. The root renders the motion
-   * it uses as `data-motion` (`slide`, `fade` or `none`).
+   * it resolves from this prop, `groupSize` and the provider as `data-motion` (`slide`, `fade` or
+   * `none`); reduced motion leaves it unchanged.
    * @default 'slide'
    */
   motion?: CarouselMotion | null;

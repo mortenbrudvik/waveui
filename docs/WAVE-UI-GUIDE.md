@@ -497,7 +497,7 @@ Since 0.15 the overlays and disclosures in the table below ship an enter and exi
 - TabList indicator (on the selected tab; it times the `::after`): `after:transition-[translate,scale] after:duration-wave-slow after:ease-wave-decelerate-max motion-reduce:after:transition-none`. The TabList writes `--wave-tab-indicator-offset` and `--wave-tab-indicator-scale` on the tab for one frame after the selection moves, without these classes, then clears them and adds the classes, so the line glides from the previous tab.
 - Indeterminate ProgressBar fill: `w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse`.
 
-**Motion slots.** Each animated part takes its motion as a prop typed `MotionSlot | null` (`MotionSlot = string | { className: string }`): `undefined` is the default above; `null` is no motion (the element still goes through the presence core, and every phase ends in the commit that starts it); a value **replaces** the default classes. The names are a ruling against C-NAMING's "Fluent's names first", and each prop's JSDoc names the Fluent prop it stands for:
+**Motion slots.** Each animated part takes its motion as a prop typed `MotionSlot | null` (`MotionSlot = string | { className: string }`): `undefined` is the default above; `null` is no motion (a part with presence phases still goes through the presence core, and every phase ends in the commit that starts it; the expand icon, the indeterminate fill and the TabList line just do not move); a value **replaces** the default classes. The names are a ruling against C-NAMING's "Fluent's names first", and each prop's JSDoc names the Fluent prop it stands for:
 
 | Prop | Where | Fluent |
 |---|---|---|
@@ -537,7 +537,7 @@ Since 0.15 the overlays and disclosures in the table below ship an enter and exi
 
 **Exits (D7) and their consequences.** The exiting element is `inert`; dismiss layers, the focus trap, the isolation, the scroll lock, positioning and focus restore key on `open`, and focus leaves a closing surface in the closing commit (Dialog and drawers through `useModalLayer`; Menu, Popover, the InfoButton note and TeachingPopover through the internal `useFocusBeforeClose`, so a Dialog opened from an item of a closing surface records the trigger as its opener; disclosures move focus to their trigger). The accepted consequences:
 
-- An exiting surface is click-through (HTML `inert` hit-tests like `pointer-events: none`): a second click during a backdrop's fade reaches the page.
+- An exiting surface is click-through (HTML `inert` hit-tests like `pointer-events: none`): a second click during a backdrop's fade reaches the page. A Tree item ignores a pointer click that falls through its exiting group onto it (it would expand the item again and activate it); a click without a pointer (`detail` 0) still activates it.
 - The scroll lock lifts at close, so the page's scroll bar returns while a modal still fades.
 - An exiting popup keeps its last coordinates; it does not follow its anchor while the page scrolls.
 - A popover named by its trigger keeps no `aria-labelledby` while it exits (it is `inert`, out of the accessibility tree).
@@ -548,7 +548,7 @@ Since 0.15 the overlays and disclosures in the table below ship an enter and exi
 - `backdropMotion` counts as given unless it is `undefined`, so `backdropMotion={null}` on a non-modal Dialog or an inline drawer warns (`…:backdrop-ignored`), unlike `backdrop={null}`.
 - The Nav item actions' reveal sets the transition list of each action (`*:transition`), so a transition class of yours on one is replaced.
 
-The real-browser checks of the phase (Firefox and WebKit for `display: contents` exits and grid-track interpolation, the TabList slide's first frame, a click through an exiting Tree group) are in the Phase 10 spec, §14; ROADMAP §8.5 lists the follow-ups.
+The real-browser checks of the phase (Firefox and WebKit for `display: contents` exits and grid-track interpolation, the TabList slide's first frame, that a click through an exiting Tree group lands on its item, which jsdom cannot hit-test) are in the Phase 10 spec, §14; ROADMAP §8.5 lists the follow-ups.
 
 ### Reduced Motion
 

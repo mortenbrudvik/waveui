@@ -50,9 +50,11 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
   inputDefaults?: InputDefaults;
   /**
    * Motion of the subtree. `'none'` makes every motion slot below it (a part's `motion`,
-   * `backdropMotion`, `expandIconMotion` or `indeterminateMotion` left unset) behave as `null` and
-   * turns off the other motion Wave adds, such as the reveal of Nav item actions; a part's own
-   * value still wins. Fluent's `MotionBehaviourProvider` with `'skip'` is the counterpart, which
+   * `backdropMotion`, `expandIconMotion` or `indeterminateMotion` left unset) behave as `null`,
+   * which also stops the slide of TabList's selection line, and turns off Carousel's slide or fade
+   * (a Carousel without its own `motion`) and the reveal of Nav item actions; a part's own value
+   * still wins. Transitions that are no motion slot keep running: the turn of Accordion's and
+   * Tree's chevrons, colour changes on hover and press. Fluent's `MotionBehaviourProvider` with `'skip'` is the counterpart, which
    * `@fluentui/react-components` does not export. A nested provider inherits an omitted `motion`
    * like `theme`.
    * @default the enclosing WaveProvider's motion, else 'default'
@@ -126,8 +128,10 @@ export function useWaveTheme(): WaveContextValue {
  * - `inputDefaults` nests differently: a nested provider's defined keys override the enclosing
  *   provider's, and an omitted key is inherited, so setting only `appearance` in a nested provider
  *   keeps the enclosing provider's `size`.
- * - `motion="none"` turns the default motion of every animated part below it off (a part's own
- *   `motion` still wins); a nested provider inherits an omitted `motion` like `theme`.
+ * - `motion="none"` turns the default motion of every animated part below it off (its motion
+ *   slots, Carousel's slide, TabList's sliding line, the reveal of Nav item actions; a part's own
+ *   `motion` still wins), while transitions without a slot keep running (Accordion's and Tree's
+ *   chevron turns, colour changes); a nested provider inherits an omitted `motion` like `theme`.
  */
 export const WaveProvider = ({
   theme: themeProp,

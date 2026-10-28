@@ -92,9 +92,10 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
    * default the chevron's half turn as the category opens and closes is animated over the fast
    * duration (150 ms) with the easy-ease curve, both ways, and so is any transform of the span
    * around your own `expandIcon`. The turn itself is not motion: `null` turns the animation off
-   * and the chevron still turns, at once; a class string or `{ className }` replaces it, written
-   * as `MotionSlot` describes. A `WaveProvider` with `motion="none"` turns the default off, and a
-   * value here still applies under it.
+   * and the chevron still turns, at once; a class string or `{ className }` replaces it with
+   * plain transition classes and a reduced-motion counterpart (the icon has no presence phases).
+   * A `WaveProvider` with `motion="none"` turns the default off, and a value here still applies
+   * under it.
    * @default the animated turn described above
    */
   expandIconMotion?: MotionSlot | null;

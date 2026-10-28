@@ -54,7 +54,8 @@ export interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * the track wide sweeps across it, mirrored in right-to-left, and becomes a full-width pulse
    * for reduced motion. The classes go on the fill and replace the whole default, its width and
    * its reduced-motion counterparts included. `null` draws a static full-width fill; a class
-   * string or `{ className }` replaces the classes, written as `MotionSlot` describes. A
+   * string or `{ className }` replaces the classes with plain animation classes (and a width) and
+   * their reduced-motion counterparts (the fill has no presence phases). A
    * `WaveProvider` with `motion="none"` turns the default off (a static full-width fill), and a
    * value here still applies under it. A determinate bar has no motion and ignores it. Fluent's
    * ProgressBar `indeterminateMotion` takes a motion slot the same way.

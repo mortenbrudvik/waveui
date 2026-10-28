@@ -347,7 +347,8 @@ export interface TabListProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
    * line, the tab's after pseudo-element (write them with the after variant, and a reduced-motion
    * counterpart); the line starts from the previous tab through two custom properties the
    * TabList writes for one frame. `null` turns the slide off (the line moves at once); a class
-   * string or `{ className }` replaces the classes, written as `MotionSlot` describes. A
+   * string or `{ className }` replaces the classes with plain transition classes for the line, as
+   * above (it has no presence phases). A
    * `WaveProvider` with `motion="none"` turns the default off, and a value here still applies
    * under it. The line also moves at once while the user prefers reduced motion. Fluent's
    * TabList slides its indicator with no prop to turn it off: this prop is a WaveUI addition.
