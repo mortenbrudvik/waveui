@@ -177,6 +177,12 @@ const MIXED_SORT_DIRECTION =
 /** The `details` argument of `onSortChange` (object form) and `onSelectedItemsChange`. */
 const DETAILS = { event: expect.any(Event) };
 
+const ROW_ID_MISMATCH =
+  "[WaveUI] DataGrid.Row: a row rendered from the grid's `items` sets its own `rowId`, which differs from its item's id (`getRowId`, by default the item's index). Select-all and its checkbox use the ids from `getRowId`, so the row is outside them and select-all selects ids that no row has. Pass a `getRowId` that returns the row's id, and leave out `rowId`.";
+
+const ROW_ID_OUTSIDE_ITEMS =
+  "[WaveUI] DataGrid.Row: a selectable row in a grid with `items` has a `rowId` that is no item's id (`getRowId`, by default the item's index). Select-all and its checkbox use the ids of `items`, so the row is outside them. Render the rows from `items` (a `DataGrid.Body` render function, or `columns`) with a `getRowId` that returns their ids.";
+
 /** useControllable's warning when a value switches between controlled and uncontrolled. */
 const switchWarning = (from: string, to: string) =>
   `[WaveUI] A component is changing from ${from} to ${to}. Components should not switch between controlled and uncontrolled: pass \`undefined\` only when the component is uncontrolled, and the empty value (for example \`[]\`, \`null\` or \`""\`) to clear a controlled value.`;
@@ -1171,6 +1177,7 @@ describe('DataGrid items and typed columns', () => {
 
     it('lose to a row’s own `rowId`', async () => {
       const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onSelectedItemsChange = vi.fn();
       render(
         <DataGrid
@@ -1191,6 +1198,64 @@ describe('DataGrid items and typed columns', () => {
       );
       await user.click(screen.getByRole('checkbox', { name: 'Bob' }));
       expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['bob'], DETAILS);
+      // Select-all uses the ids from `getRowId`, which no row has: a development warning.
+      expect(warn.mock.calls).toEqual([[ROW_ID_MISMATCH]]);
+    });
+
+    it('that a row’s own `rowId` replaces warn once in a selectable grid, and never when they agree', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const grid = (label: string, props: Partial<DataGridBaseProps<Person>>, rowId: string) => (
+        <DataGrid aria-label={label} items={PEOPLE} {...props}>
+          <DataGrid.Body>
+            {(person: Person) => (
+              <DataGrid.Row rowId={rowId === 'id' ? person.id : person.name}>
+                <DataGrid.Cell>{person.name}</DataGrid.Cell>
+              </DataGrid.Row>
+            )}
+          </DataGrid.Body>
+        </DataGrid>
+      );
+      render(
+        <>
+          {/* No warning: not selectable, or the row's id is its item's id. */}
+          {grid('Not selectable', {}, 'name')}
+          {grid('Agreeing', { selectionMode: 'multiple', getRowId: (person) => person.id }, 'id')}
+        </>,
+      );
+      expect(warn).not.toHaveBeenCalled();
+      // Three rows, and a second grid, that differ from the index ids: one warning.
+      render(
+        <>
+          {grid('Index ids', { selectionMode: 'multiple' }, 'id')}
+          {grid('Single', { selectionMode: 'single' }, 'name')}
+        </>,
+      );
+      expect(warn.mock.calls).toEqual([[ROW_ID_MISMATCH]]);
+    });
+
+    it('warn once for selectable `DataGrid.Row` children of a grid with `items` whose ids are no item’s', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const grid = (label: string, ids: readonly string[]) => (
+        <DataGrid
+          aria-label={label}
+          items={PEOPLE}
+          getRowId={(person) => person.id}
+          selectionMode="multiple"
+        >
+          <DataGrid.Body>
+            {ids.map((id) => (
+              <DataGrid.Row key={id} rowId={id}>
+                <DataGrid.Cell>{`Row ${id}`}</DataGrid.Cell>
+              </DataGrid.Row>
+            ))}
+          </DataGrid.Body>
+        </DataGrid>
+      );
+      // Ids of `items`: select-all covers them.
+      render(grid('Item ids', ['1', '2', '3']));
+      expect(warn).not.toHaveBeenCalled();
+      render(grid('Other ids', ['x', 'y', '3']));
+      expect(warn.mock.calls).toEqual([[ROW_ID_OUTSIDE_ITEMS]]);
     });
 
     it('that repeat warn once, as rows with the same `rowId` do, and every row renders', () => {

@@ -198,7 +198,11 @@ export interface DataGridItemsProps<T = unknown> {
 export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTMLTableElement> {
   /**
    * The row id of an item: the `rowId` of its row (for selection), for rows rendered from `items`.
-   * A row's own `rowId` wins. Ids must be unique (a duplicate warns in development).
+   * Select-all and its checkbox use these ids, whether the rows are rendered or not. A row's own
+   * `rowId` wins for that row, but a row whose own id differs from its item's id is outside
+   * select-all and its state, and select-all selects the item's id, which no row has (a
+   * development warning says so): return the rows' ids here rather than setting `rowId`. Ids must
+   * be unique (a duplicate warns in development).
    * @default the item's index in `items`, as a string
    */
   getRowId?: (item: T) => string;
@@ -283,8 +287,10 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    * change drops them. Select-all selects every item of `items` whose selection is not disabled
    * (`isSelectionDisabled`, or the selection cell of its rendered row) and keeps every other id;
    * when all of them are selected it removes only their ids. The select-all checkbox shows the
-   * state of those items. A row's own `rowId` that differs from its item's id is selected on its
-   * own, outside select-all.
+   * state of those items. Both use the ids from `getRowId` (by default the item's index): a row
+   * that sets its own, different `rowId` (or a `DataGrid.Row` child whose `rowId` is no item's
+   * id) is outside them, and select-all then selects ids that no row has, with a development
+   * warning. Pass a `getRowId` that returns the rows' ids.
    *
    * Without `items` (rows written as `DataGrid.Row` children), ids of rows that are not rendered
    * are left out of the reported selection and of the select-all state, so the next change drops
@@ -493,7 +499,9 @@ export interface DataGridRowProps extends React.HTMLAttributes<HTMLTableRowEleme
    * a duplicate warns in development). A selectable grid renders no selection control (and warns
    * in development) for a row without it. A row rendered from the grid's `items` (by
    * `DataGrid.Body`'s render function or from `columns`) defaults to the item's row id
-   * (`getRowId`).
+   * (`getRowId`). In a grid with `items`, select-all uses the ids from `getRowId`: a row whose
+   * `rowId` differs from its item's id, or is no item's id, is outside it (a development warning
+   * says so), so set `getRowId` rather than a different `rowId`.
    */
   rowId?: string;
   /**
@@ -612,6 +620,8 @@ export interface SelectionStore {
   getSelectableIds(): string[];
   /** The ids of the universe in its order; without one, the registered row ids. */
   getUniverseIds(): readonly string[];
+  /** Whether there is a universe and `rowId` is not in it (select-all never changes the row). */
+  isOutsideUniverse(rowId: string): boolean;
   /** Registered row ids in registration order. */
   getRegistered(): string[];
   /** `items` restricted to registered rows (order of `items`). */
@@ -820,6 +830,9 @@ export function createSelectionStore(
     },
     getUniverseIds() {
       return universeIds ?? Array.from(registered.keys());
+    },
+    isOutsideUniverse(rowId) {
+      return universeIds !== null && !universeIdSet.has(rowId);
     },
     getRegistered() {
       return Array.from(registered.keys());
@@ -2228,6 +2241,29 @@ const DataGridRow = ({
       `DataGrid: the selection cell of row "${rowId}" is ${state(selectionDisabled)} (\`DataGrid.SelectionCell disabled\` or \`selectionCellProps.disabled\`), but \`isSelectionDisabled\` says its item is ${state(!selectionDisabled)}. Select-all skips a row that either one disables, and the row's control follows its cell: make them agree, or leave the cell's \`disabled\` unset to take it from \`isSelectionDisabled\`.`,
     );
   }, [disabledMismatch, rowId, selectionDisabled]);
+
+  // With `items`, select-all uses the ids from `getRowId`: a row with another id is outside it.
+  const ownRowIdDiffers =
+    selectable && rowIdProp !== undefined && itemRowId !== null && rowIdProp !== itemRowId;
+  React.useEffect(() => {
+    if (ownRowIdDiffers) {
+      warnOnce(
+        'DataGrid.Row:row-id-mismatch',
+        "DataGrid.Row: a row rendered from the grid's `items` sets its own `rowId`, which differs from its item's id (`getRowId`, by default the item's index). Select-all and its checkbox use the ids from `getRowId`, so the row is outside them and select-all selects ids that no row has. Pass a `getRowId` that returns the row's id, and leave out `rowId`.",
+      );
+    } else if (
+      selectable &&
+      rowId !== undefined &&
+      itemRowId === null &&
+      store.isOutsideUniverse(rowId)
+    ) {
+      // A `DataGrid.Row` child of a grid with `items` (not rendered for an item).
+      warnOnce(
+        'DataGrid.Row:row-id-outside-items',
+        "DataGrid.Row: a selectable row in a grid with `items` has a `rowId` that is no item's id (`getRowId`, by default the item's index). Select-all and its checkbox use the ids of `items`, so the row is outside them. Render the rows from `items` (a `DataGrid.Body` render function, or `columns`) with a `getRowId` that returns their ids.",
+      );
+    }
+  }, [ownRowIdDiffers, selectable, rowId, itemRowId, store]);
 
   const unlabelled =
     selectable && rowId !== undefined && ownLabel === undefined && ownLabelledBy === undefined;
