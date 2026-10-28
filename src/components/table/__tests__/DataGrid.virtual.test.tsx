@@ -6,7 +6,8 @@ import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { DataGrid } from '../DataGrid';
 import type { DataGridBaseProps, DataGridItemsSortProps } from '../DataGrid';
-import { dataGridClassNames } from '../../../lib/classNames';
+import { SELECTION_CELL_CLASSES } from '../Table.shared';
+import { dataGridClassNames, dataGridRowClassNames } from '../../../lib/classNames';
 import { createTableColumn } from '../../../lib/table';
 import { useVirtualWindow, type UseVirtualWindowOptions } from '../../../hooks/useVirtualWindow';
 import { expectNoA11yViolations, renderWithProviders } from '../../../test-utils';
@@ -205,6 +206,67 @@ describe('DataGrid virtualWindow', () => {
       render(<Grid />);
       for (const row of bodyRows()) expect(row.style.height).toBe(`${ITEM}px`);
       expect(grid().querySelector('thead')).toHaveClass('sticky', 'top-0');
+    });
+
+    describe('cells that fit the row height', () => {
+      /** The selection cell's own box, less its block padding (`py-3`). */
+      const unpadded = SELECTION_CELL_CLASSES.split(' ').filter((name) => name !== 'py-3');
+      const selectionCellOf = (row: HTMLTableRowElement) =>
+        row.querySelector<HTMLTableCellElement>(':scope > [data-selection-cell]');
+
+      it.each(['multiple', 'single'] as const)(
+        'drops the block padding of every body cell, the selection cell (%s) included, and centres it',
+        (selectionMode) => {
+          render(<Grid selectionMode={selectionMode} />);
+          for (const row of bodyRows()) {
+            for (const cell of Array.from(row.cells)) {
+              expect(cell).toHaveClass('py-0', 'align-middle');
+              expect(cell).not.toHaveClass('py-3');
+            }
+            expect(selectionCellOf(row)).toHaveClass(
+              ...unpadded,
+              dataGridRowClassNames.selectionCell,
+            );
+          }
+          // The header is not a window row: its selection cell keeps its padding.
+          const headerCell = selectionCellOf(
+            grid().querySelector('thead tr') as HTMLTableRowElement,
+          );
+          expect(headerCell).toHaveClass(...SELECTION_CELL_CLASSES.split(' '));
+          expect(headerCell).not.toHaveClass('py-0');
+        },
+      );
+
+      it('keeps the selection cell’s padding without a window', () => {
+        render(<Grid windowed={false} items={ITEMS.slice(0, 5)} selectionMode="multiple" />);
+        const rows = Array.from(
+          grid().querySelectorAll<HTMLTableRowElement>(':scope > tbody > tr'),
+        );
+        expect(rows).toHaveLength(5);
+        for (const row of rows) {
+          expect(selectionCellOf(row)).toHaveClass(...SELECTION_CELL_CLASSES.split(' '));
+          expect(selectionCellOf(row)).not.toHaveClass('py-0', 'align-middle');
+        }
+      });
+
+      it('lets a selection cell class of the consumer win over the window’s', () => {
+        render(
+          <Grid selectionMode="multiple" items={ITEMS.slice(0, 5)} windowOptions={{ itemSize: 60 }}>
+            <DataGrid.Body>
+              {(item: Item) => (
+                <DataGrid.Row selectionCellProps={{ className: 'py-2' }}>
+                  <DataGrid.Cell>{item.name}</DataGrid.Cell>
+                  <DataGrid.Cell>{`Size ${item.size}`}</DataGrid.Cell>
+                </DataGrid.Row>
+              )}
+            </DataGrid.Body>
+          </Grid>,
+        );
+        for (const row of bodyRows()) {
+          expect(selectionCellOf(row)).toHaveClass('py-2');
+          expect(selectionCellOf(row)).not.toHaveClass('py-0');
+        }
+      });
     });
 
     it('lays the columns out from widths (fixed layout), so the window never resizes a column', () => {

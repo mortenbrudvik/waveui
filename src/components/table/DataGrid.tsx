@@ -1834,6 +1834,8 @@ function DataGridBodySelectionCell({
 }: DataGridBodySelectionCellProps) {
   const { selectionMode, toggleRow, radioName, subtleSelection } = useDataGridContext(component);
   const row = useDataGridRowContext(component);
+  // A body row of a windowed grid has the window's height: no block padding, the control centred.
+  const windowedRow = React.useContext(DataGridWindowRowContext)?.index !== undefined;
   const { rowId } = row;
   const single = selectionMode === 'single';
   return (
@@ -1846,6 +1848,7 @@ function DataGridBodySelectionCell({
         stableClassName,
         dataGridRowClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
+        windowedRow && 'py-0 align-middle',
         focusRingInset,
         row.selectionCellProps?.className,
         className,
@@ -1883,6 +1886,8 @@ function DataGridBodySelectionCell({
  * selection cell props of its row (`selectionCellProps`), its own winning. `aria-label`,
  * `aria-labelledby` and `aria-describedby` go to the control; the other props, `className` and
  * `ref` to the cell. In a grid without selection it renders nothing (with a development warning).
+ * In a body row of a grid with a `virtualWindow` it has no vertical padding (the row has the
+ * window's height) and its control is centred.
  */
 const DataGridSelectionCell = ({
   disabled,
