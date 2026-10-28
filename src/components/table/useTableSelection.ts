@@ -13,7 +13,12 @@ export interface UseTableSelectionOptions<T> extends UseSelectionOptions {
    * Whether the selection of an item cannot change through select-all: `toggleAllRows` skips it,
    * and `allRowsSelected` does not wait for it. A disabled row keeps its state. The single-row
    * functions do not read it: disable the row's own control. Called for every item of `items`
-   * when the selection or the items change; pass a stable function.
+   * whenever `useTableFeatures` computes its state: when the selection, `items`, `getRowId`,
+   * `columns`, the sort or another plugin's state (the column widths) change, and when this
+   * function changes. A function written inline is a new one on every render, so the state is
+   * then computed, and this function called for every item, on every render (no more: no extra
+   * render, and `getRows()` keeps its array); define it outside the component or memoise it to
+   * call it only on those changes.
    */
   isDisabled?: (item: T, index: number) => boolean;
 }
@@ -22,10 +27,10 @@ export interface UseTableSelectionOptions<T> extends UseSelectionOptions {
  * The selection plugin of `useTableFeatures`: a set of row ids (`selectedItems`, controlled, or
  * `defaultSelectedItems`), and `state.selection` with select-all over every item of `items`,
  * rendered or not. Select-all selects every selectable row and leaves the other ids as they are;
- * deselecting all removes only the ids of `items`, so ids selected on another page or filtered out
- * stay selected (`clearRows` empties the selection). `onSelectedItemsChange` fires once per change
- * with a new array of every selected id. Call it unconditionally and pass the plugin to
- * `useTableFeatures`.
+ * deselecting all removes only the selectable ids of `items`, so a selected disabled row and ids
+ * selected on another page or filtered out stay selected (`clearRows` empties the selection).
+ * `onSelectedItemsChange` fires once per change with a new array of every selected id. Call it
+ * unconditionally and pass the plugin to `useTableFeatures`.
  *
  * @example
  * const { selection } = useTableFeatures({ items, columns, getRowId }, [

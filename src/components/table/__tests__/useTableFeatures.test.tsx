@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import * as React from 'react';
 import { createTableColumn } from '../../../lib/table';
@@ -41,6 +41,11 @@ function clickEvent(): Event {
 }
 
 describe('useTableFeatures', () => {
+  // The console.warn spies of the warning tests.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe('rows', () => {
     it('returns the rows of items in order, with the index as the default row id', () => {
       const { result } = renderHook(() => useTableFeatures({ items: people, columns }));
@@ -632,20 +637,119 @@ describe('useTableFeatures', () => {
     });
   });
 
+  describe('plugin options written inline', () => {
+    it('takes an inline isDisabled: a re-render does not loop, and select-all still skips the disabled row', () => {
+      const onSelectedItemsChange = vi.fn();
+      const { result, rerender } = renderHook(() =>
+        useTableFeatures({ items: people, columns, getRowId }, [
+          useTableSelection<Person>({
+            selectionMode: 'multiple',
+            isDisabled: (person) => person.id === 'p2',
+            onSelectedItemsChange: (selectedItems, details) =>
+              onSelectedItemsChange(selectedItems, details),
+          }),
+        ]),
+      );
+      rerender();
+      act(() => result.current.selection.toggleAllRows());
+      rerender();
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['p1', 'p3', 'p4'], {
+        event: undefined,
+      });
+      expect(result.current.selection.allRowsSelected).toBe(true);
+
+      act(() => result.current.selection.toggleRow('p1'));
+      rerender();
+      expect(sorted(result.current.selection.selectedItems)).toEqual(['p3', 'p4']);
+      expect(result.current.selection.allRowsSelected).toBe(false);
+      expect(result.current.selection.someRowsSelected).toBe(true);
+      expect(onSelectedItemsChange).toHaveBeenCalledTimes(2);
+    });
+
+    it('takes inline sort options: a re-render does not loop, and the sort still toggles', () => {
+      const onSortChange = vi.fn();
+      const { result, rerender } = renderHook(() =>
+        useTableFeatures({ items: people, columns, getRowId }, [
+          useTableSort<Person>({
+            defaultSort: { columnId: 'name', direction: 'ascending' },
+            onSortChange: (sort, details) => onSortChange(sort, details),
+          }),
+        ]),
+      );
+      rerender();
+      act(() => result.current.sort.toggleColumnSort('name'));
+      rerender();
+      expect(onSortChange).toHaveBeenCalledTimes(1);
+      expect(onSortChange).toHaveBeenCalledWith(
+        { columnId: 'name', direction: 'descending' },
+        undefined,
+      );
+      expect(result.current.sort.value).toEqual({ columnId: 'name', direction: 'descending' });
+      expect(names(result.current)).toEqual(['Dan', 'Cleo', 'Bea', 'Abe']);
+    });
+
+    it('keeps getRows across a re-render that only makes new inline options', () => {
+      const { result, rerender } = renderHook(
+        () =>
+          useTableFeatures({ items: people, columns, getRowId }, [
+            useTableSort<Person>({
+              defaultSort: { columnId: 'age', direction: 'ascending' },
+              onSortChange: () => {},
+            }),
+            useTableSelection<Person>({
+              selectionMode: 'multiple',
+              selectedItems: ['p1'],
+              isDisabled: (person) => person.age > 40,
+              onSelectedItemsChange: () => {},
+            }),
+          ]),
+        { wrapper: React.StrictMode },
+      );
+      const first = result.current.getRows();
+      expect(names(result.current)).toEqual(['Abe', 'Dan', 'Cleo', 'Bea']);
+      rerender();
+      rerender();
+      expect(result.current.getRows()).toBe(first);
+      expect(result.current.selection.isRowSelected('p1')).toBe(true);
+    });
+
+    it('keeps the selection state between re-renders when its options are stable', () => {
+      const onSelectedItemsChange = vi.fn();
+      const { result, rerender } = renderHook(() =>
+        useTableFeatures({ items: people, columns, getRowId }, [
+          useTableSort<Person>(),
+          useTableSelection<Person>({
+            selectionMode: 'multiple',
+            isDisabled: isP2,
+            onSelectedItemsChange,
+          }),
+        ]),
+      );
+      const { selection, sort } = result.current;
+      rerender();
+      expect(result.current.selection).toBe(selection);
+      expect(result.current.sort).toBe(sort);
+    });
+  });
+
   describe('development warnings', () => {
     it('warns once when two plugins fill the same feature', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const { result, rerender } = renderHook(() => {
-        const sort = useTableSort<Person>();
-        return useTableFeatures({ items: people, columns, getRowId }, [sort, sort]);
-      });
+      const { result, rerender } = renderHook(() =>
+        useTableFeatures({ items: people, columns, getRowId }, [
+          useTableSort<Person>({ defaultSort: { columnId: 'name', direction: 'ascending' } }),
+          useTableSort<Person>({ defaultSort: { columnId: 'age', direction: 'descending' } }),
+        ]),
+      );
       rerender();
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledWith(
         '[WaveUI] useTableFeatures: more than one plugin fills `sort`. Pass each feature once; ' +
-          'the plugins are applied in order, so the last one fills the state.',
+          'the last plugin of a feature is used.',
       );
-      // Still applied, in order.
+      // The last sort plugin is the sort.
+      expect(result.current.sort.value).toEqual({ columnId: 'age', direction: 'descending' });
+      expect(names(result.current)).toEqual(['Cleo', 'Bea', 'Abe', 'Dan']);
       act(() => result.current.sort.toggleColumnSort('name'));
       expect(names(result.current)).toEqual(['Abe', 'Bea', 'Cleo', 'Dan']);
     });

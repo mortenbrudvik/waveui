@@ -123,6 +123,16 @@ export function useTableSort<T>(options: UseTableSortOptions = {}): TableFeature
     [columnId, direction],
   );
 
+  // The row order depends on the sort alone: useTableFeatures rebuilds the rows when it changes.
+  const sortRows = useMemo(
+    () =>
+      value
+        ? (rows: readonly TableRowData<T>[], columns: readonly DataGridColumn<T>[]) =>
+            sortTableRows(rows, columns, value)
+        : undefined,
+    [value],
+  );
+
   return useMemo(() => {
     const sortState: TableSortState = {
       value,
@@ -132,11 +142,8 @@ export function useTableSort<T>(options: UseTableSortOptions = {}): TableFeature
     };
     return createTableFeaturePlugin<T>({
       feature: 'sort',
-      sortRows: value
-        ? (rows: readonly TableRowData<T>[], columns: readonly DataGridColumn<T>[]) =>
-            sortTableRows(rows, columns, value)
-        : undefined,
+      sortRows,
       extend: (state) => ({ ...state, sort: sortState }),
     });
-  }, [value, setColumnSort, toggleColumnSort]);
+  }, [value, sortRows, setColumnSort, toggleColumnSort]);
 }

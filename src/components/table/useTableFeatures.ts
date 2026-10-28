@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { isDev, warnOnce } from '../../lib/dev';
 import type { SelectionMode } from '../../lib/types';
@@ -127,9 +127,10 @@ declare const tableFeaturePluginBrand: unique symbol;
 /**
  * A feature of {@link useTableFeatures}, returned by `useTableSort`, `useTableSelection` and
  * `useTableColumnSizing`, which hold the feature's state where they are called. The object is
- * opaque and keeps its identity while the feature's state does. `T` is the item type the plugin
- * reads (a selection's `isDisabled`): a plugin that reads no item, such as the sort, fits every
- * table.
+ * opaque. It keeps its identity while the feature's state and the options it reads keep theirs; a
+ * new one costs `useTableFeatures` a recompute of its state, and of the rows only when the sort
+ * changed. `T` is the item type the plugin reads (a selection's `isDisabled`): a plugin that reads
+ * no item, such as the sort, fits every table.
  */
 export interface TableFeaturePlugin<T> {
   /** The brand of a plugin: only the plugin hooks create one. */
@@ -147,8 +148,9 @@ export interface TableFeaturePluginImplementation<T> {
   /** The slot it fills; a second plugin for the same slot warns. */
   feature: TableFeatureName;
   /**
-   * Puts the rows in display order (the sort). The rows are rebuilt only when this function
-   * changes, so it keeps its identity while the order it gives cannot change.
+   * Puts the rows in display order (the sort plugin only). The rows are rebuilt when this function
+   * changes, so it keeps its identity while the order it gives cannot change, whatever happens to
+   * the plugin object.
    */
   sortRows?: (
     rows: readonly TableRowData<T>[],
@@ -169,8 +171,6 @@ export function createTableFeaturePlugin<T>(
 function implementationOf<T>(plugin: TableFeaturePlugin<T>): TableFeaturePluginImplementation<T> {
   return plugin as unknown as TableFeaturePluginImplementation<T>;
 }
-
-type SortRows<T> = NonNullable<TableFeaturePluginImplementation<T>['sortRows']>;
 
 const NO_PLUGINS: readonly never[] = [];
 
@@ -209,17 +209,16 @@ const INERT_COLUMN_SIZING: TableColumnSizingState = {
   getColumnProps: () => ({ style: {} }),
 };
 
-function sameElements<E>(a: readonly E[], b: readonly E[]): boolean {
-  return a === b || (a.length === b.length && a.every((element, index) => element === b[index]));
-}
-
-function sortersOf<T>(plugins: readonly TableFeaturePlugin<T>[]): readonly SortRows<T>[] {
-  const sorters: SortRows<T>[] = [];
-  for (const plugin of plugins) {
-    const { sortRows } = implementationOf(plugin);
-    if (sortRows) sorters.push(sortRows);
+/** The last plugin of `plugins` that fills `feature` (a feature given twice warns). */
+function pluginFor<T>(
+  plugins: readonly TableFeaturePlugin<T>[],
+  feature: TableFeatureName,
+): TableFeaturePluginImplementation<T> | undefined {
+  for (let index = plugins.length - 1; index >= 0; index -= 1) {
+    const implementation = implementationOf(plugins[index]!);
+    if (implementation.feature === feature) return implementation;
   }
-  return sorters;
+  return undefined;
 }
 
 function duplicateFeatureOf<T>(plugins: readonly TableFeaturePlugin<T>[]): string | undefined {
@@ -234,14 +233,17 @@ function duplicateFeatureOf<T>(plugins: readonly TableFeaturePlugin<T>[]): strin
 
 /**
  * Headless table state for a table built from the static `Table` parts: the rows of `items`, and
- * the features its plugins add (`useTableSort`, `useTableSelection`, `useTableColumnSizing`),
- * applied in the order of the array. The state follows the data, not the rendered rows, so a
- * table that renders a page or a window of its rows keeps select-all and the sort over every
- * item.
+ * the features its plugins add (`useTableSort`, `useTableSelection`, `useTableColumnSizing`). Each
+ * plugin fills its own part of the state (`sort`, `selection`, `columnSizing`), so the order of
+ * the array does not matter. The state follows the data, not the rendered rows, so a table that
+ * renders a page or a window of its rows keeps select-all and the sort over every item.
  *
  * Call each plugin hook unconditionally, in the array or before it, and pass the same plugins on
- * every render; to turn a feature off, change its options. Repeated plugins for one feature, a
- * plugin count that changes between renders and repeated row ids are development warnings.
+ * every render; to turn a feature off, change its options. Options may be written inline: a plugin
+ * whose options change identity on every render (an inline `isDisabled`) only makes the state be
+ * recomputed on every render, while `getRows()` keeps its array until `items`, `getRowId`,
+ * `columns` or the sort change. A feature given twice (the last plugin of it is used), a plugin
+ * count that changes between renders and repeated row ids are development warnings.
  *
  * @example
  * const { getRows, sort, selection } = useTableFeatures({ items, columns, getRowId }, [
@@ -255,17 +257,14 @@ export function useTableFeatures<T>(
 ): TableFeaturesState<T> {
   const { items, columns, getRowId = indexRowId } = options;
 
-  // The plugins and their row orders, kept while they are the same (by element), so that a new
-  // array literal on every render keeps the memos below; the row order is kept apart, so a change
-  // of the selection leaves the rows as they are.
-  const [cache, setCache] = useState(() => ({ plugins, sorters: sortersOf(plugins) }));
-  let { plugins: stablePlugins, sorters } = cache;
-  if (!sameElements(cache.plugins, plugins)) {
-    const nextSorters = sortersOf(plugins);
-    stablePlugins = plugins;
-    if (!sameElements(cache.sorters, nextSorters)) sorters = nextSorters;
-    setCache({ plugins, sorters });
-  }
+  // One variable per feature, so the memos below have fixed dependencies: a new array literal on
+  // every render changes nothing, and a plugin that changes identity (an inline option) costs a
+  // recompute of the state, never a state update during render. The rows depend on the sort's
+  // `sortRows` alone, which the sort plugin keeps while the sort is the same.
+  const sortPlugin = pluginFor(plugins, 'sort');
+  const selectionPlugin = pluginFor(plugins, 'selection');
+  const columnSizingPlugin = pluginFor(plugins, 'columnSizing');
+  const sortRows = sortPlugin?.sortRows;
 
   const baseRows = useMemo(
     () => items.map((item, index) => ({ item, rowId: getRowId(item, index), index })),
@@ -273,12 +272,8 @@ export function useTableFeatures<T>(
   );
 
   const rows = useMemo(
-    () =>
-      sorters.reduce<readonly TableRowData<T>[]>(
-        (ordered, sort) => sort(ordered, columns),
-        baseRows,
-      ),
-    [baseRows, columns, sorters],
+    () => (sortRows ? sortRows(baseRows, columns) : baseRows),
+    [baseRows, columns, sortRows],
   );
 
   const getRows = useCallback(() => rows, [rows]);
@@ -293,9 +288,11 @@ export function useTableFeatures<T>(
       selection: INERT_SELECTION,
       columnSizing: INERT_COLUMN_SIZING,
     };
-    for (const plugin of stablePlugins) next = implementationOf(plugin).extend(next);
+    for (const plugin of [sortPlugin, selectionPlugin, columnSizingPlugin]) {
+      if (plugin) next = plugin.extend(next);
+    }
     return next;
-  }, [items, columns, getRowId, getRows, stablePlugins]);
+  }, [items, columns, getRowId, getRows, sortPlugin, selectionPlugin, columnSizingPlugin]);
 
   const duplicateFeature = duplicateFeatureOf(plugins);
   useEffect(() => {
@@ -303,7 +300,7 @@ export function useTableFeatures<T>(
     warnOnce(
       'useTableFeatures:duplicate-plugin',
       `useTableFeatures: more than one plugin fills \`${duplicateFeature}\`. Pass each feature ` +
-        'once; the plugins are applied in order, so the last one fills the state.',
+        'once; the last plugin of a feature is used.',
     );
   }, [duplicateFeature]);
 
