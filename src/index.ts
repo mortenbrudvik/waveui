@@ -70,6 +70,9 @@ export type {
   UseSelectionOptions,
   UseSelectionResult,
 } from './hooks/useSelection';
+export { useVirtualWindow } from './hooks/useVirtualWindow';
+export type { UseVirtualWindowOptions, VirtualWindow } from './hooks/useVirtualWindow';
+export type { VirtualEntry } from './lib/virtual';
 export { useActiveDescendant } from './hooks/useActiveDescendant';
 export type {
   UseActiveDescendantOptions,
