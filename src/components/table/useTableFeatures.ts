@@ -68,6 +68,20 @@ export interface TableSelectionState {
 }
 
 /**
+ * What a resize handle needs from the table state, as returned by
+ * `columnSizing.getResizeHandleProps(columnId)`: the column's width and minimum, and the callback
+ * that sets a new width. `Table.ResizeHandle` takes these props (and a few more).
+ */
+export interface TableResizeHandleBindings {
+  /** The column's current width in pixels. */
+  width: number;
+  /** The narrowest the column can be, in pixels. */
+  minWidth: number;
+  /** Sets the column's width in pixels (held at or above `minWidth`). */
+  onResize(width: number, details: { event: Event }): void;
+}
+
+/**
  * The column widths of {@link useTableFeatures} (`state.columnSizing`), filled by
  * `useTableColumnSizing`. Without that plugin no width is set and the functions do nothing.
  */
@@ -80,10 +94,12 @@ export interface TableColumnSizingState {
   getColumnWidth(columnId: string): number | undefined;
   /** Sets the width of the column `columnId` in pixels. */
   setColumnWidth(columnId: string, width: number, event?: Event): void;
-  /** Props for the table element: its width style. */
+  /** Props for the table element: its fixed layout and width style. */
   getTableProps(): { style: CSSProperties };
   /** Props for the column's `<col>` element: its width style. */
   getColumnProps(columnId: string): { style: CSSProperties };
+  /** Props for the resize handle of the column `columnId`. */
+  getResizeHandleProps(columnId: string): TableResizeHandleBindings;
 }
 
 /** The state that {@link useTableFeatures} returns. */
@@ -207,6 +223,7 @@ const INERT_COLUMN_SIZING: TableColumnSizingState = {
   setColumnWidth: doNothing,
   getTableProps: () => ({ style: {} }),
   getColumnProps: () => ({ style: {} }),
+  getResizeHandleProps: () => ({ width: 0, minWidth: 0, onResize: doNothing }),
 };
 
 /** The last plugin of `plugins` that fills `feature` (a feature given twice warns). */

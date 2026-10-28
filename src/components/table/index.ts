@@ -65,6 +65,7 @@ export type {
   TableFeaturePlugin,
   TableFeaturesState,
   TableRowData,
+  TableResizeHandleBindings,
   TableSelectionState,
   TableSortState,
   UseTableFeaturesOptions,
@@ -73,3 +74,8 @@ export { useTableSort } from './useTableSort';
 export type { UseTableSortOptions } from './useTableSort';
 export { useTableSelection } from './useTableSelection';
 export type { UseTableSelectionOptions } from './useTableSelection';
+export { useTableColumnSizing } from './useTableColumnSizing';
+export type {
+  TableColumnWidthsChangeDetails,
+  UseTableColumnSizingOptions,
+} from './useTableColumnSizing';

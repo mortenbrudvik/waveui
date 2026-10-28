@@ -32,6 +32,7 @@ export type {
 } from './lib/breadcrumb';
 export { createTableColumn } from './lib/table';
 export type { CreateTableColumnOptions } from './lib/table';
+export type { ColumnSizingOption } from './lib/columnSizing';
 export { createToaster } from './lib/toaster';
 export type { ToasterHandle } from './lib/toaster';
 
