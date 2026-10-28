@@ -158,9 +158,10 @@ const NO_ELEMENT: readonly string[] = [
  * Constants and keys that a later wave applies (spec §0.2 rule 24, §1.4.3): the "applied" check
  * skips them, and a whole constant also the "names a public component" check. Empty since wave D
  * of 0.11, when every Phase 6 part landed. A later phase that registers parts before they exist
- * lists them here and empties the list when they land.
+ * lists them here and empties the list when they land. 0.15: MessageBarGroup's constant, until
+ * the package entry exports the component (INTEGRATION).
  */
-const PENDING_CLASS_NAMES: readonly string[] = [];
+const PENDING_CLASS_NAMES: readonly string[] = ['messageBarGroupClassNames'];
 
 const isPending = (name: string, key?: string): boolean =>
   PENDING_CLASS_NAMES.includes(name) ||

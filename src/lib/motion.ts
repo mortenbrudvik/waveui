@@ -110,6 +110,24 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   same normal duration, so the toasts around it glide together once it has faded. The margin
  *   makes up for the gap the region keeps after each toast, so nothing moves when the exited
  *   container unmounts. Under reduced motion nothing is transitioned, so the delay goes too.
+ * - `messageBarGroupItemStructure`, the element around each bar of a MessageBarGroup (not motion:
+ *   it is on the element whatever its motion slot holds). While the bar is shown the element
+ *   renders no box of its own, so the bar is an item of the group's stack as it would be without
+ *   the element; while it enters or exits, the element is a clipping grid of one row track whose
+ *   minimum is zero. The bar sits at the bottom of that track at its own height, and the track at
+ *   the bottom of the element: while the collapse is partly open the grid gives its track only
+ *   that fraction of the element, so a track left at the top would leave an empty strip under
+ *   the visible part of the bar. So the element always shows the bottom of the bar, which reads
+ *   as sliding down into the space as it opens. Its one column has a minimum of zero too and fills
+ *   the element, so the bar keeps the width it has once shown.
+ * - `messageBarGroupExitMotion`, the default motion of that element: its row track, its bottom
+ *   margin and its opacity, over the gentle duration (250 ms) with the linear curve. It exits by
+ *   closing the track to empty while the margin goes to minus the group's 8px gap and the bar
+ *   fades out, so the bars after it glide up together and nothing moves when the exited element
+ *   unmounts.
+ * - `messageBarGroupEnterMotion`, the enter a MessageBarGroup adds after the exit with its `both`
+ *   animation: an added bar starts from an empty track, minus the gap and transparent, and opens
+ *   on the exit's transition (250 ms, linear). It holds no transition of its own.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -248,6 +266,29 @@ export const toastMotion: Readonly<Record<'top' | 'bottom', string>> = {
   bottom:
     'transition-[grid-template-rows,margin-bottom,opacity,translate] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-easy-ease data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:translate-y-2 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0',
 };
+
+/**
+ * The structure of the element around each bar of a MessageBarGroup: no box while the bar is
+ * shown, a clipping one-track grid of rows while it enters or exits, with the bar at the bottom
+ * of the track at its own height and the track at the bottom of the element (so no empty strip
+ * opens under the bar), in a whole column with a zero minimum (the width it has once shown).
+ */
+export const messageBarGroupItemStructure =
+  'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-end content-end overflow-hidden data-[presence=entered]:contents';
+
+/**
+ * A MessageBarGroup bar's default exit, on the element around it: its row track and its bottom
+ * margin close while it fades out, 250 ms.
+ */
+export const messageBarGroupExitMotion =
+  'transition-[grid-template-rows,margin-bottom,opacity] duration-wave-gentle ease-wave-linear motion-reduce:transition-none data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0';
+
+/**
+ * The enter a MessageBarGroup adds to the exit with `animate="both"`: an added bar's row track and
+ * bottom margin open from closed while it fades in, on the exit's transition.
+ */
+export const messageBarGroupEnterMotion =
+  'data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0';
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */
 const PRESENCE_VARIANT = '[presence=';

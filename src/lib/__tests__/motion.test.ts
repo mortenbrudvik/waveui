@@ -24,13 +24,18 @@
  * 7. every export is a string, a record of strings or a function (the precondition of the dist
  *    probe of `scripts/verify-dist.mjs`, which reads the strings one level into records).
  *
- * And two checks of a single recipe, the structure of an inline drawer (D13), at every edge: it
- * lifts its panel's size cap on the panel's axis while the element is not entered, and it lays
- * its track on the side where it aligns the panel. The second also holds for the collapse
- * structure of the disclosures (D12), which aligns its part to the start of the track rather than
- * stretching it (a stretched part is squeezed to the track, shorter than the element shows). A
- * structure that is a grid in every phase (a toast's container, D14) has a zero-minimum track on
- * both axes, so its content keeps the container's width and its row track can close.
+ * And three checks of the structures, the elements the collapse motions run on:
+ *
+ * - the structure of an inline drawer (D13), at every edge, lifts its panel's size cap on the
+ *   panel's axis while the element is not entered;
+ * - a structure lays its track, on the axis its motion collapses, on the side where it aligns its
+ *   part ({@link trackAlignmentFindings}): every edge of the inline drawer's; the collapse
+ *   structure of the disclosures (D12), which aligns its part to the start of the track rather
+ *   than stretching it (a stretched part is squeezed to the track, shorter than the element
+ *   shows); and the MessageBarGroup item's (§8), whose bar sits at the end of a track at the end;
+ * - every structure that is a grid in some phase ({@link GRID_STRUCTURES}: the collapse elements
+ *   while they enter or exit, a toast's container in every phase, D14) has a zero-minimum track
+ *   on both axes, so its part keeps the element's width and its track can close.
  *
  * The file runs in the node environment: the compile check loads `@tailwindcss/node`.
  */
@@ -549,10 +554,16 @@ function collapsingAxis(motionValue: string): GridAxis | undefined {
 /**
  * Every structure export of the module that is a grid in some phase (a plain grid display on a
  * value): a toast's container, a grid in every phase (it takes focus, so it never renders without
- * a box), and the collapse elements, a grid while they enter or exit. Each value pins the axis it
- * does not animate as well as the one it does ({@link zeroMinimumTrackFindings}).
+ * a box), and the collapse elements (the disclosures', the inline drawer's and a MessageBarGroup
+ * item), a grid while they enter or exit. Each value pins the axis it does not animate as well as
+ * the one it does ({@link zeroMinimumTrackFindings}).
  */
-const GRID_STRUCTURES = ['collapseStructure', 'inlineDrawerStructure', 'toastStructure'];
+const GRID_STRUCTURES = [
+  'collapseStructure',
+  'inlineDrawerStructure',
+  'messageBarGroupItemStructure',
+  'toastStructure',
+];
 
 /**
  * The plain (variant-free) track template of `axis` that has a zero minimum: an arbitrary
@@ -1156,6 +1167,48 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
     });
   });
 
+  describe('the MessageBarGroup item lays its track where it aligns the bar (§8)', () => {
+    /** The variant-free utilities of a class string. */
+    const plainUtilities = (value: string) =>
+      words(value)
+        .map(parseWord)
+        .filter(({ variants }) => variants.length === 0)
+        .map(({ utility }) => utility);
+
+    it('reports the bar at the end of a row track left at the start', () => {
+      expect(
+        trackAlignmentFindings(
+          {
+            // The plan's literal with its column pinned: the bar at the end of the track, the
+            // track at the start of the element.
+            plan: 'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-end overflow-hidden data-[presence=entered]:contents',
+            gated:
+              'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-end data-[presence=exiting]:content-end',
+            start:
+              'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-end content-start',
+          },
+          { plan: 'block', gated: 'block', start: 'block' },
+        ),
+      ).toEqual([
+        'plan: items end, track start',
+        'gated: items end, track start',
+        'start: items end, track start',
+      ]);
+    });
+
+    it('holds for messageBarGroupItemStructure, on the axis its exit collapses: the bar at the end', () => {
+      const axis = collapsingAxis(motion.messageBarGroupExitMotion);
+      expect(axis).toBe('block');
+      expect(
+        trackAlignmentFindings(
+          { messageBarGroupItemStructure: motion.messageBarGroupItemStructure },
+          { messageBarGroupItemStructure: axis! },
+        ),
+      ).toEqual([]);
+      expect(plainUtilities(motion.messageBarGroupItemStructure)).toContain('items-end');
+    });
+  });
+
   describe('a grid structure pins both of its tracks to a zero minimum (D12, D14)', () => {
     it('reports an axis left to an implicit track, or a track with a minimum other than zero', () => {
       // The plan's toast literal: no column template, so the column grows to the content.
@@ -1168,6 +1221,12 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       expect(
         zeroMinimumTrackFindings(
           'grid grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents',
+        ),
+      ).toEqual(['cols: no zero-minimum track']);
+      // The plan's MessageBarGroup item literal: its rows close, its column follows the bar.
+      expect(
+        zeroMinimumTrackFindings(
+          'grid grid-rows-[minmax(0,1fr)] items-end overflow-hidden data-[presence=entered]:contents',
         ),
       ).toEqual(['cols: no zero-minimum track']);
       // A side edge of the inline drawer as first built: its columns close, its row is implicit.
@@ -1229,6 +1288,7 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
           'collapseStructure',
           'inlineDrawerStructure.start',
           'inlineDrawerStructure.bottom',
+          'messageBarGroupItemStructure',
           'toastStructure',
         ]),
       );

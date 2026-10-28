@@ -323,6 +323,15 @@ export const messageBarTitleClassNames = { root: 'wave-message-bar-title' } as c
 export const messageBarActionsClassNames = { root: 'wave-message-bar-actions' } as const;
 
 /**
+ * MessageBarGroup: `root` on the element that stacks the bars; `item` on the element around each
+ * bar (the element its enter and exit run on).
+ */
+export const messageBarGroupClassNames = {
+  root: 'wave-message-bar-group',
+  item: 'wave-message-bar-group__item',
+} as const;
+
+/**
  * ProgressBar: `root` on the `role="progressbar"` element (the track); `bar` on the fill; `label`
  * on the label of `showLabel` (a sibling of the root).
  */
