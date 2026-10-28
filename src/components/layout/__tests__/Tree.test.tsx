@@ -5,6 +5,7 @@ import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tree, TreeItem, type TreeProps, type TreeItemProps } from '../Tree';
+import { treeItemClassNames } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/types';
 import {
   asClientReference,
@@ -395,7 +396,9 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
     );
     const parent = item('Documents');
     const group = within(parent).getByRole('group');
-    expect(group.parentElement).toBe(parent);
+    // The group sits in its collapse element (0.15), a child of the treeitem.
+    expect(group.parentElement).toHaveClass(treeItemClassNames.collapse);
+    expect(group.parentElement?.parentElement).toBe(parent);
     expect(within(group).getByRole('treeitem', { name: 'Work' })).toBeInTheDocument();
   });
 

@@ -941,7 +941,8 @@ export const treeClassNames = { root: 'wave-tree' } as const;
  * chevron (or your `expandIcon`); `indicator` on the checkbox of a multi-select tree or the radio
  * of a single-select one; `icon` on the icon span; `label` on the label span; `iconAfter` on the
  * icon after the label; `aside` on the aside content; `actions` on the row's actions toolbar;
- * `group` on the `role="group"` element of its nested items.
+ * `group` on the `role="group"` element of its nested items; `collapse` on the element around
+ * that group (the element that opens and closes the group's space, 0.15).
  */
 export const treeItemClassNames = {
   root: 'wave-tree-item',
@@ -954,6 +955,7 @@ export const treeItemClassNames = {
   aside: 'wave-tree-item__aside',
   actions: 'wave-tree-item__actions',
   group: 'wave-tree-item__group',
+  collapse: 'wave-tree-item__collapse',
 } as const;
 
 /**

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { reportMissingContext } from '../../lib/dev';
-import type { SelectionMode } from '../../lib/types';
+import type { MotionSlot, SelectionMode } from '../../lib/types';
 import type { TreeNode } from './Tree.selection';
 
 /** What a top-level item hands to the root for the tree order of a toggle. */
@@ -47,6 +47,8 @@ export interface TreeContextValue {
    * tree order. Returns the unregistration.
    */
   registerTopLevel: (entry: React.RefObject<TreeSelectionEntry | null>) => () => void;
+  /** The Tree's `motion`: the collapse of every child group (`undefined` the default). */
+  motion: MotionSlot | null | undefined;
 }
 
 export const TreeContext = React.createContext<TreeContextValue | null>(null);
@@ -104,6 +106,7 @@ const INERT_CONTEXT: TreeContextValue = {
   checked: new Set(),
   toggleChecked: () => {},
   registerTopLevel: () => () => {},
+  motion: undefined,
 };
 
 /** C-CONTEXT: throws in development, logs once and returns an inert value in production. */
