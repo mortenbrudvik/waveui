@@ -2,6 +2,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { List } from '../List';
@@ -126,6 +127,22 @@ async function focus(el: HTMLElement): Promise<void> {
   await act(async () => {});
 }
 
+/**
+ * Presses `key` on the focused element, then lets the observers re-read the items (inside `act`).
+ * Returns whether the key was left alone (its default not prevented).
+ */
+async function press(key: string): Promise<boolean> {
+  let unhandled = true;
+  act(() => {
+    unhandled = fireEvent.keyDown(document.activeElement ?? document.body, { key });
+  });
+  await act(async () => {});
+  return unhandled;
+}
+
+/** The largest `scrollTop` of the list: the last item at the bottom of the viewport. */
+const MAX_SCROLL = COUNT * ITEM - VIEWPORT;
+
 /** The bare `[WaveUI]` messages `warn` was called with. */
 const messages = (warn: { mock: { calls: unknown[][] } }) => warn.mock.calls.map((call) => call[0]);
 
@@ -152,6 +169,42 @@ const laterActionItem = (index: number) => (
 /** An item per index, each with an "Open" action. */
 const actionItem = (index: number) => (
   <List.Item value={`file-${index}`} action={<button type="button">{`Open ${index}`}</button>}>
+    {`File ${index}`}
+  </List.Item>
+);
+
+/** An item per index without a value: a focus restore can only find it by its index. */
+const unvaluedItem = (index: number) => <List.Item>{`File ${index}`}</List.Item>;
+
+/** An item per index, the last one named "Zebra" (the only name that starts with z). */
+const zebraItem = (index: number) => (
+  <List.Item value={`file-${index}`}>{index === COUNT - 1 ? 'Zebra' : `File ${index}`}</List.Item>
+);
+
+/** An item per index, each with a "Rename" text field as its action. */
+const inputItem = (index: number) => (
+  <List.Item value={`file-${index}`} action={<input aria-label={`Rename ${index}`} />}>
+    {`File ${index}`}
+  </List.Item>
+);
+
+/** A button rendered into `document.body` through a portal: a popup an item opened. */
+function PortalButton({ children }: { children: string }) {
+  return createPortal(<button type="button">{children}</button>, document.body);
+}
+
+/** An item per index; item 3 has an "Open 3" button and a "Menu 3" button in a portal. */
+const popupItem = (index: number) => (
+  <List.Item
+    action={
+      index === 3 ? (
+        <>
+          <button type="button">Open 3</button>
+          <PortalButton>Menu 3</PortalButton>
+        </>
+      ) : undefined
+    }
+  >
     {`File ${index}`}
   </List.Item>
 );
@@ -507,6 +560,336 @@ describe('List virtualWindow', () => {
       expect(listRoot().children).toHaveLength(0);
       rerender(<WindowedList count={Number.NaN} />);
       expect(listRoot().children).toHaveLength(0);
+    });
+  });
+
+  describe('keys move by index over the whole list', () => {
+    it.each<[string, Partial<ListProps>, string]>([
+      ['a listbox', { selectable: true }, 'aria-posinset'],
+      ['a list navigated by its items', { navigationMode: 'items' }, 'aria-posinset'],
+      ['a grid', { navigationMode: 'composite' }, 'aria-rowindex'],
+    ])(
+      'End focuses the last item of %s, scrolled into view, and Home the first',
+      async (_, props, position) => {
+        render(<WindowedList {...props} />);
+        await focus(item(0));
+
+        expect(await press('End')).toBe(false);
+        const last = item(COUNT - 1);
+        expect(document.activeElement).toBe(last);
+        expect(last).toHaveAttribute(position, String(COUNT));
+        expect(listRoot().scrollTop).toBe(MAX_SCROLL);
+        // The window followed: item 0 is no longer kept.
+        expect(mountedIndexes()).toEqual(range(9983, COUNT));
+        expect(items().length).toBeLessThanOrEqual(40);
+        // The focused item is the one Tab stop.
+        expect(last).toHaveAttribute('tabindex', '0');
+        expect(listRoot().querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+
+        expect(await press('Home')).toBe(false);
+        expect(document.activeElement).toBe(item(0));
+        expect(listRoot().scrollTop).toBe(0);
+        expect(mountedIndexes()).toEqual(range(0, 17));
+        expect(item(0)).toHaveAttribute('tabindex', '0');
+      },
+    );
+
+    it('PageDown and PageUp move ten items, stopping at the ends', async () => {
+      render(<WindowedList selectable />);
+      await focus(item(0));
+      // Item 10 is rendered: focused as it is (a browser scrolls a focused item into view).
+      expect(await press('PageDown')).toBe(false);
+      expect(document.activeElement).toBe(item(10));
+      expect(listRoot().scrollTop).toBe(0);
+      // Item 20 is not: scrolled to the bottom of the viewport, then focused.
+      await press('PageDown');
+      expect(document.activeElement).toBe(item(20));
+      expect(item(20)).toHaveAttribute('aria-posinset', '21');
+      expect(listRoot().scrollTop).toBe(21 * ITEM - VIEWPORT);
+      await press('PageUp');
+      expect(document.activeElement).toBe(item(10));
+
+      await press('End');
+      expect(await press('PageDown')).toBe(false);
+      expect(document.activeElement).toBe(item(COUNT - 1));
+      await press('PageUp');
+      expect(document.activeElement).toBe(item(COUNT - 11));
+      await press('Home');
+      expect(await press('PageUp')).toBe(false);
+      expect(document.activeElement).toBe(item(0));
+    });
+
+    it('ArrowDown on the last rendered item focuses the next index after scrolling it into view', async () => {
+      render(<WindowedList selectable />);
+      expect(mountedIndexes()).toEqual(range(0, 17));
+      await focus(item(16));
+      expect(await press('ArrowDown')).toBe(false);
+      expect(document.activeElement).toBe(item(17));
+      expect(item(17)).toHaveAttribute('aria-posinset', '18');
+      expect(listRoot().scrollTop).toBe(18 * ITEM - VIEWPORT);
+      expect(mountedIndexes()).toEqual(range(1, 24));
+      await press('ArrowUp');
+      expect(document.activeElement).toBe(item(16));
+    });
+
+    it('moves from an item kept outside the window to its index neighbour, not its DOM neighbour', async () => {
+      render(<WindowedList selectable />);
+      await focus(item(2));
+      await scrollTo(5000 * ITEM);
+      expect(order()).toEqual(['spacer', 2, 'spacer', ...range(4994, 5017), 'spacer']);
+      await press('ArrowDown');
+      expect(document.activeElement).toBe(item(3));
+      expect(listRoot().scrollTop).toBe(3 * ITEM);
+
+      await scrollTo(5000 * ITEM);
+      await press('ArrowUp');
+      expect(document.activeElement).toBe(item(2));
+      expect(listRoot().scrollTop).toBe(2 * ITEM);
+    });
+
+    it('wraps the arrow keys around the ends of the whole list', async () => {
+      render(<WindowedList navigationMode="items" />);
+      await focus(item(0));
+      await press('ArrowUp');
+      expect(document.activeElement).toBe(item(COUNT - 1));
+      expect(listRoot().scrollTop).toBe(MAX_SCROLL);
+      await press('ArrowDown');
+      expect(document.activeElement).toBe(item(0));
+      expect(listRoot().scrollTop).toBe(0);
+    });
+
+    it('a grid moves its rows by index from a row or its action; the actions keep their mirrored keys (RTL)', async () => {
+      renderWithProviders(<WindowedList navigationMode="composite" renderItem={actionItem} />, {
+        dir: 'rtl',
+      });
+      await focus(item(0));
+      await press('End');
+      const last = item(COUNT - 1);
+      expect(document.activeElement).toBe(last);
+      expect(last).toHaveAttribute('aria-rowindex', String(COUNT));
+      // Right to left: ArrowLeft moves into the row's action.
+      await press('ArrowLeft');
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open 9999' }));
+      // From the action, ArrowUp goes to the row above by index.
+      await press('ArrowUp');
+      expect(document.activeElement).toBe(item(COUNT - 2));
+      await press('Home');
+      expect(document.activeElement).toBe(item(0));
+      expect(listRoot().scrollTop).toBe(0);
+    });
+
+    it('leaves the keys alone in a list that does not navigate its items (navigationMode "none")', async () => {
+      render(<WindowedList renderItem={actionItem} />);
+      const button = screen.getByRole('button', { name: 'Open 3' });
+      await focus(button);
+      for (const key of ['End', 'Home', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']) {
+        expect(await press(key)).toBe(true);
+        expect(document.activeElement).toBe(button);
+      }
+      expect(listRoot().scrollTop).toBe(0);
+      expect(mountedIndexes()).toEqual(range(0, 17));
+    });
+
+    it('leaves the keys to a text field in an item', async () => {
+      render(<WindowedList navigationMode="composite" renderItem={inputItem} />);
+      const input = screen.getByRole('textbox', { name: 'Rename 3' });
+      await focus(input);
+      for (const key of ['ArrowDown', 'End', 'PageDown']) {
+        expect(await press(key)).toBe(true);
+        expect(document.activeElement).toBe(input);
+      }
+      expect(listRoot().scrollTop).toBe(0);
+    });
+
+    it('typeahead matches the labels of the rendered items only', async () => {
+      render(<WindowedList selectable renderItem={zebraItem} />);
+      await focus(item(0));
+      // "Zebra" (the last item) is not rendered: nothing matches.
+      await press('z');
+      expect(document.activeElement).toBe(item(0));
+      expect(listRoot().scrollTop).toBe(0);
+      expect(mountedIndexes()).toEqual(range(0, 17));
+      // Rendered, it matches.
+      await scrollTo(MAX_SCROLL);
+      expect(mountedIndexes()).toEqual([0, ...range(9983, COUNT)]);
+      await press('z');
+      expect(document.activeElement).toBe(option('Zebra'));
+    });
+
+    it('a key that targets the focused item drops an awaited item and shows the focused one', async () => {
+      render(<WindowedList selectable />);
+      await focus(item(10));
+      // Both keys before the list renders again (one task): the second moves from the awaited
+      // item 20 back to item 10, which has focus.
+      act(() => {
+        fireEvent.keyDown(item(10), { key: 'PageDown' });
+        fireEvent.keyDown(item(10), { key: 'PageUp' });
+      });
+      await act(async () => {});
+      expect(document.activeElement).toBe(item(10));
+      expect(listRoot().scrollTop).toBe(10 * ITEM);
+    });
+
+    it('a key pressed while an item is awaited moves from that item (the latest target wins)', async () => {
+      render(<WindowedList selectable />);
+      await focus(item(0));
+      act(() => {
+        fireEvent.keyDown(item(0), { key: 'End' });
+        fireEvent.keyDown(item(0), { key: 'ArrowUp' });
+      });
+      await act(async () => {});
+      expect(document.activeElement).toBe(item(COUNT - 2));
+      expect(mountedIndexes()).toEqual(range(9983, COUNT));
+    });
+
+    it('keeps the awaited item rendered when the window does not scroll to it, and focuses it', async () => {
+      const scrollToIndex = vi.fn();
+      /** A window whose `scrollToIndex` moves nothing (a smooth scroll, or an adapter's). */
+      function StillWindowList() {
+        const virtualWindow = useVirtualWindow({ itemSize: ITEM });
+        const still = React.useMemo<VirtualWindow>(
+          () => ({ ...virtualWindow, scrollToIndex }),
+          [virtualWindow],
+        );
+        return (
+          <List aria-label="Files" selectable virtualWindow={still} count={COUNT}>
+            {fileItem}
+          </List>
+        );
+      }
+      render(<StillWindowList />);
+      await focus(item(0));
+      await press('End');
+      expect(scrollToIndex).toHaveBeenCalledTimes(1);
+      expect(scrollToIndex).toHaveBeenCalledWith(COUNT - 1, { align: 'auto' });
+      expect(document.activeElement).toBe(item(COUNT - 1));
+      expect(order()).toEqual([...range(0, 17), 'spacer', COUNT - 1]);
+    });
+
+    it('drops an awaited item that count no longer holds, so it is never focused later', async () => {
+      const { rerender } = render(<WindowedList selectable />);
+      await focus(item(0));
+      act(() => {
+        fireEvent.keyDown(item(0), { key: 'End' });
+        rerender(<WindowedList selectable count={20} />);
+      });
+      await act(async () => {});
+      expect(document.activeElement).toBe(item(0));
+      rerender(<WindowedList selectable />);
+      await act(async () => {});
+      expect(mountedIndexes()).toContain(COUNT - 1);
+      expect(document.activeElement).toBe(item(0));
+    });
+
+    it('focuses the awaited item once in StrictMode', async () => {
+      render(
+        <React.StrictMode>
+          <WindowedList selectable />
+        </React.StrictMode>,
+      );
+      await focus(item(0));
+      await press('End');
+      expect(document.activeElement).toBe(item(COUNT - 1));
+      await press('Home');
+      expect(document.activeElement).toBe(item(0));
+      expect(mountedIndexes()).toEqual(range(0, 17));
+    });
+  });
+
+  describe('the focused item and the Tab stop', () => {
+    it('makes the focused item of a selectable list its Tab stop while focus is in the list', async () => {
+      render(
+        <>
+          <WindowedList selectable defaultSelectedItems={['file-1']} />
+          <button type="button">After</button>
+        </>,
+      );
+      await scrollTo(5000 * ITEM);
+      await focus(item(5000));
+      await scrollTo(0);
+      expect(order()).toEqual([...range(0, 17), 'spacer', 5000, 'spacer']);
+      expect(item(5000)).toHaveAttribute('tabindex', '0');
+      expect(item(1)).toHaveAttribute('tabindex', '-1');
+      expect(listRoot().querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+
+      // Focus leaves: the item is no longer kept, and the selected item is the Tab stop again.
+      await focus(screen.getByRole('button', { name: 'After' }));
+      expect(mountedIndexes()).toEqual(range(0, 17));
+      expect(item(1)).toHaveAttribute('tabindex', '0');
+    });
+
+    it('stops keeping an item scrolled away once focus leaves the list', async () => {
+      render(
+        <>
+          <WindowedList selectable />
+          <button type="button">After</button>
+        </>,
+      );
+      await focus(item(2));
+      await scrollTo(5000 * ITEM);
+      expect(order()).toEqual(['spacer', 2, 'spacer', ...range(4994, 5017), 'spacer']);
+      await focus(screen.getByRole('button', { name: 'After' }));
+      expect(order()).toEqual(['spacer', ...range(4994, 5017), 'spacer']);
+      // Nothing selected and nothing focused: the first rendered item is the Tab stop.
+      expect(item(4994)).toHaveAttribute('tabindex', '0');
+      expect(listRoot().querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    });
+
+    it('keeps the item while focus is in a popup it opened (a portal), until focus leaves both', async () => {
+      render(
+        <>
+          <WindowedList renderItem={popupItem} />
+          <button type="button">After</button>
+        </>,
+      );
+      await focus(screen.getByRole('button', { name: 'Open 3' }));
+      await focus(screen.getByRole('button', { name: 'Menu 3' }));
+      await scrollTo(5000 * ITEM);
+      expect(mountedIndexes()).toEqual([3, ...range(4994, 5017)]);
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Menu 3' }));
+
+      await focus(screen.getByRole('button', { name: 'After' }));
+      expect(mountedIndexes()).toEqual(range(4994, 5017));
+      expect(screen.queryByRole('button', { name: 'Menu 3' })).toBeNull();
+    });
+
+    it('moves focus and the Tab stop to the last item when count drops below the focused one', async () => {
+      const { rerender } = render(<WindowedList selectable />);
+      await scrollTo(5000 * ITEM);
+      await focus(item(5003));
+      rerender(<WindowedList selectable count={20} />);
+      await act(async () => {});
+      expect(order()).toEqual(['spacer', ...range(3, 20)]);
+      expect(document.activeElement).toBe(item(19));
+      expect(item(19)).toHaveAttribute('aria-posinset', '20');
+      expect(item(19)).toHaveAttribute('tabindex', '0');
+      expect(listRoot().querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+
+      // No item left: nothing to focus, and nothing throws.
+      rerender(<WindowedList selectable count={0} />);
+      await act(async () => {});
+      expect(listRoot().children).toHaveLength(0);
+      expect(document.activeElement).toBe(document.body);
+      // The items come back without a stale kept item.
+      rerender(<WindowedList selectable />);
+      await act(async () => {});
+      expect(order()).toEqual(['spacer', ...range(4994, 5017), 'spacer']);
+    });
+
+    it('restores focus by the item’s index after a switch to grid semantics', async () => {
+      const { rerender } = render(
+        <WindowedList navigationMode="items" renderItem={unvaluedItem} />,
+      );
+      await scrollTo(5000 * ITEM);
+      await focus(item(5000));
+      // The switch remounts the items; the same commit moves the window (count 5005 puts its first
+      // item at 4988), so the item at the same DOM position is another one.
+      rerender(<WindowedList navigationMode="composite" count={5005} renderItem={unvaluedItem} />);
+      await act(async () => {});
+      const focused = document.activeElement as HTMLElement;
+      expect(focused).toHaveAttribute('role', 'row');
+      expect(focused).toHaveAttribute('data-index', '5000');
+      expect(focused).toHaveAttribute('aria-rowindex', '5001');
     });
   });
 
