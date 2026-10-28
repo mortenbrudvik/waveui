@@ -69,8 +69,8 @@ export interface TableSelectionState {
 
 /**
  * What a resize handle needs from the table state, as returned by
- * `columnSizing.getResizeHandleProps(columnId)`: the column's width and minimum, and the callback
- * that sets a new width. `Table.ResizeHandle` takes these props (and a few more).
+ * `columnSizing.getResizeHandleProps(columnId)`: the column's width and minimum, the callback
+ * that sets a new width and the one that resets it. `Table.ResizeHandle` takes these props (and a few more).
  */
 export interface TableResizeHandleBindings {
   /** The column's current width in pixels. */
@@ -79,6 +79,8 @@ export interface TableResizeHandleBindings {
   minWidth: number;
   /** Sets the column's width in pixels (held at or above `minWidth`). */
   onResize(width: number, details: { event: Event }): void;
+  /** Sets the column back to its initial width (a double click on the handle). */
+  onReset?(details: { event: Event }): void;
 }
 
 /**

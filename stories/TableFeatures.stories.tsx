@@ -221,9 +221,9 @@ export const FewRows: Story = {
 /**
  * Every column header holds a `Table.ResizeHandle` in its `aside` slot, fed by
  * `columnSizing.getResizeHandleProps(columnId)`. Drag a column's end edge with a mouse, a finger or
- * a pen, or click the handle and press the arrow keys (20 pixels, 5 with Shift), Home (the
- * column's minimum width) and End. The `<colgroup>` follows the widths, which are held at the
- * column's minimum.
+ * a pen, or Tab to a handle and press the arrow keys (20 pixels, 5 with Shift) or Home (the
+ * column's minimum width). Double-click a handle to reset its column to its initial width. The
+ * `<colgroup>` follows the widths, which are held at the column's minimum.
  */
 export const ResizeHandle: Story = {
   args: { resizable: true, rowCount: 20 },

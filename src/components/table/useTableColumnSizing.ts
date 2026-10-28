@@ -147,6 +147,12 @@ export function useTableColumnSizing<T>(
               width: widthOf(id),
               minWidth: columnSizingOptions?.[id]?.minWidth ?? DEFAULT_MIN_COLUMN_WIDTH,
               onResize: (width, { event }) => setColumnWidth(id, width, event),
+              onReset: ({ event }) =>
+                setColumnWidth(
+                  id,
+                  resolveColumnWidths([id], columnSizingOptions, undefined)[id]!,
+                  event,
+                ),
             }),
           };
           return { ...state, columnSizing };

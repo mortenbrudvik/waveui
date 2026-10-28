@@ -29,8 +29,8 @@ export interface TableResizeHandleProps extends Omit<
    */
   maxWidth?: number;
   /**
-   * Called with the width the user asks for, in pixels, held between `minWidth` and `maxWidth`:
-   * while a pointer drags (at most once per animation frame) and for every handled key. The handle
+   * Called with the width the user asks for, in whole pixels, held between `minWidth` and
+   * `maxWidth`: while a pointer drags (at most once per animation frame) and for every handled key. The handle
    * keeps no width of its own, so a parent that ignores the call leaves the column where it is.
    */
   onResize: (width: number, details: { event: Event }) => void;
@@ -76,7 +76,8 @@ interface DragState {
  * positioned, since the handle is drawn along the cell's end edge. A pointer drag (mouse, touch or
  * pen) resizes through `onResize`, with the movement mirrored in right-to-left tables; the arrow
  * keys move the edge by 20 pixels (5 with Shift), Home sets the minimum width and End the maximum
- * one. A double click calls `onReset`. The handle carries `data-grid-auxiliary`, so a grid's cell
+ * one. A double click calls `onReset`. The handle is a Tab stop (`tabIndex` 0), so the keys work in
+ * a static table; a grid that manages its own tab stops overrides `tabIndex`. The handle carries `data-grid-auxiliary`, so a grid's cell
  * navigation does not take it for the cell's own widget.
  *
  * It keeps no width: spread the result of `useTableColumnSizing`'s `getResizeHandleProps(columnId)`
@@ -112,7 +113,7 @@ const TableResizeHandle = ({
   const applyDrag = useEventCallback(() => {
     const drag = dragRef.current;
     if (!drag?.latestEvent) return;
-    const next = clamp(drag.startWidth + (drag.latestX - drag.startX) * drag.sign);
+    const next = clamp(Math.round(drag.startWidth + (drag.latestX - drag.startX) * drag.sign));
     if (next === drag.lastWidth) return;
     drag.lastWidth = next;
     onResize(next, { event: drag.latestEvent });
@@ -201,7 +202,7 @@ const TableResizeHandle = ({
       });
       if (intent) {
         const step = event.shiftKey ? SHIFT_KEY_STEP : KEY_STEP;
-        resizeTo(clamp(width + (intent === 'next' ? step : -step)));
+        resizeTo(clamp(Math.round(width + (intent === 'next' ? step : -step))));
       } else if (event.key === 'Home') {
         resizeTo(clamp(minWidth));
       } else if (event.key === 'End' && maxWidth !== undefined) {
@@ -223,7 +224,7 @@ const TableResizeHandle = ({
   return (
     <div
       ref={ref}
-      tabIndex={-1}
+      tabIndex={0}
       aria-label={label}
       data-dragging={dragging ? '' : undefined}
       {...rest}
@@ -232,7 +233,7 @@ const TableResizeHandle = ({
       aria-valuenow={width}
       aria-valuemin={minWidth}
       aria-valuemax={maxWidth}
-      aria-valuetext={valueText ? valueText(width) : `${width} pixels`}
+      aria-valuetext={valueText ? valueText(width) : `${Math.round(width)} pixels`}
       data-grid-auxiliary=""
       className={cn(
         tableResizeHandleClassNames.root,

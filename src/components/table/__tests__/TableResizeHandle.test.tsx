@@ -2,7 +2,9 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { composeStories } from '@storybook/react';
 import { renderToString } from 'react-dom/server';
+import * as featureStories from '../../../../stories/TableFeatures.stories';
 import { tableResizeHandleClassNames } from '../../../lib/classNames';
 import {
   expectNoA11yViolations,
@@ -57,10 +59,10 @@ describe('Table.ResizeHandle', () => {
   });
 
   describe('attributes', () => {
-    it('is a vertical separator that no Tab stop reaches, marked as an auxiliary grid widget', () => {
+    it('is a vertical separator in the Tab order, marked as an auxiliary grid widget', () => {
       renderHandle();
       expect(handle()).toHaveAttribute('aria-orientation', 'vertical');
-      expect(handle()).toHaveAttribute('tabindex', '-1');
+      expect(handle()).toHaveAttribute('tabindex', '0');
       expect(handle()).toHaveAttribute('data-grid-auxiliary', '');
     });
 
@@ -72,6 +74,16 @@ describe('Table.ResizeHandle', () => {
       rerender(ui({ width: 250 }));
       expect(handle()).toHaveAttribute('aria-valuenow', '250');
       expect(handle()).toHaveAttribute('aria-valuetext', '250 pixels');
+    });
+
+    it('lets a consumer tabIndex win, as a grid takes the handle out of the Tab order', () => {
+      renderHandle({ tabIndex: -1 });
+      expect(handle()).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('never shows a fraction in the default value text', () => {
+      renderHandle({ width: 223.33333333333331 });
+      expect(handle()).toHaveAttribute('aria-valuetext', '223 pixels');
     });
 
     it('has aria-valuemax only when a maximum is set', () => {
@@ -262,6 +274,19 @@ describe('Table.ResizeHandle', () => {
       expect(onResize).toHaveBeenLastCalledWith(260, { event: expect.any(Event) });
     });
 
+    it('reports whole pixels for a drag at a fractional pixel ratio', () => {
+      const { onResize } = renderHandle();
+      down('mouse', { clientX: 100.1 });
+      move('mouse', 140.43);
+      flushFrames();
+      expect(onResize).toHaveBeenLastCalledWith(240, { event: expect.any(Event) });
+      move('mouse', 155.9);
+      flushFrames();
+      const widths = (onResize.mock.calls as Array<[number]>).map(([width]) => width);
+      expect(widths).toEqual([240, 256]);
+      expect(widths.every(Number.isInteger)).toBe(true);
+    });
+
     it('measures the delta from the width at the start of the drag, also after the width changed', () => {
       const { onResize, rerender, ui } = renderHandle();
       down('mouse');
@@ -424,6 +449,39 @@ describe('Table.ResizeHandle', () => {
       expect(onResize).toHaveBeenCalledWith(expected, { event: expect.any(Event) });
     });
 
+    it('reports whole pixels for a key step from a fractional width', async () => {
+      const user = userEvent.setup();
+      const { onResize } = renderHandle({ width: 200.4 });
+      handle().focus();
+      await user.keyboard('{ArrowRight}');
+      expect(onResize).toHaveBeenLastCalledWith(220, { event: expect.any(Event) });
+      await user.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+      expect(onResize).toHaveBeenLastCalledWith(195, { event: expect.any(Event) });
+    });
+
+    it('is reached with Tab in a static table, and the arrow keys then resize', async () => {
+      const user = userEvent.setup();
+      const onResize = vi.fn();
+      render(
+        <Table aria-label="Team">
+          <Table.Header>
+            <Table.Row>
+              <Table.HeaderCell
+                className="relative"
+                aside={<Table.ResizeHandle width={200} minWidth={80} onResize={onResize} />}
+              >
+                Name
+              </Table.HeaderCell>
+            </Table.Row>
+          </Table.Header>
+        </Table>,
+      );
+      await user.tab();
+      expect(handle()).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(onResize).toHaveBeenCalledWith(220, { event: expect.any(Event) });
+    });
+
     it('Home sets the minimum width, End the maximum when there is one', async () => {
       const user = userEvent.setup();
       const { onResize, rerender, ui } = renderHandle();
@@ -573,6 +631,22 @@ describe('Table.ResizeHandle', () => {
       expectTypeOf<TableResizeHandleProps['ref']>().toEqualTypeOf<
         React.Ref<HTMLDivElement> | undefined
       >();
+    });
+  });
+
+  describe('the ResizeHandle story', () => {
+    const { ResizeHandle } = composeStories(featureStories);
+
+    it('resizes a column with the keys and resets it with a double click', async () => {
+      const user = userEvent.setup();
+      render(<ResizeHandle />);
+      const separator = screen.getByRole('separator', { name: 'Resize the Name column' });
+      expect(separator).toHaveAttribute('aria-valuenow', '240');
+      separator.focus();
+      await user.keyboard('{ArrowRight}{ArrowRight}');
+      expect(separator).toHaveAttribute('aria-valuenow', '280');
+      fireEvent.doubleClick(separator);
+      expect(separator).toHaveAttribute('aria-valuenow', '240');
     });
   });
 });

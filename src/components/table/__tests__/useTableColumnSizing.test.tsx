@@ -240,7 +240,12 @@ describe('useTableColumnSizing', () => {
         }),
       );
       const name = result.current.getResizeHandleProps('name');
-      expect(name).toEqual({ width: 220, minWidth: 100, onResize: expect.any(Function) });
+      expect(name).toEqual({
+        width: 220,
+        minWidth: 100,
+        onResize: expect.any(Function),
+        onReset: expect.any(Function),
+      });
       expect(result.current.getResizeHandleProps('age')).toEqual(
         expect.objectContaining({ width: 150, minWidth: 80 }),
       );
@@ -262,7 +267,46 @@ describe('useTableColumnSizing', () => {
         width: 150,
         minWidth: 80,
         onResize: expect.any(Function),
+        onReset: expect.any(Function),
       });
+    });
+
+    it('onReset sets the column back to its initial width, once, with the event', () => {
+      const onColumnWidthsChange = vi.fn();
+      const { result } = renderHook(() =>
+        useSizing({
+          columnSizingOptions: {
+            name: { defaultWidth: 220, minWidth: 100 },
+            age: { idealWidth: 90 },
+          },
+          onColumnWidthsChange,
+        }),
+      );
+      act(() => result.current.getResizeHandleProps('name').onResize(400, { event: dragEvent() }));
+      act(() => result.current.getResizeHandleProps('age').onResize(300, { event: dragEvent() }));
+      onColumnWidthsChange.mockClear();
+
+      const event = dragEvent();
+      act(() => result.current.getResizeHandleProps('name').onReset?.({ event }));
+      expect(result.current.getColumnWidth('name')).toBe(220);
+      expect(result.current.getColumnWidth('age')).toBe(300);
+      expect(onColumnWidthsChange).toHaveBeenCalledTimes(1);
+      expect(onColumnWidthsChange).toHaveBeenCalledWith(
+        { name: 220, age: 300, note: 150 },
+        { columnId: 'name', width: 220, event },
+      );
+
+      act(() => result.current.getResizeHandleProps('age').onReset?.({ event: dragEvent() }));
+      expect(result.current.getColumnWidth('age')).toBe(90);
+    });
+
+    it('onReset on a column already at its initial width is not a change once sized', () => {
+      const onColumnWidthsChange = vi.fn();
+      const { result } = renderHook(() =>
+        useSizing({ defaultColumnWidths: { name: 300 }, onColumnWidthsChange }),
+      );
+      act(() => result.current.getResizeHandleProps('age').onReset?.({ event: dragEvent() }));
+      expect(onColumnWidthsChange).not.toHaveBeenCalled();
     });
   });
 
