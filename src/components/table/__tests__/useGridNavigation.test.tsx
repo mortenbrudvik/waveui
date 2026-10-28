@@ -1,8 +1,13 @@
 import * as React from 'react';
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { isTextEntryElement, returnFocusToGridCell, useGridNavigation } from '../useGridNavigation';
+import type {
+  GridNavigationModel,
+  UseGridNavigationOptions,
+  UseGridNavigationResult,
+} from '../../../index';
 import { useRovingTabIndex } from '../../../hooks/useRovingTabIndex';
 import { getTabbableElements } from '../../../lib/focus';
 import { renderWithProviders } from '../../../test-utils';
@@ -216,6 +221,153 @@ function AuxiliaryHarness({ onSort, onSeparatorKeyDown }: AuxiliaryHarnessProps)
     </>
   );
 }
+
+/** What a test does to a {@link WindowedHarness}'s window. */
+interface WindowedHandle {
+  /** Moves the window to start at row `start`, as the user's scrolling does. */
+  scrollTo: (start: number) => void;
+  /** Applies the last `scrollToRow` request (with `deferScroll`). */
+  applyScroll: () => void;
+}
+
+interface WindowedHarnessProps {
+  /** `model.rowCount`. @default 1000 */
+  rowCount?: number;
+  /** A header row above the data rows (`model.headerRowCount` 1, else 0). @default true */
+  header?: boolean;
+  /**
+   * The rows kept mounted outside the window, as DataGrid keeps them (R12): `'both'` the hook's
+   * active and pending rows, `'active'` only the active one, `'none'` neither.
+   * @default 'both'
+   */
+  keep?: 'both' | 'active' | 'none';
+  /** `scrollToRow` only records the request; `handle.applyScroll()` moves the window. */
+  deferScroll?: boolean;
+  onScrollToRow?: (index: number) => void;
+  handle?: React.Ref<WindowedHandle>;
+}
+
+/** Rows the window shows (from its start). */
+const WINDOW_SIZE = 20;
+
+/** The window start that shows row `index` with the least movement (as `align: 'auto'` does). */
+function startShowing(start: number, index: number, rowCount: number): number {
+  let next = start;
+  if (index < start) next = index;
+  else if (index >= start + WINDOW_SIZE) next = index - WINDOW_SIZE + 1;
+  return Math.max(0, Math.min(next, rowCount - WINDOW_SIZE));
+}
+
+/**
+ * A windowed grid as DataGrid renders one: a header row (Name, Size, Open) and, of `rowCount` data
+ * rows, the rows `start..start + 19` and the kept rows outside them, each with `data-row-index`
+ * (text cells `r<index>c1` and `r<index>c2`, and `r<index>c3` holding the button "Open <index>"),
+ * with an `aria-hidden` spacer row in each gap. Its `scrollToRow` moves the window to show the row
+ * (a re-render). The table shows the hook's `activeRowIndex` and `pendingRowIndex` as
+ * `data-active-row` and `data-pending-row` (`none` for `null`); a button follows the grid.
+ */
+function WindowedHarness({
+  rowCount = 1000,
+  header = true,
+  keep = 'both',
+  deferScroll = false,
+  onScrollToRow,
+  handle,
+}: WindowedHarnessProps) {
+  const [start, setStart] = React.useState(0);
+  const [requested, setRequested] = React.useState<number | null>(null);
+  const { gridRef, gridProps, activeRowIndex, pendingRowIndex } = useGridNavigation({
+    pageSize: 10,
+    model: {
+      rowCount,
+      headerRowCount: header ? 1 : 0,
+      scrollToRow: (index) => {
+        onScrollToRow?.(index);
+        if (deferScroll) setRequested(index);
+        else setStart((current) => startShowing(current, index, rowCount));
+      },
+    },
+  });
+  React.useImperativeHandle(
+    handle,
+    () => ({
+      scrollTo: setStart,
+      applyScroll: () => {
+        if (requested !== null) setStart((current) => startShowing(current, requested, rowCount));
+      },
+    }),
+    [requested, rowCount],
+  );
+
+  const first = Math.max(0, Math.min(start, rowCount - WINDOW_SIZE));
+  const indexes = new Set<number>();
+  for (let index = first; index < Math.min(first + WINDOW_SIZE, rowCount); index += 1) {
+    indexes.add(index);
+  }
+  const kept =
+    keep === 'both' ? [activeRowIndex, pendingRowIndex] : keep === 'active' ? [activeRowIndex] : [];
+  for (const index of kept) if (index !== null && index < rowCount) indexes.add(index);
+
+  const body: React.ReactNode[] = [];
+  let next = 0;
+  for (const index of [...indexes].sort((a, b) => a - b)) {
+    if (index > next) {
+      body.push(
+        <tr key={`gap-${next}`} aria-hidden="true">
+          <td colSpan={3} />
+        </tr>,
+      );
+    }
+    body.push(
+      <tr key={index} data-row-index={index}>
+        <td data-testid={`r${index}c1`}>Name {index}</td>
+        <td data-testid={`r${index}c2`}>Size {index}</td>
+        <td data-testid={`r${index}c3`}>
+          <button type="button">Open {index}</button>
+        </td>
+      </tr>,
+    );
+    next = index + 1;
+  }
+  if (next < rowCount) {
+    body.push(
+      <tr key={`gap-${next}`} aria-hidden="true">
+        <td colSpan={3} />
+      </tr>,
+    );
+  }
+
+  return (
+    <>
+      <table
+        role="grid"
+        aria-label="Windowed"
+        ref={gridRef}
+        {...gridProps}
+        data-active-row={activeRowIndex ?? 'none'}
+        data-pending-row={pendingRowIndex ?? 'none'}
+      >
+        {header && (
+          <thead>
+            <tr>
+              {['Name', 'Size', 'Open'].map((name) => (
+                <th key={name} scope="col">
+                  {name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+        )}
+        <tbody>{body}</tbody>
+      </table>
+      <button type="button">After</button>
+    </>
+  );
+}
+
+/** The `data-row-index` of the row that holds the focused element. */
+const focusedRowIndex = () =>
+  document.activeElement?.closest('tr')?.getAttribute('data-row-index') ?? null;
 
 const cell = (id: string) => screen.getByTestId(id);
 const headerCell = (name: string) => screen.getByRole('columnheader', { name });
@@ -1001,6 +1153,428 @@ describe('useGridNavigation', () => {
       expect(getTabbableElements(screen.getByRole('grid'))).toEqual([
         screen.getByRole('button', { name: 'Late' }),
       ]);
+    });
+  });
+
+  describe('model (rows by their data index)', () => {
+    const grid = () => screen.getByRole('grid');
+    const handleRef = () => React.createRef<WindowedHandle>();
+    /** Every element of the grid that is in the Tab order. */
+    const tabStops = () => grid().querySelectorAll('[tabindex="0"]');
+
+    it('Ctrl+End asks the model once for the last row, then focuses its last cell in the commit that mounts it', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      render(<WindowedHarness onScrollToRow={onScrollToRow} />);
+      focus(cell('r5c1'));
+      await user.keyboard('{Control>}{End}{/Control}');
+      expect(onScrollToRow).toHaveBeenCalledTimes(1);
+      expect(onScrollToRow).toHaveBeenCalledWith(999);
+      expect(focusedRowIndex()).toBe('999');
+      expect(screen.getByRole('button', { name: 'Open 999' })).toHaveFocus();
+      expect(tabStops()).toHaveLength(1);
+      expect(grid()).toHaveAttribute('data-active-row', '999');
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+    });
+
+    it('calls scrollToRow once per request in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      render(
+        <React.StrictMode>
+          <WindowedHarness onScrollToRow={onScrollToRow} />
+        </React.StrictMode>,
+      );
+      focus(cell('r5c1'));
+      await user.keyboard('{Control>}{End}{/Control}');
+      expect(onScrollToRow.mock.calls).toEqual([[999]]);
+      expect(screen.getByRole('button', { name: 'Open 999' })).toHaveFocus();
+    });
+
+    it('PageDown and PageUp move pageSize rows of the data, scrolling only to a row that is not mounted', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      render(<WindowedHarness onScrollToRow={onScrollToRow} />);
+      focus(cell('r10c1'));
+      await user.keyboard('{PageDown}');
+      expect(onScrollToRow.mock.calls).toEqual([[20]]);
+      expect(cell('r20c1')).toHaveFocus();
+      // Row 10 is still mounted (the window shows rows 1 to 20): no scroll.
+      await user.keyboard('{PageUp}');
+      expect(onScrollToRow).toHaveBeenCalledTimes(1);
+      expect(cell('r10c1')).toHaveFocus();
+      // Above the first data row is the header row, as without a model.
+      focus(cell('r5c2'));
+      await user.keyboard('{PageUp}');
+      expect(headerCell('Size')).toHaveFocus();
+      expect(onScrollToRow).toHaveBeenCalledTimes(1);
+    });
+
+    it('PageDown near the end stops at the last row', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      render(<WindowedHarness onScrollToRow={onScrollToRow} handle={handle} />);
+      act(() => handle.current!.scrollTo(980));
+      // The observer stamps the cells of the rows the scroll mounted.
+      await flushObservers();
+      focus(cell('r995c2'));
+      await user.keyboard('{PageDown}');
+      expect(cell('r999c2')).toHaveFocus();
+      expect(onScrollToRow).not.toHaveBeenCalled();
+    });
+
+    it('ArrowDown at the last mounted row targets the next index and focuses it after the scroll', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      render(<WindowedHarness onScrollToRow={onScrollToRow} />);
+      focus(cell('r19c2'));
+      await user.keyboard('{ArrowDown}');
+      expect(onScrollToRow.mock.calls).toEqual([[20]]);
+      expect(cell('r20c2')).toHaveFocus();
+      // The same column, also when its cell's target is a widget.
+      await user.keyboard('{ArrowRight}{ArrowDown}');
+      expect(screen.getByRole('button', { name: 'Open 21' })).toHaveFocus();
+      expect(onScrollToRow.mock.calls).toEqual([[20], [21]]);
+    });
+
+    it('Ctrl+Home from the middle focuses the first cell of the grid and returns the window to the first row', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      render(<WindowedHarness onScrollToRow={onScrollToRow} handle={handle} />);
+      act(() => handle.current!.scrollTo(490));
+      await flushObservers();
+      focus(cell('r500c2'));
+      await user.keyboard('{Control>}{Home}{/Control}');
+      expect(headerCell('Name')).toHaveFocus();
+      expect(onScrollToRow.mock.calls).toEqual([[0]]);
+      expect(cell('r0c1')).toBeInTheDocument();
+      expect(grid()).toHaveAttribute('data-active-row', 'none');
+    });
+
+    it('Ctrl+Home without a header row focuses the first cell of data row 0 after the scroll', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      render(<WindowedHarness header={false} onScrollToRow={onScrollToRow} handle={handle} />);
+      act(() => handle.current!.scrollTo(490));
+      await flushObservers();
+      focus(cell('r500c2'));
+      await user.keyboard('{Control>}{Home}{/Control}');
+      expect(onScrollToRow.mock.calls).toEqual([[0]]);
+      expect(cell('r0c1')).toHaveFocus();
+    });
+
+    it('ArrowUp from data row 0 reaches the header, and ArrowDown from the header reaches data row 0 wherever the window is', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      render(<WindowedHarness onScrollToRow={onScrollToRow} handle={handle} />);
+      focus(cell('r0c2'));
+      await user.keyboard('{ArrowUp}');
+      expect(headerCell('Size')).toHaveFocus();
+      expect(grid()).toHaveAttribute('data-active-row', 'none');
+      act(() => handle.current!.scrollTo(500));
+      await flushObservers();
+      expect(screen.queryByTestId('r0c2')).not.toBeInTheDocument();
+
+      await user.keyboard('{ArrowDown}');
+      expect(onScrollToRow.mock.calls).toEqual([[0]]);
+      expect(cell('r0c2')).toHaveFocus();
+    });
+
+    it('ArrowDown at the last row and ArrowUp at row 0 without a header do nothing (and still prevent the default)', async () => {
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      const { unmount } = render(<WindowedHarness onScrollToRow={onScrollToRow} handle={handle} />);
+      act(() => handle.current!.scrollTo(980));
+      await flushObservers();
+      focus(cell('r999c1'));
+      expect(fireEvent.keyDown(cell('r999c1'), { key: 'ArrowDown' })).toBe(false);
+      expect(fireEvent.keyDown(cell('r999c1'), { key: 'PageDown' })).toBe(false);
+      expect(cell('r999c1')).toHaveFocus();
+      unmount();
+
+      render(<WindowedHarness header={false} onScrollToRow={onScrollToRow} />);
+      focus(cell('r0c1'));
+      expect(fireEvent.keyDown(cell('r0c1'), { key: 'ArrowUp' })).toBe(false);
+      expect(fireEvent.keyDown(cell('r0c1'), { key: 'PageUp' })).toBe(false);
+      expect(cell('r0c1')).toHaveFocus();
+      expect(onScrollToRow).not.toHaveBeenCalled();
+    });
+
+    it('moves within the row with ArrowLeft/ArrowRight and Home/End as without a model', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      render(<WindowedHarness onScrollToRow={onScrollToRow} />);
+      focus(cell('r7c1'));
+      await user.keyboard('{End}');
+      expect(screen.getByRole('button', { name: 'Open 7' })).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(cell('r7c1')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(cell('r7c2')).toHaveFocus();
+      expect(onScrollToRow).not.toHaveBeenCalled();
+    });
+
+    it('leaves the spacer rows out: their cells get no tabindex', async () => {
+      const handle = handleRef();
+      render(<WindowedHarness handle={handle} />);
+      const spacerCells = () => grid().querySelectorAll('tr[aria-hidden="true"] td');
+      expect(spacerCells()).toHaveLength(1);
+      act(() => handle.current!.scrollTo(500));
+      await flushObservers();
+      expect(spacerCells()).toHaveLength(2);
+      for (const spacer of Array.from(spacerCells()))
+        expect(spacer).not.toHaveAttribute('tabindex');
+      expect(tabStops()).toHaveLength(1);
+      expect(tabStops()[0]).toBe(headerCell('Name'));
+    });
+
+    it('activeRowIndex follows focus: the data row index, null on a header row', async () => {
+      const user = userEvent.setup();
+      render(<WindowedHarness />);
+      expect(grid()).toHaveAttribute('data-active-row', 'none');
+      focus(cell('r3c1'));
+      expect(grid()).toHaveAttribute('data-active-row', '3');
+      await user.keyboard('{ArrowRight}{ArrowDown}');
+      expect(cell('r4c2')).toHaveFocus();
+      expect(grid()).toHaveAttribute('data-active-row', '4');
+      await user.keyboard('{Control>}{Home}{/Control}');
+      expect(grid()).toHaveAttribute('data-active-row', 'none');
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+    });
+
+    it('pendingRowIndex holds the target until its row mounts; the focused row stays active meanwhile', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      render(
+        <WindowedHarness keep="active" deferScroll onScrollToRow={onScrollToRow} handle={handle} />,
+      );
+      focus(cell('r4c1'));
+      await user.keyboard('{Control>}{End}{/Control}');
+      expect(onScrollToRow.mock.calls).toEqual([[999]]);
+      expect(grid()).toHaveAttribute('data-pending-row', '999');
+      expect(grid()).toHaveAttribute('data-active-row', '4');
+      expect(cell('r4c1')).toHaveFocus();
+      expect(Array.from(tabStops())).toEqual([cell('r4c1')]);
+
+      act(() => handle.current!.applyScroll());
+      expect(screen.getByRole('button', { name: 'Open 999' })).toHaveFocus();
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+      expect(grid()).toHaveAttribute('data-active-row', '999');
+      expect(onScrollToRow).toHaveBeenCalledTimes(1);
+    });
+
+    it('two PageDown presses before the window moves go on from the first target: one scrollToRow per distinct target, the later one focused', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      render(
+        <WindowedHarness keep="active" deferScroll onScrollToRow={onScrollToRow} handle={handle} />,
+      );
+      focus(cell('r10c1'));
+      await user.keyboard('{PageDown}{PageDown}');
+      expect(onScrollToRow.mock.calls).toEqual([[20], [30]]);
+      expect(grid()).toHaveAttribute('data-pending-row', '30');
+
+      act(() => handle.current!.applyScroll());
+      expect(cell('r30c1')).toHaveFocus();
+      expect(cell('r20c1')).toBeInTheDocument();
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+    });
+
+    it('the same target requested twice calls scrollToRow once', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      render(
+        <WindowedHarness keep="active" deferScroll onScrollToRow={onScrollToRow} handle={handle} />,
+      );
+      focus(cell('r10c2'));
+      await user.keyboard('{Control>}{End}{End}{/Control}');
+      expect(onScrollToRow.mock.calls).toEqual([[999]]);
+      act(() => handle.current!.applyScroll());
+      expect(screen.getByRole('button', { name: 'Open 999' })).toHaveFocus();
+    });
+
+    it('a horizontal key while a row is pending moves in the focused row and drops the request', async () => {
+      const user = userEvent.setup();
+      const handle = handleRef();
+      render(<WindowedHarness keep="active" deferScroll handle={handle} />);
+      focus(cell('r10c1'));
+      await user.keyboard('{PageDown}');
+      expect(grid()).toHaveAttribute('data-pending-row', '20');
+      await user.keyboard('{ArrowRight}');
+      expect(cell('r10c2')).toHaveFocus();
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+      act(() => handle.current!.applyScroll());
+      await flushObservers();
+      expect(cell('r10c2')).toHaveFocus();
+    });
+
+    it('drops a pending row when the row count falls to it or below', async () => {
+      const user = userEvent.setup();
+      const handle = handleRef();
+      const props = { keep: 'active', deferScroll: true, handle } as const;
+      const { rerender } = render(<WindowedHarness {...props} />);
+      focus(cell('r5c1'));
+      await user.keyboard('{Control>}{End}{/Control}');
+      expect(grid()).toHaveAttribute('data-pending-row', '999');
+      rerender(<WindowedHarness {...props} rowCount={500} />);
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+      act(() => handle.current!.applyScroll());
+      await flushObservers();
+      expect(cell('r5c1')).toHaveFocus();
+    });
+
+    it('does not take focus back when it left the grid before the row mounted', async () => {
+      const user = userEvent.setup();
+      const handle = handleRef();
+      render(<WindowedHarness keep="active" deferScroll handle={handle} />);
+      focus(cell('r5c1'));
+      await user.keyboard('{Control>}{End}{/Control}');
+      const after = screen.getByRole('button', { name: 'After' });
+      focus(after);
+      act(() => handle.current!.applyScroll());
+      await flushObservers();
+      expect(after).toHaveFocus();
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+      // The tab stop stays where focus last was in the grid.
+      expect(Array.from(tabStops())).toEqual([cell('r5c1')]);
+    });
+
+    it('keeps the focused row mounted through activeRowIndex while the window scrolls away and back', async () => {
+      const handle = handleRef();
+      render(<WindowedHarness handle={handle} />);
+      focus(cell('r5c2'));
+      act(() => handle.current!.scrollTo(500));
+      await flushObservers();
+      expect(cell('r5c2')).toHaveFocus();
+      expect(cell('r500c2')).toBeInTheDocument();
+      expect(Array.from(tabStops())).toEqual([cell('r5c2')]);
+      act(() => handle.current!.scrollTo(0));
+      await flushObservers();
+      expect(cell('r5c2')).toHaveFocus();
+      expect(Array.from(tabStops())).toEqual([cell('r5c2')]);
+    });
+
+    it('keeps exactly one tab stop while the active row is not mounted, in the nearest mounted row, and gives it back when the row mounts', async () => {
+      const handle = handleRef();
+      render(<WindowedHarness keep="none" handle={handle} />);
+      focus(cell('r5c2'));
+      act(() => handle.current!.scrollTo(500));
+      await flushObservers();
+      expect(screen.queryByTestId('r5c2')).not.toBeInTheDocument();
+      // Not the first row of the grid: the active row's index is still in the data.
+      expect(Array.from(tabStops())).toEqual([cell('r500c2')]);
+      expect(grid()).toHaveAttribute('data-active-row', '5');
+
+      act(() => handle.current!.scrollTo(0));
+      await flushObservers();
+      expect(Array.from(tabStops())).toEqual([cell('r5c2')]);
+      expect(grid()).toHaveAttribute('data-active-row', '5');
+    });
+
+    it('follows the active row’s element when its index changes while it stays mounted', async () => {
+      /**
+       * Ten items keyed by id, shown at data rows `base..base + 9` under a spacer for the rows
+       * above: items inserted above with the scroll anchored, as a window keyed by id renders it.
+       */
+      function Anchored({ base }: { base: number }) {
+        const { gridRef, gridProps, activeRowIndex } = useGridNavigation({
+          model: { rowCount: base + 10, headerRowCount: 0, scrollToRow: () => {} },
+        });
+        return (
+          <table
+            role="grid"
+            aria-label="Anchored"
+            ref={gridRef}
+            {...gridProps}
+            data-active-row={activeRowIndex ?? 'none'}
+          >
+            <tbody>
+              <tr key="gap" aria-hidden="true">
+                <td />
+              </tr>
+              {Array.from({ length: 10 }, (_, id) => (
+                <tr key={id} data-row-index={base + id}>
+                  <td data-testid={`item-${id}`}>Item {id}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+      const { rerender } = render(<Anchored base={10} />);
+      focus(cell('item-5'));
+      expect(grid()).toHaveAttribute('data-active-row', '15');
+      rerender(<Anchored base={11} />);
+      await flushObservers();
+      expect(grid()).toHaveAttribute('data-active-row', '16');
+      expect(cell('item-5')).toHaveFocus();
+      expect(Array.from(tabStops())).toEqual([cell('item-5')]);
+    });
+
+    it('falls back to the first cell of the grid when the active row leaves the data', async () => {
+      const handle = handleRef();
+      const { rerender } = render(<WindowedHarness keep="none" handle={handle} />);
+      act(() => handle.current!.scrollTo(980));
+      await flushObservers();
+      focus(cell('r990c1'));
+      expect(grid()).toHaveAttribute('data-active-row', '990');
+      rerender(<WindowedHarness keep="none" handle={handle} rowCount={100} />);
+      await flushObservers();
+      expect(Array.from(tabStops())).toEqual([headerCell('Name')]);
+      expect(grid()).toHaveAttribute('data-active-row', 'none');
+    });
+
+    it('reports no row indexes without a model', async () => {
+      const user = userEvent.setup();
+      function Unmodelled() {
+        const { gridRef, gridProps, activeRowIndex, pendingRowIndex } = useGridNavigation();
+        return (
+          <table
+            role="grid"
+            aria-label="Unmodelled"
+            ref={gridRef}
+            {...gridProps}
+            data-active-row={activeRowIndex ?? 'none'}
+            data-pending-row={pendingRowIndex ?? 'none'}
+          >
+            <tbody>
+              {[0, 1].map((index) => (
+                <tr key={index} data-row-index={index}>
+                  <td data-testid={`plain-${index}`}>Row {index}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+      render(<Unmodelled />);
+      focus(cell('plain-0'));
+      await user.keyboard('{ArrowDown}');
+      expect(cell('plain-1')).toHaveFocus();
+      expect(grid()).toHaveAttribute('data-active-row', 'none');
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+    });
+
+    it('types: the model option and the row indexes of the result, from the package entry', () => {
+      expectTypeOf<UseGridNavigationOptions['model']>().toEqualTypeOf<
+        GridNavigationModel | undefined
+      >();
+      expectTypeOf<GridNavigationModel['rowCount']>().toEqualTypeOf<number>();
+      expectTypeOf<GridNavigationModel['headerRowCount']>().toEqualTypeOf<number>();
+      expectTypeOf<GridNavigationModel['scrollToRow']>().parameters.toEqualTypeOf<[number]>();
+      expectTypeOf<GridNavigationModel['scrollToRow']>().returns.toEqualTypeOf<void>();
+      expectTypeOf<UseGridNavigationResult['activeRowIndex']>().toEqualTypeOf<number | null>();
+      expectTypeOf<UseGridNavigationResult['pendingRowIndex']>().toEqualTypeOf<number | null>();
+      // @ts-expect-error a model needs its row count
+      const partial: GridNavigationModel = { headerRowCount: 1, scrollToRow: () => {} };
+      expect(partial.headerRowCount).toBe(1);
     });
   });
 

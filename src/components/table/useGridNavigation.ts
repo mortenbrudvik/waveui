@@ -2,6 +2,29 @@ import * as React from 'react';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable, isFocused } from '../../lib/focus';
 
+/**
+ * The data behind the rows of a windowed grid, whose rows are mounted only in part (see
+ * {@link UseGridNavigationOptions.model}). Each mounted data row carries its 0-based index in the
+ * data as `data-row-index`.
+ */
+export interface GridNavigationModel {
+  /** How many data rows there are, mounted or not. */
+  rowCount: number;
+  /**
+   * How many header rows are above the data rows: the first rows of the grid without a
+   * `data-row-index` (they stay mounted). Other rows without one, such as the spacer rows of a
+   * window, are not navigated.
+   */
+  headerRowCount: number;
+  /**
+   * Brings data row `index` into the mounted rows (scrolls the window to it). Called once for each
+   * row a key moves focus to that is not mounted; focus moves to the row's cell in the commit that
+   * mounts it. Ctrl+Home in a grid with header rows also calls it for row 0, so the first rows
+   * show under the header.
+   */
+  scrollToRow(index: number): void;
+}
+
 /** Options of {@link useGridNavigation}. */
 export interface UseGridNavigationOptions {
   /**
@@ -9,6 +32,14 @@ export interface UseGridNavigationOptions {
    * @default 10
    */
   pageSize?: number;
+  /**
+   * The data of a windowed grid (DataGrid with a virtual window). ArrowUp/ArrowDown,
+   * PageUp/PageDown and Ctrl+Home/Ctrl+End then move by the rows of the data: a target row that is
+   * not mounted is asked for with `scrollToRow` and focused when it mounts. The active row is kept
+   * by its index (see {@link UseGridNavigationResult.activeRowIndex}). Without it, the mounted
+   * rows are the whole grid.
+   */
+  model?: GridNavigationModel;
 }
 
 /** Handlers {@link useGridNavigation} needs on the grid element (compose them with the consumer's). */
@@ -24,6 +55,19 @@ export interface UseGridNavigationResult {
   gridRef: React.RefCallback<HTMLTableElement>;
   /** Keyboard and focus handlers for the grid element. Stable identities. */
   gridProps: GridNavigationHandlers;
+  /**
+   * With a `model`: the `data-row-index` of the active cell's row, the row that holds the grid's
+   * tab stop (or takes it back once it is mounted again), so the owner keeps that row mounted.
+   * `null` on a header row, and always `null` without a model. A change re-renders the owner.
+   */
+  activeRowIndex: number | null;
+  /**
+   * With a `model`: the index of the data row a key moved focus to while it is not mounted (asked
+   * for with `scrollToRow`); focus moves there in the commit that mounts it, so the owner keeps it
+   * mounted too. `null` when no row is awaited, and always `null` without a model. A change
+   * re-renders the owner.
+   */
+  pendingRowIndex: number | null;
 }
 
 /** Input types that do not take arrow or character keys, so a lone one can be a cell's focus target. */
@@ -81,9 +125,13 @@ const WIDGET_CANDIDATE_SELECTOR = `${FOCUSABLE_SELECTOR}, ${COMPOSITE_SELECTOR}`
  */
 const AUXILIARY_ATTRIBUTE = 'data-grid-auxiliary';
 
+/** The attribute of a windowed grid's data rows that holds their 0-based index in the data. */
+const ROW_INDEX_ATTRIBUTE = 'data-row-index';
+
 /**
  * Attributes whose changes can change a cell's widgets or the grid's rows. `aria-selected` on a row
- * signals a selection change, which can change the active cell's target (radio groups).
+ * signals a selection change, which can change the active cell's target (radio groups). A row's
+ * index changes in place when rows keyed by id are shown at other indexes (items inserted above).
  */
 const OBSERVED_ATTRIBUTES = [
   'disabled',
@@ -96,6 +144,7 @@ const OBSERVED_ATTRIBUTES = [
   'data-roving-container',
   'aria-selected',
   AUXILIARY_ATTRIBUTE,
+  ROW_INDEX_ATTRIBUTE,
 ];
 
 /**
@@ -233,6 +282,152 @@ function getCellAtColumn(
   return null;
 }
 
+/** The data row index `row` carries, or `null` (a header or spacer row, or no row). */
+function getRowIndex(row: Element | null): number | null {
+  const value = row?.getAttribute(ROW_INDEX_ATTRIBUTE);
+  return value != null && /^\d+$/.test(value) ? Number(value) : null;
+}
+
+/** A count of a model: a whole number, at least 0 (0 when it is not finite). */
+function toCount(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+/**
+ * The rows keys move between. With a model: the first `headerRowCount` rows without a row index
+ * that are not `aria-hidden` (the header rows) and every row with one (the data rows); other rows,
+ * the spacer rows of a window, are left out.
+ */
+function getGridRows(
+  grid: HTMLTableElement,
+  model: GridNavigationModel | undefined,
+): HTMLTableRowElement[] {
+  if (!model) return getRows(grid);
+  const headerRowCount = toCount(model.headerRowCount);
+  let headers = 0;
+  return getRows(grid).filter((row) => {
+    if (getRowIndex(row) !== null) return true;
+    if (headers >= headerRowCount || row.getAttribute('aria-hidden') === 'true') return false;
+    headers += 1;
+    return true;
+  });
+}
+
+/**
+ * With a model, the active cell by its row and visual column, so the tab stop survives the row
+ * unmounting: the row's element while it is mounted, and its data row index (`null`: a header row).
+ */
+interface ActiveRow {
+  row: HTMLTableRowElement | null;
+  index: number | null;
+  column: number;
+}
+
+/** With a model, a data row a key moved to that is not mounted yet. */
+interface PendingRow {
+  index: number;
+  /** The visual column to focus there (`Infinity`: the row's last cell). */
+  column: number;
+}
+
+/** The row and visual column of `cell` among `rows` (column 0 for a cell outside them). */
+function locateCell(rows: readonly HTMLTableRowElement[], cell: HTMLTableCellElement): ActiveRow {
+  const row = cell.parentElement as HTMLTableRowElement;
+  const at = rows.indexOf(row);
+  return {
+    row: at < 0 ? null : row,
+    index: getRowIndex(row),
+    column: at < 0 ? 0 : Math.max(getColumnMap(rows)[at].indexOf(cell), 0),
+  };
+}
+
+/** The cell at visual `column` of the mounted data row nearest to `index` (`null`: none). */
+function getNearestRowCell(
+  rows: readonly HTMLTableRowElement[],
+  index: number,
+  column: number,
+): HTMLTableCellElement | null {
+  let nearest = -1;
+  let distance = Infinity;
+  rows.forEach((row, at) => {
+    const rowIndex = getRowIndex(row);
+    if (rowIndex === null || Math.abs(rowIndex - index) >= distance) return;
+    nearest = at;
+    distance = Math.abs(rowIndex - index);
+  });
+  return nearest < 0 ? null : getCellAtColumn(getColumnMap(rows)[nearest], column);
+}
+
+/**
+ * With a model, where `activeRow` is now and which cell holds the tab stop for it; `null` when the
+ * rule without a model applies (the first cell once the active cell is gone): a header row that is
+ * gone, or a data row that left the data (`rowCount`). The row is its element while that is
+ * mounted (its index follows it: rows keyed by id are shown at other indexes when items are
+ * inserted above), else the mounted row of its index (a row mounted again). While neither is mounted, a stand-in holds the tab stop:
+ * `current` (the active cell, while it is mounted), else the cell of the nearest mounted data row
+ * (`cell` is `null` when none is mounted).
+ */
+function placeActiveRow(
+  rows: readonly HTMLTableRowElement[],
+  activeRow: ActiveRow,
+  rowCount: number,
+  current: HTMLTableCellElement | null,
+): { activeRow: ActiveRow; cell: HTMLTableCellElement | null } | null {
+  const mounted = activeRow.row !== null && rows.includes(activeRow.row);
+  const index = mounted ? getRowIndex(activeRow.row) : activeRow.index;
+  if (index === null ? !mounted : index >= rowCount) return null;
+  const row = mounted ? activeRow.row : (rows.find((each) => getRowIndex(each) === index) ?? null);
+  const { column } = activeRow;
+  if (!row) {
+    // `index` is a data row index here (a header row is always `mounted`).
+    return { activeRow, cell: current ?? getNearestRowCell(rows, index as number, column) };
+  }
+  const cell =
+    current?.parentElement === row
+      ? current
+      : getCellAtColumn(getColumnMap(rows)[rows.indexOf(row)], column);
+  return { activeRow: { row, index, column }, cell };
+}
+
+/** The focused element, through open shadow roots (the body, or `null`, when focus is lost). */
+function getDeepActiveElement(doc: Document): Element | null {
+  let active = doc.activeElement;
+  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+  return active;
+}
+
+/**
+ * The row indexes of {@link UseGridNavigationResult} (`activeRowIndex`, `pendingRowIndex`), read
+ * by the owner's render through `useSyncExternalStore` and written by the handlers, the observer
+ * and the layout effects. Without a model it stays at `null` and never notifies.
+ */
+class GridRowIndexes {
+  private active: number | null = null;
+  private pending: number | null = null;
+  private readonly listeners = new Set<() => void>();
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  getActive = (): number | null => this.active;
+
+  getPending = (): number | null => this.pending;
+
+  set(active: number | null, pending: number | null): void {
+    if (active === this.active && pending === this.pending) return;
+    this.active = active;
+    this.pending = pending;
+    for (const listener of Array.from(this.listeners)) listener();
+  }
+}
+
+/** The server snapshot of the row indexes: no row. */
+const getNoRow = (): null => null;
+
 /** The grid cells in `node` (itself, or its descendants that belong to `grid`). */
 function collectCells(grid: HTMLTableElement, node: Node, into: Set<HTMLTableCellElement>): void {
   if (!(node instanceof Element)) return;
@@ -345,6 +540,16 @@ export function returnFocusToGridCell(element: Element): boolean {
  *   While the widgets of such a cell are interacted with, its target widget is in interaction mode
  *   too, so Tab moves between all of them and Escape on the target ends the mode. A cell without
  *   auxiliary widgets behaves as described above.
+ * - **Rows by their data** (a `model`: a windowed grid, whose rows are mounted in part): the rows
+ *   are the header rows and the data rows, which carry their index in the data as `data-row-index`
+ *   (other rows, such as the spacer rows of a window, are skipped). ArrowUp/ArrowDown,
+ *   PageUp/PageDown and Ctrl+Home/Ctrl+End go by that index over every row of the data, header
+ *   rows first, with the rules above: a target row that is not mounted is asked for with
+ *   `scrollToRow` (once per row) and focused in the commit that mounts it, and Ctrl+Home also
+ *   brings data row 0 back under the header rows. The active cell is kept by its row and column:
+ *   `activeRowIndex` and `pendingRowIndex` name the rows the owner keeps mounted, and while the
+ *   active row is not mounted anyway, a cell of the nearest mounted row holds the tab stop until
+ *   the row is back. ArrowLeft/ArrowRight and Home/End work in the row as above.
  *
  * Keys are ignored when the event's default was prevented (a widget that handled the key, a
  * consumer handler), or with Alt/Meta held. The tab indexes are written to the DOM (layout effect
@@ -355,8 +560,26 @@ export function returnFocusToGridCell(element: Element): boolean {
  * Internal to the table package.
  */
 export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGridNavigationResult {
+  const { model } = options;
   const pageSize = Math.max(1, options.pageSize ?? 10);
   const [grid, setGrid] = React.useState<HTMLTableElement | null>(null);
+  /** The model of the last commit (read by the handlers, the observer and the effects). */
+  const modelRef = React.useRef(model);
+  /** With a model: the active cell's row and column (see {@link ActiveRow}). */
+  const activeRowRef = React.useRef<ActiveRow | null>(null);
+  /** With a model: the data row a key moved to that is not mounted yet. */
+  const pendingRef = React.useRef<PendingRow | null>(null);
+  const [rowIndexes] = React.useState(() => new GridRowIndexes());
+  const activeRowIndex = React.useSyncExternalStore(
+    rowIndexes.subscribe,
+    rowIndexes.getActive,
+    getNoRow,
+  );
+  const pendingRowIndex = React.useSyncExternalStore(
+    rowIndexes.subscribe,
+    rowIndexes.getPending,
+    getNoRow,
+  );
   /** The cell that holds the tab stop. */
   const activeCellRef = React.useRef<HTMLTableCellElement | null>(null);
   /** The cell whose widgets are being interacted with, or `null` (navigation mode). */
@@ -505,23 +728,56 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
     [getTarget, getWidgets, retained, setTabIndex, stamped, written],
   );
 
+  /** With a model: publishes the active and the pending row index to the owner's render. */
+  const publish = React.useCallback(() => {
+    rowIndexes.set(activeRowRef.current?.index ?? null, pendingRef.current?.index ?? null);
+  }, [rowIndexes]);
+
   /**
    * Re-resolves the active cell (the first cell when it is gone) and syncs `cells` — every cell
-   * when omitted. A new active cell is always synced.
+   * when omitted. A new active cell is always synced. With a model, an active cell that is gone
+   * while its row index is in the data is replaced in its row instead (see `placeActiveRow`).
    */
   const sync = React.useCallback(
     (table: HTMLTableElement, cells?: Iterable<HTMLTableCellElement | null>) => {
-      const rows = getRows(table);
+      const currentModel = modelRef.current;
+      const rows = getGridRows(table, currentModel);
       let active = activeCellRef.current;
       const targets = new Set<HTMLTableCellElement>();
-      if (
+      let gone =
         !active ||
         !active.isConnected ||
-        !rows.includes(active.parentElement as HTMLTableRowElement)
-      ) {
+        !rows.includes(active.parentElement as HTMLTableRowElement);
+      const placed =
+        currentModel && activeRowRef.current
+          ? placeActiveRow(
+              rows,
+              activeRowRef.current,
+              toCount(currentModel.rowCount),
+              gone ? null : active,
+            )
+          : null;
+      if (placed) {
+        activeRowRef.current = placed.activeRow;
+        if (placed.cell) {
+          gone = false;
+          if (placed.cell !== active) {
+            // The cell that held the tab stop (a stand-in) gives it up.
+            if (active) targets.add(active);
+            active = placed.cell;
+            activeCellRef.current = active;
+            targets.add(active);
+          }
+        }
+      }
+      if (gone) {
         active = rows[0]?.cells[0] ?? null;
         activeCellRef.current = active;
         if (active) targets.add(active);
+        if (currentModel && !placed) activeRowRef.current = null;
+      }
+      if (currentModel && active && activeRowRef.current === null) {
+        activeRowRef.current = locateCell(rows, active);
       }
       if (interactionCellRef.current !== null && interactionCellRef.current !== active) {
         const previous = interactionCellRef.current;
@@ -535,12 +791,189 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       } else {
         for (const cell of cells) if (cell) targets.add(cell);
       }
+      // With a model, the cells of rows keys skip (the spacer rows of a window) are never stamped.
+      const skipped = currentModel ? new Set(rows) : null;
       for (const cell of targets) {
         if (!cell.isConnected || getCell(table, cell) !== cell) continue;
+        if (
+          skipped &&
+          !skipped.has(cell.parentElement as HTMLTableRowElement) &&
+          !stamped.has(cell)
+        ) {
+          continue;
+        }
         syncCell(cell, cell === active, cell === interaction);
       }
+      if (currentModel) publish();
     },
-    [syncCell],
+    [publish, stamped, syncCell],
+  );
+
+  /**
+   * Makes `cell` the active cell (in interaction mode when `interaction`) and re-syncs only the
+   * cells involved: the previous active and interaction cells and `cell`. With a model, its row is
+   * the active row, and a row that was awaited is not any more (focus moved).
+   */
+  const activate = React.useCallback(
+    (table: HTMLTableElement, cell: HTMLTableCellElement, interaction: boolean) => {
+      const previousActive = activeCellRef.current;
+      const previousInteraction = interactionCellRef.current;
+      activeCellRef.current = cell;
+      interactionCellRef.current = interaction ? cell : null;
+      const currentModel = modelRef.current;
+      if (currentModel) {
+        activeRowRef.current = locateCell(getGridRows(table, currentModel), cell);
+        pendingRef.current = null;
+      }
+      sync(table, [previousActive, previousInteraction, cell]);
+    },
+    [sync],
+  );
+
+  const focusCell = React.useCallback(
+    (table: HTMLTableElement, cell: HTMLTableCellElement) => {
+      activate(table, cell, false);
+      getTarget(cell, getWidgets(cell, true), true).focus();
+    },
+    [activate, getTarget, getWidgets],
+  );
+
+  /**
+   * With a model: awaits data row `index`, which is not mounted. The model scrolls to it (once per
+   * row: a key pressed again before it mounts replaces the target, and asks again only for another
+   * row), and focus moves to its cell at `column` once it is mounted (`resolvePending`).
+   */
+  const requestRow = React.useCallback(
+    (index: number, column: number) => {
+      const currentModel = modelRef.current;
+      if (!currentModel) return;
+      const previous = pendingRef.current;
+      pendingRef.current = { index, column };
+      publish();
+      if (previous?.index !== index) currentModel.scrollToRow(index);
+    },
+    [publish],
+  );
+
+  /**
+   * With a model: focuses the awaited row's cell once the row is mounted, from the layout effect of
+   * the owner's commit that mounts it or from the observer (a row mounted by another component's
+   * commit). The request is dropped when the row left the data, and when focus went to an element
+   * outside the grid meanwhile (focus stays there).
+   */
+  const resolvePending = React.useCallback(
+    (table: HTMLTableElement) => {
+      const pending = pendingRef.current;
+      const currentModel = modelRef.current;
+      if (!pending || !currentModel) return;
+      if (pending.index >= toCount(currentModel.rowCount)) {
+        pendingRef.current = null;
+        publish();
+        return;
+      }
+      const rows = getGridRows(table, currentModel);
+      const at = rows.findIndex((row) => getRowIndex(row) === pending.index);
+      if (at < 0) return;
+      pendingRef.current = null;
+      const target = getCellAtColumn(getColumnMap(rows)[at], pending.column);
+      const focused = getDeepActiveElement(table.ownerDocument);
+      const focusInGrid =
+        focused === null || focused === table.ownerDocument.body || table.contains(focused);
+      if (target && focusInGrid) focusCell(table, target);
+      else publish();
+    },
+    [focusCell, publish],
+  );
+
+  /**
+   * With a model: moves focus by the rows of the data for `key` (ArrowUp/ArrowDown, PageUp/PageDown,
+   * or Home/End with Ctrl held), from the awaited row while there is one, else from `cell`. The
+   * header rows come first, then the data rows by index. Up/Down and PageUp/PageDown keep the
+   * visual column; Ctrl+Home goes to the first cell of the grid and Ctrl+End to the last cell of the
+   * last data row. A target row that is not mounted is awaited (`requestRow`).
+   */
+  const moveByRow = React.useCallback(
+    (
+      table: HTMLTableElement,
+      cell: HTMLTableCellElement,
+      rows: HTMLTableRowElement[],
+      key: string,
+    ) => {
+      const currentModel = modelRef.current;
+      if (!currentModel) return;
+      const headers = rows.filter((row) => getRowIndex(row) === null);
+      /** Where each mounted data row is in `rows`, by its index. */
+      const mounted = new Map<number, number>();
+      rows.forEach((row, at) => {
+        const index = getRowIndex(row);
+        if (index !== null) mounted.set(index, at);
+      });
+      const rowCount = toCount(currentModel.rowCount);
+      const last = headers.length + rowCount - 1;
+      const columns = getColumnMap(rows);
+      const pending = pendingRef.current;
+      /** The row the move starts from (header rows, then data rows) and its visual column. */
+      let from: number;
+      let column: number;
+      if (pending) {
+        from = headers.length + Math.min(pending.index, rowCount - 1);
+        column = pending.column;
+      } else {
+        const row = cell.parentElement as HTMLTableRowElement;
+        const index = getRowIndex(row);
+        from = index === null ? headers.indexOf(row) : headers.length + index;
+        column = Math.max(columns[rows.indexOf(row)].indexOf(cell), 0);
+      }
+      let start: number;
+      let step: 1 | -1 = 1;
+      /** Ctrl+Home and Ctrl+End go to one row (no row a spanning cell covers is skipped). */
+      let single = false;
+      switch (key) {
+        case 'ArrowDown':
+          start = from + 1;
+          break;
+        case 'ArrowUp':
+          start = from - 1;
+          step = -1;
+          break;
+        case 'PageDown':
+          start = Math.min(from + pageSizeRef.current, last);
+          break;
+        case 'PageUp':
+          start = Math.max(from - pageSizeRef.current, 0);
+          step = -1;
+          break;
+        case 'Home':
+          start = 0;
+          column = 0;
+          single = true;
+          break;
+        default:
+          start = last;
+          column = Infinity;
+          single = true;
+          break;
+      }
+      for (let position = start; position >= 0 && position <= last; position += step) {
+        const at =
+          position < headers.length
+            ? rows.indexOf(headers[position])
+            : (mounted.get(position - headers.length) ?? -1);
+        if (at < 0) {
+          requestRow(position - headers.length, column);
+          break;
+        }
+        const candidate = getCellAtColumn(columns[at], column);
+        if (candidate && candidate !== cell) {
+          focusCell(table, candidate);
+          break;
+        }
+        if (single) break;
+      }
+      // Focus on a header row: the first data rows come back under it, as the top of the grid.
+      if (key === 'Home' && headers.length > 0 && rowCount > 0) currentModel.scrollToRow(0);
+    },
+    [focusCell, requestRow],
   );
 
   React.useLayoutEffect(() => {
@@ -587,6 +1020,8 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       // changed, reflected by the rows' `aria-selected`), so it is always re-checked.
       if (activeCellRef.current) dirty.add(activeCellRef.current);
       sync(grid, all ? undefined : dirty);
+      // With a model, an awaited row mounted by a commit of another component.
+      resolvePending(grid);
     });
     observer.observe(grid, {
       childList: true,
@@ -595,30 +1030,7 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       attributeFilter: OBSERVED_ATTRIBUTES,
     });
     return () => observer.disconnect();
-  }, [grid, sync, written]);
-
-  /**
-   * Makes `cell` the active cell (in interaction mode when `interaction`) and re-syncs only the
-   * cells involved: the previous active and interaction cells and `cell`.
-   */
-  const activate = React.useCallback(
-    (table: HTMLTableElement, cell: HTMLTableCellElement, interaction: boolean) => {
-      const previousActive = activeCellRef.current;
-      const previousInteraction = interactionCellRef.current;
-      activeCellRef.current = cell;
-      interactionCellRef.current = interaction ? cell : null;
-      sync(table, [previousActive, previousInteraction, cell]);
-    },
-    [sync],
-  );
-
-  const focusCell = React.useCallback(
-    (table: HTMLTableElement, cell: HTMLTableCellElement) => {
-      activate(table, cell, false);
-      getTarget(cell, getWidgets(cell, true), true).focus();
-    },
-    [activate, getTarget, getWidgets],
-  );
+  }, [grid, resolvePending, sync, written]);
 
   // A widget that handles its leaving keys itself returns through `returnFocusToGridCell`.
   React.useLayoutEffect(() => {
@@ -629,6 +1041,19 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       if (cellReturns.get(grid) === returnTo) cellReturns.delete(grid);
     };
   }, [grid, focusCell]);
+
+  // After every commit: the model of this render, and focus on an awaited row that the commit
+  // mounted. Without a model, no row is kept by its index.
+  React.useLayoutEffect(() => {
+    modelRef.current = model;
+    if (!model) {
+      activeRowRef.current = null;
+      pendingRef.current = null;
+      rowIndexes.set(null, null);
+      return;
+    }
+    if (grid) resolvePending(grid);
+  });
 
   const onKeyDown = React.useCallback<React.KeyboardEventHandler<HTMLTableElement>>(
     (event) => {
@@ -676,7 +1101,7 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
         return;
       }
 
-      const rows = getRows(table);
+      const rows = getGridRows(table, modelRef.current);
       const rowIndex = rows.findIndex((row) => row === cell.parentElement);
       if (rowIndex < 0) return;
       const columnIndex = Array.from(rows[rowIndex].cells).indexOf(cell);
@@ -722,6 +1147,11 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       if (!next && !vertical) return;
       // A handled key never scrolls the page or reaches the widget, even at the grid's edge.
       event.preventDefault();
+      // With a model, Up/Down, PageUp/PageDown and Ctrl+Home/Ctrl+End go by the rows of the data.
+      if (modelRef.current && (vertical || ctrl)) {
+        moveByRow(table, cell, rows, event.key);
+        return;
+      }
       let destination: HTMLTableCellElement | null = null;
       if (vertical) {
         // Up/Down keep the visual column (spans counted), clamped to a shorter row; the rows a
@@ -744,7 +1174,7 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       }
       if (destination && destination !== cell) focusCell(table, destination);
     },
-    [activate, focusCell, getTarget, getWidgets],
+    [activate, focusCell, getTarget, getWidgets, moveByRow],
   );
 
   const onFocus = React.useCallback<React.FocusEventHandler<HTMLTableElement>>(
@@ -795,5 +1225,5 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
     [onBlur, onFocus, onKeyDown],
   );
 
-  return { gridRef: setGrid, gridProps };
+  return { gridRef: setGrid, gridProps, activeRowIndex, pendingRowIndex };
 }
