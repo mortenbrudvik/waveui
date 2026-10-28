@@ -325,6 +325,7 @@ Order A, B, C, D, E, F, G, H, I; D and E may swap. Each package ends green on it
 (Empty. Each package appends here every deliberate departure from this spec and every existing test assertion it had to edit, with the reason.)
 
 - **Task 2, `useSelection`:** `toggleAll` does nothing in `single` mode (spec §3.2 is silent; a select-all has no meaning for one id, and `selectAllIds` would break the one-id invariant). `UseSelectionChangeDetails` is a named exported type of the public signature. `selectedItems` keeps its set by content, so a controlled parent that passes a new array of the same ids every render gets the same set.
+- **Task 3, `computeVirtualLayout`:** `firstVisible` is clamped to `[0, max(0, count - visibleCount)]`, not to `[0, max(0, count - 1)]` as the task brief said. A real scroller cannot put a row past the last full page at the top (the browser caps `scrollTop` at `count * itemSize - viewport`); with the looser clamp, a list that shrinks under a scrolled window (a filter, a page change) while the hook still holds a large `firstVisible` returned a window that started too late (viewport 480, itemSize 44, overscan 6, firstVisible 5000, count 20 gave rows 13..19 where the browser shows 9..19, leaving rows 9..12 blank until the next scroll event). With the tighter clamp `end` always reaches `count`.
 
 ## 17. Risks
 

@@ -109,6 +109,15 @@ describe('computeVirtualLayout', () => {
     expect(shape(layout({ firstVisible: 95 }))).toEqual(['[930]', 93, 94, 95, 96, 97, 98, 99]);
   });
 
+  it('clamps firstVisible to the last full page, so a shrunk list keeps its rows in view', () => {
+    // viewport 480 / itemSize 44 -> 11 rows; the browser shows rows 9..19 of 20 at most.
+    const shrunk = { count: 20, itemSize: 44, viewportSize: 480, overscan: 6 };
+    const entries = computeVirtualLayout({ ...shrunk, firstVisible: 5000 });
+    expect(shape(entries)).toEqual(['[132]', ...Array.from({ length: 17 }, (_, i) => i + 3)]);
+    expect(entries).toEqual(computeVirtualLayout({ ...shrunk, firstVisible: 20 - 11 }));
+    expect(totalSize(entries, 44)).toBe(20 * 44);
+  });
+
   it('clamps firstVisible to the list', () => {
     expect(layout({ firstVisible: -40 })).toEqual(layout({ firstVisible: 0 }));
     expect(layout({ firstVisible: 5000 })).toEqual(layout({ firstVisible: 99 }));
@@ -295,7 +304,11 @@ describe('computeVirtualLayout', () => {
 
     it('always includes the clamped first visible row', () => {
       for (const input of cases) {
-        const clamped = Math.min(Math.max(0, input.firstVisible), input.count - 1);
+        const visibleCount = Math.max(1, Math.ceil(input.viewportSize / input.itemSize));
+        const clamped = Math.min(
+          Math.max(0, input.firstVisible),
+          Math.max(0, input.count - visibleCount),
+        );
         expect(items(computeVirtualLayout(input)), JSON.stringify(input)).toContain(clamped);
       }
     });

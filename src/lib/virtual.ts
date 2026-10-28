@@ -12,7 +12,7 @@ export interface VirtualLayoutInput {
   count: number;
   /** Height (or width) of one row, in pixels. */
   itemSize: number;
-  /** Index of the first row in view. Clamped to the list. */
+  /** Index of the first row in view. Clamped to `[0, max(0, count - rows in view)]`. */
   firstVisible: number;
   /** Height (or width) of the scroll viewport, in pixels. */
   viewportSize: number;
@@ -48,7 +48,9 @@ export function computeVirtualLayout(input: VirtualLayoutInput): readonly Virtua
     Number.isFinite(input.viewportSize) ? Math.ceil(input.viewportSize / rowSize) : 1,
   );
   const overscan = toCount(input.overscan, 0);
-  const first = Math.min(toCount(input.firstVisible, 0), count - 1);
+  // A scroller never shows a first row past the last full page: a list that shrank under a
+  // scrolled window is clamped the way the browser clamps `scrollTop`.
+  const first = Math.min(toCount(input.firstVisible, 0), Math.max(0, count - visibleCount));
   const start = Math.max(0, first - overscan);
   const end = Math.min(count, first + visibleCount + overscan);
 
