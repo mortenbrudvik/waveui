@@ -1400,6 +1400,84 @@ describe('useGridNavigation', () => {
       expect(screen.getByRole('button', { name: 'Open 999' })).toHaveFocus();
     });
 
+    it.each([
+      ['r10c1', '{PageDown}', 20, '{PageUp}', '10'],
+      ['r19c1', '{ArrowDown}', 20, '{ArrowUp}', '19'],
+    ])(
+      'from %s, %s awaits row %i and %s back to the focused row stays there and drops the request',
+      async (from, away, target, back, row) => {
+        const user = userEvent.setup();
+        const onScrollToRow = vi.fn();
+        const handle = handleRef();
+        render(
+          <WindowedHarness
+            keep="active"
+            deferScroll
+            onScrollToRow={onScrollToRow}
+            handle={handle}
+          />,
+        );
+        focus(cell(from));
+        await user.keyboard(away);
+        expect(grid()).toHaveAttribute('data-pending-row', String(target));
+        await user.keyboard(back);
+        expect(focusedRowIndex()).toBe(row);
+        expect(cell(from)).toHaveFocus();
+        expect(grid()).toHaveAttribute('data-pending-row', 'none');
+        expect(onScrollToRow.mock.calls).toEqual([[target]]);
+        // The window moving later does not pull focus to the dropped target.
+        act(() => handle.current!.applyScroll());
+        await flushObservers();
+        expect(cell(from)).toHaveFocus();
+      },
+    );
+
+    it('Ctrl+Home on the focused first cell after Ctrl+End drops the request (no header row)', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      render(
+        <WindowedHarness
+          header={false}
+          keep="active"
+          deferScroll
+          onScrollToRow={onScrollToRow}
+          handle={handle}
+        />,
+      );
+      focus(cell('r0c1'));
+      await user.keyboard('{Control>}{End}{/Control}');
+      expect(grid()).toHaveAttribute('data-pending-row', '999');
+      await user.keyboard('{Control>}{Home}{/Control}');
+      expect(focusedRowIndex()).toBe('0');
+      expect(cell('r0c1')).toHaveFocus();
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+      expect(onScrollToRow.mock.calls).toEqual([[999]]);
+      act(() => handle.current!.applyScroll());
+      await flushObservers();
+      expect(cell('r0c1')).toHaveFocus();
+    });
+
+    it('Ctrl+Home on the focused first header cell after Ctrl+End drops the request and still returns the window to row 0', async () => {
+      const user = userEvent.setup();
+      const onScrollToRow = vi.fn();
+      const handle = handleRef();
+      render(
+        <WindowedHarness keep="active" deferScroll onScrollToRow={onScrollToRow} handle={handle} />,
+      );
+      focus(headerCell('Name'));
+      await user.keyboard('{Control>}{End}{/Control}');
+      expect(grid()).toHaveAttribute('data-pending-row', '999');
+      await user.keyboard('{Control>}{Home}{/Control}');
+      expect(headerCell('Name')).toHaveFocus();
+      expect(focusedRowIndex()).toBeNull();
+      expect(grid()).toHaveAttribute('data-pending-row', 'none');
+      expect(onScrollToRow.mock.calls).toEqual([[999], [0]]);
+      act(() => handle.current!.applyScroll());
+      await flushObservers();
+      expect(headerCell('Name')).toHaveFocus();
+    });
+
     it('a horizontal key while a row is pending moves in the focused row and drops the request', async () => {
       const user = userEvent.setup();
       const handle = handleRef();

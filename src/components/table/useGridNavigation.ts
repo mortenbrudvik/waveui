@@ -964,7 +964,10 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
           break;
         }
         const candidate = getCellAtColumn(columns[at], column);
-        if (candidate && candidate !== cell) {
+        // The focused cell itself is passed over (a cell spanning rows), except while a row is
+        // awaited: the move starts from that row, so a key back to the focused cell targets it
+        // (focusing it drops the request).
+        if (candidate && (pending || candidate !== cell)) {
           focusCell(table, candidate);
           break;
         }
