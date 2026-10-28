@@ -134,6 +134,28 @@ const CHILDREN_WARNING =
   'returns the `List.Item` at an index; without one of them the window is ignored (a function ' +
   'child then renders nothing, and element children are all rendered).';
 
+const ACTIONS_WARNING =
+  '[WaveUI] List: a selectable windowed list keeps its listbox structure whatever items are ' +
+  'rendered, so an item action sits inside an option, which cannot hold interactive content. ' +
+  'Set navigationMode="composite" to render a grid whose rows hold the actions.';
+
+/** An item per index, with an "Open" action from index 100 on. */
+const laterActionItem = (index: number) => (
+  <List.Item
+    value={`file-${index}`}
+    action={index >= 100 ? <button type="button">{`Open ${index}`}</button> : undefined}
+  >
+    {`File ${index}`}
+  </List.Item>
+);
+
+/** An item per index, each with an "Open" action. */
+const actionItem = (index: number) => (
+  <List.Item value={`file-${index}`} action={<button type="button">{`Open ${index}`}</button>}>
+    {`File ${index}`}
+  </List.Item>
+);
+
 describe('List virtualWindow', () => {
   describe('rendering', () => {
     it('renders the first window within the budget: the items in view, the overscan and one spacer', () => {
@@ -525,6 +547,65 @@ describe('List virtualWindow', () => {
         act(() => root?.unmount());
         container.remove();
       }
+    });
+  });
+
+  describe('the structure does not depend on the rendered items', () => {
+    it('keeps the root element, its scroll position and its role when items with actions scroll in and out', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<WindowedList selectable renderItem={laterActionItem} />);
+      const root = listRoot();
+      expect(root).toHaveAttribute('role', 'listbox');
+      expect(warn).not.toHaveBeenCalled();
+
+      await scrollTo(200 * ITEM);
+      expect(listRoot()).toBe(root);
+      expect(listRoot().scrollTop).toBe(200 * ITEM);
+      expect(root).toHaveAttribute('role', 'listbox');
+      expect(mountedIndexes()).toEqual(range(194, 217));
+      expect(item(200)).toHaveAttribute('role', 'option');
+      expect(item(200)).toHaveAttribute('aria-posinset', '201');
+
+      await scrollTo(0);
+      expect(listRoot()).toBe(root);
+      expect(root).toHaveAttribute('role', 'listbox');
+      await scrollTo(300 * ITEM);
+      expect(listRoot()).toBe(root);
+      expect(messages(warn)).toEqual([ACTIONS_WARNING]);
+    });
+
+    it('stays a listbox from the first render, on the server too, when every item has an action', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const html = renderToString(<WindowedList selectable renderItem={actionItem} />);
+      expect(html).toContain('role="listbox"');
+      expect(html).not.toContain('role="grid"');
+      render(<WindowedList selectable renderItem={actionItem} />);
+      expect(listRoot()).toHaveAttribute('role', 'listbox');
+      expect(screen.getAllByRole('option')).toHaveLength(17);
+      expect(messages(warn)).toEqual([ACTIONS_WARNING]);
+    });
+
+    it('navigationMode="composite" holds the grid from the first render whatever is scrolled, without a warning', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<WindowedList selectable navigationMode="composite" renderItem={laterActionItem} />);
+      const root = listRoot();
+      expect(screen.getByRole('grid', { name: 'Files' })).toBe(root);
+      await scrollTo(200 * ITEM);
+      expect(listRoot()).toBe(root);
+      expect(listRoot().scrollTop).toBe(200 * ITEM);
+      expect(screen.getByRole('grid', { name: 'Files' })).toBe(root);
+      expect(screen.getByRole('button', { name: 'Open 200' })).toHaveAttribute('tabindex', '-1');
+      await scrollTo(0);
+      expect(screen.getByRole('grid', { name: 'Files' })).toBe(root);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('does not warn for actions in a plain windowed list, whose items are list items', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<WindowedList renderItem={actionItem} />);
+      expect(listRoot()).toHaveAttribute('role', 'list');
+      await scrollTo(200 * ITEM);
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 

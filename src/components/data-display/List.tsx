@@ -70,9 +70,15 @@ export interface ListProps<M extends ListSelectionMode = ListSelectionMode> exte
    *
    * Selection covers every value: the values of items that are not rendered stay selected, and
    * `onSelectionChange` reports them (a list without a window drops the values of items it no
-   * longer renders). The arrow keys, Home/End and typeahead move among the rendered items. A
-   * selectable list picks listbox or grid semantics from the actions of its rendered items, so
-   * when some items have actions, pin the grid with `navigationMode="composite"`.
+   * longer renders). The arrow keys, Home/End and typeahead move among the rendered items.
+   *
+   * The structure never depends on which items are rendered: a selectable windowed list stays a
+   * listbox (its items are options) unless `navigationMode="composite"` makes it a grid from the
+   * first render, so scrolling never replaces the list element (which would reset its scroll
+   * position and remount every item). Its items' actions do not switch it to a grid as they do in
+   * a list without a window: an item with an action in a selectable windowed list without that
+   * pin is a development warning, since an option cannot hold interactive content. Pin
+   * `navigationMode="composite"` when items have actions.
    *
    * Applies only with `count` and a function child; otherwise it is ignored, with a development
    * warning.
@@ -130,7 +136,9 @@ export interface ListProps<M extends ListSelectionMode = ListSelectionMode> exte
    *   the Tab order. The rows of a list without selection carry no `aria-selected`.
    *
    * The resolved mode is rendered as `data-navigation-mode`. Changing it while mounted can switch
-   * between `ul`/`li` and `div` elements, which remounts the items (see {@link List}).
+   * between `ul`/`li` and `div` elements, which remounts the items (see {@link List}). A windowed
+   * list (`virtualWindow`) never switches for its items' actions: unset or `'items'`, a selectable
+   * one is a listbox; only `'composite'` makes it a grid.
    */
   navigationMode?: ListNavigationMode;
   /**
@@ -572,8 +580,8 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   // A function child renders nothing without a window (a development warning says so).
   const elementChildren = renderItem ? null : (children as React.ReactNode);
 
-  // Only a selectable list without the `composite` pin decides its structure by its actions.
-  const hasActions =
+  // Whether a rendered item of a selectable list without the `composite` pin has an action.
+  const itemActions =
     selectable &&
     navigationMode !== 'composite' &&
     (registered
@@ -583,6 +591,11 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
             ? windowEntries.map((entry) => (entry.kind === 'item' ? entry.node : null))
             : elementChildren,
         ));
+  // Only such a list decides its structure by its actions. A windowed list does not: which items
+  // are rendered changes as it scrolls, and a new root element would remount the scroller, reset
+  // its scroll position and every item (it stays a listbox, with a development warning).
+  const hasActions = itemActions && !windowed;
+  const windowActions = itemActions && windowed;
   const { mode, navigation } = resolveNavigation(selectable, hasActions, navigationMode);
   const navigable = navigation !== 'none';
   const drawsCheckmark = selectable && checkmark;
@@ -723,6 +736,17 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
       );
     }
   }, [windowIgnored]);
+
+  React.useEffect(() => {
+    if (windowActions) {
+      warnOnce(
+        'List:virtual-window-actions',
+        'List: a selectable windowed list keeps its listbox structure whatever items are ' +
+          'rendered, so an item action sits inside an option, which cannot hold interactive ' +
+          'content. Set navigationMode="composite" to render a grid whose rows hold the actions.',
+      );
+    }
+  }, [windowActions]);
 
   const contextValue = React.useMemo<ListContextValue>(
     () => ({
@@ -1309,16 +1333,16 @@ ListActionCell.displayName = 'ListActionCell';
  * - **Check marks** (`checkmark`, opt-in): a decorative check at the start of every item of a
  *   selectable list, shown while the item is selected; `List.Item checkmark` replaces or hides it.
  * - **Switching semantics remounts the items.** Listbox/list and grid use different elements
- *   (`ul`/`li` and `div`), so when a selectable list gains its first item action, loses its last
- *   one, or `selectable` or `navigationMode` changes the structure, React remounts the items and
- *   their content: state inside them (an inline rename input's draft, an uncontrolled checkbox) is
- *   reset. Focus that is on an item or inside it when the list switches moves to the same item (by
- *   `value`, else by position; the next item when the focused one was removed), or to its first
- *   focusable content when the item is no Tab stop any more, so the switch never drops it to
- *   `<body>`. This includes focus inside the last action when that action removes itself (an
- *   inline rename input that unmounts on Enter). An action that removes itself while focused
- *   without causing a switch drops focus, like any removed element. When the list may switch,
- *   keep such state in the parent, or pin the grid with `navigationMode="composite"`.
+ *   (`ul`/`li` and `div`), so when a selectable list without a window gains its first item
+ *   action, loses its last one, or `selectable` or `navigationMode` changes the structure, React
+ *   remounts the items and their content: state inside them (an inline rename input's draft, an
+ *   uncontrolled checkbox) is reset. Focus that is on an item or inside it when the list switches
+ *   moves to the same item (by `value`, else by position; the next item when the focused one was
+ *   removed), or to its first focusable content when the item is no Tab stop any more, so the
+ *   switch never drops it to `<body>`. This includes focus inside the last action when that action
+ *   removes itself (an inline rename input that unmounts on Enter). An action that removes itself
+ *   while focused without causing a switch drops focus, like any removed element. When the list
+ *   may switch, keep such state in the parent, or pin the grid with `navigationMode="composite"`.
  * - Selection: `selectionMode` `'single'` (default) or `'multiple'`; controlled with
  *   `selectedItems` (or `selectedItem` in single mode) or uncontrolled with the `default*` props.
  *   Values of items that are no longer rendered are dropped from the reported selection (a
@@ -1328,7 +1352,9 @@ ListActionCell.displayName = 'ListActionCell';
  *   overscan, with spacers for the others. The list element scrolls (give it a bounded height),
  *   every item has the window's item size as its height, the item that last had focus stays
  *   rendered, each item carries its place in the whole list, and the values selected outside the
- *   window stay selected.
+ *   window stay selected. Its structure never follows the rendered items: a selectable windowed
+ *   list is a listbox unless `navigationMode="composite"` pins the grid (pin it when items have
+ *   actions; a development warning says so).
  * - Sub-component: `List.Item` (also exported as `ListItem` for React Server Components).
  *
  * @example
