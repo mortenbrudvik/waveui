@@ -58,3 +58,18 @@ export type {
   DataGridColumn,
   DataGridLabels,
 } from './DataGrid';
+
+export { useTableFeatures } from './useTableFeatures';
+export type {
+  TableColumnSizingState,
+  TableFeaturePlugin,
+  TableFeaturesState,
+  TableRowData,
+  TableSelectionState,
+  TableSortState,
+  UseTableFeaturesOptions,
+} from './useTableFeatures';
+export { useTableSort } from './useTableSort';
+export type { UseTableSortOptions } from './useTableSort';
+export { useTableSelection } from './useTableSelection';
+export type { UseTableSelectionOptions } from './useTableSelection';

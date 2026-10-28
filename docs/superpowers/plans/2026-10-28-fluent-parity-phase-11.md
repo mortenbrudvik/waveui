@@ -133,9 +133,9 @@ State is `{ firstVisible, viewportSize }`; it changes only when the first visibl
 
 **Interfaces — Consumes:** Tasks 1–2; `createTableColumn`/`DataGridColumn<T>` (`src/lib/table.ts`), `DataGridSort`, `SortDirection`. **Produces** (spec §4):
 ```ts
-export interface TableRow<T> { item: T; rowId: string; index: number }
+export interface TableRowData<T> { item: T; rowId: string; index: number }
 export type TableFeaturePlugin<T> = /* an opaque, stable descriptor returned by the plugin hooks; applied in array order */ …;
-export interface TableFeaturesState<T> { items: readonly T[]; columns: readonly DataGridColumn<T>[]; getRowId: (item: T, index: number) => string; getRows(): readonly TableRow<T>[]; sort: TableSortState; selection: TableSelectionState; columnSizing: TableColumnSizingState }
+export interface TableFeaturesState<T> { items: readonly T[]; columns: readonly DataGridColumn<T>[]; getRowId: (item: T, index: number) => string; getRows(): readonly TableRowData<T>[]; sort: TableSortState; selection: TableSelectionState; columnSizing: TableColumnSizingState }
 export function useTableFeatures<T>(options: { items: readonly T[]; columns: readonly DataGridColumn<T>[]; getRowId?: (item: T, index: number) => string }, plugins?: readonly TableFeaturePlugin<T>[]): TableFeaturesState<T>;
 export function useTableSort<T>(options?: { sort?: DataGridSort | null; defaultSort?: DataGridSort | null; onSortChange?: (sort: DataGridSort, details?: { event: Event }) => void }): TableFeaturePlugin<T>;
 export function useTableSelection<T>(options: { selectionMode: SelectionMode; selectedItems?: readonly string[]; defaultSelectedItems?: readonly string[]; onSelectedItemsChange?: (selectedItems: string[], details?: { event?: Event; id?: string }) => void; isDisabled?: (item: T, index: number) => boolean }): TableFeaturePlugin<T>;
