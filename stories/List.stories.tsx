@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, List } from '../src';
+import { Button, List, useVirtualWindow } from '../src';
 import type { ListProps } from '../src';
 
 const meta = {
@@ -221,6 +221,58 @@ export const DisabledSelection: Story = {
       <List.Item value="trash">Trash</List.Item>
     </SelectionDemo>
   ),
+};
+
+const FILE_COUNT = 10_000;
+
+/** The 10,000-item list of the `Windowed` story, with a readout of the selection. */
+function WindowedDemo(props: ListProps) {
+  const { onSelectionChange, defaultSelectedItems, style, ...rest } = props;
+  // 40 pixels per item: the item's padding, one line of text and its bottom rule fit.
+  const virtualWindow = useVirtualWindow({ itemSize: 40 });
+  const [selected, setSelected] = React.useState<readonly string[]>(defaultSelectedItems ?? []);
+  const shown = selected.slice(0, 5).join(', ');
+  return (
+    <div>
+      <p className="mb-2 text-body-1">
+        {`Selected: ${selected.length} of ${FILE_COUNT.toLocaleString('en-US')}`}
+        {selected.length > 0 && ` (${shown}${selected.length > 5 ? ', …' : ''})`}
+      </p>
+      <List
+        {...rest}
+        style={{ ...style, height: 320 }}
+        virtualWindow={virtualWindow}
+        count={FILE_COUNT}
+        selectedItems={selected}
+        onSelectionChange={(next) => {
+          setSelected(next);
+          onSelectionChange?.(next);
+        }}
+      >
+        {(index) => <List.Item value={`file-${index + 1}`}>{`File ${index + 1}`}</List.Item>}
+      </List>
+    </div>
+  );
+}
+
+/**
+ * A list of 10,000 items that renders only the items in view, plus a few above and below:
+ * `virtualWindow` (from `useVirtualWindow({ itemSize })`) and `count`, with a function child that
+ * returns the item at an index. The list scrolls inside its height (320 pixels here) and every
+ * item is the window's 40 pixels tall, so an item's content must fit in one line. Each option
+ * tells its place in the whole list (`aria-posinset` of `aria-setsize`). The values selected
+ * outside the window stay selected: select an item, scroll far away, select another, and the
+ * readout counts both. The item that has focus stays rendered while it is scrolled away.
+ */
+export const Windowed: Story = {
+  args: {
+    selectable: true,
+    selectionMode: 'multiple',
+    defaultSelectedItems: ['file-2', 'file-5000', 'file-9999'],
+    'aria-label': 'Files',
+    onSelectionChange: fn(),
+  },
+  render: (args) => <WindowedDemo {...args} />,
 };
 
 /**

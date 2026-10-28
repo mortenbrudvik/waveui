@@ -284,8 +284,12 @@ export const infoLabelClassNames = {
 /** Image: `root` on the `<img>`. */
 export const imageClassNames = { root: 'wave-image' } as const;
 
-/** List: `root` on the `<ul>` (the `role="grid"` element of a selectable list with actions). */
-export const listClassNames = { root: 'wave-list' } as const;
+/**
+ * List: `root` on the `<ul>` (the `role="grid"` element of a selectable list with actions);
+ * `spacer` on each spacer element of a list with a `virtualWindow` (the elements that stand in for
+ * the items that are not rendered).
+ */
+export const listClassNames = { root: 'wave-list', spacer: 'wave-list__spacer' } as const;
 
 /**
  * List.Item: `root` on the `<li>` (the `role="row"` element of a grid list); `content` on the
