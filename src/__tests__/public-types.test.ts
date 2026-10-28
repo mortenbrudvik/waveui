@@ -528,9 +528,10 @@ const INTERNAL_HELPERS: Record<string, string> = {
 
 /**
  * Public type names that a prop refers to before the barrels export them (spec §0.2 rule 24,
- * §1.5), matched against the name after `#` of the walk's labels. Empty since wave D of 0.11.
+ * §1.5), matched against the name after `#` of the walk's labels. In 0.15, Carousel's
+ * `CarouselMotion` until the INTEGRATION package exports it.
  */
-const PENDING_PUBLIC_TYPES: readonly string[] = [];
+const PENDING_PUBLIC_TYPES: readonly string[] = ['CarouselMotion'];
 
 /** `components/feedback/Toaster.tsx#ToastDispatchOptions` → `ToastDispatchOptions`. */
 const typeNameOf = (label: string): string => label.slice(label.indexOf('#') + 1);

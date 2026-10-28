@@ -128,6 +128,15 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  * - `messageBarGroupEnterMotion`, the enter a MessageBarGroup adds after the exit with its `both`
  *   animation: an added bar starts from an empty track, minus the gap and transparent, and opens
  *   on the exit's transition (250 ms, linear). It holds no transition of its own.
+ * - `carouselSlideMotion`, the track of a Carousel that slides: the transition of its transform
+ *   (the inline translation that shows the current page) over the slow duration (300 ms) with the
+ *   easy-ease curve, so the track glides to the new page. It keys on no phase: the carousel drops
+ *   it while the track follows a drag, so the track stays under the pointer, and a carousel's
+ *   `motionDuration` other than 300 ms replaces the duration with an inline one.
+ * - `carouselFadeMotion`, each slide of a Carousel that fades: the transition of its opacity over
+ *   the slow duration (300 ms) with the easy-ease curve, so the slide that leaves fades out while
+ *   the one that comes fades in, in the same place. It keys on no phase either (the carousel hides
+ *   the inactive slides by their opacity), and `motionDuration` replaces its duration the same way.
  *
  * The resolver below picks the classes of a part: its motion slot, the provider's preference and
  * the className rule of the parts that keep 0.14's own motion.
@@ -289,6 +298,14 @@ export const messageBarGroupExitMotion =
  */
 export const messageBarGroupEnterMotion =
   'data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0';
+
+/** A sliding Carousel track's motion: its transform glides to the new page, 300 ms. */
+export const carouselSlideMotion =
+  'transition-transform duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none';
+
+/** A fading Carousel slide's motion: it fades in or out in place, 300 ms. */
+export const carouselFadeMotion =
+  'transition-opacity duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none';
 
 /** The text of a class list that marks a presence variant written for 0.14's own motion. */
 const PRESENCE_VARIANT = '[presence=';
