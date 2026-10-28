@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Nav, type NavCategoryProps, type NavProps } from '../Nav';
 import { NavDrawer } from '../NavDrawer';
+import { Button } from '../../button/Button';
 import { navCategoryClassNames, navItemClassNames } from '../../../lib/classNames';
 import {
   collapseMotion,
@@ -582,6 +583,92 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
     expect(icon).toHaveTextContent('−');
     expect(icon).not.toHaveClass('rotate-180');
     expect(icon).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  /** The one-time warning of a button passed as the glyph (C-SLOTS, `unwrapButtonGlyph`). */
+  const buttonGlyphWarning = (received: string) =>
+    `[WaveUI] Nav.Category: \`expandIcon\` received ${received}; its children render as the glyph of the toggle button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. \`expandIcon={<MyIcon />}\`.`;
+
+  it.each([
+    [
+      'a <button> element',
+      () => (
+        <button type="button" className="own-button" aria-label="Expand">
+          <svg data-testid="glyph" />
+        </button>
+      ),
+      'a button element',
+    ],
+    [
+      'a Wave Button element',
+      () => (
+        <Button appearance="subtle" className="own-button" aria-label="Expand">
+          <svg data-testid="glyph" />
+        </Button>
+      ),
+      'a button element',
+    ],
+    [
+      'a slot object whose `as` is a button',
+      () =>
+        ({
+          as: 'button',
+          className: 'own-button',
+          children: <svg data-testid="glyph" />,
+        }) as unknown as Slot<'span'>,
+      'a slot object that renders a button',
+    ],
+  ] as Array<[string, () => Slot<'span'>, string]>)(
+    'unwraps %s: its children are the glyph in the span, never a nested button, with one warning',
+    (_kind, make, received) => {
+      warn.mockImplementation(() => {});
+      render(
+        <React.StrictMode>
+          <Docs defaultOpenCategories={['docs']} category={{ expandIcon: make() }} />
+        </React.StrictMode>,
+      );
+      expect(toggle().querySelector('button')).toBeNull();
+      const icon = expandIcon()!;
+      expect(icon.tagName).toBe('SPAN');
+      expect(icon.classList[0]).toBe(navCategoryClassNames.expandIcon);
+      expect(icon).toHaveClass('inline-flex', 'shrink-0');
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+      expect(icon).not.toHaveClass('rotate-180');
+      expect(within(icon as HTMLElement).getByTestId('glyph').parentElement).toBe(icon);
+      // The button's props are dropped: neither its class nor its name reaches the toggle.
+      expect(document.querySelector('.own-button')).toBeNull();
+      expect(toggle()).toHaveAccessibleName('Docs');
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      expect(warn.mock.calls).toEqual([[buttonGlyphWarning(received)]]);
+      warn.mockClear();
+    },
+  );
+
+  it('a button without children keeps the default chevron (the glyph is its nothing), with the warning', () => {
+    warn.mockImplementation(() => {});
+    render(
+      <Docs
+        defaultOpenCategories={['docs']}
+        category={{ expandIcon: <button type="button" aria-label="Expand" /> }}
+      />,
+    );
+    expect(toggle().querySelector('button')).toBeNull();
+    expect(expandIcon()!.tagName.toLowerCase()).toBe('svg');
+    expect(expandIcon()).toHaveClass('rotate-180');
+    expect(toggle()).toHaveAccessibleName('Docs');
+    expect(warn.mock.calls).toEqual([[buttonGlyphWarning('a button element')]]);
+    warn.mockClear();
+  });
+
+  it('a glyph that is not a button never warns', () => {
+    render(
+      <Docs
+        defaultOpenCategories={['docs']}
+        category={{ expandIcon: <svg data-testid="plus" /> }}
+      />,
+    );
+    expect(screen.getByTestId('plus')).toBeInTheDocument();
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

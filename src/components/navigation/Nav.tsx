@@ -7,7 +7,7 @@ import {
 } from '../../lib/classNames';
 import type { MotionPreference, MotionSlot, Slot } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
-import { warnDeprecated } from '../../lib/dev';
+import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 // Aliased: `expandIconMotion` is also Nav.Category's prop.
 import {
@@ -18,6 +18,7 @@ import { disabledStyles, focusRingInset } from '../../lib/styles';
 import { useCollapsePresence } from '../../hooks/useCollapsePresence';
 import { useId } from '../../hooks/useId';
 import { useMotionClasses, useMotionPreference } from '../../hooks/useMotion';
+import { unwrapButtonGlyph } from '../button/Button.slots';
 import {
   NavCategoryValueContext,
   NavRovingContext,
@@ -80,7 +81,10 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
    * `null`/`undefined` keep the chevron, which turns while the category is open; `false`, or
    * anything that renders nothing, hides it (`aria-expanded` still reports the state). Your glyph
    * renders as given in a span with the expand icon's class and is not turned, so a glyph that
-   * shows the state itself works (a plus or a minus, picked from your `openCategories`).
+   * shows the state itself works (a plus or a minus, picked from your `openCategories`). It is
+   * rendered inside the toggle button: a `<button>` or `Button` passed here (or a slot object
+   * whose `as` is one) is not nested (its children become the glyph and its props are dropped,
+   * with a development warning).
    */
   expandIcon?: Slot<'span'>;
   /**
@@ -149,8 +153,9 @@ export interface NavItemOwnProps {
    * transition of each direct child of the group, so a transition of your own on one is replaced.
    * They stay enabled when the item is `disabled`. With actions, the selected background and
    * indicator are drawn on the row (the item's list item, `.wave-nav-item__list-item`), so a
-   * `className` on the item no longer covers them. Content that renders nothing renders no group. Fluent's `actionButton`, `toggleButton`
-   * and `menuButton` slots and their tooltips are your own controls here.
+   * `className` on the item no longer covers them. Content that renders nothing renders no group.
+   * Fluent's `actionButton`, `toggleButton` and `menuButton` slots and their tooltips are your own
+   * controls here.
    */
   actions?: React.ReactNode;
 }
@@ -639,10 +644,23 @@ const NavCategory = ({
 
   // The optional-indicator slot rule (C-SLOTS): `null`/`undefined` keep the chevron, which turns
   // while open; `false` or content that renders nothing hides it; a custom glyph is rendered as
-  // given in its span and never turned. `expandIconMotion` animates the transform of either.
+  // given in its span and never turned. `expandIconMotion` animates the transform of either. The
+  // glyph sits inside the toggle button, so a button passed as the glyph is unwrapped (its
+  // children are the glyph, its props are dropped), never nested.
+  const { glyph: expandGlyph, button: expandIconButton } = unwrapButtonGlyph(expandIcon);
+  React.useEffect(() => {
+    if (expandIconButton) {
+      warnOnce(
+        'Nav.Category:expandIcon-button',
+        `Nav.Category: \`expandIcon\` received ${expandIconButton}; its children render as the ` +
+          'glyph of the toggle button and its props were dropped (buttons cannot be nested). ' +
+          'Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.',
+      );
+    }
+  }, [expandIconButton]);
   const expandIconMotionClassName = useMotionClasses(expandIconMotion, expandIconRecipe);
   let expandIconElement: React.ReactNode = null;
-  if (expandIcon === undefined || expandIcon === null) {
+  if (expandGlyph === undefined || expandGlyph === null) {
     expandIconElement = (
       <ChevronDownIcon
         className={cn(
@@ -653,9 +671,9 @@ const NavCategory = ({
         )}
       />
     );
-  } else if (slotRendersContent(expandIcon)) {
+  } else if (slotRendersContent(expandGlyph)) {
     expandIconElement = renderSlot(
-      expandIcon,
+      expandGlyph,
       'span',
       cn(navCategoryClassNames.expandIcon, 'inline-flex shrink-0', expandIconMotionClassName),
       { 'aria-hidden': true },
@@ -840,8 +858,9 @@ markNavPart(NavSubItem, 'entry');
  *   selected item's background and indicator are drawn on its row (`.wave-nav-item__list-item`).
  * - **Motion**: a category's list opens and closes its space with a short collapse and fade
  *   (`motion` on `Nav.Category`), its chevron's turn is animated (`expandIconMotion`) and item
- *   actions fade in; none of it under reduced motion or a `WaveProvider` with `motion="none"`.
- *   Focus inside a list that closes moves to its category's toggle button.
+ *   actions fade in. None of these defaults runs under reduced motion, and a `WaveProvider` with
+ *   `motion="none"` turns them off, while a category's own `motion` or `expandIconMotion` value
+ *   still applies. Focus inside a list that closes moves to its category's toggle button.
  *
  * Sub-components are also exported under flat names (`NavCategory`, `NavItem`, `NavSubItem`,
  * `NavSectionHeader`, `NavDivider`, `NavAppItem`, `NavAppItemStatic`): React Server Components
