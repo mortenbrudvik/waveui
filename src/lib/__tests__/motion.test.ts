@@ -499,21 +499,32 @@ function alignmentValue(
   return undefined;
 }
 
+/** A grid axis: `inline` (its column tracks) or `block` (its row tracks). */
+type GridAxis = keyof typeof GRID_ALIGNMENT;
+
 /**
  * The inline drawer's track alignment: for each structure with a column (row) track, a finding
  * when it does not align its items on that axis, or when its track sits elsewhere than its items
  * (an absent track alignment is the initial one, the start). The element is as large as the
  * collapse has opened, but a grid whose flex factors add up to less than 1 gives its track only
  * that fraction of the element, so a track left at the start while the panel sits at the end of
- * it leaves an empty strip between the visible panel and the page.
+ * it leaves an empty strip between the visible panel and the page. With `collapsing`, a
+ * structure it names is checked on that axis only: its other track stays whole (the pin of
+ * {@link zeroMinimumTrackFindings}), filling the element, so its items stretch there as they do
+ * once entered.
  */
-function trackAlignmentFindings(structures: Readonly<Record<string, string>>): string[] {
+function trackAlignmentFindings(
+  structures: Readonly<Record<string, string>>,
+  collapsing: Readonly<Record<string, GridAxis>> = {},
+): string[] {
   return Object.entries(structures).flatMap(([edge, value]) => {
     const utilities = words(value)
       .map(parseWord)
       .filter(({ variants }) => variants.length === 0)
       .map(({ utility }) => utility);
-    return Object.values(GRID_ALIGNMENT).flatMap(({ track, items, content }) => {
+    const axis = Object.hasOwn(collapsing, edge) ? collapsing[edge] : undefined;
+    return Object.entries(GRID_ALIGNMENT).flatMap(([name, { track, items, content }]) => {
+      if (axis !== undefined && name !== axis) return [];
       if (!utilities.some((utility) => track.test(utility))) return [];
       const item = alignmentValue(utilities, items);
       if (item === undefined) return [`${edge}: no item alignment`];
@@ -524,10 +535,24 @@ function trackAlignmentFindings(structures: Readonly<Record<string, string>>): s
 }
 
 /**
- * The structures that are a grid in every phase, entered included (a toast's container takes
- * focus, so it never renders without a box), whose tracks must have a zero minimum on both axes.
+ * The axis whose track a collapse motion opens and closes: `inline` when it transitions the
+ * column template, `block` when it transitions the row template; `undefined` for neither or both.
  */
-const ALWAYS_GRID_STRUCTURES = ['toastStructure'];
+function collapsingAxis(motionValue: string): GridAxis | undefined {
+  const properties = transitionedProperties(motionValue);
+  const columns = properties.includes('grid-template-columns');
+  const rows = properties.includes('grid-template-rows');
+  if (columns === rows) return undefined;
+  return columns ? 'inline' : 'block';
+}
+
+/**
+ * Every structure export of the module that is a grid in some phase (a plain grid display on a
+ * value): a toast's container, a grid in every phase (it takes focus, so it never renders without
+ * a box), and the collapse elements, a grid while they enter or exit. Each value pins the axis it
+ * does not animate as well as the one it does ({@link zeroMinimumTrackFindings}).
+ */
+const GRID_STRUCTURES = ['collapseStructure', 'inlineDrawerStructure', 'toastStructure'];
 
 /**
  * The plain (variant-free) track template of `axis` that has a zero minimum: an arbitrary
@@ -541,11 +566,12 @@ function hasZeroMinimumTrack(utilities: readonly string[], axis: 'cols' | 'rows'
 }
 
 /**
- * The grid tracks of an always-grid structure (D14): for a value with a plain grid display, a
- * finding per axis without a zero-minimum track. Without a template the axis has one implicit
- * track sized by its content (an automatic minimum): a column then grows to the content's
- * longest unbreakable line, past the container's width, and a row cannot get smaller than the
- * content, so the container could not open from or close to nothing.
+ * The grid tracks of a structure (D12, D14): for a value with a plain grid display, a finding per
+ * axis without a zero-minimum track. Without a template the axis has one implicit track sized by
+ * its content (an automatic minimum): a column then grows to the content's longest unbreakable
+ * line (a long link, a label that does not wrap) past the element's width, so the part is wider
+ * while the element is a grid than once entered; and a row cannot get smaller than the content,
+ * so the element could not open from or close to nothing.
  */
 function zeroMinimumTrackFindings(value: string): string[] {
   const utilities = words(value)
@@ -1048,8 +1074,47 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       ).toEqual([]);
     });
 
-    it('holds for every edge of inlineDrawerStructure', () => {
-      expect(trackAlignmentFindings(motion.inlineDrawerStructure)).toEqual([]);
+    it('reads the collapsing axis from the motion, and checks only that axis of a pinned structure', () => {
+      expect(
+        collapsingAxis(
+          'transition-[grid-template-columns,opacity] motion-reduce:transition-none data-[presence=exiting]:grid-cols-[minmax(0,0fr)]',
+        ),
+      ).toBe('inline');
+      expect(collapsingAxis('transition-[grid-template-rows,opacity] duration-wave-fast')).toBe(
+        'block',
+      );
+      expect(collapsingAxis('transition-[grid-template-rows,grid-template-columns]')).toBe(
+        undefined,
+      );
+      expect(
+        collapsingAxis('transition-opacity motion-reduce:transition-[grid-template-rows]'),
+      ).toBe(undefined);
+      const pinned =
+        'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-start overflow-hidden';
+      // Without the axis, the pinned column (its items stretched) is reported.
+      expect(trackAlignmentFindings({ bottom: pinned })).toEqual(['bottom: no item alignment']);
+      expect(trackAlignmentFindings({ bottom: pinned }, { bottom: 'block' })).toEqual([]);
+      // The collapsing axis is still checked.
+      expect(
+        trackAlignmentFindings(
+          { bottom: pinned.replace('items-start', 'items-end') },
+          { bottom: 'block' },
+        ),
+      ).toEqual(['bottom: items end, track start']);
+      expect(trackAlignmentFindings({ start: pinned }, { start: 'inline' })).toEqual([
+        'start: no item alignment',
+      ]);
+    });
+
+    it('holds for every edge of inlineDrawerStructure, on the axis its motion collapses', () => {
+      const structures: Readonly<Record<string, string>> = motion.inlineDrawerStructure;
+      const width = collapsingAxis(motion.inlineDrawerMotion.width);
+      const height = collapsingAxis(motion.inlineDrawerMotion.height);
+      expect([width, height]).toEqual(['inline', 'block']);
+      const collapsing = Object.fromEntries(
+        Object.keys(structures).map((edge) => [edge, edge === 'bottom' ? height : width]),
+      ) as Record<string, GridAxis>;
+      expect(trackAlignmentFindings(structures, collapsing)).toEqual([]);
     });
   });
 
@@ -1079,19 +1144,38 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
     });
 
     it('holds for collapseStructure: the part at the start of a track at the start', () => {
-      expect(trackAlignmentFindings({ collapseStructure: motion.collapseStructure })).toEqual([]);
+      const axis = collapsingAxis(motion.collapseMotion);
+      expect(axis).toBe('block');
+      expect(
+        trackAlignmentFindings(
+          { collapseStructure: motion.collapseStructure },
+          { collapseStructure: axis! },
+        ),
+      ).toEqual([]);
       expect(plainUtilities(motion.collapseStructure)).toContain('items-start');
     });
   });
 
-  describe('an always-grid structure keeps its content to its width and can close (D14)', () => {
+  describe('a grid structure pins both of its tracks to a zero minimum (D12, D14)', () => {
     it('reports an axis left to an implicit track, or a track with a minimum other than zero', () => {
-      // The plan's literal: no column template, so the column grows to the content.
+      // The plan's toast literal: no column template, so the column grows to the content.
       expect(
         zeroMinimumTrackFindings(
           'grid grid-rows-[minmax(0,1fr)] not-data-[presence=entered]:overflow-hidden',
         ),
       ).toEqual(['cols: no zero-minimum track']);
+      // The collapse literal of 0.15's first packages: its rows close, its column follows the part.
+      expect(
+        zeroMinimumTrackFindings(
+          'grid grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents',
+        ),
+      ).toEqual(['cols: no zero-minimum track']);
+      // A side edge of the inline drawer as first built: its columns close, its row is implicit.
+      expect(
+        zeroMinimumTrackFindings(
+          'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-end justify-end overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
+        ),
+      ).toEqual(['rows: no zero-minimum track']);
       expect(zeroMinimumTrackFindings('grid grid-cols-[minmax(0,1fr)] grid-rows-[1fr]')).toEqual([
         'rows: no zero-minimum track',
       ]);
@@ -1119,20 +1203,44 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       expect(zeroMinimumTrackFindings('data-[presence=exiting]:grid')).toEqual([]);
     });
 
-    it('holds for every always-grid structure, a string export that never renders without a box', () => {
+    /** The values of `lib/motion` with a plain grid display, as `{ name, label, value }`. */
+    const gridValues = () =>
+      recipeStrings(recipeEntries()).filter(({ value }) =>
+        words(value).some((word) => word === 'grid'),
+      );
+
+    it('lists every grid structure of the module, each value of which is a grid', () => {
       const exports: Readonly<Record<string, unknown>> = motion;
-      expect(ALWAYS_GRID_STRUCTURES.length).toBeGreaterThan(0);
-      for (const name of ALWAYS_GRID_STRUCTURES) {
-        expect(typeof exports[name], name).toBe('string');
-        const value = String(exports[name]);
-        expect(words(value), name).toContain('grid');
-        expect(value, name).not.toContain(':contents');
+      expect([...new Set(gridValues().map(({ name }) => name))].sort()).toEqual(
+        [...GRID_STRUCTURES].sort(),
+      );
+      for (const name of GRID_STRUCTURES) {
+        const value = exports[name];
+        const values = typeof value === 'string' ? [value] : Object.values(value as object);
+        expect(values.length, name).toBeGreaterThan(0);
+        for (const item of values) expect(words(String(item)), name).toContain('grid');
       }
+    });
+
+    it('holds for every value of every grid structure', () => {
+      const checked = gridValues();
+      expect(checked.map(({ label }) => label)).toEqual(
+        expect.arrayContaining([
+          'collapseStructure',
+          'inlineDrawerStructure.start',
+          'inlineDrawerStructure.bottom',
+          'toastStructure',
+        ]),
+      );
       expect(
-        ALWAYS_GRID_STRUCTURES.flatMap((name) =>
-          zeroMinimumTrackFindings(String(exports[name])).map((finding) => `${name}: ${finding}`),
+        checked.flatMap(({ label, value }) =>
+          zeroMinimumTrackFindings(value).map((finding) => `${label}: ${finding}`),
         ),
       ).toEqual([]);
+    });
+
+    it('keeps the toast container a grid in every phase: it takes focus, so it keeps its box', () => {
+      expect(motion.toastStructure).not.toContain(':contents');
     });
   });
 });

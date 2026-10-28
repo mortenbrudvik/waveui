@@ -44,7 +44,10 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   entered it also lifts the panel's own maximum on that axis (its width at a side, its height at
  *   the bottom): that maximum is a percentage, which inside the grid would follow the track and
  *   squeeze the panel's content as the track narrows, where the track should only clip the panel.
- *   Entered, the maximum applies again against the page, as before.
+ *   Entered, the maximum applies again against the page, as before. Its track on the other axis
+ *   (the row at a side, the column at the bottom) has a minimum of zero too and stays whole, so
+ *   the panel fills the element on that axis as it fills its place once entered, rather than
+ *   growing there to its content's own size.
  * - `inlineDrawerMotion`, the motion of that element per axis: its track and its opacity. It
  *   enters from an empty, transparent track with the mid decelerating curve and exits back to one
  *   with the min accelerating curve, so the space the panel takes in the layout opens and closes
@@ -72,6 +75,10 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   scrolls shows no scroll bar and keeps its line breaks, and its background and border cover
  *   all of its visible part (while the collapse is partly open, the grid gives its track only that
  *   fraction of the element, so a stretched part would be shorter than what the element shows).
+ *   Its one column has a minimum of zero too and fills the element, so the part keeps the width it
+ *   has once entered: a column sized by its content would grow to the part's longest unbreakable
+ *   line (a long link, a label that does not wrap), and the part would be wider, its end side
+ *   clipped and its lines broken anew, for as long as it moves.
  * - `collapseMotion`, the motion of that element: its row track and its opacity. It enters from
  *   an empty, transparent track and exits back to one over the normal duration (200 ms) with the
  *   max easy-ease curve, both ways, so the space the part takes opens and closes while the content
@@ -159,18 +166,19 @@ export const drawerBackdropMotion: Readonly<Record<SurfaceSize, string>> = {
 /**
  * The structure of the element around an inline drawer's panel, per edge: no box while open, a
  * clipping one-track grid on the panel's axis while it enters or exits, the panel and the track
- * against its inner edge (so no empty strip opens next to the page) and the panel without its
- * percentage maximum on that axis (so it is clipped, not squeezed).
+ * against its inner edge (so no empty strip opens next to the page), the panel without its
+ * percentage maximum on that axis (so it is clipped, not squeezed), and a whole track with a zero
+ * minimum on the other axis (so the panel fills the element there, as once entered).
  */
 export const inlineDrawerStructure: Readonly<Record<DrawerEdge, string>> = {
   start:
-    'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-end justify-end overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
-  end: 'grid shrink-0 grid-cols-[minmax(0,1fr)] justify-items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
-  left: 'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:right] [justify-content:right] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical left edge
+    'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] justify-items-end justify-end overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
+  end: 'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] justify-items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
+  left: 'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [justify-items:right] [justify-content:right] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical left edge
   right:
-    'grid shrink-0 grid-cols-[minmax(0,1fr)] [justify-items:left] [justify-content:left] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical right edge
+    'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [justify-items:left] [justify-content:left] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical right edge
   bottom:
-    'grid shrink-0 grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-h-none',
+    'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-h-none',
 };
 
 /**
@@ -200,10 +208,10 @@ export const tooltipMotion =
  * The structure of the element around a disclosure's collapsing part (Accordion's region, a Tree
  * group, a Nav category's list): no box while open, a clipping one-track grid of rows while it
  * enters or exits, with the part at the top of the track at its own height (clipped, not
- * squeezed).
+ * squeezed) and in a whole column with a zero minimum (the width it has once entered).
  */
 export const collapseStructure =
-  'grid grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents';
+  'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents';
 
 /**
  * A disclosure's default collapse, on the element around its part: the row track opens from zero
