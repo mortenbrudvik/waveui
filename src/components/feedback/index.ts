@@ -1,6 +1,9 @@
 export { MessageBar, MessageBarTitle, MessageBarActions } from './MessageBar';
 export type { MessageBarProps, MessageBarTitleProps, MessageBarActionsProps } from './MessageBar';
 
+export { MessageBarGroup } from './MessageBarGroup';
+export type { MessageBarGroupProps } from './MessageBarGroup';
+
 export { ProgressBar } from './ProgressBar';
 export type { ProgressBarProps, ProgressBarColor } from './ProgressBar';
 

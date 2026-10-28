@@ -34,6 +34,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   AccordionBaseProps,
   AccordionMultipleProps,
+  AccordionPanelProps,
   AccordionSingleProps,
   addDays,
   addMonths,
@@ -50,6 +51,8 @@ import type {
   CalendarLabels,
   CalendarProps,
   CalendarValueChangeDetails,
+  CarouselMotion,
+  CarouselProps,
   CheckboxLabelPosition,
   CheckboxProps,
   CheckboxShape,
@@ -92,6 +95,7 @@ import type {
   DatePickerLabels,
   DatePickerProps,
   DayOfWeek,
+  DialogContentProps,
   DialogModalType,
   DialogOpenChangeDetails,
   DialogOpenChangeReason,
@@ -182,16 +186,20 @@ import type {
   MenuSplitGroupProps,
   MenuTriggerProps,
   MessageBarActionsProps,
+  MessageBarGroupProps,
   MessageBarProps,
   MessageBarTitleProps,
   ModalOpenChangeReason,
   ModalType,
+  MotionPreference,
+  MotionSlot,
   NavAppItemAnchorProps,
   NavAppItemButtonProps,
   NavAppItemDynamicProps,
   NavAppItemOwnProps,
   NavAppItemProps,
   NavAppItemStaticProps,
+  NavCategoryProps,
   NavDividerProps,
   NavDrawer,
   NavDrawerBodyProps,
@@ -219,6 +227,7 @@ import type {
   OverflowProps,
   PartitionBreadcrumbItemsOptions,
   PartitionBreadcrumbItemsResult,
+  PopoverContentProps,
   PopoverProps,
   PopoverTriggerChildProps,
   PopupRect,
@@ -528,10 +537,11 @@ const INTERNAL_HELPERS: Record<string, string> = {
 
 /**
  * Public type names that a prop refers to before the barrels export them (spec §0.2 rule 24,
- * §1.5), matched against the name after `#` of the walk's labels. In 0.15, Carousel's
- * `CarouselMotion` until the INTEGRATION package exports it.
+ * §1.5), matched against the name after `#` of the walk's labels. Empty since the INTEGRATION
+ * package of 0.15 exported Carousel's `CarouselMotion`; a later phase whose props refer to a
+ * type before its barrel exports it lists the name here the same way.
  */
-const PENDING_PUBLIC_TYPES: readonly string[] = ['CarouselMotion'];
+const PENDING_PUBLIC_TYPES: readonly string[] = [];
 
 /** `components/feedback/Toaster.tsx#ToastDispatchOptions` → `ToastDispatchOptions`. */
 const typeNameOf = (label: string): string => label.slice(label.indexOf('#') + 1);
@@ -1893,5 +1903,74 @@ describe('0.14 collections, data grids and tours from the package entry', () => 
     expectTypeOf<Popover['CarouselFooter']>().toEqualTypeOf<
       Entry['TeachingPopoverCarouselFooter']
     >();
+  });
+});
+
+describe('0.15 motion from the package entry', () => {
+  it('the motion slot and the preference: the types, and the values they refuse', () => {
+    expectTypeOf<MotionSlot>().toEqualTypeOf<string | { className: string }>();
+    expectTypeOf<MotionPreference>().toEqualTypeOf<'default' | 'none'>();
+    expectTypeOf<WaveProviderProps['motion']>().toEqualTypeOf<MotionPreference | undefined>();
+    expectTypeOf<WaveContextValue['motion']>().toEqualTypeOf<MotionPreference>();
+
+    // @ts-expect-error a motion slot is a class string or { className }
+    const empty: MotionSlot = {};
+    // @ts-expect-error the preference is 'default' or 'none'
+    const reduced: MotionPreference = 'reduced';
+    expect([empty, reduced]).toEqual([{}, 'reduced']);
+  });
+
+  it('every motion prop is a motion slot, null included', () => {
+    type Prop = MotionSlot | null | undefined;
+    expectTypeOf<DialogContentProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<DialogContentProps['backdropMotion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<DrawerProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<DrawerProps['backdropMotion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<NavDrawerProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<NavDrawerProps['backdropMotion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<MenuPopoverProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<PopoverContentProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<InfoButtonProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<InfoLabelProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<TooltipProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<TeachingPopoverProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<TeachingPopoverSurfaceProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<AccordionPanelProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<TreeProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<NavCategoryProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<NavCategoryProps['expandIconMotion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<NavCategoryProps['expandIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<ToasterProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<MessageBarGroupProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<TabListProps['motion']>().toEqualTypeOf<Prop>();
+    expectTypeOf<ProgressBarProps['indeterminateMotion']>().toEqualTypeOf<Prop>();
+  });
+
+  it('Carousel: the motion kinds, null and the duration in milliseconds', () => {
+    expectTypeOf<CarouselMotion>().toEqualTypeOf<'slide' | 'fade'>();
+    expectTypeOf<CarouselProps['motion']>().toEqualTypeOf<CarouselMotion | null | undefined>();
+    expectTypeOf<CarouselProps['motionDuration']>().toEqualTypeOf<number | undefined>();
+
+    // @ts-expect-error Carousel's motion is a kind, not a class string
+    const classes: CarouselProps['motion'] = 'my-motion';
+    expect(classes).toBe('my-motion');
+  });
+
+  it('MessageBarGroup: the props of a div, animate, the motion slot and the ref', () => {
+    expectTypeOf<MessageBarGroupProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<MessageBarGroupProps['animate']>().toEqualTypeOf<
+      'exit-only' | 'both' | undefined
+    >();
+    expectTypeOf<MessageBarGroupProps['children']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<MessageBarGroupProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<Entry['MessageBarGroup']>().parameter(0).toEqualTypeOf<MessageBarGroupProps>();
+    expectTypeOf<Entry['messageBarGroupClassNames']>().toEqualTypeOf<{
+      readonly root: 'wave-message-bar-group';
+      readonly item: 'wave-message-bar-group__item';
+    }>();
+
+    // @ts-expect-error a group animates its exits, or its exits and enters
+    const enterOnly: MessageBarGroupProps['animate'] = 'enter-only';
+    expect(enterOnly).toBe('enter-only');
   });
 });
