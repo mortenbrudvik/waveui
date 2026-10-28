@@ -77,6 +77,25 @@ export interface OptionProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>,
   ref?: React.Ref<HTMLLIElement>;
 }
 
+/**
+ * The state of an item's option, which `renderOption` of Listbox, Combobox and Dropdown receives
+ * with the item (data mode, `items`).
+ */
+export interface ListboxOptionRenderState {
+  /** The item's value is selected. */
+  selected: boolean;
+  /**
+   * The option is the active one, which `aria-activedescendant` points at: in a Listbox while the
+   * list has focus, in a Combobox or Dropdown while the list is open.
+   */
+  active: boolean;
+  /**
+   * The option's index among the shown options, from 0 (its `aria-posinset` minus one): items a
+   * filter leaves out and hidden items are not counted.
+   */
+  index: number;
+}
+
 /** Whether options draw the selected check mark (P05-internal; TagPicker lists no selected options). */
 const OptionCheckContext = React.createContext(true);
 OptionCheckContext.displayName = 'OptionCheckContext';

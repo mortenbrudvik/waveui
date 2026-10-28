@@ -168,6 +168,15 @@ export interface UseListboxOptions {
    * {@link useActiveDescendant}'s `onActiveValueChange`.
    */
   onActiveValueChange?: (value: string | null) => void;
+  /**
+   * Called instead of scrolling the active option into view when the option has no mounted
+   * element, as in a list that renders only part of its options (a virtual window): `index` is the
+   * option's index in {@link UseListboxResult.items}, the shown options (filtered-out and hidden
+   * items are not counted, disabled ones are). Scroll the list so that the option renders (a
+   * window's `scrollToIndex(index)`); `aria-activedescendant` names it meanwhile. Passed to
+   * {@link useActiveDescendant}'s `onScrollToItem`, mapped to that index.
+   */
+  onScrollToItem?: (index: number) => void;
   /** Prefix of the generated listbox id. @default 'listbox' */
   idPrefix?: string;
   /**
@@ -386,6 +395,13 @@ export interface ListboxOptionElementProps<E extends HTMLElement = HTMLElement> 
   'aria-disabled'?: true;
   /** While filtered out or hidden. */
   hidden?: boolean;
+  /**
+   * The number of shown options, for an option of a data-mode list rendered by Listbox, Combobox
+   * or Dropdown (`items`), which tell each option its position. Absent otherwise.
+   */
+  'aria-setsize'?: number;
+  /** The option's position among the shown options (from 1), with `aria-setsize`. */
+  'aria-posinset'?: number;
   /** While the option is active, for styling. */
   'data-active'?: '';
   /** While selected, for styling. */
@@ -762,6 +778,25 @@ export const ListboxContext: React.Context<ListboxContextValue | null> =
   React.createContext<ListboxContextValue | null>(null);
 ListboxContext.displayName = 'ListboxContext';
 
+/**
+ * Where an option of a data-mode list stands among the shown options: `index` from 0 and the
+ * number of shown options. Read by {@link useListboxOption}, which renders `aria-posinset` and
+ * `aria-setsize` from it.
+ */
+export interface ListboxOptionPosition {
+  index: number;
+  setSize: number;
+}
+
+/**
+ * The position of the option rendered inside it, provided around each option of a data-mode list
+ * (Listbox, Combobox and Dropdown with `items`), so an option a consumer's `renderOption` returns
+ * gets its position too. Not public: `null` (no position) everywhere else.
+ */
+export const ListboxOptionPositionContext: React.Context<ListboxOptionPosition | null> =
+  React.createContext<ListboxOptionPosition | null>(null);
+ListboxOptionPositionContext.displayName = 'ListboxOptionPositionContext';
+
 let inertContext: ListboxContextValue | null = null;
 
 function getInertContext(): ListboxContextValue {
@@ -959,7 +994,9 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   render. Options register even when filtered out or hidden (they render `hidden` and are not
  *   navigable), so labels are always known — use {@link collectOptionLabels} for the display text
  *   before registration (SSR/first render). `filter` is the navigability predicate, which a
- *   picker builds from its query.
+ *   picker builds from its query. In data mode the keys, typeahead, the labels and the filter
+ *   read `items` only, so a picker may render just the shown options (`items` of the result), or
+ *   part of them: `onScrollToItem` receives an active option that has no element.
  * - **Active option** is derived during render: the highlighted value, else the `autoHighlight`
  *   fallback. The highlight is reset on close and after a single-select commit that closes the
  *   listbox, and dropped once it is not navigable any more (filtered out, hidden, removed by an
@@ -1034,6 +1071,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     autoHighlight = 'selected',
     highlightOnFilter = false,
     onActiveValueChange,
+    onScrollToItem,
     idPrefix,
     onClearDraft,
   } = options;
@@ -1105,7 +1143,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   // and with the options before opening, so the keystroke that opens the listbox and filters it in
   // one update counts; opening with unchanged options (ArrowDown, a click) keeps the autoHighlight
   // start. Every highlight but the pointer's (a hover, a standalone press) is scrolled into view
-  // (the list would scroll under the pointer).
+  // (the list would scroll under the pointer). An active option without an element (a windowed
+  // list) goes to onScrollToItem by its index among the shown options, which differs from its
+  // index among the navigation values when disabled options are skipped.
+  const scrollToItem = useEventCallback((navigationIndex: number) => {
+    const value = navigationValues[navigationIndex];
+    const index = navigable.findIndex((item) => item.value === value);
+    if (index !== -1) onScrollToItem?.(index);
+  });
   const ad = useActiveDescendant({
     items: navigationValues,
     getId: getOptionId,
@@ -1114,6 +1159,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     loop,
     activateFirstOnChange: highlightOnFilter,
     getElement: store.getElement,
+    onScrollToItem: onScrollToItem ? scrollToItem : undefined,
     onActiveValueChange,
   });
   const { activeValue, activeDescendantId } = ad;
@@ -1429,8 +1475,9 @@ function optionFlags(store: ListboxStore, value: string): number {
  * the option (registration mode) and its element, and reads its flags from the listbox store, so
  * it re-renders only when its own active/selected/hidden state changes. Spread `optionProps` onto
  * the `<li>` (`id`, `role="option"`, `aria-selected`, `aria-disabled`, `hidden`, and
- * `data-active`/`data-selected`/`data-disabled` for styling) and compose its `onClick` — and in
- * standalone mode its `onMouseDown`, the pointer press — with your own handlers. Mark the
+ * `data-active`/`data-selected`/`data-disabled` for styling; `aria-posinset` and `aria-setsize`
+ * when a `renderOption` of Listbox, Combobox or Dropdown renders it) and compose its `onClick` —
+ * and in standalone mode its `onMouseDown`, the pointer press — with your own handlers. Mark the
  * component with {@link markListboxElement}, so its label is known before it registers.
  *
  * Throws in development when used outside a listbox; in production it logs the error once and
@@ -1444,6 +1491,7 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
 ): UseListboxOptionResult<E> {
   const context = useListboxContext('Option');
   const { store, listboxId, multiselect, mode, select, highlight, press } = context;
+  const position = useContext(ListboxOptionPositionContext);
   const { value, label, textValue, disabled = false, hidden: hiddenByConsumer = false } = props;
 
   const id = `${listboxId}-opt-${store.getIndex(value)}`;
@@ -1525,6 +1573,10 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
     ref: mergedRef,
   };
   if (mode === 'standalone') optionProps.onMouseDown = onMouseDown;
+  if (position) {
+    optionProps['aria-setsize'] = position.setSize;
+    optionProps['aria-posinset'] = position.index + 1;
+  }
   if (disabled) {
     optionProps['aria-disabled'] = true;
     optionProps['data-disabled'] = '';

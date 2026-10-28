@@ -28,7 +28,14 @@ import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
 import { insertedText, replacedText } from './Combobox.text';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
-import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
+import {
+  ListboxSurface,
+  Option,
+  OptionGroup,
+  useListboxPopup,
+  type ListboxOptionRenderState,
+} from './Option';
+import { renderListboxItems, useItemsAndChildrenWarning } from './Option.data';
 import { announceToggle, defaultSelectionLabel, PickerAnnouncer } from './pickerLabels';
 import {
   pickerButtonOffset,
@@ -182,8 +189,9 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * keep options that do not contain the text: `filter={() => true}` with `query` and
    * `onQueryChange` leaves the matching to you (a server-side search that replaces the options),
    * and a filter that always keeps an option of your own gives a "Create …" entry. With a
-   * server-side search, keep the selected option among the children, `hidden` while the results
-   * leave it out: a value without an option shows no label (the "Async search" story does this).
+   * server-side search, keep the selected option among the children (or `items`), `hidden` while
+   * the results leave it out: a value without an option shows no label (the "Async search" story
+   * does this).
    * @default a case-insensitive substring match on the option's `textValue`, else its `label`
    */
   filter?: (option: ListboxItem, query: string) => boolean;
@@ -278,6 +286,26 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    */
   labels?: ComboboxLabels;
   /**
+   * Data mode: the options as data, in list order (`value`, `label`, and optionally `textValue`,
+   * `disabled` and `hidden`; values unique). The open list renders one option per item that is
+   * not `hidden` and that the typed text matches (`filter`, on `textValue ?? label` by default; see
+   * `renderOption`); the closed list renders none. The keys, the selection and the input's label
+   * text follow `items`, also for a selected item whose option is not rendered. The children are
+   * neither read nor rendered: passing both warns once in development. Each option gets
+   * `aria-posinset` and `aria-setsize` from its place among the shown items (typing narrows
+   * them), and keeps one id per value. Without it, the options are the `Option` children.
+   */
+  items?: readonly ListboxItem[];
+  /**
+   * Data mode: renders the option of an item, given its state (`selected`, `active`, and `index`
+   * among the shown options). Return an `Option`, or an option component of your own on
+   * `useListboxOption`, with the item's `value` (and its `disabled`); its position is set for you.
+   * It is called again only when the item, its state or the function itself changes, so pass a
+   * stable function in a long list. Ignored without `items`.
+   * @default an `Option` with the item's `value`, `label` (also its text), `textValue` and `disabled`
+   */
+  renderOption?: (item: ListboxItem, state: ListboxOptionRenderState) => React.ReactNode;
+  /**
    * Called when the `<input role="combobox">` receives focus (the root keeps other handlers).
    * With `multiselect`, a focus while the input shows the selected labels then selects them;
    * `event.preventDefault()` skips that.
@@ -326,6 +354,9 @@ const HISTORY_EDITS: ReadonlySet<string> = new Set(['historyUndo', 'historyRedo'
  */
 type LockState = 'unlocked' | 'locked' | 'mounted-locked';
 
+/** The labels read from the children in data mode, where none are read. */
+const NO_LABELS: ReadonlyMap<string, string> = new Map<string, string>();
+
 /** The default `filter` (0.7's match): a case-insensitive substring of `textValue ?? label`. */
 function matchesText(item: ListboxItem, text: string): boolean {
   return (item.textValue ?? item.label).toLowerCase().includes(text.toLowerCase());
@@ -364,6 +395,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     clearable = false,
     expandIcon,
     labels,
+    items,
+    renderOption,
     inputMode,
     spellCheck,
     enterKeyHint,
@@ -509,7 +542,13 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const optionLabels = React.useMemo(() => collectOptionLabels(children), [children]);
+  // Data mode reads every label from `items` (listbox.getItem), so the children are not walked.
+  const dataMode = items !== undefined;
+  const optionLabels = React.useMemo<ReadonlyMap<string, string>>(
+    () => (dataMode ? NO_LABELS : collectOptionLabels(children)),
+    [dataMode, children],
+  );
+  useItemsAndChildrenWarning('Combobox', items, children);
   // useListbox's navigability predicate: `filter` (else the 0.7 match) bound to the typed text,
   // while there is any (D13).
   const filterText = draft ?? '';
@@ -572,6 +611,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     mode: 'editable',
     multiselect,
     disabledOptionsFocusable,
+    items,
     selectedValues: values,
     onSelect: (next, details) => {
       if (!multiselect) {
@@ -947,7 +987,16 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
       >
-        {children}
+        {/* Data mode: the options of the shown items while the list shows (labels come from
+            `items`, so a closed list needs none); the children are ignored. */}
+        {!dataMode
+          ? children
+          : expanded &&
+            renderListboxItems(listbox.items, {
+              selected: new Set(values),
+              activeValue: listbox.activeValue,
+              renderOption,
+            })}
       </ListboxSurface>
       <HiddenInput
         name={name}
@@ -998,6 +1047,11 @@ export const ComboboxOptionGroup = OptionGroup;
  * edit the text: the options, the clear button (which clears every value) and a form reset change
  * the value. `freeform` is not available with `multiselect`, and a non-literal
  * `multiselect={flag}` is a type error: render two elements, one for each mode.
+ *
+ * **Data mode**: `items` passes the options as data instead of children. The open list renders an
+ * option per matching item (`renderOption` draws it, an `Option` with the item's label by
+ * default) and the closed list none; the keys, the filter and the input's text follow the data,
+ * and each option carries `aria-posinset` and `aria-setsize` among the shown options.
  *
  * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,

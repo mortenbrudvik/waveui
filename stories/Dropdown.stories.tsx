@@ -1,9 +1,10 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Dropdown, Field, type DropdownProps } from '../src';
+import { Dropdown, Field, Option, type DropdownProps, type ListboxItem } from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
+import { PEOPLE, teamOf } from './_people';
 
 const meta = {
   title: 'Components/Input/Dropdown',
@@ -233,6 +234,36 @@ export const Invalid: Story = {
       </Dropdown>
     </Field>
   ),
+};
+
+/**
+ * A person's option, with their team after the name. A function defined once, so moving the
+ * highlight draws only the two options whose state changed.
+ */
+function renderPerson(item: ListboxItem) {
+  return (
+    <Option value={item.value} label={item.label}>
+      <span className="flex items-baseline justify-between gap-2">
+        <span>{item.label}</span>
+        <span className="text-caption-1 text-muted-foreground">{teamOf(item.value)}</span>
+      </span>
+    </Option>
+  );
+}
+
+/**
+ * Data mode: the 500 options come from `items`, not from children, and `renderOption` draws each
+ * one with the person's team. The button shows the selected person's label while the list is
+ * closed and no option is rendered; typing a name moves to it (typeahead).
+ */
+export const DataMode: Story = {
+  args: {
+    'aria-label': 'Person',
+    placeholder: 'Select a person',
+    defaultValue: 'person-321',
+    items: PEOPLE,
+    renderOption: renderPerson,
+  },
 };
 
 export const SizesAndAppearances: Story = {

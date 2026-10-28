@@ -4,6 +4,7 @@ import { fn } from 'storybook/test';
 import { Combobox, Field, Option, OptionGroup, type ComboboxProps, type ListboxItem } from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
+import { PEOPLE } from './_people';
 
 const meta = {
   title: 'Components/Input/Combobox',
@@ -297,6 +298,20 @@ export const Invalid: Story = {
       </Combobox>
     </Field>
   ),
+};
+
+/**
+ * Data mode: the 500 options come from `items`, not from children. The input shows the selected
+ * person's label while the list is closed and no option is rendered; typing filters the items
+ * (try "an"), and each option carries its position among the shown ones.
+ */
+export const DataMode: Story = {
+  args: {
+    'aria-label': 'Person',
+    placeholder: 'Search 500 people...',
+    defaultValue: 'person-321',
+    items: PEOPLE,
+  },
 };
 
 export const SizesAndAppearances: Story = {

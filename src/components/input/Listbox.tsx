@@ -10,10 +10,11 @@ import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useIsClient } from '../../hooks/useIsClient';
-import { useListbox } from '../../hooks/useListbox';
+import { useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
-import { ListboxProvider, Option, OptionGroup } from './Option';
+import { ListboxProvider, Option, OptionGroup, type ListboxOptionRenderState } from './Option';
+import { renderListboxItems, useItemsAndChildrenWarning } from './Option.data';
 import { announceToggle, PickerAnnouncer } from './pickerLabels';
 import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
 
@@ -104,6 +105,24 @@ export interface ListboxProps<M extends boolean = false> extends Omit<
   /** The `multiselect` toggle announcements, for localization. Unset members keep their English defaults. */
   labels?: ListboxLabels;
   /**
+   * Data mode: the options as data, in list order (`value`, `label`, and optionally `textValue`,
+   * `disabled` and `hidden`; values unique). The list renders one option per item that is not
+   * `hidden` (see `renderOption`), and the keys, typeahead and the selection follow `items`. The
+   * children are neither read nor rendered: passing both warns once in development. Each option
+   * gets `aria-posinset` and `aria-setsize` from its place among the shown items, and keeps one id
+   * per value. Without it, the options are the `Option` children.
+   */
+  items?: readonly ListboxItem[];
+  /**
+   * Data mode: renders the option of an item, given its state (`selected`, `active`, and `index`
+   * among the shown options). Return an `Option`, or an option component of your own on
+   * `useListboxOption`, with the item's `value` (and its `disabled`); its position is set for you.
+   * It is called again only when the item, its state or the function itself changes, so pass a
+   * stable function in a long list. Ignored without `items`.
+   * @default an `Option` with the item's `value`, `label` (also its text), `textValue` and `disabled`
+   */
+  renderOption?: (item: ListboxItem, state: ListboxOptionRenderState) => React.ReactNode;
+  /**
    * Name of the value in form submissions (renders a hidden input inside the list; one per value
    * with `multiselect`).
    */
@@ -151,6 +170,8 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     disabledOptionsFocusable = false,
     autoFocus = false,
     labels,
+    items,
+    renderOption,
     name,
     form,
     required,
@@ -232,6 +253,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     // APG listbox: the arrows stop at the ends.
     loop: false,
     disabledOptionsFocusable,
+    items,
     onSelect: (next, details) => {
       if (disabled) return;
       if (!multiselect) {
@@ -242,7 +264,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       const { values: updated, added } = toggleValue(values, next);
       setValue(updated);
       // A toggle the user made (D41): a controlled change and a form reset never reach this
-      // callback. `details` carries the registered option, whose label is its text.
+      // callback. `details` carries the registered option (or the item), whose label is its text.
       announceToggle(labels, details?.item.label ?? next, added, updated.length);
     },
     onActiveValueChange: onActiveOptionChange,
@@ -299,6 +321,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
   React.useEffect(() => {
     if (unnamed) warnOnce('Listbox:unnamed', UNNAMED_WARNING);
   }, [unnamed]);
+  useItemsAndChildrenWarning('Listbox', items, children);
 
   // C-COMPOSE: keys typed in a portal rendered inside the list bubble through it in React; they
   // are not the list's.
@@ -359,7 +382,16 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       )}
     >
       {multiselect && <PickerAnnouncer />}
-      <ListboxProvider value={listbox.context}>{children}</ListboxProvider>
+      <ListboxProvider value={listbox.context}>
+        {/* Data mode: the options of the shown items; the children are ignored. */}
+        {items === undefined
+          ? children
+          : renderListboxItems(listbox.items, {
+              selected: new Set(values),
+              activeValue: listbox.activeValue,
+              renderOption,
+            })}
+      </ListboxProvider>
       {/* Inside the list: a focused hidden input hands focus back to its parent element. */}
       <HiddenInput
         name={name}
@@ -412,6 +444,10 @@ export const ListboxOptionGroup = OptionGroup;
  *   either), dims it, takes pointer input off its options, selects nothing and submits nothing.
  *   Disabled options are skipped by the keys unless `disabledOptionsFocusable`, and are never
  *   selected.
+ * - **Data mode.** `items` passes the options as data instead of children: the list renders an
+ *   option per item (`renderOption` draws it, an `Option` with the item's label by default), the
+ *   keys, typeahead and the selection follow the data, and each option carries `aria-posinset`
+ *   and `aria-setsize`.
  * - **Forms and Field.** With `name` the value is submitted with its form (one entry, or one per
  *   value with `multiselect`), and `required` needs a value (native validation; a missing value
  *   moves focus to the list). A reset of its form restores `defaultValue`, with or without a
@@ -430,6 +466,10 @@ export const ListboxOptionGroup = OptionGroup;
  *   <Listbox.Option value="apple">Apple</Listbox.Option>
  *   <Listbox.Option value="banana">Banana</Listbox.Option>
  * </Listbox>
+ *
+ * @example
+ * // Data mode
+ * <Listbox aria-label="City" items={cities.map((c) => ({ value: c.id, label: c.name }))} />
  */
 export const Listbox = /* @__PURE__ */ Object.assign(ListboxRoot, {
   Option,

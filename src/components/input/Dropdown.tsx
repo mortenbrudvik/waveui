@@ -20,14 +20,21 @@ import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../l
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
-import { collectOptionLabels, useListbox } from '../../hooks/useListbox';
+import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { unwrapButtonGlyph } from '../button/Button.slots';
 import { HiddenInput } from '../internal/HiddenInput';
 import { showsExpandButton } from './Combobox.expand';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
-import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
+import {
+  ListboxSurface,
+  Option,
+  OptionGroup,
+  useListboxPopup,
+  type ListboxOptionRenderState,
+} from './Option';
+import { renderListboxItems, useItemsAndChildrenWarning } from './Option.data';
 import { announceToggle, defaultSelectionLabel, PickerAnnouncer } from './pickerLabels';
 import {
   pickerButtonOffset,
@@ -205,6 +212,25 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    * announcements, for localization. Unset members keep their English defaults.
    */
   labels?: DropdownLabels;
+  /**
+   * Data mode: the options as data, in list order (`value`, `label`, and optionally `textValue`,
+   * `disabled` and `hidden`; values unique). The open list renders one option per item that is
+   * not `hidden` (see `renderOption`); the closed list renders none. The keys, typeahead, the
+   * selection and the button's label text follow `items`, also for a selected item whose option
+   * is not rendered. The children are neither read nor rendered: passing both warns once in
+   * development. Each option gets `aria-posinset` and `aria-setsize` from its place among the
+   * shown items, and keeps one id per value. Without it, the options are the `Option` children.
+   */
+  items?: readonly ListboxItem[];
+  /**
+   * Data mode: renders the option of an item, given its state (`selected`, `active`, and `index`
+   * among the shown options). Return an `Option`, or an option component of your own on
+   * `useListboxOption`, with the item's `value` (and its `disabled`); its position is set for you.
+   * It is called again only when the item, its state or the function itself changes, so pass a
+   * stable function in a long list. Ignored without `items`.
+   * @default an `Option` with the item's `value`, `label` (also its text), `textValue` and `disabled`
+   */
+  renderOption?: (item: ListboxItem, state: ListboxOptionRenderState) => React.ReactNode;
   /** Called when the `<button role="combobox">` receives focus (the root keeps other handlers). */
   onFocus?: React.FocusEventHandler<HTMLButtonElement>;
   /** Called when the `<button role="combobox">` loses focus. */
@@ -231,6 +257,9 @@ export interface DropdownComponent {
   OptionGroup: typeof OptionGroup;
 }
 
+/** The labels read from the children in data mode, where none are read. */
+const NO_LABELS: ReadonlyMap<string, string> = new Map<string, string>();
+
 const DropdownRoot = (props: DropdownProps<boolean>) => {
   const {
     multiselect = false,
@@ -255,6 +284,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     clearable = false,
     expandIcon,
     labels,
+    items,
+    renderOption,
     autoFocus,
     tabIndex,
     id,
@@ -329,7 +360,13 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const buttonRef = React.useRef<HTMLButtonElement | null>(null);
 
-  const optionLabels = React.useMemo(() => collectOptionLabels(children), [children]);
+  // Data mode reads every label from `items` (listbox.getItem), so the children are not walked.
+  const dataMode = items !== undefined;
+  const optionLabels = React.useMemo<ReadonlyMap<string, string>>(
+    () => (dataMode ? NO_LABELS : collectOptionLabels(children)),
+    [dataMode, children],
+  );
+  useItemsAndChildrenWarning('Dropdown', items, children);
 
   const listbox = useListbox({
     open,
@@ -337,6 +374,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     mode: 'select-only',
     multiselect,
     disabledOptionsFocusable,
+    items,
     selectedValues: values,
     onSelect: (next, details) => {
       if (!multiselect) {
@@ -563,7 +601,16 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
       >
-        {children}
+        {/* Data mode: the options of the shown items while the list shows (labels come from
+            `items`, so a closed list needs none); the children are ignored. */}
+        {!dataMode
+          ? children
+          : expanded &&
+            renderListboxItems(listbox.items, {
+              selected: new Set(values),
+              activeValue: listbox.activeValue,
+              renderOption,
+            })}
       </ListboxSurface>
       <HiddenInput
         name={name}
@@ -600,6 +647,11 @@ export const DropdownOptionGroup = OptionGroup;
  * (`labels.added`/`labels.removed`, never for a controlled change, a clear or a form reset).
  * `clearable` then clears every value. A non-literal `multiselect={flag}` is a type error: render
  * two elements, one for each mode.
+ *
+ * **Data mode**: `items` passes the options as data instead of children. The open list renders an
+ * option per item (`renderOption` draws it, an `Option` with the item's label by default) and the
+ * closed list none; the keys, typeahead and the button's text follow the data, and each option
+ * carries `aria-posinset` and `aria-setsize`.
  *
  * The `<button>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`

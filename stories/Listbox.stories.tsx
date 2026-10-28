@@ -14,6 +14,7 @@ import {
   type ListboxItem,
   type ListboxProps,
 } from '../src';
+import { PEOPLE } from './_people';
 
 const meta = {
   title: 'Components/Input/Listbox',
@@ -105,6 +106,20 @@ export const DisabledOptions: Story = {
       <Listbox.Option value="fish">Fish</Listbox.Option>
     </Listbox>
   ),
+};
+
+/**
+ * Data mode: the 500 options come from `items`, not from children; the keys, typeahead and the
+ * selection follow the data, and each option carries its position (`aria-posinset` of
+ * `aria-setsize`). Every option is rendered, so the list is given a height and scrolls.
+ */
+export const DataMode: Story = {
+  args: {
+    'aria-label': 'Person',
+    defaultValue: 'person-321',
+    items: PEOPLE,
+    className: 'max-h-72',
+  },
 };
 
 /** Named by a Field label instead of `aria-label`. */
