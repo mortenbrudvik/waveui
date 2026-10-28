@@ -16,7 +16,7 @@ import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
+import { ownsArrowKeys, useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { ListRegistry, type ListFocusLoss } from './List.registry';
 
@@ -381,23 +381,6 @@ function isTextEntry(el: Element): boolean {
   if (tag === 'textarea' || tag === 'select') return true;
   if (tag === 'input') return !NON_TEXT_INPUT_TYPES.has((el as HTMLInputElement).type);
   return el.matches('[contenteditable]:not([contenteditable="false"])');
-}
-
-/**
- * Whether a key on `target` belongs to a widget that uses the arrow keys itself, by the rule of
- * the roving tab index, which leaves such keys alone: a text field, select, contenteditable,
- * slider, spin button or editable combobox. A select-only combobox (a button) is not one.
- */
-function ownsArrowKeys(target: EventTarget): boolean {
-  if ((target as Partial<Node>).nodeType !== 1) return false;
-  const el = target as Element;
-  const role = el.getAttribute('role');
-  if (role !== null && role !== 'combobox' && TEXT_ENTRY_ROLES.has(role)) return true;
-  const tag = el.localName;
-  if (tag === 'textarea' || tag === 'select') return true;
-  if (tag === 'input') return !NON_TEXT_INPUT_TYPES.has((el as HTMLInputElement).type);
-  const editable = el.closest('[contenteditable]');
-  return editable !== null && editable.getAttribute('contenteditable') !== 'false';
 }
 
 function getFocusables(cell: HTMLElement): HTMLElement[] {
@@ -873,7 +856,8 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   // After every commit of a windowed list: focus the awaited item, which the commit rendered (it
   // is kept), unless focus went outside the list meanwhile; and when `count` dropped to or below
   // the focused item, move focus (the list had it: the item was removed with it) and with it the
-  // Tab stop to the last item. A list that is not windowed keeps nothing.
+  // Tab stop to the last item, awaited as a key's target when the window is elsewhere (the focused
+  // item was kept outside it). A list that is not windowed keeps nothing.
   React.useLayoutEffect(() => {
     const root = rootElementRef.current;
     if (!windowed || !root) {
@@ -893,8 +877,16 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     }
     const { focused } = windowFocus.getSnapshot();
     if (focused === null || focused < itemCount) return;
-    const last = itemCount > 0 ? getWindowItem(root, itemCount - 1) : null;
-    if (last && lost) getItemFocusTarget(last)?.focus();
+    if (lost && itemCount > 0) {
+      const last = getWindowItem(root, itemCount - 1);
+      if (last) {
+        getItemFocusTarget(last)?.focus();
+      } else {
+        windowFocus.update({ focused: null, pending: itemCount - 1 });
+        activeWindow?.scrollToIndex(itemCount - 1, { align: 'auto' });
+        return;
+      }
+    }
     if (windowFocus.getSnapshot().focused === focused) windowFocus.update({ focused: null });
   });
 

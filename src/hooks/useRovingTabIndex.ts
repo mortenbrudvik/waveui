@@ -388,8 +388,13 @@ function isNativelyDisabled(el: HTMLElement): boolean {
   }
 }
 
-/** Text-entry fields and widgets that use the arrow keys themselves (APG Toolbar). */
-function ownsArrowKeys(target: EventTarget | null): boolean {
+/**
+ * Text-entry fields and widgets that use the arrow keys themselves (APG Toolbar).
+ *
+ * Internal: shared with the windowed List's keys, which leave the same keys alone; not exported
+ * from the package.
+ */
+export function ownsArrowKeys(target: EventTarget | null): boolean {
   if (!target || (target as Node).nodeType !== 1) return false;
   const el = target as HTMLElement;
   const role = el.getAttribute('role');

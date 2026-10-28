@@ -876,6 +876,28 @@ describe('List virtualWindow', () => {
       expect(order()).toEqual(['spacer', ...range(4994, 5017), 'spacer']);
     });
 
+    it('scrolls to the last item and focuses it when count drops below a focused item and the last one is not rendered', async () => {
+      const { rerender } = render(<WindowedList selectable />);
+      await scrollTo(9000 * ITEM);
+      await focus(item(9000));
+      await scrollTo(0);
+      expect(order()).toEqual([...range(0, 17), 'spacer', 9000, 'spacer']);
+      // Item 9000 goes, and the new last item (4999) is outside the window.
+      rerender(<WindowedList selectable count={5000} />);
+      await act(async () => {});
+      expect(document.activeElement).toBe(item(4999));
+      expect(item(4999)).toHaveAttribute('aria-posinset', '5000');
+      expect(item(4999)).toHaveAttribute('tabindex', '0');
+      expect(listRoot().querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      expect(listRoot().scrollTop).toBe(5000 * ITEM - VIEWPORT);
+      expect(mountedIndexes()).toEqual(range(4983, 5000));
+
+      rerender(<WindowedList selectable count={0} />);
+      await act(async () => {});
+      expect(listRoot().children).toHaveLength(0);
+      expect(document.activeElement).toBe(document.body);
+    });
+
     it('restores focus by the item’s index after a switch to grid semantics', async () => {
       const { rerender } = render(
         <WindowedList navigationMode="items" renderItem={unvaluedItem} />,
