@@ -11,8 +11,10 @@ import {
   ToggleButton,
   Toolbar,
   Tooltip,
+  type MotionSlot,
   type NavDrawerProps,
 } from '../src';
+import { motionCases } from './_motion';
 
 /** A locally drawn home glyph (tokens only: it takes the text colour). */
 const HomeGlyph = () => (
@@ -352,6 +354,106 @@ export const NonModal: Story = {
           <NavDrawer.Body>{bodyItems}</NavDrawer.Body>
           {footer}
         </NavDrawer>
+      </div>
+    );
+  },
+};
+
+/** The Motion story's overlay panel: a fade in place, without the slide, over 300ms both ways. */
+const panelFade =
+  'transition-opacity duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
+
+/** The Motion story's inline collapse: 500ms with the max easy-ease curve, without the fade. */
+const slowCollapse =
+  'transition-[grid-template-columns] duration-wave-ultra-slow ease-wave-easy-ease-max motion-reduce:transition-none data-[presence=entering]:starting:grid-cols-[minmax(0,0fr)] data-[presence=exiting]:grid-cols-[minmax(0,0fr)]';
+
+/**
+ * One pane of the Motion story: the page's Hamburger toggles the drawer, named by `label`, which
+ * starts open inline and closed as an overlay.
+ */
+function MotionPane({
+  args,
+  label,
+  motion,
+  id,
+}: {
+  args: NavDrawerProps;
+  label: string;
+  motion: MotionSlot | null | undefined;
+  id: string;
+}) {
+  const overlay = args.type === 'overlay';
+  const [open, setOpen] = React.useState(!overlay);
+  const outerRef = React.useRef<HTMLButtonElement>(null);
+  return (
+    <div className="flex h-80 flex-col overflow-hidden rounded-md border border-border bg-background text-foreground">
+      <div className="flex items-center gap-2 border-b border-border p-2">
+        <Hamburger
+          ref={outerRef}
+          aria-expanded={open}
+          aria-controls={open ? id : undefined}
+          aria-haspopup={overlay ? 'dialog' : undefined}
+          onClick={() => setOpen(!open)}
+        />
+        <span className="text-subtitle-2 font-semibold">{label}</span>
+      </div>
+      <div className="flex min-h-0 flex-1">
+        {/* The pane owns the controlled pair; every other arg is forwarded. */}
+        <NavDrawer
+          {...args}
+          id={id}
+          aria-label={label}
+          open={open}
+          finalFocusRef={outerRef}
+          motion={motion}
+          // An inline drawer has no backdrop (a `backdropMotion` there warns in development).
+          backdropMotion={overlay && motion === null ? null : undefined}
+          onOpenChange={(next, details) => {
+            setOpen(next);
+            args.onOpenChange?.(next, details);
+          }}
+          onItemSelect={(value) => {
+            // An overlay closes when a page is chosen, the current one included.
+            if (overlay) setOpen(false);
+            args.onItemSelect?.(value);
+          }}
+        >
+          {overlay && (
+            <NavDrawer.Header>
+              <Hamburger />
+              <span className="text-subtitle-2 font-semibold">{label}</span>
+            </NavDrawer.Header>
+          )}
+          <NavDrawer.Body>{bodyItems}</NavDrawer.Body>
+        </NavDrawer>
+        <Content />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * `motion` and `backdropMotion`. Inline (the default `type` here), the pane's space in the row
+ * collapses toward its edge while the pane fades, over the duration of its `size` (250ms at
+ * `small`); as an overlay (pick `type` in the controls) the panel slides in from its edge while
+ * its backdrop fades. `null` turns the motion off; a class string replaces it (a slower collapse
+ * inline, a fade in place as an overlay, whose backdrop keeps its default fade). Each page
+ * Hamburger toggles its pane.
+ */
+export const Motion: Story = {
+  render: function MotionNavDrawers(args) {
+    const replacement = args.type === 'overlay' ? panelFade : slowCollapse;
+    return (
+      <div className="flex flex-col gap-3">
+        {motionCases(replacement).map(({ label, motion }, index) => (
+          <MotionPane
+            key={`${label}-${args.type}`}
+            args={args}
+            label={label}
+            motion={motion}
+            id={`motion-nav-${index}`}
+          />
+        ))}
       </div>
     );
   },

@@ -3,7 +3,13 @@ import { flattenChildren, isElementOfType } from '../../lib/children';
 import { teachingPopoverClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
 import { slotRendersContent } from '../../lib/slot';
-import type { PopupAlign, PopupPositioning, PopupSide, VirtualElement } from '../../lib/types';
+import type {
+  MotionSlot,
+  PopupAlign,
+  PopupPositioning,
+  PopupSide,
+  VirtualElement,
+} from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
@@ -161,10 +167,24 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    */
   positioning?: PopupPositioning;
   /**
+   * The motion of the surface TeachingPopover renders (next to a `TeachingPopover.Surface` it is
+   * ignored, with a development warning: give it to the Surface). By default the surface fades in
+   * over 200 ms with a decelerating curve and out over 100 ms with an accelerating curve, and,
+   * pointed at a target (or the Trigger), also slides 4px away from it on the side it opened on,
+   * and back as it closes; under reduced motion it appears and disappears at once. `null` turns
+   * the motion off (the surface still renders its `data-presence` phases, which then end at
+   * once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. Fluent's `TeachingPopover` `surfaceMotion` (a TeachingPopover is a Popover
+   * there).
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
+  /**
    * `TeachingPopover.Trigger` and `TeachingPopover.Surface` (Fluent's composition), rendered where
    * they are written. Without a `TeachingPopover.Surface` among them, the popover renders its
    * surface itself, after the children, with the element props given here (`className`, `style`,
-   * `ref`, …); with one (best written directly inside, a Fragment is fine: see
+   * `ref`, `motion`, …); with one (best written directly inside, a Fragment is fine: see
    * `TeachingPopover.Surface`), the Surface takes them instead.
    */
   children?: React.ReactNode;
@@ -210,7 +230,7 @@ const SURFACE_PLACEMENT_WARNING =
 
 const SURFACE_PROPS_WARNING_KEY = 'TeachingPopover:surface-props';
 const SURFACE_PROPS_WARNING =
-  'TeachingPopover: the props of the surface element on TeachingPopover (`className`, `style`, `ref`, `onKeyDown` and the other element props) are ignored next to a TeachingPopover.Surface: pass them to the Surface.';
+  'TeachingPopover: the props of the surface element on TeachingPopover (`className`, `style`, `ref`, `onKeyDown`, `motion` and the other element props) are ignored next to a TeachingPopover.Surface: pass them to the Surface.';
 
 // The root of `TeachingPopover` (documented on the export in TeachingPopover.tsx).
 export const TeachingPopoverRoot = ({
@@ -239,6 +259,7 @@ export const TeachingPopoverRoot = ({
   className,
   style,
   onKeyDown,
+  motion,
   ref,
   ...rest
 }: TeachingPopoverProps) => {
@@ -371,13 +392,15 @@ export const TeachingPopoverRoot = ({
     if (next !== index) setStep(next);
   });
 
-  // Next to a Surface the root renders no surface element, so its element props go nowhere.
+  // Next to a Surface the root renders no surface element, so its element props and its `motion`
+  // (`null` included: it asks for no motion) go nowhere.
   const ignoresSurfaceProps =
     hasSurfacePart &&
     (id !== undefined ||
       className !== undefined ||
       style !== undefined ||
       onKeyDown !== undefined ||
+      motion !== undefined ||
       ref !== undefined ||
       Object.keys(rest).length > 0);
   React.useEffect(() => {
@@ -476,6 +499,7 @@ export const TeachingPopoverRoot = ({
           className={className}
           style={style}
           onKeyDown={onKeyDown}
+          motion={motion}
           {...rest}
           ref={ref}
         />

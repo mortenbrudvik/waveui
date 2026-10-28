@@ -15,6 +15,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -39,6 +40,7 @@ import {
   directivePrologue,
   entryStatus,
   EXCLUSION_PROBES_0_11,
+  EXCLUSION_PROBES_0_15,
   expectsUseClient,
   importSpecifiers,
   INCLUSION_PROBES_0_11,
@@ -47,6 +49,11 @@ import {
   missingDeclarations,
   missingValueAndTypeDeclarations,
   MODULE_ONLY_NAMES,
+  MOTION_INCLUDE_PROBES,
+  MOTION_RECIPE_MIN,
+  motionLiteralsOf,
+  motionRecipeLiterals,
+  motionRecipeValues,
   OPT_IN_MODULES,
   PENDING_FLAT_EXPORTS,
   probeIncludes,
@@ -59,6 +66,8 @@ import {
   VALUE_AND_TYPE_DECLARATIONS,
   verifyDist,
 } from '../verify-dist.mjs';
+// The source of `dist/lib/motion.mjs` (0.15): MOTION_RECIPE_MIN is the count of its literals.
+import * as motionSource from '../../src/lib/motion.ts';
 
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 // Removed with its parent once no other run uses the parent (no empty directory is left behind).
@@ -95,8 +104,16 @@ const DTS =
 /** What vite-plugin-dts rolls up when TypeScript writes the declarations elsewhere. */
 const EMPTY_ROLL_UP = 'export { }\n';
 
-/** A correct preserveModules dist: Button, a Card and a Dialog compound, a hook and `cn`. */
+/**
+ * A correct preserveModules dist: Button, a Card and a Dialog compound, a hook and `cn`, the
+ * modules of each phase since 0.11, and the 0.15 modules of {@link withPhase10Modules}.
+ */
 function goodFiles() {
+  return withPhase10Modules(goodFilesBefore015());
+}
+
+/** The good files up to 0.14 ({@link goodFiles} adds the 0.15 modules). */
+function goodFilesBefore015() {
   const component = (name, members = [], constant) => {
     const parts = members.map(
       (member) =>
@@ -131,7 +148,10 @@ function goodFiles() {
   const field = component('Field');
   const infoButton = component('InfoButton', [], 'infoButtonClassNames');
   const card = component('Card', ['Header']);
-  const dialog = component('Dialog', ['Trigger', 'Content']);
+  // The Dialog resolves its two recipes through the motion hook (0.15), so an import of only
+  // Dialog holds `lib/motion`, `hooks/useMotion` and both recipe literals.
+  const dialog = withDialogMotion(component('Dialog', ['Trigger', 'Content']));
+  const motion = fixtureMotionModules();
   // The presence core (0.7): a hook and a component on it, with React external.
   const usePresence = {
     esm:
@@ -309,6 +329,10 @@ function createToaster() {
           'dist/components/layout/Card.cjs': card.cjs,
           'dist/components/overlays/Dialog.mjs': dialog.esm,
           'dist/components/overlays/Dialog.cjs': dialog.cjs,
+          'dist/lib/motion.mjs': motion.module.esm,
+          'dist/lib/motion.cjs': motion.module.cjs,
+          'dist/hooks/useMotion.mjs': motion.hook.esm,
+          'dist/hooks/useMotion.cjs': motion.hook.cjs,
           'dist/hooks/usePresence.mjs': usePresence.esm,
           'dist/hooks/usePresence.cjs': usePresence.cjs,
           'dist/components/motion/Presence.mjs': presence.esm,
@@ -770,6 +794,112 @@ function withPhase9Modules(files) {
     "const phase9Breadcrumb = require('./lib/breadcrumb.cjs');\n" +
     'exports.createTableColumn = phase9Table.createTableColumn;\n' +
     BREADCRUMB_HELPERS.map((name) => `exports.${name} = phase9Breadcrumb.${name};\n`).join('');
+  return result;
+}
+
+/**
+ * The 0.15 modules of the fixture (INTEGRATION), one entry per dist module (without its
+ * extension): `imports` are [module, names] pairs (a bare module stays bare), `body` the code that
+ * uses them, `exports` its names, and `entry` whether the package entry exports them. An Accordion
+ * on the collapse hook and a MessageBarGroup on the presence group resolve their recipes from
+ * `lib/motion` through `hooks/useMotion`, so the motion controls of MOTION_INCLUDE_PROBES find
+ * their modules and literals; a MessageBar reaches neither (EXCLUSION_PROBES_0_15).
+ */
+const PHASE10_MODULES = {
+  'hooks/useCollapsePresence': {
+    imports: [
+      ['lib/motion', ['collapseMotion', 'collapseStructure']],
+      ['hooks/useMotion', ['useMotionClasses']],
+      ['hooks/usePresence', ['usePresence']],
+    ],
+    body:
+      'function useCollapsePresence(open, options) { const presence = usePresence(open); ' +
+      "return { isMounted: presence.isMounted, className: collapseStructure + ' ' + useMotionClasses(options.motion, collapseMotion) }; }\n",
+    exports: ['useCollapsePresence'],
+  },
+  'components/layout/Accordion': {
+    imports: [
+      ['lib/cn', ['cn']],
+      ['hooks/useCollapsePresence', ['useCollapsePresence']],
+    ],
+    body:
+      "function Accordion(props) { const collapse = useCollapsePresence(props.open, props); return cn('accordion', collapse.className, props.className); }\n" +
+      "Accordion.displayName = 'Accordion';\n",
+    exports: ['Accordion'],
+    entry: true,
+  },
+  'components/feedback/MessageBar': {
+    imports: [['lib/cn', ['cn']]],
+    body:
+      "function MessageBar(props) { return cn('message-bar', props && props.className); }\n" +
+      "MessageBar.displayName = 'MessageBar';\n",
+    exports: ['MessageBar'],
+    entry: true,
+  },
+  'hooks/usePresenceGroup': {
+    imports: [['react', ['useState']]],
+    body:
+      'function usePresenceGroup(children) { const [entries] = useState(() => [].concat(children ?? [])); ' +
+      'return { entries, skipped: [], onExited: () => {} }; }\n',
+    exports: ['usePresenceGroup'],
+  },
+  'components/feedback/MessageBarGroup': {
+    imports: [
+      ['lib/cn', ['cn']],
+      [
+        'lib/motion',
+        ['messageBarGroupEnterMotion', 'messageBarGroupExitMotion', 'messageBarGroupItemStructure'],
+      ],
+      ['hooks/useMotion', ['useMotionClasses']],
+      ['hooks/usePresence', ['usePresence']],
+      ['hooks/usePresenceGroup', ['usePresenceGroup']],
+    ],
+    body:
+      'function MessageBarGroup(props) { const { entries } = usePresenceGroup(props.children); const item = usePresence(entries.length > 0); ' +
+      "return cn('message-bar-group', messageBarGroupItemStructure, useMotionClasses(props.motion, messageBarGroupExitMotion + ' ' + messageBarGroupEnterMotion), item.phase); }\n" +
+      "MessageBarGroup.displayName = 'MessageBarGroup';\n",
+    exports: ['MessageBarGroup'],
+    entry: true,
+  },
+};
+
+/** The ESM and CommonJS code of the 0.15 module `path` with `spec` (see PHASE10_MODULES). */
+function phase10Module(path, { imports, body, exports }) {
+  const specifier = (target, ext) => {
+    if (!target.includes('/')) return target;
+    const relative = posix.relative(posix.dirname(path), target);
+    return `${relative.startsWith('.') ? relative : `./${relative}`}.${ext}`;
+  };
+  const esmImports = imports
+    .map(
+      ([module, names]) => `import { ${names.join(', ')} } from '${specifier(module, 'mjs')}';\n`,
+    )
+    .join('');
+  const cjsImports = imports
+    .map(
+      ([module, names]) =>
+        `const { ${names.join(', ')} } = require('${specifier(module, 'cjs')}');\n`,
+    )
+    .join('');
+  return {
+    esm: `${DIRECTIVE}${esmImports}${body}export { ${exports.join(', ')} };\n`,
+    cjs: `${DIRECTIVE}${cjsImports}${body}${exports.map((name) => `exports.${name} = ${name};\n`).join('')}`,
+  };
+}
+
+/** The good files with the 0.15 modules of PHASE10_MODULES, their public names in the entry. */
+function withPhase10Modules(files) {
+  const result = { ...files };
+  for (const [path, spec] of Object.entries(PHASE10_MODULES)) {
+    const { esm, cjs } = phase10Module(path, spec);
+    result[`dist/${path}.mjs`] = esm;
+    result[`dist/${path}.cjs`] = cjs;
+    if (!spec.entry) continue;
+    result['dist/index.mjs'] += `export { ${spec.exports.join(', ')} } from './${path}.mjs';\n`;
+    result['dist/index.cjs'] += spec.exports
+      .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
+      .join('');
+  }
   return result;
 }
 
@@ -1645,7 +1775,7 @@ describe('probeTreeShaking: a Field-only bundle (0.9)', () => {
     expect(await probeTreeShaking(dist, fieldDrop)).toEqual([
       'components/data-display/InfoButton.mjs is in the bundle of an import of only Field (InfoButton must be dropped)',
       'InfoButton code (displayName "InfoButton") is in the bundle of an import of only Field',
-      'the bundle of an import of only Field contains the string "wave-info-button" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Field contains the string "wave-info-button" (an unused constant was not tree-shaken)',
     ]);
   });
 
@@ -1661,7 +1791,7 @@ describe('probeTreeShaking: a Field-only bundle (0.9)', () => {
         .replace('return cn(', 'return cn(infoButtonClassNames.root, '),
     });
     expect(await probeTreeShaking(dist, fieldDrop)).toEqual([
-      'the bundle of an import of only Field contains the string "wave-info-button" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Field contains the string "wave-info-button" (an unused constant was not tree-shaken)',
     ]);
   });
 });
@@ -2281,7 +2411,7 @@ describe('the 0.11 probes (INTEGRATION)', () => {
     expect(await probeTreeShaking(dist, probe)).toEqual([
       'components/button/Toolbar.navigation.mjs is in the bundle of an import of only Tag (TagPicker must be dropped)',
       'components/data-display/TagGroup.mjs is in the bundle of an import of only Tag (TagPicker must be dropped)',
-      'the bundle of an import of only Tag contains the string "wave-tag-group" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Tag contains the string "wave-tag-group" (an unused constant was not tree-shaken)',
     ]);
   });
 
@@ -2382,6 +2512,53 @@ describe('module-only names (0.11 INTEGRATION)', () => {
         'TeachingSurface',
         'isForeignEvent',
         'SortArrowUpIcon',
+      ]),
+    );
+  });
+
+  it('lists every export of the internal motion modules (0.15, spec §16 Q1): the recipes, the resolver and the hooks', () => {
+    // Read from the sources, so a new recipe constant or hook export is listed before it ships.
+    const modules = [
+      'src/lib/motion.ts',
+      'src/hooks/useMotion.ts',
+      'src/hooks/useCollapsePresence.ts',
+      'src/hooks/useFocusBeforeClose.ts',
+      'src/hooks/usePresenceGroup.ts',
+    ];
+    const names = [];
+    for (const path of modules) {
+      const source = readFileSync(join(repoRoot, path), 'utf8');
+      // Every export is a declaration, so the pattern below sees each one.
+      expect(source, path).not.toMatch(/^export\s+(?:type\s+)?(?:\{|\*)|^export\s+default\b/m);
+      const found = Array.from(
+        source.matchAll(
+          /^export (?:declare )?(?:async )?(?:function\*?|const|let|class|interface|type|enum) (\w+)/gm,
+        ),
+        (match) => match[1],
+      );
+      expect(found.length, path).toBeGreaterThan(0);
+      names.push(...found);
+    }
+    // The pattern finds every value the motion module exports at run time, records and functions.
+    expect(names).toEqual(expect.arrayContaining(Object.keys(motionSource)));
+    expect(names.filter((name) => !MODULE_ONLY_NAMES.includes(name))).toEqual([]);
+    expect(MODULE_ONLY_NAMES).toEqual(
+      expect.arrayContaining([
+        'PresenceGroupEntry',
+        'UseCollapsePresenceOptions',
+        'UseCollapsePresenceResult',
+        'UseFocusBeforeCloseOptions',
+        'UsePresenceGroupResult',
+        'resolveMotion',
+        'useCollapsePresence',
+        'useFocusBeforeClose',
+        'useMotionClasses',
+        'useMotionPreference',
+        'usePresenceGroup',
+        'usesLegacyMotion',
+        'collapseMotion',
+        'dialogMotion',
+        'popupMotion',
       ]),
     );
   });
@@ -2562,7 +2739,7 @@ describe('probeTreeShaking: class-name strings (P3-00)', () => {
         ),
     });
     expect(await probeTreeShaking(dist, strings)).toEqual([
-      'the bundle of an import of only Button contains the string "wave-dialog-content" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Button contains the string "wave-dialog-content" (an unused constant was not tree-shaken)',
     ]);
   });
 
@@ -2588,6 +2765,531 @@ describe('probeTreeShaking: class-name strings (P3-00)', () => {
       '"wave-gone", listed for the bundle of an import of only Button, occurs in no module of dist (the probe would pass vacuously)',
     ]);
   });
+});
+
+/**
+ * The motion recipes of the fixture (spec §2.10, D23): the recipe literals its components read
+ * (the Dialog's two; the collapse structure and motion of the Accordion; and, 0.15, the three of
+ * the MessageBarGroup, whose structures and enter hold no transition, only the presence variant)
+ * and a record of durations (the drawer durations hold no presence variant, no transition and no
+ * animation). Every one is exported by both motion modules of the fixture, the good files' and
+ * {@link motionModule}'s: a module the bundler reaches must export every name imported from it.
+ */
+const MOTION_RECIPES = {
+  dialogMotion:
+    'transition-[opacity,scale] duration-wave-gentle ease-wave-decelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+  dialogBackdropMotion:
+    'transition-opacity duration-wave-gentle ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+  collapseStructure:
+    'grid grid-rows-[minmax(0,1fr)] overflow-hidden data-[presence=entered]:contents',
+  collapseMotion:
+    'transition-[grid-template-rows,opacity] duration-wave-normal ease-wave-easy-ease-max motion-reduce:transition-none data-[presence=exiting]:grid-rows-[minmax(0,0fr)]',
+  messageBarGroupItemStructure:
+    'grid grid-rows-[minmax(0,1fr)] items-end overflow-hidden data-[presence=entered]:contents',
+  messageBarGroupExitMotion:
+    'transition-[grid-template-rows,margin-bottom,opacity] duration-wave-gentle ease-wave-linear motion-reduce:transition-none data-[presence=exiting]:opacity-0',
+  messageBarGroupEnterMotion: 'data-[presence=entering]:starting:opacity-0',
+};
+const MOTION_DURATIONS = { small: 'duration-wave-gentle', large: 'duration-wave-slow' };
+/** The literals `motionRecipeLiterals` reads from the fixture: exports by name, records by key. */
+const MOTION_LITERALS = [
+  MOTION_RECIPES.collapseMotion,
+  MOTION_RECIPES.collapseStructure,
+  MOTION_RECIPES.dialogBackdropMotion,
+  MOTION_RECIPES.dialogMotion,
+  MOTION_DURATIONS.small,
+  MOTION_DURATIONS.large,
+  MOTION_RECIPES.messageBarGroupEnterMotion,
+  MOTION_RECIPES.messageBarGroupExitMotion,
+  MOTION_RECIPES.messageBarGroupItemStructure,
+];
+
+/**
+ * The resolver of a fixture `lib/motion` (without its export), whose own literal holds the
+ * presence-variant text, as the real module's does.
+ */
+const MOTION_RESOLVER =
+  "const PRESENCE_VARIANT = '[presence=';\n" +
+  'function resolveMotion(slot, recipe, preference, legacyClassName) {\n' +
+  "  if (slot === null) return '';\n" +
+  "  if (slot !== undefined) return typeof slot === 'string' ? slot : slot.className;\n" +
+  "  if (preference === 'none') return '';\n" +
+  "  if (legacyClassName !== undefined && legacyClassName.includes(PRESENCE_VARIANT)) return '';\n" +
+  '  return recipe;\n' +
+  '}\n';
+
+/**
+ * A fixture `lib/motion.mjs`: the recipes, the durations, `extra` exports and the resolver, whose
+ * own literal holds the presence-variant text, as the real module's does.
+ */
+function motionModule(extra = '') {
+  return (
+    MOTION_RESOLVER +
+    Object.entries(MOTION_RECIPES)
+      .map(([name, value]) => `export const ${name} = '${value}';\n`)
+      .join('') +
+    `export const drawerDurations = ${JSON.stringify(MOTION_DURATIONS)};\n` +
+    extra +
+    'export { resolveMotion };\n'
+  );
+}
+
+/**
+ * The recipes of the good files' `lib/motion` (0.15): those of {@link MOTION_RECIPES}, which the
+ * fixture's components read, then generated ones up to {@link MOTION_RECIPE_MIN}, so
+ * `verifyDist`'s default minimum (the release count) holds.
+ */
+function fixtureMotionRecipes() {
+  const recipes = { ...MOTION_RECIPES };
+  for (let i = Object.keys(recipes).length; i < Math.max(MOTION_RECIPE_MIN, 2); i++) {
+    recipes[`fixtureMotion${i}`] =
+      `transition-opacity duration-wave-fast ease-wave-easy-ease motion-reduce:transition-none data-[presence=exiting]:opacity-${i}`;
+  }
+  return recipes;
+}
+
+/**
+ * The good files' motion modules in both formats: `lib/motion` (the recipes of
+ * {@link fixtureMotionRecipes} and the resolver) and `hooks/useMotion` on it.
+ */
+function fixtureMotionModules() {
+  const recipes = Object.entries(fixtureMotionRecipes());
+  return {
+    module: {
+      esm:
+        MOTION_RESOLVER +
+        recipes.map(([name, value]) => `export const ${name} = '${value}';\n`).join('') +
+        'export { resolveMotion };\n',
+      cjs:
+        MOTION_RESOLVER +
+        recipes.map(([name, value]) => `exports.${name} = '${value}';\n`).join('') +
+        'exports.resolveMotion = resolveMotion;\n',
+    },
+    hook: {
+      esm:
+        `${DIRECTIVE}import { resolveMotion } from '../lib/motion.mjs';\n` +
+        "export function useMotionClasses(slot, recipe) { return resolveMotion(slot, recipe, 'default'); }\n",
+      cjs:
+        `${DIRECTIVE}const { resolveMotion } = require('../lib/motion.cjs');\n` +
+        "exports.useMotionClasses = function useMotionClasses(slot, recipe) { return resolveMotion(slot, recipe, 'default'); };\n",
+    },
+  };
+}
+
+/** The motion classes of the good files' Dialog: its surface's and its backdrop's recipe. */
+const DIALOG_MOTION_CALLS =
+  'useMotionClasses(props.motion, dialogMotion), useMotionClasses(props.backdropMotion, dialogBackdropMotion), ';
+
+/** `dialog` (the fixture's component modules) resolving its two recipes in its render. */
+function withDialogMotion(dialog) {
+  return {
+    esm: dialog.esm
+      .replace(
+        DIRECTIVE,
+        `${DIRECTIVE}import { dialogBackdropMotion, dialogMotion } from '../../lib/motion.mjs';\n` +
+          "import { useMotionClasses } from '../../hooks/useMotion.mjs';\n",
+      )
+      .replace('return cn(', `return cn(${DIALOG_MOTION_CALLS}`),
+    cjs: dialog.cjs
+      .replace(
+        DIRECTIVE,
+        `${DIRECTIVE}const { dialogBackdropMotion, dialogMotion } = require('../../lib/motion.cjs');\n` +
+          "const { useMotionClasses } = require('../../hooks/useMotion.cjs');\n",
+      )
+      .replace('return cn(', `return cn(${DIALOG_MOTION_CALLS}`),
+  };
+}
+
+/**
+ * The good files (whose Dialog resolves its recipes through `hooks/useMotion`, so an import of
+ * only Dialog holds both motion modules) with the recipes and durations of {@link motionModule},
+ * then `overrides`.
+ */
+function motionFixture(overrides = {}) {
+  return fixture({ 'dist/lib/motion.mjs': motionModule(), ...overrides });
+}
+
+/** Button's module with `code` added to its render (before its `return`). */
+function buttonWith(code, imports = '') {
+  const files = goodFiles();
+  return files['dist/components/button/Button.mjs']
+    .replace(DIRECTIVE, `${DIRECTIVE}${imports}`)
+    .replace('return cn(', `${code} return cn(`);
+}
+
+describe('motionRecipeLiterals (spec §2.10, D23)', () => {
+  it('reads every string export of lib/motion.mjs, one level into records', async () => {
+    const { dist } = motionFixture();
+    expect(await motionRecipeLiterals(dist, { min: 4 })).toEqual({
+      literals: MOTION_LITERALS,
+      errors: [],
+    });
+  });
+
+  it('defaults to a minimum of at least the Dialog’s two recipes', () => {
+    expect(Number.isInteger(MOTION_RECIPE_MIN) && MOTION_RECIPE_MIN >= 2).toBe(true);
+  });
+
+  it('MOTION_RECIPE_MIN is the release count: the literals of src/lib/motion.ts, read as in dist', () => {
+    // The source of dist/lib/motion.mjs, read by the rule motionRecipeLiterals applies to the
+    // build: a new recipe raises the count here, and a recipe the build loses fails verifyDist.
+    const { literals, errors } = motionLiteralsOf(motionSource, 'src/lib/motion.ts');
+    expect(errors).toEqual([]);
+    expect(literals).toHaveLength(MOTION_RECIPE_MIN);
+  });
+
+  it('motionLiteralsOf reads a module namespace: functions skipped, records one level deep, each value once', () => {
+    const mod = {
+      fade: 'transition-opacity duration-wave-fast',
+      byEdge: { start: 'duration-wave-slow', end: 'transition-opacity duration-wave-fast' },
+      resolve: () => '',
+      count: 3,
+    };
+    expect(motionLiteralsOf(mod, 'fixture')).toEqual({
+      literals: ['transition-opacity duration-wave-fast', 'duration-wave-slow'],
+      errors: ['fixture: count is neither a string, a record of strings nor a function'],
+    });
+  });
+
+  it('reads the good files’ recipes at the default minimum, exports in name order', async () => {
+    // A module namespace lists its exports sorted by name (code units).
+    const byName = Object.entries(fixtureMotionRecipes()).sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    );
+    expect(await motionRecipeLiterals(fixture().dist)).toEqual({
+      literals: byName.map(([, value]) => value),
+      errors: [],
+    });
+    expect(byName).toHaveLength(Math.max(MOTION_RECIPE_MIN, 2));
+  });
+
+  it('reports fewer literals than the default minimum', async () => {
+    const { dist } = fixture({
+      'dist/lib/motion.mjs': `export const dialogMotion = '${MOTION_RECIPES.dialogMotion}';\n`,
+    });
+    expect(await motionRecipeLiterals(dist)).toEqual({
+      literals: [MOTION_RECIPES.dialogMotion],
+      errors: [
+        `lib/motion.mjs holds 1 recipe literals, fewer than the minimum of ${MOTION_RECIPE_MIN}`,
+      ],
+    });
+  });
+
+  it('reports fewer literals than the minimum', async () => {
+    const { dist } = motionFixture();
+    expect((await motionRecipeLiterals(dist, { min: 10 })).errors).toEqual([
+      'lib/motion.mjs holds 9 recipe literals, fewer than the minimum of 10',
+    ]);
+  });
+
+  it('reports a value with none of the recipe markers, and an export of another kind', async () => {
+    const { dist } = motionFixture({
+      'dist/lib/motion.mjs': motionModule(
+        "export const gridStructure = 'grid gap-2';\n" +
+          "export const byEdge = { start: 'transition-[translate] duration-wave-slow', end: 'p-0' };\n" +
+          'export const stagger = 40;\n',
+      ),
+    });
+    const { literals, errors } = await motionRecipeLiterals(dist, { min: 0 });
+    expect(literals).toContain('grid gap-2');
+    expect(errors).toEqual([
+      'lib/motion.mjs: byEdge.end ("p-0") holds none of [presence=, transition, animate-, duration-wave- (not a recipe)',
+      'lib/motion.mjs: gridStructure ("grid gap-2") holds none of [presence=, transition, animate-, duration-wave- (not a recipe)',
+      'lib/motion.mjs: stagger is neither a string, a record of strings nor a function',
+    ]);
+  });
+
+  it('motionRecipeValues reads named recipes: the Dialog’s, for the positive control', async () => {
+    expect(
+      await motionRecipeValues(fixture().dist, ['dialogMotion', 'dialogBackdropMotion']),
+    ).toEqual({
+      strings: [MOTION_RECIPES.dialogMotion, MOTION_RECIPES.dialogBackdropMotion],
+      errors: [],
+    });
+  });
+
+  it('motionRecipeValues reports a name that is no string export, and a missing module', async () => {
+    const { dist } = motionFixture();
+    expect(
+      await motionRecipeValues(dist, ['dialogMotion', 'drawerDurations', 'resolveMotion', 'gone']),
+    ).toEqual({
+      strings: [MOTION_RECIPES.dialogMotion],
+      errors: [
+        'lib/motion.mjs exports no recipe string drawerDurations',
+        'lib/motion.mjs exports no recipe string resolveMotion',
+        'lib/motion.mjs exports no recipe string gone',
+      ],
+    });
+    const { dist: bare } = fixture({ 'dist/lib/motion.mjs': null });
+    expect(await motionRecipeValues(bare, ['dialogMotion'])).toEqual({
+      strings: [],
+      errors: ['lib/motion.mjs does not exist in dist'],
+    });
+  });
+
+  it('reports a dist without lib/motion.mjs (the probe would pass vacuously)', async () => {
+    const { dist } = fixture({ 'dist/lib/motion.mjs': null });
+    expect(await motionRecipeLiterals(dist, { min: 0 })).toEqual({
+      literals: [],
+      errors: ['lib/motion.mjs does not exist in dist'],
+    });
+  });
+});
+
+describe('probeTreeShaking: the motion recipes of a Button-only bundle (spec §2.10, D23)', () => {
+  const motionDrop = (literals) => ({
+    keep: 'Button',
+    drop: 'Presence',
+    dropModules: ['hooks/usePresence.mjs', 'lib/motion.mjs', 'hooks/useMotion.mjs'],
+    dropStrings: literals,
+    dropSubstrings: ['[presence='],
+  });
+
+  it('passes when Button reaches no motion code', async () => {
+    const { dist } = motionFixture();
+    const { literals } = await motionRecipeLiterals(dist, { min: 4 });
+    expect(await probeTreeShaking(dist, motionDrop(literals))).toEqual([]);
+  });
+
+  it('reports a recipe literal in the bundle, also without the motion module', async () => {
+    const { dist } = motionFixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        `const motion = '${MOTION_RECIPES.dialogMotion}';`,
+      ).replace('cn(buttonClassNames.root, ', 'cn(buttonClassNames.root, motion, '),
+    });
+    const { literals } = await motionRecipeLiterals(dist, { min: 4 });
+    expect(await probeTreeShaking(dist, motionDrop(literals))).toEqual([
+      `the bundle of an import of only Button contains the string "${MOTION_RECIPES.dialogMotion}" (an unused constant was not tree-shaken)`,
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+  });
+
+  it('reports the motion module and its recipe in the bundle of a Button that imports it', async () => {
+    const { dist } = motionFixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        '',
+        "import { dialogBackdropMotion } from '../../lib/motion.mjs';\n",
+      ).replace('cn(buttonClassNames.root, ', 'cn(buttonClassNames.root, dialogBackdropMotion, '),
+    });
+    const { literals } = await motionRecipeLiterals(dist, { min: 4 });
+    expect(await probeTreeShaking(dist, motionDrop(literals))).toEqual([
+      'lib/motion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
+      `the bundle of an import of only Button contains the string "${MOTION_RECIPES.dialogBackdropMotion}" (an unused constant was not tree-shaken)`,
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+  });
+
+  it('reports a presence variant in any string of the bundle, never in a comment', async () => {
+    const inString = motionFixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        "const legacy = 'p-0 data-[presence=exiting]:opacity-50';",
+      ).replace('cn(buttonClassNames.root, ', 'cn(buttonClassNames.root, legacy, '),
+    });
+    // A doc comment before a declaration survives in the plain bundle (a comment inside a body
+    // does not), so only the minified code tells it from a string.
+    const inComment = motionFixture({
+      'dist/components/button/Button.mjs': buttonWith('').replace(
+        'function ButtonRoot(props)',
+        '/** Animated by a data-[presence=exiting]:opacity-50 class in 0.14. */\nfunction ButtonRoot(props)',
+      ),
+    });
+    const probe = { keep: 'Button', drop: 'Dialog', dropSubstrings: ['[presence='] };
+    expect(await probeTreeShaking(inString.dist, probe)).toEqual([
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+    expect(await probeTreeShaking(inComment.dist, probe)).toEqual([]);
+  }, 30_000);
+});
+
+describe('probeIncludes: strings and substrings (the positive control of D23)', () => {
+  const dialogMotion = {
+    keep: 'Dialog',
+    modules: ['lib/motion.mjs', 'hooks/useMotion.mjs'],
+    strings: [MOTION_RECIPES.dialogMotion],
+    substrings: ['[presence='],
+  };
+
+  it('passes when the bundle holds the modules, the literals and the fragments', async () => {
+    expect(await probeIncludes(motionFixture().dist, dialogMotion)).toEqual([]);
+  });
+
+  it('reports a literal the bundle lacks, matched whole', async () => {
+    // The Dialog reads no drawer duration, and a recipe's word is no literal of its own.
+    expect(
+      await probeIncludes(motionFixture().dist, {
+        ...dialogMotion,
+        strings: [MOTION_DURATIONS.large, 'data-[presence=exiting]:opacity-0'],
+      }),
+    ).toEqual([
+      `the bundle of an import of only Dialog lacks the string "${MOTION_DURATIONS.large}"`,
+      'the bundle of an import of only Dialog lacks the string "data-[presence=exiting]:opacity-0"',
+    ]);
+  });
+
+  it('reports a fragment the code lacks', async () => {
+    expect(
+      await probeIncludes(motionFixture().dist, {
+        ...dialogMotion,
+        substrings: ['[presence=', '[presence=gone'],
+      }),
+    ).toEqual([
+      'the bundle of an import of only Dialog lacks "[presence=gone" outside comments (its minified code)',
+    ]);
+    expect(
+      await probeIncludes(motionFixture().dist, {
+        keep: 'Button',
+        modules: [],
+        substrings: ['[presence='],
+      }),
+    ).toEqual([
+      'the bundle of an import of only Button lacks "[presence=" outside comments (its minified code)',
+    ]);
+  }, 30_000);
+});
+
+describe('the 0.15 probes (INTEGRATION)', () => {
+  /** The module that renders a control's `keep`, and its fixture without any of its motion. */
+  const MOTIONLESS = {
+    Dialog: (files) => {
+      const path = 'dist/components/overlays/Dialog.mjs';
+      const motionImports =
+        "import { dialogBackdropMotion, dialogMotion } from '../../lib/motion.mjs';\n" +
+        "import { useMotionClasses } from '../../hooks/useMotion.mjs';\n";
+      expect(files[path]).toContain(motionImports);
+      expect(files[path]).toContain(DIALOG_MOTION_CALLS);
+      return { [path]: files[path].replace(motionImports, '').replace(DIALOG_MOTION_CALLS, '') };
+    },
+    Accordion: () => ({
+      'dist/components/layout/Accordion.mjs': phase10Module('components/layout/Accordion', {
+        imports: [['lib/cn', ['cn']]],
+        body: "function Accordion(props) { return cn('accordion', props.className); }\n",
+        exports: ['Accordion'],
+      }).esm,
+    }),
+    MessageBarGroup: () => ({
+      'dist/components/feedback/MessageBarGroup.mjs': phase10Module(
+        'components/feedback/MessageBarGroup',
+        {
+          imports: [['lib/cn', ['cn']]],
+          body: "function MessageBarGroup(props) { return cn('message-bar-group', props.className); }\n",
+          exports: ['MessageBarGroup'],
+        },
+      ).esm,
+    }),
+  };
+
+  it('lists the probes of the spec (§2.10)', () => {
+    expect(EXCLUSION_PROBES_0_15).toEqual([
+      {
+        keep: 'MessageBar',
+        drop: 'MessageBarGroup',
+        dropModules: ['hooks/usePresence.mjs', 'hooks/usePresenceGroup.mjs'],
+      },
+    ]);
+    expect(MOTION_INCLUDE_PROBES).toEqual([
+      {
+        keep: 'Dialog',
+        modules: ['lib/motion.mjs', 'hooks/useMotion.mjs'],
+        recipes: ['dialogMotion', 'dialogBackdropMotion'],
+        substrings: ['[presence='],
+      },
+      {
+        keep: 'Accordion',
+        modules: ['lib/motion.mjs', 'hooks/useCollapsePresence.mjs'],
+        recipes: ['collapseStructure', 'collapseMotion'],
+      },
+      {
+        keep: 'MessageBarGroup',
+        modules: ['hooks/usePresenceGroup.mjs', 'lib/motion.mjs'],
+        recipes: [
+          'messageBarGroupItemStructure',
+          'messageBarGroupExitMotion',
+          'messageBarGroupEnterMotion',
+        ],
+      },
+    ]);
+    for (const { keep } of MOTION_INCLUDE_PROBES) expect(MOTIONLESS[keep], keep).toBeDefined();
+  });
+
+  it('an import of only MessageBar drops the presence core and the group: passes on a correct dist, reports each one it imports', async () => {
+    const [probe] = EXCLUSION_PROBES_0_15;
+    expect(await probeTreeShaking(fixture().dist, probe)).toEqual([]);
+    const path = 'components/feedback/MessageBar';
+    const file = `dist/${path}.mjs`;
+    const files = goodFiles();
+    const { dist } = fixture({
+      [file]: withCall(
+        withCall(files[file], path, 'hooks/usePresence', 'usePresence'),
+        path,
+        'hooks/usePresenceGroup',
+        'usePresenceGroup',
+      ),
+    });
+    expect(await probeTreeShaking(dist, probe)).toEqual([
+      'hooks/usePresence.mjs is in the bundle of an import of only MessageBar (MessageBarGroup must be dropped)',
+      'hooks/usePresenceGroup.mjs is in the bundle of an import of only MessageBar (MessageBarGroup must be dropped)',
+    ]);
+  }, 30_000);
+
+  it.each(MOTION_INCLUDE_PROBES.map((probe) => [probe.keep, probe]))(
+    'an import of only %s holds its motion modules and recipe literals: passes on a correct dist, reports each one missing',
+    async (keep, { recipes, ...probe }) => {
+      const good = fixture().dist;
+      const values = await motionRecipeValues(good, recipes);
+      expect(values.errors).toEqual([]);
+      expect(values.strings).toEqual(recipes.map((name) => MOTION_RECIPES[name]));
+      expect(await probeIncludes(good, { ...probe, strings: values.strings })).toEqual([]);
+
+      const { dist } = fixture(MOTIONLESS[keep](goodFiles()));
+      expect(await probeIncludes(dist, { ...probe, strings: values.strings })).toEqual([
+        ...probe.modules.map((path) => `${path} is not in the bundle of an import of only ${keep}`),
+        ...values.strings.map(
+          (text) => `the bundle of an import of only ${keep} lacks the string "${text}"`,
+        ),
+        ...(probe.substrings ?? []).map(
+          (text) =>
+            `the bundle of an import of only ${keep} lacks "${text}" outside comments (its minified code)`,
+        ),
+      ]);
+    },
+    30_000,
+  );
+
+  it('verifyDist runs the MessageBar probe', async () => {
+    const path = 'components/feedback/MessageBar';
+    const file = `dist/${path}.mjs`;
+    const { dist } = fixture({
+      [file]: withCall(goodFiles()[file], path, 'hooks/usePresenceGroup', 'usePresenceGroup'),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'hooks/usePresenceGroup.mjs is in the bundle of an import of only MessageBar (MessageBarGroup must be dropped)',
+    ]);
+  }, 30_000);
+
+  it('verifyDist runs the Accordion and MessageBarGroup controls', async () => {
+    const files = goodFiles();
+    const hook = 'dist/hooks/useCollapsePresence.mjs';
+    const collapseCall = 'useMotionClasses(options.motion, collapseMotion)';
+    const group = 'dist/components/feedback/MessageBarGroup.mjs';
+    const groupImport = "import { usePresenceGroup } from '../../hooks/usePresenceGroup.mjs';\n";
+    const groupCall = 'const { entries } = usePresenceGroup(props.children);';
+    expect(files[hook]).toContain(collapseCall);
+    expect(files[group]).toContain(groupImport);
+    expect(files[group]).toContain(groupCall);
+    const { dist } = fixture({
+      // The collapse no longer reads its motion; the group no longer reaches the presence group.
+      [hook]: files[hook].replace(collapseCall, "useMotionClasses(options.motion, '')"),
+      [group]: files[group]
+        .replace(groupImport, '')
+        .replace(groupCall, 'const entries = [].concat(props.children ?? []);'),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      `the bundle of an import of only Accordion lacks the string "${MOTION_RECIPES.collapseMotion}"`,
+      'hooks/usePresenceGroup.mjs is not in the bundle of an import of only MessageBarGroup',
+    ]);
+  }, 30_000);
 });
 
 describe('verifyDist and main', () => {
@@ -2664,6 +3366,55 @@ describe('verifyDist and main', () => {
     ]);
   }, 30_000);
 
+  it('runs the motion probe: a Button bundle with a recipe literal fails (D23)', async () => {
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        `const motion = '${MOTION_RECIPES.dialogMotion}';`,
+      ).replace('cn(buttonClassNames.root, ', 'cn(buttonClassNames.root, motion, '),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      `the bundle of an import of only Button contains the string "${MOTION_RECIPES.dialogMotion}" (an unused constant was not tree-shaken)`,
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+  }, 30_000);
+
+  it('runs the motion probe: a Button bundle with the motion modules fails (D23)', async () => {
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': buttonWith(
+        '',
+        "import { useMotionClasses } from '../../hooks/useMotion.mjs';\n",
+      ).replace(
+        'cn(buttonClassNames.root, ',
+        "cn(buttonClassNames.root, useMotionClasses(props.motion, ''), ",
+      ),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'hooks/useMotion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
+      'lib/motion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
+      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
+    ]);
+  }, 30_000);
+
+  it('runs the motion control: a Dialog bundle without one of its recipes fails (D23)', async () => {
+    const dialog = 'dist/components/overlays/Dialog.mjs';
+    const files = goodFiles();
+    expect(files[dialog]).toContain(
+      'useMotionClasses(props.backdropMotion, dialogBackdropMotion), ',
+    );
+    const { dist } = fixture({
+      [dialog]: files[dialog].replace(
+        'useMotionClasses(props.backdropMotion, dialogBackdropMotion), ',
+        '',
+      ),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      `the bundle of an import of only Dialog lacks the string "${MOTION_RECIPES.dialogBackdropMotion}"`,
+    ]);
+  }, 30_000);
+
   it('runs the Field probe: a Field bundle that pulls InfoButton fails', async () => {
     const files = goodFiles();
     const { dist } = fixture({
@@ -2678,7 +3429,7 @@ describe('verifyDist and main', () => {
     expect(errors).toEqual([
       'components/data-display/InfoButton.mjs is in the bundle of an import of only Field (InfoButton must be dropped)',
       'InfoButton code (displayName "InfoButton") is in the bundle of an import of only Field',
-      'the bundle of an import of only Field contains the string "wave-info-button" (an unused class-name constant was not tree-shaken)',
+      'the bundle of an import of only Field contains the string "wave-info-button" (an unused constant was not tree-shaken)',
     ]);
   }, 30_000);
 

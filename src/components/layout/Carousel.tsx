@@ -5,8 +5,9 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent } from '../../lib/direction';
+import { carouselFadeMotion, carouselSlideMotion } from '../../lib/motion';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import type { Slot } from '../../lib/types';
+import type { MotionPreference, Slot } from '../../lib/types';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { focusRing, forcedColors } from '../../lib/styles';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../lib/icons';
@@ -15,6 +16,7 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 import { useDirection } from '../../hooks/useDirection';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionPreference } from '../../hooks/useMotion';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { CarouselButton } from './Carousel.button';
@@ -28,6 +30,12 @@ export type { CarouselControlsLayout };
 
 /** How a Carousel is drawn: `flat`, or `elevated` with rounded corners and a shadow. */
 export type CarouselAppearance = 'flat' | 'elevated';
+
+/**
+ * How a Carousel moves between pages: `slide` moves the slides in from the side of the page order,
+ * `fade` cross-fades them in place (one slide per page only).
+ */
+export type CarouselMotion = 'slide' | 'fade';
 
 /** Accessible names of the rotation control shown while `autoPlay` is on. */
 export interface CarouselAutoPlayLabels {
@@ -117,10 +125,12 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Lets the pointer drag the slides (mouse, touch and pen). The track follows the pointer and,
    * on release, the page changes when the drag passed a quarter of the width or left fast, else
-   * it snaps back; the direction follows the carousel's. The click that ends a drag is not
-   * delivered to the slide, and a vertical swipe still scrolls the page. Dragging pauses
-   * autoplay like the pointer over the carousel does. The buttons and the keyboard stay the way
-   * to operate the carousel without a pointer.
+   * it snaps back; the direction follows the carousel's. Under `motion="fade"` the slides do not
+   * follow the pointer (they share one place): the same drag still changes the page on release,
+   * and the slides cross-fade. The click that ends a drag is not delivered to the slide, and a
+   * vertical swipe still scrolls the page. Dragging pauses autoplay like the pointer over the
+   * carousel does. The buttons and the keyboard stay the way to operate the carousel without a
+   * pointer.
    * @default false
    */
   draggable?: boolean;
@@ -168,6 +178,26 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default false
    */
   loop?: boolean;
+  /**
+   * How the carousel moves between pages: `slide` glides the slides in from the side of the page
+   * order (mirrored in right-to-left layouts), `fade` cross-fades them in place, and `null` turns
+   * the motion off (the page changes at once). Fluent's `motion`; its object form with a
+   * `duration` is not offered: use `motionDuration`. `fade` needs one slide per page: with
+   * `groupSize` above 1 or `'auto'` the slides slide, and a development warning says so. Under
+   * `fade` a drag still changes the page on release, but the slides do not follow the pointer.
+   * Below a `WaveProvider` with `motion="none"` the carousel does not move unless this prop is
+   * set. Either motion is off while the user prefers reduced motion. The root renders the motion
+   * it resolves from this prop, `groupSize` and the provider as `data-motion` (`slide`, `fade` or
+   * `none`); reduced motion leaves it unchanged.
+   * @default 'slide'
+   */
+  motion?: CarouselMotion | null;
+  /**
+   * How long the slide or the fade takes, in milliseconds. Fluent's `duration` is a different
+   * unit (Embla's unitless speed, 20 to 60), so a value ported from Fluent is far too short.
+   * @default 300
+   */
+  motionDuration?: number;
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -192,6 +222,8 @@ const DEFAULT_PICKER_LABEL = 'Choose slide';
 const defaultSlideLabel = (index: number, total: number) => `Slide ${index + 1} of ${total}`;
 const DEFAULT_CAROUSEL_ROLE_DESCRIPTION = 'carousel';
 const DEFAULT_SLIDE_ROLE_DESCRIPTION = 'slide';
+/** The default `motionDuration`: the slow duration token, which the motion classes carry. */
+const DEFAULT_MOTION_DURATION = 300;
 
 const defaultSlidesLabel = (start: number, end: number, total: number) =>
   `Slides ${start} to ${end} of ${total}`;
@@ -232,6 +264,19 @@ function useAutoPageSize(
   return { perPage, slideWidth, rootWidth };
 }
 
+/**
+ * The motion a carousel asks for: its own `motion` (`null` none), else none below a provider that
+ * turns motion off, else the slide.
+ */
+function requestedCarouselMotion(
+  motion: CarouselMotion | null | undefined,
+  preference: MotionPreference,
+): CarouselMotion | 'none' {
+  if (motion === undefined) return preference === 'none' ? 'none' : 'slide';
+  if (motion === null) return 'none';
+  return motion === 'fade' ? 'fade' : 'slide';
+}
+
 function isRotationControl(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('[data-carousel-rotation]') !== null;
 }
@@ -269,6 +314,8 @@ const CarouselRoot = ({
   draggable = false,
   controlsLayout = 'overlay',
   appearance = 'flat',
+  motion,
+  motionDuration = DEFAULT_MOTION_DURATION,
   className,
   children,
   onMouseEnter,
@@ -297,6 +344,22 @@ const CarouselRoot = ({
   const auto = groupSize === 'auto';
   const measured = useAutoPageSize(auto, viewportEl, firstSlideEl);
   const size = auto ? measured.perPage : Math.max(1, Math.floor(groupSize) || 1);
+
+  // The motion: the carousel's own, else none under a provider that turns motion off, else the
+  // slide. A fade needs one slide per page, so pages of several slides slide (warned below).
+  const requestedMotion = requestedCarouselMotion(motion, useMotionPreference());
+  const fadeFallback = requestedMotion === 'fade' && (auto || size > 1);
+  const resolvedMotion = fadeFallback ? 'slide' : requestedMotion;
+
+  React.useEffect(() => {
+    if (fadeFallback) {
+      warnOnce(
+        'Carousel:fade-group',
+        'Carousel: `motion="fade"` needs one slide per page; with `groupSize` above 1 or ' +
+          '`"auto"` the slides slide.',
+      );
+    }
+  }, [fadeFallback]);
 
   // Rotation state: stopped or not (the user's choice, stopped by default under reduced motion, or
   // ended at the last slide without loop) and the temporary pauses while the pointer is over the
@@ -532,6 +595,7 @@ const CarouselRoot = ({
         ref={rootRef}
         data-controls-layout={controlsLayout}
         data-appearance={appearance}
+        data-motion={resolvedMotion}
         className={cn(carouselClassNames.root, 'relative', className)}
         {...rootHandlers}
         {...rest}
@@ -552,6 +616,29 @@ const CarouselRoot = ({
     const px = sign * index * measured.slideWidth + (dir === 'rtl' ? -alignShift : alignShift);
     transform = `translateX(${px + drag.offsetPx + 0}px)`;
   }
+  // The slide moves the track; the fade stacks the slides in the track's one cell and hides the
+  // inactive ones by their opacity (they are inert either way), with no transform, so a drag
+  // pages on release but the slides do not follow the pointer. The track's transition is off
+  // while it follows a drag.
+  const fading = resolvedMotion === 'fade';
+  const trackMoves = resolvedMotion === 'slide' && !drag.dragging;
+  // A `motionDuration` other than the motion classes' own is an inline duration on the element
+  // that transitions (D4), written only while that element has its transition: without a
+  // property list, an inline duration would time every property.
+  const durationStyle =
+    motionDuration === DEFAULT_MOTION_DURATION
+      ? undefined
+      : { transitionDuration: `${motionDuration}ms` };
+  // A slide is as wide as its content (`auto`), the viewport (one per page) or its share of it;
+  // under the fade it fills the track's one cell, which every slide shares.
+  const slideLayout = fading
+    ? 'col-start-1 row-start-1'
+    : auto
+      ? 'w-auto shrink-0'
+      : size === 1
+        ? 'w-full shrink-0'
+        : 'shrink-0';
+  const slideWidth = !auto && size > 1 ? { width: `calc(100% / ${size})` } : undefined;
   const slidesLabel = labels?.slides ?? defaultSlidesLabel;
   /** The name of the page that starts at `start`: its slides, or the one slide it holds. */
   const pageLabel = (start: number) => {
@@ -611,13 +698,14 @@ const CarouselRoot = ({
         id={trackId}
         className={cn(
           carouselClassNames.track,
-          drag.dragging
-            ? 'flex'
-            : 'flex transition-transform duration-300 ease-in-out motion-reduce:transition-none',
+          // One column with a zero minimum: the slides keep the viewport's width, whatever their
+          // content's longest line.
+          fading ? 'grid grid-cols-[minmax(0,1fr)]' : 'flex',
+          trackMoves && carouselSlideMotion,
           // Horizontal pointer moves belong to the drag; a vertical swipe still scrolls the page.
           draggable && 'touch-pan-y',
         )}
-        style={{ transform }}
+        style={fading ? undefined : { transform, ...(trackMoves ? durationStyle : undefined) }}
         data-dragging={drag.dragging ? '' : undefined}
         {...drag.handlers}
         {...(grouped ? roving.containerProps : null)}
@@ -639,11 +727,13 @@ const CarouselRoot = ({
               tabIndex={grouped && active ? roving.getTabIndex(String(i)) : undefined}
               className={cn(
                 carouselClassNames.slide,
-                auto ? 'w-auto shrink-0' : size === 1 ? 'w-full shrink-0' : 'shrink-0',
+                slideLayout,
+                fading && carouselFadeMotion,
+                fading && !active && 'opacity-0',
                 grouped &&
                   'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
               )}
-              style={!auto && size > 1 ? { width: `calc(100% / ${size})` } : undefined}
+              style={fading ? durationStyle : slideWidth}
             >
               {node}
             </div>
@@ -665,6 +755,7 @@ const CarouselRoot = ({
         aria-label="Carousel"
         data-controls-layout={controlsLayout}
         data-appearance={appearance}
+        data-motion={resolvedMotion}
         // A stacking context of its own: the controls' z-index cannot lift them over page headers.
         className={cn(
           carouselClassNames.root,
@@ -827,6 +918,10 @@ CarouselItem.displayName = 'CarouselItem';
  * - `controlsLayout` places the Previous and Next buttons over the slides (`overlay`,
  *   `overlay-wide`) or beside them (`inline`, `inline-wide`); `Carousel.Button` replaces the
  *   built-in button of its `direction` with one of your own glyph.
+ * - The slides glide to the new page over 300 ms; `motion="fade"` cross-fades them instead (one
+ *   slide per page), `motion={null}` turns the motion off and `motionDuration` times it. Under
+ *   reduced motion, or below a `WaveProvider` with `motion="none"` (unless `motion` is set), the
+ *   page changes at once.
  *
  * Compound access (`Carousel.Item`, `Carousel.Button`) needs a client module; React Server
  * Components import the flat names `CarouselItem` and `CarouselButton` instead.

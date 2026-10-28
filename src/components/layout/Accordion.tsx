@@ -11,9 +11,11 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
-import type { HeadingLevel, SelectionMode } from '../../lib/types';
+import type { HeadingLevel, MotionSlot, SelectionMode } from '../../lib/types';
+import { useCollapsePresence } from '../../hooks/useCollapsePresence';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { getPartId } from './disclosureIds';
 
 /** Heading level of the element that wraps each Accordion trigger: the shared {@link HeadingLevel}. */
@@ -600,25 +602,75 @@ AccordionTrigger.displayName = 'AccordionTrigger';
 
 /** Properties for the AccordionPanel sub-component (merged onto the `role="region"` element). */
 export interface AccordionPanelProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * Replaces the panel's collapse (Fluent's `AccordionPanel collapseMotion`), on the element
+   * around the region: by default the space the region takes opens from nothing and closes back
+   * to it, with a fade, over the normal duration (200 ms) with the max easy-ease curve, both ways.
+   * `null` turns it off (the region appears and disappears at once); a class string or
+   * `{ className }` replaces it, written as `MotionSlot` describes. A `WaveProvider` with
+   * `motion="none"` turns the default off, and a value here still applies under it. A panel
+   * rendered inside another panel has no motion of its own.
+   * @default the collapse described above
+   */
+  motion?: MotionSlot | null;
   /** Ref to the panel `<div role="region">`. */
   ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
- * The content region of an Accordion.Item, rendered only while the item is open and labelled by
- * its trigger. Its props (className merged, `ref`, `data-*`, handlers) land on the region, and a
- * non-empty `id` replaces the generated one (the trigger's `aria-controls` follows it).
+ * The content region of an Accordion.Item, labelled by its trigger and rendered while the item is
+ * open and while it collapses after a close. Its props (className merged, `ref`, `data-*`,
+ * handlers) land on the region, and a non-empty `id` replaces the generated one (the trigger's
+ * `aria-controls` follows it).
+ *
+ * The region renders as the only child of a collapse element (its stable class
+ * `wave-accordion-panel__collapse`), which opens and closes the region's space (`motion`) and has
+ * no box of its own while the item is open, so the region lays out in the Item as before. An item
+ * opened by default appears without motion. After a close the region stays in the document until
+ * the collapse ends, `inert` and with `data-state="closed"`, while its trigger already reports the
+ * item collapsed; opening the item again during the collapse keeps the same region and the state
+ * of its content. Focus inside the region when the item closes moves to the item's trigger.
  */
-const AccordionPanel = ({ id: idProp, className, children, ref, ...rest }: AccordionPanelProps) => {
+const AccordionPanel = ({
+  id: idProp,
+  className,
+  children,
+  motion,
+  ref,
+  ...rest
+}: AccordionPanelProps) => {
   const item = useAccordionItemContext('Accordion.Panel');
   const slot = React.useContext(AccordionPanelSlotContext);
   const inPanel = slot?.inPanel ?? false;
   React.useEffect(() => {
     if (inPanel) warnOnce('Accordion.Panel:inside-panel', misplacedMessage('Accordion.Panel'));
   }, [inPanel]);
-  if (!item.isOpen) return null;
+
+  // The region, and its document for the trigger lookup (kept after the region unmounts, so an
+  // item's panel removed while open with focus inside still finds its trigger).
+  const regionRef = React.useRef<HTMLDivElement | null>(null);
+  const documentRef = React.useRef<Document | null>(null);
+  const attachRegion = React.useCallback((node: HTMLDivElement | null) => {
+    regionRef.current = node;
+    if (node) documentRef.current = node.ownerDocument;
+  }, []);
+  const mergedRegionRef = useMergedRefs(ref, attachRegion);
+  const { triggerId } = item;
+  // A misplaced panel collapses with the region it sits in: it has no wrapper of its own.
+  const {
+    isMounted,
+    wrapperRef,
+    presenceProps,
+    className: collapseClassName,
+  } = useCollapsePresence(item.isOpen && !inPanel, {
+    motion,
+    partRef: regionRef,
+    getTrigger: () => documentRef.current?.getElementById(triggerId),
+  });
+
   if (inPanel) {
-    // Misplaced: its content joins the enclosing region (one region and one panel id per item).
+    // Misplaced: its content joins the enclosing region (one region and one panel id per item),
+    // and stays while that region is mounted, so it also stays while the region collapses.
     return (
       <div
         className={cn(accordionPanelClassNames.root, className)}
@@ -630,23 +682,30 @@ const AccordionPanel = ({ id: idProp, className, children, ref, ...rest }: Accor
       </div>
     );
   }
+  if (!isMounted) return null;
   return (
     <AccordionPanelSlotContext.Provider value={IN_PANEL}>
       <div
-        role="region"
-        className={cn(
-          accordionPanelClassNames.root,
-          'px-4 pb-3 text-body-1 text-muted-foreground',
-          className,
-        )}
-        {...rest}
-        id={idProp || item.panelId}
-        aria-labelledby={item.triggerId}
-        data-state="open"
-        ref={ref}
+        ref={wrapperRef}
+        {...presenceProps}
+        className={cn(accordionPanelClassNames.collapse, collapseClassName)}
       >
-        {children}
-        {slot?.extra}
+        <div
+          role="region"
+          className={cn(
+            accordionPanelClassNames.root,
+            'px-4 pb-3 text-body-1 text-muted-foreground',
+            className,
+          )}
+          {...rest}
+          id={idProp || item.panelId}
+          aria-labelledby={item.triggerId}
+          data-state={item.isOpen ? 'open' : 'closed'}
+          ref={mergedRegionRef}
+        >
+          {children}
+          {slot?.extra}
+        </div>
       </div>
     </AccordionPanelSlotContext.Provider>
   );
@@ -660,7 +719,9 @@ AccordionPanel.displayName = 'AccordionPanel';
 /**
  * A vertically stacked set of disclosure sections (WAI-ARIA Accordion pattern). Each
  * `Accordion.Item` renders an `Accordion.Trigger` button inside a heading (`headingLevel`) and an
- * `Accordion.Panel` region that is shown while the item is open.
+ * `Accordion.Panel` region that is shown while the item is open. A panel opens and closes its
+ * space with a short collapse and fade (`Accordion.Panel`'s `motion`; none under reduced motion or
+ * a `WaveProvider` with `motion="none"`), and focus inside a closing panel moves to its trigger.
  *
  * Single mode (the default) keeps at most one item open (`openItem`, `defaultOpenItem`,
  * `onOpenItemChange`); `type="multiple"` lets any number of items open (`openItems`,

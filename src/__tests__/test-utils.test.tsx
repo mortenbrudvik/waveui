@@ -8,6 +8,7 @@ import { Button } from '../components/button/Button';
 import { ToggleButton } from '../components/button/ToggleButton';
 import { RadioGroup, RadioItem } from '../components/input/RadioGroup';
 import { useWaveTheme } from '../components/provider/WaveProvider';
+import { useMotionPreference } from '../hooks/useMotion';
 import { Portal } from '../components/portal/Portal';
 import { DismissLayerProvider, useDismiss } from '../hooks/useDismiss';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -34,10 +35,12 @@ import {
   findDanglingIdRefs,
   findDanglingIdRefsInHtml,
   getStableClassNames,
+  honourInert,
   installResizeObserverMock,
   mockAnimations,
   mockMatchMedia,
   mockRect,
+  motionClasses,
   renderWithProviders,
   resetMatchMediaMock,
   testA11y,
@@ -1267,6 +1270,14 @@ describe('renderWithProviders', () => {
     renderWithProviders(<Probe />, { inputDefaults: { size: 'large' } });
     expect(screen.getByRole('status')).toHaveTextContent('large');
   });
+
+  it('renderWithProviders passes motion to the provider (Phase 10)', () => {
+    function Probe() {
+      return <output>{useMotionPreference()}</output>;
+    }
+    renderWithProviders(<Probe />, { motion: 'none' });
+    expect(screen.getByRole('status')).toHaveTextContent('none');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1621,6 +1632,130 @@ describe('mockAnimations', () => {
     });
     it('finds no getAnimations in the next test (jsdom has none)', () => {
       seen.push({ installed: false, found: 'getAnimations' in Element.prototype });
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// honourInert (focus() inside an inert subtree, as in a browser)
+// ---------------------------------------------------------------------------
+
+describe('honourInert', () => {
+  it('jsdom focuses an element inside an inert subtree by default (what the helper emulates away)', () => {
+    render(
+      <div inert>
+        <button type="button">Inside</button>
+      </div>,
+    );
+    const inside = screen.getByRole('button', { name: 'Inside', hidden: true });
+    act(() => inside.focus());
+    expect(inside).toHaveFocus();
+  });
+
+  it('makes focus() do nothing inside an inert subtree, and work elsewhere', () => {
+    honourInert();
+    render(
+      <>
+        <button type="button">Outside</button>
+        <div inert>
+          <div>
+            <button type="button">Inside</button>
+          </div>
+        </div>
+        <button type="button" inert>
+          Itself inert
+        </button>
+      </>,
+    );
+    const outside = screen.getByRole('button', { name: 'Outside' });
+    act(() => outside.focus());
+    expect(outside).toHaveFocus();
+    act(() => screen.getByRole('button', { name: 'Inside', hidden: true }).focus());
+    act(() => screen.getByRole('button', { name: 'Itself inert', hidden: true }).focus());
+    expect(outside).toHaveFocus();
+  });
+
+  it('keeps an element that already has focus when its subtree turns inert (as a browser does until its next rendering update)', () => {
+    honourInert();
+    const { rerender } = render(
+      <div>
+        <button type="button">Inside</button>
+      </div>,
+    );
+    const inside = screen.getByRole('button', { name: 'Inside' });
+    act(() => inside.focus());
+    rerender(
+      <div inert>
+        <button type="button">Inside</button>
+      </div>,
+    );
+    expect(inside).toHaveFocus();
+  });
+
+  it('called twice in a test, still honours inert and focuses elsewhere', () => {
+    honourInert();
+    honourInert();
+    render(
+      <>
+        <button type="button">Outside</button>
+        <div inert>
+          <button type="button">Inside</button>
+        </div>
+      </>,
+    );
+    const outside = screen.getByRole('button', { name: 'Outside' });
+    act(() => outside.focus({ preventScroll: true }));
+    expect(outside).toHaveFocus();
+    act(() => screen.getByRole('button', { name: 'Inside', hidden: true }).focus());
+    expect(outside).toHaveFocus();
+  });
+
+  describe('the emulation lasts one test', () => {
+    // As for mockAnimations: afterAll checks each test against its role, in any order, and is
+    // skipped when a filter selects only one of them.
+    const seen: Array<{ installed: boolean; focused: boolean }> = [];
+    afterAll(() => {
+      if (seen.length !== 2) return;
+      expect(seen.find((entry) => entry.installed)?.focused).toBe(false);
+      expect(seen.find((entry) => !entry.installed)?.focused).toBe(true);
+    });
+    function focusInsideInert(): boolean {
+      render(
+        <div inert>
+          <button type="button">Inside</button>
+        </div>,
+      );
+      const inside = screen.getByRole('button', { name: 'Inside', hidden: true });
+      act(() => inside.focus());
+      return inside === document.activeElement;
+    }
+    it('honours inert in the test that calls it', () => {
+      honourInert();
+      seen.push({ installed: true, focused: focusInsideInert() });
+    });
+    it('focuses inside inert again in the next test (jsdom’s own behaviour)', () => {
+      seen.push({ installed: false, focused: focusInsideInert() });
+    });
+  });
+
+  describe('a spy on focus() made before the call', () => {
+    // jsdom's own focus(), read when the suite is collected (before any test spies on it).
+    const nativeFocus = HTMLElement.prototype.focus;
+    it('is called through while the emulation is installed, and restored by the test', () => {
+      const spy = vi.spyOn(HTMLElement.prototype, 'focus');
+      honourInert();
+      render(<button type="button">Outside</button>);
+      const outside = screen.getByRole('button', { name: 'Outside' });
+      act(() => outside.focus());
+      expect(outside).toHaveFocus();
+      expect(spy).toHaveBeenCalledTimes(1);
+      // As a suite's `vi.restoreAllMocks()` in an afterEach does, before the emulation's cleanup.
+      spy.mockRestore();
+    });
+    // Runs after the test above (in file order), so it sees what that test left behind.
+    it('does not outlive the test: the next one has jsdom’s own focus() again', () => {
+      expect(vi.isMockFunction(HTMLElement.prototype.focus)).toBe(false);
+      expect(HTMLElement.prototype.focus).toBe(nativeFocus);
     });
   });
 });
@@ -2187,4 +2322,12 @@ describe('resolveFieldTestContext', () => {
 
 it('type-level contracts compile (see typeContracts)', () => {
   expectTypeOf(typeContracts).toBeFunction();
+});
+
+describe('motionClasses (Phase 10)', () => {
+  it('splits a recipe on whitespace and drops empty words', () => {
+    expect(motionClasses('  a  b ')).toEqual(['a', 'b']);
+    expect(motionClasses('')).toEqual([]);
+    expect(motionClasses('a\n  b\tc')).toEqual(['a', 'b', 'c']);
+  });
 });

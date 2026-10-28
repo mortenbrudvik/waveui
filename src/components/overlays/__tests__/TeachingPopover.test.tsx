@@ -44,6 +44,7 @@ import {
   teachingPopoverTitleClassNames,
 } from '../../../lib/classNames';
 import { __resetWarnings } from '../../../lib/dev';
+import { popupMotion } from '../../../lib/motion';
 import type { Slot } from '../../../lib/slot';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
 import { getOpenLayers, subscribeLayers } from '../../../lib/layers';
@@ -1756,9 +1757,11 @@ describe('TeachingPopover steps form markup (D2)', () => {
     ['aria-labelledby', ''],
     ['tabindex', '-1'],
     ['data-layout', 'horizontal'],
+    ['data-presence', 'entered'],
+    ['data-state', 'open'],
     [
       'class',
-      'wave-teaching-popover relative w-80 rounded-md border border-border bg-background p-5 text-foreground shadow-8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+      `wave-teaching-popover relative w-80 rounded-md border border-border bg-background p-5 text-foreground shadow-8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${popupMotion}`,
     ],
   ];
 
@@ -1823,7 +1826,7 @@ describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
   const PLACEMENT_WARNING =
     '[WaveUI] TeachingPopover.Surface: render one TeachingPopover.Surface in a TeachingPopover; a second Surface renders a second popover.';
   const SURFACE_PROPS_WARNING =
-    '[WaveUI] TeachingPopover: the props of the surface element on TeachingPopover (`className`, `style`, `ref`, `onKeyDown` and the other element props) are ignored next to a TeachingPopover.Surface: pass them to the Surface.';
+    '[WaveUI] TeachingPopover: the props of the surface element on TeachingPopover (`className`, `style`, `ref`, `onKeyDown`, `motion` and the other element props) are ignored next to a TeachingPopover.Surface: pass them to the Surface.';
 
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -2478,7 +2481,7 @@ describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
 
 describe('TeachingPopover parts: a Surface in your component, focus return and module imports (P9-08)', () => {
   const SURFACE_PROPS_WARNING =
-    '[WaveUI] TeachingPopover: the props of the surface element on TeachingPopover (`className`, `style`, `ref`, `onKeyDown` and the other element props) are ignored next to a TeachingPopover.Surface: pass them to the Surface.';
+    '[WaveUI] TeachingPopover: the props of the surface element on TeachingPopover (`className`, `style`, `ref`, `onKeyDown`, `motion` and the other element props) are ignored next to a TeachingPopover.Surface: pass them to the Surface.';
 
   const trigger = () => screen.getByRole('button', { name: 'Take the tour' });
 

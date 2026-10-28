@@ -8,11 +8,13 @@ import {
 } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
+import { dialogBackdropMotion, dialogMotion } from '../../lib/motion';
 import { renderSlot, slotRendersContent, type Slot, type SlotObject } from '../../lib/slot';
 import type {
   BackdropAppearance,
   ModalOpenChangeReason,
   ModalType,
+  MotionSlot,
   OpenChangeDetails,
   SurfaceSize,
 } from '../../lib/types';
@@ -20,6 +22,7 @@ import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { Portal } from '../portal/Portal';
 import {
@@ -117,13 +120,13 @@ export interface DialogProps {
    */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /**
-   * Removes `Dialog.Content` (the surface and everything in it) when the dialog closes. `false`
-   * keeps it mounted while closed, `hidden` and `inert`, so a form inside keeps what was typed and
-   * the components inside keep their state; the surface then mounts with the Dialog, closed (in
-   * the browser only, as an open one), and an `autoFocus` inside it never applies (each open
-   * focuses the first focusable element). A popup opened inside that is still open when the
-   * dialog closes stays open over the page (a development warning says so): close it first.
-   * Fluent's `unmountOnClose`.
+   * Removes `Dialog.Content` (the surface and everything in it) when the dialog closes, once its
+   * exit motion has ended. `false` keeps it mounted while closed, `hidden` and `inert`, so a form
+   * inside keeps what was typed and the components inside keep their state; the surface then
+   * mounts with the Dialog, closed (in the browser only, as an open one), and an `autoFocus`
+   * inside it never applies (each open focuses the first focusable element). A popup opened inside
+   * that is still open when the dialog closes stays open over the page (a development warning says
+   * so): close it first. Fluent's `unmountOnClose`.
    * @default true
    */
   unmountOnClose?: boolean;
@@ -158,6 +161,29 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
    * `modalType="non-modal"` (a development warning says so). Fluent's `backdrop`.
    */
   backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
+  /**
+   * The surface's motion. By default it scales up from 85% of its size and fades in over 250 ms
+   * with a decelerating curve, and scales down and fades out over 200 ms with an accelerating
+   * curve; under reduced motion it appears and disappears at once. `null` turns the motion off
+   * (the surface still renders its `data-presence` phases, which then end at once); a class string
+   * or `{ className }` replaces the default classes with yours (see `MotionSlot`), also under a
+   * `WaveProvider` with `motion="none"`, which otherwise turns the default off. A `className` that
+   * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
+   * motion, your classes animate the surface. Fluent's `Dialog` `surfaceMotion`.
+   * @default the scale and fade above
+   */
+  motion?: MotionSlot | null;
+  /**
+   * The backdrop's motion. By default it fades in over 250 ms and out over 200 ms, the surface's
+   * exit, with an easy-ease curve; under reduced motion it appears and disappears at once. `null`
+   * turns the motion off; a class string or `{ className }` replaces the default classes with yours
+   * (see `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. The surface's motion decides when the dialog unmounts or hides: a replacement
+   * longer than the surface's exit is cut off there. Ignored with `modalType="non-modal"` (a
+   * development warning says so). Fluent's `DialogSurface` `backdropMotion`.
+   * @default the fade above
+   */
+  backdropMotion?: MotionSlot | null;
   /**
    * Content of the built-in Close button (the dismiss glyph by default). It renders inside the
    * button, decorative (`aria-hidden`), so the button keeps the name `closeLabel`; a slot object's
@@ -418,7 +444,7 @@ const TITLE_ACTIONS_GAP = 8;
 
 const BACKDROP_IGNORED_WARNING_KEY = 'Dialog.Content:backdrop-ignored';
 const BACKDROP_IGNORED_WARNING =
-  'Dialog.Content: `backdrop` is ignored with `modalType="non-modal"`: a non-modal dialog has no backdrop, so the page behind it stays usable.';
+  'Dialog.Content: `backdrop` and `backdropMotion` are ignored with `modalType="non-modal"`: a non-modal dialog has no backdrop, so the page behind it stays usable.';
 
 const NON_MODAL_FULL_WARNING_KEY = 'Dialog.Content:non-modal-full';
 const NON_MODAL_FULL_WARNING =
@@ -462,19 +488,26 @@ function useTitleActionsWidth(area: HTMLElement | null): number | null {
  * centres the surface and lets presses through to the page. The titles' end padding follows the
  * width of the title-actions area (`--wave-dialog-title-end-padding`, 2rem until it is measured).
  *
- * It mounts through the presence core: the backdrop, the positioner and the surface render
- * `data-presence` (`entered` while open, `exited` while kept closed; `entering` and `exiting`
- * only while a motion of yours runs on the surface), and the backdrop and the positioner are
- * `inert` while exiting and `hidden` and `inert` while kept closed. No motion ships: animate the
- * surface with `data-[presence=…]:` classes in `className` (an enter's start as
- * `data-[presence=entering]:starting:`, each with a `motion-reduce:` counterpart); a closed
- * surface waits for that motion before it unmounts or hides, while focus, the trap and the
- * isolation follow the open state at once.
+ * It moves in and out: the surface scales up from 85% of its size and fades in over 250 ms, and
+ * scales down and fades out over 200 ms, while the backdrop fades in over 250 ms and out with the
+ * surface; a dialog open by default animates in when it mounts in the browser. Under reduced
+ * motion both appear and disappear at once. `motion` (the surface) and `backdropMotion` (the
+ * backdrop) turn each motion off (`null`) or replace its classes, and a `WaveProvider` with
+ * `motion="none"` turns both defaults off. It mounts through the presence core: the backdrop, the
+ * positioner and the surface render `data-presence` (`entering` and `exiting` while the surface's
+ * motion runs, `entered` while open, `exited` while kept closed), and the backdrop and the
+ * positioner are `inert` while exiting and `hidden` and `inert` while kept closed. A closed
+ * surface waits for its motion before it unmounts or hides, while focus, the trap, the isolation
+ * and the scroll lock follow the open state at once: an exiting dialog lets clicks through to the
+ * page (an `inert` element takes no pointer events), and the page's scrollbar comes back while the
+ * dialog still fades. Opened again during its exit, the same surface enters again.
  */
 export const DialogContent = ({
   title,
   size = 'medium',
   backdrop,
+  motion,
+  backdropMotion,
   closeButton,
   titleAction,
   closeLabel = 'Close',
@@ -495,13 +528,19 @@ export const DialogContent = ({
     unmountOnClose,
     registerContentId,
   } = useDialogContext('Dialog.Content');
-  // Every surface mounts through the presence core (D5, D103), with no motion of its own: kept
+  // Every surface mounts through the presence core (D5, D103), and enters also when it mounts open
+  // (D9: a dialog open by default animates in on a client render as after hydration): kept
   // mounted while closed with `unmountOnClose={false}`, else removed once it has exited.
   const {
     isMounted,
     ref: presenceRef,
     presenceProps,
-  } = usePresence(open, { unmountOnExit: unmountOnClose });
+  } = usePresence(open, { appear: true, unmountOnExit: unmountOnClose });
+  const exiting = presenceProps['data-presence'] === 'exiting';
+  // The motion classes of the surface (a `className` with presence variants keeps 0.14's own
+  // motion, D19) and of the backdrop.
+  const surfaceMotion = useMotionClasses(motion, dialogMotion, className);
+  const backdropMotionClassName = useMotionClasses(backdropMotion, dialogBackdropMotion);
   const keptMounted = !unmountOnClose;
   const generatedId = useId('wave-dialog');
   const contentId = id ?? generatedId;
@@ -553,9 +592,12 @@ export const DialogContent = ({
   useUnnamedModalWarning(open ? surface : null, titles.hasTitle, 'Dialog.Content', 'Dialog.Title');
   useOpenInsideWarning(open, keptMounted, layer.layerId, 'Dialog');
 
-  // A non-modal dialog has no backdrop: a given slot (not undefined, null or a boolean) is ignored.
+  // A non-modal dialog has no backdrop: a given slot (not undefined, null or a boolean) and a
+  // given backdrop motion are ignored.
   const backdropIgnored =
-    nonModal && backdrop !== undefined && backdrop !== null && typeof backdrop !== 'boolean';
+    nonModal &&
+    ((backdrop !== undefined && backdrop !== null && typeof backdrop !== 'boolean') ||
+      backdropMotion !== undefined);
   React.useEffect(() => {
     if (backdropIgnored) warnOnce(BACKDROP_IGNORED_WARNING_KEY, BACKDROP_IGNORED_WARNING);
   }, [backdropIgnored]);
@@ -568,10 +610,11 @@ export const DialogContent = ({
   // The title-actions area (held in state) and the outlet `Dialog.Title` actions portal into. Both
   // attach in the commit that mounts the surface, so a title's action is in the DOM in the next
   // commit, the one in which the focus trap starts (it waits for the surface held in state). The
-  // area is measured only while the dialog is open (a kept-mounted closed one measures nothing).
+  // area is measured while the dialog is open and while it exits, so the titles keep their end
+  // padding through the exit motion (a kept-mounted closed one measures nothing).
   const [titleActionsArea, setTitleActionsArea] = React.useState<HTMLDivElement | null>(null);
   const [titleActionsOutlet, setTitleActionsOutlet] = React.useState<HTMLSpanElement | null>(null);
-  const titleActionsWidth = useTitleActionsWidth(open ? titleActionsArea : null);
+  const titleActionsWidth = useTitleActionsWidth(open || exiting ? titleActionsArea : null);
 
   // The height of the sticky Dialog.Footer, reserved as the body's scroll padding.
   const [footerHeight, setFooterHeight] = React.useState<number | null>(null);
@@ -608,6 +651,7 @@ export const DialogContent = ({
           open={open}
           onMouseDown={backdropPress.onMouseDown}
           presenceProps={presenceProps}
+          motionClassName={backdropMotionClassName}
         />
       )}
       <div
@@ -641,6 +685,7 @@ export const DialogContent = ({
             // the body instead of pushing the surface over the gap.
             'pointer-events-auto relative m-4 flex min-w-0 max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-border bg-background p-6 text-foreground shadow-64',
             sizeClasses[size],
+            surfaceMotion,
             className,
           )}
         >
@@ -863,8 +908,11 @@ DialogFooter.displayName = 'DialogFooter';
  *   closed, so a form keeps what was typed and the components inside keep their state; each open
  *   focuses the first focusable element again (an `autoFocus` inside never applies), and a kept
  *   dialog opened while another overlay is open stacks above it.
- * - **Presence**: the surface mounts through the presence core and renders `data-presence`; no
- *   motion ships, and `data-[presence=…]:` classes on `Dialog.Content` animate it.
+ * - **Motion**: the surface scales and fades in and out and the backdrop fades with it (none under
+ *   reduced motion); `Dialog.Content`'s `motion` and `backdropMotion` turn each off (`null`) or
+ *   replace it, and `WaveProvider motion="none"` turns both off. The surface mounts through the
+ *   presence core and renders `data-presence`; while it exits it stays on screen, `inert`, and
+ *   focus, the trap and the scroll lock are already released.
  * - **Naming**: give `Dialog.Content` a `title`, a `Dialog.Title`, or `aria-label`.
  *
  * The sub-components are also exported under flat names (`DialogTrigger`, `DialogContent`,

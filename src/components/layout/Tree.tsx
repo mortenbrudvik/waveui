@@ -14,6 +14,10 @@ export type { TreeItemPersonaLayoutProps } from './Tree.itemPersonaLayout';
  * Keyboard focus enters at the `selected` item, else the first item; while focus is inside, the
  * tab stop follows it, so Shift+Tab leaves the tree.
  *
+ * A child group opens and closes its space with a short collapse and fade (the Tree's `motion`;
+ * none under reduced motion or a `WaveProvider` with `motion="none"`), and focus inside a group
+ * that collapses moves to its item.
+ *
  * `selectionMode="multiple"` draws a checkbox on every item, bound to `checkedItems`: Space
  * toggles the focused item's check, a click on the checkbox toggles it, and a click elsewhere on
  * the row activates the item (as Enter does). Checks cascade: checking an item checks every item

@@ -69,6 +69,19 @@ export type {
  *   With no control at or before the target, the popover is reached where it is portaled, at the
  *   end of the page: Tab from the page's last control and Shift+Tab from outside the page enter
  *   it.
+ * - **Motion.** The surface fades in over 200 ms and out over 100 ms as it closes; pointed at a
+ *   target (or the Trigger) it also slides 4px away from it on the side it opened on
+ *   (`data-side`), and back. Under reduced motion it appears and disappears at once. `motion` (on
+ *   TeachingPopover for the surface it renders, or on `TeachingPopover.Surface`) turns it off
+ *   (`null`) or replaces its classes, and a `WaveProvider` with `motion="none"` turns the default
+ *   off. The surface mounts through the presence core: it carries `data-presence` and
+ *   `data-state="open"`, and while it closes `data-state="closed"` and `inert`, so it stays on
+ *   screen, where it was and on the step it closed on, until its exit ends. Escape, focus and the
+ *   Trigger's `aria-expanded` follow the open state, not the exit: focus inside a closing popover
+ *   moves, in the commit that closes it, to where it returns focus. A popover open by default
+ *   animates in when it mounts in the browser, and one opened again during its exit enters again
+ *   on the same surface (on its first step, as every opening). Without motion it unmounts as soon
+ *   as it closes.
  * - **Parts** (Fluent's composition): `TeachingPopover.Trigger` opens and closes the popover, gets
  *   focus back when it closes and, without a `target`, is what it points at; written directly
  *   inside TeachingPopover (a Fragment is fine), it makes the popover start closed (`defaultOpen`

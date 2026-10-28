@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Dialog, Button, Field, Input, ToggleButton } from '../src';
 import type { DialogContentProps, DialogProps } from '../src';
+import { motionCases } from './_motion';
 
 /** Stories that render the dialog open show it in an iframe, so the docs page stays usable. */
 const openStoryParameters = {
@@ -679,5 +680,50 @@ export const KeepMounted: Story = {
         </Dialog.Content>
       </>
     ),
+  },
+};
+
+/** The Motion story's surface: it rises 32px as it fades in, and sinks back as it fades out. */
+const riseMotion =
+  'transition-[opacity,translate] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:translate-y-8 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:translate-y-8 data-[presence=exiting]:opacity-0';
+
+/** The Motion story's backdrop: a linear fade that exits over the surface's 200ms, not longer. */
+const backdropFade =
+  'transition-opacity duration-wave-slow ease-wave-linear data-[presence=exiting]:duration-wave-normal motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
+
+/**
+ * `motion` and `backdropMotion` of `Dialog.Content`. By default the surface scales up from 85%
+ * and fades in over 250ms, and scales down and fades out over 200ms, while the backdrop fades;
+ * focus, the trap and the scroll lock are released when the dialog closes, not when its exit
+ * ends. `null` turns both off; a class string replaces them (here a rise and a linear fade that
+ * exits no later than the surface, which ends the dialog's exit). Under reduced motion every dialog
+ * appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: function MotionDialogs(args) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {motionCases(riseMotion).map(({ label, motion }) => (
+          // The story renders one dialog per case; every other arg is forwarded.
+          <Dialog key={label} {...args}>
+            <Dialog.Trigger>
+              <Button>{label}</Button>
+            </Dialog.Trigger>
+            <Dialog.Content
+              title={label}
+              motion={motion}
+              backdropMotion={typeof motion === 'string' ? backdropFade : motion}
+            >
+              <p>Close the dialog with Escape, the Close button or Done to see its exit.</p>
+              <Dialog.Footer>
+                <Dialog.Close>
+                  <Button appearance="primary">Done</Button>
+                </Dialog.Close>
+              </Dialog.Footer>
+            </Dialog.Content>
+          </Dialog>
+        ))}
+      </div>
+    );
   },
 };

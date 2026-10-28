@@ -77,8 +77,8 @@
  * (`tsconfig.dev.json`). `data-*` attributes are always accepted.
  *
  * ## Other helpers
- * - {@link renderWithProviders}: renders inside `WaveProvider` with `theme`/`dir`/`inputDefaults`
- *   (RTL tests).
+ * - {@link renderWithProviders}: renders inside `WaveProvider` with `theme`/`dir`/`inputDefaults`/`motion`
+ *   (RTL tests); {@link motionClasses} splits a motion recipe into its classes.
  * - {@link testNoImplicitSubmit}: internal `<button>`s are never submit buttons, portaled ones
  *   included, and clicking inside the form never submits it (C-BUTTON-TYPE).
  * - {@link testComposedHandler}: a consumer handler composes with the built-in behaviour and can
@@ -93,7 +93,8 @@
  *   last one test — call it inside the test or in `beforeEach`, never `beforeAll`),
  *   {@link mockRect}, {@link mockAnimations} (`getAnimations()` for the waiting phases of the
  *   presence core; it removes itself after the test — call it inside the test or in
- *   `beforeEach`).
+ *   `beforeEach`), {@link honourInert} (`focus()` does nothing inside an `inert` subtree, as in a
+ *   browser, for focus tests of exiting surfaces; one test, as `mockAnimations`).
  * - The environment machinery {@link mockMatchMedia}, {@link resetMatchMediaMock},
  *   {@link assertEmptyBody}, {@link assertOverlayStateReleased} and {@link describeElement} is
  *   **defined in `src/test-setup.ts`** and re-exported here — one instance, the one the setup
@@ -128,6 +129,7 @@ import { configureAxe } from 'vitest-axe';
 import { WaveProvider } from './components/provider/WaveProvider';
 import type { InputDefaults, WaveDir, WaveTheme } from './components/provider/WaveProvider';
 import * as registry from './lib/classNames';
+import type { MotionPreference } from './lib/types';
 import { describeElement } from './test-setup';
 
 /*
@@ -1046,11 +1048,13 @@ export interface RenderWithProvidersOptions extends RenderOptions {
   dir?: WaveDir;
   /** `WaveProvider` input defaults. */
   inputDefaults?: InputDefaults;
+  /** `WaveProvider` motion preference; `'none'` turns every default motion off. @default 'default' */
+  motion?: MotionPreference;
 }
 
 /**
- * Renders `ui` inside `<WaveProvider theme dir inputDefaults>` (the provider's existing
- * `theme`/`dir`/`inputDefaults` props). A `wrapper` option is rendered inside the provider.
+ * Renders `ui` inside `<WaveProvider theme dir inputDefaults motion>` (the provider's existing
+ * `theme`/`dir`/`inputDefaults`/`motion` props). A `wrapper` option is rendered inside the provider.
  * Returns the usual RTL result; `rerender` keeps the providers.
  *
  * @example
@@ -1060,12 +1064,30 @@ export function renderWithProviders(
   ui: React.ReactElement,
   options: RenderWithProvidersOptions = {},
 ): RenderResult {
-  const { theme, dir, inputDefaults, wrapper: InnerWrapper, ...renderOptions } = options;
+  const { theme, dir, inputDefaults, motion, wrapper: InnerWrapper, ...renderOptions } = options;
   function Providers({ children }: { children: React.ReactNode }) {
     const inner = InnerWrapper ? React.createElement(InnerWrapper, null, children) : children;
-    return React.createElement(WaveProvider, { theme, dir, inputDefaults, children: inner });
+    return React.createElement(WaveProvider, {
+      theme,
+      dir,
+      inputDefaults,
+      motion,
+      children: inner,
+    });
   }
   return render(ui, { ...renderOptions, wrapper: Providers });
+}
+
+/**
+ * Splits a motion recipe (the string a part's `motion` slot replaces) into its classes: split on
+ * whitespace, empty words dropped. Use it to assert a recipe on an element:
+ * `expect(el).toHaveClass(...motionClasses(popupMotion))`.
+ *
+ * @param recipe - A class string, possibly with extra whitespace.
+ * @returns The classes, in order; `[]` for an empty or blank string.
+ */
+export function motionClasses(recipe: string): string[] {
+  return recipe.split(/\s+/).filter(Boolean);
 }
 
 /**
@@ -1267,6 +1289,64 @@ export function mockRect(el: Element, rect: Partial<DOMRect>): void {
   define('clientWidth', width);
   define('offsetHeight', height);
   define('clientHeight', height);
+}
+
+/** Whether {@link honourInert} is installed for the current test. */
+let honouringInert = false;
+
+/**
+ * jsdom's own `HTMLElement.prototype.focus`, read when this module loads (before any test can spy
+ * on it), which {@link honourInert} puts back; `undefined` in the Node.js environment.
+ */
+const NATIVE_FOCUS: PropertyDescriptor | undefined =
+  typeof HTMLElement === 'undefined'
+    ? undefined
+    : Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'focus');
+
+/**
+ * Makes `HTMLElement.prototype.focus()` do nothing on an element inside an `inert` subtree (the
+ * element itself or an ancestor carries `inert`), as a browser does, for the current test; jsdom
+ * has no `inert` behaviour and focuses the element. Call it inside a test or a `beforeEach` (it
+ * registers its cleanup with Vitest's `onTestFinished`, which a `beforeAll` cannot use); a second
+ * call in the same test does nothing.
+ *
+ * Focus tests of an exiting surface need it: after a commit, React DOM focuses again the element
+ * that had focus before the commit when that element is still in the document. An exiting surface
+ * stays in the document, `inert`, so in jsdom that restore can undo a focus move out of it, or
+ * hide a missing one, where a browser leaves focus where the component put it. With the
+ * emulation, a test that expects focus out of a closing surface fails when the component does not
+ * move it. An element that already has focus keeps it when its subtree turns `inert` (a browser
+ * moves it to `<body>` only at its next rendering update, which jsdom never runs).
+ *
+ * A spy on `focus()` works with it in either order: one made before the call is called through,
+ * one made after it wraps the emulation. The cleanup puts back jsdom's own `focus()`, read when
+ * this module loads, never the method it found, so a spy made before the call (and restored by
+ * the suite's `vi.restoreAllMocks()`, which runs before `onTestFinished`) does not outlive the
+ * test.
+ *
+ * @example
+ * honourInert();
+ * render(<Disclosure />);
+ * await user.click(button('Done')); // closes the panel, which exits inert
+ * expect(button('Shipping')).toHaveFocus();
+ */
+export function honourInert(): void {
+  if (honouringInert) return;
+  const proto = HTMLElement.prototype;
+  const focus = proto.focus;
+  Object.defineProperty(proto, 'focus', {
+    configurable: true,
+    writable: true,
+    value: function focusOutsideInert(this: HTMLElement, options?: FocusOptions): void {
+      if (!this.closest('[inert]')) focus.call(this, options);
+    },
+  });
+  honouringInert = true;
+  onTestFinished(() => {
+    if (NATIVE_FOCUS) Object.defineProperty(proto, 'focus', NATIVE_FOCUS);
+    else Reflect.deleteProperty(proto, 'focus');
+    honouringInert = false;
+  });
 }
 
 /** Options of {@link mockAnimations}. */

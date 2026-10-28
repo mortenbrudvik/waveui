@@ -9,7 +9,7 @@ import {
 import { isDev, warnOnce } from '../../lib/dev';
 import { renderSlot, slotRendersContent, type Slot, type SlotObject } from '../../lib/slot';
 import { focusRingInset } from '../../lib/styles';
-import type { BackdropAppearance } from '../../lib/types';
+import type { BackdropAppearance, MotionSlot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import {
@@ -122,7 +122,10 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * viewport's width — or its height at the bottom (the same values; `full` the viewport's height).
    * It never exceeds the viewport. An inline panel takes the same sizes, where `full` is its
    * container's width (height), and never grows past its container. A width class in `className`
-   * (a height class for `bottom`) replaces it. Rendered as `data-size`. Fluent's `size`.
+   * (a height class for `bottom`) replaces it. It also times the motion, an overlay's slide and an
+   * inline drawer's collapse alike: 250 ms small, 300 ms medium, 400 ms large, 500 ms full (an
+   * inline drawer at `full` has no motion; see `motion`). Rendered as `data-size`. Fluent's
+   * `size`.
    * @default 'small'
    */
   size?: DrawerSize;
@@ -154,6 +157,43 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * development warning says so). Fluent's `backdrop`.
    */
   backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
+  /**
+   * The drawer's motion. By default an overlay panel slides in from beyond its edge and fades in
+   * with a decelerating curve, and slides back out and fades out with an accelerating curve; the
+   * `start` and `end` edges follow the text direction, `left` and `right` do not mirror, and a
+   * `bottom` panel rises from below. An inline drawer by default opens the space it takes in your
+   * layout from nothing (its width at a side, its height at the bottom) while its panel fades in,
+   * held at its size against its inner edge, so it reads as sliding out from that edge, with a
+   * decelerating curve; closing runs the same backwards with an accelerating curve. Both take a
+   * duration that follows `size` both ways: 250 ms small, 300 ms medium, 400 ms large, 500 ms
+   * full. An inline drawer at `full` has no motion, as its size is its container's (a value here
+   * does not apply to it either), and an inline drawer whose width (height at the bottom) in
+   * `className` is a percentage resizes oddly during the motion, correctly once open: give it a
+   * length, or pass `null`. Under reduced motion the drawer appears and disappears at once.
+   * `null` turns the motion off (the drawer still renders its `data-presence` phases, which then
+   * end at once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. They go on the overlay panel, or on the element around an inline drawer's
+   * `<aside>` (`wave-drawer__collapse`), whose phases the drawer waits for. A `className` that
+   * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
+   * motion, your classes animate the panel, and the drawer waits for the panel's motion (an
+   * inline one's `<aside>`, not the element around it). Fluent's `OverlayDrawer` and
+   * `InlineDrawer` `surfaceMotion`.
+   * @default the slide (overlay) or the collapse (inline) above
+   */
+  motion?: MotionSlot | null;
+  /**
+   * The backdrop's motion (a modal or alert overlay). By default it fades in and out with a
+   * linear curve over the panel's duration (250 to 500 ms, by `size`), so it ends with the panel;
+   * under reduced motion it appears and disappears at once. `null` turns the motion off; a class
+   * string or `{ className }` replaces the default classes with yours (see `MotionSlot`), also
+   * under a `WaveProvider` with `motion="none"`, which otherwise turns the default off. The
+   * panel's motion decides when the drawer unmounts or hides: a replacement longer than the
+   * panel's exit is cut off there. Ignored with `modalType="non-modal"` and by an inline drawer
+   * (a development warning says so). Fluent's `OverlayDrawer` `backdropMotion`.
+   * @default the fade above
+   */
+  backdropMotion?: MotionSlot | null;
   /**
    * Content of the built-in Close button, in the built-in header and in every
    * `Drawer.HeaderTitle`, as `Dialog.Content`'s `closeButton`: decorative content inside the button
@@ -199,16 +239,17 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /**
-   * Removes the panel and its content when the drawer closes. `false` keeps them mounted while
-   * closed, `hidden` and `inert` (out of the layout, the Tab order and the accessibility tree), so
-   * what was typed and the state of the components inside survive closing and opening again; the
-   * content then mounts with the Drawer, closed, and an `autoFocus` inside it never applies (an
-   * overlay focuses its first focusable element on each open). An overlay panel still renders only
-   * in the browser; a kept inline panel is in the server HTML, hidden. Kept content still belongs
-   * to its form: a `required` empty field in a closed inline drawer inside a page `<form>` blocks
-   * its submission without a visible message. A popup opened inside that is still open when the
-   * drawer closes stays open over the page (a development warning says so): close it first. A
-   * `key` on the Drawer resets the kept content. Fluent's `unmountOnClose`.
+   * Removes the panel and its content when the drawer closes, once the panel's exit motion has
+   * ended. `false` keeps them mounted while closed, `hidden` and `inert` (out of the layout, the
+   * Tab order and the accessibility tree), so what was typed and the state of the components
+   * inside survive closing and opening again; the content then mounts with the Drawer, closed, and
+   * an `autoFocus` inside it never applies (an overlay focuses its first focusable element on each
+   * open). An overlay panel still renders only in the browser; a kept inline panel is in the
+   * server HTML, hidden. Kept content still belongs to its form: a `required` empty field in a
+   * closed inline drawer inside a page `<form>` blocks its submission without a visible message. A
+   * popup opened inside that is still open when the drawer closes stays open over the page (a
+   * development warning says so): close it first. A `key` on the Drawer resets the kept content.
+   * Fluent's `unmountOnClose`.
    * @default true
    */
   unmountOnClose?: boolean;
@@ -465,6 +506,8 @@ export const DrawerRoot = ({
   size = 'small',
   modalType = 'modal',
   backdrop,
+  motion,
+  backdropMotion,
   closeButton,
   titleAction,
   title,
@@ -598,7 +641,10 @@ export const DrawerRoot = ({
       finalFocusRef={finalFocusRef}
       rootClassName={drawerClassNames.root}
       backdropClassName={drawerClassNames.backdrop}
+      collapseClassName={drawerClassNames.collapse}
       backdrop={backdrop}
+      motion={motion}
+      backdropMotion={backdropMotion}
       id={panelId}
       aria-labelledby={labelledBy}
       {...rest}

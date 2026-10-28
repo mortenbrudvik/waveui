@@ -23,13 +23,17 @@ import {
   type Slot,
 } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { popupMotion } from '../../lib/motion';
 import { focusRing, forcedColors } from '../../lib/styles';
-import type { VirtualElement } from '../../lib/types';
+import type { MotionSlot, VirtualElement } from '../../lib/types';
 import { useAnnounce } from '../../hooks/useAnnounce';
 import { useDismiss } from '../../hooks/useDismiss';
+import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
+import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useTriggerElement, useTriggerFocusRef } from '../../hooks/useTriggerElement';
 import { Button } from '../button/Button';
@@ -39,6 +43,7 @@ import { ModalCloseButton } from './Dialog.slots';
 import { getTabbableThrough, PopoverBeak, usePopoverTabOrder } from './Popover.shared';
 import { useCarouselFooterStacked } from './TeachingPopover.stack';
 import {
+  TeachingPopoverContext,
   TeachingPopoverSurfaceContext,
   useTeachingPopoverContext,
   type TeachingPopoverAction,
@@ -48,8 +53,9 @@ import {
 
 /*
  * The TeachingPopover's parts and the surface they share with the root: `TeachingSurface` holds
- * the surface's hooks (positioning, dismissal, focus, keyboard order, announcements, the title
- * registry), so the `steps` form and `TeachingPopover.Surface` render one element the same way.
+ * the surface's hooks (presence and motion, positioning, dismissal, focus, keyboard order,
+ * announcements, the title registry), so the `steps` form and `TeachingPopover.Surface` render one
+ * element the same way.
  * The content parts (Header, Title, Body, Footer) show the current step without children; the
  * `steps` form renders them that way (Pattern 15), so both forms render the same markup. The
  * carousel parts (Carousel, CarouselNav, CarouselPageCount, CarouselFooter) read the same state,
@@ -107,6 +113,19 @@ export interface TeachingPopoverSurfaceProps extends React.HTMLAttributes<HTMLDi
    * without one, name it with `aria-label` or `aria-labelledby`.
    */
   children?: React.ReactNode;
+  /**
+   * The surface's motion (TeachingPopover's own `motion` is for the surface it renders without a
+   * Surface). By default it fades in over 200 ms with a decelerating curve and out over 100 ms with
+   * an accelerating curve, and, pointed at a target (or the Trigger), also slides 4px away from it
+   * on the side it opened on, and back as it closes; under reduced motion it appears and
+   * disappears at once. `null` turns the motion off (the surface still renders its
+   * `data-presence` phases, which then end at once); a class string or `{ className }` replaces
+   * the default classes with yours (see `MotionSlot`), also under a `WaveProvider` with
+   * `motion="none"`, which otherwise turns the default off. Fluent's `TeachingPopover`
+   * `surfaceMotion` (a TeachingPopover is a Popover there).
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
   /** Ref to the popover surface (`role="dialog"`). */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -188,16 +207,19 @@ interface TeachingSurfaceProps extends React.HTMLAttributes<HTMLDivElement> {
   context: TeachingPopoverContextValue;
   /** The stable classes of the component that renders the surface, first in its classes. */
   rootClassName: string;
+  /** The surface's motion slot: TeachingPopover's `motion`, or the Surface's. */
+  motion?: MotionSlot | null;
   ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
  * The popover surface (internal): the non-modal `role="dialog"` element, rendered in place, or
  * portaled and positioned next to the target with a beak, with its dismissal, focus, keyboard
- * order and step announcements. The root renders it with its own props while no
- * `TeachingPopover.Surface` is among its children; `TeachingPopover.Surface` renders it with its
- * props. Its children replace the content parts of the current step; a `TeachingPopover.Title`
- * among them registers its id, which names the surface.
+ * order, step announcements and motion: it mounts through the presence core and, while it exits,
+ * stays where it was, `inert`, on the step it closed on. The root renders it with its own props
+ * while no `TeachingPopover.Surface` is among its children; `TeachingPopover.Surface` renders it
+ * with its props. Its children replace the content parts of the current step; a
+ * `TeachingPopover.Title` among them registers its id, which names the surface.
  */
 export const TeachingSurface = ({
   context,
@@ -206,6 +228,7 @@ export const TeachingSurface = ({
   className,
   style,
   onKeyDown,
+  motion,
   children,
   ref,
   ...rest
@@ -220,7 +243,6 @@ export const TeachingSurface = ({
     step,
     stepPosition,
     titleId,
-    footerLayout,
     dismiss,
     hasTrigger,
     triggerRef,
@@ -231,6 +253,23 @@ export const TeachingSurface = ({
   const titles = useTitleRegistry();
   const stepTitle = step?.title;
   const hasTarget = target !== undefined;
+
+  // What the surface's content shows: the live context while shown, else the one it last showed,
+  // so an exiting surface keeps the step it closed on whatever the step or the steps become as it
+  // closes (a controlled step moved back, the steps emptied). An opening shows the live one again,
+  // so a tour opened during its exit starts over. Adjusted during render (C-HOOKS: a
+  // previous-value state).
+  const [shownContext, setShownContext] = React.useState(context);
+  if (shown && context !== shownContext) setShownContext(context);
+  const content = shown ? context : shownContext;
+
+  // The surface mounts and unmounts through the presence core, and enters also when it mounts
+  // open (a tour open on page load animates in on a client render as after hydration). The
+  // positioning keys on `shown`, and the Escape layer, the focus restore, the keyboard order and
+  // the initial focus below on `visible`, so they go on close, not after the exit.
+  // Destructured: react-hooks/refs treats an object whose member is passed to `ref` as a ref.
+  const { isMounted, ref: presenceRef, presenceProps } = usePresence(shown, { appear: true });
+  const motionClassName = useMotionClasses(motion, popupMotion);
 
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
   // Whether `target` pointed at an element when it was last read. An element (or `null`) is known
@@ -276,7 +315,20 @@ export const TeachingSurface = ({
   const targetAvailable = target != null && (isRefObject(target) ? targetResolved : true);
   const anchorReady = !hasTarget || (targetAvailable && isPositioned);
   const visible = shown && anchorReady;
-  const elementRef = useMergedRefs<HTMLDivElement>(ref, surfaceRef, setSurface, setFloating);
+  // Whether the surface is drawn while it exits: floating-ui resets `isPositioned` when the
+  // positioning closes, which would hide an anchored surface as its exit starts. While closed the
+  // surface keeps the last `anchorReady` seen while shown (a previous-value state, C-HOOKS): one
+  // that pointed at its target exits where it was, one that was still hidden stays hidden.
+  const [shownAnchorReady, setShownAnchorReady] = React.useState(anchorReady);
+  if (shown && anchorReady !== shownAnchorReady) setShownAnchorReady(anchorReady);
+  const drawn = shown ? anchorReady : shownAnchorReady;
+  const elementRef = useMergedRefs<HTMLDivElement>(
+    ref,
+    surfaceRef,
+    setSurface,
+    setFloating,
+    presenceRef,
+  );
 
   // Point the positioning at the target after every commit. A ref is read once more when the whole
   // commit is done (the C-HOOKS deferred-update pattern): a target that comes after the popover in
@@ -322,6 +374,18 @@ export const TeachingSurface = ({
     fallback: () => targetRef.current,
     onlyIfFocusInside: true,
   });
+  // Focus before close: the surface stays mounted while it exits, so when it closes with focus
+  // inside, focus moves in the closing commit to where useRestoreFocus would put it, in its order:
+  // the element focused when it became visible (the Trigger first), the Trigger, the target. A
+  // Dialog opened by a button of the surface as it closes then records that element as its
+  // opener, not the button, which the exiting surface still holds. Unmounting is left to
+  // useRestoreFocus.
+  useFocusBeforeClose({
+    open: visible,
+    surfaceRef,
+    captureOpener: () => triggerFocusRef.current,
+    candidates: (opener) => [opener, triggerFocusRef.current, targetRef.current],
+  });
 
   // Portaled next to a target: the keyboard order of the popover placed right after the target.
   const onSurfaceKeyDown = usePopoverTabOrder({
@@ -350,7 +414,8 @@ export const TeachingSurface = ({
     }
   }, [index, visible, stepTitle, stepPosition, announce]);
 
-  if (!shown || !step) return null;
+  // Rendered while mounted: shown, or exiting with the step it closed on.
+  if (!isMounted || !content.step) return null;
 
   // Children replace the content parts of the step. The parts without children name the surface
   // by the title id known while rendering (the server HTML too); with children of yours, the
@@ -364,9 +429,11 @@ export const TeachingSurface = ({
         role="dialog"
         aria-labelledby={hasContent ? titles.titleId : titleId}
         tabIndex={-1}
-        data-layout={footerLayout}
+        data-layout={content.footerLayout}
         id={ownId ?? (hasTrigger ? surfaceId : undefined)}
         {...rest}
+        {...presenceProps}
+        data-state={shown ? 'open' : 'closed'}
         ref={elementRef}
         onKeyDown={composeEventHandlers(onKeyDown, onSurfaceKeyDown)}
         {...(hasTarget
@@ -376,7 +443,7 @@ export const TeachingSurface = ({
               style: {
                 ...style,
                 ...floatingProps.style,
-                ...(anchorReady ? undefined : { visibility: 'hidden' as const }),
+                ...(drawn ? undefined : { visibility: 'hidden' as const }),
               },
             }
           : { style })}
@@ -384,6 +451,7 @@ export const TeachingSurface = ({
           rootClassName,
           'relative w-80 rounded-md border border-border bg-background p-5 text-foreground shadow-8',
           focusRing,
+          motionClassName,
           className,
         )}
       >
@@ -397,20 +465,24 @@ export const TeachingSurface = ({
           />
         )}
 
-        {/* Titles among your children register here; the default content's does not (its id is
-            known while rendering), and a popover nested inside provides its own registry. */}
-        <TeachingPopoverSurfaceContext.Provider value={hasContent ? titles.context : null}>
-          {hasContent ? (
-            children
-          ) : (
-            <>
-              <TeachingPopoverHeader />
-              <TeachingPopoverTitle />
-              <TeachingPopoverBody />
-              <TeachingPopoverFooter />
-            </>
-          )}
-        </TeachingPopoverSurfaceContext.Provider>
+        {/* The parts inside read the step the surface shows (the one it closed on while it
+            exits). Titles among your children register here; the default content's does not
+            (its id is known while rendering), and a popover nested inside provides its own
+            registry. */}
+        <TeachingPopoverContext.Provider value={content}>
+          <TeachingPopoverSurfaceContext.Provider value={hasContent ? titles.context : null}>
+            {hasContent ? (
+              children
+            ) : (
+              <>
+                <TeachingPopoverHeader />
+                <TeachingPopoverTitle />
+                <TeachingPopoverBody />
+                <TeachingPopoverFooter />
+              </>
+            )}
+          </TeachingPopoverSurfaceContext.Provider>
+        </TeachingPopoverContext.Provider>
       </div>
     </Portal>
   );
@@ -480,19 +552,19 @@ TeachingPopoverTrigger.displayName = 'TeachingPopoverTrigger';
 /**
  * The popover surface (Fluent's `TeachingPopoverSurface`): the non-modal `role="dialog"` element
  * that the `steps` form renders, with the same behaviour (in place, or portaled next to the
- * target with a beak; focus, dismissal, keyboard order and step announcements), so your
- * `className`, `style`, `ref` and other props reach the element the `steps` form gives
+ * target with a beak; focus, dismissal, keyboard order, step announcements and motion), so your
+ * `className`, `style`, `ref`, `motion` and other props reach the element the `steps` form gives
  * TeachingPopover's own. Without children it shows the current step as the `steps` form does;
  * children replace that content: build it from `TeachingPopover.Header`, `Title`, `Body` and
  * `Footer`, or from your own (then name the surface with `aria-label` or `aria-labelledby`).
  *
  * Render one inside TeachingPopover; TeachingPopover then renders no surface of its own, and its
- * own `className`, `style`, `ref` and other element props are ignored (a development warning says
- * so). Write it directly inside TeachingPopover (a Fragment is fine) where you can: there it is
- * found while rendering. One inside an element or a component of yours is found once it has
- * mounted, so until then TeachingPopover's own surface renders next to it: in the server HTML, and
- * in the browser's first commit (before anything is painted or focused). A second Surface renders
- * a second popover (a development warning says so).
+ * own `className`, `style`, `ref`, `motion` and other element props are ignored (a development
+ * warning says so). Write it directly inside TeachingPopover (a Fragment is fine) where you can:
+ * there it is found while rendering. One inside an element or a component of yours is found once
+ * it has mounted, so until then TeachingPopover's own surface renders next to it: in the server
+ * HTML, and in the browser's first commit (before anything is painted or focused). A second
+ * Surface renders a second popover (a development warning says so).
  *
  * Also exported as `TeachingPopoverSurface` for React Server Components, which cannot use the
  * dotted `TeachingPopover.Surface` (that needs a client file).

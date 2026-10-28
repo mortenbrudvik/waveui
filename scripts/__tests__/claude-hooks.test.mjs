@@ -104,6 +104,7 @@ describe('isConventionsTarget', () => {
     'src/components/navigation/Menu.root.tsx',
     'src/components/input/pickerStyles.ts',
     'stories/Menu.stories.tsx',
+    'src/lib/motion.ts',
   ])('selects %s, which the conventions gate scans', (rel) => {
     expect(isConventionsTarget(rel)).toBe(true);
   });
@@ -112,6 +113,8 @@ describe('isConventionsTarget', () => {
     'src/components/navigation/__tests__/Menu.test.tsx',
     'src/hooks/useId.ts',
     'src/lib/cn.ts',
+    'src/lib/__tests__/motion.test.ts',
+    'src/lib/motion.tsx',
     'stories/helpers/fixtures.tsx',
     'src/components/input/README.md',
   ])('skips %s, which the conventions gate does not scan', (rel) => {

@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Button, Menu, MenuButton } from '../src';
 import type { CheckedValues, MenuProps } from '../src';
+import { motionCases } from './_motion';
 
 const meta = {
   title: 'Components/Navigation/Menu',
@@ -573,9 +574,11 @@ export const SplitGroup: Story = {
 };
 
 /**
- * Menu surfaces mount through the presence core: while a menu closes, its surface carries
- * `data-presence="exiting"` (and `inert`), so classes on that phase fade it out before it
- * unmounts. Focus is back on the trigger at once. The fade is off under reduced motion.
+ * A `motion` of your own replaces the default one: this menu appears at once and fades out over
+ * 150ms. While it closes, its surface carries `data-presence="exiting"` (and `inert`), the phase
+ * these classes key on, and it unmounts when the fade ends; focus is back on the trigger at once.
+ * The fade is off under reduced motion. (0.14 put such classes in `className`, which still works:
+ * a `className` with `data-[presence=…]` classes and no `motion` gets no default motion.)
  */
 export const ExitMotion: Story = {
   args: {
@@ -586,13 +589,56 @@ export const ExitMotion: Story = {
         <Menu.Trigger>
           <Button>Actions</Button>
         </Menu.Trigger>
-        <Menu.Popover className="transition-opacity duration-wave-fast data-[presence=exiting]:opacity-0 motion-reduce:transition-none">
+        <Menu.Popover motion="transition-opacity duration-wave-fast data-[presence=exiting]:opacity-0 motion-reduce:transition-none">
           <Menu.Item onClick={fn()}>Edit</Menu.Item>
           <Menu.Item onClick={fn()}>Duplicate</Menu.Item>
           <Menu.Item onClick={fn()}>Delete</Menu.Item>
         </Menu.Popover>
       </>
     ),
+  },
+};
+
+/** The Motion story's menus: they zoom in from 95% as they fade in, and back out as they fade. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-95 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-95 data-[presence=exiting]:opacity-0';
+
+/**
+ * `Menu.Popover motion`. By default a menu fades in and slides 4px away from its trigger on the
+ * side it opened on (a submenu away from its parent menu: open "Share") over 200ms, and fades out
+ * and slides back over 100ms. `null` turns it off; a class string replaces it (here a zoom, which
+ * leaves the slide out). A positioned surface never transitions `transform`, which places it, so a
+ * replacement moves it with `translate` or `scale`. Under reduced motion every menu appears and
+ * disappears at once.
+ */
+export const Motion: Story = {
+  args: { 'aria-label': undefined, onOpenChange: fn() },
+  render: function MotionMenus({ children: _children, ...args }) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {motionCases(fadeAndZoom).map(({ label, motion }) => (
+          // The story renders one menu per case; every other arg is forwarded.
+          <Menu key={label} {...args}>
+            <Menu.Trigger>
+              <MenuButton>{label}</MenuButton>
+            </Menu.Trigger>
+            <Menu.Popover motion={motion}>
+              <Menu.Item onClick={fn()}>Edit</Menu.Item>
+              <Menu.Item onClick={fn()}>Duplicate</Menu.Item>
+              <Menu>
+                <Menu.Trigger>
+                  <Menu.Item>Share</Menu.Item>
+                </Menu.Trigger>
+                <Menu.Popover motion={motion}>
+                  <Menu.Item onClick={fn()}>Email</Menu.Item>
+                  <Menu.Item onClick={fn()}>Copy link</Menu.Item>
+                </Menu.Popover>
+              </Menu>
+            </Menu.Popover>
+          </Menu>
+        ))}
+      </div>
+    );
   },
 };
 

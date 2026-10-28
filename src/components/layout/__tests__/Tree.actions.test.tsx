@@ -199,7 +199,7 @@ describe('Tree.Item - row content', () => {
         '[@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible',
       );
       expect(item('Documents')).toHaveClass(
-        '[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible',
+        '[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible',
       );
       expect(rowOf('Documents').querySelector('[data-tree-end]')).toHaveClass(
         'group/end',
@@ -249,7 +249,7 @@ describe('Tree.Item - actions', () => {
     );
     expect(rowOf('Documents')).toHaveClass('group/row');
     expect(item('Documents')).toHaveClass(
-      '[&:focus-within:not(:has(>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible',
+      '[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible',
     );
     // Not `:focus` on the item alone: Chromium ends it while focus moves from the item into an
     // action, so the hidden action refused the focus (E2b R6).
@@ -275,7 +275,8 @@ describe('Tree.Item - actions', () => {
     const suffix = '>[data-tree-row]_[data-tree-actions]]:visible';
     const variant = Array.from(item('Documents').classList).find((name) => name.endsWith(suffix))!;
     const ownFocus = variant.slice('[&'.length, -suffix.length).replaceAll('_', ' ');
-    expect(ownFocus).toBe(':focus-within:not(:has(>[role=group] :focus))');
+    // The child group is a grandchild of the item: it sits in its collapse element (0.15).
+    expect(ownFocus).toBe(':focus-within:not(:has(>*>[role=group] :focus))');
     const shown = () =>
       ['Documents', 'Work', 'Plan'].filter((name) => item(name).matches(ownFocus));
     act(() => item('Documents').focus());

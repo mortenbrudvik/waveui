@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Tooltip, Button, Popover, ToggleButton } from '../src';
+import { motionCases } from './_motion';
 
 /** Decorative inline icon (the Button hides its icon slot from assistive technology). */
 const SaveIcon = () => (
@@ -147,6 +148,30 @@ export const Delays: Story = {
       <Tooltip {...args} content="Appears after a second" openDelay={1000} closeDelay={100}>
         <Button>Slow to show</Button>
       </Tooltip>
+    </div>
+  ),
+};
+
+/** The Motion story's tooltip: it zooms in from 90% as it fades in, and back out as it fades. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-normal ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-faster data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-90 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-90 data-[presence=exiting]:opacity-0';
+
+/**
+ * `motion` of the tooltip's surface (the portaled box; `className` stays on the wrapper). By
+ * default it fades in and out over 100ms, without a slide (Fluent's Tooltip has no motion). `null`
+ * turns it off; a class string replaces it (here a zoom). Pointing at the button again while the
+ * tooltip fades out shows it again on the same element. Under reduced motion every tooltip appears
+ * and disappears at once.
+ */
+export const Motion: Story = {
+  render: ({ children: _children, ...args }) => (
+    <div className="flex items-center gap-4">
+      {motionCases(fadeAndZoom).map(({ label, motion }) => (
+        // The story renders one tooltip per case; every other arg is forwarded.
+        <Tooltip key={label} {...args} motion={motion}>
+          <Button>{label}</Button>
+        </Tooltip>
+      ))}
     </div>
   ),
 };

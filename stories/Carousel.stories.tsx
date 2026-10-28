@@ -2,7 +2,7 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Button, Carousel } from '../src';
-import type { CarouselProps } from '../src';
+import type { CarouselMotion, CarouselProps } from '../src';
 
 const slideClass =
   'flex h-44 flex-col items-center justify-center gap-2 rounded-md text-center text-body-1';
@@ -48,9 +48,17 @@ const meta = {
     autoPlay: false,
     autoPlayInterval: 5000,
     loop: false,
+    motion: 'slide',
+    motionDuration: 300,
     onValueChange: fn(),
     className: 'w-full max-w-lg',
     children: neutralSlides,
+  },
+  argTypes: {
+    motion: {
+      control: 'inline-radio',
+      options: ['slide', 'fade'] satisfies readonly CarouselMotion[],
+    },
   },
 } satisfies Meta<typeof Carousel>;
 
@@ -232,4 +240,43 @@ export const CustomButtons: Story = {
 
 export const Elevated: Story = {
   args: { appearance: 'elevated' },
+};
+
+/** The cases of the Motion story: its name, `motion` and `motionDuration`. */
+const carouselMotions: ReadonlyArray<{
+  label: string;
+  motion: CarouselMotion | null;
+  motionDuration?: number;
+}> = [
+  { label: 'Slide, the default', motion: 'slide' },
+  { label: 'Fade', motion: 'fade' },
+  { label: 'No motion', motion: null },
+  { label: 'Slide over 800ms', motion: 'slide', motionDuration: 800 },
+];
+
+/**
+ * `motion` and `motionDuration`. `slide` (the default) glides the slides in from the side of the
+ * page order, mirrored in right-to-left layouts; `fade` cross-fades them in place (one slide per
+ * page; with `groupSize` above 1 they slide, with a development warning); `null` changes the page
+ * at once. `motionDuration` is in milliseconds (300 by default; Fluent's `duration` is another
+ * unit). The root renders the motion as `data-motion`. Under reduced motion every carousel
+ * changes its page at once (and one with `autoPlay` starts stopped).
+ */
+export const Motion: Story = {
+  render: ({ motion: _motion, motionDuration, ...args }) => (
+    <div className="flex flex-col gap-6">
+      {carouselMotions.map((option) => (
+        // The story renders one carousel per case; every other arg is forwarded.
+        <Carousel
+          key={option.label}
+          {...args}
+          aria-label={option.label}
+          motion={option.motion}
+          motionDuration={option.motionDuration ?? motionDuration}
+        >
+          {tintedSlides}
+        </Carousel>
+      ))}
+    </div>
+  ),
 };

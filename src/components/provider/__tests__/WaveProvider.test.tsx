@@ -17,6 +17,7 @@ import { testSystemProps } from '../../../test-utils';
 import { __resetWarnings } from '../../../lib/dev';
 import { useDirection } from '../../../hooks/useDirection';
 import { Portal } from '../../portal/Portal';
+import type { MotionPreference } from '../../../lib/types';
 
 function root(container: HTMLElement): HTMLElement {
   return container.firstElementChild as HTMLElement;
@@ -239,6 +240,7 @@ describe('WaveProvider', () => {
         themeClassName: 'wave-high-contrast high-contrast',
         portalContainer: appRoot,
         inputDefaults: {},
+        motion: 'default',
         hasProvider: true,
       });
     });
@@ -398,6 +400,7 @@ describe('useWaveTheme', () => {
       themeClassName: 'wave-high-contrast high-contrast',
       portalContainer: portalTarget,
       inputDefaults: {},
+      motion: 'default',
       hasProvider: true,
     });
   });
@@ -436,6 +439,7 @@ describe('useWaveTheme', () => {
       themeClassName: string;
       portalContainer: HTMLElement | null;
       inputDefaults: InputDefaults;
+      motion: MotionPreference;
       hasProvider: boolean;
     }>();
   });
@@ -501,5 +505,53 @@ describe('inputDefaults (Phase 4 D7)', () => {
       </WaveProvider>,
     );
     expect(seen.size).toBe(1);
+  });
+});
+
+describe('motion (Phase 10 D6)', () => {
+  it('is "default" without a provider and with one', () => {
+    let value: WaveContextValue | undefined;
+    function Capture() {
+      value = useWaveTheme();
+      return null;
+    }
+    const { unmount } = render(<Capture />);
+    expect(value?.motion).toBe('default');
+    unmount();
+    render(
+      <WaveProvider>
+        <Capture />
+      </WaveProvider>,
+    );
+    expect(value?.motion).toBe('default');
+  });
+
+  it('keeps the context identity across a re-render with equal props', () => {
+    const seen = new Set<unknown>();
+    function Collect() {
+      seen.add(useWaveTheme());
+      return null;
+    }
+    const { rerender } = render(
+      <WaveProvider motion="none">
+        <Collect />
+      </WaveProvider>,
+    );
+    rerender(
+      <WaveProvider motion="none">
+        <Collect />
+      </WaveProvider>,
+    );
+    expect(seen.size).toBe(1);
+  });
+
+  it('never reaches the root element', () => {
+    const { container } = render(
+      <WaveProvider motion="none">
+        <span />
+      </WaveProvider>,
+    );
+    const el = root(container);
+    expect(Array.from(el.attributes).some((a) => a.name.includes('motion'))).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Avatar, Badge, Button, Tree } from '../src';
+import { motionCases } from './_motion';
 
 const meta = {
   title: 'Components/Layout/Tree',
@@ -386,5 +387,33 @@ export const PersonaRows: Story = {
         ))}
       </Tree.Item>
     </Tree>
+  ),
+};
+
+/** The Motion story's collapse: 400ms with the mid decelerating curve, without the fade. */
+const slowCollapse =
+  'transition-[grid-template-rows] duration-wave-slower ease-wave-decelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:grid-rows-[minmax(0,0fr)]';
+
+/**
+ * `Tree motion`, for every child group of the tree (on the element around each `role="group"`,
+ * `wave-tree-item__collapse`). By default a group's space opens from nothing and closes back to
+ * it while the group fades, over 200ms both ways, and a nested group goes with its parent. The
+ * items of a closing group leave the arrow order at once, and focus inside it moves to the item
+ * that collapsed. `null` turns it off; a class string replaces it (here a slower collapse). The
+ * chevron's turn is not part of it. Under reduced motion every group opens and closes at once.
+ */
+export const Motion: Story = {
+  args: {
+    defaultExpandedItems: ['docs'],
+  },
+  render: ({ 'aria-label': _label, ...args }) => (
+    <div className="flex flex-wrap gap-6">
+      {motionCases(slowCollapse).map(({ label, motion }) => (
+        // The story renders one tree per case; every other arg is forwarded.
+        <Tree key={label} {...args} aria-label={label} motion={motion}>
+          {files}
+        </Tree>
+      ))}
+    </div>
   ),
 };

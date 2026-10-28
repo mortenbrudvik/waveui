@@ -2,10 +2,12 @@ import * as React from 'react';
 import { progressBarClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { isDev, warnOnce } from '../../lib/dev';
+import { progressIndeterminateMotion } from '../../lib/motion';
 import { forcedColors } from '../../lib/styles';
-import type { ValidationState } from '../../lib/types';
+import type { MotionSlot, ValidationState } from '../../lib/types';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useId } from '../../hooks/useId';
+import { useMotionClasses } from '../../hooks/useMotion';
 
 /** Color of a {@link ProgressBar}'s fill. */
 export type ProgressBarColor = 'brand' | 'success' | 'warning' | 'error';
@@ -47,6 +49,19 @@ export interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'brand'
    */
   color?: ProgressBarColor;
+  /**
+   * Replaces the motion of the indeterminate fill (no `value`): by default a fill two fifths of
+   * the track wide sweeps across it, mirrored in right-to-left, and becomes a full-width pulse
+   * for reduced motion. The classes go on the fill and replace the whole default, its width and
+   * its reduced-motion counterparts included. `null` draws a static full-width fill; a class
+   * string or `{ className }` replaces the classes with plain animation classes (and a width) and
+   * their reduced-motion counterparts (the fill has no presence phases). A
+   * `WaveProvider` with `motion="none"` turns the default off (a static full-width fill), and a
+   * value here still applies under it. A determinate bar has no motion and ignores it. Fluent's
+   * ProgressBar `indeterminateMotion` takes a motion slot the same way.
+   * @default the sweep described above
+   */
+  indeterminateMotion?: MotionSlot | null;
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -84,7 +99,8 @@ function isName(value: unknown): value is string {
  *   a Field's wrapper element, the bar gets an id of its own and leaves the Field's
  *   `<label htmlFor>` to that control.
  * - The indeterminate animation follows the writing direction and becomes a full-width pulse for
- *   reduced motion. In forced-colors mode the fill uses `Highlight` and the track gets a border.
+ *   reduced motion; `indeterminateMotion` replaces or removes it. In forced-colors mode the fill
+ *   uses `Highlight` and the track gets a border.
  *
  * @example
  * <ProgressBar value={uploaded} max={total} label="Uploading photos" showLabel />
@@ -100,6 +116,7 @@ export const ProgressBar = ({
   label,
   showLabel,
   color,
+  indeterminateMotion,
   id,
   'aria-describedby': ariaDescribedBy,
   // Field merges both into its first child; neither is allowed on role="progressbar".
@@ -126,6 +143,8 @@ export const ProgressBar = ({
   const fieldState = field ? (field.validationState ?? (field.invalid ? 'error' : 'none')) : 'none';
   const resolvedColor = color ?? fieldColors[fieldState] ?? 'brand';
   const isIndeterminate = value === undefined;
+  // Called whatever the mode, so the hook order never changes when `value` appears.
+  const indeterminateClasses = useMotionClasses(indeterminateMotion, progressIndeterminateMotion);
   const validMax = Number.isFinite(max) && max > 0;
   const validValue = isIndeterminate || Number.isFinite(value);
   /** Clamped once, used for both the fill width and `aria-valuenow`. */
@@ -234,8 +253,7 @@ export const ProgressBar = ({
           'h-full rounded-full',
           fillColorClasses[resolvedColor],
           forcedColors.selectedLeaf,
-          isIndeterminate &&
-            'w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse',
+          isIndeterminate && cn('w-full', indeterminateClasses),
         )}
         style={isIndeterminate ? undefined : { width: `${percentage}%` }}
       />

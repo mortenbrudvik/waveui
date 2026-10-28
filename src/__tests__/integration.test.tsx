@@ -70,6 +70,7 @@ import {
   ListboxSurface,
   Menu,
   MessageBar,
+  MessageBarGroup,
   MenuButton,
   MenuGroup,
   MenuGroupHeader,
@@ -181,19 +182,27 @@ import {
   toggleButtonClassNames,
   toolbarClassNames,
   toolbarToggleButtonClassNames,
+  type CarouselMotion,
   type CheckedValuesChangeDetails,
   type DialogProps,
   type ListboxItem,
   type MenuProps,
 } from '../index';
 import { getOpenLayers } from '../lib/layers';
+import * as motionInternals from '../lib/motion';
+import * as useMotionInternals from '../hooks/useMotion';
+import * as collapseInternals from '../hooks/useCollapsePresence';
+import * as focusBeforeCloseInternals from '../hooks/useFocusBeforeClose';
+import * as presenceGroupInternals from '../hooks/usePresenceGroup';
 import {
   asClientReference,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  honourInert,
   installResizeObserverMock,
   mockAnimations,
   mockRect,
+  motionClasses,
 } from '../test-utils';
 
 afterEach(() => {
@@ -438,6 +447,42 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     expect(Wave.isTruncatableBreadcrumbContent(long, 30)).toBe(true);
     expect(Wave.truncateBreadcrumbLongName(long)).toBe('Quarterly planning documents f...');
     expect(Wave.truncateBreadcrumbLongTooltip(long)).toBe(long);
+  });
+
+  it('exports MessageBarGroup by its flat name only, and keeps the motion internals out (0.15)', () => {
+    expect(barrel['MessageBarGroup']).toBeTypeOf('function');
+    expect((barrel['MessageBarGroup'] as { displayName?: string }).displayName).toBe(
+      'MessageBarGroup',
+    );
+    expect(barrel['messageBarGroupClassNames']).toEqual({
+      root: 'wave-message-bar-group',
+      item: 'wave-message-bar-group__item',
+    });
+    // D21: a standalone component, not a member of MessageBar.
+    expect((barrel['MessageBar'] as Record<string, unknown>)['Group']).toBeUndefined();
+    expect(barrel['MessageBarGroupItem']).toBeUndefined();
+    // Spec §16 Q1: the recipes, the resolver and the motion hooks stay internal in 0.15 (every
+    // value export of their modules, so a new recipe is checked too).
+    const internal = [
+      ...Object.keys(motionInternals),
+      ...Object.keys(useMotionInternals),
+      ...Object.keys(collapseInternals),
+      ...Object.keys(focusBeforeCloseInternals),
+      ...Object.keys(presenceGroupInternals),
+    ];
+    expect(internal).toEqual(
+      expect.arrayContaining([
+        'dialogMotion',
+        'resolveMotion',
+        'usesLegacyMotion',
+        'useMotionClasses',
+        'useMotionPreference',
+        'useCollapsePresence',
+        'useFocusBeforeClose',
+        'usePresenceGroup',
+      ]),
+    );
+    expect(internal.filter((name) => name in barrel)).toEqual([]);
   });
 
   it('keeps internal helpers out of the public API', () => {
@@ -4727,10 +4772,45 @@ describe('compounds composed in a React Server Component', () => {
     tree: (parts: P) => React.ReactElement;
     /** Text the server HTML must contain, so an empty render cannot pass. */
     serverText: string;
+    /** Checks of the server HTML of the plain tree (0.15: the collapse wrappers' phase). */
+    serverHtml?: (html: string) => void;
     /** The key interaction, run on the hydrated lazy tree. */
     interact: (user: ReturnType<typeof userEvent.setup>) => Promise<void>;
   }
   const ssrCase = <P extends Parts>(c: SsrCase<P>) => c as unknown as SsrCase;
+
+  /** The elements with `className` in server HTML, parsed in a detached element (not rendered). */
+  function inServerHtml(html: string, className: string): Element[] {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    return Array.from(host.querySelectorAll(`.${className}`));
+  }
+
+  /** A presence wrapper rendered `entered` (no box of its own) around one part, `selector`. */
+  function expectEnteredAround(wrapper: Element, selector: string) {
+    expect(wrapper).toHaveAttribute('data-presence', 'entered');
+    expect(wrapper).not.toHaveAttribute('inert');
+    expect(wrapper.children).toHaveLength(1);
+    expect(wrapper.firstElementChild?.matches(selector), selector).toBe(true);
+  }
+
+  /** Two dismissible MessageBars in a MessageBarGroup, their state in a client component. */
+  function Notices({ Bar }: { Bar: typeof MessageBar }) {
+    const [ids, setIds] = React.useState(['saved', 'synced']);
+    return (
+      <MessageBarGroup>
+        {ids.map((id) => (
+          <Bar
+            key={id}
+            status="success"
+            onDismiss={() => setIds((current) => current.filter((other) => other !== id))}
+          >
+            {id === 'saved' ? 'Changes saved.' : 'Files synced.'}
+          </Bar>
+        ))}
+      </MessageBarGroup>
+    );
+  }
 
   const toastDismiss = vi.fn();
   const secondaryClick = vi.fn();
@@ -6022,6 +6102,131 @@ describe('compounds composed in a React Server Component', () => {
         expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
       },
     }),
+    // 0.15 (spec §11): the collapse wrappers of open parts and the bars of a MessageBarGroup are
+    // in the server HTML, entered (D9: in-flow content never animates on mount).
+    ssrCase({
+      name: 'Accordion (an open panel in its collapse wrapper)',
+      parts: { Item: AccordionItem, Trigger: AccordionTrigger, Panel: AccordionPanel },
+      tree: ({ Item, Trigger, Panel }) => (
+        <Accordion defaultOpenItem="q1">
+          <Item value="q1">
+            <Trigger>Question one?</Trigger>
+            <Panel>Answer one.</Panel>
+          </Item>
+          <Item value="q2">
+            <Trigger>Question two?</Trigger>
+            <Panel>Answer two.</Panel>
+          </Item>
+        </Accordion>
+      ),
+      serverText: 'Answer one.',
+      serverHtml: (html) => {
+        const wrappers = inServerHtml(html, Wave.accordionPanelClassNames.collapse);
+        expect(wrappers).toHaveLength(1);
+        expectEnteredAround(wrappers[0], '[role="region"]');
+      },
+      interact: async (user) => {
+        const region = screen.getByRole('region', { name: 'Question one?' });
+        expect(region.parentElement).toHaveClass(Wave.accordionPanelClassNames.collapse);
+        expect(region.parentElement).toHaveAttribute('data-presence', 'entered');
+        await user.click(button('Question two?'));
+        expect(screen.queryByRole('region', { name: 'Question one?' })).toBeNull();
+        expect(screen.getByRole('region', { name: 'Question two?' }).parentElement).toHaveAttribute(
+          'data-presence',
+          'entered',
+        );
+      },
+    }),
+    ssrCase({
+      name: 'Tree (expanded groups in their collapse wrappers, one inside the other)',
+      parts: { Item: TreeItem },
+      tree: ({ Item }) => (
+        <Tree aria-label="Files" defaultExpandedItems={['docs', 'work']}>
+          <Item value="docs">
+            Documents
+            <Item value="work">
+              Work
+              <Item value="plan">Plan.md</Item>
+            </Item>
+          </Item>
+          <Item value="readme">Readme.md</Item>
+        </Tree>
+      ),
+      serverText: 'Plan.md',
+      serverHtml: (html) => {
+        const wrappers = inServerHtml(html, Wave.treeItemClassNames.collapse);
+        expect(wrappers).toHaveLength(2);
+        for (const wrapper of wrappers) expectEnteredAround(wrapper, '[role="group"]');
+      },
+      interact: async (user) => {
+        const docs = screen.getByRole('treeitem', { name: 'Documents' });
+        const groups = within(docs).getAllByRole('group');
+        expect(groups).toHaveLength(2);
+        for (const group of groups) {
+          expect(group.parentElement).toHaveClass(Wave.treeItemClassNames.collapse);
+          expect(group.parentElement).toHaveAttribute('data-presence', 'entered');
+        }
+        await user.click(within(docs).getByText('Documents'));
+        expect(docs).toHaveAttribute('aria-expanded', 'false');
+        expect(groups.map((group) => group.isConnected)).toEqual([false, false]);
+      },
+    }),
+    ssrCase({
+      name: 'Nav (an open category list in its collapse wrapper)',
+      parts: { Item: NavItem, Category: NavCategory, SubItem: NavSubItem },
+      tree: ({ Item, Category, SubItem }) => (
+        <Nav aria-label="Main" defaultOpenCategories={['docs']}>
+          <Item value="home">Home</Item>
+          <Category value="docs" label="Docs">
+            <SubItem value="intro">Introduction</SubItem>
+          </Category>
+          <Category value="api" label="API">
+            <SubItem value="hooks">Hooks</SubItem>
+          </Category>
+        </Nav>
+      ),
+      serverText: 'Introduction',
+      serverHtml: (html) => {
+        const wrappers = inServerHtml(html, Wave.navCategoryClassNames.collapse);
+        expect(wrappers).toHaveLength(1);
+        expectEnteredAround(wrappers[0], `ul.${Wave.navCategoryClassNames.list}`);
+      },
+      interact: async (user) => {
+        const docs = button('Docs');
+        expect(docs).toHaveAttribute('aria-expanded', 'true');
+        const list = document.getElementById(docs.getAttribute('aria-controls') ?? '');
+        expect(list?.parentElement).toHaveClass(Wave.navCategoryClassNames.collapse);
+        expect(list?.parentElement).toHaveAttribute('data-presence', 'entered');
+        await user.click(button('API'));
+        expect(button('API')).toHaveAttribute('aria-expanded', 'true');
+        expect(button('Hooks')).toBeInTheDocument();
+        await user.click(docs);
+        expect(docs).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByRole('button', { name: 'Introduction' })).toBeNull();
+      },
+    }),
+    ssrCase({
+      name: 'MessageBarGroup (keyed MessageBar children)',
+      parts: { Bar: MessageBar },
+      tree: ({ Bar }) => <Notices Bar={Bar} />,
+      serverText: 'Files synced.',
+      serverHtml: (html) => {
+        const items = inServerHtml(html, Wave.messageBarGroupClassNames.item);
+        expect(items).toHaveLength(2);
+        for (const item of items) expectEnteredAround(item, `.${Wave.messageBarClassNames.root}`);
+      },
+      interact: async (user) => {
+        const items = document.querySelectorAll('.' + Wave.messageBarGroupClassNames.item);
+        expect(Array.from(items, (item) => item.getAttribute('data-presence'))).toEqual([
+          'entered',
+          'entered',
+        ]);
+        await user.click(screen.getAllByRole('button', { name: 'Dismiss' })[0]);
+        expect(screen.queryByText('Changes saved.')).toBeNull();
+        // Focus leaves the dismissed bar for the next bar's Dismiss button.
+        expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+      },
+    }),
   ];
 
   const hydrated: Array<{ root: Root; container: HTMLElement }> = [];
@@ -6035,6 +6240,7 @@ describe('compounds composed in a React Server Component', () => {
   it.each(cases)('$name: the server HTML is the same with lazy part types', (c) => {
     const plain = renderToString(c.tree(c.parts));
     expect(plain).toContain(c.serverText);
+    c.serverHtml?.(plain);
     expect(renderToString(c.tree(asClientReferences(c.parts)))).toBe(plain);
   });
 
@@ -9376,5 +9582,618 @@ describe('Phase 9 parts across components (0.14)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(trigger).toHaveFocus();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0.15 (Fluent parity phase 10): motion across components (spec §11 INTEGRATION)
+// ---------------------------------------------------------------------------
+
+/** Ends every mocked animation handed out so far, and so the phases that wait for them. */
+async function finishMotion(motion: ReturnType<typeof mockAnimations>) {
+  await act(async () => {
+    await motion.finishAll();
+  });
+}
+
+/** The toaster handle of the motion cases below (bound to the Toaster each case mounts). */
+const motionToaster = createToaster();
+
+describe('Phase 10 motion across components (0.15)', () => {
+  describe('a Popover or a Menu that closes and opens a Dialog in one update while it exits (D20)', () => {
+    /** Rename closes the popup and opens the Dialog (rendered after it) in one update. */
+    function RenameFlow({ popup }: { popup: 'popover' | 'menu' }) {
+      const [popupOpen, setPopupOpen] = React.useState(false);
+      const [renaming, setRenaming] = React.useState(false);
+      const startRename = () => {
+        setPopupOpen(false);
+        setRenaming(true);
+      };
+      return (
+        <>
+          {popup === 'popover' ? (
+            <Popover open={popupOpen} onOpenChange={setPopupOpen}>
+              <Popover.Trigger>
+                <Button>Actions</Button>
+              </Popover.Trigger>
+              <Popover.Content aria-label="More actions">
+                <Button onClick={startRename}>Rename</Button>
+              </Popover.Content>
+            </Popover>
+          ) : (
+            <Menu open={popupOpen} onOpenChange={setPopupOpen}>
+              <Menu.Trigger>
+                <Button>Actions</Button>
+              </Menu.Trigger>
+              <Menu.Popover>
+                {/* persistOnClick: the close comes from the state, with focus on the item. */}
+                <Menu.Item persistOnClick onClick={startRename}>
+                  Rename
+                </Menu.Item>
+              </Menu.Popover>
+            </Menu>
+          )}
+          <Dialog open={renaming} onOpenChange={setRenaming}>
+            <Dialog.Content title="Rename">
+              <Dialog.Close>
+                <Button>Cancel</Button>
+              </Dialog.Close>
+            </Dialog.Content>
+          </Dialog>
+        </>
+      );
+    }
+
+    it.each(['popover', 'menu'] as const)(
+      '%s: the Dialog opens over the exiting surface, and closing it focuses the trigger',
+      async (popup) => {
+        const surfaceClass =
+          popup === 'menu' ? menuPopoverClassNames.root : Wave.popoverContentClassNames.root;
+        const surface = () => document.querySelector<HTMLElement>(`.${surfaceClass}`);
+        const motion = mockAnimations({ animated: (el) => el.classList.contains(surfaceClass) });
+        // Focus in an inert subtree does nothing, as in a browser: React's restore of the item
+        // the exiting surface still holds cannot mask a missing focus move.
+        honourInert();
+        const user = userEvent.setup();
+        render(<RenameFlow popup={popup} />);
+        await user.click(button('Actions'));
+        await finishMotion(motion);
+
+        await user.click(popup === 'menu' ? menuitem('Rename') : button('Rename'));
+        expect(surface()).toHaveAttribute('data-presence', 'exiting');
+        expect(surface()?.closest('[inert]')).not.toBeNull();
+        const dialog = screen.getByRole('dialog', { name: 'Rename' });
+        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+        await finishMotion(motion);
+        expect(surface()).toBeNull();
+        await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+        expect(screen.queryByRole('dialog', { name: 'Rename' })).toBeNull();
+        expect(button('Actions')).toHaveFocus();
+      },
+    );
+  });
+
+  it('two stacked Dialogs: the upper one keeps its transparent backdrop while it exits, the lower one stays dimmed and modal (risk 7)', async () => {
+    const motion = mockAnimations({ animated: (el) => el.getAttribute('role') === 'dialog' });
+    const user = userEvent.setup();
+    render(
+      <Dialog defaultOpen>
+        <Dialog.Content title="Settings">
+          <Dialog>
+            <Dialog.Trigger>
+              <Button>Advanced</Button>
+            </Dialog.Trigger>
+            <Dialog.Content title="Advanced settings">
+              <Dialog.Close>
+                <Button>Done</Button>
+              </Dialog.Close>
+            </Dialog.Content>
+          </Dialog>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    /** The backdrop of the dialog whose surface is `dialog`: the surface's sibling in its portal. */
+    const backdropOf = (dialog: HTMLElement) =>
+      dialog
+        .closest('[data-wave-portal]')
+        ?.querySelector<HTMLElement>(`.${dialogContentClassNames.backdrop}`) ?? null;
+    await finishMotion(motion);
+    const lower = screen.getByRole('dialog', { name: 'Settings' });
+    expect(lower).toHaveAttribute('data-presence', 'entered');
+    await user.click(button('Advanced'));
+    await finishMotion(motion);
+    const upper = screen.getByRole('dialog', { name: 'Advanced settings' });
+    const upperBackdrop = backdropOf(upper);
+    expect(upperBackdrop).not.toBeNull();
+    expect(upperBackdrop).not.toBe(backdropOf(lower));
+    expect(upperBackdrop).toHaveAttribute('data-appearance', 'transparent');
+    expect(backdropOf(lower)).toHaveAttribute('data-appearance', 'dimmed');
+
+    await user.click(within(upper).getByRole('button', { name: 'Done' }));
+    expect(upper).toHaveAttribute('data-presence', 'exiting');
+    expect(upper.closest('[inert]')).not.toBeNull();
+    expect(upperBackdrop).toHaveAttribute('data-presence', 'exiting');
+    expect(upperBackdrop).toHaveAttribute('data-appearance', 'transparent');
+    expect(backdropOf(lower)).toHaveAttribute('data-appearance', 'dimmed');
+    expect(Wave.hasOpenModal()).toBe(true);
+    expect(button('Advanced')).toHaveFocus();
+
+    await finishMotion(motion);
+    expect(upper.isConnected).toBe(false);
+    expect(upperBackdrop?.isConnected).toBe(false);
+    expect(lower).toHaveAttribute('data-presence', 'entered');
+    expect(backdropOf(lower)).toHaveAttribute('data-appearance', 'dimmed');
+    expect(button('Advanced')).toHaveFocus();
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('a Toast over an exiting Dialog stays operable: not inert, focusable, and its action runs', async () => {
+    const onUndo = vi.fn();
+    function DeleteRow() {
+      const { dispatchToast } = useToastController();
+      return (
+        <Button
+          onClick={() =>
+            dispatchToast(
+              <Toast status="success">
+                <Toast.Title>Row deleted</Toast.Title>
+                <Toast.Footer>
+                  <Toast.Close>
+                    <Button onClick={onUndo}>Undo</Button>
+                  </Toast.Close>
+                </Toast.Footer>
+              </Toast>,
+              { timeout: 0 },
+            )
+          }
+        >
+          Delete row
+        </Button>
+      );
+    }
+    const motion = mockAnimations({ animated: (el) => el.getAttribute('role') === 'dialog' });
+    honourInert();
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <Dialog>
+          <Dialog.Trigger>
+            <Button>Edit rows</Button>
+          </Dialog.Trigger>
+          <Dialog.Content title="Rows">
+            <DeleteRow />
+            <Dialog.Close>
+              <Button>Done</Button>
+            </Dialog.Close>
+          </Dialog.Content>
+        </Dialog>
+      </Toaster>,
+    );
+    await user.click(button('Edit rows'));
+    await finishMotion(motion);
+    await user.click(button('Delete row'));
+    const toast = toastGroup('Success: Row deleted');
+
+    await user.click(button('Done'));
+    const dialog = screen.getByRole('dialog', { name: 'Rows' });
+    expect(dialog).toHaveAttribute('data-presence', 'exiting');
+    expect(dialog.closest('[inert]')).not.toBeNull();
+    // The layer, the trap and the isolation are gone at the close: the page and the toast are
+    // usable while the dialog still fades.
+    expect(Wave.hasOpenModal()).toBe(false);
+    expect(button('Edit rows')).toHaveFocus();
+    expect(button('Edit rows').closest('[inert]')).toBeNull();
+    expect(toast.closest('[inert]')).toBeNull();
+    act(() => button('Undo').focus());
+    expect(button('Undo')).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Success: Row deleted' })).toBeNull();
+
+    await finishMotion(motion);
+    expect(screen.queryByRole('dialog', { name: 'Rows' })).toBeNull();
+  });
+
+  it('an Accordion in a Dialog closing with focus in its panel: focus on its trigger, the Dialog still open', async () => {
+    function HelpDialog() {
+      const [openItem, setOpenItem] = React.useState<string | null>('shipping');
+      return (
+        <Dialog defaultOpen>
+          <Dialog.Content title="Help">
+            <Accordion openItem={openItem} onOpenItemChange={setOpenItem}>
+              <Accordion.Item value="shipping">
+                <Accordion.Trigger>Shipping</Accordion.Trigger>
+                <Accordion.Panel>
+                  Ships in two days.
+                  <Button onClick={() => setOpenItem(null)}>Got it</Button>
+                </Accordion.Panel>
+              </Accordion.Item>
+            </Accordion>
+          </Dialog.Content>
+        </Dialog>
+      );
+    }
+    const isCollapse = (el: Element) =>
+      el.classList.contains(Wave.accordionPanelClassNames.collapse);
+    const motion = mockAnimations({ animated: isCollapse });
+    honourInert();
+    const user = userEvent.setup();
+    render(<HelpDialog />);
+    const dialog = screen.getByRole('dialog', { name: 'Help' });
+    const region = screen.getByRole('region', { name: 'Shipping' });
+
+    await user.click(button('Got it'));
+    expect(region.parentElement).toHaveAttribute('data-presence', 'exiting');
+    expect(region.closest('[inert]')).toBe(region.parentElement);
+    expect(button('Shipping')).toHaveFocus();
+    expect(button('Shipping')).toHaveAttribute('aria-expanded', 'false');
+    expect(dialog).toHaveAttribute('data-presence', 'entered');
+    expect(Wave.hasOpenModal()).toBe(true);
+
+    await finishMotion(motion);
+    expect(region.isConnected).toBe(false);
+    expect(button('Shipping')).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Help' })).toBe(dialog);
+  });
+
+  describe('WaveProvider motion="none" around one of each surface (D6)', () => {
+    /** Every recipe of the motion module by name (`drawerMotion.end`), records one level deep. */
+    const RECIPES: Array<[string, string]> = Object.entries(motionInternals).flatMap(
+      ([name, value]): Array<[string, string]> => {
+        if (typeof value === 'string') return [[name, value]];
+        if (typeof value === 'object' && value !== null) {
+          return Object.entries(value as Record<string, string>).map(([key, item]) => [
+            `${name}.${key}`,
+            item,
+          ]);
+        }
+        return [];
+      },
+    );
+    /** The structures (the `*Structure` constants) are layout keyed on the phase, not motion. */
+    const isStructure = (name: string) => name.split('.')[0].endsWith('Structure');
+    const structureWords = new Set(
+      RECIPES.filter(([name]) => isStructure(name)).flatMap(([, value]) => motionClasses(value)),
+    );
+    /**
+     * A word only a motion recipe writes: a presence variant, or Wave's duration, curve and
+     * animation tokens (no component uses them outside the recipes). Generic words that other
+     * classes share (a fade's opacity class, a plain transition) are left out of the sweep.
+     */
+    const isMotionWord = (word: string) =>
+      word.includes('[presence=') || /(?:^|:)(?:duration|ease|animate)-wave-/.test(word);
+    /** Each such word of a motion recipe, with the first recipe that writes it. */
+    const MOTION_WORDS = new Map<string, string>();
+    for (const [name, value] of RECIPES) {
+      if (isStructure(name)) continue;
+      for (const word of motionClasses(value)) {
+        if (isMotionWord(word) && !structureWords.has(word) && !MOTION_WORDS.has(word)) {
+          MOTION_WORDS.set(word, name);
+        }
+      }
+    }
+
+    /** `element word (recipe)` for every element of the document with a word of a recipe. */
+    function carriedMotion(): string[] {
+      const found: string[] = [];
+      for (const el of Array.from(document.body.querySelectorAll('*'))) {
+        for (const word of Array.from(el.classList)) {
+          const recipe = MOTION_WORDS.get(word);
+          if (recipe) found.push(`${el.localName}.${el.classList[0]} ${word} (${recipe})`);
+        }
+      }
+      return found;
+    }
+
+    it('every motion recipe has words only motion writes, so the sweep sees each one', () => {
+      const motionRecipes = RECIPES.filter(([name]) => !isStructure(name));
+      expect(motionRecipes.length).toBeGreaterThan(20);
+      expect(RECIPES.filter(([name]) => isStructure(name)).length).toBeGreaterThan(0);
+      for (const [name, value] of motionRecipes) {
+        expect(
+          motionClasses(value).some((word) => MOTION_WORDS.has(word)),
+          name,
+        ).toBe(true);
+      }
+    });
+
+    interface MotionCase {
+      name: string;
+      /** The surface, shown, with `motion` on the part the recipe animates (else the default). */
+      ui: (motion?: string) => React.ReactElement;
+      /** Shows what a gesture or a dispatch shows (the InfoButton's note, a toast). */
+      show?: (user: UserEvent) => Promise<void>;
+      /** The element the recipe animates. */
+      target: () => Element | null;
+      /** Its default motion. */
+      recipe: string;
+      /**
+       * The part's own motion and what it puts where (default: `my-motion` on the target); `null`
+       * for a motion without a slot (Nav item actions' reveal, D6).
+       */
+      own?: { motion: string; target: () => Element | null; classes: string[] } | null;
+    }
+
+    const byClass = (className: string) => () => document.querySelector(`.${className}`);
+    const motion = motionInternals;
+    const CASES: MotionCase[] = [
+      {
+        name: 'Dialog',
+        ui: (m) => (
+          <Dialog defaultOpen>
+            <Dialog.Content title="Rename" motion={m}>
+              <Button>Save</Button>
+            </Dialog.Content>
+          </Dialog>
+        ),
+        target: byClass(dialogContentClassNames.root),
+        recipe: motion.dialogMotion,
+      },
+      {
+        name: 'Drawer (overlay)',
+        ui: (m) => (
+          <Drawer defaultOpen title="Filters" motion={m}>
+            <Button>Apply</Button>
+          </Drawer>
+        ),
+        target: byClass(Wave.drawerClassNames.root),
+        recipe: `${motion.drawerMotion.end} ${motion.drawerDurations.small}`,
+      },
+      {
+        name: 'Drawer (inline)',
+        ui: (m) => (
+          <Drawer type="inline" defaultOpen title="Details" motion={m}>
+            <p>Shipping address</p>
+          </Drawer>
+        ),
+        target: byClass(Wave.drawerClassNames.collapse),
+        recipe: `${motion.inlineDrawerMotion.width} ${motion.drawerDurations.small}`,
+      },
+      {
+        name: 'NavDrawer (overlay)',
+        ui: (m) => (
+          <NavDrawer defaultOpen motion={m}>
+            <NavDrawerHeader>Contoso HR</NavDrawerHeader>
+            <NavDrawerBody>
+              <NavItem value="home">Home</NavItem>
+            </NavDrawerBody>
+          </NavDrawer>
+        ),
+        target: byClass(Wave.navDrawerClassNames.root),
+        recipe: `${motion.drawerMotion.start} ${motion.drawerDurations.small}`,
+      },
+      {
+        name: 'Menu.Popover',
+        ui: (m) => (
+          <Menu defaultOpen>
+            <Menu.Trigger>
+              <Button>File</Button>
+            </Menu.Trigger>
+            <Menu.Popover motion={m}>
+              <Menu.Item>New</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        ),
+        target: byClass(menuPopoverClassNames.root),
+        recipe: motion.popupMotion,
+      },
+      {
+        name: 'Popover.Content',
+        ui: (m) => (
+          <Popover defaultOpen>
+            <Popover.Trigger>
+              <Button>Details</Button>
+            </Popover.Trigger>
+            <Popover.Content title="Details" motion={m}>
+              Delivered on Monday.
+            </Popover.Content>
+          </Popover>
+        ),
+        target: byClass(Wave.popoverContentClassNames.root),
+        recipe: motion.popupMotion,
+      },
+      {
+        name: 'InfoButton',
+        ui: (m) => <InfoButton info="Use 12 characters." openOnHover={false} motion={m} />,
+        show: async (user) => {
+          await user.click(screen.getByRole('button', { name: 'Information' }));
+        },
+        target: byClass(Wave.infoButtonClassNames.info),
+        recipe: motion.popupMotion,
+      },
+      {
+        name: 'Tooltip',
+        ui: (m) => (
+          <Tooltip content="Save changes" defaultOpen motion={m}>
+            <Button>Save</Button>
+          </Tooltip>
+        ),
+        target: tooltipSurface,
+        recipe: motion.tooltipMotion,
+      },
+      {
+        name: 'TeachingPopover',
+        ui: (m) => (
+          <TeachingPopover
+            steps={[
+              { title: 'Welcome', body: 'A quick tour.' },
+              { title: 'Done', body: 'You are all set.' },
+            ]}
+            motion={m}
+          />
+        ),
+        target: byClass(Wave.teachingPopoverClassNames.root),
+        recipe: motion.popupMotion,
+      },
+      {
+        name: 'Accordion.Panel',
+        ui: (m) => (
+          <Accordion defaultOpenItem="shipping">
+            <Accordion.Item value="shipping">
+              <Accordion.Trigger>Shipping</Accordion.Trigger>
+              <Accordion.Panel motion={m}>Ships in two days.</Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        ),
+        target: byClass(Wave.accordionPanelClassNames.collapse),
+        recipe: motion.collapseMotion,
+      },
+      {
+        name: 'Tree',
+        ui: (m) => (
+          <Tree aria-label="Files" defaultExpandedItems={['docs']} motion={m}>
+            <Tree.Item value="docs">
+              Documents
+              <Tree.Item value="work">Work</Tree.Item>
+            </Tree.Item>
+          </Tree>
+        ),
+        target: byClass(Wave.treeItemClassNames.collapse),
+        recipe: motion.collapseMotion,
+      },
+      {
+        name: 'Nav.Category (its list)',
+        ui: (m) => (
+          <Nav aria-label="Main" defaultOpenCategories={['docs']}>
+            <Nav.Category value="docs" label="Docs" motion={m}>
+              <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+            </Nav.Category>
+          </Nav>
+        ),
+        target: byClass(Wave.navCategoryClassNames.collapse),
+        recipe: motion.collapseMotion,
+      },
+      {
+        name: 'Nav.Category (its expand icon)',
+        ui: (m) => (
+          <Nav aria-label="Main" defaultOpenCategories={['docs']}>
+            <Nav.Category value="docs" label="Docs" expandIconMotion={m}>
+              <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+            </Nav.Category>
+          </Nav>
+        ),
+        target: byClass(Wave.navCategoryClassNames.expandIcon),
+        recipe: motion.expandIconMotion,
+      },
+      {
+        name: 'Nav.Item (the reveal of its actions)',
+        ui: () => (
+          <Nav aria-label="Main">
+            <Nav.Item value="reports" actions={<Button>Pin Reports</Button>}>
+              Reports
+            </Nav.Item>
+          </Nav>
+        ),
+        target: byClass(Wave.navItemClassNames.actions),
+        recipe: motion.navActionsRevealMotion,
+        own: null,
+      },
+      {
+        name: 'Toaster (its toast containers)',
+        ui: (m) => (
+          <Toaster toaster={motionToaster} motion={m}>
+            <p>App</p>
+          </Toaster>
+        ),
+        show: async () => {
+          act(() => {
+            motionToaster.dispatchToast(
+              <Toast status="success">
+                <Toast.Title>Saved</Toast.Title>
+              </Toast>,
+              { timeout: 0 },
+            );
+          });
+        },
+        target: () => document.querySelector('[data-wave-toast]'),
+        recipe: motion.toastMotion.bottom,
+      },
+      {
+        name: 'MessageBarGroup',
+        ui: (m) => (
+          <MessageBarGroup motion={m}>
+            <MessageBar key="saved" status="success">
+              Changes saved.
+            </MessageBar>
+          </MessageBarGroup>
+        ),
+        target: byClass(Wave.messageBarGroupClassNames.item),
+        recipe: motion.messageBarGroupExitMotion,
+      },
+      {
+        name: 'Carousel',
+        ui: (m) => (
+          <Carousel aria-label="Promo" motion={m as CarouselMotion | undefined}>
+            <CarouselItem>First slide</CarouselItem>
+            <CarouselItem>Second slide</CarouselItem>
+          </Carousel>
+        ),
+        target: byClass(Wave.carouselClassNames.track),
+        recipe: motion.carouselSlideMotion,
+        own: {
+          motion: 'fade',
+          target: byClass(Wave.carouselClassNames.slide),
+          classes: motionClasses(motion.carouselFadeMotion),
+        },
+      },
+      {
+        name: 'TabList (its selection line)',
+        ui: (m) => (
+          <TabList aria-label="Sections" motion={m}>
+            <TabListTab value="a">Tab A</TabListTab>
+            <TabListTab value="b">Tab B</TabListTab>
+          </TabList>
+        ),
+        target: () => screen.getByRole('tab', { name: 'Tab A' }),
+        recipe: motion.tabIndicatorMotion,
+      },
+      {
+        name: 'ProgressBar (indeterminate)',
+        ui: (m) => <ProgressBar aria-label="Loading" indeterminateMotion={m} />,
+        target: byClass(Wave.progressBarClassNames.bar),
+        recipe: motion.progressIndeterminateMotion,
+      },
+    ];
+
+    it.each(CASES)(
+      '$name: under motion="none" no element carries a word of a motion recipe',
+      async (c) => {
+        const user = userEvent.setup();
+        render(<WaveProvider motion="none">{c.ui()}</WaveProvider>);
+        await c.show?.(user);
+        expect(c.target()).not.toBeNull();
+        expect(carriedMotion()).toEqual([]);
+      },
+    );
+
+    it.each(CASES.filter((c) => c.own !== null))(
+      '$name: the part’s own motion still applies under motion="none", and nothing else moves',
+      async (c) => {
+        const own = c.own ?? { motion: 'my-motion', target: c.target, classes: ['my-motion'] };
+        const user = userEvent.setup();
+        render(<WaveProvider motion="none">{c.ui(own.motion)}</WaveProvider>);
+        await c.show?.(user);
+        expect(own.target()).toHaveClass(...own.classes);
+        // The own motion is the only one: no default recipe joins it, on its part or elsewhere.
+        const words = new Set(own.classes);
+        expect(carriedMotion().filter((entry) => !words.has(entry.split(' ')[1]))).toEqual([]);
+      },
+    );
+
+    it.each(CASES)(
+      '$name: a nested WaveProvider motion="default" turns the default motion on again',
+      async (c) => {
+        const user = userEvent.setup();
+        render(
+          <WaveProvider motion="none">
+            <WaveProvider motion="default">{c.ui()}</WaveProvider>
+          </WaveProvider>,
+        );
+        await c.show?.(user);
+        expect(c.target()).toHaveClass(...motionClasses(c.recipe));
+      },
+    );
   });
 });

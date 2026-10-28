@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { infoLabelClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp } from '../../lib/dev';
+import type { MotionSlot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { markFieldLabel } from '../input/fieldLabel';
 import { Label, type LabelProps } from '../input/Label';
@@ -33,6 +34,13 @@ export interface InfoLabelProps
    * @default true
    */
   openOnHover?: boolean;
+  /**
+   * The motion of the info button's note, passed through unchanged (see `InfoButton`'s `motion`:
+   * `undefined` is the default fade and slide, `null` none, a value replaces it). Fluent's
+   * `Popover` `surfaceMotion`.
+   * @default the fade and slide of InfoButton's note
+   */
+  motion?: MotionSlot | null;
   /** Ref to the root `<span>`. */
   ref?: React.Ref<HTMLSpanElement>;
 }
@@ -50,7 +58,7 @@ export interface InfoLabelProps
  * - The button is named "‹label text› ‹infoButtonLabel›" through `aria-labelledby`, which points
  *   at the `<label>` and at the button's own id (whose `aria-label` supplies the second half), so
  *   several InfoLabels on a page are told apart; `infoButtonLabel` localizes that second half.
- *   `openOnHover` and `size` reach the button too.
+ *   `openOnHover`, `motion` and `size` reach the button too.
  * - No `controlRef`: InfoLabel is a label, not a form control, so C-ROUTING's composite-control
  *   routing does not apply to it; a layout that needs the button's own element renders `InfoButton`
  *   next to a `Label` instead.
@@ -64,6 +72,7 @@ export const InfoLabel = ({
   info,
   infoButtonLabel = 'Information',
   openOnHover,
+  motion,
   id,
   htmlFor,
   required,
@@ -108,6 +117,7 @@ export const InfoLabel = ({
           info={info}
           size={size}
           openOnHover={openOnHover}
+          motion={motion}
           aria-label={infoButtonLabel}
           aria-labelledby={`${labelId} ${buttonId}`}
         />

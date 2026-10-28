@@ -323,6 +323,15 @@ export const messageBarTitleClassNames = { root: 'wave-message-bar-title' } as c
 export const messageBarActionsClassNames = { root: 'wave-message-bar-actions' } as const;
 
 /**
+ * MessageBarGroup: `root` on the element that stacks the bars; `item` on the element around each
+ * bar (the element its enter and exit run on).
+ */
+export const messageBarGroupClassNames = {
+  root: 'wave-message-bar-group',
+  item: 'wave-message-bar-group__item',
+} as const;
+
+/**
  * ProgressBar: `root` on the `role="progressbar"` element (the track); `bar` on the fill; `label`
  * on the label of `showLabel` (a sibling of the root).
  */
@@ -383,11 +392,13 @@ export const toastFooterClassNames = { root: 'wave-toast-footer' } as const;
 
 /**
  * Toaster: `root` on the portaled toast region; `toast` on the `role="group"` container the
- * Toaster renders around each toast.
+ * Toaster renders around each toast; `toastContent` on the element inside each container, its
+ * only child, which holds the toast's status text and content (0.15).
  */
 export const toasterClassNames = {
   root: 'wave-toaster',
   toast: 'wave-toaster__toast',
+  toastContent: 'wave-toaster__toast-content',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -909,8 +920,14 @@ export const accordionTriggerClassNames = {
   expandIcon: 'wave-accordion-trigger__expand-icon',
 } as const;
 
-/** Accordion.Panel: `root` on the `role="region"` element. */
-export const accordionPanelClassNames = { root: 'wave-accordion-panel' } as const;
+/**
+ * Accordion.Panel: `root` on the `role="region"` element; `collapse` on the element around it
+ * (the element that opens and closes the region's space, 0.15).
+ */
+export const accordionPanelClassNames = {
+  root: 'wave-accordion-panel',
+  collapse: 'wave-accordion-panel__collapse',
+} as const;
 
 /** TabList: `root` on the `role="tablist"` element. */
 export const tabListClassNames = { root: 'wave-tab-list' } as const;
@@ -935,7 +952,8 @@ export const treeClassNames = { root: 'wave-tree' } as const;
  * chevron (or your `expandIcon`); `indicator` on the checkbox of a multi-select tree or the radio
  * of a single-select one; `icon` on the icon span; `label` on the label span; `iconAfter` on the
  * icon after the label; `aside` on the aside content; `actions` on the row's actions toolbar;
- * `group` on the `role="group"` element of its nested items.
+ * `group` on the `role="group"` element of its nested items; `collapse` on the element around
+ * that group (the element that opens and closes the group's space, 0.15).
  */
 export const treeItemClassNames = {
   root: 'wave-tree-item',
@@ -948,6 +966,7 @@ export const treeItemClassNames = {
   aside: 'wave-tree-item__aside',
   actions: 'wave-tree-item__actions',
   group: 'wave-tree-item__group',
+  collapse: 'wave-tree-item__collapse',
 } as const;
 
 /**
@@ -1133,8 +1152,9 @@ export const navClassNames = {
 
 /**
  * Nav.Category: `root` on its `<li>`; `button` on the toggle button; `icon` on the icon span;
- * `label` on the label span; `expandIcon` on the chevron `<svg>`; `list` on the `<ul>` of its
- * sub-items.
+ * `label` on the label span; `expandIcon` on the chevron `<svg>` (or on the span of your
+ * `expandIcon`); `list` on the `<ul>` of its sub-items; `collapse` on the element around that
+ * list (the element that opens and closes the list's space, 0.15).
  */
 export const navCategoryClassNames = {
   root: 'wave-nav-category',
@@ -1143,6 +1163,7 @@ export const navCategoryClassNames = {
   label: 'wave-nav-category__label',
   expandIcon: 'wave-nav-category__expand-icon',
   list: 'wave-nav-category__list',
+  collapse: 'wave-nav-category__collapse',
 } as const;
 
 /**
@@ -1200,13 +1221,15 @@ export const navAppItemStaticClassNames = {
 
 /**
  * NavDrawer (a Drawer variant: it also carries Drawer's root, and its backdrop Drawer's backdrop
- * class): `root` on the panel (the portaled `role="dialog"` element of an overlay drawer, the
- * panel element of an inline one); `backdrop` on the backdrop of a modal overlay; `nav` on the
- * navigation landmark that fills the panel.
+ * class, and its collapse element Drawer's collapse class): `root` on the panel (the portaled
+ * `role="dialog"` element of an overlay drawer, the panel element of an inline one); `backdrop` on
+ * the backdrop of a modal overlay; `collapse` on the element around an inline drawer's panel;
+ * `nav` on the navigation landmark that fills the panel.
  */
 export const navDrawerClassNames = {
   root: 'wave-nav-drawer',
   backdrop: 'wave-nav-drawer__backdrop',
+  collapse: 'wave-nav-drawer__collapse',
   nav: 'wave-nav-drawer__nav',
 } as const;
 
@@ -1324,16 +1347,19 @@ export const tooltipClassNames = {
 /**
  * Drawer: `root` on the panel (the portaled `role="dialog"` element of an overlay drawer, while it
  * is open or kept mounted, or the `<aside>` of an inline one); `backdrop` on the backdrop of a
- * modal or alert overlay drawer; `header` on the built-in header row (absent with a
- * Drawer.Header); `titleAction` on the element of the `titleAction` slot in that row;
- * `closeButton` on every built-in Close button (which also carries Button's root), in the built-in
- * header and in each Drawer.HeaderTitle; `body` on the scrolling body. The heading of its `title`
- * prop carries Drawer.Title's class. The panel carries `data-type`, `data-position` and
- * `data-size`; the body, the header and the footer carry `data-scroll-state`.
+ * modal or alert overlay drawer; `collapse` on the element around an inline drawer's panel (its
+ * only child), which carries the presence phases and the motion of an inline drawer; `header` on
+ * the built-in header row (absent with a Drawer.Header); `titleAction` on the element of the
+ * `titleAction` slot in that row; `closeButton` on every built-in Close button (which also
+ * carries Button's root), in the built-in header and in each Drawer.HeaderTitle; `body` on the
+ * scrolling body. The heading of its `title` prop carries Drawer.Title's class. The panel carries
+ * `data-type`, `data-position` and `data-size`; the body, the header and the footer carry
+ * `data-scroll-state`.
  */
 export const drawerClassNames = {
   root: 'wave-drawer',
   backdrop: 'wave-drawer__backdrop',
+  collapse: 'wave-drawer__collapse',
   header: 'wave-drawer__header',
   titleAction: 'wave-drawer__title-action',
   closeButton: 'wave-drawer__close-button',

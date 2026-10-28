@@ -730,11 +730,12 @@ describe('Drawer type="inline"', () => {
     ] as const)(
       'stays mounted and inert while its exit motion runs, focus already returned, then %s it',
       async (_, unmountOnClose) => {
-        const motion = mockAnimations();
+        // 0.15 (P10-DRW-I): the presence element is the collapse element around the <aside>.
+        const motion = mockAnimations({
+          animated: (el) => el.classList.contains(drawerClassNames.collapse),
+        });
         const user = userEvent.setup();
-        render(
-          <Page drawerProps={{ unmountOnClose, 'data-test-motion': '' } as Partial<DrawerProps>} />,
-        );
+        render(<Page drawerProps={{ unmountOnClose }} />);
         await user.click(button('Show details'));
         await act(async () => {
           await motion.finishAll();
@@ -777,7 +778,7 @@ describe('Drawer type="inline"', () => {
       expect(document.querySelector('.' + drawerClassNames.backdrop)).toBeNull();
       expect(warn.mock.calls).toEqual([
         [
-          '[WaveUI] Drawer: `backdrop` is ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.',
+          '[WaveUI] Drawer: `backdrop` and `backdropMotion` are ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.',
         ],
       ]);
     } finally {

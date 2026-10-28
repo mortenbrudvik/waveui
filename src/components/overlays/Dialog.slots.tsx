@@ -291,14 +291,20 @@ const getServerAppearance = (): BackdropAppearance => 'dimmed';
  * content or opened beside it), so the page is dimmed once; `'dimmed'` otherwise. Derived during
  * render from the layer stack (`hasIsolatingModalBelow`), re-read whenever a layer or an isolation
  * changes, so the upper surface dims when the lower one closes. A modal layer without isolation
- * (the DatePicker calendar) never counts.
+ * (the DatePicker calendar) never counts. While closed it keeps the look it last had while open,
+ * so a stacked surface's backdrop stays transparent through its exit motion instead of dimming the
+ * page a second time.
  */
 export function useBackdropAppearance(layerId: string, open: boolean): BackdropAppearance {
   const getSnapshot = React.useCallback(
     (): BackdropAppearance => (open && hasIsolatingModalBelow(layerId) ? 'transparent' : 'dimmed'),
     [layerId, open],
   );
-  return React.useSyncExternalStore(subscribeLayers, getSnapshot, getServerAppearance);
+  const live = React.useSyncExternalStore(subscribeLayers, getSnapshot, getServerAppearance);
+  // The look while open, held through the close (a previous-value state, updated only while open).
+  const [held, setHeld] = React.useState(live);
+  if (open && live !== held) setHeld(live);
+  return open ? live : held;
 }
 
 /** Properties of {@link ModalBackdrop}. */
@@ -318,16 +324,21 @@ export interface ModalBackdropProps {
   onMouseDown: (event: React.MouseEvent<HTMLElement>) => void;
   /** The presence attributes of the surface's top-level elements (P6-07). */
   presenceProps: PresenceAttributes;
+  /**
+   * The backdrop's motion classes (its `backdropMotion`, resolved), after the base classes and
+   * before the slot's `className`.
+   */
+  motionClassName?: string;
 }
 
 /**
  * The backdrop element of a modal or alert surface with the `backdrop` slot rules (D93) and the
  * automatic appearance (D94): `aria-hidden`, `fixed inset-0`, rendered as `data-appearance` and
- * filled with the backdrop token, or transparent. `null` renders none; `undefined` and booleans
- * the default; shorthand content renders inside it; a slot object's attributes, `className`
- * (merged last), `style`, `ref` and handlers (composed, the slot's first) go to it, its children
- * render inside it, and its `appearance` overrides the automatic one. `aria-hidden="true"` always
- * wins.
+ * filled with the backdrop token, or transparent, then its motion classes. `null` renders none;
+ * `undefined` and booleans the default; shorthand content renders inside it; a slot object's
+ * attributes, `className` (merged last), `style`, `ref` and handlers (composed, the slot's first)
+ * go to it, its children render inside it, and its `appearance` overrides the automatic one.
+ * `aria-hidden="true"` always wins.
  */
 export function ModalBackdrop({
   backdrop,
@@ -336,6 +347,7 @@ export function ModalBackdrop({
   open,
   onMouseDown,
   presenceProps,
+  motionClassName,
 }: ModalBackdropProps): React.ReactNode {
   const automatic = useBackdropAppearance(layerId, open);
   const slot = backdrop === null || typeof backdrop === 'boolean' ? undefined : backdrop;
@@ -368,6 +380,7 @@ export function ModalBackdrop({
         className,
         'fixed inset-0',
         appearance === 'transparent' ? 'bg-transparent' : 'bg-backdrop',
+        motionClassName,
         slotClassName as string | undefined,
       )}
     >

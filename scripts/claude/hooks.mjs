@@ -115,12 +115,14 @@ export function sourceTargets(pkg) {
 }
 
 /**
- * Whether the conventions gate scans the file: every source of src/components (tests excluded)
- * and every stories/*.stories.tsx — the globs of src/__tests__/conventions.test.ts.
+ * Whether the conventions gate scans the file: every source of src/components (tests excluded),
+ * the motion recipes of src/lib/motion.ts and every stories/*.stories.tsx — the globs of
+ * src/__tests__/conventions.test.ts.
  */
 export function isConventionsTarget(rel) {
   return (
     (/^src\/components\/.+\.tsx?$/.test(rel) && !rel.split('/').includes('__tests__')) ||
+    rel === 'src/lib/motion.ts' ||
     /^stories\/[^/]+\.stories\.tsx$/.test(rel)
   );
 }

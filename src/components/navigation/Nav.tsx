@@ -5,12 +5,20 @@ import {
   navItemClassNames,
   navSubItemClassNames,
 } from '../../lib/classNames';
-import type { Slot } from '../../lib/types';
+import type { MotionPreference, MotionSlot, Slot } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
-import { warnDeprecated } from '../../lib/dev';
+import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
+// Aliased: `expandIconMotion` is also Nav.Category's prop.
+import {
+  expandIconMotion as expandIconRecipe,
+  navActionsRevealMotion as navActionsReveal,
+} from '../../lib/motion';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
+import { useCollapsePresence } from '../../hooks/useCollapsePresence';
 import { useId } from '../../hooks/useId';
+import { useMotionClasses, useMotionPreference } from '../../hooks/useMotion';
+import { unwrapButtonGlyph } from '../button/Button.slots';
 import {
   NavCategoryValueContext,
   NavRovingContext,
@@ -69,8 +77,41 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
    */
   icon?: Slot<'span'>;
   /**
+   * Replaces the expand chevron at the end of the toggle button (decorative, `aria-hidden`).
+   * `null`/`undefined` keep the chevron, which turns while the category is open; `false`, or
+   * anything that renders nothing, hides it (`aria-expanded` still reports the state). Your glyph
+   * renders as given in a span with the expand icon's class and is not turned, so a glyph that
+   * shows the state itself works (a plus or a minus, picked from your `openCategories`). It is
+   * rendered inside the toggle button: a `<button>` or `Button` passed here (or a slot object
+   * whose `as` is one) is not nested (its children become the glyph and its props are dropped,
+   * with a development warning).
+   */
+  expandIcon?: Slot<'span'>;
+  /**
+   * Replaces the motion of the expand icon (Fluent's `NavCategoryItem expandIconMotion`): by
+   * default the chevron's half turn as the category opens and closes is animated over the fast
+   * duration (150 ms) with the easy-ease curve, both ways, and so is any transform of the span
+   * around your own `expandIcon`. The turn itself is not motion: `null` turns the animation off
+   * and the chevron still turns, at once; a class string or `{ className }` replaces it with
+   * plain transition classes and a reduced-motion counterpart (the icon has no presence phases).
+   * A `WaveProvider` with `motion="none"` turns the default off, and a value here still applies
+   * under it.
+   * @default the animated turn described above
+   */
+  expandIconMotion?: MotionSlot | null;
+  /**
+   * Replaces the collapse of the category's list (Fluent's `NavSubItemGroup collapseMotion`), on
+   * the element around its `<ul>`: by default the space the list takes opens from nothing and
+   * closes back to it, with a fade, over the normal duration (200 ms) with the max easy-ease
+   * curve, both ways. `null` turns it off (the list appears and disappears at once); a class
+   * string or `{ className }` replaces it, written as `MotionSlot` describes. A `WaveProvider`
+   * with `motion="none"` turns the default off, and a value here still applies under it.
+   * @default the collapse described above
+   */
+  motion?: MotionSlot | null;
+  /**
    * The category's sub-items (`Nav.SubItem`), and `Nav.SectionHeader` and `Nav.Divider`, rendered
-   * in its list while it is open.
+   * in its list while it is open (and while the list collapses after a close).
    */
   children?: React.ReactNode;
   /** Ref to the category's `<li>` element. */
@@ -108,11 +149,14 @@ export interface NavItemOwnProps {
    * never inside it, in a group named by the item; each is a Tab stop after the item, and a click
    * or key on one never selects the item. They are drawn while the row is hovered or has focus,
    * while one of them is pressed or has its popup open, and always in forced colours and on touch
-   * screens; otherwise they are transparent and still focusable. They stay enabled when the item
-   * is `disabled`. With actions, the selected background and indicator are drawn on the row (the
-   * item's list item, `.wave-nav-item__list-item`), so a `className` on the item no longer covers
-   * them. Content that renders nothing renders no group. Fluent's `actionButton`, `toggleButton`
-   * and `menuButton` slots and their tooltips are your own controls here.
+   * screens; otherwise they are transparent and still focusable. They fade in and out over 150 ms
+   * (at once under reduced motion or a `WaveProvider` with `motion="none"`); the fade sets the
+   * transition of each direct child of the group, so a transition of your own on one is replaced.
+   * They stay enabled when the item is `disabled`. With actions, the selected background and
+   * indicator are drawn on the row (the item's list item, `.wave-nav-item__list-item`), so a
+   * `className` on the item no longer covers them. Content that renders nothing renders no group.
+   * Fluent's `actionButton`, `toggleButton` and `menuButton` slots and their tooltips are your own
+   * controls here.
    */
   actions?: React.ReactNode;
 }
@@ -314,7 +358,9 @@ const rowHoverClasses = 'hover:bg-subtle-hover';
  * focus inside it, and is always drawn in forced colours and on devices without hover; a child
  * that is or holds a pressed toggle or an expanded trigger stays drawn (the first pair covers an
  * action wrapped in a Tooltip's span, the second a bare one). Opacity keeps every action
- * focusable, so Shift+Tab and a focus return reach it. No motion.
+ * focusable, so Shift+Tab and a focus return reach it. The reveal fades: `renderNavEntry` adds
+ * the actions' reveal motion of `lib/motion` to these classes unless the provider's motion is
+ * `'none'` (it has no slot: it is not a presence motion).
  */
 const actionsClasses = cn(
   'flex shrink-0 items-center gap-1 pe-2',
@@ -364,7 +410,8 @@ interface NavEntryClassNames {
  * (`roving` provided) the link or button also carries `data-roving-value={value}`, after the
  * consumer's attributes; in a plain Nav nothing is added. With `actions` that render content, the
  * list item becomes the row (D121) and holds the link or button, then the actions in a group named
- * by it through `generatedId` (unless the consumer gave an `id`), siblings, never nested (D119).
+ * by it through `generatedId` (unless the consumer gave an `id`), siblings, never nested (D119);
+ * the group's reveal fades unless `motionPreference` is `'none'`.
  */
 function renderNavEntry(
   props: NavEntryProps,
@@ -374,6 +421,7 @@ function renderNavEntry(
   stable: NavEntryClassNames,
   withIcon: boolean,
   generatedId: string,
+  motionPreference: MotionPreference,
 ): React.ReactElement {
   const {
     value,
@@ -442,7 +490,11 @@ function renderNavEntry(
       role="group"
       aria-labelledby={itemId}
       data-wave-nav-actions=""
-      className={cn(stable.actions, actionsClasses)}
+      className={cn(
+        stable.actions,
+        actionsClasses,
+        motionPreference === 'none' ? undefined : navActionsReveal,
+      )}
     >
       {materialiseSlotContent(actions)}
     </span>
@@ -498,8 +550,19 @@ function renderNavEntry(
 
 /**
  * A collapsible group of sub-items. Its toggle button shows `label` and reports `aria-expanded`
- * (and `aria-controls` while open); the sub-items render in a nested list while it is open.
- * Open state lives on `Nav` (`openCategories`/`defaultOpenCategories`).
+ * (and `aria-controls` while open); the sub-items render in a nested list while it is open and
+ * while the list collapses after a close. Open state lives on `Nav`
+ * (`openCategories`/`defaultOpenCategories`).
+ *
+ * The list renders as the only child of a collapse element (its stable class
+ * `wave-nav-category__collapse`), which opens and closes the list's space (`motion`) and has no
+ * box of its own while the category is open, so the list lays out in the category as before. A
+ * category open by default appears without motion. After a close the list stays in the document
+ * until the collapse ends, `inert` (its items leave the Tab order and an arrow-key body's arrow
+ * keys at once), while the toggle button already reports the category closed, without
+ * `aria-controls`; opening the category again during the collapse keeps the same list. Focus
+ * inside the list when the category closes moves to the toggle button. The expand chevron turns
+ * while the category is open (`expandIcon` replaces it, `expandIconMotion` animates its turn).
  *
  * A closed category that contains the current item marks its toggle button with
  * `aria-current="true"` (the button is not the page's link, so not `"page"`),
@@ -515,6 +578,9 @@ const NavCategory = ({
   value,
   label,
   icon,
+  expandIcon,
+  expandIconMotion,
+  motion,
   className,
   children,
   ref,
@@ -562,6 +628,59 @@ const NavCategory = ({
   const listRef = React.useRef<HTMLUListElement>(null);
   useNavListChildCheck(listRef, 'Nav.Category', 'sub-items');
 
+  // The list renders in a collapse element (the presence element) while the category is open
+  // and, after a close, until that element's motion ends; focus inside the list at the close
+  // moves to the toggle button.
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const {
+    isMounted: isListMounted,
+    wrapperRef: collapseRef,
+    presenceProps: collapsePresenceProps,
+    className: collapseClassName,
+  } = useCollapsePresence(isOpen, {
+    motion,
+    partRef: listRef,
+    getTrigger: () => buttonRef.current,
+  });
+
+  // The optional-indicator slot rule (C-SLOTS): `null`/`undefined` keep the chevron, which turns
+  // while open; `false` or content that renders nothing hides it; a custom glyph is rendered as
+  // given in its span and never turned. `expandIconMotion` animates the transform of either. The
+  // glyph sits inside the toggle button, so a button passed as the glyph is unwrapped (its
+  // children are the glyph, its props are dropped), never nested.
+  const { glyph: expandGlyph, button: expandIconButton } = unwrapButtonGlyph(expandIcon);
+  React.useEffect(() => {
+    if (expandIconButton) {
+      warnOnce(
+        'Nav.Category:expandIcon-button',
+        `Nav.Category: \`expandIcon\` received ${expandIconButton}; its children render as the ` +
+          'glyph of the toggle button and its props were dropped (buttons cannot be nested). ' +
+          'Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.',
+      );
+    }
+  }, [expandIconButton]);
+  const expandIconMotionClassName = useMotionClasses(expandIconMotion, expandIconRecipe);
+  let expandIconElement: React.ReactNode = null;
+  if (expandGlyph === undefined || expandGlyph === null) {
+    expandIconElement = (
+      <ChevronDownIcon
+        className={cn(
+          navCategoryClassNames.expandIcon,
+          'shrink-0',
+          expandIconMotionClassName,
+          isOpen && 'rotate-180',
+        )}
+      />
+    );
+  } else if (slotRendersContent(expandGlyph)) {
+    expandIconElement = renderSlot(
+      expandGlyph,
+      'span',
+      cn(navCategoryClassNames.expandIcon, 'inline-flex shrink-0', expandIconMotionClassName),
+      { 'aria-hidden': true },
+    );
+  }
+
   let buttonLabel: React.ReactNode = label;
   let items: React.ReactNode = children;
   if (label === undefined) {
@@ -581,6 +700,7 @@ const NavCategory = ({
   return (
     <li ref={ref} {...rest} className={cn(navCategoryClassNames.root, className)}>
       <button
+        ref={buttonRef}
         type="button"
         aria-expanded={isOpen}
         aria-controls={isOpen ? listId : undefined}
@@ -592,23 +712,23 @@ const NavCategory = ({
       >
         {renderIcon(icon, navCategoryClassNames.icon)}
         <span className={cn(navCategoryClassNames.label, 'flex-1 text-start')}>{buttonLabel}</span>
-        <ChevronDownIcon
-          className={cn(
-            navCategoryClassNames.expandIcon,
-            'shrink-0 transition-transform motion-reduce:transition-none',
-            isOpen && 'rotate-180',
-          )}
-        />
+        {expandIconElement}
       </button>
-      {isOpen && (
+      {isListMounted && (
         <NavCategoryValueContext.Provider value={value}>
-          <ul
-            ref={listRef}
-            id={listId}
-            className={cn(navCategoryClassNames.list, 'm-0 list-none p-0')}
+          <div
+            ref={collapseRef}
+            {...collapsePresenceProps}
+            className={cn(navCategoryClassNames.collapse, collapseClassName)}
           >
-            {items}
-          </ul>
+            <ul
+              ref={listRef}
+              id={listId}
+              className={cn(navCategoryClassNames.list, 'm-0 list-none p-0')}
+            >
+              {items}
+            </ul>
+          </div>
         </NavCategoryValueContext.Provider>
       )}
     </li>
@@ -651,6 +771,7 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
   const roving = React.useContext(NavRovingContext);
   // Called always, rendered only while the item's actions render (D119).
   const generatedId = useId('wave-nav-item');
+  const motionPreference = useMotionPreference();
   return renderNavEntry(
     props as NavEntryProps,
     context,
@@ -665,6 +786,7 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
     },
     true,
     generatedId,
+    motionPreference,
   );
 }
 NavItem.displayName = 'NavItem';
@@ -688,6 +810,7 @@ function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.Reac
   const roving = React.useContext(NavRovingContext);
   // Called always, rendered only while the sub-item's actions render (D119).
   const generatedId = useId('wave-nav-item');
+  const motionPreference = useMotionPreference();
   return renderNavEntry(
     props as NavEntryProps,
     context,
@@ -700,6 +823,7 @@ function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.Reac
     },
     false,
     generatedId,
+    motionPreference,
   );
 }
 NavSubItem.displayName = 'NavSubItem';
@@ -730,9 +854,14 @@ markNavPart(NavSubItem, 'entry');
  *   `href` or a button; it is never selected. `Nav.AppItemStatic` shows them as plain text.
  * - **Item actions**: `actions` on `Nav.Item` and `Nav.SubItem` (Fluent's SplitNavItem) puts your
  *   own controls beside the item, in a group named by it; each is a Tab stop after the item, and
- *   none selects it. They are drawn while the row is hovered or has focus, while one is pressed or
- *   has its menu open, and always on touch screens and in forced colours. With actions, a selected
- *   item's background and indicator are drawn on its row (`.wave-nav-item__list-item`).
+ *   none selects it. They fade in while the row is hovered or has focus, while one is pressed or
+ *   has its menu open, and are always drawn on touch screens and in forced colours. With actions, a
+ *   selected item's background and indicator are drawn on its row (`.wave-nav-item__list-item`).
+ * - **Motion**: a category's list opens and closes its space with a short collapse and fade
+ *   (`motion` on `Nav.Category`), its chevron's turn is animated (`expandIconMotion`) and item
+ *   actions fade in. None of these defaults runs under reduced motion, and a `WaveProvider` with
+ *   `motion="none"` turns them off, while a category's own `motion` or `expandIconMotion` value
+ *   still applies. Focus inside a list that closes moves to its category's toggle button.
  *
  * Sub-components are also exported under flat names (`NavCategory`, `NavItem`, `NavSubItem`,
  * `NavSectionHeader`, `NavDivider`, `NavAppItem`, `NavAppItemStatic`): React Server Components

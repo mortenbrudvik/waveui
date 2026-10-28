@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { TeachingPopover, Button } from '../src';
+import { motionCases } from './_motion';
 
 const sampleSteps = [
   {
@@ -222,6 +223,33 @@ export const TourFromParts: Story = {
         </TeachingPopover.Trigger>
         {tourParts}
       </TeachingPopover>
+    </div>
+  ),
+};
+
+/** The Motion story's surface: it zooms in from 95% as it fades in, and back out as it fades. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-95 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-95 data-[presence=exiting]:opacity-0';
+
+/**
+ * `motion` of the surface (on the root when it renders its own surface, else on
+ * `TeachingPopover.Surface`). By default it fades in and slides 4px away from the element it
+ * points at over 200ms, and fades out and slides back over 100ms; a popover rendered in place,
+ * without a target or a Trigger, only fades. It stays visible while it exits, with focus already
+ * back on its Trigger. `null` turns the motion off; a class string replaces it (here a zoom).
+ * Under reduced motion every popover appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: (args) => (
+    <div className="flex flex-wrap gap-4" style={{ paddingBottom: 240 }}>
+      {motionCases(fadeAndZoom).map(({ label, motion }) => (
+        // The story renders one popover per case; every other arg is forwarded.
+        <TeachingPopover key={label} {...args} motion={motion}>
+          <TeachingPopover.Trigger>
+            <Button>{label}</Button>
+          </TeachingPopover.Trigger>
+        </TeachingPopover>
+      ))}
     </div>
   ),
 };

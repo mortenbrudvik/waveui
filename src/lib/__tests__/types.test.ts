@@ -35,6 +35,8 @@ import type {
   HsvColor,
   DayOfWeek,
   FirstWeekOfYear,
+  MotionSlot,
+  MotionPreference,
 } from '../types';
 import type { VirtualElement as FloatingVirtualElement } from '@floating-ui/react-dom';
 import type { DismissReason } from '../layers';
@@ -267,5 +269,22 @@ describe('color vocabulary (P3-05)', () => {
     expectTypeOf<ColorPickerShape>().toEqualTypeOf<'rounded' | 'square'>();
     expectTypeOf<ColorPickerShape>().toExtend<Shape>();
     expectTypeOf<'circular'>().not.toMatchTypeOf<ColorPickerShape>();
+  });
+});
+
+describe('motion types (Phase 10)', () => {
+  it('MotionSlot is a class string or { className }', () => {
+    expectTypeOf<'x'>().toExtend<MotionSlot>();
+    expectTypeOf<{ className: string }>().toExtend<MotionSlot>();
+    // @ts-expect-error an empty object is not a slot
+    const empty: MotionSlot = {};
+    expect(empty).toEqual({});
+  });
+
+  it('MotionPreference is "default" or "none"', () => {
+    expectTypeOf<MotionPreference>().toEqualTypeOf<'default' | 'none'>();
+    // @ts-expect-error 'reduced' is not a preference
+    const reduced: MotionPreference = 'reduced';
+    expect(reduced).toBe('reduced');
   });
 });

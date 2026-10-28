@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, Input, Presence } from '../src';
+import { Accordion, Button, Dialog, Input, Popover, Presence, WaveProvider } from '../src';
 import type { PresenceProps } from '../src';
 
 const meta = {
@@ -101,6 +101,68 @@ export const KeepMounted: Story = {
           </section>
         }
       />
+    );
+  },
+};
+
+/** The ProviderMotionNone story's own popover motion: a fade over 300ms. */
+const ownFade =
+  'transition-opacity duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
+
+/**
+ * `WaveProvider motion="none"` turns off the default motion of every Wave part below it: the
+ * dialog appears and disappears at once, and so does the accordion panel. A part's own `motion`
+ * still applies (the second popover fades), and so do classes of yours on a `Presence` child,
+ * which is no motion slot (the card). A nested provider inherits `motion` like `theme`;
+ * `motion="default"` turns the default back on below it.
+ */
+export const ProviderMotionNone: Story = {
+  render: function ProviderMotionNonePresence(args) {
+    return (
+      <WaveProvider motion="none" className="flex flex-col items-start gap-4">
+        <div className="flex flex-wrap gap-2">
+          <Dialog>
+            <Dialog.Trigger>
+              <Button>Open a dialog</Button>
+            </Dialog.Trigger>
+            <Dialog.Content title="No default motion">
+              <p>The dialog neither scales nor fades.</p>
+            </Dialog.Content>
+          </Dialog>
+          <Popover>
+            <Popover.Trigger>
+              <Button>Popover without motion</Button>
+            </Popover.Trigger>
+            <Popover.Content title="No default motion">It appears at once.</Popover.Content>
+          </Popover>
+          <Popover>
+            <Popover.Trigger>
+              <Button>Popover with its own motion</Button>
+            </Popover.Trigger>
+            <Popover.Content title="Its own motion" motion={ownFade}>
+              Its own motion still fades it.
+            </Popover.Content>
+          </Popover>
+        </div>
+        <Accordion className="w-80">
+          <Accordion.Item value="shipping">
+            <Accordion.Trigger>Shipping</Accordion.Trigger>
+            <Accordion.Panel>Orders ship within two working days.</Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+        <TogglePresence
+          args={args}
+          label="card"
+          child={
+            <section
+              aria-label="Card"
+              className={`${cardClasses} transition-opacity duration-wave-normal ease-wave-easy-ease data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 motion-reduce:transition-none`}
+            >
+              Your own classes on a Presence child still fade it.
+            </section>
+          }
+        />
+      </WaveProvider>
     );
   },
 };

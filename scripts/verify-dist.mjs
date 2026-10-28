@@ -53,11 +53,21 @@
  *   - opt-in modules (0.8): an import of only `Button` contains none of {@link OPT_IN_MODULES}
  *     (the color parts and helpers, the toaster handle), and an import of only `Toaster`
  *     contains `hooks/usePresence`;
+ *   - motion (0.15, D23): an import of only `Button` contains neither `lib/motion` nor
+ *     `hooks/useMotion`, none of the recipe literals of `dist/lib/motion.mjs` (at least
+ *     {@link MOTION_RECIPE_MIN}, the release count, read at run time) and no string with a
+ *     presence variant (`[presence=`, matched in a minified bundle, so comments do not count); the
+ *     controls of {@link MOTION_INCLUDE_PROBES} prove the same matchers: an import of only `Dialog`
+ *     contains both modules, its two recipe literals and the presence variant, one of only
+ *     `Accordion` the motion module, the collapse hook and the collapse's two literals, and one of
+ *     only `MessageBarGroup` the presence group, the motion module and the bars' three literals;
+ *     an import of only `MessageBar` contains neither the presence core nor the presence group
+ *     ({@link EXCLUSION_PROBES_0_15}, D21);
  *   - 0.11: the exclusion probes of {@link EXCLUSION_PROBES_0_11} and the inclusion probes of
  *     {@link INCLUSION_PROBES_0_11} (tags, TagPicker, Dialog and Drawer, Nav, Hamburger and
- *     NavDrawer); no name of {@link MODULE_ONLY_NAMES} is exported from `dist/index.mjs` or
- *     `dist/index.d.ts`; the roll-ups export each of {@link VALUE_AND_TYPE_DECLARATIONS} both as a
- *     type and as a value (`TagPickerOption`);
+ *     NavDrawer); no name of {@link MODULE_ONLY_NAMES} (the motion internals of 0.15 among them)
+ *     is exported from `dist/index.mjs` or `dist/index.d.ts`; the roll-ups export each of
+ *     {@link VALUE_AND_TYPE_DECLARATIONS} both as a type and as a value (`TagPickerOption`);
  *
  * Usage: node scripts/verify-dist.mjs [--dist <dir>] [--no-pending | --final]
  *   --dist        the dist directory (default: dist); its parent holds the package.json
@@ -422,7 +432,10 @@ export const INCLUSION_PROBES_0_11 = [
  * overlay slots, the Nav seam, NavDrawer's contexts and TagPicker's internals; since 0.14 (spec
  * D6) also the parts the tables share (`Table.shared`, the sort arrows), the Overflow store,
  * TeachingPopover's root, context and surface, and the event predicates of the selectable
- * containers. Sorted.
+ * containers; since 0.15 (spec §16 Q1) every export of the motion internals: the recipe
+ * constants, `resolveMotion` and `usesLegacyMotion` of `lib/motion`, and the hooks `useMotion`,
+ * `useCollapsePresence`, `useFocusBeforeClose` and `usePresenceGroup` with their types
+ * (`verify-dist.test.mjs` reads them from the sources, so a new one cannot be missed). Sorted.
  */
 export const MODULE_ONLY_NAMES = [
   'AvatarSizeContext',
@@ -469,6 +482,7 @@ export const MODULE_ONLY_NAMES = [
   'NavRovingContextValue',
   'NavValueKind',
   'OverflowStore',
+  'PresenceGroupEntry',
   'ResolvedTagPickerLabels',
   'SELECTION_CELL_CLASSES',
   'SortArrowDownIcon',
@@ -506,40 +520,72 @@ export const MODULE_ONLY_NAMES = [
   'TeachingPopoverSurfaceContextValue',
   'TeachingPopoverTarget',
   'TeachingSurface',
+  'UseCollapsePresenceOptions',
+  'UseCollapsePresenceResult',
+  'UseFocusBeforeCloseOptions',
   'UseNavRootStateOptions',
+  'UsePresenceGroupResult',
   'UseTagGroupItemOptions',
   'UseTagOverflowOptions',
   'UseToolbarNavigationOptions',
+  'carouselFadeMotion',
+  'carouselSlideMotion',
+  'collapseMotion',
+  'collapseStructure',
   'containsValue',
   'createCategoryStore',
   'createOptionText',
+  'dialogBackdropMotion',
+  'dialogMotion',
+  'drawerBackdropMotion',
+  'drawerDurations',
+  'drawerMotion',
   'endsTextSelection',
+  'expandIconMotion',
   'findCategoriesContaining',
   'findExactMatch',
   'getNavPartKind',
   'getTablePartKind',
   'hasIsolatingModalBelow',
   'hasResizeObserver',
+  'inlineDrawerMotion',
+  'inlineDrawerStructure',
   'isDismissKey',
   'isForeignEvent',
   'isRepeatedActivation',
   'markNavPart',
   'markTablePart',
+  'messageBarGroupEnterMotion',
+  'messageBarGroupExitMotion',
+  'messageBarGroupItemStructure',
+  'navActionsRevealMotion',
+  'popupMotion',
+  'progressIndeterminateMotion',
+  'resolveMotion',
   'sameIds',
   'scrollSeparatorClasses',
+  'tabIndicatorMotion',
   'tagListControls',
   'tagRootClasses',
+  'toastMotion',
+  'toastStructure',
+  'tooltipMotion',
   'useBackdropAppearance',
+  'useCollapsePresence',
   'useDismissControlFocus',
   'useDrawerContext',
   'useDrawerOpen',
+  'useFocusBeforeClose',
   'useFocusWithin',
   'useHeldFocus',
   'useModalOpener',
+  'useMotionClasses',
+  'useMotionPreference',
   'useNavContext',
   'useNavListChildCheck',
   'useNavRootState',
   'useNavValue',
+  'usePresenceGroup',
   'useRecordCategory',
   'useScrollState',
   'useTagGroupContext',
@@ -549,6 +595,7 @@ export const MODULE_ONLY_NAMES = [
   'useTagPickerControlContext',
   'useTeachingPopoverContext',
   'useToolbarNavigation',
+  'usesLegacyMotion',
 ];
 
 /**
@@ -1667,14 +1714,29 @@ function quotedLiteral(text) {
 }
 
 /**
+ * The code of a minified bundle of an import of only `keep`: the minifier drops comments and keeps
+ * the contents of string literals, so a fragment found here is in code, not in a comment.
+ */
+async function minifiedCode(distRoot, keep) {
+  const chunks = await bundleImport(distRoot, [keep], { minify: true });
+  return chunks.map((chunk) => chunk.code).join('\n');
+}
+
+/**
  * Tree-shaking probe (repo-level#3): bundles an entry that imports only `keep` from
  * `dist/index.mjs` with Vite's `build()` API (no write, no minification, bare imports external)
  * and asserts that the bundle holds `keep`'s module, only it and its static imports, no code of
  * `drop` (its module or its `displayName`) and none of `dropModules` (dist-relative module paths,
  * such as `hooks/usePresence.mjs`; a listed module that does not exist in `dist` is an error, since
- * the probe would pass vacuously). `keepStrings` and `dropStrings` (the stable class names, P3-00)
- * are string literals, matched with their quotes, that the bundle must, or must not, contain; a
- * listed string that occurs in no JavaScript module of `dist` is an error for the same reason.
+ * the probe would pass vacuously). `keepStrings` and `dropStrings` (the stable class names, P3-00;
+ * the motion recipe literals, D23) are string literals, matched with their quotes, that the bundle
+ * must, or must not, contain; a listed string that occurs in no JavaScript module of `dist` is an
+ * error for the same reason. `dropSubstrings` are fragments that no code of the bundle may contain
+ * outside comments (`[presence=`: no string of a Button-only bundle may hold a presence variant),
+ * checked on a second, minified bundle of the same entry, which drops comments and keeps string
+ * contents. Since the motion resolver's own literal holds `[presence=`, a bundle that reaches
+ * `lib/motion` always contains it: the positive control of the recipes is
+ * {@link probeIncludes}'s `strings` (the recipe literals), never the fragment alone.
  *
  * The bundler reports module ids as real paths, so the probe imports and matches them through
  * the real path of `dist`: a dist reached through a symlink or a junction (a linked checkout or
@@ -1682,7 +1744,14 @@ function quotedLiteral(text) {
  */
 export async function probeTreeShaking(
   dist,
-  { keep = 'Button', drop = 'Dialog', dropModules = [], keepStrings = [], dropStrings = [] } = {},
+  {
+    keep = 'Button',
+    drop = 'Dialog',
+    dropModules = [],
+    keepStrings = [],
+    dropStrings = [],
+    dropSubstrings = [],
+  } = {},
 ) {
   const errors = [];
   const distRoot = realpathSync(resolve(dist));
@@ -1758,27 +1827,208 @@ export async function probeTreeShaking(
   for (const text of dropStrings) {
     if (foundStrings.has(text) && quotedLiteral(text).test(code)) {
       errors.push(
-        `the bundle of an import of only ${keep} contains the string "${text}" (an unused class-name constant was not tree-shaken)`,
+        `the bundle of an import of only ${keep} contains the string "${text}" (an unused constant was not tree-shaken)`,
       );
+    }
+  }
+  if (dropSubstrings.length > 0) {
+    const minified = await minifiedCode(distRoot, keep);
+    for (const text of dropSubstrings) {
+      if (minified.includes(text)) {
+        errors.push(
+          `the bundle of an import of only ${keep} contains "${text}" outside comments (its minified code)`,
+        );
+      }
     }
   }
   return errors;
 }
 
 /**
+ * The motion recipes' module (spec §2.2, D23): server-safe, so the probe imports it in Node.js.
+ * Vite emits it only once a component imports it.
+ */
+const MOTION_MODULE = 'lib/motion.mjs';
+
+/**
+ * The fewest recipe literals {@link motionRecipeLiterals} accepts from {@link MOTION_MODULE}: the
+ * release count of spec §2.2's table (0.15), every literal of `src/lib/motion.ts` read by
+ * {@link motionLiteralsOf} (`verify-dist.test.mjs` pins the two equal). A recipe the build drops
+ * (no component imports it, so Rollup leaves it out) fails the probe, which would otherwise stop
+ * looking for its literal in the Button-only bundle; a new recipe raises the count.
+ */
+export const MOTION_RECIPE_MIN = 38;
+
+/** The motion hook's module (spec §2.3, D23): only a component that animates imports it. */
+const MOTION_HOOK_MODULE = 'hooks/useMotion.mjs';
+
+/** The keyed presence group's module (spec §2.6, D21): only MessageBarGroup imports it. */
+const PRESENCE_GROUP_MODULE = 'hooks/usePresenceGroup.mjs';
+
+/**
+ * The exclusion probes of 0.15 (spec §2.10, D21): an import of only `MessageBar` holds neither the
+ * presence core nor the presence group, so a page of MessageBars without a MessageBarGroup loads
+ * none of the group's motion.
+ */
+export const EXCLUSION_PROBES_0_15 = [
+  {
+    keep: 'MessageBar',
+    drop: 'MessageBarGroup',
+    dropModules: [PRESENCE_MODULE, PRESENCE_GROUP_MODULE],
+  },
+];
+
+/**
+ * The positive controls of the Button-only motion probe (spec §2.10, D23): an import of only
+ * `keep` holds each of `modules` and the literals of `recipes` (exports of {@link MOTION_MODULE},
+ * read by name from dist with {@link motionRecipeValues}), and its code each of `substrings`, so
+ * the matchers that must find nothing in the Button-only bundle find motion where it is: the
+ * Dialog's surface and backdrop, the collapse of Accordion (and so of Tree and Nav, on the same
+ * hook), and the bars of a MessageBarGroup on the presence group.
+ */
+export const MOTION_INCLUDE_PROBES = [
+  {
+    keep: 'Dialog',
+    modules: [MOTION_MODULE, MOTION_HOOK_MODULE],
+    recipes: ['dialogMotion', 'dialogBackdropMotion'],
+    substrings: ['[presence='],
+  },
+  {
+    keep: 'Accordion',
+    modules: [MOTION_MODULE, 'hooks/useCollapsePresence.mjs'],
+    recipes: ['collapseStructure', 'collapseMotion'],
+  },
+  {
+    keep: 'MessageBarGroup',
+    modules: [PRESENCE_GROUP_MODULE, MOTION_MODULE],
+    recipes: [
+      'messageBarGroupItemStructure',
+      'messageBarGroupExitMotion',
+      'messageBarGroupEnterMotion',
+    ],
+  },
+];
+
+/**
+ * The text one of which every motion literal holds (spec §2.10; `duration-wave-` because the drawer
+ * durations, a recipe composed with the drawer motion at run time, hold none of the other three).
+ */
+const MOTION_RECIPE_MARKERS = ['[presence=', 'transition', 'animate-', 'duration-wave-'];
+
+/**
+ * Every string value of the exports of the module namespace `mod`, one level into records
+ * (exports in name order, as a module namespace lists them, a record's values in key order), each
+ * value once: the recipe literals of a motion module. Functions (the resolver) are skipped.
+ * Errors, prefixed with `label`: a value holds none of {@link MOTION_RECIPE_MARKERS} (not a
+ * recipe), or an export is neither a string, a record of strings nor a function.
+ * {@link motionRecipeLiterals} reads `dist/lib/motion.mjs` with it, and `verify-dist.test.mjs`
+ * the source module, `src/lib/motion.ts`, to pin {@link MOTION_RECIPE_MIN}.
+ */
+export function motionLiteralsOf(mod, label = MOTION_MODULE) {
+  const literals = [];
+  const errors = [];
+  const add = (name, value) => {
+    if (!MOTION_RECIPE_MARKERS.some((marker) => value.includes(marker))) {
+      errors.push(
+        `${label}: ${name} ("${value}") holds none of ${MOTION_RECIPE_MARKERS.join(', ')} (not a recipe)`,
+      );
+    }
+    if (!literals.includes(value)) literals.push(value);
+  };
+  for (const [name, value] of Object.entries(mod)) {
+    if (typeof value === 'function') continue;
+    if (typeof value === 'string') {
+      add(name, value);
+    } else if (
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      Object.values(value).every((item) => typeof item === 'string')
+    ) {
+      for (const [key, item] of Object.entries(value)) add(`${name}.${key}`, item);
+    } else {
+      errors.push(`${label}: ${name} is neither a string, a record of strings nor a function`);
+    }
+  }
+  return { literals, errors };
+}
+
+/**
+ * Every recipe literal of `dist/lib/motion.mjs` ({@link motionLiteralsOf}), imported by file URL:
+ * the literals the Button-only probe must not find (`dropStrings`; spec D23). Errors: those of
+ * {@link motionLiteralsOf}, the module does not exist (the probe would pass vacuously), or it
+ * holds fewer than `min` distinct literals.
+ */
+export async function motionRecipeLiterals(dist, { min = MOTION_RECIPE_MIN } = {}) {
+  const file = join(realpathSync(resolve(dist)), MOTION_MODULE);
+  if (!existsSync(file)) {
+    return { literals: [], errors: [`${MOTION_MODULE} does not exist in dist`] };
+  }
+  const { literals, errors } = motionLiteralsOf(await import(pathToFileURL(file).href));
+  if (literals.length < min) {
+    errors.push(
+      `${MOTION_MODULE} holds ${literals.length} recipe literals, fewer than the minimum of ${min}`,
+    );
+  }
+  return { literals, errors };
+}
+
+/**
+ * The values of the recipes `names` of `dist/lib/motion.mjs` (imported by file URL), in the order
+ * of `names`: the literals a positive control looks for in the bundle of the component that uses
+ * them (spec §2.10). Errors: the module does not exist, or a name is not a string export.
+ */
+export async function motionRecipeValues(dist, names) {
+  const file = join(realpathSync(resolve(dist)), MOTION_MODULE);
+  if (!existsSync(file)) {
+    return { strings: [], errors: [`${MOTION_MODULE} does not exist in dist`] };
+  }
+  const mod = await import(pathToFileURL(file).href);
+  const strings = [];
+  const errors = [];
+  for (const name of names) {
+    if (typeof mod[name] === 'string') strings.push(mod[name]);
+    else errors.push(`${MOTION_MODULE} exports no recipe string ${name}`);
+  }
+  return { strings, errors };
+}
+
+/**
  * Inclusion probe: bundles an entry that imports only `keep` from `dist/index.mjs`, as the
  * tree-shaking probe does, and reports each of `modules` (dist-relative module paths) that is not
  * in the bundle — a probe that detects a module where it is used, so a check that it is dropped
- * elsewhere cannot pass because the module is missing.
+ * elsewhere cannot pass because the module is missing. `strings` are string literals, matched
+ * whole with their quotes, that the bundle must contain; `substrings` are fragments its code
+ * (minified, so comments are dropped and string contents kept) must contain: the same matchers as
+ * the tree-shaking probe's `dropStrings` and `dropSubstrings`, so a positive control proves they
+ * see what they look for (spec D23). The recipes' control lists their literals in `strings`: the
+ * motion resolver's own literal holds `[presence=`, so that fragment alone is found in any bundle
+ * that reaches `lib/motion`, recipes or not.
  */
-export async function probeIncludes(dist, { keep, modules }) {
+export async function probeIncludes(dist, { keep, modules, strings = [], substrings = [] }) {
   const distRoot = realpathSync(resolve(dist));
-  const included = new Set(
-    [...bundledModules(distRoot, await bundleImport(distRoot, [keep]))].map(fold),
-  );
-  return modules
+  const chunks = await bundleImport(distRoot, [keep]);
+  const included = new Set([...bundledModules(distRoot, chunks)].map(fold));
+  const errors = modules
     .filter((path) => !included.has(fold(path)))
     .map((path) => `${path} is not in the bundle of an import of only ${keep}`);
+  const code = chunks.map((chunk) => chunk.code).join('\n');
+  for (const text of strings) {
+    if (!quotedLiteral(text).test(code)) {
+      errors.push(`the bundle of an import of only ${keep} lacks the string "${text}"`);
+    }
+  }
+  if (substrings.length > 0) {
+    const minified = await minifiedCode(distRoot, keep);
+    for (const text of substrings) {
+      if (!minified.includes(text)) {
+        errors.push(
+          `the bundle of an import of only ${keep} lacks "${text}" outside comments (its minified code)`,
+        );
+      }
+    }
+  }
+  return errors;
 }
 
 /**
@@ -1922,11 +2172,17 @@ export async function verifyDist(
         ...BUTTON_ONLY_STRINGS,
       })),
     );
+    // D23 (0.15): an import of only Button holds no presence core, no motion module, no recipe
+    // literal of lib/motion and no presence variant in any string.
+    const motion = await motionRecipeLiterals(distRoot);
+    errors.push(...motion.errors);
     errors.push(
       ...(await probeTreeShaking(distRoot, {
         keep: 'Button',
         drop: 'Presence',
-        dropModules: [PRESENCE_MODULE],
+        dropModules: [PRESENCE_MODULE, MOTION_MODULE, MOTION_HOOK_MODULE],
+        dropStrings: motion.literals,
+        dropSubstrings: ['[presence='],
       })),
     );
     errors.push(
@@ -1949,6 +2205,10 @@ export async function verifyDist(
     errors.push(...(await probeTreeShaking(distRoot, LISTBOX_ONLY)));
     // 0.11: tags, pickers, overlays and navigation.
     for (const probe of EXCLUSION_PROBES_0_11) {
+      errors.push(...(await probeTreeShaking(distRoot, probe)));
+    }
+    // D21 (0.15): a MessageBar holds no presence core and no presence group.
+    for (const probe of EXCLUSION_PROBES_0_15) {
       errors.push(...(await probeTreeShaking(distRoot, probe)));
     }
   } catch (error) {
@@ -2001,6 +2261,17 @@ export async function verifyDist(
     );
   } catch (error) {
     errors.push(`toaster include probe failed: ${error.message}`);
+  }
+  try {
+    // D23 (0.15): the positive controls of the Button-only motion probe. Each component's own
+    // recipe literals prove its matchers (the resolver's literal alone holds the presence variant).
+    for (const { recipes, ...probe } of MOTION_INCLUDE_PROBES) {
+      const values = await motionRecipeValues(distRoot, recipes);
+      errors.push(...values.errors);
+      errors.push(...(await probeIncludes(distRoot, { ...probe, strings: values.strings })));
+    }
+  } catch (error) {
+    errors.push(`motion include probe failed: ${error.message}`);
   }
   let budget = null;
   try {

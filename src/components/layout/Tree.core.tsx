@@ -9,9 +9,10 @@ import { getArrowIntent, getDirection } from '../../lib/direction';
 import { isEditableTarget, isOwnEvent } from '../../lib/events';
 import { isHiddenInput } from '../../lib/focus';
 import { CheckIcon, ChevronRightIcon, SubtractIcon } from '../../lib/icons';
-import type { SelectionMode } from '../../lib/types';
+import type { MotionSlot, SelectionMode } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
+import { useCollapsePresence } from '../../hooks/useCollapsePresence';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
@@ -94,17 +95,18 @@ const ACTION_ITEM_SELECTOR = 'button, [href], input, select, textarea, [role="bu
 
 /**
  * Shows a row's actions while focus is on its item (also after a click) or inside the item's own
- * row, never in its child group, so Tab and the treegrid arrows reach them. The item's
- * `:focus-within`, not its `:focus`: while focus moves from the item into an action, Chromium has
- * already ended the item's `:focus` (but keeps `:focus-within` on it, the common ancestor) when it
- * checks that the action can take focus, and a hidden action refuses it.
+ * row, never in its child group (a grandchild of the item: the group sits in its collapse
+ * element), so Tab and the treegrid arrows reach them. The item's `:focus-within`, not its
+ * `:focus`: while focus moves from the item into an action, Chromium has already ended the item's
+ * `:focus` (but keeps `:focus-within` on it, the common ancestor) when it checks that the action
+ * can take focus, and a hidden action refuses it.
  */
 const ACTIONS_ON_ITEM_FOCUS =
-  '[&:focus-within:not(:has(>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible';
+  '[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible';
 
 /** Makes the aside invisible while its actions show for focus, where they take its place. */
 const ASIDE_OFF_ON_ITEM_FOCUS =
-  '[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible';
+  '[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible';
 
 /**
  * The actions stay invisible until the row is hovered or the item or an action has focus, and
@@ -221,6 +223,17 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'tree'
    */
   navigationMode?: 'tree' | 'treegrid';
+  /**
+   * Replaces the collapse of every child group in the tree (Fluent's `Tree collapseMotion`), on
+   * the element around each `role="group"` element: by default the space a group takes opens
+   * from nothing and closes back to it, with a fade, over the normal duration (200 ms) with the
+   * max easy-ease curve, both ways. `null` turns it off (a group appears and disappears at once);
+   * a class string or `{ className }` replaces it, written as `MotionSlot` describes. A
+   * `WaveProvider` with `motion="none"` turns the default off, and a value here still applies
+   * under it. The expand chevron's turn is not part of it, and a nested `Tree` takes its own.
+   * @default the collapse described above
+   */
+  motion?: MotionSlot | null;
   /** Ref to the `role="tree"` element. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -237,6 +250,7 @@ export const TreeRoot = ({
   checkedItems,
   defaultCheckedItems,
   onCheckedItemsChange,
+  motion,
   className,
   children,
   onKeyDown,
@@ -384,6 +398,7 @@ export const TreeRoot = ({
       checked,
       toggleChecked,
       registerTopLevel,
+      motion,
     }),
     [
       expanded,
@@ -401,6 +416,7 @@ export const TreeRoot = ({
       checked,
       toggleChecked,
       registerTopLevel,
+      motion,
     ],
   );
 
@@ -544,10 +560,17 @@ function isOwnKeyEvent(event: React.KeyboardEvent<HTMLElement>): boolean {
  * Whether a click landed on this treeitem's own row (or on the treeitem element itself). Clicks
  * in its child group, including the indentation gutter beside the nested rows, clicks on nested
  * items, on its checkbox and on its actions are not its own.
+ *
+ * While the child group exits, its collapse element is `inert`, which hit-tests like an element
+ * the pointer passes through: a pointer click in the group's box lands on the treeitem element
+ * itself, and is not its own either (it would expand the item again and activate it). A click
+ * without a pointer (`detail` 0: Enter on a focused item, a screen reader's click) still is.
  */
 function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
   const target = event.target as Element | null;
-  if (target === event.currentTarget) return true;
+  if (target === event.currentTarget) {
+    return event.detail === 0 || !event.currentTarget.querySelector(':scope > [inert]');
+  }
   if (target?.closest?.('[data-tree-checkbox], [data-tree-actions]')) return false;
   return target?.closest?.('[data-tree-row]')?.parentElement === event.currentTarget;
 }
@@ -681,6 +704,16 @@ TreeItemActions.displayName = 'TreeItemActions';
  * One node of a Tree. Text and other content are the label; nested `Tree.Item` children form its
  * child group, which is shown while the item is expanded.
  *
+ * The child group renders as the only child of a collapse element (its stable class
+ * `wave-tree-item__collapse`), which opens and closes the group's space (the Tree's `motion`) and
+ * has no box of its own while the item is expanded, so the group lays out in the item as before.
+ * An item expanded by default appears without motion. After a collapse the group stays in the
+ * document until the collapse ends, `inert` (its items leave the arrow keys and typeahead at once)
+ * while the item already reports itself collapsed; expanding the item again during the collapse
+ * keeps the same group. Focus inside the group when the item collapses moves to the item. A
+ * pointer click that falls through the exiting group onto the item (an `inert` element lets the
+ * pointer through) is not the item's: it neither expands nor activates it.
+ *
  * Nested items must be `Tree.Item` elements among the item's own children: written directly, in
  * Fragments, or returned by a render function (`{node.children.map(renderNode)}`). A component
  * that renders `Tree.Item` itself (a recursive `<NodeView node={child} />`) is not recognised:
@@ -690,14 +723,14 @@ TreeItemActions.displayName = 'TreeItemActions';
  * renders is not checked with its parent.
  *
  * `ref` and every other prop land on the `role="treeitem"` element, which contains the label row
- * and the child group. Its `onClick` receives only clicks on its own row (not on its child group
- * or nested items) and its `onKeyDown` only keys pressed while focus is on it or in its row; both
- * run before the built-in behaviour (call `event.preventDefault()` to skip it). In a checkbox
- * tree, a click on the item's checkbox toggles its check and is not passed to `onClick`, and
- * neither is a click on its actions; `onKeyDown` receives no keys pressed in the actions. Its
- * other event handlers (`onFocus`, `onDoubleClick`, `onContextMenu` and the rest) are not
- * filtered: as DOM events bubble, they also receive events from its child group and nested items
- * (compare `event.target` with `event.currentTarget` to tell them apart).
+ * and the child group (in its collapse element). Its `onClick` receives only clicks on its own
+ * row (not on its child group or nested items) and its `onKeyDown` only keys pressed while focus
+ * is on it or in its row; both run before the built-in behaviour (call `event.preventDefault()`
+ * to skip it). In a checkbox tree, a click on the item's checkbox toggles its check and is not
+ * passed to `onClick`, and neither is a click on its actions; `onKeyDown` receives no keys pressed
+ * in the actions. Its other event handlers (`onFocus`, `onDoubleClick`, `onContextMenu` and the
+ * rest) are not filtered: as DOM events bubble, they also receive events from its child group and
+ * nested items (compare `event.target` with `event.currentTarget` to tell them apart).
  *
  * `actions` render in a toolbar at the end of the row, named by the item; keys and clicks on them
  * belong to them and never activate or check the item. `aside` sits before them and describes the
@@ -792,6 +825,21 @@ export const TreeItem = ({
   const hasAside = slotRendersContent(aside);
   const hasActions = slotRendersContent(actions);
   const hasChildren = nestedItems.length > 0 && !leaf;
+
+  // The child group renders in a collapse element (the presence element) while the item is
+  // expanded and, after a collapse, until that element's motion ends; focus inside the group when
+  // the item collapses moves to this item, which the roving hook then treats as the focused item.
+  const groupRef = React.useRef<HTMLDivElement | null>(null);
+  const {
+    isMounted: isGroupMounted,
+    wrapperRef: collapseRef,
+    presenceProps: collapsePresenceProps,
+    className: collapseClassName,
+  } = useCollapsePresence(hasChildren && isExpanded, {
+    motion: ctx.motion,
+    partRef: groupRef,
+    getTrigger: () => itemRef.current,
+  });
 
   // The optional-indicator slot rule (C-SLOTS): `null`/`undefined` keep the chevron, `false` or
   // content that renders nothing hides it (the spacer keeps the column), and a custom glyph is
@@ -1125,12 +1173,18 @@ export const TreeItem = ({
           </span>
         )}
       </div>
-      {hasChildren && isExpanded && (
+      {isGroupMounted && (
         <TreeParentContext.Provider value={value}>
           <TreeCheckForcedContext.Provider value={groupListed}>
             <TreeLabelContext.Provider value={false}>
-              <div role="group" className={cn(treeItemClassNames.group, 'ps-4')}>
-                {nestedItems}
+              <div
+                ref={collapseRef}
+                {...collapsePresenceProps}
+                className={cn(treeItemClassNames.collapse, collapseClassName)}
+              >
+                <div ref={groupRef} role="group" className={cn(treeItemClassNames.group, 'ps-4')}>
+                  {nestedItems}
+                </div>
               </div>
             </TreeLabelContext.Provider>
           </TreeCheckForcedContext.Provider>

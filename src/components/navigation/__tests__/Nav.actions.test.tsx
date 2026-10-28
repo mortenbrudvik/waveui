@@ -17,9 +17,11 @@ import { MenuButton } from '../../button/MenuButton';
 import { ToggleButton } from '../../button/ToggleButton';
 import { Tooltip } from '../../overlays/Tooltip';
 import { navItemClassNames, navSubItemClassNames } from '../../../lib/classNames';
+import { navActionsRevealMotion } from '../../../lib/motion';
 import {
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  motionClasses,
   renderWithProviders,
 } from '../../../test-utils';
 
@@ -390,7 +392,11 @@ describe('row look (D121) and reveal (D120)', () => {
     );
     expect(group('Reports')).toHaveClass(navItemClassNames.actions, ...REVEAL_CLASSES);
     expect(group('Reports')).not.toHaveClass('invisible');
-    expect(group('Reports').className).not.toMatch(/\btransition/);
+    // 0.15 (P10-NAV): the reveal fades; the reveal motion's are the group's only transitions.
+    const transitions = (classes: readonly string[]) => classes.filter((c) => /transition/.test(c));
+    expect(transitions(Array.from(group('Reports').classList))).toEqual(
+      transitions(motionClasses(navActionsRevealMotion)),
+    );
   });
 });
 

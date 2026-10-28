@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Drawer, Button, Field, Input, Switch, Tooltip } from '../src';
 import type { DrawerPosition, DrawerProps } from '../src';
+import { motionCases } from './_motion';
 
 /** Stories that render the drawer open show it in an iframe, so the docs page stays usable. */
 const openStoryParameters = {
@@ -720,6 +721,95 @@ export const InlineBottom: Story = {
           </Drawer.Trigger>
           <p>{children}</p>
         </Drawer>
+      </div>
+    );
+  },
+};
+
+/** The Motion story's panel: a fade in place, without the slide, over 300ms both ways. */
+const panelFade =
+  'transition-opacity duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
+
+/** The Motion story's backdrop: a linear fade over the panel's 300ms, so it ends with the panel. */
+const backdropFade =
+  'transition-opacity duration-wave-slow ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
+
+/**
+ * `motion` and `backdropMotion` of an overlay drawer. By default the panel slides in from its edge
+ * (the start and end edges follow the text direction) and fades, over 250ms at `small`, 300ms at
+ * `medium`, 400ms at `large` and 500ms at `full`, both ways, while the backdrop fades over the same
+ * time; pick another `position` or `size` in the controls. `null` turns both off; a class string
+ * replaces them (here a fade in place). Focus returns to the trigger as the drawer closes, before
+ * its exit ends; under reduced motion every drawer appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: function MotionDrawers({ children, title: _title, ...args }) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {motionCases(panelFade).map(({ label, motion }) => (
+          // The story renders one drawer per case; every other arg is forwarded.
+          <Drawer
+            key={label}
+            {...args}
+            title={label}
+            motion={motion}
+            backdropMotion={typeof motion === 'string' ? backdropFade : motion}
+          >
+            <Drawer.Trigger>
+              <Button>{label}</Button>
+            </Drawer.Trigger>
+            <p>{children}</p>
+            <Drawer.Footer>
+              <Drawer.Close>
+                <Button appearance="primary">Apply</Button>
+              </Drawer.Close>
+            </Drawer.Footer>
+          </Drawer>
+        ))}
+      </div>
+    );
+  },
+};
+
+/**
+ * The Inline motion story's collapse: the space opens and closes over 500ms with the max
+ * easy-ease curve, without the fade.
+ */
+const slowCollapse =
+  'transition-[grid-template-columns] duration-wave-ultra-slow ease-wave-easy-ease-max motion-reduce:transition-none data-[presence=entering]:starting:grid-cols-[minmax(0,0fr)] data-[presence=exiting]:grid-cols-[minmax(0,0fr)]';
+
+/**
+ * `motion` of an inline drawer goes on the element around its `<aside>`
+ * (`wave-drawer__collapse`): by default the space the pane takes in the row opens from nothing
+ * while the pane fades in, held at its width against its inner edge, so it reads as sliding out
+ * of its edge, with the duration of its `size`; closing runs it backwards. The page content beside
+ * it moves with the space and never reflows inside the pane. `null` turns it off; a class string
+ * replaces it (here a slower collapse without the fade). A `full` inline drawer has no motion.
+ */
+export const InlineMotion: Story = {
+  args: {
+    type: 'inline',
+    separator: true,
+    title: 'Order 1042',
+    children: 'Two items, shipped on Monday to the warehouse in Lyon.',
+  },
+  render: function InlineMotionDrawers({ children, title: _title, ...args }) {
+    return (
+      <div className="flex flex-col gap-3">
+        {motionCases(slowCollapse).map(({ label, motion }) => (
+          <div key={label} className="flex h-48 rounded-md border border-border">
+            <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
+              <p>Orders received this week.</p>
+            </div>
+            {/* The story renders one drawer per case; every other arg is forwarded. */}
+            <Drawer {...args} title={label} motion={motion}>
+              <Drawer.Trigger>
+                <Button className="m-4 self-start">{label}</Button>
+              </Drawer.Trigger>
+              <p>{children}</p>
+            </Drawer>
+          </div>
+        ))}
       </div>
     );
   },

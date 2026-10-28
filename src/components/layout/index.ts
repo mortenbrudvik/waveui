@@ -52,6 +52,7 @@ export type {
   CarouselLabels,
   CarouselAppearance,
   CarouselControlsLayout,
+  CarouselMotion,
 } from './Carousel';
 
 export {

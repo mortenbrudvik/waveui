@@ -157,7 +157,9 @@ describe('Nav.SectionHeader', () => {
       </Nav>,
     );
     const heading = screen.getByRole('heading', { level: 3, name: 'Guides' });
-    const categoryList = screen.getByRole('button', { name: 'Docs' }).nextElementSibling;
+    // The list sits in the category's collapse element (0.15), the toggle button's next sibling.
+    const categoryList = screen.getByRole('button', { name: 'Docs' }).nextElementSibling
+      ?.firstElementChild;
     expect(heading.parentElement?.parentElement).toBe(categoryList);
   });
 
@@ -297,7 +299,9 @@ describe('Nav.Divider', () => {
         </Nav.Category>
       </Nav>,
     );
-    const categoryList = screen.getByRole('button', { name: 'Docs' }).nextElementSibling;
+    // The list sits in the category's collapse element (0.15), the toggle button's next sibling.
+    const categoryList = screen.getByRole('button', { name: 'Docs' }).nextElementSibling
+      ?.firstElementChild;
     expect(categoryList?.firstElementChild).toHaveClass(navDividerClassNames.root);
     await expectNoA11yViolations();
   });

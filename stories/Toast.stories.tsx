@@ -5,12 +5,15 @@ import {
   Button,
   Drawer,
   ProgressBar,
+  RadioGroup,
+  RadioItem,
   Toast,
   Toaster,
   createToaster,
   useToastController,
 } from '../src';
 import type { ToastProps } from '../src';
+import { motionCases } from './_motion';
 
 const meta = {
   title: 'Components/Feedback/Toast',
@@ -224,6 +227,52 @@ export const DismissAll: Story = {
       <DismissAllDemo {...args} />
     </Toaster>
   ),
+};
+
+/**
+ * The Motion story's toasts: they fade while their place opens and closes, all together over
+ * 300ms, without the slide.
+ */
+const fadeAndCollapse =
+  'transition-[grid-template-rows,margin-bottom,opacity] duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0';
+
+/**
+ * `Toaster motion`, on every toast's container (`wave-toaster__toast`). By default a toast opens
+ * its place in the stack, fades in and slides 8px in from the stack's edge over 250ms; dismissed,
+ * it fades out over 200ms, then its place closes over 200ms more, so the toasts around it glide
+ * together. Show three toasts and dismiss the middle one. `null` turns the motion off; a class
+ * string replaces it (here a fade with the place, without the slide). The timer starts when a toast
+ * is shown, and focus leaves a dismissed toast at once. Under reduced motion toasts appear and
+ * disappear at once.
+ */
+export const Motion: Story = {
+  args: {
+    title: 'Comment added',
+    status: 'info',
+    children: 'Kat replied to your comment.',
+  },
+  render: function MotionToaster(args) {
+    const cases = motionCases(fadeAndCollapse);
+    const [label, setLabel] = React.useState(cases[0].label);
+    const { motion } = cases.find((option) => option.label === label) ?? cases[0];
+    return (
+      <div className="flex flex-col gap-4">
+        <RadioGroup
+          aria-label="Toast motion"
+          orientation="horizontal"
+          value={label}
+          onValueChange={setLabel}
+        >
+          {cases.map((option) => (
+            <RadioItem key={option.label} value={option.label} label={option.label} />
+          ))}
+        </RadioGroup>
+        <Toaster motion={motion}>
+          <DismissAllDemo {...args} />
+        </Toaster>
+      </div>
+    );
+  },
 };
 
 /** A Drawer whose Notify button shows a persistent toast while the drawer is open. */

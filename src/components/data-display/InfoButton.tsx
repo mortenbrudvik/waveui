@@ -6,12 +6,15 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getFirstTabbable } from '../../lib/focus';
 import { InfoIcon } from '../../lib/icons';
 import { focusRing } from '../../lib/styles';
-import type { CoreSize } from '../../lib/types';
+import { popupMotion } from '../../lib/motion';
+import type { CoreSize, MotionSlot } from '../../lib/types';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { useHoverIntent } from '../../hooks/useHoverIntent';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
@@ -52,6 +55,17 @@ export interface InfoButtonProps extends Omit<
    * @default 'Information'
    */
   'aria-label'?: string;
+  /**
+   * The note's motion. By default it fades in and slides 4px away from the button, on the side it
+   * opened on, over 200 ms with a decelerating curve, and fades out and slides back over 100 ms
+   * with an accelerating curve; under reduced motion it appears and disappears at once. `null`
+   * turns the motion off (the note still renders its `data-presence` phases, which then end at
+   * once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. Fluent's `Popover` `surfaceMotion` (its InfoButton is a Popover).
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
   /** Ref to the button. */
   ref?: React.Ref<HTMLButtonElement>;
 }
@@ -125,8 +139,14 @@ InfoNoteClassContext.displayName = 'InfoNoteClassContext';
  *   attribute go to it, the consumer's handlers first. The description and the note render next
  *   to it, never inside it. Its box is 24×24px at every `size` and renders `data-size`. The note
  *   mounts through the presence core: it carries `data-presence`, `data-state` (`open`, and
- *   `closed` while it exits, `inert`) and the `data-wave-infolabel-surface` marker; it ships no
- *   motion of its own.
+ *   `closed` while it exits, `inert`) and the `data-wave-infolabel-surface` marker.
+ * - **Motion.** The note fades in and slides toward the button from the side it opened on, and
+ *   fades out and slides back as it closes (see `motion`); it stays in the document, `inert`,
+ *   until the exit ends, with `info` still inside it (never twice in the document), while the
+ *   dismiss layer, the focus restore and the button's `aria-expanded` follow the open state at
+ *   once. Focus inside a closing note moves to the button in the closing commit. Without motion
+ *   (reduced motion, `motion={null}`, or a provider with `motion="none"`) it unmounts as soon as
+ *   it closes.
  *
  * Fluent's InfoButton takes the same `info` and `size`. It opens on click only
  * (`openOnHover={false}` here), renders its note in place, and moves focus into the note; this one
@@ -148,6 +168,7 @@ export const InfoButton = ({
   id: idProp,
   type = 'button',
   'aria-label': ariaLabelProp,
+  motion,
   'aria-labelledby': ariaLabelledBy,
   'aria-describedby': ariaDescribedBy,
   className,
@@ -206,7 +227,13 @@ export const InfoButton = ({
   // The note mounts and unmounts through the presence core; the dismiss layer, the focus restore
   // and the positioning below key on `open`, so they go on close, not after an exit motion.
   // Destructured: react-hooks/refs treats an object whose member is passed to `ref` as a ref.
-  const { isMounted, ref: presenceRef, presenceProps } = usePresence(open);
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePresence(open, {
+    appear: true,
+  });
   const { setReference, setFloating, floatingProps, arrowStyles, side } = usePopupPosition({
     open,
     side: 'top',
@@ -238,6 +265,17 @@ export const InfoButton = ({
     onlyIfFocusInside: true,
     isHoverClose: () => hoverCloseRef.current,
   });
+
+  // Focus before close: the note stays mounted while it exits, so focus inside a closing note moves
+  // to the button in the closing commit, where useRestoreFocus would put it. Unmounting is left to
+  // useRestoreFocus.
+  useFocusBeforeClose({
+    open,
+    surfaceRef: noteRef,
+    captureOpener: () => buttonRef.current,
+    candidates: () => [buttonRef.current],
+  });
+  const motionClassName = useMotionClasses(motion, popupMotion);
 
   const {
     triggerHandlers: hoverTriggerHandlers,
@@ -416,6 +454,7 @@ export const InfoButton = ({
               infoButtonClassNames.info,
               noteClassName,
               'w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
+              motionClassName,
             )}
           >
             <PopoverBeak
