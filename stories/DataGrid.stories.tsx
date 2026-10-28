@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { DataGrid, Menu, MenuButton, createTableColumn } from '../src';
+import { Button, DataGrid, Menu, MenuButton, createTableColumn } from '../src';
 import type { DataGridBaseProps, DataGridColumn, DataGridSort } from '../src';
 
 interface Member {
@@ -360,4 +360,71 @@ export const SelectionCellAtTheEnd: Story = {
       </DataGrid.Body>
     </DataGrid>
   ),
+};
+
+const PAGE_SIZE = 20;
+const ROLES = ['Engineer', 'Designer', 'Manager', 'Analyst'];
+const LOCATIONS = ['Seattle', 'New York', 'London', 'Oslo', 'Tokyo'];
+
+/** 200 members for the paging story. */
+const MANY_MEMBERS: Member[] = Array.from({ length: 200 }, (_, index) => ({
+  id: String(index + 1),
+  name: `Member ${index + 1}`,
+  role: ROLES[index % ROLES.length],
+  location: LOCATIONS[index % LOCATIONS.length],
+  status: index % 9 === 4 ? 'On leave' : 'Active',
+}));
+
+/** Client-side pages of `MANY_MEMBERS`; the selection is held here, over every page. */
+function PagedGrid({ onSelectedItemsChange, ...args }: MemberGridProps) {
+  const [page, setPage] = React.useState(0);
+  const [selected, setSelected] = React.useState<string[]>([]);
+  const pageCount = Math.ceil(MANY_MEMBERS.length / PAGE_SIZE);
+  const items = React.useMemo(
+    () => MANY_MEMBERS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [page],
+  );
+  const handleSelectedItemsChange: DataGridBaseProps['onSelectedItemsChange'] = (next, details) => {
+    setSelected(next);
+    onSelectedItemsChange?.(next, details);
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <DataGrid
+        items={items}
+        columns={MEMBER_COLUMNS}
+        getRowId={memberId}
+        {...args}
+        selectedItems={selected}
+        onSelectedItemsChange={handleSelectedItemsChange}
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <Button disabledFocusable={page === 0} onClick={() => setPage(page - 1)}>
+          Previous page
+        </Button>
+        <span className="text-body-1 text-foreground">
+          Page {page + 1} of {pageCount}
+        </span>
+        <Button disabledFocusable={page === pageCount - 1} onClick={() => setPage(page + 1)}>
+          Next page
+        </Button>
+        <span role="status" className="text-body-1 text-foreground">
+          {selected.length} selected
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pages of 20 over 200 members. With `items`, selection follows the data: members selected on
+ * one page stay selected on the others (the status counts them all), the header checkbox shows
+ * the current page, and its select-all selects that page's members and keeps the rest.
+ */
+export const Paging: Story = {
+  args: {
+    'aria-label': 'Team members, paged',
+    selectionMode: 'multiple',
+  },
+  render: (args) => <PagedGrid {...args} />,
 };

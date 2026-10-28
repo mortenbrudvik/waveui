@@ -19,6 +19,7 @@ import {
   warnOnce,
 } from '../../lib/dev';
 import { endsTextSelection, isForeignEvent } from '../../lib/events';
+import { clearIds, selectAllIds, summarizeSelection, toggleId } from '../../lib/selection';
 import type { Slot } from '../../lib/slot';
 import { focusRingInset, forcedColors } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
@@ -137,7 +138,7 @@ export interface DataGridRowSelectionCellProps {
    * (the cell takes focus), and neither a row click (`selectOnRowClick`), Space on a cell nor
    * select-all changes the row's selection: select-all skips it, keeps it as it is, and tells its
    * state from the other rows. In a header row it disables the select-all checkbox.
-   * @default false
+   * @default false (in a row rendered from `items`: the grid's `isSelectionDisabled` for its item)
    */
   disabled?: boolean;
   /**
@@ -202,6 +203,18 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    */
   getRowId?: (item: T) => string;
   /**
+   * Whether the selection of an item of `items` is disabled (`index` is its index in `items`), so
+   * select-all can skip items whose rows are not rendered. Select-all leaves such an item as it is,
+   * selected or not, and its state counts only the other items. The item's row takes it as the
+   * `disabled` of its selection cell (a disabled control; neither a row click nor Space changes
+   * it), unless the cell sets `disabled` itself: the cell's value then applies to the control, a
+   * value that disagrees warns in development, and select-all skips a row that either disables.
+   * Without it, every item is selectable unless its rendered row disables its selection cell.
+   * Ignored without `items`. Called for every item whenever `items`, `getRowId` or this function
+   * change: define it outside the component, or memoise it.
+   */
+  isSelectionDisabled?: (item: T, index: number) => boolean;
+  /**
    * Column definitions. When given and no `DataGrid.Header` child is present, the header row
    * (including the selection column) is rendered from them: `columnId` becomes the header cell's
    * `columnId`, `renderHeaderCell()` (else `label`) its content, and `sortable` (by default, having
@@ -252,18 +265,31 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    */
   subtleSelection?: boolean;
   /**
-   * Controlled selected row ids (`DataGrid.Row` `rowId`). In single mode pass at most one id: with
-   * several, only the first one whose row is rendered is selected (a development warning says so).
+   * Controlled selected row ids (`DataGrid.Row` `rowId`; with `items`, the ids from `getRowId`).
+   * With `items`, every id counts, whether its row is rendered, filtered out or on another page
+   * (see `onSelectedItemsChange`). In single mode pass at most one id: with several, only the
+   * first one is selected (without `items`, the first one whose row is rendered), and a
+   * development warning says so.
    */
   selectedItems?: readonly string[];
   /** Initially selected row ids (uncontrolled). In single mode, at most one (see `selectedItems`). */
   defaultSelectedItems?: readonly string[];
   /**
    * Called with the new selected row ids when the selection changes, then `details` (`{ event }`,
-   * the click or key press behind the change). Ids of rows that are not rendered are left out of
-   * the reported selection and of the select-all state, so the next change drops them. Until that
-   * change an uncontrolled grid still holds such an id: a row re-added with the same `rowId` before
-   * then is shown selected again.
+   * the click or key press behind the change).
+   *
+   * With `items`, the selection follows the data: it reports every selected id, also ids whose
+   * rows are not rendered or not in `items` (filtered out, on another page, restored by id), and no
+   * change drops them. Select-all selects every item of `items` whose selection is not disabled
+   * (`isSelectionDisabled`, or the selection cell of its rendered row) and keeps every other id;
+   * when all of them are selected it removes only their ids. The select-all checkbox shows the
+   * state of those items. A row's own `rowId` that differs from its item's id is selected on its
+   * own, outside select-all.
+   *
+   * Without `items` (rows written as `DataGrid.Row` children), ids of rows that are not rendered
+   * are left out of the reported selection and of the select-all state, so the next change drops
+   * them. Until that change an uncontrolled grid still holds such an id: a row re-added with the
+   * same `rowId` before then is shown selected again.
    */
   onSelectedItemsChange?: (
     selectedItems: string[],
@@ -508,10 +534,24 @@ export interface DataGridCellProps extends React.TdHTMLAttributes<HTMLTableCellE
 type SelectAllState = 'all' | 'some' | 'none';
 
 /**
+ * The rows of a grid with `items`, whether rendered or not (see {@link SelectionStore.setUniverse}).
+ *
+ * @internal Not exported from the package (exported for its unit tests).
+ */
+export interface SelectionUniverse {
+  /** The row ids of `items`, in their order (a repeated id counts once). */
+  ids: readonly string[];
+  /** The ids whose selection `isSelectionDisabled` disables. */
+  disabled: ReadonlySet<string>;
+}
+
+/**
  * Selection state shared with the rows through `useSyncExternalStore`, so toggling one row
  * re-renders only that row (and the select-all header cell). The root pushes the committed
- * selection in a layout effect; rows register their ids. The effective selection is always
- * `selected ∩ registered`, derived on read (no pruning effect).
+ * selection in a layout effect; rows register their ids. Select-all covers the rows of the
+ * universe (a grid with `items`: every row id of `items`, rendered or not) or, without one, the
+ * registered rows, whose effective selection is `selected ∩ registered`, derived on read (no
+ * pruning effect).
  *
  * @internal Not exported from the package (exported for its unit tests).
  */
@@ -519,12 +559,13 @@ export interface SelectionStore {
   /**
    * Row subscription: notified only when the selection changes. Rows registering or unregistering
    * notify no row, so adding or removing k of n rows costs O(k), not O(k·n); the one exception is
-   * single mode with several selected ids, where a row registering can move the selected row.
+   * single mode with several selected ids and no universe, where a row registering can move the
+   * selected row.
    */
   subscribe(listener: () => void): () => void;
   /**
    * Select-all subscription: notified only when {@link getSelectAllState} changes (through the
-   * selection or through rows registering and unregistering).
+   * selection, the universe, or rows registering and unregistering).
    */
   subscribeSelectAll(listener: () => void): () => void;
   /** Registers a rendered row id; returns the unregister function. */
@@ -547,16 +588,30 @@ export interface SelectionStore {
    */
   setSingleMode(single: boolean): void;
   /**
-   * Whether the row is selected. With `single`, only one row is: the first selected id (in
-   * selection order) whose row is registered, else the first selected id (before any row
-   * registered: the server render and the first client render).
+   * Sets the universe of a grid with `items` (layout effect of the root; `null` without `items`).
+   * With a universe, select-all and its state cover the ids of the universe whose selection is
+   * disabled neither by it nor by a registered row, rendered or not, and registrations change only
+   * which rows are disabled; the one selected row of single mode is the first selected id. O(n);
+   * notifies no row, unless it moves the one selected row of single mode.
+   */
+  setUniverse(universe: SelectionUniverse | null): void;
+  /**
+   * Whether the row is selected. With `single`, only one row is: with a universe, the first
+   * selected id; without one, the first selected id (in selection order) whose row is registered,
+   * else the first selected id (before any row registered: the server render and the first client
+   * render).
    */
   isSelected(rowId: string, single?: boolean): boolean;
   /**
-   * Whether all, some or none of the registered rows whose selection is not disabled are selected
-   * (`'none'` without such rows). O(1).
+   * Whether all, some or none of the rows select-all changes are selected: those of the universe,
+   * else the registered rows, whose selection is not disabled (`'none'` without such rows). A
+   * selected row whose selection is disabled counts toward nothing. O(1).
    */
   getSelectAllState(): SelectAllState;
+  /** The ids select-all changes (see {@link getSelectAllState}), in the order of the universe. */
+  getSelectableIds(): string[];
+  /** The ids of the universe in its order; without one, the registered row ids. */
+  getUniverseIds(): readonly string[];
   /** Registered row ids in registration order. */
   getRegistered(): string[];
   /** `items` restricted to registered rows (order of `items`). */
@@ -564,20 +619,29 @@ export interface SelectionStore {
 }
 
 /**
- * Creates the {@link SelectionStore} of one DataGrid.
+ * Creates the {@link SelectionStore} of one DataGrid; `initialUniverse` is the universe of a grid
+ * with `items` (see {@link SelectionStore.setUniverse}), so its first render knows the select-all
+ * state.
  *
  * @internal Not exported from the package (exported for its unit tests).
  */
 export function createSelectionStore(
   initial: readonly string[],
   initialSingleMode = false,
+  initialUniverse: SelectionUniverse | null = null,
 ): SelectionStore {
   let selected: ReadonlySet<string> = new Set(initial);
   /** Registered row id -> number of rows registered with it. */
   const registered = new Map<string, number>();
   /** Row id -> number of `disable` calls in effect for it. */
   const disabled = new Map<string, number>();
-  /** Registered row ids whose selection is not disabled: the rows select-all changes. */
+  /** The universe last set (compared by identity, so setting it again costs nothing). */
+  let universeInput: SelectionUniverse | null = null;
+  /** The universe's ids in its order, without repeats; `null` without a universe. */
+  let universeIds: readonly string[] | null = null;
+  let universeIdSet: ReadonlySet<string> = new Set();
+  let universeDisabled: ReadonlySet<string> = new Set();
+  /** Row ids select-all changes: in the universe (or registered) and not disabled. */
   let enabledCount = 0;
   /** How many of those are selected (kept up to date, so select-all is O(1)). */
   let selectedEnabled = 0;
@@ -597,7 +661,7 @@ export function createSelectionStore(
     if (singleId !== undefined) return singleId;
     let first: string | null = null;
     for (const rowId of selected) {
-      if (registered.has(rowId)) {
+      if (universeIds !== null || registered.has(rowId)) {
         first = rowId;
         break;
       }
@@ -608,25 +672,55 @@ export function createSelectionStore(
   };
 
   /**
-   * A row id registered or unregistered. With several selected ids, the one selected row of
-   * single mode can move: in single mode it is re-checked and the rows are notified if it moved.
+   * A row id registered or unregistered. Without a universe and with several selected ids, the
+   * one selected row of single mode can move: in single mode it is re-checked and the rows are
+   * notified if it moved.
    */
   const onRegistrationChange = (rowId: string) => {
-    if (selected.size < 2 || !selected.has(rowId)) return;
+    if (universeIds !== null || selected.size < 2 || !selected.has(rowId)) return;
     const previous = singleId;
     singleId = undefined;
     if (singleMode && getSingleId() !== previous) notify(rowListeners);
   };
 
+  const computeSelectAll = (): SelectAllState => {
+    if (selectedEnabled === 0) return 'none';
+    return selectedEnabled === enabledCount ? 'all' : 'some';
+  };
+
   const updateSelectAll = () => {
-    const next: SelectAllState =
-      selectedEnabled === 0 ? 'none' : selectedEnabled === enabledCount ? 'all' : 'some';
+    const next = computeSelectAll();
     if (next === selectAll) return;
     selectAll = next;
     notify(selectAllListeners);
   };
 
-  const isEnabled = (rowId: string) => registered.has(rowId) && !disabled.has(rowId);
+  const isEnabled = (rowId: string) =>
+    (universeIds !== null ? universeIdSet.has(rowId) : registered.has(rowId)) &&
+    !disabled.has(rowId) &&
+    !universeDisabled.has(rowId);
+
+  /** Counts the selected rows select-all changes: O(selected ids). */
+  const countSelected = () => {
+    selectedEnabled = 0;
+    for (const rowId of selected) if (isEnabled(rowId)) selectedEnabled += 1;
+  };
+
+  /** Takes a universe (or none) and counts again: O(n). */
+  const applyUniverse = (universe: SelectionUniverse | null) => {
+    universeInput = universe;
+    universeIdSet = new Set(universe?.ids);
+    universeIds = universe ? Array.from(universeIdSet) : null;
+    universeDisabled = universe?.disabled ?? new Set();
+    enabledCount = 0;
+    for (const rowId of universeIds ?? registered.keys()) if (isEnabled(rowId)) enabledCount += 1;
+    countSelected();
+  };
+
+  if (initialUniverse) {
+    applyUniverse(initialUniverse);
+    selectAll = computeSelectAll();
+  }
 
   /**
    * Runs `change` (a registration or a `disable` of `rowId`) and keeps the counts of select-all in
@@ -693,13 +787,24 @@ export function createSelectionStore(
       if (next.size === selected.size && items.every((item) => selected.has(item))) return;
       selected = next;
       singleId = undefined;
-      selectedEnabled = 0;
-      for (const rowId of next) if (isEnabled(rowId)) selectedEnabled += 1;
+      countSelected();
       notify(rowListeners);
       updateSelectAll();
     },
     setSingleMode(single) {
       singleMode = single;
+    },
+    setUniverse(universe) {
+      if (universe === universeInput) return;
+      const previousSingleId = singleId;
+      applyUniverse(universe);
+      updateSelectAll();
+      // With a universe the one selected row of single mode is the first selected id, without one
+      // the first registered: it moves only when a grid gains or loses `items`.
+      singleId = undefined;
+      if (singleMode && previousSingleId !== undefined && getSingleId() !== previousSingleId) {
+        notify(rowListeners);
+      }
     },
     isSelected(rowId, single = false) {
       return single ? getSingleId() === rowId : selected.has(rowId);
@@ -709,6 +814,12 @@ export function createSelectionStore(
     },
     getSelectAllState() {
       return selectAll;
+    },
+    getSelectableIds() {
+      return Array.from(universeIds ?? registered.keys()).filter(isEnabled);
+    },
+    getUniverseIds() {
+      return universeIds ?? Array.from(registered.keys());
     },
     getRegistered() {
       return Array.from(registered.keys());
@@ -795,7 +906,10 @@ interface DataGridContextValue {
   store: SelectionStore;
   /** Toggles one row (single mode: selects it alone, or clears it); `event` goes to `details`. */
   toggleRow: (rowId: string, event: Event) => void;
-  /** Selects every rendered row, or clears the selection when all are selected. */
+  /**
+   * Selects every row select-all changes (with `items`, every selectable item, rendered or not),
+   * or clears them when all are selected.
+   */
   toggleAll: (event: Event) => void;
   /** Shared `name` of the single-mode radios (they are kept out of any form with `form=""`). */
   radioName: string;
@@ -868,6 +982,11 @@ interface DataGridItemsContextValue {
   rows: readonly DataGridItemRowData[] | null;
   /** Renders a row from `columns`; `null` without `items` and `columns`. */
   renderColumnsRow: DataGridRenderRow | null;
+  /**
+   * `isSelectionDisabled` of each item, by its index in `items`; `null` without `items` or
+   * without `isSelectionDisabled`.
+   */
+  selectionDisabled: readonly boolean[] | null;
 }
 
 /** The grid's `items`, for `DataGrid.Body` (optional: a body of JSX rows needs none). */
@@ -877,6 +996,11 @@ const DataGridItemsContext = React.createContext<DataGridItemsContextValue | nul
  * grid resets it, so the rows of a grid nested in a cell do not take the outer row's id.
  */
 const DataGridRowIdContext = React.createContext<string | null>(null);
+/**
+ * `isSelectionDisabled` of the item a body row is rendered for, the default `disabled` of the
+ * row's selection cell; `undefined` without it. The grid resets it, as {@link DataGridRowIdContext}.
+ */
+const DataGridItemSelectionDisabledContext = React.createContext<boolean | undefined>(undefined);
 /** The row around a selection cell (see {@link DataGridRowContextValue}). */
 const DataGridRowContext = React.createContext<DataGridRowContextValue | null>(null);
 
@@ -942,6 +1066,29 @@ function sameItems(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((item, index) => item === b[index]);
 }
 
+/**
+ * Select-all of a grid with `items`: adds every selectable id of the universe, or removes them
+ * when all are selected; every other id (a selected disabled row, ids outside `items`) keeps its
+ * state. The ids outside the universe come first, in their order, then the universe's in its own.
+ */
+function toggleAllInUniverse(
+  previous: readonly string[],
+  universe: readonly string[],
+  selectable: readonly string[],
+): readonly string[] {
+  if (selectable.length === 0) return previous;
+  const current = new Set(previous);
+  // The state counts the selectable ids only, as the select-all checkbox shows it.
+  const next = summarizeSelection(current, selectable).all
+    ? clearIds(current, selectable)
+    : selectAllIds(current, selectable);
+  const inUniverse = new Set(universe);
+  return [
+    ...Array.from(next).filter((id) => !inUniverse.has(id)),
+    ...universe.filter((id) => next.has(id)),
+  ];
+}
+
 /** A child of {@link flattenChildren} under its flattened key (unique across the flattened list). */
 function renderFlatChild({ key, node }: { key: string; node: React.ReactNode }): React.ReactNode {
   return <React.Fragment key={key}>{node}</React.Fragment>;
@@ -1002,6 +1149,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   const {
     items,
     getRowId,
+    isSelectionDisabled,
     sort: sortProp,
     defaultSort,
     sortColumn: sortColumnProp,
@@ -1234,8 +1382,41 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     [setSelectedValue],
   );
 
+  // The rows of `items` (with `items` the selection follows them, rendered or not).
+  const itemRows = React.useMemo<readonly DataGridItemRowData[] | null>(() => {
+    if (items === undefined) return null;
+    const keys = new Set<string>();
+    return items.map((item, index) => {
+      const rowId = getRowId ? getRowId(item) : String(index);
+      // A repeated id (the selection store warns about it) still gets a key of its own.
+      const key = keys.has(rowId) ? `${rowId}\u0000${index}` : rowId;
+      keys.add(key);
+      return { item, index, rowId, key };
+    });
+  }, [items, getRowId]);
+
+  const itemSelectionDisabled = React.useMemo<readonly boolean[] | null>(() => {
+    if (itemRows === null || !isSelectionDisabled) return null;
+    // The rows hold the items as `unknown`; `isSelectionDisabled` takes the grid's `T`.
+    return itemRows.map((row) => isSelectionDisabled(row.item as T, row.index));
+  }, [itemRows, isSelectionDisabled]);
+
+  // Select-all covers every row id of `items`, rendered or not, but those `isSelectionDisabled`
+  // disables (a rendered row's own `disabled` is added by the row).
+  const selectionUniverse = React.useMemo<SelectionUniverse | null>(() => {
+    if (itemRows === null) return null;
+    const disabledIds = new Set<string>();
+    if (itemSelectionDisabled) {
+      for (const row of itemRows) if (itemSelectionDisabled[row.index]) disabledIds.add(row.rowId);
+    }
+    return { ids: itemRows.map((row) => row.rowId), disabled: disabledIds };
+  }, [itemRows, itemSelectionDisabled]);
+
   const single = selectionMode === 'single';
-  const [store] = React.useState(() => createSelectionStore(selected, single));
+  const [store] = React.useState(() => createSelectionStore(selected, single, selectionUniverse));
+  React.useLayoutEffect(() => {
+    store.setUniverse(selectionUniverse);
+  }, [store, selectionUniverse]);
   React.useLayoutEffect(() => {
     store.setSelected(selected);
   }, [store, selected]);
@@ -1246,47 +1427,62 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   const toggleRow = React.useCallback(
     (rowId: string, event: Event) => {
       setSelected(event, (previous) => {
-        const effective = store.prune(previous);
-        let next: string[];
-        if (single) {
-          // Single mode shows the first selected row that is rendered (see the store).
-          next = effective[0] === rowId ? [] : [rowId];
+        let next: readonly string[];
+        if (hasItems) {
+          // With `items` a row changes its own id and keeps every other one, rendered or not.
+          // Single mode toggles the one selected id, the first (see the store), and clears it.
+          const current = new Set(single ? previous.slice(0, 1) : previous);
+          next = Array.from(
+            toggleId(current, rowId, single ? 'single' : 'multiple', { allowEmpty: true }),
+          );
         } else {
-          next = effective.includes(rowId)
-            ? effective.filter((item) => item !== rowId)
-            : [...effective, rowId];
+          const effective = store.prune(previous);
+          if (single) {
+            // Single mode shows the first selected row that is rendered (see the store).
+            next = effective[0] === rowId ? [] : [rowId];
+          } else {
+            next = effective.includes(rowId)
+              ? effective.filter((item) => item !== rowId)
+              : [...effective, rowId];
+          }
         }
         return sameItems(next, previous) ? previous : next;
       });
     },
-    [single, setSelected, store],
+    [hasItems, single, setSelected, store],
   );
 
   const selectedCount = selected.length;
   React.useEffect(() => {
     if (single && selectedCount > 1) {
+      const which = hasItems ? 'the first one' : 'the first one that is rendered';
       warnOnce(
         'DataGrid:single-several-selected',
-        `DataGrid: a single-selection grid (selectionMode "single") has ${selectedCount} selected row ids; only the first one that is rendered is selected. Pass at most one id in \`selectedItems\`/\`defaultSelectedItems\`, or use selectionMode="multiple".`,
+        `DataGrid: a single-selection grid (selectionMode "single") has ${selectedCount} selected row ids; only ${which} is selected. Pass at most one id in \`selectedItems\`/\`defaultSelectedItems\`, or use selectionMode="multiple".`,
       );
     }
-  }, [single, selectedCount]);
+  }, [single, selectedCount, hasItems]);
 
   // Rows whose selection is disabled keep their state: select-all selects (or clears) the others.
   const toggleAll = React.useCallback(
     (event: Event) => {
       setSelected(event, (previous) => {
-        const effective = new Set(store.prune(previous));
-        const all = store.getRegistered();
-        const enabled = all.filter((rowId) => !store.isDisabled(rowId));
-        const allSelected = enabled.length > 0 && enabled.every((rowId) => effective.has(rowId));
-        const next = allSelected
-          ? all.filter((rowId) => store.isDisabled(rowId) && effective.has(rowId))
-          : all.filter((rowId) => !store.isDisabled(rowId) || effective.has(rowId));
+        let next: readonly string[];
+        if (hasItems) {
+          next = toggleAllInUniverse(previous, store.getUniverseIds(), store.getSelectableIds());
+        } else {
+          const effective = new Set(store.prune(previous));
+          const all = store.getRegistered();
+          const enabled = all.filter((rowId) => !store.isDisabled(rowId));
+          const allSelected = enabled.length > 0 && enabled.every((rowId) => effective.has(rowId));
+          next = allSelected
+            ? all.filter((rowId) => store.isDisabled(rowId) && effective.has(rowId))
+            : all.filter((rowId) => !store.isDisabled(rowId) || effective.has(rowId));
+        }
         return sameItems(next, previous) ? previous : next;
       });
     },
-    [setSelected, store],
+    [hasItems, setSelected, store],
   );
 
   const radioName = useId('wave-datagrid-selection');
@@ -1324,19 +1520,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   const { gridRef, gridProps } = useGridNavigation();
   const mergedRef = useMergedRefs<HTMLTableElement>(ref, gridRef);
 
-  // --- items ------------------------------------------------------------------
-  const itemRows = React.useMemo<readonly DataGridItemRowData[] | null>(() => {
-    if (items === undefined) return null;
-    const keys = new Set<string>();
-    return items.map((item, index) => {
-      const rowId = getRowId ? getRowId(item) : String(index);
-      // A repeated id (the selection store warns about it) still gets a key of its own.
-      const key = keys.has(rowId) ? `${rowId}\u0000${index}` : rowId;
-      keys.add(key);
-      return { item, index, rowId, key };
-    });
-  }, [items, getRowId]);
-
+  // --- items (the rows of `items` are built with the selection above) -------------
   // Built-in sorting: by the `compare` of the sorted column (controlled `sort` included).
   const sortColumnId = sort?.columnId;
   const sortDirection = sort?.direction;
@@ -1374,8 +1558,8 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   }, [columns, hasItems]);
 
   const itemsContext = React.useMemo<DataGridItemsContextValue>(
-    () => ({ rows: sortedRows, renderColumnsRow }),
-    [sortedRows, renderColumnsRow],
+    () => ({ rows: sortedRows, renderColumnsRow, selectionDisabled: itemSelectionDisabled }),
+    [sortedRows, renderColumnsRow, itemSelectionDisabled],
   );
 
   const columnWithoutId =
@@ -1466,41 +1650,43 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
           {/* Reset for a grid nested in a cell: its rows are not the outer row. */}
           <DataGridRowContext.Provider value={null}>
             <DataGridRowIdContext.Provider value={null}>
-              <div
-                {...containerRest}
-                aria-label={containerHasRole ? containerLabel : undefined}
-                aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
-                className={cn(
-                  dataGridClassNames.container,
-                  'overflow-x-auto rounded-md border border-border',
-                  containerClassName,
-                )}
-              >
-                <table
-                  ref={mergedRef}
-                  role="grid"
-                  aria-multiselectable={selectionMode === 'multiple' || undefined}
-                  data-selection-appearance={selectionAppearance}
-                  data-subtle-selection={subtleSelection ? '' : undefined}
+              <DataGridItemSelectionDisabledContext.Provider value={undefined}>
+                <div
+                  {...containerRest}
+                  aria-label={containerHasRole ? containerLabel : undefined}
+                  aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
                   className={cn(
-                    dataGridClassNames.root,
-                    'w-full border-separate border-spacing-0',
-                    // The group whose hover or focus draws the subtle select-all checkbox.
-                    subtleSelection && 'group/grid',
-                    className,
+                    dataGridClassNames.container,
+                    'overflow-x-auto rounded-md border border-border',
+                    containerClassName,
                   )}
-                  {...rest}
-                  onKeyDown={composeEventHandlers(onKeyDown, gridProps.onKeyDown)}
-                  onFocus={composeEventHandlers(onFocus, gridProps.onFocus, {
-                    checkDefaultPrevented: false,
-                  })}
-                  onBlur={composeEventHandlers(onBlur, gridProps.onBlur, {
-                    checkDefaultPrevented: false,
-                  })}
                 >
-                  {content}
-                </table>
-              </div>
+                  <table
+                    ref={mergedRef}
+                    role="grid"
+                    aria-multiselectable={selectionMode === 'multiple' || undefined}
+                    data-selection-appearance={selectionAppearance}
+                    data-subtle-selection={subtleSelection ? '' : undefined}
+                    className={cn(
+                      dataGridClassNames.root,
+                      'w-full border-separate border-spacing-0',
+                      // The group whose hover or focus draws the subtle select-all checkbox.
+                      subtleSelection && 'group/grid',
+                      className,
+                    )}
+                    {...rest}
+                    onKeyDown={composeEventHandlers(onKeyDown, gridProps.onKeyDown)}
+                    onFocus={composeEventHandlers(onFocus, gridProps.onFocus, {
+                      checkDefaultPrevented: false,
+                    })}
+                    onBlur={composeEventHandlers(onBlur, gridProps.onBlur, {
+                      checkDefaultPrevented: false,
+                    })}
+                  >
+                    {content}
+                  </table>
+                </div>
+              </DataGridItemSelectionDisabledContext.Provider>
             </DataGridRowIdContext.Provider>
           </DataGridRowContext.Provider>
         </DataGridItemsContext.Provider>
@@ -1861,23 +2047,28 @@ DataGridHeaderCell.displayName = 'DataGridHeaderCell';
 
 /**
  * The row of one item of `items`, under its row id. Memoised, so a grid that renders again (a
- * sort, a parent update) renders the row again only when its item, its index or the render
- * function change.
+ * sort, a parent update) renders the row again only when its item, its index, its
+ * `isSelectionDisabled` or the render function change.
  */
 const DataGridItemRow = React.memo(function DataGridItemRow({
   item,
   index,
   rowId,
+  selectionDisabled,
   render,
 }: {
   item: unknown;
   index: number;
   rowId: string;
+  /** `isSelectionDisabled` of the item; `undefined` without it. */
+  selectionDisabled: boolean | undefined;
   render: DataGridRenderRow;
 }) {
   return (
     <DataGridRowIdContext.Provider value={rowId}>
-      {render(item, index)}
+      <DataGridItemSelectionDisabledContext.Provider value={selectionDisabled}>
+        {render(item, index)}
+      </DataGridItemSelectionDisabledContext.Provider>
     </DataGridRowIdContext.Provider>
   );
 });
@@ -1903,6 +2094,7 @@ const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyPro
     }
   }, [renderWithoutItems]);
 
+  const selectionDisabled = itemsContext?.selectionDisabled ?? null;
   const renderRows = (render: DataGridRenderRow | null) =>
     render &&
     rows?.map((row) => (
@@ -1911,6 +2103,7 @@ const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyPro
         item={row.item}
         index={row.index}
         rowId={row.rowId}
+        selectionDisabled={selectionDisabled?.[row.index]}
         render={render}
       />
     ));
@@ -1982,7 +2175,10 @@ const DataGridRow = ({
     }
   }
   const hasSelectionCell = ownCellProps !== undefined;
-  const selectionDisabled = ownCellProps?.disabled ?? selectionCellProps?.disabled ?? false;
+  // A row rendered for an item takes `isSelectionDisabled` of the item, unless its cell says.
+  const itemSelectionDisabled = React.useContext(DataGridItemSelectionDisabledContext);
+  const cellDisabled = ownCellProps?.disabled ?? selectionCellProps?.disabled;
+  const selectionDisabled = cellDisabled ?? itemSelectionDisabled ?? false;
   const selectionInvisible = ownCellProps?.invisible ?? selectionCellProps?.invisible ?? false;
   const ownLabelledBy = ownCellProps?.['aria-labelledby'];
   const ownLabel =
@@ -2017,6 +2213,21 @@ const DataGridRow = ({
       );
     }
   }, [selectable, rowId]);
+
+  const disabledMismatch =
+    selectable &&
+    rowId !== undefined &&
+    itemSelectionDisabled !== undefined &&
+    cellDisabled !== undefined &&
+    cellDisabled !== itemSelectionDisabled;
+  React.useEffect(() => {
+    if (!disabledMismatch) return;
+    const state = (disabled: boolean) => (disabled ? 'disabled' : 'enabled');
+    warnOnce(
+      'DataGrid:selection-disabled-mismatch',
+      `DataGrid: the selection cell of row "${rowId}" is ${state(selectionDisabled)} (\`DataGrid.SelectionCell disabled\` or \`selectionCellProps.disabled\`), but \`isSelectionDisabled\` says its item is ${state(!selectionDisabled)}. Select-all skips a row that either one disables, and the row's control follows its cell: make them agree, or leave the cell's \`disabled\` unset to take it from \`isSelectionDisabled\`.`,
+    );
+  }, [disabledMismatch, rowId, selectionDisabled]);
 
   const unlabelled =
     selectable && rowId !== undefined && ownLabel === undefined && ownLabelledBy === undefined;
@@ -2347,6 +2558,11 @@ export {
  * (`DataGridColumn<T>`, see `createTableColumn`) it renders the header, the rows and the cells
  * itself, and `DataGrid.Body` also takes a render function that returns each item's row. Rows
  * rendered from `items` take their `rowId` from `getRowId` (by default the item's index).
+ *
+ * With `items`, selection follows the data rather than the rendered rows: select-all and its
+ * checkbox cover every item (`isSelectionDisabled` leaves items out), and ids of rows that are
+ * filtered out, on another page or not rendered stay selected through row clicks, select-all and
+ * sorting, and are reported by `onSelectedItemsChange`.
  *
  * Sub-components are available as `DataGrid.Header`, `DataGrid.HeaderCell`, `DataGrid.Body`,
  * `DataGrid.Row`, `DataGrid.Cell` and `DataGrid.SelectionCell` in client components, and as the
