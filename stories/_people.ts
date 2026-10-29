@@ -1,0 +1,108 @@
+/**
+ * The people of the data-mode stories of Listbox, Combobox and Dropdown: 500 `ListboxItem`s,
+ * every first name with every last name, in alphabetical order (`person-1` is "Ada Andersen",
+ * `person-500` "Zoe Weber"), and the team of each one for a `renderOption` that shows more than
+ * the label; and the 10,000 of the windowed stories, every one of them in each of 20 cities.
+ */
+import type { ListboxItem } from '../src';
+
+const FIRST_NAMES = [
+  'Ada',
+  'Ben',
+  'Chloe',
+  'Daniel',
+  'Elif',
+  'Farah',
+  'Gustav',
+  'Hana',
+  'Ivan',
+  'Jonas',
+  'Kai',
+  'Lena',
+  'Mateo',
+  'Nora',
+  'Oscar',
+  'Priya',
+  'Quinn',
+  'Rosa',
+  'Sami',
+  'Tariq',
+  'Uma',
+  'Viktor',
+  'Wen',
+  'Yara',
+  'Zoe',
+];
+
+const LAST_NAMES = [
+  'Andersen',
+  'Berg',
+  'Costa',
+  'Dahl',
+  'Eriksen',
+  'Fischer',
+  'Garcia',
+  'Haugen',
+  'Ito',
+  'Johansen',
+  'Kim',
+  'Larsen',
+  'Moreau',
+  'Nilsen',
+  'Okafor',
+  'Pedersen',
+  'Rossi',
+  'Silva',
+  'Tanaka',
+  'Weber',
+];
+
+const TEAMS = ['Design', 'Engineering', 'Finance', 'Marketing', 'Research', 'Support'];
+
+/** 500 people, `person-1` … `person-500`. */
+export const PEOPLE: readonly ListboxItem[] = FIRST_NAMES.flatMap((first, i) =>
+  LAST_NAMES.map((last, j) => ({
+    value: `person-${i * LAST_NAMES.length + j + 1}`,
+    label: `${first} ${last}`,
+  })),
+);
+
+/** The team of a person of {@link PEOPLE} or {@link TEN_THOUSAND_PEOPLE}, by value. */
+export function teamOf(value: string): string {
+  const number = Number(value.slice('person-'.length));
+  return TEAMS[(number * 7) % TEAMS.length];
+}
+
+const CITIES = [
+  'Accra',
+  'Austin',
+  'Bergen',
+  'Berlin',
+  'Bogota',
+  'Cairo',
+  'Dakar',
+  'Dublin',
+  'Hanoi',
+  'Kyoto',
+  'Lagos',
+  'Lima',
+  'Lisbon',
+  'Madrid',
+  'Nairobi',
+  'Oslo',
+  'Paris',
+  'Quito',
+  'Seoul',
+  'Vienna',
+];
+
+/**
+ * 10,000 people for the windowed stories: every person of {@link PEOPLE} in each city, in
+ * alphabetical order (`person-1` is "Ada Andersen (Accra)", `person-10000` "Zoe Weber (Vienna)").
+ */
+export const TEN_THOUSAND_PEOPLE: readonly ListboxItem[] = PEOPLE.flatMap((person, i) =>
+  CITIES.map((city, j) => ({
+    value: `person-${i * CITIES.length + j + 1}`,
+    label: `${person.label} (${city})`,
+  })),
+);

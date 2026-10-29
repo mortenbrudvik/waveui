@@ -11,9 +11,12 @@ import {
   useListbox,
   useListboxPopup,
   useMergedRefs,
+  useVirtualWindow,
   type ListboxItem,
   type ListboxProps,
 } from '../src';
+import { MountedOptions } from './_mountedOptions';
+import { PEOPLE, TEN_THOUSAND_PEOPLE } from './_people';
 
 const meta = {
   title: 'Components/Input/Listbox',
@@ -105,6 +108,68 @@ export const DisabledOptions: Story = {
       <Listbox.Option value="fish">Fish</Listbox.Option>
     </Listbox>
   ),
+};
+
+/**
+ * Data mode: the 50 options come from `items`, not from children; the keys, typeahead and the
+ * selection follow the data, and each option carries its position (`aria-posinset` of
+ * `aria-setsize`). Every option is rendered, so the list is given a height and scrolls (the
+ * `TenThousandOptions` story renders only the options in view).
+ */
+export const DataMode: Story = {
+  args: {
+    'aria-label': 'Person',
+    defaultValue: 'person-32',
+    items: PEOPLE.slice(0, 50),
+    className: 'max-h-72',
+  },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    virtualWindow: { control: false },
+  },
+};
+
+/** The args of the windowed story: the Listbox's, and the window's option height. */
+type TenThousandOptionsArgs = ListboxProps & {
+  /** The height of every option in pixels: `useVirtualWindow({ itemSize })`. */
+  itemSize: number;
+};
+
+/** A Listbox of 10,000 people, windowed by `useVirtualWindow`, with the mounted-option count. */
+function TenThousandListbox({ itemSize, ...args }: TenThousandOptionsArgs) {
+  const virtualWindow = useVirtualWindow({ itemSize });
+  const [list, setList] = React.useState<HTMLUListElement | null>(null);
+  return (
+    <div className="flex flex-col gap-3">
+      <Listbox {...args} ref={setList} items={TEN_THOUSAND_PEOPLE} virtualWindow={virtualWindow} />
+      <MountedOptions scope={list} total={TEN_THOUSAND_PEOPLE.length} />
+    </div>
+  );
+}
+
+/**
+ * 10,000 options with `virtualWindow`: the list (288 pixels tall here) renders only the options in
+ * view and a few beyond them, as the line below counts, every one 32 pixels tall. The keys and
+ * typeahead reach any of the 10,000, and the active option stays rendered while it is scrolled
+ * away.
+ */
+export const TenThousandOptions: StoryObj<TenThousandOptionsArgs> = {
+  args: {
+    'aria-label': 'Person',
+    defaultValue: 'person-5000',
+    itemSize: 32,
+    className: 'h-72',
+    style: { width: 260 },
+  },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    virtualWindow: { control: false },
+    // Heights an option fits in; a smaller one would overlap the options.
+    itemSize: { control: 'select', options: [32, 40, 48] },
+  },
+  render: (args) => <TenThousandListbox {...args} />,
 };
 
 /** Named by a Field label instead of `aria-label`. */

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { DataGrid, Menu, MenuButton, createTableColumn } from '../src';
+import { Button, DataGrid, Menu, MenuButton, createTableColumn, useVirtualWindow } from '../src';
 import type { DataGridBaseProps, DataGridColumn, DataGridSort } from '../src';
 
 interface Member {
@@ -360,4 +360,262 @@ export const SelectionCellAtTheEnd: Story = {
       </DataGrid.Body>
     </DataGrid>
   ),
+};
+
+const PAGE_SIZE = 20;
+const ROLES = ['Engineer', 'Designer', 'Manager', 'Analyst'];
+const LOCATIONS = ['Seattle', 'New York', 'London', 'Oslo', 'Tokyo'];
+
+/** 200 members for the paging story. */
+const MANY_MEMBERS: Member[] = Array.from({ length: 200 }, (_, index) => ({
+  id: String(index + 1),
+  name: `Member ${index + 1}`,
+  role: ROLES[index % ROLES.length],
+  location: LOCATIONS[index % LOCATIONS.length],
+  status: index % 9 === 4 ? 'On leave' : 'Active',
+}));
+
+/** Client-side pages of `MANY_MEMBERS`; the selection is held here, over every page. */
+function PagedGrid({ onSelectedItemsChange, ...args }: MemberGridProps) {
+  const [page, setPage] = React.useState(0);
+  const [selected, setSelected] = React.useState<string[]>([]);
+  const pageCount = Math.ceil(MANY_MEMBERS.length / PAGE_SIZE);
+  const items = React.useMemo(
+    () => MANY_MEMBERS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [page],
+  );
+  const handleSelectedItemsChange: DataGridBaseProps['onSelectedItemsChange'] = (next, details) => {
+    setSelected(next);
+    onSelectedItemsChange?.(next, details);
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <DataGrid
+        items={items}
+        columns={MEMBER_COLUMNS}
+        getRowId={memberId}
+        {...args}
+        selectedItems={selected}
+        onSelectedItemsChange={handleSelectedItemsChange}
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <Button disabledFocusable={page === 0} onClick={() => setPage(page - 1)}>
+          Previous page
+        </Button>
+        <span className="text-body-1 text-foreground">
+          Page {page + 1} of {pageCount}
+        </span>
+        <Button disabledFocusable={page === pageCount - 1} onClick={() => setPage(page + 1)}>
+          Next page
+        </Button>
+        <span role="status" className="text-body-1 text-foreground">
+          {selected.length} selected
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pages of 20 over 200 members. With `items`, selection follows the data: members selected on
+ * one page stay selected on the others (the status counts them all), the header checkbox shows
+ * the current page, and its select-all selects that page's members and keeps the rest.
+ */
+export const Paging: Story = {
+  args: {
+    'aria-label': 'Team members, paged',
+    selectionMode: 'multiple',
+  },
+  render: (args) => <PagedGrid {...args} />,
+};
+
+/** The initial widths of the member columns; Name is never narrower than 120 pixels. */
+const MEMBER_COLUMN_SIZING = {
+  name: { minWidth: 120, defaultWidth: 220 },
+  role: { defaultWidth: 160 },
+  location: { defaultWidth: 160 },
+  status: { defaultWidth: 140 },
+};
+
+/**
+ * `resizableColumns` gives every column header a resize handle: drag the end edge of a header, or
+ * press F2 on a header (or its sort button) to move focus to its handle, then the arrow keys (20
+ * pixels, 5 with Shift, Home for the minimum) and Enter, Space or Escape to go back. The columns
+ * start at their `defaultWidth` and the grid fills its container; the first resize keeps the
+ * widths the columns are drawn at, and from then on the grid is as wide as its columns. Once any
+ * column has been resized, a double click on a handle sets its column back to its initial width
+ * (before the first resize it changes nothing).
+ */
+export const Resizable: Story = {
+  args: {
+    'aria-label': 'Team members, resizable columns',
+    resizableColumns: true,
+    columnSizingOptions: MEMBER_COLUMN_SIZING,
+    onColumnWidthsChange: fn(),
+  },
+  render: (args) => <MemberGrid {...args} />,
+};
+
+/** Widths of the controlled story, by `columnId`. */
+const INITIAL_MEMBER_WIDTHS: Record<string, number> = {
+  name: 220,
+  role: 160,
+  location: 160,
+  status: 140,
+};
+
+/** Holds the column widths in state, as an app that persists them would, and shows them. */
+function ControlledWidthsGrid({ onColumnWidthsChange, ...args }: MemberGridProps) {
+  const [widths, setWidths] = React.useState(INITIAL_MEMBER_WIDTHS);
+  const handleColumnWidthsChange: NonNullable<DataGridBaseProps['onColumnWidthsChange']> = (
+    next,
+    details,
+  ) => {
+    setWidths(next);
+    onColumnWidthsChange?.(next, details);
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <MemberGrid {...args} columnWidths={widths} onColumnWidthsChange={handleColumnWidthsChange} />
+      <p className="text-body-1 text-foreground">
+        Widths:{' '}
+        {MEMBER_COLUMNS.map(({ columnId = '' }) => `${columnId} ${widths[columnId]}`).join(', ')}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Controlled widths: `columnWidths` comes from state and `onColumnWidthsChange` stores every
+ * change there (where an app would persist it); the line below the grid shows the state.
+ */
+export const ResizableControlled: Story = {
+  args: {
+    'aria-label': 'Team members, controlled column widths',
+    resizableColumns: true,
+    onColumnWidthsChange: fn(),
+  },
+  render: (args) => <ControlledWidthsGrid {...args} />,
+};
+
+/** 10,000 members for the windowed story. */
+const TEN_THOUSAND_MEMBERS: Member[] = Array.from({ length: 10_000 }, (_, index) => ({
+  id: String(index + 1),
+  name: `Member ${String(index + 1).padStart(5, '0')}`,
+  role: ROLES[(index * 3) % ROLES.length],
+  location: LOCATIONS[(index * 7) % LOCATIONS.length],
+  status: index % 9 === 4 ? 'On leave' : 'Active',
+}));
+
+/** One collator for every comparison: sorting 10,000 rows calls `compare` about 130,000 times. */
+const collator = new Intl.Collator('en');
+
+const TEN_THOUSAND_COLUMNS: readonly DataGridColumn<Member>[] = [
+  createTableColumn<Member>({
+    columnId: 'name',
+    label: 'Name',
+    compare: (a, b) => collator.compare(a.name, b.name),
+    renderCell: (member) => member.name,
+  }),
+  createTableColumn<Member>({
+    columnId: 'role',
+    label: 'Role',
+    compare: (a, b) => collator.compare(a.role, b.role),
+    renderCell: (member) => member.role,
+  }),
+  createTableColumn<Member>({
+    columnId: 'location',
+    label: 'Location',
+    compare: (a, b) => collator.compare(a.location, b.location),
+    renderCell: (member) => member.location,
+  }),
+  createTableColumn<Member>({
+    columnId: 'status',
+    label: 'Status',
+    renderCell: (member) => member.status,
+  }),
+];
+
+/** The args of the windowed story: the grid's, and the window's row height. */
+type TenThousandRowsArgs = MemberGridProps & {
+  /** The height of every row in pixels: `useVirtualWindow({ itemSize })`. */
+  itemSize: number;
+};
+
+/** The height of the grid's header in `container`, followed with a ResizeObserver. */
+function useHeaderHeight(container: HTMLElement | null): number {
+  const [height, setHeight] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const header = container?.querySelector('thead');
+    if (!header || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => setHeight(header.offsetHeight));
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [container]);
+  return height;
+}
+
+/** Counts the body rows the grid in `container` has rendered (`tr[data-row-index]`). */
+function MountedRows({ container, total }: { container: HTMLElement | null; total: number }) {
+  const subscribe = React.useCallback(
+    (onChange: () => void) => {
+      if (!container) return () => {};
+      const observer = new MutationObserver(onChange);
+      observer.observe(container, { childList: true, subtree: true });
+      return () => observer.disconnect();
+    },
+    [container],
+  );
+  const mounted = React.useSyncExternalStore(
+    subscribe,
+    () => container?.querySelectorAll('tr[data-row-index]').length ?? 0,
+    () => 0,
+  );
+  return (
+    <p className="text-body-1 text-foreground">
+      Mounted rows: {mounted} of {total.toLocaleString('en')}
+    </p>
+  );
+}
+
+/** A grid of 10,000 members in a 480-pixel scroller, windowed by `useVirtualWindow`. */
+function TenThousandRowsGrid({ itemSize, ...args }: TenThousandRowsArgs) {
+  const [container, setContainer] = React.useState<HTMLDivElement | null>(null);
+  // The header sticks over the rows: keyboard moves bring rows into the area below it.
+  const headerHeight = useHeaderHeight(container);
+  const virtualWindow = useVirtualWindow({ itemSize, scrollPaddingStart: headerHeight });
+  return (
+    <div className="flex flex-col gap-3">
+      <DataGrid
+        items={TEN_THOUSAND_MEMBERS}
+        columns={TEN_THOUSAND_COLUMNS}
+        getRowId={memberId}
+        {...args}
+        virtualWindow={virtualWindow}
+        containerProps={{ ref: setContainer, className: 'h-120' }}
+      />
+      <MountedRows container={container} total={TEN_THOUSAND_MEMBERS.length} />
+    </div>
+  );
+}
+
+/**
+ * 10,000 members with `virtualWindow`: only the rows in view (and a few beyond) are rendered, as
+ * the line below the grid counts, in a scroller 480 pixels tall with rows 44 pixels tall. Sorting,
+ * select-all (every member), column resizing and the keyboard (Ctrl+End reaches the last member)
+ * work on the whole list; a focused row stays rendered when it is scrolled away.
+ */
+export const TenThousandRows: StoryObj<TenThousandRowsArgs> = {
+  args: {
+    'aria-label': 'Ten thousand members',
+    itemSize: 44,
+    selectionMode: 'multiple',
+    resizableColumns: true,
+    onColumnWidthsChange: fn(),
+  },
+  argTypes: {
+    // Heights a row's cells fit in; a smaller one would overlap the rows.
+    itemSize: { control: 'select', options: [44, 52, 60] },
+  },
+  render: (args) => <TenThousandRowsGrid {...args} />,
 };

@@ -20,14 +20,28 @@ import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../l
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
-import { collectOptionLabels, useListbox } from '../../hooks/useListbox';
+import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { unwrapButtonGlyph } from '../button/Button.slots';
 import { HiddenInput } from '../internal/HiddenInput';
 import { showsExpandButton } from './Combobox.expand';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
-import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
+import {
+  ListboxSurface,
+  Option,
+  OptionGroup,
+  useListboxPopup,
+  type ListboxOptionRenderState,
+} from './Option';
+import {
+  renderListboxItems,
+  renderListboxWindow,
+  useDataModeWarnings,
+  useItemsAndChildrenWarning,
+  useShownListScroll,
+} from './Option.data';
 import { announceToggle, defaultSelectionLabel, PickerAnnouncer } from './pickerLabels';
 import {
   pickerButtonOffset,
@@ -205,6 +219,50 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    * announcements, for localization. Unset members keep their English defaults.
    */
   labels?: DropdownLabels;
+  /**
+   * Data mode: the options as data, in list order (`value`, `label`, and optionally `textValue`,
+   * `disabled` and `hidden`; values unique). The open list renders one option per item that is
+   * not `hidden` (see `renderOption`); the closed list renders none. The keys, typeahead, the
+   * selection and the button's label text follow `items`, also for a selected item whose option
+   * is not rendered. The children are neither read nor rendered: passing both warns once in
+   * development. Each option gets `aria-posinset` and `aria-setsize` from its place among the
+   * shown items, and keeps one id per value. Without it, the options are the `Option` children.
+   */
+  items?: readonly ListboxItem[];
+  /**
+   * Data mode: renders the option of an item, given its state (`selected`, `active`, and `index`
+   * among the shown options). Return an `Option`, or an option component of your own on
+   * `useListboxOption`, with the item's `value` (and its `disabled`); its position is set for you,
+   * and in a windowed list (`virtualWindow`) its height. It is called again only when the item, its
+   * state, its position (`aria-posinset` and `aria-setsize`, which new `items` change) or the
+   * function itself changes, so pass a stable function in a long list. Ignored without `items`,
+   * with a development warning.
+   * @default an `Option` with the item's `value`, `label` (also its text), `textValue` and `disabled`
+   */
+  renderOption?: (item: ListboxItem, state: ListboxOptionRenderState) => React.ReactNode;
+  /**
+   * Data mode: renders only the options in view of a long list, plus an overscan, and spacers
+   * (`aria-hidden`, `data-virtual-spacer`) as tall as the options they stand for: pass the result
+   * of `useVirtualWindow({ itemSize })`, or an object of your own that implements `VirtualWindow`.
+   * It needs `items`: without them, or beside `OptionGroup` children, it is ignored with a
+   * development warning (a window renders a flat list).
+   *
+   * The open popup's list is the window's scroller, so it needs no height of yours: it scrolls
+   * within its own maximum height (15rem, 240 pixels at the default root size, less where the
+   * viewport has no room). Every option is exactly `itemSize` tall (the list sets its height,
+   * after the option's own `style`), so an option's content must fit in it: the default `Option`
+   * with one line of text is 32 pixels tall.
+   *
+   * The window counts the shown options (the items that are not `hidden`). The keys and typeahead
+   * move over all of them (Home and End to the first and the last, PageUp and PageDown by ten); the
+   * active option stays rendered while it is scrolled away, so `aria-activedescendant` always names
+   * an element, and when a key makes it active the list and the window move to it in the same
+   * update. Opening the list scrolls the active option (the selected one, by default) to the
+   * middle of the list, and again once the popup's positioning has given the list its height (a
+   * short viewport) unless it was scrolled first. A closed list renders no option. The browser's
+   * scroll anchoring is off on a windowed list (the window lays the options out).
+   */
+  virtualWindow?: VirtualWindow;
   /** Called when the `<button role="combobox">` receives focus (the root keeps other handlers). */
   onFocus?: React.FocusEventHandler<HTMLButtonElement>;
   /** Called when the `<button role="combobox">` loses focus. */
@@ -231,6 +289,9 @@ export interface DropdownComponent {
   OptionGroup: typeof OptionGroup;
 }
 
+/** The labels read from the children in data mode, where none are read. */
+const NO_LABELS: ReadonlyMap<string, string> = new Map<string, string>();
+
 const DropdownRoot = (props: DropdownProps<boolean>) => {
   const {
     multiselect = false,
@@ -255,6 +316,9 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     clearable = false,
     expandIcon,
     labels,
+    items,
+    renderOption,
+    virtualWindow,
     autoFocus,
     tabIndex,
     id,
@@ -329,7 +393,16 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const buttonRef = React.useRef<HTMLButtonElement | null>(null);
 
-  const optionLabels = React.useMemo(() => collectOptionLabels(children), [children]);
+  // Data mode reads every label from `items` (listbox.getItem), so the children are not walked.
+  const dataMode = items !== undefined;
+  const optionLabels = React.useMemo<ReadonlyMap<string, string>>(
+    () => (dataMode ? NO_LABELS : collectOptionLabels(children)),
+    [dataMode, children],
+  );
+  useItemsAndChildrenWarning('Dropdown', items, children);
+  useDataModeWarnings('Dropdown', { items, renderOption, virtualWindow, children });
+  // A window renders data mode only.
+  const activeWindow = dataMode ? virtualWindow : undefined;
 
   const listbox = useListbox({
     open,
@@ -337,6 +410,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     mode: 'select-only',
     multiselect,
     disabledOptionsFocusable,
+    items,
     selectedValues: values,
     onSelect: (next, details) => {
       if (!multiselect) {
@@ -361,6 +435,11 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
       );
     },
     onActiveValueChange: onActiveOptionChange,
+    // An active option that the window does not render (an adapter that keeps nothing): scrolled
+    // to by its index among the shown options, the window's count.
+    onScrollToItem: activeWindow
+      ? (index) => activeWindow.scrollToIndex(index, { align: 'auto' })
+      : undefined,
     idPrefix: 'dropdown-listbox',
   });
 
@@ -376,6 +455,12 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
 
   const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
   const buttonMergedRef = useMergedRefs<HTMLButtonElement>(buttonRef, controlRef, setReference);
+  // The window scrolls the shown list only, which mounts with the popup (C-POPUPS: the window
+  // holds it in state); the closed list in place is another, hidden element.
+  const listScrollRef = useMergedRefs<HTMLUListElement>(
+    expanded ? activeWindow?.scrollRef : undefined,
+  );
+  useShownListScroll(expanded, activeWindow, listbox.items, listbox.activeValue, values);
 
   useFormReset(
     buttonRef,
@@ -453,6 +538,13 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     fieldProps['aria-label'] === undefined
       ? (fieldProps['aria-labelledby'] ?? field?.labelId)
       : fieldProps['aria-labelledby'];
+
+  // What every option of data mode is drawn from, besides its item.
+  const optionsState = {
+    selected: new Set(values),
+    activeValue: listbox.activeValue,
+    renderOption,
+  };
 
   return (
     <div
@@ -558,12 +650,26 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         floatingProps={floatingProps}
         open={open}
         expanded={expanded}
-        listClassName={dropdownClassNames.listbox}
+        // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
+        listClassName={cn(dropdownClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
         surfaceClassName={dropdownClassNames.surface}
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
+        listProps={activeWindow ? { ref: listScrollRef } : undefined}
       >
-        {children}
+        {/* Data mode: the options of the shown items while the list shows (labels come from
+            `items`, so a closed list needs none), or the window's; the children are ignored. */}
+        {!dataMode
+          ? children
+          : expanded &&
+            (activeWindow
+              ? renderListboxWindow(
+                  listbox.items,
+                  activeWindow,
+                  optionsState,
+                  dropdownClassNames.spacer,
+                )
+              : renderListboxItems(listbox.items, optionsState))}
       </ListboxSurface>
       <HiddenInput
         name={name}
@@ -600,6 +706,14 @@ export const DropdownOptionGroup = OptionGroup;
  * (`labels.added`/`labels.removed`, never for a controlled change, a clear or a form reset).
  * `clearable` then clears every value. A non-literal `multiselect={flag}` is a type error: render
  * two elements, one for each mode.
+ *
+ * **Data mode**: `items` passes the options as data instead of children. The open list renders an
+ * option per item (`renderOption` draws it, an `Option` with the item's label by default) and the
+ * closed list none; the keys, typeahead and the button's text follow the data, and each option
+ * carries `aria-posinset` and `aria-setsize`. A long list takes a `virtualWindow` (from
+ * `useVirtualWindow({ itemSize })`): the open list then renders only the options in view, plus an
+ * overscan, with spacers for the others, every option `itemSize` tall; the active option stays
+ * rendered, and opening scrolls it to the middle of the list.
  *
  * The `<button>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`

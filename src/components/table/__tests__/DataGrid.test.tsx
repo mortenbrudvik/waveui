@@ -2,8 +2,10 @@ import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { composeStories } from '@storybook/react';
 import { createPortal } from 'react-dom';
 import { renderToString } from 'react-dom/server';
+import * as stories from '../../../../stories/DataGrid.stories';
 import {
   DataGrid,
   DataGridBody,
@@ -174,6 +176,12 @@ const MIXED_SORT_DIRECTION =
 
 /** The `details` argument of `onSortChange` (object form) and `onSelectedItemsChange`. */
 const DETAILS = { event: expect.any(Event) };
+
+const ROW_ID_MISMATCH =
+  "[WaveUI] DataGrid.Row: a row rendered from the grid's `items` sets its own `rowId`, which differs from its item's id (`getRowId`, by default the item's index). Select-all and its checkbox use the ids from `getRowId`, so the row is outside them and select-all selects ids that no row has. Pass a `getRowId` that returns the row's id, and leave out `rowId`.";
+
+const ROW_ID_OUTSIDE_ITEMS =
+  "[WaveUI] DataGrid.Row: a selectable row in a grid with `items` has a `rowId` that is no item's id (`getRowId`, by default the item's index). Select-all and its checkbox use the ids of `items`, so the row is outside them. Render the rows from `items` (a `DataGrid.Body` render function, or `columns`) with a `getRowId` that returns their ids.";
 
 /** useControllable's warning when a value switches between controlled and uncontrolled. */
 const switchWarning = (from: string, to: string) =>
@@ -1169,6 +1177,7 @@ describe('DataGrid items and typed columns', () => {
 
     it('lose to a row’s own `rowId`', async () => {
       const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onSelectedItemsChange = vi.fn();
       render(
         <DataGrid
@@ -1189,6 +1198,64 @@ describe('DataGrid items and typed columns', () => {
       );
       await user.click(screen.getByRole('checkbox', { name: 'Bob' }));
       expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['bob'], DETAILS);
+      // Select-all uses the ids from `getRowId`, which no row has: a development warning.
+      expect(warn.mock.calls).toEqual([[ROW_ID_MISMATCH]]);
+    });
+
+    it('that a row’s own `rowId` replaces warn once in a selectable grid, and never when they agree', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const grid = (label: string, props: Partial<DataGridBaseProps<Person>>, rowId: string) => (
+        <DataGrid aria-label={label} items={PEOPLE} {...props}>
+          <DataGrid.Body>
+            {(person: Person) => (
+              <DataGrid.Row rowId={rowId === 'id' ? person.id : person.name}>
+                <DataGrid.Cell>{person.name}</DataGrid.Cell>
+              </DataGrid.Row>
+            )}
+          </DataGrid.Body>
+        </DataGrid>
+      );
+      render(
+        <>
+          {/* No warning: not selectable, or the row's id is its item's id. */}
+          {grid('Not selectable', {}, 'name')}
+          {grid('Agreeing', { selectionMode: 'multiple', getRowId: (person) => person.id }, 'id')}
+        </>,
+      );
+      expect(warn).not.toHaveBeenCalled();
+      // Three rows, and a second grid, that differ from the index ids: one warning.
+      render(
+        <>
+          {grid('Index ids', { selectionMode: 'multiple' }, 'id')}
+          {grid('Single', { selectionMode: 'single' }, 'name')}
+        </>,
+      );
+      expect(warn.mock.calls).toEqual([[ROW_ID_MISMATCH]]);
+    });
+
+    it('warn once for selectable `DataGrid.Row` children of a grid with `items` whose ids are no item’s', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const grid = (label: string, ids: readonly string[]) => (
+        <DataGrid
+          aria-label={label}
+          items={PEOPLE}
+          getRowId={(person) => person.id}
+          selectionMode="multiple"
+        >
+          <DataGrid.Body>
+            {ids.map((id) => (
+              <DataGrid.Row key={id} rowId={id}>
+                <DataGrid.Cell>{`Row ${id}`}</DataGrid.Cell>
+              </DataGrid.Row>
+            ))}
+          </DataGrid.Body>
+        </DataGrid>
+      );
+      // Ids of `items`: select-all covers them.
+      render(grid('Item ids', ['1', '2', '3']));
+      expect(warn).not.toHaveBeenCalled();
+      render(grid('Other ids', ['x', 'y', '3']));
+      expect(warn.mock.calls).toEqual([[ROW_ID_OUTSIDE_ITEMS]]);
     });
 
     it('that repeat warn once, as rows with the same `rowId` do, and every row renders', () => {
@@ -3369,6 +3436,524 @@ describe('DataGrid selection store', () => {
     store.register('b');
     expect(rowListener).toHaveBeenCalledTimes(3);
     expect(store.isSelected('b', true)).toBe(true);
+  });
+});
+
+describe('DataGrid selection store with a universe (a grid with `items`)', () => {
+  const THOUSAND = Array.from({ length: 1000 }, (_, index) => String(index));
+
+  it('takes select-all from the universe, never from registrations, and rows registering notify nothing', () => {
+    // '0' is disabled by the data (`isSelectionDisabled`).
+    const store = createSelectionStore(['1'], false, { ids: THOUSAND, disabled: new Set(['0']) });
+    const rowListener = vi.fn();
+    const selectAllListener = vi.fn();
+    store.subscribe(rowListener);
+    store.subscribeSelectAll(selectAllListener);
+    // Known from the start, before any row registered (the server render).
+    expect(store.getSelectAllState()).toBe('some');
+    expect(store.getSelectableIds()).toEqual(THOUSAND.slice(1));
+
+    // A window of 30 rows mounting and unmounting changes nothing.
+    const unregister = THOUSAND.slice(0, 30).map((rowId) => store.register(rowId));
+    for (const done of unregister) done();
+    expect(store.getSelectAllState()).toBe('some');
+    expect(rowListener).not.toHaveBeenCalled();
+    expect(selectAllListener).not.toHaveBeenCalled();
+
+    // Every selectable id: all, the disabled '0' and an id outside the universe aside.
+    store.setSelected([...THOUSAND.slice(1), 'x']);
+    expect(store.getSelectAllState()).toBe('all');
+    expect(rowListener).toHaveBeenCalledTimes(1);
+    expect(selectAllListener).toHaveBeenCalledTimes(1);
+
+    // A rendered row that disables its selection leaves select-all too, until it stops.
+    store.setSelected(THOUSAND.slice(2));
+    expect(store.getSelectAllState()).toBe('some');
+    const enable = store.disable('1');
+    expect(store.getSelectAllState()).toBe('all');
+    expect(store.getSelectableIds()).toEqual(THOUSAND.slice(2));
+    enable();
+    expect(store.getSelectAllState()).toBe('some');
+
+    // A selected disabled id and ids outside the universe count toward nothing.
+    store.setSelected(['0', 'x']);
+    expect(store.getSelectAllState()).toBe('none');
+    expect(rowListener).toHaveBeenCalledTimes(3);
+  });
+
+  it('notifies no row when the universe changes, and returns to registrations without one', () => {
+    const store = createSelectionStore(['a'], false, { ids: ['a', 'b'], disabled: new Set() });
+    const rowListener = vi.fn();
+    store.subscribe(rowListener);
+    const unregisterB = store.register('b');
+    expect(store.getSelectAllState()).toBe('some');
+    // The items are filtered down to 'a'.
+    store.setUniverse({ ids: ['a'], disabled: new Set() });
+    expect(store.getSelectAllState()).toBe('all');
+    expect(store.getUniverseIds()).toEqual(['a']);
+    // 'a' disabled by the data: nothing select-all can change is selected.
+    store.setUniverse({ ids: ['a'], disabled: new Set(['a']) });
+    expect(store.getSelectAllState()).toBe('none');
+    expect(store.getSelectableIds()).toEqual([]);
+    // Without a universe (no `items`), the registered rows count again: 'b' only.
+    store.setUniverse(null);
+    expect(store.getSelectAllState()).toBe('none');
+    expect(store.getSelectableIds()).toEqual(['b']);
+    unregisterB();
+    expect(rowListener).not.toHaveBeenCalled();
+  });
+
+  it('selects the first selected id in single mode, whether its row is registered or not', () => {
+    const store = createSelectionStore(['9', 'b'], true, { ids: ['a', 'b'], disabled: new Set() });
+    const rowListener = vi.fn();
+    store.subscribe(rowListener);
+    store.register('a');
+    store.register('b');
+    expect(store.isSelected('9', true)).toBe(true);
+    expect(store.isSelected('b', true)).toBe(false);
+    expect(rowListener).not.toHaveBeenCalled();
+  });
+});
+
+describe('DataGrid selection that follows the data (`items`)', () => {
+  interface Entry {
+    id: string;
+    name: string;
+  }
+
+  /** 100 items, ids '0' to '99'. */
+  const ENTRIES: readonly Entry[] = Array.from({ length: 100 }, (_, index) => ({
+    id: String(index),
+    name: `Entry ${index}`,
+  }));
+  const idsOf = (entries: readonly Entry[]) => entries.map((entry) => entry.id);
+  const ALL_IDS = idsOf(ENTRIES);
+  /** Ten items, every one rendered: '7', '17', … '97'. */
+  const SEVENS = ENTRIES.filter((entry) => entry.id.endsWith('7'));
+  const SEVEN_IDS = idsOf(SEVENS);
+  const entryId = (entry: Entry) => entry.id;
+  /** The rows that mount: the first ten items stand for the rows of a window. */
+  const MOUNTED = 10;
+
+  function renderEntry(entry: Entry, index: number) {
+    return index < MOUNTED ? (
+      <DataGrid.Row>
+        <DataGrid.Cell>{entry.name}</DataGrid.Cell>
+      </DataGrid.Row>
+    ) : null;
+  }
+
+  type EntryGridProps = Omit<Partial<DataGridBaseProps<Entry>>, 'children'> & {
+    items?: readonly Entry[];
+  };
+
+  /** A multiple-selection grid of `items` that renders only the first ten rows. */
+  function EntryGrid({ items = ENTRIES, ...props }: EntryGridProps) {
+    return (
+      <DataGrid
+        aria-label="Entries"
+        items={items}
+        getRowId={entryId}
+        selectionMode="multiple"
+        {...props}
+      >
+        <DataGrid.Header>
+          <tr>
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>{renderEntry}</DataGrid.Body>
+      </DataGrid>
+    );
+  }
+
+  const selectAll = () => screen.getByRole('checkbox', { name: 'Select all rows' });
+
+  const SINGLE_SEVERAL_SELECTED =
+    '[WaveUI] DataGrid: a single-selection grid (selectionMode "single") has 2 selected row ids; only the first one is selected. Pass at most one id in `selectedItems`/`defaultSelectedItems`, or use selectionMode="multiple".';
+
+  const selectionDisabledMismatch = (rowId: string, cell: string, data: string) =>
+    `[WaveUI] DataGrid: the selection cell of row "${rowId}" is ${cell} (\`DataGrid.SelectionCell disabled\` or \`selectionCellProps.disabled\`), but \`isSelectionDisabled\` says its item is ${data}. Select-all skips a row that either one disables, and the row's control follows its cell: make them agree, or leave the cell's \`disabled\` unset to take it from \`isSelectionDisabled\`.`;
+
+  it('select-all selects every item of `items`, rendered or not, and its next toggle clears them', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    render(<EntryGrid onSelectedItemsChange={onSelectedItemsChange} />);
+    expect(bodyRows()).toHaveLength(MOUNTED);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Entry 3' }));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3'], DETAILS);
+    expect(selectAll()).toBePartiallyChecked();
+
+    await user.click(selectAll());
+    // The 100 ids of `items`, in their order, not the ten rendered rows.
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(ALL_IDS, DETAILS);
+    expect(selectAll()).toBeChecked();
+    expect(selectAll()).not.toBePartiallyChecked();
+
+    await user.click(selectAll());
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith([], DETAILS);
+    expect(selectAll()).not.toBeChecked();
+    expect(selectAll()).not.toBePartiallyChecked();
+    expect(onSelectedItemsChange).toHaveBeenCalledTimes(3);
+  });
+
+  it('draws the select-all state from the data: the rendered rows alone are not all', () => {
+    const { rerender } = render(<EntryGrid selectedItems={ALL_IDS.slice(0, MOUNTED)} />);
+    // Every rendered row is selected, 90 items are not.
+    expect(selectAll()).toBePartiallyChecked();
+    // Only an item whose row is not rendered.
+    rerender(<EntryGrid selectedItems={['50']} />);
+    expect(selectAll()).toBePartiallyChecked();
+    rerender(<EntryGrid selectedItems={ALL_IDS} />);
+    expect(selectAll()).toBeChecked();
+    expect(selectAll()).not.toBePartiallyChecked();
+    // An id that is not in `items` counts toward nothing.
+    rerender(<EntryGrid selectedItems={['x']} />);
+    expect(selectAll()).not.toBeChecked();
+    expect(selectAll()).not.toBePartiallyChecked();
+  });
+
+  it('renders the select-all state from the data on the server', () => {
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(<EntryGrid defaultSelectedItems={ALL_IDS} />);
+    const control = container.querySelector('input[aria-label="Select all rows"]');
+    expect(control).toHaveAttribute('checked');
+  });
+
+  it('keeps the ids of rows that are not rendered or not in `items` through a row click, Space and the control', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const grid = (items: readonly Entry[]) => (
+      <EntryGrid
+        items={items}
+        selectOnRowClick
+        defaultSelectedItems={['50', '99']}
+        onSelectedItemsChange={onSelectedItemsChange}
+      />
+    );
+    const { rerender } = render(grid(ENTRIES));
+    await user.click(screen.getByText('Entry 3'));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['50', '99', '3'], DETAILS);
+
+    // Filtered: '50', '99' and '3' are no longer in `items`.
+    rerender(grid(SEVENS));
+    expect(selectAll()).not.toBePartiallyChecked();
+    await user.click(screen.getByRole('checkbox', { name: 'Entry 7' }));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['50', '99', '3', '7'], DETAILS);
+    act(() => cell('Entry 17').focus());
+    await user.keyboard(' ');
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['50', '99', '3', '7', '17'], DETAILS);
+    await user.click(screen.getByText('Entry 7'));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['50', '99', '3', '17'], DETAILS);
+    expect(onSelectedItemsChange).toHaveBeenCalledTimes(4);
+
+    // Back to every item: the ids kept all along are selected.
+    rerender(grid(ENTRIES));
+    expect(screen.getByRole('checkbox', { name: 'Entry 3' })).toBeChecked();
+  });
+
+  it('select-all over filtered items adds their ids and keeps the others; its next toggle removes only theirs', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    render(
+      <EntryGrid
+        items={SEVENS}
+        defaultSelectedItems={['3', '17']}
+        onSelectedItemsChange={onSelectedItemsChange}
+      />,
+    );
+    expect(selectAll()).toBePartiallyChecked();
+    await user.click(selectAll());
+    // The id outside `items` first, then every id of `items` in their order.
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3', ...SEVEN_IDS], DETAILS);
+    expect(selectAll()).toBeChecked();
+    await user.click(selectAll());
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3'], DETAILS);
+    expect(selectAll()).not.toBeChecked();
+    expect(selectAll()).not.toBePartiallyChecked();
+  });
+
+  it('deselect-all after filtering removes only the ids of the filtered items', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const grid = (items: readonly Entry[]) => (
+      <EntryGrid
+        items={items}
+        defaultSelectedItems={ALL_IDS}
+        onSelectedItemsChange={onSelectedItemsChange}
+      />
+    );
+    const { rerender } = render(grid(ENTRIES));
+    expect(selectAll()).toBeChecked();
+    rerender(grid(SEVENS));
+    expect(selectAll()).toBeChecked();
+    await user.click(selectAll());
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(
+      ALL_IDS.filter((id) => !SEVEN_IDS.includes(id)),
+      DETAILS,
+    );
+    expect(selectAll()).not.toBeChecked();
+    expect(onSelectedItemsChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the ids outside `items` through a sort and a replacement of `items`', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const columns: readonly DataGridColumn<Entry>[] = [
+      createTableColumn<Entry>({
+        columnId: 'name',
+        label: 'Name',
+        compare: (a, b) => a.name.localeCompare(b.name),
+        renderCell: (entry) => entry.name,
+      }),
+    ];
+    const grid = (items: readonly Entry[]) => (
+      <DataGrid
+        aria-label="Entries"
+        items={items}
+        columns={columns}
+        getRowId={entryId}
+        selectionMode="multiple"
+        defaultSort={{ columnId: 'name', direction: 'ascending' }}
+        defaultSelectedItems={['3']}
+        onSelectedItemsChange={onSelectedItemsChange}
+      />
+    );
+    const { rerender } = render(grid(SEVENS));
+    await user.click(sortButton('Name'));
+    expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    await user.click(selectAll());
+    // The order of `items`, not the sorted order.
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3', ...SEVEN_IDS], DETAILS);
+
+    // New objects with the same ids, and one more item.
+    rerender(grid([...SEVENS.map((entry) => ({ ...entry })), ENTRIES[8]]));
+    expect(selectAll()).toBePartiallyChecked();
+    await user.click(screen.getByRole('checkbox', { name: 'Entry 97' }));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(
+      ['3', ...SEVEN_IDS.filter((id) => id !== '97')],
+      DETAILS,
+    );
+  });
+
+  it('leaves the items that `isSelectionDisabled` disables out of select-all and its state, keeping their selection', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn');
+    const onSelectedItemsChange = vi.fn();
+    // Every tenth item: '0', '10', … '90'.
+    const isSelectionDisabled = vi.fn((_entry: Entry, index: number) => index % 10 === 0);
+    render(
+      <EntryGrid
+        isSelectionDisabled={isSelectionDisabled}
+        selectOnRowClick
+        defaultSelectedItems={['0']}
+        onSelectedItemsChange={onSelectedItemsChange}
+      />,
+    );
+    expect(isSelectionDisabled).toHaveBeenCalledWith(ENTRIES[55], 55);
+    // The rendered row of a disabled item: its control is disabled, a click and Space keep it.
+    const first = screen.getByRole('checkbox', { name: 'Entry 0' });
+    expect(first).toBeDisabled();
+    expect(first).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Entry 1' })).toBeEnabled();
+    await user.click(screen.getByText('Entry 0'));
+    act(() => cell('Entry 0').focus());
+    await user.keyboard(' ');
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    // No item that select-all can change is selected.
+    expect(selectAll()).not.toBeChecked();
+    expect(selectAll()).not.toBePartiallyChecked();
+
+    await user.click(selectAll());
+    // Every selectable item, and '0', kept; '10' … '90' stay unselected.
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(
+      ALL_IDS.filter((_, index) => index === 0 || index % 10 !== 0),
+      DETAILS,
+    );
+    expect(selectAll()).toBeChecked();
+    await user.click(selectAll());
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['0'], DETAILS);
+    expect(first).toBeChecked();
+    expect(selectAll()).not.toBeChecked();
+    expect(selectAll()).not.toBePartiallyChecked();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('warns once when a rendered row’s selection cell disagrees with `isSelectionDisabled`; either one keeps the row out of select-all', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onSelectedItemsChange = vi.fn();
+    // '0' disables what the data allows, '1' allows what the data disables; '2' and '3' leave it
+    // to the data.
+    const cellDisabled: Record<string, boolean | undefined> = { '0': true, '1': false };
+    render(
+      <DataGrid
+        aria-label="Entries"
+        items={ENTRIES.slice(0, 4)}
+        getRowId={entryId}
+        selectionMode="multiple"
+        isSelectionDisabled={(entry) => entry.id === '1' || entry.id === '3'}
+        onSelectedItemsChange={onSelectedItemsChange}
+      >
+        <DataGrid.Header>
+          <tr>
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+            <DataGrid.SelectionCell />
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          {(entry: Entry) => (
+            <DataGrid.Row>
+              <DataGrid.Cell>{entry.name}</DataGrid.Cell>
+              <DataGrid.SelectionCell disabled={cellDisabled[entry.id]} />
+            </DataGrid.Row>
+          )}
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    expect(warn.mock.calls).toEqual([[selectionDisabledMismatch('0', 'disabled', 'enabled')]]);
+    // The control follows the row's cell.
+    expect(screen.getByRole('checkbox', { name: 'Entry 0' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Entry 1' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Entry 2' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Entry 3' })).toBeDisabled();
+    await user.click(selectAll());
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['2'], DETAILS);
+    expect(selectAll()).toBeChecked();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not warn when the rows’ selection cells agree with `isSelectionDisabled`, or without it', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const row = (entry: Entry, disabled: boolean) => (
+      <DataGrid.Row selectionCellProps={{ disabled }}>
+        <DataGrid.Cell>{entry.name}</DataGrid.Cell>
+      </DataGrid.Row>
+    );
+    render(
+      <>
+        <DataGrid
+          aria-label="Agreeing"
+          items={ENTRIES.slice(0, 3)}
+          getRowId={entryId}
+          selectionMode="multiple"
+          isSelectionDisabled={(entry) => entry.id === '1'}
+        >
+          <DataGrid.Body>{(entry: Entry) => row(entry, entry.id === '1')}</DataGrid.Body>
+        </DataGrid>
+        <DataGrid
+          aria-label="Without"
+          items={ENTRIES.slice(0, 3)}
+          getRowId={entryId}
+          selectionMode="multiple"
+        >
+          <DataGrid.Body>{(entry: Entry) => row(entry, entry.id === '2')}</DataGrid.Body>
+        </DataGrid>
+      </>,
+    );
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('keeps the one selected id of single mode when `items` changes, and replaces it on a click', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const grid = (items: readonly Entry[]) => (
+      <EntryGrid
+        items={items}
+        selectionMode="single"
+        selectOnRowClick
+        defaultSelectedItems={['50']}
+        onSelectedItemsChange={onSelectedItemsChange}
+      />
+    );
+    const { rerender } = render(grid(ENTRIES));
+    // '50' is not rendered.
+    expect(bodyRows().map((row) => row.getAttribute('aria-selected'))).not.toContain('true');
+    rerender(grid(SEVENS));
+    // Rendered again (the ten items from '45').
+    rerender(grid(ENTRIES.slice(45, 55)));
+    expect(screen.getByRole('radio', { name: 'Entry 50' })).toBeChecked();
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('radio', { name: 'Entry 47' }));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['47'], DETAILS);
+    expect(screen.getByRole('radio', { name: 'Entry 50' })).not.toBeChecked();
+    // A click on the selected row clears it, as without `items`.
+    await user.click(screen.getByText('Entry 47'));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith([], DETAILS);
+  });
+
+  it('selects only the first id in single mode, rendered or not, and warns once', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onSelectedItemsChange = vi.fn();
+    render(
+      <EntryGrid
+        selectionMode="single"
+        selectedItems={['50', '3']}
+        onSelectedItemsChange={onSelectedItemsChange}
+      />,
+    );
+    // '50' is the selected id; its row is not rendered, and row 3 is not selected.
+    expect(bodyRows().map((row) => row.getAttribute('aria-selected'))).not.toContain('true');
+    expect(screen.getByRole('radio', { name: 'Entry 3' })).not.toBeChecked();
+    await user.click(screen.getByRole('radio', { name: 'Entry 3' }));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3'], DETAILS);
+    expect(warn.mock.calls).toEqual([[SINGLE_SEVERAL_SELECTED]]);
+  });
+
+  it('types `isSelectionDisabled` by the items', () => {
+    expectTypeOf<DataGridProps<Entry>['isSelectionDisabled']>().toEqualTypeOf<
+      ((item: Entry, index: number) => boolean) | undefined
+    >();
+    const element = (
+      <DataGrid
+        aria-label="Entries"
+        items={ENTRIES}
+        isSelectionDisabled={(entry, index) => {
+          expectTypeOf(entry).toEqualTypeOf<Entry>();
+          expectTypeOf(index).toEqualTypeOf<number>();
+          return entry.id === '0';
+        }}
+      />
+    );
+    expect(element.props.items).toBe(ENTRIES);
+  });
+});
+
+describe('DataGrid stories', () => {
+  const { Paging } = composeStories(stories);
+
+  it('Paging keeps the selection of one page on the others; select-all covers the page shown', async () => {
+    const user = userEvent.setup();
+    render(<Paging />);
+    const status = screen.getByRole('status');
+    const selectAll = () => screen.getByRole('checkbox', { name: 'Select all rows' });
+    expect(status).toHaveTextContent('0 selected');
+    await user.click(screen.getByRole('checkbox', { name: 'Member 3' }));
+    expect(status).toHaveTextContent('1 selected');
+
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByRole('checkbox', { name: 'Member 21' })).not.toBeChecked();
+    expect(selectAll()).not.toBePartiallyChecked();
+    await user.click(selectAll());
+    expect(status).toHaveTextContent('21 selected');
+    expect(selectAll()).toBeChecked();
+
+    await user.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(screen.getByRole('checkbox', { name: 'Member 3' })).toBeChecked();
+    expect(selectAll()).toBePartiallyChecked();
+    await user.click(selectAll());
+    expect(status).toHaveTextContent('40 selected');
+    await user.click(selectAll());
+    // Only the page's members are cleared: page 2 stays selected.
+    expect(status).toHaveTextContent('20 selected');
+    expect(screen.getByRole('button', { name: 'Previous page' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 });
 

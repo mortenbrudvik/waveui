@@ -32,6 +32,7 @@ export type {
 } from './lib/breadcrumb';
 export { createTableColumn } from './lib/table';
 export type { CreateTableColumnOptions } from './lib/table';
+export type { ColumnSizingOption } from './lib/columnSizing';
 export { createToaster } from './lib/toaster';
 export type { ToasterHandle } from './lib/toaster';
 
@@ -64,6 +65,15 @@ export type {
   UsePresenceOptions,
   UsePresenceResult,
 } from './hooks/usePresence';
+export { useSelection } from './hooks/useSelection';
+export type {
+  UseSelectionChangeDetails,
+  UseSelectionOptions,
+  UseSelectionResult,
+} from './hooks/useSelection';
+export { useVirtualWindow } from './hooks/useVirtualWindow';
+export type { UseVirtualWindowOptions, VirtualWindow } from './hooks/useVirtualWindow';
+export type { VirtualEntry } from './lib/virtual';
 export { useActiveDescendant } from './hooks/useActiveDescendant';
 export type {
   UseActiveDescendantOptions,
@@ -120,6 +130,7 @@ export type {
   UseGridNavigationOptions,
   UseGridNavigationResult,
   GridNavigationHandlers,
+  GridNavigationModel,
 } from './components/table/useGridNavigation';
 export { getTabbableElements, getFirstTabbable, getLastTabbable } from './lib/focus';
 export { focusRing, focusRingInset, inputFocus, inputFocusWithin } from './lib/styles';

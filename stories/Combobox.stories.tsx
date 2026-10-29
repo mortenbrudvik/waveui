@@ -1,9 +1,19 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Combobox, Field, Option, OptionGroup, type ComboboxProps, type ListboxItem } from '../src';
+import {
+  Combobox,
+  Field,
+  Option,
+  OptionGroup,
+  useVirtualWindow,
+  type ComboboxProps,
+  type ListboxItem,
+} from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
+import { MountedOptions } from './_mountedOptions';
+import { PEOPLE, TEN_THOUSAND_PEOPLE } from './_people';
 
 const meta = {
   title: 'Components/Input/Combobox',
@@ -297,6 +307,67 @@ export const Invalid: Story = {
       </Combobox>
     </Field>
   ),
+};
+
+/**
+ * Data mode: the 500 options come from `items`, not from children. The input shows the selected
+ * person's label while the list is closed and no option is rendered; typing filters the items
+ * (try "an"), and each option carries its position among the shown ones.
+ */
+export const DataMode: Story = {
+  args: {
+    'aria-label': 'Person',
+    placeholder: 'Search 500 people...',
+    defaultValue: 'person-321',
+    items: PEOPLE,
+  },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    virtualWindow: { control: false },
+  },
+};
+
+/** The args of the windowed story: the Combobox's, and the window's option height. */
+type TenThousandOptionsArgs = ComboboxProps & {
+  /** The height of every option in pixels: `useVirtualWindow({ itemSize })`. */
+  itemSize: number;
+};
+
+/** A Combobox of 10,000 people, windowed by `useVirtualWindow`, with the mounted-option count. */
+function TenThousandCombobox({ itemSize, ...args }: TenThousandOptionsArgs) {
+  const virtualWindow = useVirtualWindow({ itemSize });
+  const [root, setRoot] = React.useState<HTMLDivElement | null>(null);
+  return (
+    <div className="flex flex-col gap-3">
+      <Combobox {...args} ref={setRoot} items={TEN_THOUSAND_PEOPLE} virtualWindow={virtualWindow} />
+      <MountedOptions scope={root} total={TEN_THOUSAND_PEOPLE.length} />
+    </div>
+  );
+}
+
+/**
+ * 10,000 options with `virtualWindow`: the open list renders only the options in view and a few
+ * beyond them, as the line below counts, every one 32 pixels tall. It opens on the selected person
+ * in the middle of the list; typing filters the 10,000 (try "oslo"), and the arrow keys reach the
+ * last one.
+ */
+export const TenThousandOptions: StoryObj<TenThousandOptionsArgs> = {
+  args: {
+    'aria-label': 'Person',
+    placeholder: 'Search 10,000 people...',
+    defaultValue: 'person-5000',
+    itemSize: 32,
+    style: { width: 300 },
+  },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    virtualWindow: { control: false },
+    // Heights an option fits in; a smaller one would overlap the options.
+    itemSize: { control: 'select', options: [32, 40, 48] },
+  },
+  render: (args) => <TenThousandCombobox {...args} />,
 };
 
 export const SizesAndAppearances: Story = {

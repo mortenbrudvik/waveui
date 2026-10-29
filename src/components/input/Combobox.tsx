@@ -23,12 +23,26 @@ import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { HiddenInput } from '../internal/HiddenInput';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
 import { insertedText, replacedText } from './Combobox.text';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
-import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
+import {
+  ListboxSurface,
+  Option,
+  OptionGroup,
+  useListboxPopup,
+  type ListboxOptionRenderState,
+} from './Option';
+import {
+  renderListboxItems,
+  renderListboxWindow,
+  useDataModeWarnings,
+  useItemsAndChildrenWarning,
+  useShownListScroll,
+} from './Option.data';
 import { announceToggle, defaultSelectionLabel, PickerAnnouncer } from './pickerLabels';
 import {
   pickerButtonOffset,
@@ -182,8 +196,9 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * keep options that do not contain the text: `filter={() => true}` with `query` and
    * `onQueryChange` leaves the matching to you (a server-side search that replaces the options),
    * and a filter that always keeps an option of your own gives a "Create …" entry. With a
-   * server-side search, keep the selected option among the children, `hidden` while the results
-   * leave it out: a value without an option shows no label (the "Async search" story does this).
+   * server-side search, keep the selected option among the children (or `items`), `hidden` while
+   * the results leave it out: a value without an option shows no label (the "Async search" story
+   * does this).
    * @default a case-insensitive substring match on the option's `textValue`, else its `label`
    */
   filter?: (option: ListboxItem, query: string) => boolean;
@@ -278,6 +293,51 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    */
   labels?: ComboboxLabels;
   /**
+   * Data mode: the options as data, in list order (`value`, `label`, and optionally `textValue`,
+   * `disabled` and `hidden`; values unique). The open list renders one option per item that is
+   * not `hidden` and that the typed text matches (`filter`, on `textValue ?? label` by default; see
+   * `renderOption`); the closed list renders none. The keys, the selection and the input's label
+   * text follow `items`, also for a selected item whose option is not rendered. The children are
+   * neither read nor rendered: passing both warns once in development. Each option gets
+   * `aria-posinset` and `aria-setsize` from its place among the shown items (typing narrows
+   * them), and keeps one id per value. Without it, the options are the `Option` children.
+   */
+  items?: readonly ListboxItem[];
+  /**
+   * Data mode: renders the option of an item, given its state (`selected`, `active`, and `index`
+   * among the shown options). Return an `Option`, or an option component of your own on
+   * `useListboxOption`, with the item's `value` (and its `disabled`); its position is set for you,
+   * and in a windowed list (`virtualWindow`) its height. It is called again only when the item, its
+   * state, its position (`aria-posinset` and `aria-setsize`, which typing changes) or the function
+   * itself changes, so pass a stable function in a long list. Ignored without `items`, with a
+   * development warning.
+   * @default an `Option` with the item's `value`, `label` (also its text), `textValue` and `disabled`
+   */
+  renderOption?: (item: ListboxItem, state: ListboxOptionRenderState) => React.ReactNode;
+  /**
+   * Data mode: renders only the options in view of a long list, plus an overscan, and spacers
+   * (`aria-hidden`, `data-virtual-spacer`) as tall as the options they stand for: pass the result
+   * of `useVirtualWindow({ itemSize })`, or an object of your own that implements `VirtualWindow`.
+   * It needs `items`: without them, or beside `OptionGroup` children, it is ignored with a
+   * development warning (a window renders a flat list).
+   *
+   * The open popup's list is the window's scroller, so it needs no height of yours: it scrolls
+   * within its own maximum height (15rem, 240 pixels at the default root size, less where the
+   * viewport has no room). Every option is exactly `itemSize` tall (the list sets its height,
+   * after the option's own `style`), so an option's content must fit in it: the default `Option`
+   * with one line of text is 32 pixels tall.
+   *
+   * The window counts the shown options: typing narrows it, as it narrows `aria-setsize`. The
+   * arrow keys move over all of them; the active option stays rendered while it is scrolled away,
+   * so `aria-activedescendant` always names an element, and when a key (or typing) makes it
+   * active the list and the window move to it in the same update. Opening the list scrolls the
+   * active option, else the first selected one, to the middle of the list, and again once the
+   * popup's positioning has given the list its height (a short viewport) unless it was scrolled
+   * first. A closed list renders no option. The browser's scroll anchoring is off on a windowed
+   * list (the window lays the options out).
+   */
+  virtualWindow?: VirtualWindow;
+  /**
    * Called when the `<input role="combobox">` receives focus (the root keeps other handlers).
    * With `multiselect`, a focus while the input shows the selected labels then selects them;
    * `event.preventDefault()` skips that.
@@ -326,6 +386,9 @@ const HISTORY_EDITS: ReadonlySet<string> = new Set(['historyUndo', 'historyRedo'
  */
 type LockState = 'unlocked' | 'locked' | 'mounted-locked';
 
+/** The labels read from the children in data mode, where none are read. */
+const NO_LABELS: ReadonlyMap<string, string> = new Map<string, string>();
+
 /** The default `filter` (0.7's match): a case-insensitive substring of `textValue ?? label`. */
 function matchesText(item: ListboxItem, text: string): boolean {
   return (item.textValue ?? item.label).toLowerCase().includes(text.toLowerCase());
@@ -364,6 +427,9 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     clearable = false,
     expandIcon,
     labels,
+    items,
+    renderOption,
+    virtualWindow,
     inputMode,
     spellCheck,
     enterKeyHint,
@@ -509,7 +575,16 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const optionLabels = React.useMemo(() => collectOptionLabels(children), [children]);
+  // Data mode reads every label from `items` (listbox.getItem), so the children are not walked.
+  const dataMode = items !== undefined;
+  const optionLabels = React.useMemo<ReadonlyMap<string, string>>(
+    () => (dataMode ? NO_LABELS : collectOptionLabels(children)),
+    [dataMode, children],
+  );
+  useItemsAndChildrenWarning('Combobox', items, children);
+  useDataModeWarnings('Combobox', { items, renderOption, virtualWindow, children });
+  // A window renders data mode only.
+  const activeWindow = dataMode ? virtualWindow : undefined;
   // useListbox's navigability predicate: `filter` (else the 0.7 match) bound to the typed text,
   // while there is any (D13).
   const filterText = draft ?? '';
@@ -572,6 +647,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     mode: 'editable',
     multiselect,
     disabledOptionsFocusable,
+    items,
     selectedValues: values,
     onSelect: (next, details) => {
       if (!multiselect) {
@@ -607,6 +683,11 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     // option.
     autoHighlight: !freeform && draft ? 'first' : false,
     onActiveValueChange: onActiveOptionChange,
+    // An active option that the window does not render (an adapter that keeps nothing): scrolled
+    // to by its index among the shown options, the window's count.
+    onScrollToItem: activeWindow
+      ? (index) => activeWindow.scrollToIndex(index, { align: 'auto' })
+      : undefined,
     idPrefix: 'combobox-listbox',
     onClearDraft: clearDraft,
   });
@@ -655,6 +736,12 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
 
   const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
   const inputMergedRef = useMergedRefs<HTMLInputElement>(inputRef, controlRef, setReference);
+  // The window scrolls the shown list only, which mounts with the popup (C-POPUPS: the window
+  // holds it in state); the closed list in place is another, hidden element.
+  const listScrollRef = useMergedRefs<HTMLUListElement>(
+    expanded ? activeWindow?.scrollRef : undefined,
+  );
+  useShownListScroll(expanded, activeWindow, listbox.items, listbox.activeValue, values);
 
   useFormReset(
     inputRef,
@@ -821,6 +908,13 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       ? (fieldProps['aria-labelledby'] ?? field?.labelId)
       : fieldProps['aria-labelledby'];
 
+  // What every option of data mode is drawn from, besides its item.
+  const optionsState = {
+    selected: new Set(values),
+    activeValue: listbox.activeValue,
+    renderOption,
+  };
+
   return (
     <div
       data-size={size}
@@ -929,7 +1023,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         floatingProps={floatingProps}
         open={open}
         expanded={expanded}
-        listClassName={comboboxClassNames.listbox}
+        // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
+        listClassName={cn(comboboxClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
         surfaceClassName={comboboxClassNames.surface}
         emptyContent={
           draft ? (
@@ -946,8 +1041,21 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         }
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
+        listProps={activeWindow ? { ref: listScrollRef } : undefined}
       >
-        {children}
+        {/* Data mode: the options of the shown items while the list shows (labels come from
+            `items`, so a closed list needs none), or the window's; the children are ignored. */}
+        {!dataMode
+          ? children
+          : expanded &&
+            (activeWindow
+              ? renderListboxWindow(
+                  listbox.items,
+                  activeWindow,
+                  optionsState,
+                  comboboxClassNames.spacer,
+                )
+              : renderListboxItems(listbox.items, optionsState))}
       </ListboxSurface>
       <HiddenInput
         name={name}
@@ -998,6 +1106,15 @@ export const ComboboxOptionGroup = OptionGroup;
  * edit the text: the options, the clear button (which clears every value) and a form reset change
  * the value. `freeform` is not available with `multiselect`, and a non-literal
  * `multiselect={flag}` is a type error: render two elements, one for each mode.
+ *
+ * **Data mode**: `items` passes the options as data instead of children. The open list renders an
+ * option per matching item (`renderOption` draws it, an `Option` with the item's label by
+ * default) and the closed list none; the keys, the filter and the input's text follow the data,
+ * and each option carries `aria-posinset` and `aria-setsize` among the shown options. A long list
+ * takes a `virtualWindow` (from `useVirtualWindow({ itemSize })`): the open list then renders only
+ * the options in view, plus an overscan, with spacers for the others, every option `itemSize`
+ * tall; the active option stays rendered, and opening scrolls it (else the first selected option)
+ * to the middle of the list.
  *
  * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,

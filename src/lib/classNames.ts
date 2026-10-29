@@ -284,8 +284,12 @@ export const infoLabelClassNames = {
 /** Image: `root` on the `<img>`. */
 export const imageClassNames = { root: 'wave-image' } as const;
 
-/** List: `root` on the `<ul>` (the `role="grid"` element of a selectable list with actions). */
-export const listClassNames = { root: 'wave-list' } as const;
+/**
+ * List: `root` on the `<ul>` (the `role="grid"` element of a selectable list with actions);
+ * `spacer` on each spacer element of a list with a `virtualWindow` (the elements that stand in for
+ * the items that are not rendered).
+ */
+export const listClassNames = { root: 'wave-list', spacer: 'wave-list__spacer' } as const;
 
 /**
  * List.Item: `root` on the `<li>` (the `role="row"` element of a grid list); `content` on the
@@ -537,8 +541,12 @@ export const optionGroupClassNames = {
   list: 'wave-option-group__list',
 } as const;
 
-/** Listbox: `root` on the `role="listbox"` list (its options carry Option's classes). */
-export const listboxClassNames = { root: 'wave-listbox' } as const;
+/**
+ * Listbox: `root` on the `role="listbox"` list (its options carry Option's classes); `spacer` on
+ * each spacer element of a list with a `virtualWindow` (the elements that stand in for the options
+ * that are not rendered).
+ */
+export const listboxClassNames = { root: 'wave-listbox', spacer: 'wave-listbox__spacer' } as const;
 
 /**
  * ListboxSurface: `root` on the portaled popup around the list, while it shows the list or the
@@ -555,7 +563,8 @@ export const listboxSurfaceClassNames = {
  * Combobox: `root` on the outer element; `input` on the `role="combobox"` input; `clearButton` on
  * the clear button; `expandButton` on the expand button and `expandIcon` on its glyph; `listbox`
  * on the `role="listbox"` list; `surface` on its portaled popup; `emptyMessage` on the
- * "No matches" row.
+ * "No matches" row; `spacer` on each spacer element of the list with a `virtualWindow` (the
+ * elements that stand in for the options that are not rendered).
  */
 export const comboboxClassNames = {
   root: 'wave-combobox',
@@ -566,12 +575,15 @@ export const comboboxClassNames = {
   listbox: 'wave-combobox__listbox',
   surface: 'wave-combobox__surface',
   emptyMessage: 'wave-combobox__empty-message',
+  spacer: 'wave-combobox__spacer',
 } as const;
 
 /**
  * Dropdown: `root` on the outer element; `button` on the `role="combobox"` button; `value` on the
  * value or placeholder span; `expandIcon` on the chevron `<svg>`; `clearButton` on the clear
- * button; `listbox` on the `role="listbox"` list; `surface` on its portaled popup.
+ * button; `listbox` on the `role="listbox"` list; `surface` on its portaled popup; `spacer` on
+ * each spacer element of the list with a `virtualWindow` (the elements that stand in for the
+ * options that are not rendered).
  */
 export const dropdownClassNames = {
   root: 'wave-dropdown',
@@ -581,6 +593,7 @@ export const dropdownClassNames = {
   clearButton: 'wave-dropdown__clear-button',
   listbox: 'wave-dropdown__listbox',
   surface: 'wave-dropdown__surface',
+  spacer: 'wave-dropdown__spacer',
 } as const;
 
 /**
@@ -978,6 +991,29 @@ export const treeItemPersonaLayoutClassNames = {
   media: 'wave-tree-item-persona-layout__media',
   main: 'wave-tree-item-persona-layout__main',
   description: 'wave-tree-item-persona-layout__description',
+} as const;
+
+/**
+ * FlatTree: `root` on the `role="tree"` element (the scrolling element of a tree with a
+ * `virtualWindow`); `spacer` on each spacer element of a windowed tree (the elements that stand in
+ * for the items that are not rendered, 0.16).
+ */
+export const flatTreeClassNames = {
+  root: 'wave-flat-tree',
+  spacer: 'wave-flat-tree__spacer',
+} as const;
+
+/**
+ * FlatTree.Item: `root` on the `role="treeitem"` element; `row` on its row; `expandIcon` on the
+ * chevron of a branch; `indicator` on the checkbox of a multi-select tree or the radio of a
+ * single-select one; `label` on the span around the item's content (0.16).
+ */
+export const flatTreeItemClassNames = {
+  root: 'wave-flat-tree-item',
+  row: 'wave-flat-tree-item__row',
+  expandIcon: 'wave-flat-tree-item__expand-icon',
+  indicator: 'wave-flat-tree-item__indicator',
+  label: 'wave-flat-tree-item__label',
 } as const;
 
 /**
@@ -1546,10 +1582,21 @@ export const tableCellLayoutClassNames = {
 /** Table.CellActions: `root` on the element that holds the actions. */
 export const tableCellActionsClassNames = { root: 'wave-table-cell-actions' } as const;
 
-/** DataGrid: `root` on the grid element (`role="grid"`); `container` on the wrapper around it. */
+/**
+ * Table.ResizeHandle: `root` on the separator element that resizes a column (placed in the `aside`
+ * of a header cell).
+ */
+export const tableResizeHandleClassNames = { root: 'wave-table-resize-handle' } as const;
+
+/**
+ * DataGrid: `root` on the grid element (`role="grid"`); `container` on the wrapper around it;
+ * `spacer` on each spacer row of a grid with a `virtualWindow` (the rows that stand in for the
+ * rows that are not rendered).
+ */
 export const dataGridClassNames = {
   root: 'wave-data-grid',
   container: 'wave-data-grid__container',
+  spacer: 'wave-data-grid__spacer',
 } as const;
 
 /**
@@ -1564,12 +1611,14 @@ export const dataGridHeaderClassNames = {
 
 /**
  * DataGrid.HeaderCell: `root` on the `<th>`; `button` on the sort button; `sortIcon` on its
- * direction glyph (the default arrow `<svg>`, or the `<span>` of a `sortIcon` slot).
+ * direction glyph (the default arrow `<svg>`, or the `<span>` of a `sortIcon` slot);
+ * `resizeHandle` on the column's resize handle (a `Table.ResizeHandle`, with resizable columns).
  */
 export const dataGridHeaderCellClassNames = {
   root: 'wave-data-grid-header-cell',
   button: 'wave-data-grid-header-cell__button',
   sortIcon: 'wave-data-grid-header-cell__sort-icon',
+  resizeHandle: 'wave-data-grid-header-cell__resize-handle',
 } as const;
 
 /** DataGrid.Body: `root` on the `<tbody>`. */

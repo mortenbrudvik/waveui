@@ -24,6 +24,8 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { AvatarSizeContext } from '../data-display/Avatar.context';
 import type { AvatarSizeContextValue } from '../data-display/Avatar.context';
+import { TableResizeHandle } from './Table.resize';
+import type { TableResizeHandleProps } from './Table.resize';
 import { SELECTION_CELL_CLASSES, TableSelectionControl, TableSortButton } from './Table.shared';
 import type { SortDirection } from './Table.shared';
 
@@ -799,7 +801,9 @@ export {
   TableSelectionCell,
   TableCellLayout,
   TableCellActions,
+  TableResizeHandle,
 };
+export type { TableResizeHandleProps };
 
 /**
  * A non-interactive data table with an optional striped body. The table sits in a horizontally
@@ -812,11 +816,12 @@ export {
  * `Table.CellActions` shows a cell's actions while its row is hovered or holds focus.
  *
  * Sub-components are available as `Table.Header`, `Table.HeaderCell`, `Table.Body`, `Table.Row`,
- * `Table.Cell`, `Table.SelectionCell`, `Table.CellLayout` and `Table.CellActions` in client
+ * `Table.Cell`, `Table.SelectionCell`, `Table.CellLayout`, `Table.CellActions` and
+ * `Table.ResizeHandle` (the separator that resizes a column, for a header cell's `aside`) in client
  * components, and as the flat exports `TableHeader`, `TableHeaderCell`, `TableBody`, `TableRow`,
- * `TableCell`, `TableSelectionCell`, `TableCellLayout` and `TableCellActions` (the form React
- * Server Components can import). `Table.Head`/`Table.HeadCell` (`TableHead`/`TableHeadCell`) are
- * deprecated aliases.
+ * `TableCell`, `TableSelectionCell`, `TableCellLayout`, `TableCellActions` and
+ * `TableResizeHandle` (the form React Server Components can import). `Table.Head`/`Table.HeadCell`
+ * (`TableHead`/`TableHeadCell`) are deprecated aliases.
  */
 export const Table = /* @__PURE__ */ Object.assign(TableRoot, {
   Header: TableHeader,
@@ -831,4 +836,5 @@ export const Table = /* @__PURE__ */ Object.assign(TableRoot, {
   SelectionCell: TableSelectionCell,
   CellLayout: TableCellLayout,
   CellActions: TableCellActions,
+  ResizeHandle: TableResizeHandle,
 });

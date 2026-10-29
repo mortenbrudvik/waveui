@@ -58,6 +58,7 @@ export {
   type ListboxComponent,
 } from './Listbox';
 export {
+  type ListboxOptionRenderState,
   ListboxProvider,
   type ListboxProviderProps,
   ListboxSurface,

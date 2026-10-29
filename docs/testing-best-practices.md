@@ -702,7 +702,7 @@ Keep it a pure pass-through: the mock replaces React for the whole test file.
 
 ### Pure models: the tree cascade
 
-`Tree.selection.ts` holds the cascade as pure functions (`collectItems`, `computeCheckStates`, `toggleCheck`). Test them without rendering: build the item tree from JSX children, then assert the state map and the emitted arrays (tree order, fully checked parents included, unmatched values kept at the end). Render only for what the model cannot show: the attributes, the keys and the callback.
+The cascade is pure functions: `computeCheckStates` and `toggleCheck` in `src/lib/treeCascade.ts` (since 0.16; `Tree.selection.ts` re-exports them and keeps `collectItems`, which builds the nodes from JSX children), shared by Tree and `useFlatTree`. Test them without rendering: build the node tree (from JSX children with `collectItems`, or as literal `TreeNode`s, as `src/lib/__tests__/treeCascade.test.ts` does), then assert the state map and the emitted arrays (tree order, fully checked parents included, unmatched values kept at the end). `src/lib/flatTree.ts` (the flat index, the visible rows, the forest for the cascade) is tested the same way, with table tests over issues (duplicates, unknown parents, cycles) and a chain thousands of levels deep, since every walk there is iterative. Render only for what the model cannot show: the attributes, the keys and the callback.
 
 ### Active-descendant widgets: `aria-activedescendant` and `data-active`
 
@@ -750,6 +750,62 @@ it('has an active option only while focused, and the keys move it', async () => 
 - **Callbacks.** `onActiveOptionChange` (and the hooks' `onActiveValueChange`) report every change after the commit, `null` included when the list closes or loses focus: assert the whole sequence (`expect(onActiveOptionChange.mock.calls).toEqual([['apple'], ['cherry'], [null]])`), and once per change in StrictMode.
 - **The hook alone.** `useActiveDescendant.test.tsx` renders a probe component that hands the hook's result out through `useImperativeHandle` (`resultRef`) and calls its methods in `act()`, as `useListbox.test.tsx`'s `Picker` does.
 - **Server HTML.** A closed picker or an unfocused Listbox renders no `aria-activedescendant`; `findDanglingIdRefsInHtml(renderToString(…))` fails on one that points at no element.
+
+### Windowed components: a window without layout
+
+DataGrid, List, Listbox, Combobox, Dropdown and FlatTree with a `virtualWindow` render the items of `useVirtualWindow`'s `layout`, which jsdom cannot drive by itself: it has no layout, so every `clientHeight` and `scrollHeight` is 0 (the window then lays out its `initialViewportSize`, 480 pixels), and the window reads a scroll in an animation frame. The suites (`DataGrid.virtual.test.tsx`, `List.virtual.test.tsx`, `FlatTree.virtual.test.tsx`, the three `*.data.test.tsx` picker suites on `src/components/input/__tests__/windowHarness.tsx`, `useVirtualWindow.test.tsx`) stub the scroller and run the frames by hand:
+
+```tsx
+const frames = new Map<number, FrameRequestCallback>();
+let nextFrameId = 1;
+const isScroller = (el: Element) => el.classList.contains(dataGridClassNames.container);
+
+beforeEach(() => {
+  vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback) => {
+    const id = nextFrameId++;
+    frames.set(id, callback);
+    return id;
+  });
+  vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
+    frames.delete(id);
+  });
+  vi.spyOn(Element.prototype, 'clientHeight', 'get').mockImplementation(function (this: Element) {
+    return isScroller(this) ? 480 : 0;
+  });
+  vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockImplementation(function (this: Element) {
+    return isScroller(this) ? 44 + 10_000 * 44 : 0; // the header and every row
+  });
+});
+afterEach(() => vi.restoreAllMocks());
+
+/** Runs the frames requested so far (the window reads a scroll in a frame), inside `act`. */
+function runFrames() {
+  act(() => {
+    const pending = [...frames.values()];
+    frames.clear();
+    for (const callback of pending) callback(performance.now());
+  });
+}
+
+/** Sets the scroller's `scrollTop`, fires `scroll` and runs the window's frame. */
+function scrollTo(scroller: HTMLElement, top: number) {
+  act(() => {
+    scroller.scrollTop = top;
+    fireEvent.scroll(scroller);
+  });
+  runFrames();
+}
+```
+
+- **Stub the scroller only.** Match it by its stable class (`dataGridClassNames.container`), its role (`role="listbox"` for the pickers) or the element you render, and return 0 for every other element. A `scrollHeight` that follows the content (the picker harness sums the inline heights of the list's children) bounds `scrollToIndex` as a browser does; without one only the start bounds it.
+- **Count the mounted items against the budget** (spec §11 of Phase 11): `rows.length` `toBeLessThanOrEqual(30)` for a DataGrid of 10,000 rows (body rows are `tr[data-row-index]`, spacers `[data-virtual-spacer]`), 30 options for a picker, 40 items for a List or a tree, at the top, in the middle and with a kept item outside the window. Assert the order of items and spacers (`['spacer', ...range(9987, 10001)]`) and that the sizes add up to `count * itemSize`.
+- **Never mount all 10,000.** A test that does not need the window still renders few items (the axe cases of the data suites audit `ITEMS.slice(0, 20)`), and a windowed test always passes the window: 10,000 mounted rows make a suite slow and an axe run time out.
+- **`keep`.** Scroll a focused item away and back and assert it stays mounted (one extra entry between two spacers) and keeps focus and the Tab stop. To prove what a component does when an adapter ignores `keep`, wrap the real window and drop the option (`useTestWindow({ keep: false })` in the picker harness); to see the scroll requests, wrap `scrollToIndex` with a spy (`onScrollToIndex`) and assert the exact `[index, { align }]` list.
+- **Keys to an item that is not rendered** move the window in the key's own update: assert `scrollTop`, the mounted order and focus (or `aria-activedescendant`) right after the key, with no simulated scroll event in between. Keys pressed with `fireEvent` in one task land before the commit; separate them with `await act(async () => {})` or use `userEvent`.
+- **Positions:** assert `aria-rowcount`/`aria-rowindex`, `aria-setsize`/`aria-posinset` and `data-row-index`/`data-index` from the data (sorted order, filtered count), never from the DOM position.
+- **One render per row boundary.** Count the host's renders across scroll events inside one row (no render) and across a boundary (one), as `useVirtualWindow.test.tsx` does; the stories' readouts ("Mounted rows: N of 10,000") follow the DOM with a `MutationObserver` through `useSyncExternalStore`.
+- **Server HTML** of a windowed component holds the first window of the 480-pixel default viewport; render it with `renderToString`, hydrate it in a container you append and remove yourself, and assert that hydration logs nothing.
+- **What jsdom cannot show** (row heights, the sticky header, scroll anchoring, blank frames, the timings of §11) belongs to the phase spec's real-browser checklist. jsdom's `scrollIntoView` is the setup's no-op stub: a test of the least scroll a List makes before focusing a rendered target stubs it with a function that sets `scrollTop`.
 
 ### Tags, drawers and the app shell
 

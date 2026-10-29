@@ -14,6 +14,7 @@ import {
   tableClassNames,
   tableHeaderCellClassNames,
   tableHeaderClassNames,
+  tableResizeHandleClassNames,
   tableRowClassNames,
 } from '../../../lib/classNames';
 import { DataGrid } from '../DataGrid';
@@ -57,6 +58,29 @@ describe('stable class names (P3-00): table folder', () => {
     expect(table.querySelector('tbody')).toHaveClass(tableBodyClassNames.root);
     for (const row of screen.getAllByRole('row')) expect(row).toHaveClass(tableRowClassNames.root);
     expect(screen.getByRole('cell', { name: 'Tea' })).toHaveClass(tableCellClassNames.root);
+  });
+
+  it('Table.ResizeHandle: root, in a header cell and in the server HTML', () => {
+    render(
+      <Table>
+        <Table.Header>
+          <Table.Row>
+            <Table.HeaderCell aside={<Table.ResizeHandle width={200} onResize={() => {}} />}>
+              Item
+            </Table.HeaderCell>
+          </Table.Row>
+        </Table.Header>
+      </Table>,
+    );
+    const handle = within(screen.getByRole('columnheader', { name: /^Item/ })).getByRole(
+      'separator',
+      { name: 'Resize column' },
+    );
+    expect(handle).toHaveClass(tableResizeHandleClassNames.root);
+    const host = parseServerHtml(
+      renderToString(<Table.ResizeHandle width={200} onResize={() => {}} />),
+    );
+    expect(host.querySelector('[role="separator"]')).toHaveClass(tableResizeHandleClassNames.root);
   });
 
   it('the deprecated Table.Head and Table.HeadCell carry the classes of their replacements', () => {

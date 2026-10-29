@@ -16,7 +16,8 @@ import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
+import { ownsArrowKeys, useRovingTabIndex } from '../../hooks/useRovingTabIndex';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { ListRegistry, type ListFocusLoss } from './List.registry';
 
 /** Selection modes of {@link List}: the shared `SelectionMode` plus the deprecated `'multi'`. */
@@ -40,9 +41,75 @@ export type ListItemActionEvent = React.MouseEvent<HTMLElement> | React.Keyboard
  * `selectionMode="multiple"` is passed; `ListProps` without a type argument accepts every mode
  * (the 0.4 shape, extendable by interfaces).
  */
-export interface ListProps<
-  M extends ListSelectionMode = ListSelectionMode,
-> extends React.HTMLAttributes<HTMLUListElement> {
+export interface ListProps<M extends ListSelectionMode = ListSelectionMode> extends Omit<
+  React.HTMLAttributes<HTMLUListElement>,
+  'children'
+> {
+  /**
+   * The items: `List.Item` elements. In a windowed list (`virtualWindow` and `count`), a function
+   * `(index) => <List.Item … />` that returns the item at an index: the list calls it for the
+   * rendered indexes only and keys each item by its index. Without `virtualWindow` and `count` a
+   * function renders nothing (a development warning says so).
+   */
+  children?: React.ReactNode | ((index: number) => React.ReactNode);
+  /**
+   * Renders only the items in view, plus an overscan, of a long list: pass the result of
+   * `useVirtualWindow({ itemSize })` (or an object of your own that implements `VirtualWindow`)
+   * with `count`, and a function child that returns the `List.Item` at an index. The items that
+   * are not rendered are replaced by spacers (`aria-hidden`, `data-virtual-spacer`) of their
+   * height.
+   *
+   * The list element becomes the window's scroller (it scrolls vertically, without the browser's
+   * scroll anchoring): give it a bounded height, a height or a maximum height (a class or a style);
+   * without one the window measures the whole list and renders every item. Where the list
+   * navigates its items, one item is its Tab stop and the list element is none of its own
+   * (`tabIndex` -1, as Firefox would stop on a scroller); a plain windowed list keeps the browser's
+   * default, under which WebKit does not let the keyboard reach and scroll it: pass `tabIndex={0}`
+   * or navigate its items (`navigationMode="items"`). A `tabIndex` you pass wins.
+   *
+   * Every item has the window's `itemSize` as its height (the list sets it, after the item's own
+   * `style`), so an item's content must fit in it. Each item carries `data-index` (its 0-based
+   * index) and its place in the whole list: `aria-setsize` and `aria-posinset`, or in a grid
+   * (`navigationMode="composite"`) the list's `aria-rowcount` and the row's `aria-rowindex`.
+   *
+   * The item that has focus stays rendered when it is scrolled away (also while focus is in a
+   * popup it opened), so it keeps focus, and while focus is in the list it is the list's Tab stop.
+   * Once focus leaves the list it is no longer kept, and the Tab stop follows the rule of a list
+   * without focus among the rendered items (the first selected item, else the first item; in a
+   * list without selection the item that last had focus while it is rendered). When `count` drops
+   * to or below the focused item, focus moves to the last item.
+   *
+   * The keys move by index over the whole list, rendered or not, where the list navigates its
+   * items (`navigationMode` `'items'` or `'composite'`, or a selectable list): ArrowUp/ArrowDown
+   * (wrapping at the ends), Home/End, and PageUp/PageDown, which move ten items and stop at the
+   * ends. The target is scrolled into view before it is focused, the least that shows it whole: a
+   * rendered one by the browser (`scrollIntoView`, nearest), which the window follows, one that is
+   * not rendered through the window's `scrollToIndex`, and focused once it renders. An item that a
+   * pointer press focuses is not scrolled. Typeahead matches the labels of the rendered items
+   * only.
+   *
+   * Selection covers every value: the values of items that are not rendered stay selected, and
+   * `onSelectionChange` reports them (a list without a window drops the values of items it no
+   * longer renders).
+   *
+   * The structure never depends on which items are rendered: a selectable windowed list stays a
+   * listbox (its items are options) unless `navigationMode="composite"` makes it a grid from the
+   * first render, so scrolling never replaces the list element (which would reset its scroll
+   * position and remount every item). Its items' actions do not switch it to a grid as they do in
+   * a list without a window: an item with an action in a selectable windowed list without that
+   * pin is a development warning, since an option cannot hold interactive content. Pin
+   * `navigationMode="composite"` when items have actions.
+   *
+   * Applies only with `count` and a function child; otherwise it is ignored, with a development
+   * warning.
+   */
+  virtualWindow?: VirtualWindow;
+  /**
+   * The number of items of a windowed list (with `virtualWindow`): the function child is called
+   * for the indexes from 0 to `count - 1` that are rendered. A value that is not a whole number
+   * counts as its whole part, and one below 0 (or not finite) as 0.
+   */
+  count?: number;
   /** Whether list items can be selected.
    * @default false
    */
@@ -89,7 +156,10 @@ export interface ListProps<
    *   the Tab order. The rows of a list without selection carry no `aria-selected`.
    *
    * The resolved mode is rendered as `data-navigation-mode`. Changing it while mounted can switch
-   * between `ul`/`li` and `div` elements, which remounts the items (see {@link List}).
+   * between `ul`/`li` and `div` elements, which remounts the items (see {@link List}). A windowed
+   * list (`virtualWindow`) never switches for its items' actions: unset or `'items'`, a selectable
+   * one is a listbox; only `'composite'` makes it a grid. In a windowed list the keys move by
+   * index over the whole list, PageUp/PageDown included (see `virtualWindow`).
    */
   navigationMode?: ListNavigationMode;
   /**
@@ -163,8 +233,18 @@ export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
 /**
  * The list's structure: `list` (`ul`/`li`, `role="list"`), `listbox` (selectable, `option`s) or
  * `grid` (`div`s with `row`s: a selectable list with item actions, or `navigationMode="composite"`).
+ * The structure of a windowed list does not depend on its rendered items' actions, so a windowed
+ * selectable list is a grid only with `navigationMode="composite"`.
  */
 type ListMode = 'list' | 'listbox' | 'grid';
+
+/** The window of a windowed list, as its items read it. */
+interface ListWindow {
+  /** The number of items of the whole list (`count`). */
+  count: number;
+  /** The height of every item, in pixels (the window's `itemSize`). */
+  itemSize: number;
+}
 
 interface ListContextValue {
   mode: ListMode;
@@ -178,10 +258,19 @@ interface ListContextValue {
   toggleItem: (value: string) => void;
   getTabIndex: (value: string) => 0 | -1;
   registry: ListRegistry;
+  /** The window of a windowed list; `null` in a list that renders every item. */
+  listWindow: ListWindow | null;
 }
 
 const ListContext = React.createContext<ListContextValue | null>(null);
 ListContext.displayName = 'ListContext';
+
+/**
+ * The index of the item around it in a windowed list (the List provides one per rendered item);
+ * `null` outside a windowed list.
+ */
+const ListItemIndexContext = React.createContext<number | null>(null);
+ListItemIndexContext.displayName = 'ListItemIndexContext';
 
 let inertContext: ListContextValue | null = null;
 
@@ -195,6 +284,7 @@ function getInertContext(): ListContextValue {
     toggleItem: () => {},
     getTabIndex: () => -1,
     registry: new ListRegistry(),
+    listWindow: null,
   };
   return inertContext;
 }
@@ -324,29 +414,170 @@ function getItemIndex(item: HTMLElement): number {
   return index;
 }
 
+/** The element that takes focus for an item: the item itself, else its first focusable content. */
+function getItemFocusTarget(item: HTMLElement): HTMLElement | null {
+  return item.hasAttribute('tabindex') ? item : (getFocusables(item)[0] ?? null);
+}
+
 /**
  * Where focus goes after the items remounted: the item with the same explicit value, else the item
  * now at the same position (the next one when the focused item itself was removed), else the last.
- * An item that cannot take focus itself (a plain list item) passes it to its first focusable
- * descendant.
+ * The position is the item's place among the root's children, or in a windowed list (`windowed`)
+ * its index (`data-index`; the spacers are no items). An item that cannot take focus itself (a
+ * plain list item) passes it to its first focusable descendant.
  */
-function getFocusRestoreTarget(root: HTMLElement, loss: ListFocusLoss): HTMLElement | null {
+function getFocusRestoreTarget(
+  root: HTMLElement,
+  loss: ListFocusLoss,
+  windowed: boolean,
+): HTMLElement | null {
   let byValue: Element | null = null;
   let atIndex: Element | null = null;
   let last: Element | null = null;
   let index = 0;
   for (let el = root.firstElementChild; el; el = el.nextElementSibling, index++) {
+    const position = windowed ? getIndexAttribute(el) : index;
+    if (position === null) continue;
     if (loss.value !== undefined && el.getAttribute('data-roving-value') === loss.value) {
       byValue = el;
       break;
     }
-    if (index === loss.index) atIndex = el;
+    if (position === loss.index) atIndex = el;
     last = el;
   }
   const item = (byValue ?? atIndex ?? (loss.index >= 0 ? last : null)) as HTMLElement | null;
-  if (!item) return null;
-  return item.hasAttribute('tabindex') ? item : (getFocusables(item)[0] ?? null);
+  return item ? getItemFocusTarget(item) : null;
 }
+
+/** A windowed list's `count` as a whole number of 0 or more (`NaN`, infinite and negative: 0). */
+function toItemCount(count: number | undefined): number {
+  return count !== undefined && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+}
+
+/** The indexes a windowed list keeps rendered outside its window, the unset ones left out. */
+function keptIndexes(...indexes: readonly (number | null)[]): readonly number[] {
+  return indexes.filter((index): index is number => index !== null);
+}
+
+/** The index an item element of a windowed list carries (`data-index`); `null` for a spacer. */
+function getIndexAttribute(el: Element): number | null {
+  const value = el.getAttribute('data-index');
+  return value !== null && /^\d+$/.test(value) ? Number(value) : null;
+}
+
+/**
+ * The `data-index` of the item of a windowed list (an element child of `root`) that holds
+ * `target`; `null` for the root itself and for a target outside its DOM (a portal's, C-COMPOSE).
+ */
+function getWindowItemIndex(root: Element, target: EventTarget): number | null {
+  let el = target instanceof Element ? target : null;
+  while (el && el.parentElement !== root) el = el.parentElement;
+  return el ? getIndexAttribute(el) : null;
+}
+
+/** The rendered item of a windowed list at `index`, or `null` when it is not rendered. */
+function getWindowItem(root: Element, index: number): HTMLElement | null {
+  for (let el = root.firstElementChild; el; el = el.nextElementSibling) {
+    if (getIndexAttribute(el) === index) return el as HTMLElement;
+  }
+  return null;
+}
+
+/**
+ * How many items PageUp and PageDown move in a windowed list: the APG listbox's ten (a
+ * `VirtualWindow` exposes no viewport size), as DataGrid's rows.
+ */
+const WINDOW_PAGE_SIZE = 10;
+
+/**
+ * The index a key moves to in a windowed list of `count` items (1 or more), from the item at
+ * `from` (`null`: from the list element itself), or `undefined` for a key that does not move by
+ * index. The arrows wrap around the ends as the roving tab index does; PageUp and PageDown stop
+ * at them.
+ */
+function getWindowKeyTarget(key: string, from: number | null, count: number): number | undefined {
+  const last = count - 1;
+  const at = from === null ? null : Math.min(from, last);
+  switch (key) {
+    case 'ArrowDown':
+      return at === null || at === last ? 0 : at + 1;
+    case 'ArrowUp':
+      return at === null || at === 0 ? last : at - 1;
+    case 'PageDown':
+      return at === null ? 0 : Math.min(at + WINDOW_PAGE_SIZE, last);
+    case 'PageUp':
+      return at === null ? last : Math.max(at - WINDOW_PAGE_SIZE, 0);
+    case 'Home':
+      return 0;
+    case 'End':
+      return last;
+    default:
+      return undefined;
+  }
+}
+
+/** The focused and the awaited item of a windowed list (see {@link WindowFocusStore}). */
+interface WindowFocus {
+  /**
+   * The index of the item that has focus, or holds it while focus is in a popup it opened: kept
+   * rendered, and the Tab stop. `null` while focus is outside the list.
+   */
+  focused: number | null;
+  /**
+   * The index a key moved to that was not rendered: scrolled into view, kept rendered, and
+   * focused after the commit that renders it.
+   */
+  pending: number | null;
+}
+
+const NO_WINDOW_FOCUS: WindowFocus = { focused: null, pending: null };
+
+/**
+ * The focused and the awaited item of a windowed list, read during render through
+ * `useSyncExternalStore` and written by the List's handlers and layout effects (C-HOOKS: no state
+ * set in an effect, no ref read during render).
+ */
+class WindowFocusStore {
+  private state: WindowFocus = NO_WINDOW_FOCUS;
+  private readonly listeners = new Set<() => void>();
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  getSnapshot = (): WindowFocus => this.state;
+
+  getServerSnapshot = (): WindowFocus => NO_WINDOW_FOCUS;
+
+  /** Changes the given fields; notifies only when one of them changed. */
+  update(next: Partial<WindowFocus>): void {
+    const state = { ...this.state, ...next };
+    if (state.focused === this.state.focused && state.pending === this.state.pending) return;
+    this.state = state;
+    for (const listener of this.listeners) listener();
+  }
+}
+
+/**
+ * An element that stands in for the items of a windowed list that are not rendered: as tall as
+ * they are, out of the accessibility tree and never focused. A `<div>` in a grid, else an `<li>`.
+ */
+function ListSpacer({ grid, size }: { grid: boolean; size: number }) {
+  const Spacer = (grid ? 'div' : 'li') as React.ElementType;
+  return (
+    <Spacer
+      aria-hidden="true"
+      role="presentation"
+      data-virtual-spacer=""
+      className={listClassNames.spacer}
+      style={{ height: size }}
+    />
+  );
+}
+ListSpacer.displayName = 'ListSpacer';
 
 /** The action cell of an item element (its direct `[data-list-action]` child), read at event time. */
 function getActionCell(item: HTMLElement): HTMLElement | null {
@@ -386,14 +617,31 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     onSelectedItemChange,
     navigationMode,
     checkmark = false,
+    virtualWindow,
+    count,
     className,
     children,
     ref,
     onKeyDown,
     onKeyDownCapture,
     onFocus,
+    onBlur,
     ...rest
   } = props as ListProps;
+
+  // The window applies with `virtualWindow`, `count` and a function child together.
+  const renderItem = typeof children === 'function' ? children : null;
+  const activeWindow =
+    virtualWindow !== undefined && count !== undefined && renderItem ? virtualWindow : null;
+  const windowed = activeWindow !== null;
+  const windowIgnored =
+    !windowed && (virtualWindow !== undefined || count !== undefined || renderItem !== null);
+  const itemCount = windowed ? toItemCount(count) : 0;
+  const itemSize = activeWindow?.itemSize;
+  const listWindow = React.useMemo<ListWindow | null>(
+    () => (itemSize === undefined ? null : { count: itemCount, itemSize }),
+    [itemCount, itemSize],
+  );
 
   if (selectionMode === 'multi') {
     warnDeprecated('List', 'selectionMode="multi"', 'selectionMode="multiple"');
@@ -432,17 +680,56 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   );
 
   // Effective selection: selected ∩ registered item values, derived during render (table-core#22).
+  // A windowed list keeps every value: most of its items are not rendered, so not registered.
   const effective = React.useMemo(
-    () => (registered ? selected.filter((value) => registered.valueSet.has(value)) : selected),
-    [registered, selected],
+    () =>
+      registered && !windowed
+        ? selected.filter((value) => registered.valueSet.has(value))
+        : selected,
+    [registered, selected, windowed],
   );
   const selectedValues = React.useMemo<ReadonlySet<string>>(() => new Set(effective), [effective]);
 
-  // Only a selectable list without the `composite` pin decides its structure by its actions.
-  const hasActions =
+  // A windowed list keeps the focused item rendered outside the window, so a focused item scrolled
+  // away keeps focus and its Tab stop, and the item a key moved to until it is focused.
+  const [windowFocus] = React.useState(() => new WindowFocusStore());
+  const { focused: focusedIndex, pending: pendingIndex } = React.useSyncExternalStore(
+    windowFocus.subscribe,
+    windowFocus.getSnapshot,
+    windowFocus.getServerSnapshot,
+  );
+  const keep = React.useMemo(
+    () => keptIndexes(focusedIndex, pendingIndex),
+    [focusedIndex, pendingIndex],
+  );
+  // The entries of the window, each item rendered by the function child (only its indexes).
+  const windowEntries =
+    activeWindow && renderItem
+      ? activeWindow
+          .layout(itemCount, { keep })
+          .map((entry) =>
+            entry.kind === 'item' ? { ...entry, node: renderItem(entry.index) } : entry,
+          )
+      : null;
+  // A function child renders nothing without a window (a development warning says so).
+  const elementChildren = renderItem ? null : (children as React.ReactNode);
+
+  // Whether a rendered item of a selectable list without the `composite` pin has an action.
+  const itemActions =
     selectable &&
     navigationMode !== 'composite' &&
-    (registered ? registered.hasActions : childrenHaveAction(children));
+    (registered
+      ? registered.hasActions
+      : childrenHaveAction(
+          windowEntries
+            ? windowEntries.map((entry) => (entry.kind === 'item' ? entry.node : null))
+            : elementChildren,
+        ));
+  // Only such a list decides its structure by its actions. A windowed list does not: which items
+  // are rendered changes as it scrolls, and a new root element would remount the scroller, reset
+  // its scroll position and every item (it stays a listbox, with a development warning).
+  const hasActions = itemActions && !windowed;
+  const windowActions = itemActions && windowed;
   const { mode, navigation } = resolveNavigation(selectable, hasActions, navigationMode);
   const navigable = navigation !== 'none';
   const drawsCheckmark = selectable && checkmark;
@@ -457,12 +744,25 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     ? (registered.values.find((value) => selectedValues.has(value)) ?? null)
     : (effective[0] ?? null);
 
+  // A windowed list leaves only typeahead (and a grid's moves into its actions) to the roving tab
+  // index, which focuses a rendered item: the window moves to it in the same update, so no frame
+  // shows the browser's focus scrolling without the items around it.
+  const followRovingFocus = useEventCallback((_value: string, event: React.KeyboardEvent) => {
+    const root = event.currentTarget;
+    const active = root.ownerDocument.activeElement;
+    const index = active ? getWindowItemIndex(root, active) : null;
+    if (index !== null) activeWindow?.scrollToIndex(index, { align: 'auto' });
+  });
+
   const { containerProps, getTabIndex } = useRovingTabIndex({
     activeValue: selectable ? tabStopValue : null,
     orientation: 'vertical',
-    typeahead: (registered?.count ?? 0) > 7,
-    // A list without selection returns to the item that last had focus.
-    tabStop: selectable ? 'active' : 'last-focused',
+    onFocusMove: windowed ? followRovingFocus : undefined,
+    // A windowed list counts its items from `count` (most of them are not rendered).
+    typeahead: (windowed ? itemCount : (registered?.count ?? 0)) > 7,
+    // A list without selection returns to the item that last had focus. While focus is in a
+    // windowed list, the focused item is its Tab stop (it stays rendered, scrolled away or not).
+    tabStop: selectable && !(windowed && focusedIndex !== null) ? 'active' : 'last-focused',
     // The items are the root's children. A composite in an item action (a Toolbar, a radio group)
     // is part of its row, not an item: arrows and typeahead never move into it.
     itemSelector: ':scope > [data-roving-value]',
@@ -478,12 +778,99 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     ref,
     navigable ? rovingRef : null,
     rootElementRef,
+    // The list is the window's scroller.
+    activeWindow?.scrollRef,
   );
+
+  /**
+   * Whether focus is in a popup that an item of a windowed list opened (an element outside the
+   * list's DOM whose focus React bubbles through the list): the item stays kept. Written by the
+   * focus and blur handlers.
+   */
+  const focusInPopupRef = React.useRef(false);
+
+  // A windowed list records the index of the item that focus moves into (after the roving
+  // bookkeeping of a navigable list); an item that takes focus is no longer awaited.
+  const handleWindowFocus = useEventCallback((event: React.FocusEvent) => {
+    if (navigable) rovingFocus(event);
+    const root = event.currentTarget;
+    focusInPopupRef.current = !root.contains(event.target as Node);
+    const index = getWindowItemIndex(root, event.target);
+    if (index !== null) windowFocus.update({ focused: index, pending: null });
+  });
+  const internalFocus = windowed ? handleWindowFocus : navigable ? rovingFocus : undefined;
+
+  // Focus leaving a windowed list (for an element outside it, or for nothing) ends the keeping of
+  // its focused item; the Tab stop then follows the rule of a list without focus. Decided once
+  // focus has landed: a popup an item opened takes focus in the same task (`focusInPopupRef`).
+  const handleWindowBlur = useEventCallback((event: React.FocusEvent) => {
+    const root = event.currentTarget;
+    const next = event.relatedTarget as Node | null;
+    if (next && root.contains(next)) return;
+    focusInPopupRef.current = false;
+    queueMicrotask(() => {
+      if (!root.isConnected || focusInPopupRef.current) return;
+      const active = root.ownerDocument.activeElement;
+      if (active && root.contains(active)) return;
+      windowFocus.update(NO_WINDOW_FOCUS);
+    });
+  });
+
+  /**
+   * The keys of a windowed list in the `items` and `composite` modes (before the roving tab index,
+   * which then skips them): ArrowUp/ArrowDown, Home/End and PageUp/PageDown move by index over the
+   * whole list, from the item the key started in (or the item a key is awaiting). A rendered target
+   * is scrolled into view and focused; one that is not is kept rendered, scrolled into view and
+   * focused after the commit that renders it. A key whose target is the focused item drops an
+   * awaited item and scrolls the focused one into view. The keys the roving tab index leaves alone
+   * are left alone too.
+   */
+  const handleWindowKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (!activeWindow || event.defaultPrevented || itemCount === 0) return;
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    const root = event.currentTarget;
+    // A key from a popup is the popup's; a text field keeps its keys.
+    if (!root.contains(event.target as Node) || ownsArrowKeys(event.target)) return;
+    const current = getWindowItemIndex(root, event.target);
+    const target = getWindowKeyTarget(
+      event.key,
+      windowFocus.getSnapshot().pending ?? current,
+      itemCount,
+    );
+    if (target === undefined) return;
+    event.preventDefault();
+    if (target === current) {
+      windowFocus.update({ pending: null });
+      activeWindow.scrollToIndex(target, { align: 'auto' });
+      return;
+    }
+    const element = getWindowItem(root, target);
+    if (element) {
+      windowFocus.update({ pending: null });
+      // A rendered target is at most the overscan away from the view, so the least scroll that
+      // shows it whole keeps the view on rendered items while the window follows from the scroll
+      // event. A browser's own focus scrolling would centre a hidden item, past the rendered ones
+      // (a blank frame), or in Firefox leave a partly visible one clipped; and moving the window in
+      // this update (`scrollToIndex`) gives Firefox long frames while a key is held.
+      // jsdom has no `scrollIntoView`: a consumer's test without a stub still moves focus.
+      element.scrollIntoView?.({ block: 'nearest' });
+      getItemFocusTarget(element)?.focus();
+      return;
+    }
+    const previous = windowFocus.getSnapshot().pending;
+    windowFocus.update({ pending: target });
+    if (previous !== target) activeWindow.scrollToIndex(target, { align: 'auto' });
+  });
+  const internalKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (windowed) handleWindowKeyDown(event);
+    rovingKeyDown(event);
+  });
 
   // Switching between list and grid semantics changes the root and item elements (`ul`/`li` ↔
   // `div`), so React remounts the items and the focused one is removed. Items record, while they
   // are still in the document, that they held focus (see ListItem); after the new items mounted,
-  // focus moves to the same item (C-DISABLED: focus is never dropped to <body>).
+  // focus moves to the same item (C-DISABLED: focus is never dropped to <body>), found in a
+  // windowed list by its index.
   React.useLayoutEffect(() => {
     const loss = registry.takeFocusLoss();
     const root = rootElementRef.current;
@@ -492,8 +879,45 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     const active = doc.activeElement;
     // Focus placed elsewhere in this commit (an autoFocus, a restore-focus hook) wins.
     if (active && active !== doc.body && active.isConnected) return;
-    getFocusRestoreTarget(root, loss)?.focus();
-  }, [mode, registry]);
+    getFocusRestoreTarget(root, loss, windowed)?.focus();
+  }, [mode, registry, windowed]);
+
+  // After every commit of a windowed list: focus the awaited item, which the commit rendered (it
+  // is kept), unless focus went outside the list meanwhile; and when `count` dropped to or below
+  // the focused item, move focus (the list had it: the item was removed with it) and with it the
+  // Tab stop to the last item, awaited as a key's target when the window is elsewhere (the focused
+  // item was kept outside it). A list that is not windowed keeps nothing.
+  React.useLayoutEffect(() => {
+    const root = rootElementRef.current;
+    if (!windowed || !root) {
+      windowFocus.update(NO_WINDOW_FOCUS);
+      return;
+    }
+    const doc = root.ownerDocument;
+    const active = doc.activeElement;
+    // Focus lost to nothing (to the body, or with a removed item).
+    const lost = !active || active === doc.body || !active.isConnected || active === root;
+    const { pending } = windowFocus.getSnapshot();
+    if (pending !== null) {
+      windowFocus.update({ pending: null });
+      const element = pending < itemCount ? getWindowItem(root, pending) : null;
+      // The focus handler records it as the focused item.
+      if (element && (lost || root.contains(active))) getItemFocusTarget(element)?.focus();
+    }
+    const { focused } = windowFocus.getSnapshot();
+    if (focused === null || focused < itemCount) return;
+    if (lost && itemCount > 0) {
+      const last = getWindowItem(root, itemCount - 1);
+      if (last) {
+        getItemFocusTarget(last)?.focus();
+      } else {
+        windowFocus.update({ focused: null, pending: itemCount - 1 });
+        activeWindow?.scrollToIndex(itemCount - 1, { align: 'auto' });
+        return;
+      }
+    }
+    if (windowFocus.getSnapshot().focused === focused) windowFocus.update({ focused: null });
+  });
 
   // A plain list that stops navigating (`items` to `none`) keeps its item elements, but they lose
   // their tabindex: focus on one moves to its first focusable content, as after a remount.
@@ -515,8 +939,9 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   const toggleItem = React.useCallback(
     (value: string) => {
       setSelected((previous) => {
-        // From the effective selection, so values of removed items are never reported again.
-        const current = registry.prune(previous);
+        // From the effective selection, so values of removed items are never reported again; a
+        // windowed list keeps the values of the items it does not render.
+        const current = windowed ? previous : registry.prune(previous);
         const isSelected = current.includes(value);
         if (multiple) {
           return isSelected ? current.filter((item) => item !== value) : [...current, value];
@@ -524,7 +949,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
         return isSelected ? [] : [value];
       });
     },
-    [multiple, registry, setSelected],
+    [multiple, registry, setSelected, windowed],
   );
 
   // Registered values of a selectable list that more than one item holds (development warning).
@@ -560,6 +985,28 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     }
   }, [itemsWithActions, noneSelectable]);
 
+  React.useEffect(() => {
+    if (windowIgnored) {
+      warnOnce(
+        'List:virtual-window-children',
+        'List: a windowed list needs `virtualWindow`, `count` and a function child that returns ' +
+          'the `List.Item` at an index; without one of them the window is ignored (a function ' +
+          'child then renders nothing, and element children are all rendered).',
+      );
+    }
+  }, [windowIgnored]);
+
+  React.useEffect(() => {
+    if (windowActions) {
+      warnOnce(
+        'List:virtual-window-actions',
+        'List: a selectable windowed list keeps its listbox structure whatever items are ' +
+          'rendered, so an item action sits inside an option, which cannot hold interactive ' +
+          'content. Set navigationMode="composite" to render a grid whose rows hold the actions.',
+      );
+    }
+  }, [windowActions]);
+
   const contextValue = React.useMemo<ListContextValue>(
     () => ({
       mode,
@@ -570,6 +1017,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
       toggleItem,
       getTabIndex,
       registry,
+      listWindow,
     }),
     [
       mode,
@@ -580,36 +1028,65 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
       toggleItem,
       getTabIndex,
       registry,
+      listWindow,
     ],
   );
 
   const Root = (mode === 'grid' ? 'div' : 'ul') as React.ElementType;
   const role = mode === 'grid' ? 'grid' : mode === 'listbox' ? 'listbox' : 'list';
 
+  // A windowed list renders its window: each item with its index, each gap as a spacer.
+  const content = windowEntries
+    ? windowEntries.map((entry) =>
+        entry.kind === 'item' ? (
+          <ListItemIndexContext.Provider key={entry.index} value={entry.index}>
+            {entry.node}
+          </ListItemIndexContext.Provider>
+        ) : (
+          <ListSpacer key={entry.key} grid={mode === 'grid'} size={entry.size} />
+        ),
+      )
+    : elementChildren;
+
   return (
     <ListContext.Provider value={contextValue}>
       <Root
         role={role}
         aria-multiselectable={selectable && multiple ? true : undefined}
+        aria-rowcount={windowed && mode === 'grid' ? itemCount : undefined}
         data-navigation-mode={navigation}
         data-checkmark={drawsCheckmark ? '' : undefined}
-        className={cn(listClassNames.root, 'm-0 list-none p-0', className)}
+        // A windowed list that navigates its items has its Tab stop on an item: the scroller is
+        // none of its own (Firefox makes a scroller a Tab stop). The consumer's `tabIndex` wins.
+        tabIndex={windowed && navigable ? -1 : undefined}
+        className={cn(
+          listClassNames.root,
+          'm-0 list-none p-0',
+          // The window lays the items out: the browser's scroll anchoring only fights it.
+          windowed && 'overflow-y-auto [overflow-anchor:none]',
+          className,
+        )}
         {...rest}
         ref={rootRef}
         data-roving-container={navigable ? '' : undefined}
-        onKeyDown={navigable ? composeEventHandlers(onKeyDown, rovingKeyDown) : onKeyDown}
+        onKeyDown={navigable ? composeEventHandlers(onKeyDown, internalKeyDown) : onKeyDown}
         onKeyDownCapture={
           navigable
             ? composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture)
             : onKeyDownCapture
         }
         onFocus={
-          navigable
-            ? composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })
+          internalFocus
+            ? composeEventHandlers(onFocus, internalFocus, { checkDefaultPrevented: false })
             : onFocus
         }
+        onBlur={
+          windowed
+            ? composeEventHandlers(onBlur, handleWindowBlur, { checkDefaultPrevented: false })
+            : onBlur
+        }
       >
-        {children}
+        {content}
       </Root>
     </ListContext.Provider>
   );
@@ -664,6 +1141,10 @@ function renderCheckmark(
  * selection without calling `onClick`, which receives pointer clicks; `onAction` runs on clicks
  * and Enter (and Space where the item cannot be selected), before the selection toggles.
  *
+ * In a windowed list (the List's `virtualWindow`) an item has the window's item size as its
+ * height, after its own `style` (its content must fit), and carries `data-index` and its place
+ * in the whole list: `aria-setsize` and `aria-posinset`, or `aria-rowindex` in a grid.
+ *
  * Exported under the flat name `ListItem` so React Server Components can import it; `List.Item`
  * (dotted access) needs a client module.
  */
@@ -674,6 +1155,7 @@ export const ListItem = ({
   disabledSelection = false,
   checkmark,
   className,
+  style,
   children,
   onClick,
   onKeyDown,
@@ -689,7 +1171,11 @@ export const ListItem = ({
     toggleItem,
     getTabIndex,
     registry,
+    listWindow,
   } = useListContext('ListItem');
+  const providedIndex = React.useContext(ListItemIndexContext);
+  // The item's index in a windowed list; `null` in a list that renders every item.
+  const windowIndex = listWindow ? providedIndex : null;
   const autoValue = useId('list-item');
   const selectableValue = value ? value : undefined;
   const rovingValue = selectableValue ?? autoValue;
@@ -702,15 +1188,24 @@ export const ListItem = ({
   // The record is updated in place when the value or the action changes and removed only on
   // unmount, so the item keeps its place in the registry (table-core#22).
   React.useLayoutEffect(() => {
-    registry.set(token, { value: selectableValue, hasAction, element: itemRef });
-  }, [registry, token, selectableValue, hasAction]);
+    registry.set(token, {
+      value: selectableValue,
+      hasAction,
+      element: itemRef,
+      index: windowIndex ?? undefined,
+    });
+  }, [registry, token, selectableValue, hasAction, windowIndex]);
   React.useLayoutEffect(() => () => registry.delete(token), [registry, token]);
 
   // Focus inside the action when it disappears: if that switches the list from grid to listbox, the
-  // List moves focus to this item in the next commit (see ListActionCell and ListRoot).
+  // List moves focus to this item in the next commit (see ListActionCell and ListRoot). The item's
+  // position is its index in a windowed list (spacers are no items), else its place in the DOM.
   const recordActionFocusLoss = useEventCallback((cell: HTMLElement) => {
     const item = cell.parentElement;
-    registry.recordFocusLoss({ value: selectableValue, index: item ? getItemIndex(item) : -1 });
+    registry.recordFocusLoss({
+      value: selectableValue,
+      index: windowIndex ?? (item ? getItemIndex(item) : -1),
+    });
   });
 
   // Unmount: a layout-effect cleanup runs while the element is still in the document, so it can
@@ -722,10 +1217,13 @@ export const ListItem = ({
       if (!node) return;
       const active = node.ownerDocument.activeElement;
       if (active && node.contains(active)) {
-        registry.recordFocusLoss({ value: selectableValue, index: getItemIndex(node) });
+        registry.recordFocusLoss({
+          value: selectableValue,
+          index: windowIndex ?? getItemIndex(node),
+        });
       }
     };
-  }, [registry, selectableValue]);
+  }, [registry, selectableValue, windowIndex]);
 
   // C-DEV: an item that is no Tab stop cannot be activated with the keyboard.
   const actionNotNavigable = onAction !== undefined && !navigable;
@@ -879,6 +1377,18 @@ export const ListItem = ({
   const customCheckmark = checkmark != null && slotRendersContent(checkmark);
   const showCheckmark = selection && (checkmark == null ? listCheckmark : customCheckmark);
 
+  // In a windowed list: the item's index and its place in the whole list (a grid's rows carry
+  // `aria-rowindex` against the list's `aria-rowcount`), after `rest` (the window depends on them).
+  const windowProps: Record<string, unknown> =
+    listWindow && windowIndex !== null
+      ? {
+          'data-index': windowIndex,
+          ...(mode === 'grid'
+            ? { 'aria-rowindex': windowIndex + 1 }
+            : { 'aria-setsize': listWindow.count, 'aria-posinset': windowIndex + 1 }),
+        }
+      : {};
+
   return (
     <Element
       role={role}
@@ -886,6 +1396,8 @@ export const ListItem = ({
       className={cn(
         listItemClassNames.root,
         'flex items-center border-b border-border px-4 py-2 text-body-1',
+        // A windowed item is exactly the window's item size, its bottom rule included.
+        windowIndex !== null && 'box-border',
         navigable ? ['relative', cursor, focusRingInset] : cursor,
         isSelected
           ? [
@@ -895,9 +1407,11 @@ export const ListItem = ({
           : hoverable && 'hover:bg-subtle-hover',
         className,
       )}
+      style={listWindow && windowIndex !== null ? { ...style, height: listWindow.itemSize } : style}
       {...rest}
       ref={itemRefs}
       {...interactiveProps}
+      {...windowProps}
     >
       <ContentCell
         role={mode === 'grid' ? 'gridcell' : undefined}
@@ -1094,19 +1608,31 @@ ListActionCell.displayName = 'ListActionCell';
  * - **Check marks** (`checkmark`, opt-in): a decorative check at the start of every item of a
  *   selectable list, shown while the item is selected; `List.Item checkmark` replaces or hides it.
  * - **Switching semantics remounts the items.** Listbox/list and grid use different elements
- *   (`ul`/`li` and `div`), so when a selectable list gains its first item action, loses its last
- *   one, or `selectable` or `navigationMode` changes the structure, React remounts the items and
- *   their content: state inside them (an inline rename input's draft, an uncontrolled checkbox) is
- *   reset. Focus that is on an item or inside it when the list switches moves to the same item (by
- *   `value`, else by position; the next item when the focused one was removed), or to its first
- *   focusable content when the item is no Tab stop any more, so the switch never drops it to
- *   `<body>`. This includes focus inside the last action when that action removes itself (an
- *   inline rename input that unmounts on Enter). An action that removes itself while focused
- *   without causing a switch drops focus, like any removed element. When the list may switch,
- *   keep such state in the parent, or pin the grid with `navigationMode="composite"`.
+ *   (`ul`/`li` and `div`), so when a selectable list without a window gains its first item
+ *   action, loses its last one, or `selectable` or `navigationMode` changes the structure, React
+ *   remounts the items and their content: state inside them (an inline rename input's draft, an
+ *   uncontrolled checkbox) is reset. Focus that is on an item or inside it when the list switches
+ *   moves to the same item (by `value`, else by position; the next item when the focused one was
+ *   removed), or to its first focusable content when the item is no Tab stop any more, so the
+ *   switch never drops it to `<body>`. This includes focus inside the last action when that action
+ *   removes itself (an inline rename input that unmounts on Enter). An action that removes itself
+ *   while focused without causing a switch drops focus, like any removed element. When the list
+ *   may switch, keep such state in the parent, or pin the grid with `navigationMode="composite"`.
  * - Selection: `selectionMode` `'single'` (default) or `'multiple'`; controlled with
  *   `selectedItems` (or `selectedItem` in single mode) or uncontrolled with the `default*` props.
- *   Values of items that are no longer rendered are dropped from the reported selection.
+ *   Values of items that are no longer rendered are dropped from the reported selection (a
+ *   windowed list keeps them).
+ * - **Windowing** (`virtualWindow` and `count`, for long lists): a window from `useVirtualWindow`
+ *   and a function child that returns the item at an index render only the items in view plus an
+ *   overscan, with spacers for the others. The list element scrolls (give it a bounded height),
+ *   every item has the window's item size as its height, the focused item stays rendered and is
+ *   the Tab stop while focus is in the list, each item carries its place in the whole list, and
+ *   the values selected outside the window stay selected. The keys move by index over the whole
+ *   list (ArrowUp/ArrowDown, Home/End, and PageUp/PageDown by ten), scrolling the target into view
+ *   before focusing it, rendered or not; typeahead matches the rendered items. Its structure
+ *   never follows the rendered items: a selectable windowed list is a listbox unless
+ *   `navigationMode="composite"` pins the grid (pin it when items have actions; a development
+ *   warning says so).
  * - Sub-component: `List.Item` (also exported as `ListItem` for React Server Components).
  *
  * @example
@@ -1119,6 +1645,18 @@ ListActionCell.displayName = 'ListActionCell';
  * <List navigationMode="items" aria-label="Recent files">
  *   <List.Item value="report" onAction={() => open('report')}>Report</List.Item>
  *   <List.Item value="budget" onAction={() => open('budget')}>Budget</List.Item>
+ * </List>
+ *
+ * @example
+ * const virtualWindow = useVirtualWindow({ itemSize: 40 });
+ * <List
+ *   selectable
+ *   aria-label="Files"
+ *   virtualWindow={virtualWindow}
+ *   count={files.length}
+ *   style={{ height: 320 }}
+ * >
+ *   {(index) => <List.Item value={files[index].id}>{files[index].name}</List.Item>}
  * </List>
  */
 export const List = /* @__PURE__ */ Object.assign(ListRoot, {

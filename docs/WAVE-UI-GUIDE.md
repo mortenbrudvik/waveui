@@ -35,8 +35,9 @@ All APIs, token values and patterns below refer to **this library's implementati
 9. [Accessibility](#9-accessibility)
 10. [Theming](#10-theming)
 11. [Common UI Patterns](#11-common-ui-patterns)
-12. [Quick Reference](#12-quick-reference)
-13. [Deprecated APIs](#13-deprecated-apis)
+12. [Data at Scale](#12-data-at-scale)
+13. [Quick Reference](#13-quick-reference)
+14. [Deprecated APIs](#14-deprecated-apis)
 
 ---
 
@@ -1287,6 +1288,20 @@ Controls drawn only while their row is hovered or holds focus (Tree row actions,
 - **Keep the room.** Hide with opacity or visibility, never `display: none`, so the row does not shift when the controls show; with opacity they also stay focusable and named (DataGrid's subtle controls, `Table.CellActions`, Nav's actions), and a fade carries `motion-reduce:` (C-MOTION).
 - **An opaque reveal over a row's fill** maps the library's row fills (`Table.CellActions`: the canvas, the row hover, a striped row, a DataGrid's selected rows) by selectors on the table's own attributes (`data-striped`, `data-selection-appearance`, `data-selected`); a consumer's own row background needs the same class on the revealed element.
 
+### Pattern 19: Windowed Components
+
+A component that takes a `virtualWindow` (DataGrid, List, Listbox, Combobox, Dropdown, FlatTree) owns the window: it calls `layout(count, { keep })` during render and renders the entries, because only it knows which items must stay rendered. The consumer creates the window and never renders it. The rules the library's own windowed components follow (chapter 12 describes the contract from the consumer's side):
+
+- **Keep what focus needs.** `keep` holds the focused (or active) index and the index a key is waiting for, so focus is never dropped with an unmounted item: DataGrid keeps `useGridNavigation`'s `activeRowIndex` and `pendingRowIndex`, List and FlatTree a focused and a pending item, the pickers the active option. DataGrid's, List's and FlatTree's live in a small external store read during render through `useSyncExternalStore` and written by handlers and layout effects (C-HOOKS: no state set in an effect, no ref read during render).
+- **Scroll first, then focus, in one update.** A key whose target is not rendered calls `scrollToIndex(index, { align: 'auto' })` from the handler (the window moves in the same update, so no frame paints the spacer) and focuses the target in the layout effect of the commit that renders it. A rendered target is scrolled the least that shows it (List and FlatTree before focusing it, DataGrid from its focus handler, which also brings a row out from under the sticky header). Focus that a pointer press gave is never corrected (a `pointerdown` capture flag, cleared by that focus or the next `keydown` on the document), so a click on a partly covered row lands.
+- **Attach the scroller by merging.** Merge `scrollRef` into the element's refs (`useMergedRefs(ownRef, virtualWindow.scrollRef)`); `ref={virtualWindow.scrollRef}` makes the React Compiler's lint report every call on the window during render. A popup attaches only its shown list, never the hidden list in place, whose `display: none` drops a scroll write; ask for the opening scroll in a layout effect of the commit that shows it.
+- **Fix the height after the item's own style.** Each rendered item gets `height: itemSize`, border-box, after its `style`; a component that pads its items (DataGrid cells) drops the block padding in a windowed row, so no row is taller than the window counts.
+- **Spacers are presentational.** `aria-hidden="true"`, `role="presentation"` (an `<li>` in a list or listbox, a `<div>` in a grid, a `<tr>` with one `<td colSpan>` in a table), `data-virtual-spacer` and the part's `spacer` class constant; no `data-roving-value` and no `tabindex`, so the roving selectors never match them. Key items so that no item key can equal a spacer key (`option:<value>` and `spacer:<key>`; FlatTree keys items by value, List by index).
+- **Structure never depends on the rendered items.** A windowed List does not switch between listbox and grid as actions scroll in and out (the switch would remount the scroller at offset 0); its mode comes from props only.
+- **The scroller** gets `[overflow-anchor:none]` only while windowed (the window lays the items out; FlatTree moves its view itself to keep its focused item in place), and `tabIndex={-1}` before `{...rest}` while one of its items holds the tab stop.
+- **Positions come from the data:** `aria-rowcount`/`aria-rowindex` on grids, `aria-setsize`/`aria-posinset` on options and list items, `aria-level` too on tree items; the DataGrid's and the List's only while windowed, a FlatTree's items and a data-mode picker's options always.
+- **The server renders the first window** from `initialViewportSize`; nothing reads the DOM during render.
+
 ### Props Interface Conventions
 
 - Extend native HTML attributes: `React.HTMLAttributes<HTMLDivElement>`
@@ -1466,6 +1481,24 @@ Nested items are `Tree.Item` elements in their parent's children: directly, in F
 
 Where they hide (devices with hover, outside forced colors), the actions show for hover, for focus on the item or inside its own row (`:focus-within`, never for focus in its child group), while an element inside them has `aria-expanded="true"`, and while the toolbar carries `data-focus-in-popup`. That attribute is set while focus is in a surface opened from an action (a Menu, Popover or Dialog rendered inside the actions, whose focus events reach the toolbar through the React tree) and kept for one animation frame after focus leaves it, so the surface's focus return, which runs after its trigger already reports it closed, finds the action shown. A Dialog rendered outside the actions and opened through state (a "Delete…" menu item that opens a confirm Dialog elsewhere) gets neither: when it closes the action is hidden and cannot take focus, so focus returns to the nearest element that can, normally the item. Render such a Dialog inside `actions` (its `Dialog.Trigger` there, or the controlled Dialog next to the Menu that opens it) to return focus to the action; `finalFocusRef` cannot name a hidden action.
 
+#### FlatTree
+
+```
+Tab                  → enters at the focused item while focus was inside, else the selected item
+                       while it is visible, else the first enabled item
+ArrowDown / ArrowUp  → next / previous visible enabled item
+ArrowRight           → expand a collapsed branch, or move to its first enabled child (mirrored in RTL)
+ArrowLeft            → collapse an expanded branch, or move to the nearest enabled ancestor
+                       (mirrored in RTL)
+Home / End           → first / last enabled visible item
+Enter                → activate (onItemSelect) and toggle a branch
+Space                → activate; in a checkbox tree (selectionMode="multiple"), toggle the check
+*                    → expand every collapsed sibling branch (one onExpandedItemsChange call)
+Printable characters → the next visible item whose label starts with the text
+```
+
+The items are flat siblings, so the keys come from the model (`useFlatTree`), not from the DOM: with a `virtualWindow`, an item that is not rendered is scrolled into the window in the key's own update and focused once it renders, and the focused item stays rendered while it is scrolled away. Disabled items are skipped and never activated, expanded or checked by the user. When a branch collapses around the focused item from code, focus moves to its nearest visible ancestor. There is no PageUp/PageDown (the APG tree has none).
+
 #### Toaster
 
 ```
@@ -1502,9 +1535,12 @@ PageUp / PageDown      → 10 rows up / down
 Enter / F2             → move into the cell's widgets (text inputs, several buttons)
 Escape                 → back to the cell
 Space (on a cell)      → toggle the row's selection (selectable grids)
+F2 (on a header cell   → to the column's resize handle (resizableColumns); there ArrowLeft /
+   or its sort button)   ArrowRight move the edge by 20 px (Shift: 5; mirrored in RTL), Home sets
+                         the minimum, Enter / Space / Escape return to the header
 ```
 
-A cell with a single non-text widget (a checkbox, a sort button, a link) focuses that widget directly. In `selectionMode="single"` pass at most one selected id (with several, the first one whose row is rendered is selected, with a development warning). Each row's selection control is named after the row's first `DataGrid.Cell`, `<td>` or `<th>` child (Fragments are looked into); for a cell rendered by another component, pass `selectionLabel`. A selectable `List` with item actions uses a similar grid model: Up/Down between rows, Left/Right into and out of the actions, Enter/F2 into a text field, Escape back.
+A cell with a single non-text widget (a checkbox, a sort button, a link) focuses that widget directly. The resize handle is an auxiliary widget (`data-grid-auxiliary`): it never becomes the cell's target, so a sortable, resizable header's target stays its sort button (Enter sorts), and in interaction mode Tab moves between the button and the handle. With a `virtualWindow` the vertical keys move by the data: the target row index comes from the items (PageUp/PageDown still move 10 rows), a row that is not rendered is scrolled into the window and focused in the commit that renders it, Ctrl+Home also brings the first data rows back under the sticky header, and the active cell is kept by its row, which stays rendered while it is scrolled away. In `selectionMode="single"` pass at most one selected id (with several, the first one is selected, or in a grid without `items` the first one whose row is rendered, with a development warning). Each row's selection control is named after the row's first `DataGrid.Cell`, `<td>` or `<th>` child (Fragments are looked into); for a cell rendered by another component, pass `selectionLabel`. A selectable `List` with item actions uses a similar grid model: Up/Down between rows, Left/Right into and out of the actions, Enter/F2 into a text field, Escape back.
 
 #### Menu
 
@@ -2332,12 +2368,178 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Browse content | `Carousel` (`groupSize`, `draggable`, `Carousel.Item thumbnail`, `controlsLayout`, `Carousel.Button`) |
 | Rate items | `Rating`, `RatingDisplay` |
 | Label fields | `Label`, `InfoLabel`, `Field` |
+| Show thousands of rows, items or options | `virtualWindow` (from `useVirtualWindow`) on `DataGrid`, `List`, `Listbox`, `Combobox`, `Dropdown`; `FlatTree` for trees (chapter 12) |
+| Keep table state outside the DOM | `useTableFeatures` with `useTableSort`, `useTableSelection`, `useTableColumnSizing`; `useSelection` |
 
 ---
 
-## 12. Quick Reference
+## 12. Data at Scale
 
-### Component Catalog (79 components)
+A DataGrid, List, Listbox, Combobox, Dropdown or FlatTree with thousands of items renders a **window** of them: the items in view plus an overscan, and spacers as tall as the items they stand for. What the user does still acts on the data: selection, select-all, sorting, keyboard movement and the positions a screen reader announces cover every item, rendered or not, and the focused item stays rendered when it is scrolled away. The window is built in (`useVirtualWindow`, about 1.8 KiB gzip) and fixed-size; the same interface takes an adapter over a library.
+
+### The window
+
+`useVirtualWindow({ itemSize, overscan?, initialViewportSize?, scrollPaddingStart? })` returns a `VirtualWindow`, which you pass to the component as `virtualWindow`:
+
+```ts
+interface VirtualWindow {
+  itemSize: number; // the height of every item, in pixels
+  scrollRef: React.RefCallback<HTMLElement>; // the scrolling element
+  layout(count: number, options?: { keep?: readonly number[] }): readonly VirtualEntry[];
+  scrollToIndex(index: number, options?: { align?: 'auto' | 'start' | 'center' | 'end' }): void;
+}
+type VirtualEntry = { kind: 'item'; index: number } | { kind: 'spacer'; size: number; key: string };
+```
+
+- `layout` is a pure function of the window's state (the first item in view, the viewport height) and its arguments, called during render: the items in view and `overscan` items beyond each edge, every `keep` index outside them as an item of its own with spacers between, and spacers that make the sizes add up to `count * itemSize`. The count is an argument, so a component whose count is its own (a filtered Combobox) lays out its own.
+- The window re-renders its host **once per row boundary**, not per scroll event: a passive `scroll` listener read once per animation frame, and a `ResizeObserver` for the viewport height.
+- `scrollToIndex` sets `scrollTop` (bounded by the rendered content) and moves the window in the same update, so the commit after it renders the target. `auto`, the default, scrolls the least that shows the item. A request made before the scroller attaches (a popup asking for its selected option in the commit that shows it) is applied when it attaches, and once more when the scroller first changes height (positioning shrinking the popup on a short viewport), unless it was scrolled first.
+- `overscan` defaults to enough items for 240 pixels beyond each edge, and at least 6 (9 items of 28 pixels, 8 of 32, 6 of 40 or more); a number you give is a number of items. `scrollPaddingStart` is the height of content pinned over the top of the rows, a DataGrid's sticky header: `scrollToIndex` places rows in the area below it.
+- On the server and in the first render the window lays out the top of the list in `initialViewportSize` (480 pixels) and reads no DOM, so the server HTML holds the first window and hydrates without a mismatch. In jsdom the scroller measures 0, and the window keeps using `initialViewportSize`.
+
+### The contract: a fixed item size and a bounded height
+
+1. **Every item is exactly `itemSize` tall.** The window never measures: it computes offsets as `index * itemSize`. The components set that height on each rendered row, item and option, after its own `style` and with border-box sizing, so content that does not fit overflows (a List item) or grows the row (a DataGrid cell) and breaks the arithmetic: the view jumps and the scrollbar lies. A windowed DataGrid drops its body cells' block padding and keeps their text on one line (the columns are laid out from widths, so the cells truncate); its selection cell centres its control. Pick an `itemSize` the content fits in: a List item with one line of text needs 37 pixels at the default padding (the story uses 40), the default `Option` is 32, the DataGrid story's rows are 44 and the FlatTree story's items 28. Variable sizes are not supported in 0.16.
+2. **The scroller has a bounded height.** The window counts the items that fit in the scroller's `clientHeight`; a scroller that grows with its content shows every item, so the window renders every item. Give the scroller a height or a maximum height: the DataGrid's scroll wrapper through `containerProps`, the List, Listbox or FlatTree element through `className` or `style`. A Combobox or Dropdown popup list already scrolls within its own maximum (15rem, less where the viewport has no room). DataGrid warns in development when its wrapper is not bounded (`DataGrid:virtual-window-height`).
+
+### State follows the data, not the DOM
+
+The components hold their state as data so that unrendered items keep theirs:
+
+- **Selection is a set of ids.** A DataGrid with `items` selects by the ids `getRowId` gives (the item's index without it): select-all covers every item whose selection is not disabled, and ids whose rows are not rendered, or whose items are not in `items` (filtered out, on another page, restored by id), stay selected and are reported. `isSelectionDisabled(item, index)` tells select-all which items it must skip, since a row that is not rendered cannot say so. A windowed List keeps the values of items it does not render. `useSelection` and `useTableSelection` hold the same id sets for components of your own (`toggleAll(universe)` adds or removes the universe's ids and keeps the others).
+- **Keep the data stable.** The component that calls `useVirtualWindow` renders again at every row boundary, so `items`, `columns`, `getRowId`, `isSelectionDisabled`, `renderOption` and a FlatTree's `items` written inline are new values on every scroll step, and the component computes them again over every item: a 10,000-row grid can rebuild its selection universe, sort again and call `isSelectionDisabled` for all 10,000 items at every row scrolled past. Define them outside the component or memoise them (`useMemo`, `useCallback`); controlled arrays (`selectedItems`, `expandedItems`, `checkedItems`) too.
+- **Ids are the identity.** A DataGrid row that sets its own `rowId`, different from its item's id, is outside select-all (a development warning): return the rows' ids from `getRowId` instead. Option values and FlatTree values are unique (duplicates warn).
+- **Data mode for the pickers.** A Listbox, Combobox or Dropdown windows only in data mode (`items`, and `renderOption` to draw an option): with option children it cannot know the options it does not render (a `virtualWindow` there is ignored, with a warning).
+
+### Keyboard and screen readers
+
+- **Keys move by the data.** DataGrid: ArrowUp/ArrowDown, PageUp/PageDown (10 rows) and Ctrl+Home/Ctrl+End by row index over every row; List: the arrows (wrapping), Home/End and PageUp/PageDown (ten items, stopping at the ends) by index; the pickers: every key of the active-descendant model over the shown options; FlatTree: the tree keys over the visible items of its model. A target that is not rendered is scrolled into the window in the key's own update and focused, or made active, in the commit that renders it.
+- **The focused item stays rendered** while it is scrolled away (an extra entry between spacers), so it keeps focus and the Tab stop; a List also keeps it while focus is in a popup one of its items opened. When a data change makes the browser drop focus from a DataGrid row that moved, focus returns to the same row, else the rendered row nearest its place; when a List's `count` drops to or below the focused item, focus moves to the last item; when a FlatTree branch collapses around the focused item from code, focus moves to the branch.
+- **Positions are announced from the data.** A windowed DataGrid carries `aria-rowcount` (the items plus the header rows) and `aria-rowindex` on every row (in the sorted order), a windowed List `aria-setsize` and `aria-posinset` on its items (in a grid, `aria-rowcount` and `aria-rowindex`), the options of a data-mode picker `aria-setsize` and `aria-posinset` among the shown options, and FlatTree items `aria-level`, `aria-setsize` and `aria-posinset`, so "row 5000 of 10001" is read whatever is rendered. Spacers are `aria-hidden`.
+- **The scroller is no extra Tab stop** while one of its items is the Tab stop (`tabIndex` -1; Firefox would stop on it), and a pointer press on a partly visible item focuses it without scrolling it, so the click lands.
+
+### An adapter for `@tanstack/react-virtual`
+
+The components accept any object that implements `VirtualWindow`, so a virtualization library can drive them. WaveUI ships no adapter and no dependency; this one, on `useVirtualizer` from `@tanstack/react-virtual` 3, type-checks against `VirtualWindow`:
+
+```tsx
+import * as React from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import type { VirtualEntry, VirtualWindow } from '@mortenbrudvik/waveui';
+
+interface TanStackWindowOptions {
+  /** The number of items the component lays out (`items.length`, a List's `count`). */
+  count: number;
+  /** The height of every item, in pixels: fixed, never measured. */
+  itemSize: number;
+  /** Items rendered beyond each edge of the viewport. */
+  overscan?: number;
+  /** The height of a sticky header over the rows (a DataGrid's). */
+  scrollPaddingStart?: number;
+}
+
+type ScrollRequest = Parameters<VirtualWindow['scrollToIndex']>;
+
+/** A `VirtualWindow` on `@tanstack/react-virtual`'s virtualizer. */
+export function useTanStackWindow({
+  count,
+  itemSize,
+  overscan = 6,
+  scrollPaddingStart = 0,
+}: TanStackWindowOptions): VirtualWindow {
+  const [scroller, setScroller] = React.useState<HTMLElement | null>(null);
+  // A request made before the scroller attached: a popup asks for its selected option in the
+  // commit that shows it.
+  const pendingRef = React.useRef<ScrollRequest | null>(null);
+  const virtualizer = useVirtualizer({
+    count,
+    getScrollElement: () => scroller,
+    estimateSize: () => itemSize,
+    overscan,
+    // The rows start below the header, and scrolling to a row leaves it below the header.
+    paddingStart: scrollPaddingStart,
+    scrollPaddingStart,
+    // The viewport assumed on the server and in the first render, as useVirtualWindow's.
+    initialRect: { width: 0, height: 480 },
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+
+  React.useLayoutEffect(() => {
+    const request = pendingRef.current;
+    if (!scroller || !request) return;
+    pendingRef.current = null;
+    const [index, options] = request;
+    virtualizer.scrollToIndex(index, { align: options?.align ?? 'auto' });
+  }, [scroller, virtualizer]);
+
+  const scrollRef = React.useCallback((element: HTMLElement | null) => setScroller(element), []);
+
+  return React.useMemo<VirtualWindow>(
+    () => ({
+      itemSize,
+      scrollRef,
+      layout(layoutCount, options) {
+        // The virtualizer's range, the kept indexes, and spacers for the gaps between them.
+        const indexes = new Set(virtualItems.map((item) => item.index));
+        for (const index of options?.keep ?? []) indexes.add(index);
+        const entries: VirtualEntry[] = [];
+        let next = 0;
+        for (const index of [...indexes].sort((a, b) => a - b)) {
+          if (!Number.isInteger(index) || index < 0 || index >= layoutCount) continue;
+          if (index > next) {
+            entries.push({ kind: 'spacer', size: (index - next) * itemSize, key: `gap-${index}` });
+          }
+          entries.push({ kind: 'item', index });
+          next = index + 1;
+        }
+        if (next < layoutCount) {
+          entries.push({ kind: 'spacer', size: (layoutCount - next) * itemSize, key: 'gap-end' });
+        }
+        return entries;
+      },
+      scrollToIndex(index, options) {
+        if (scroller) virtualizer.scrollToIndex(index, { align: options?.align ?? 'auto' });
+        else pendingRef.current = [index, options];
+      },
+    }),
+    [itemSize, scrollRef, virtualItems, virtualizer, scroller],
+  );
+}
+
+// <DataGrid items={people} columns={columns} getRowId={personId}
+//   virtualWindow={useTanStackWindow({ count: people.length, itemSize: 44, scrollPaddingStart: 45 })}
+//   containerProps={{ style: { height: 480 } }} />
+```
+
+What the adapter must keep, and what it costs:
+
+- **Fixed sizes.** `estimateSize` returns `itemSize` and nothing calls `measureElement`: the components set every item's height to `itemSize`, so a measured size would only disagree with it.
+- **`keep`.** `layout` adds the kept indexes to the virtualizer's range; without them the focused row unmounts when it is scrolled away, and focus falls to the page.
+- **The count.** `layout` receives the count the component lays out, which can be smaller than the one the virtualizer knows (a Combobox narrowed by typing), so it drops indexes at or past it. Build the adapter with the number of items.
+- **Requests before the scroller.** A popup asks for its opening scroll before its list attaches; the adapter keeps the request and applies it in a layout effect once the scroller is there. The built-in window also applies it once more when positioning shrinks the popup; this adapter does not.
+- **One frame later.** The virtualizer takes its range from its own scroll listener, so after a jump past the overscan (End, PageDown, a far typeahead match) the target is rendered through `keep` at once, while the items around it can arrive a frame later, a frame that shows the spacer. The built-in `scrollToIndex` moves the window in the same update instead.
+- **Lint.** `eslint-plugin-react-hooks` 7 reports `react-hooks/incompatible-library` (a warning) on `useVirtualizer`: the React Compiler does not memoise a hook that calls it. The `useMemo` above keys the window on `virtualItems`, a new array whenever the range changes, so the component that receives the window renders again with it.
+
+### Limits
+
+- **Fast flings.** A scroll that moves farther than the overscan in one frame (dragging the scroll bar, a fast fling) shows the spacers until the next frame renders the new items. Raise `overscan` where that matters; wheel scrolling and held arrow keys stay within it.
+- **Typeahead** in a windowed List matches the labels of the rendered items only. The pickers and FlatTree search their data (FlatTree the visible items, so items under a collapsed branch are not found).
+- **No option groups** in a windowed Listbox, Combobox or Dropdown (a flat window cannot honour `OptionGroup` structure; a development warning). TagPicker and TimePicker have no `virtualWindow`, nor has the static `Table`, whose state the table hooks keep over every item while you render a page of it.
+- **No `noNativeElements`.** DataGrid and Table stay native tables (`<table role="grid">` with spacer rows and a fixed table layout); a Table rendered from `<div>`s (Fluent's `noNativeElements`, gap `table-2`) is not in 0.16.
+- **Rows outside the body.** `<tfoot>` rows of a windowed DataGrid get no `aria-rowindex` and the arrow keys skip them. A component that renders several header rows counts as one header row.
+- **PageUp/PageDown move 10 rows** in a windowed DataGrid and ten items in a windowed List, not a viewport page: a `VirtualWindow` exposes no viewport size.
+- **Focus kept by index.** The DataGrid keeps its focused row by index: a sort or new `items` that move the focused item out of the window leave focus on the row now at that index. A List item with a consumer `aria-disabled="true"` is reached by a windowed List's keys (a List item is never out of the arrow order).
+- **Scroll anchoring is off** on every windowed scroller (the browser's anchoring fights the window): content inserted or removed above the view from code moves the view. FlatTree keeps only its focused item in place (`*`, or a branch changed from code while the item is in view).
+- **A plain windowed List** (`navigationMode` `none`) keeps the browser's default tab stop, under which WebKit's keyboard cannot reach and scroll it: pass `tabIndex={0}` or navigate its items (`navigationMode="items"`).
+- **Deep checkbox trees.** FlatTree's index and visible rows are built without recursion, but the check cascade (multiple selection, `setChecked`) recurses per level: a chain of about 3,000 nested levels overflows the stack (2,000 work). A selected item under a collapsed branch is not the FlatTree's tab stop until it is visible.
+- **Resizing a column in WebKit, right to left.** In a right-to-left DataGrid whose table is wider than its scroll wrapper, a pointer drag that narrows a column stops after its first move in WebKit, and the grid stays in its resizing state until the next pointer press, which resumes the drag where it lands; keyboard resizing, left to right, a table that fits, Chromium and Firefox are not affected (a known issue in the roadmap's §8.5, found in headless WebKit's Windows port).
+- **A smooth-scrolling scroller** (`scroll-behavior: smooth`) reads back its old offset after `scrollToIndex`, so the window does not move in the same update; the components keep the target in `keep`, and a window of your own must too.
+
+---
+
+## 13. Quick Reference
+
+### Component Catalog (80 components)
 
 **Buttons & Actions** (7)
 `Button` `CompoundButton` `ToggleButton` `SplitButton` `MenuButton` `Link` `Toolbar` (plus the Toolbar parts `Toolbar.Button`, `Toolbar.ToggleButton`, `Toolbar.RadioGroup`, `Toolbar.RadioButton`, `Toolbar.Group`, `Toolbar.Divider`)
@@ -2348,8 +2550,8 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 **Data Display** (14)
 `Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `TagGroup` `InteractionTag` `Persona` `Divider` `InfoLabel` `InfoButton` `Image` `List` (plus `InteractionTag.Primary`, `InteractionTag.Secondary`)
 
-**Layout** (9)
-`Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex` (plus `Tree.ItemPersonaLayout`, `Overflow.Item`, `Overflow.Divider`)
+**Layout** (10)
+`Card` `Accordion` `TabList` `Tree` `FlatTree` `Carousel` `Overflow` `Grid` `Stack` `Flex` (plus `Tree.ItemPersonaLayout`, `FlatTree.Item`, `Overflow.Item`, `Overflow.Divider`; `useFlatTree` is FlatTree's model)
 
 **Navigation** (7)
 `Breadcrumb` `Menu` `Nav` `NavDrawer` `Hamburger` `Stepper` `Pagination` (plus the Menu parts `Menu.ItemCheckbox`, `Menu.ItemRadio`, `Menu.ItemSwitch`, `Menu.ItemLink`, `Menu.Group`, `Menu.GroupHeader`, `Menu.SplitGroup`, the Nav parts `Nav.SectionHeader`, `Nav.Divider`, `Nav.AppItem`, `Nav.AppItemStatic`, and `NavDrawer.Header`, `NavDrawer.Body`, `NavDrawer.Footer`)
@@ -2361,7 +2563,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 `Dialog` `Popover` `Tooltip` `Drawer` `TeachingPopover` (plus the Drawer parts `Drawer.Header`, `Drawer.HeaderTitle`, `Drawer.HeaderNavigation`, `Drawer.Body`, `Drawer.Footer`, and the TeachingPopover parts `TeachingPopover.Trigger`, `TeachingPopover.Surface`, `TeachingPopover.Header`, `TeachingPopover.Title`, `TeachingPopover.Body`, `TeachingPopover.Footer`, `TeachingPopover.Carousel`, `TeachingPopover.CarouselNav`, `TeachingPopover.CarouselPageCount`, `TeachingPopover.CarouselFooter`)
 
 **Table** (2)
-`Table` `DataGrid` (plus the cell parts `Table.SelectionCell`, `Table.CellLayout`, `Table.CellActions` and `DataGrid.SelectionCell`; `createTableColumn` builds typed DataGrid columns)
+`Table` `DataGrid` (plus the cell parts `Table.SelectionCell`, `Table.CellLayout`, `Table.CellActions`, `Table.ResizeHandle` and `DataGrid.SelectionCell`; `createTableColumn` builds typed DataGrid columns; `useTableFeatures` with `useTableSort`, `useTableSelection` and `useTableColumnSizing` holds a static table's state)
 
 **Typography** (1)
 `Text`
@@ -2371,6 +2573,9 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 
 **Motion** (utility)
 `Presence` (`usePresence` is its hook form)
+
+**Windowing** (hook)
+`useVirtualWindow`, the `virtualWindow` of DataGrid, List, Listbox, Combobox, Dropdown and FlatTree (chapter 12)
 
 ### Most-Used Tailwind Classes
 
@@ -2451,6 +2656,12 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | `src/components/layout/Tree*.ts(x)` | The Tree modules (compound, root and items, context, the cascade model, the persona layout) |
 | `src/components/layout/Overflow.tsx`, `src/components/layout/Overflow.store.ts` | Overflow, its items, divider and hooks; the store that measures and picks the items to hide (internal) |
 | `src/components/table/Table.shared.tsx` | The sort button and glyphs, the selection control and the cell classes that Table and DataGrid share (internal) |
+| `src/components/table/DataGrid.*.ts(x)`, `src/components/table/Table.resize.tsx` | The DataGrid modules (the selection store, the contexts, the header parts, column sizing, the window) and `Table.ResizeHandle` |
+| `src/components/table/useTable*.ts` | `useTableFeatures` and its plugins `useTableSort`, `useTableSelection`, `useTableColumnSizing` (public) |
+| `src/hooks/useVirtualWindow.ts`, `src/lib/virtual.ts` | The window (public) and its layout maths (internal; `VirtualEntry` is public) |
+| `src/hooks/useSelection.ts`, `src/lib/selection.ts` | Selection by id (public) and its pure core (internal) |
+| `src/components/layout/FlatTree*.ts(x)`, `src/components/layout/useFlatTree.ts`, `src/lib/flatTree.ts`, `src/lib/treeCascade.ts` | FlatTree (root, item, context), its model hook, the flat index and visible rows, and the check cascade shared with Tree (the lib modules are internal and server-safe) |
+| `src/components/input/Option.data.tsx` | The data mode and the window of Listbox, Combobox and Dropdown (internal) |
 | `src/components/overlays/TeachingPopover*.ts(x)` | The TeachingPopover modules (compound, root, context and public types, parts with the internal surface) |
 | `src/lib/breadcrumb.ts`, `src/lib/table.ts` | `partitionBreadcrumbItems` and the truncation helpers, `createTableColumn` (public, server-safe) |
 | `src/lib/composeEventHandlers.ts` | Consumer + internal handler composition |
@@ -2490,11 +2701,12 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | Dropdown | Tab | Down/Up/Home/End, typeahead, PageUp/PageDown | Enter/Space | Escape / Tab (commits) |
 | Menu | Enter/Space/Down on the trigger; Shift+F10 on a context region | Up/Down, Home/End, typeahead; Right/Left into and out of submenus | Enter/Space (Space keeps a checkable item's menu open) | Escape (one level) / Tab (all) |
 | Tree | Tab (selected item) | Up/Down, Left/Right (collapse/expand), Home/End, typeahead; into a row's actions by Tab (`tree`) or Right (`treegrid`) | Enter/Space (Space toggles the check in a checkbox tree) | Tab |
+| FlatTree | Tab (focused, else selected, else first enabled item) | Up/Down, Left/Right (collapse/expand), Home/End, `*`, typeahead over the visible items | Enter/Space (Space toggles the check in a checkbox tree) | Tab |
 | Toaster | the app's `shortcuts.focus` key press | Tab through the toasts' controls | Enter/Space on a control | Escape (all toasts) / Delete, Backspace (the focused one) |
 | ColorArea | Tab (one stop) | Arrows, Shift+arrows, PageUp/PageDown, Home/End | – | Tab |
-| List (selectable, or `navigationMode="items"`) | Tab | Up/Down, Home/End, typeahead | Enter/Space (toggle; Enter runs `onAction`) | Tab |
+| List (selectable, or `navigationMode="items"`) | Tab | Up/Down, Home/End, typeahead (windowed: by index, PageUp/PageDown by ten) | Enter/Space (toggle; Enter runs `onAction`) | Tab |
 | Breadcrumb (`focusMode="arrow"`) | Tab (the last focused link, at first the first) | Left/Right, Home/End | Enter (Space on a button) | Tab |
-| DataGrid | Tab (one tab stop) | Arrows, Home/End, Ctrl+Home/End, PageUp/PageDown | Enter/F2 (into cell), Space (select row) | Tab / Escape (from cell widgets) |
+| DataGrid | Tab (one tab stop) | Arrows, Home/End, Ctrl+Home/End, PageUp/PageDown (windowed: by the data) | Enter/F2 (into cell), F2 on a header (its resize handle), Space (select row) | Tab / Escape (from cell widgets) |
 | DatePicker calendar, Calendar | Alt+Down on the input, or the toggle (Calendar: Tab) | Arrows, PageUp/PageDown, Shift+PageUp/PageDown, Home/End; the heading button to the month and year views | Enter/Space | Escape (one view back; in the day view, closes a DatePicker) / Tab |
 | Dialog / Drawer (modal, alert) | Auto-focus | Tab (trapped) | Enter | Escape / the trigger (toggles) |
 | Dialog / Drawer (non-modal) | Auto-focus | Tab (in page order, after the opener) | Enter | Escape (from inside) / Tab out |
@@ -2506,7 +2718,7 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 
 ---
 
-## 13. Deprecated APIs
+## 14. Deprecated APIs
 
 Deprecated names still work through 0.x, warn once in development and will be removed in 1.0. The CHANGELOG has the full table with callback semantics.
 

@@ -15,6 +15,11 @@ export interface ListItemRecord {
   hasAction: boolean;
   /** The item element's ref, read after a commit to keep the records in DOM order. */
   element: { readonly current: Element | null };
+  /**
+   * The item's index in a windowed list (the List provides it): the records are kept in index
+   * order instead of DOM order. `undefined` in a list that renders every item.
+   */
+  index?: number;
 }
 
 /** The data collected from the records, see {@link ListRegistrySnapshot}. */
@@ -150,7 +155,11 @@ export class ListRegistry {
    * item) follows the DOM. Items that mount between others register last, and keyed moves do not
    * register again, so the List calls this after each of its commits. O(n); publishes only when
    * the order changed. The records keep their registration order while an item is not a direct
-   * child of `root` (an element wrapped around an item) or has no element.
+   * child of `root` (an element wrapped around an item) or has no element. Children that are no
+   * item (the spacers of a windowed list) are skipped.
+   *
+   * When every record has an `index` (a windowed list, whose items scrolled into view above the
+   * others register last), the records are put in index order instead, without reading the DOM.
    *
    * The children are walked with `nextElementSibling`, never through the `root.children`
    * collection: jsdom before 30.1 does not cache indexed `HTMLCollection` access, so an indexed
@@ -159,6 +168,7 @@ export class ListRegistry {
    */
   syncOrder(root: Element | null): void {
     if (!this.active || !root || this.records.size < 2) return;
+    if (this.syncIndexOrder()) return;
     const byElement = new Map<Element, [object, ListItemRecord]>();
     for (const entry of this.records) {
       const element = entry[1].element.current;
@@ -175,6 +185,25 @@ export class ListRegistry {
       if (!moved && current.next().value !== entry[0]) moved = true;
     }
     if (!moved || ordered.length !== this.records.size) return;
+    this.reorder(ordered);
+  }
+
+  /**
+   * Index order (see {@link syncOrder}): `false` when a record has no index, so the DOM decides
+   * (O(1) in a list that renders every item: its first record has none). O(n log n) over the
+   * rendered items of a window.
+   */
+  private syncIndexOrder(): boolean {
+    for (const record of this.records.values()) {
+      if (record.index === undefined) return false;
+    }
+    const entries = Array.from(this.records);
+    const ordered = entries.slice().sort(([, a], [, b]) => (a.index ?? 0) - (b.index ?? 0));
+    if (ordered.some((entry, position) => entry !== entries[position])) this.reorder(ordered);
+    return true;
+  }
+
+  private reorder(ordered: readonly [object, ListItemRecord][]): void {
     this.records.clear();
     for (const [token, record] of ordered) this.records.set(token, record);
     this.publish();
