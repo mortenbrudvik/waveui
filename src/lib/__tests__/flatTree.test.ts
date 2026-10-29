@@ -169,6 +169,21 @@ describe('buildFlatTreeIndex', () => {
 describe('visibleFlatItems', () => {
   const index = buildFlatTreeIndex(FILES);
 
+  it('marks a childless item typed as a branch, and an item with children, as branches', () => {
+    const lazy = buildFlatTreeIndex([
+      item('lazy', undefined, { itemType: 'branch' }),
+      item('typed-leaf', undefined, { itemType: 'leaf' }),
+      item('parent', undefined, { itemType: 'leaf' }),
+      item('child', 'parent'),
+    ]);
+    const visible = visibleFlatItems(lazy, new Set(['lazy']));
+    expect(visible.map((v) => [v.item.value, v.hasChildren, v.isBranch, v.expanded])).toEqual([
+      ['lazy', false, true, true],
+      ['typed-leaf', false, false, false],
+      ['parent', true, true, false],
+    ]);
+  });
+
   it('lists only the roots while nothing is expanded', () => {
     const visible = visibleFlatItems(index, new Set());
     expect(summary(visible)).toEqual([
@@ -178,6 +193,7 @@ describe('visibleFlatItems', () => {
     ]);
     expect(visible.map((v) => v.expanded)).toEqual([false, false, false]);
     expect(visible.map((v) => v.hasChildren)).toEqual([true, true, false]);
+    expect(visible.map((v) => v.isBranch)).toEqual([true, true, false]);
     expect(visible.map((v) => v.index)).toEqual([0, 1, 2]);
     expect(visible.map((v) => v.parentValue)).toEqual([undefined, undefined, undefined]);
   });

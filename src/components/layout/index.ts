@@ -42,6 +42,11 @@ export type {
   TreeCheckedItemsChangeDetails,
 } from './Tree';
 
+export { useFlatTree } from './useFlatTree';
+export type { UseFlatTreeOptions, FlatTreeModel } from './useFlatTree';
+export type { FlatTreeItemData, VisibleFlatItem } from '../../lib/flatTree';
+export type { CheckState } from '../../lib/treeCascade';
+
 export { Carousel, CarouselItem } from './Carousel';
 export { CarouselButton } from './Carousel.button';
 export type { CarouselButtonProps } from './Carousel.button';

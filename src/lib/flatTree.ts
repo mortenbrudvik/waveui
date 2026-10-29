@@ -41,6 +41,8 @@ export interface VisibleFlatItem {
   parentValue: string | undefined;
   /** Whether other items are nested in it. */
   hasChildren: boolean;
+  /** Whether it can expand: `hasChildren`, or `item.itemType === 'branch'` (`aria-expanded` is set for these). */
+  isBranch: boolean;
   /** Whether it is a branch in the expanded set. */
   expanded: boolean;
   /** The place in the visible list, 0-based. */
@@ -223,6 +225,7 @@ export function visibleFlatItems(
       setSize: record.setSize,
       parentValue: record.parentValue,
       hasChildren: record.hasChildren,
+      isBranch: record.isBranch,
       expanded: open,
       index: visible.length,
     });
