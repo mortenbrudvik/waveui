@@ -1,7 +1,8 @@
 /**
  * Shared harness of the token tests: the small CSS parser, the `var()` resolver, the WCAG 2.2
  * contrast maths, the theme-group lookups of `src/styles/tokens.css` and the contrast matrix (its
- * pair lists, the classification of every colour token, and `forEachContrastPair`, which walks it).
+ * pair lists, the classification of every colour token, `forEachContrastPair`, which walks it, and
+ * `brandPairs`, its pairs that read a brand stop).
  * `tokens.test.ts` and the tests that prove properties of the tokens read them from here. The
  * parser is not a general CSS parser: it covers what the style files use (rules, at-rules, nested
  * `@theme`/`@keyframes` blocks and declarations).
@@ -563,6 +564,81 @@ export function forEachContrastPair(
     const bgValue = resolveToken(`--wave-${bg}`, chain);
     callback({ fg, bg, threshold, fgValue, bgValue, ratio: contrastRatio(fgValue, bgValue) });
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Brand pairs
+// ---------------------------------------------------------------------------------------------
+
+/** The stops of the brand ramp (`--wave-brand-N`), darkest first. */
+export const BRAND_STOPS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160];
+
+/** A colour per stop that no token of tokens.css resolves to, to find where a stop is read. */
+export function brandMarker(stop: number): string {
+  return `#ab${stop.toString(16).padStart(2, '0')}cd`;
+}
+
+/** A side of a brand pair: a brand stop, or a colour that no brand stop changes. */
+export type BrandSide = { stop: number } | { colour: string; luminance: number };
+
+/** A pair of the contrast matrix that reads a brand stop on at least one side. */
+export interface BrandPair {
+  theme: 'light' | 'dark';
+  /** `<fgToken> on <bgToken>`. */
+  name: string;
+  fgToken: string;
+  bgToken: string;
+  fg: BrandSide;
+  bg: BrandSide;
+  threshold: number;
+}
+
+/** The `:root` constants with a marker colour per stop in place of the `--wave-brand-N` values. */
+function markedConstants(): Decls {
+  return merge(
+    rootConstants(),
+    new Map(
+      BRAND_STOPS.map((stop): [string, string] => [`--wave-brand-${stop}`, brandMarker(stop)]),
+    ),
+  );
+}
+
+/** A resolved value as a side: the stop whose marker it is, or the colour. */
+function sideOf(value: string): BrandSide {
+  const stop = BRAND_STOPS.find((candidate) => brandMarker(candidate) === value);
+  return stop === undefined ? { colour: value, luminance: relativeLuminance(value) } : { stop };
+}
+
+/** What `--wave-<token>` of a theme reads: a brand stop (directly or through other tokens), or a colour. */
+export function brandSide(theme: 'light' | 'dark', token: string): BrandSide {
+  return sideOf(resolveToken(`--wave-${token}`, [themeDecls(theme), markedConstants()]));
+}
+
+/**
+ * The pairs of the contrast matrix (`forEachContrastPair`) that read a brand stop on either side,
+ * in light and dark, in the matrix's order: the matrix resolved with a marker colour per stop
+ * (`brandMarker`) in place of the `--wave-brand-N` values of the `:root` constants.
+ */
+export function brandPairs(): BrandPair[] {
+  const markers = markedConstants();
+  const pairs: BrandPair[] = [];
+  for (const theme of ['light', 'dark'] as const) {
+    forEachContrastPair(theme, [markers], ({ fg, bg, threshold, fgValue, bgValue }) => {
+      const fgSide = sideOf(fgValue);
+      const bgSide = sideOf(bgValue);
+      if (!('stop' in fgSide) && !('stop' in bgSide)) return;
+      pairs.push({
+        theme,
+        name: `${fg} on ${bg}`,
+        fgToken: fg,
+        bgToken: bg,
+        fg: fgSide,
+        bg: bgSide,
+        threshold,
+      });
+    });
+  }
+  return pairs;
 }
 
 // ---------------------------------------------------------------------------------------------

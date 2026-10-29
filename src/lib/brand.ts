@@ -1,7 +1,8 @@
 /**
  * Brand ramps: `createBrandTokens` builds the 16 brand tokens from a seed colour, or takes a full
- * ramp. Server-safe and pure: no DOM and no React; its only run-time import is the development
- * warnings. The colour maths (sRGB, linear light, OKLab and OKLCH) is small and local to it.
+ * ramp, which it checks against the pairs the themes read from it in development. Server-safe and
+ * pure: no DOM and no React; its only run-time import is the development warnings. The colour
+ * maths (sRGB, linear light, OKLab and OKLCH) is small and local to it.
  */
 import { warnOnce } from './dev';
 
@@ -77,9 +78,10 @@ const GREY_CHROMA = 0.005;
  * 160 (1.163); 140 rounds darker for that step against the light selected text at 60 on it
  * (5.23:1). So the pairs whose two stops round the same way (150 and 160, 40 and 20, 10 and 40,
  * 60 and 140) can lose up to one rounding step of contrast, and each has more margin over its
- * floor (1.15 between the states of a fill, 4.5 for text) than that.
+ * floor (1.15 between the states of a fill, 4.5 for text) than that. A test derives the sides
+ * from the pairs of tokens.css and keeps this list equal to them.
  */
-const ROUNDS_DARKER: readonly BrandStop[] = [10, 20, 30, 40, 50, 60, 70, 80, 140];
+export const ROUNDS_DARKER: readonly BrandStop[] = [10, 20, 30, 40, 50, 60, 70, 80, 140];
 
 // ---------------------------------------------------------------------------------------------
 // Colour maths
@@ -212,6 +214,104 @@ function toHex(rgb: Triple, target: number, grey: boolean, darker: boolean): str
 }
 
 // ---------------------------------------------------------------------------------------------
+// Checking a full ramp
+// ---------------------------------------------------------------------------------------------
+
+// Colours of the light and dark themes that a checked pair reads a stop against: the values of
+// their tokens in tokens.css, which a test keeps equal.
+const WHITE = '#ffffff';
+const BLACK = '#000000';
+const LIGHT_SUBTLE_SELECTED = '#ebebeb';
+const LIGHT_SUCCESS = '#107c10';
+const DARK_SUBTLE_SELECTED = '#383838';
+const DARK_SUCCESS = '#5db55d';
+
+/**
+ * A pair the check measures: the token that reads a stop, the stop, the token it is read against,
+ * that token's colour (a colour of the theme, or the stop it reads) and the least contrast the
+ * pair needs (4.5 for text, 3 for a focus ring, 1.15 between the states of a fill).
+ */
+type BrandContrastPair = readonly [
+  token: string,
+  stop: BrandStop,
+  against: string,
+  colour: string | BrandStop,
+  minimum: number,
+];
+
+/**
+ * Where the light and dark themes read the ramp: every `var(--wave-brand-N)` of their groups in
+ * tokens.css, as the pairs the check of a full ramp measures. Of the pairs of the contrast matrix
+ * that read a stop, it keeps the one theme colour that bounds each token's stop (the closest in
+ * luminance at its minimum: the darkest light surface under the light primary text, the lightest
+ * dark surface under the dark primary text, the lightest text on the light selection fill, the
+ * darkest text on the dark one, the on-brand text of the fill states), and every pair of two stops
+ * those bounds do not already decide. Tests keep it in step with tokens.css and prove that a ramp
+ * that passes these pairs passes every pair of the matrix that reads a stop. High contrast reads
+ * no stop.
+ */
+export const BRAND_CONTRAST_PAIRS: Readonly<
+  Record<'light' | 'dark', readonly BrandContrastPair[]>
+> = {
+  light: [
+    ['primary', 80, 'subtle-selected', LIGHT_SUBTLE_SELECTED, 4.5],
+    ['primary', 80, 'selected', 160, 4.5],
+    ['primary-hover', 70, 'primary-foreground', WHITE, 4.5],
+    ['primary-pressed', 40, 'primary-foreground', WHITE, 4.5],
+    ['selected', 160, 'success', LIGHT_SUCCESS, 4.5],
+    ['selected-foreground', 60, 'selected', 160, 4.5],
+    ['selected-foreground', 60, 'selected-hover', 150, 4.5],
+    ['selected-foreground', 60, 'selected-pressed', 140, 4.5],
+    ['selected-hover', 150, 'selected', 160, 1.15],
+    ['selected-pressed', 140, 'selected-hover', 150, 1.15],
+    ['ring', 80, 'subtle-selected', LIGHT_SUBTLE_SELECTED, 3],
+  ],
+  dark: [
+    ['primary', 110, 'subtle-selected', DARK_SUBTLE_SELECTED, 4.5],
+    ['primary-hover', 120, 'primary-foreground', BLACK, 4.5],
+    ['primary-pressed', 90, 'primary-foreground', BLACK, 4.5],
+    ['selected', 20, 'success', DARK_SUCCESS, 4.5],
+    ['selected-foreground', 110, 'selected', 20, 4.5],
+    ['selected-foreground', 110, 'selected-hover', 40, 4.5],
+    ['selected-foreground', 110, 'selected-pressed', 10, 4.5],
+    ['selected-hover', 40, 'selected', 20, 1.15],
+    ['selected-pressed', 10, 'selected-hover', 40, 1.15],
+    ['ring', 100, 'subtle-selected', DARK_SUBTLE_SELECTED, 3],
+    ['ring', 100, 'selected', 20, 3],
+  ],
+};
+
+/** The WCAG relative luminance of a `#rgb` or `#rrggbb` colour; `undefined` for anything else. */
+function luminanceOf(value: unknown): number | undefined {
+  const rgb = parseHex(value);
+  return rgb && luminance(rgb.map(toLinear) as Triple);
+}
+
+/**
+ * The development check of a full ramp (R8): warns once per pair of `BRAND_CONTRAST_PAIRS` whose
+ * contrast is below its minimum, naming the theme, the tokens, the stops and the ratio (rounded
+ * down, so a failing ratio never reads as its minimum). Advisory: it never throws, never changes
+ * the ramp, and skips a stop that is not a hex colour.
+ */
+export function checkBrandRamp(ramp: BrandRamp): void {
+  for (const [theme, pairs] of Object.entries(BRAND_CONTRAST_PAIRS)) {
+    for (const [token, stop, against, colour, minimum] of pairs) {
+      const own = luminanceOf(ramp[stop]);
+      const other = luminanceOf(typeof colour === 'number' ? ramp[colour] : colour);
+      if (own === undefined || other === undefined) continue;
+      const ratio = (Math.max(own, other) + 0.05) / (Math.min(own, other) + 0.05);
+      if (ratio >= minimum) continue;
+      warnOnce(
+        `createBrandTokens:contrast:${theme}:${token}:${against}`,
+        `createBrandTokens: in the ${theme} theme, \`${token}\` on \`${against}\` (stop ${stop} on ` +
+          `${typeof colour === 'number' ? `stop ${colour}` : colour}) is ` +
+          `${Math.floor(ratio * 100) / 100}:1; needs ${minimum}:1.`,
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Ramps
 // ---------------------------------------------------------------------------------------------
 
@@ -260,11 +360,13 @@ function rampFromSeed([red, green, blue]: Triple): BrandTokens {
 
 function rampFromStops(ramp: BrandRamp): BrandTokens {
   const invalid: BrandStop[] = [];
+  // The colours the tokens take, checked below: the ramp's, or the default's where it has none.
+  const used = {} as Record<BrandStop, string>;
   const tokens = toTokens((stop) => {
     const value: unknown = ramp[stop];
-    if (typeof value === 'string' && parseHex(value)) return value;
+    if (typeof value === 'string' && parseHex(value)) return (used[stop] = value);
     invalid.push(stop);
-    return DEFAULT_BRAND_RAMP[stop];
+    return (used[stop] = DEFAULT_BRAND_RAMP[stop]);
   });
   if (invalid.length > 0) {
     const several = invalid.length > 1;
@@ -273,6 +375,14 @@ function rampFromStops(ramp: BrandRamp): BrandTokens {
       `createBrandTokens: the ramp has no #rgb or #rrggbb colour at the stop${several ? 's' : ''} ` +
         `${invalid.join(', ')}, so the default ramp's colour${several ? 's are' : ' is'} used there.`,
     );
+  }
+  // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
+  // production bundle then drops the check and its table. Without a bundler and without
+  // `process` (an unbundled import in a browser), the read throws and the check is skipped.
+  try {
+    if (process.env.NODE_ENV !== 'production') checkBrandRamp(used);
+  } catch {
+    // No `process`: see above.
   }
   return tokens;
 }
@@ -299,8 +409,13 @@ function rampFromStops(ramp: BrandRamp): BrandTokens {
  * seed (black, white or any grey) a grey ramp.
  *
  * A full `BrandRamp` is returned as tokens with its colours unchanged; a stop that is missing or
- * not a hex colour takes the default ramp's colour, with a development warning. Any other seed
- * returns the default ramp, with a development warning.
+ * not a hex colour takes the default ramp's colour, with a development warning. In development the
+ * ramp is also checked against the pairs the light and dark themes read from it (the primary
+ * colour as text and as a fill under its text, the hover and pressed fills, the selection fills
+ * and their text, the focus ring): each pair below its minimum (4.5:1 for text, 3:1 for the focus
+ * ring, 1.15:1 between the states of a fill) logs one warning naming the theme, the tokens, the
+ * stops and the ratio. The check is advisory: the ramp applies as given. Any other seed returns
+ * the default ramp, with a development warning.
  *
  * Pure and server-safe; it returns a new object on each call, so compute it once (at module scope,
  * or memoised) rather than on every render.

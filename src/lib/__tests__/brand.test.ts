@@ -1,12 +1,19 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   BRAND_SEEDS,
+  brandPairs,
+  brandSide,
   relativeLuminance,
   rootConstants,
+  themeDecls,
+  type BrandPair,
+  type BrandSide,
 } from '../../styles/__tests__/tokensHarness';
 import {
+  BRAND_CONTRAST_PAIRS,
   createBrandTokens,
   DEFAULT_BRAND_RAMP,
+  ROUNDS_DARKER,
   type BrandRamp,
   type BrandStop,
   type BrandTokens,
@@ -59,19 +66,15 @@ function luminanceMisses(tokens: BrandTokens): string[] {
 }
 
 /**
- * The stops the themes pair with lighter colours (fills under light text, text and focus rings on
- * light surfaces, the dark selection fills; 140, the light pressed selection, below the hover fill
- * at 150): rounding may only make them darker, and every other stop only lighter.
+ * Each stop rounded to the unsafe side of the default stop's luminance: a stop of `ROUNDS_DARKER`
+ * may only round darker, every other stop only lighter.
  */
-const DARKER_STOPS: BrandStop[] = [10, 20, 30, 40, 50, 60, 70, 80, 140];
-
-/** Each stop rounded to the unsafe side of the default stop's luminance. */
 function unsafeRoundings(tokens: BrandTokens): string[] {
   return STOPS.flatMap((stop) => {
     const hex = tokens[`brand${stop}`];
     const target = relativeLuminance(DEFAULT_BRAND_RAMP[stop]);
     const value = relativeLuminance(hex);
-    const unsafe = DARKER_STOPS.includes(stop) ? value > target : value < target;
+    const unsafe = ROUNDS_DARKER.includes(stop) ? value > target : value < target;
     return unsafe ? [`${stop}: ${hex} at ${value.toFixed(5)} for ${target.toFixed(5)}`] : [];
   });
 }
@@ -248,6 +251,7 @@ describe('createBrandTokens with an invalid seed', () => {
 });
 
 describe('createBrandTokens with a full ramp', () => {
+  /** A hand-made ramp that passes the contrast check of a full ramp in light and dark. */
   const violet: BrandRamp = {
     10: '#1a0b2e',
     20: '#26103f',
@@ -257,11 +261,11 @@ describe('createBrandTokens with a full ramp', () => {
     60: '#572584',
     70: '#642b96',
     80: '#7232a9',
-    90: '#8a4fc4',
+    90: '#9560d4',
     100: '#A06BDB',
-    110: '#ab7be0',
-    120: '#b68be5',
-    130: '#c4a1eb',
+    110: '#bb98ee',
+    120: '#c6a8f2',
+    130: '#d0b4f4',
     140: '#d3b8f1',
     150: '#e2d0f6',
     160: '#f2e9fb',
@@ -319,6 +323,312 @@ describe('createBrandTokens with a full ramp', () => {
         `[WaveUI] createBrandTokens: the ramp has no #rgb or #rrggbb colour at the stops ${STOPS.join(', ')}, ` +
           "so the default ramp's colours are used there.",
       ],
+    ]);
+  });
+});
+
+describe('createBrandTokens checks a full ramp in development (R8)', () => {
+  /** The ramp of generated tokens, to pass back as a `BrandRamp`. */
+  const rampOf = (tokens: BrandTokens): BrandRamp =>
+    Object.fromEntries(STOPS.map((stop) => [stop, tokens[`brand${stop}`]])) as BrandRamp;
+
+  it('passes the default ramp without a warning', () => {
+    const warn = vi.spyOn(console, 'warn');
+    expect(createBrandTokens(DEFAULT_BRAND_RAMP)).toEqual(DEFAULT_TOKENS);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('warns once for each light pair that reads stop 80 when stop 80 is light', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ramp: BrandRamp = Object.freeze({ ...DEFAULT_BRAND_RAMP, 80: '#b4d6fa' });
+    const expected = { ...DEFAULT_TOKENS, brand80: '#b4d6fa' };
+    expect(createBrandTokens(ramp)).toEqual(expected);
+    expect(createBrandTokens(ramp)).toEqual(expected);
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] createBrandTokens: in the light theme, `primary` on `subtle-selected` (stop 80 ' +
+          'on #ebebeb) is 1.26:1; needs 4.5:1.',
+      ],
+      [
+        '[WaveUI] createBrandTokens: in the light theme, `primary` on `selected` (stop 80 on ' +
+          'stop 160) is 1.34:1; needs 4.5:1.',
+      ],
+      [
+        '[WaveUI] createBrandTokens: in the light theme, `ring` on `subtle-selected` (stop 80 on ' +
+          '#ebebeb) is 1.26:1; needs 3:1.',
+      ],
+    ]);
+    const readingStop80 = BRAND_CONTRAST_PAIRS.light.filter(
+      ([, stop, , colour]) => stop === 80 || colour === 80,
+    );
+    expect(warn).toHaveBeenCalledTimes(readingStop80.length);
+  });
+
+  it('warns only for dark when the ramp fails only in dark', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    createBrandTokens({ ...DEFAULT_BRAND_RAMP, 110: '#2886de' });
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] createBrandTokens: in the dark theme, `primary` on `subtle-selected` (stop 110 ' +
+          'on #383838) is 3.1:1; needs 4.5:1.',
+      ],
+      [
+        '[WaveUI] createBrandTokens: in the dark theme, `selected-foreground` on `selected` (stop ' +
+          '110 on stop 20) is 4.24:1; needs 4.5:1.',
+      ],
+      [
+        '[WaveUI] createBrandTokens: in the dark theme, `selected-foreground` on `selected-hover` ' +
+          '(stop 110 on stop 40) is 3.08:1; needs 4.5:1.',
+      ],
+    ]);
+  });
+
+  it('measures a missing or invalid stop at the default colour it takes', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { 80: _missing, ...rest } = DEFAULT_BRAND_RAMP;
+    createBrandTokens({ ...rest, 60: '#cfe4fa', 160: 'none' } as unknown as BrandRamp);
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] createBrandTokens: the ramp has no #rgb or #rrggbb colour at the stops 80, 160, ' +
+          "so the default ramp's colours are used there.",
+      ],
+      [
+        '[WaveUI] createBrandTokens: in the light theme, `selected-foreground` on `selected` (stop ' +
+          '60 on stop 160) is 1.16:1; needs 4.5:1.',
+      ],
+      [
+        '[WaveUI] createBrandTokens: in the light theme, `selected-foreground` on ' +
+          '`selected-hover` (stop 60 on stop 150) is 1:1; needs 4.5:1.',
+      ],
+      [
+        '[WaveUI] createBrandTokens: in the light theme, `selected-foreground` on ' +
+          '`selected-pressed` (stop 60 on stop 140) is 1.15:1; needs 4.5:1.',
+      ],
+    ]);
+  });
+
+  it('logs nothing in production and still returns the ramp unchanged', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const warn = vi.spyOn(console, 'warn');
+    expect(createBrandTokens({ ...DEFAULT_BRAND_RAMP, 80: '#b4d6fa' })).toEqual({
+      ...DEFAULT_TOKENS,
+      brand80: '#b4d6fa',
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each(BRAND_SEEDS)('passes the generated ramp of %s without a warning', (seed) => {
+    const warn = vi.spyOn(console, 'warn');
+    const tokens = createBrandTokens(seed);
+    expect(createBrandTokens(rampOf(tokens))).toEqual(tokens);
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('the pairs the check of a full ramp measures', () => {
+  const THEMES = ['light', 'dark'] as const;
+
+  /** A side of a pair of the table: a stop, or a theme colour. */
+  const tableSide = (colour: string | BrandStop): BrandSide =>
+    typeof colour === 'number'
+      ? { stop: colour }
+      : { colour, luminance: relativeLuminance(colour) };
+
+  const sameSide = (a: BrandSide, b: BrandSide): boolean =>
+    'stop' in a ? 'stop' in b && a.stop === b.stop : !('stop' in b) && a.colour === b.colour;
+
+  it('lists every var(--wave-brand-N) of the light and dark groups of tokens.css, and no other', () => {
+    for (const theme of THEMES) {
+      const read = [...themeDecls(theme)].flatMap(([name, value]) =>
+        [...value.matchAll(/var\(\s*--wave-brand-(\d+)\b/g)].map(
+          ([, stop]) => `${name.slice('--wave-'.length)} ${stop}`,
+        ),
+      );
+      const listed = BRAND_CONTRAST_PAIRS[theme].flatMap(([token, stop, against, colour]) => [
+        `${token} ${stop}`,
+        ...(typeof colour === 'number' ? [`${against} ${colour}`] : []),
+      ]);
+      expect([...new Set(listed)].sort(), theme).toEqual([...new Set(read)].sort());
+    }
+  });
+
+  it('reads each stop and theme colour of a pair from tokens.css (the colours stay in step)', () => {
+    const wrong = THEMES.flatMap((theme) =>
+      BRAND_CONTRAST_PAIRS[theme].flatMap(([token, stop, against, colour]) => {
+        const misses: string[] = [];
+        if (!sameSide(brandSide(theme, token), { stop })) {
+          misses.push(`${theme} ${token} does not read stop ${stop}`);
+        }
+        if (!sameSide(brandSide(theme, against), tableSide(colour))) {
+          misses.push(`${theme} ${against} is not ${colour}`);
+        }
+        return misses;
+      }),
+    );
+    expect(wrong).toEqual([]);
+  });
+
+  it('names a pair of the contrast matrix in each row, at its threshold', () => {
+    const pairs = brandPairs();
+    const key = (a: string, b: string) => [a, b].sort().join(' and ');
+    const strays = THEMES.flatMap((theme) =>
+      BRAND_CONTRAST_PAIRS[theme].flatMap(([token, , against, , minimum]) =>
+        pairs.some(
+          (pair) =>
+            pair.theme === theme &&
+            pair.threshold === minimum &&
+            key(pair.fgToken, pair.bgToken) === key(token, against),
+        )
+          ? []
+          : [`${theme} ${token} on ${against} at ${minimum}`],
+      ),
+    );
+    expect(strays).toEqual([]);
+  });
+
+  it('bounds every brand pair of the matrix: a ramp that passes the table passes them all', () => {
+    // Each stop's pairs against theme colours confine its luminance to an interval; a brand pair
+    // of the matrix that is not in the table must hold for every luminance those intervals allow.
+    const allowed = new Map<number, Array<[number, number]>>();
+    for (const theme of THEMES) {
+      for (const [, stop, , colour, minimum] of BRAND_CONTRAST_PAIRS[theme]) {
+        if (typeof colour === 'number') continue;
+        const other = relativeLuminance(colour) + 0.05;
+        const passing: Array<[number, number]> = [
+          [0, other / minimum - 0.05],
+          [other * minimum - 0.05, 1],
+        ];
+        allowed.set(
+          stop,
+          (allowed.get(stop) ?? [[0, 1]]).flatMap(([low, high]) =>
+            passing.flatMap(([from, to]): Array<[number, number]> => {
+              const [start, end] = [Math.max(low, from), Math.min(high, to)];
+              return start <= end ? [[start, end]] : [];
+            }),
+          ),
+        );
+      }
+    }
+    const range = (side: BrandSide): [number, number] => {
+      if (!('stop' in side)) return [side.luminance, side.luminance];
+      const intervals = allowed.get(side.stop) ?? [[0, 1]];
+      return [
+        Math.min(...intervals.map(([low]) => low)),
+        Math.max(...intervals.map(([, high]) => high)),
+      ];
+    };
+    const unbounded = brandPairs().flatMap((pair) => {
+      const listed = BRAND_CONTRAST_PAIRS[pair.theme].some(([, stop, , colour, minimum]) => {
+        const [a, b] = [{ stop }, tableSide(colour)];
+        return (
+          minimum >= pair.threshold &&
+          ((sameSide(a, pair.fg) && sameSide(b, pair.bg)) ||
+            (sameSide(a, pair.bg) && sameSide(b, pair.fg)))
+        );
+      });
+      if (listed) return [];
+      const [fgLow, fgHigh] = range(pair.fg);
+      const [bgLow, bgHigh] = range(pair.bg);
+      // The least contrast the intervals allow: their closest ends, or none when they overlap.
+      const least =
+        fgLow > bgHigh
+          ? (fgLow + 0.05) / (bgHigh + 0.05)
+          : bgLow > fgHigh
+            ? (bgLow + 0.05) / (fgHigh + 0.05)
+            : 1;
+      return least >= pair.threshold
+        ? []
+        : [`${pair.theme} ${pair.name}: ${least.toFixed(4)}:1 < ${pair.threshold}:1`];
+    });
+    expect(unbounded).toEqual([]);
+  });
+});
+
+describe('the rounding sides of generated ramps agree with tokens.css', () => {
+  /** The default ramp's luminance of a side of a brand pair. */
+  const defaultLuminance = (side: BrandSide): number =>
+    'stop' in side ? relativeLuminance(DEFAULT_BRAND_RAMP[side.stop as BrandStop]) : side.luminance;
+
+  it('rounds each stop the themes read toward the safe side of its thinnest pair', () => {
+    const thinnest = new Map<number, { margin: number; darker: boolean; pair: string }>();
+    for (const pair of brandPairs()) {
+      const [fg, bg] = [defaultLuminance(pair.fg), defaultLuminance(pair.bg)];
+      const margin = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05) / pair.threshold;
+      for (const [side, own, other] of [
+        [pair.fg, fg, bg],
+        [pair.bg, bg, fg],
+      ] as const) {
+        if (!('stop' in side)) continue;
+        const current = thinnest.get(side.stop);
+        if (current && current.margin <= margin) continue;
+        thinnest.set(side.stop, {
+          margin,
+          darker: own < other,
+          pair: `${pair.theme} ${pair.name}`,
+        });
+      }
+    }
+    // 30, 50 and 130 are read by no theme (ROUNDS_DARKER's comment says so).
+    expect(STOPS.filter((stop) => !thinnest.has(stop))).toEqual([30, 50, 130]);
+    const wrong = [...thinnest].flatMap(([stop, { margin, darker, pair }]) =>
+      ROUNDS_DARKER.includes(stop as BrandStop) === darker
+        ? []
+        : [
+            `${stop} should round ${darker ? 'darker' : 'lighter'} for ${pair} (${margin.toFixed(4)})`,
+          ],
+    );
+    expect(wrong).toEqual([]);
+  });
+
+  /** An 8-bit sRGB channel value in linear light. */
+  const linear = (code: number): number => {
+    const value = code / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+
+  /**
+   * The most one 8-bit step on every channel moves the luminance of a colour whose luminance is
+   * `luminance`, up or down: a channel's linear value is at most the luminance over the channel's
+   * weight, and the higher a channel, the larger its step.
+   */
+  function oneStep(luminance: number, up: boolean): number {
+    return [0.2126, 0.7152, 0.0722].reduce((sum, weight) => {
+      const cap = Math.min(1, luminance / weight);
+      let code = 0;
+      while (code < 255 && linear(code + 1) <= cap) code++;
+      const high = up ? Math.min(255, code + 1) : Math.max(1, code);
+      return sum + weight * (linear(high) - linear(high - 1));
+    }, 0);
+  }
+
+  it('keeps each pair whose stops round toward each other above its floor by one step', () => {
+    const toward: string[] = [];
+    const thin = brandPairs().flatMap((pair: BrandPair) => {
+      const [low, high] = [pair.fg, pair.bg].sort(
+        (a, b) => defaultLuminance(a) - defaultLuminance(b),
+      );
+      let [lowLuminance, highLuminance] = [defaultLuminance(low), defaultLuminance(high)];
+      // The darker side rounding lighter, or the lighter side rounding darker, moves toward the
+      // other side by up to one step.
+      const lowMoves = 'stop' in low && !ROUNDS_DARKER.includes(low.stop as BrandStop);
+      const highMoves = 'stop' in high && ROUNDS_DARKER.includes(high.stop as BrandStop);
+      if (!lowMoves && !highMoves) return [];
+      toward.push(`${pair.theme} ${pair.name}`);
+      if (lowMoves) lowLuminance += oneStep(lowLuminance, true);
+      if (highMoves) highLuminance -= oneStep(highLuminance, false);
+      const ratio = (highLuminance + 0.05) / (lowLuminance + 0.05);
+      return ratio < pair.threshold
+        ? [`${pair.theme} ${pair.name}: ${ratio.toFixed(4)}:1 < ${pair.threshold}:1`]
+        : [];
+    });
+    expect(thin).toEqual([]);
+    // The pairs ROUNDS_DARKER's comment names: a theme that starts reading a stop on its other
+    // side adds one here.
+    expect(toward).toEqual([
+      'light selected-hover on selected',
+      'light selected-foreground on selected-pressed',
+      'dark selected-hover on selected',
+      'dark selected-pressed on selected-hover',
     ]);
   });
 });

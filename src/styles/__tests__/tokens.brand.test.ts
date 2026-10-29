@@ -10,8 +10,11 @@
 import { createBrandTokens, type BrandTokens } from '../../lib/brand';
 import {
   BRAND_SEEDS,
+  BRAND_STOPS,
   CONTRAST_PAIRS,
   TEXT_MATRIX,
+  brandMarker,
+  brandPairs,
   forEachContrastPair,
   merge,
   relativeLuminance,
@@ -19,6 +22,7 @@ import {
   resolved,
   rootConstants,
   themeDecls,
+  type BrandSide,
   type Decls,
 } from './tokensHarness';
 
@@ -103,47 +107,6 @@ describe('createBrandTokens: generated ramps pass the whole contrast matrix (R7)
 });
 
 describe('createBrandTokens: the brand pairs of the matrix hold for a sweep of seeds', () => {
-  const STOPS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160];
-  /** A colour per stop that no token of tokens.css resolves to, to find where a stop is read. */
-  const marker = (stop: number) => `#ab${stop.toString(16).padStart(2, '0')}cd`;
-  const markers = merge(
-    rootConstants(),
-    new Map(STOPS.map((stop): [string, string] => [`--wave-brand-${stop}`, marker(stop)])),
-  );
-
-  /** A side of a pair: a brand stop, or a colour that no brand stop changes (its luminance). */
-  type Side = { stop: number } | { luminance: number };
-  interface BrandPair {
-    theme: 'light' | 'dark';
-    name: string;
-    fg: Side;
-    bg: Side;
-    threshold: number;
-  }
-
-  /** The pairs of the matrix that read a brand stop on either side, in light and dark. */
-  function brandPairs(): BrandPair[] {
-    const pairs: BrandPair[] = [];
-    for (const theme of ['light', 'dark'] as const) {
-      forEachContrastPair(theme, [markers], ({ fg, bg, threshold, fgValue, bgValue }) => {
-        const side = (value: string): Side => {
-          const stop = STOPS.find((candidate) => marker(candidate) === value);
-          return stop === undefined ? { luminance: relativeLuminance(value) } : { stop };
-        };
-        if (STOPS.some((stop) => [fgValue, bgValue].includes(marker(stop)))) {
-          pairs.push({
-            theme,
-            name: `${fg} on ${bg}`,
-            fg: side(fgValue),
-            bg: side(bgValue),
-            threshold,
-          });
-        }
-      });
-    }
-    return pairs;
-  }
-
   /** HSV colours around the wheel at three saturations and three values, as hex. */
   function wheelSeeds(): string[] {
     const seeds: string[] = [];
@@ -178,7 +141,7 @@ describe('createBrandTokens: the brand pairs of the matrix hold for a sweep of s
   }
 
   it('finds the brand pairs through marker colours that no token resolves to', () => {
-    const markerValues = new Set(STOPS.map(marker));
+    const markerValues = new Set(BRAND_STOPS.map(brandMarker));
     for (const theme of ['light', 'dark'] as const) {
       forEachContrastPair(theme, [rootConstants()], ({ fgValue, bgValue }) => {
         expect(markerValues.has(fgValue) || markerValues.has(bgValue)).toBe(false);
@@ -195,7 +158,7 @@ describe('createBrandTokens: the brand pairs of the matrix hold for a sweep of s
     const pairs = brandPairs();
     const failing = [...wheelSeeds(), ...randomSeeds(1000)].flatMap((seed) => {
       const tokens = createBrandTokens(seed);
-      const luminance = (side: Side) =>
+      const luminance = (side: BrandSide) =>
         'stop' in side
           ? relativeLuminance(tokens[`brand${side.stop}` as keyof BrandTokens])
           : side.luminance;
