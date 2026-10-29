@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { createPortal } from 'react-dom';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { FlatTree } from '../FlatTree';
 import type { FlatTreeProps } from '../FlatTree';
 import { useFlatTree, type UseFlatTreeOptions } from '../useFlatTree';
-import type { FlatTreeItemData } from '../../../lib/flatTree';
+import type { FlatTreeItemData, VisibleFlatItem } from '../../../lib/flatTree';
 import { flatTreeClassNames } from '../../../lib/classNames';
 import { useVirtualWindow, type UseVirtualWindowOptions } from '../../../hooks/useVirtualWindow';
 import { expectNoA11yViolations } from '../../../test-utils';
@@ -113,6 +114,23 @@ function CollapsibleTree(props: Omit<WindowedTreeProps, 'options'>) {
     </>
   );
 }
+
+/** A button rendered into `document.body` through a portal: a popup an item opened. */
+function PortalButton({ children }: { children: string }) {
+  return createPortal(<button type="button">{children}</button>, document.body);
+}
+
+/** An item's label; Entry 2 (index 3) also has an "Open" button and a "Menu" button in a portal. */
+const popupItem = (row: VisibleFlatItem) =>
+  row.item.value === 'entry-2' ? (
+    <>
+      {row.item.label}
+      <button type="button">Open</button>
+      <PortalButton>Menu</PortalButton>
+    </>
+  ) : (
+    row.item.label
+  );
 
 const treeRoot = () => {
   const root = document.querySelector<HTMLElement>(`.${flatTreeClassNames.root}`);
@@ -249,6 +267,43 @@ describe('FlatTree virtualWindow', () => {
       expect(treeRoot().scrollTop).toBe(100 * ITEM);
       await focus(itemAt(96));
       expect(treeRoot().scrollTop).toBe(96 * ITEM);
+    });
+
+    it('keeps the focused item while focus is in a popup it opened (a portal), until focus leaves both', async () => {
+      render(
+        <>
+          <WindowedTree renderItem={popupItem} />
+          <button type="button">After</button>
+        </>,
+      );
+      await focus(screen.getByRole('button', { name: 'Open' }));
+      expect(tabStops()).toEqual([itemAt(3)]);
+      await focus(screen.getByRole('button', { name: 'Menu' }));
+      // A wheel scroll while the popup is open: the item stays rendered and the tab stop.
+      await scrollTo(3000 * ITEM);
+      expect(order()).toEqual(['spacer', 3, 'spacer', ...range(2991, 3024), 'spacer']);
+      expect(tabStops()).toEqual([itemAt(3)]);
+      expect(screen.getByRole('button', { name: 'Menu' })).toHaveFocus();
+
+      await focus(screen.getByRole('button', { name: 'After' }));
+      expect(order()).toEqual([0, 'spacer', ...range(2991, 3024), 'spacer']);
+      expect(tabStops()).toEqual([itemAt(0)]);
+      expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull();
+    });
+
+    it('takes no pointer press in that popup for one on the tree: focus returning to the item scrolls it into view', async () => {
+      render(<WindowedTree renderItem={popupItem} />);
+      await focus(screen.getByRole('button', { name: 'Open' }));
+      await focus(screen.getByRole('button', { name: 'Menu' }));
+      await scrollTo(3000 * ITEM);
+      // A click in the popup closes it, and the popup returns focus to the item's button.
+      act(() => {
+        fireEvent.pointerDown(screen.getByRole('button', { name: 'Menu' }), { button: 0 });
+      });
+      await focus(screen.getByRole('button', { name: 'Open' }));
+      expect(treeRoot().scrollTop).toBe(3 * ITEM);
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+      expect(tabStops()).toEqual([itemAt(3)]);
     });
   });
 

@@ -534,6 +534,78 @@ describe('Table.ResizeHandle', () => {
       },
     );
 
+    it.each(['Enter', ' '])(
+      '%j leaves on its keyup: the keydown and its repeats are consumed and leave nothing',
+      (key) => {
+        const onAncestorKeyDown = vi.fn();
+        const onAncestorKeyUp = vi.fn();
+        const onLeave = vi.fn();
+        render(
+          <div onKeyDown={onAncestorKeyDown} onKeyUp={onAncestorKeyUp}>
+            <Table.ResizeHandle width={200} minWidth={80} onResize={noop} onLeave={onLeave} />
+          </div>,
+        );
+        act(() => handle().focus());
+        expect(fireEvent.keyDown(handle(), { key })).toBe(false);
+        // A held key repeats its keydown: focus must still be on the handle when it does.
+        expect(fireEvent.keyDown(handle(), { key, repeat: true })).toBe(false);
+        expect(fireEvent.keyDown(handle(), { key, repeat: true })).toBe(false);
+        expect(onLeave).not.toHaveBeenCalled();
+        expect(fireEvent.keyUp(handle(), { key })).toBe(false);
+        expect(onLeave).toHaveBeenCalledTimes(1);
+        expect(onAncestorKeyDown).not.toHaveBeenCalled();
+        expect(onAncestorKeyUp).not.toHaveBeenCalled();
+      },
+    );
+
+    it('Escape leaves on its keydown', () => {
+      const { onLeave } = renderHandle();
+      act(() => handle().focus());
+      expect(fireEvent.keyDown(handle(), { key: 'Escape' })).toBe(false);
+      expect(onLeave).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores the keyup of an Enter or Space pressed before focus reached the handle', () => {
+      const { onLeave } = renderHandle();
+      act(() => handle().focus());
+      // Enter on a header cell moves focus to its handle at keydown; the keyup lands here, and
+      // so do the repeats of a held key (consumed, but they leave nothing to release).
+      expect(fireEvent.keyUp(handle(), { key: 'Enter' })).toBe(true);
+      expect(fireEvent.keyUp(handle(), { key: ' ' })).toBe(true);
+      expect(fireEvent.keyDown(handle(), { key: 'Enter', repeat: true })).toBe(false);
+      expect(fireEvent.keyUp(handle(), { key: 'Enter' })).toBe(true);
+      // The keyup of another key than the one pressed.
+      fireEvent.keyDown(handle(), { key: 'Enter' });
+      fireEvent.keyUp(handle(), { key: ' ' });
+      expect(onLeave).not.toHaveBeenCalled();
+      fireEvent.keyUp(handle(), { key: 'Enter' });
+      expect(onLeave).toHaveBeenCalledTimes(1);
+    });
+
+    it('forgets a pressed Enter or Space when the handle loses focus before the keyup', () => {
+      const { onLeave } = renderHandle();
+      act(() => handle().focus());
+      fireEvent.keyDown(handle(), { key: ' ' });
+      act(() => handle().blur());
+      act(() => handle().focus());
+      fireEvent.keyUp(handle(), { key: ' ' });
+      expect(onLeave).not.toHaveBeenCalled();
+    });
+
+    it('composes a consumer onKeyUp, whose preventDefault() keeps the handle', () => {
+      const onKeyUp = vi.fn();
+      const { onLeave, rerender, ui } = renderHandle({ onKeyUp });
+      act(() => handle().focus());
+      fireEvent.keyDown(handle(), { key: 'Enter' });
+      fireEvent.keyUp(handle(), { key: 'Enter' });
+      expect(onKeyUp).toHaveBeenCalledTimes(1);
+      expect(onLeave).toHaveBeenCalledTimes(1);
+      rerender(ui({ onKeyUp: (event) => event.preventDefault() }));
+      fireEvent.keyDown(handle(), { key: 'Enter' });
+      fireEvent.keyUp(handle(), { key: 'Enter' });
+      expect(onLeave).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps Enter, Space and Escape for the ancestors when there is no onLeave', async () => {
       const user = userEvent.setup();
       const onAncestorKeyDown = vi.fn();
@@ -545,6 +617,11 @@ describe('Table.ResizeHandle', () => {
       handle().focus();
       await user.keyboard('{Escape}');
       expect(onAncestorKeyDown).toHaveBeenCalledTimes(1);
+      for (const key of ['Enter', ' ']) {
+        expect(fireEvent.keyDown(handle(), { key })).toBe(true);
+        expect(fireEvent.keyUp(handle(), { key })).toBe(true);
+      }
+      expect(onAncestorKeyDown).toHaveBeenCalledTimes(3);
     });
 
     it.each(['ArrowRight', 'ArrowLeft', 'Home'])(
@@ -618,8 +695,9 @@ describe('Table.ResizeHandle', () => {
     it('has the documented props', () => {
       expectTypeOf<TableResizeHandleProps['width']>().toEqualTypeOf<number>();
       expectTypeOf<TableResizeHandleProps['maxWidth']>().toEqualTypeOf<number | undefined>();
+      // `details` is always passed; typed optional through 0.x, as every `details` argument.
       expectTypeOf<TableResizeHandleProps['onResize']>().toEqualTypeOf<
-        (width: number, details: { event: Event }) => void
+        (width: number, details?: { event: Event }) => void
       >();
       expectTypeOf<TableResizeHandleProps['onReset']>().toEqualTypeOf<
         ((details: { event: Event }) => void) | undefined

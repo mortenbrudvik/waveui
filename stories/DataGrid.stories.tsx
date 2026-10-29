@@ -613,5 +613,9 @@ export const TenThousandRows: StoryObj<TenThousandRowsArgs> = {
     resizableColumns: true,
     onColumnWidthsChange: fn(),
   },
+  argTypes: {
+    // Heights a row's cells fit in; a smaller one would overlap the rows.
+    itemSize: { control: 'select', options: [44, 52, 60] },
+  },
   render: (args) => <TenThousandRowsGrid {...args} />,
 };

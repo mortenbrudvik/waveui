@@ -4,7 +4,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
-import { isEditableTarget } from '../../lib/events';
+import { isEditableTarget, isOwnEvent } from '../../lib/events';
 import type { VisibleFlatItem } from '../../lib/flatTree';
 import type { CheckState } from '../../lib/treeCascade';
 import type { SelectionMode } from '../../lib/types';
@@ -300,11 +300,11 @@ const FlatTreeRoot = ({
   /**
    * Set by a pointer press in a windowed tree until the focus it gives, or until a key press:
    * keyboard focus always follows one, so a press that gave no focus never keeps a later keyboard
-   * focus from being scrolled into view.
+   * focus from being scrolled into view. A press in a popup an item opened is the popup's.
    */
   const pointerPressRef = React.useRef(false);
-  const handlePointerDownCapture = useEventCallback(() => {
-    if (windowed) pointerPressRef.current = true;
+  const handlePointerDownCapture = useEventCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (windowed && isOwnEvent(event)) pointerPressRef.current = true;
   });
   React.useEffect(() => {
     const doc = rootRef.current?.ownerDocument;
@@ -316,12 +316,20 @@ const FlatTreeRoot = ({
     return () => doc.removeEventListener('keydown', clear, true);
   }, [windowed]);
 
+  /**
+   * Whether focus is in a popup that an item opened (an element outside the tree's DOM whose focus
+   * React bubbles through the tree): the focused item stays kept. Written by the focus and blur
+   * handlers.
+   */
+  const focusInPopupRef = React.useRef(false);
+
   // Focus moving onto an item makes it the focused item (the tab stop, kept rendered). Unless a
   // pointer press gave the focus, the window moves to it in the same update (a browser's own focus
   // scrolling moves the view a frame before the window would follow).
   const handleFocus = useEventCallback((event: React.FocusEvent<HTMLDivElement>) => {
     const pointerFocus = pointerPressRef.current;
     pointerPressRef.current = false;
+    focusInPopupRef.current = !event.currentTarget.contains(event.target as Node);
     const el = getOwnItem(event.currentTarget, event.target);
     const index = el ? getIndex(el) : null;
     const row = index === null ? undefined : rows[index];
@@ -337,14 +345,16 @@ const FlatTreeRoot = ({
   });
 
   // Focus leaving the tree (for an element outside it, or for nothing) ends the focused item; the
-  // tab stop then returns to the selected or the first item. Decided once focus has landed.
+  // tab stop then returns to the selected or the first item. Decided once focus has landed: a
+  // popup an item opened takes focus in the same task (`focusInPopupRef`).
   const handleBlur = useEventCallback((event: React.FocusEvent<HTMLDivElement>) => {
     const root = event.currentTarget;
     const next = event.relatedTarget as Node | null;
     if (next && root.contains(next)) return;
+    focusInPopupRef.current = false;
     const blurred = event.target as Node;
     queueMicrotask(() => {
-      if (!root.isConnected) return;
+      if (!root.isConnected || focusInPopupRef.current) return;
       const active = root.ownerDocument.activeElement;
       if (active && root.contains(active)) return;
       // A focused item that left the document (a branch collapsed around it): the commit's check
@@ -609,19 +619,23 @@ FlatTreeRoot.displayName = 'FlatTree';
  * focused item stays rendered (and focused) while it is scrolled away.
  *
  * Keyboard: a single tab stop, on the focused item while focus is inside, else on the `selected`
- * item while it is visible, else on the first item; Tab leaves the tree. Up/Down move between the
- * visible items, Home/End to the first and last, Right expands a collapsed branch or moves to its
- * first child, Left collapses an expanded branch or moves to the parent (both mirrored in
- * right-to-left layouts), Enter activates (and toggles a branch), and so does Space unless the
- * tree has checkboxes, `*` expands the sibling branches, and typing moves to the next visible item
- * whose label starts with the typed text (items under a collapsed branch are not searched).
+ * item while it is visible, else on the first enabled item; Tab leaves the tree. Up/Down move
+ * between the visible items, Home/End to the first and last, Right expands a collapsed branch or
+ * moves to its first child, Left collapses an expanded branch or moves to the parent (both
+ * mirrored in right-to-left layouts), Enter activates (and toggles a branch), and so does Space
+ * unless the tree has checkboxes, `*` expands the sibling branches, and typing moves to the next
+ * visible item whose label starts with the typed text (items under a collapsed branch are not
+ * searched). The focused item stays the focused item (rendered, and the tab stop) while focus is
+ * in a popup that its content opened, such as a menu in a portal, so the popup can return focus
+ * to it.
  *
  * Selection, as the nested `Tree`: `selected` and `onItemSelect` (single selection and activation,
  * with radios in `selectionMode="single"`), `current`, and with `selectionMode="multiple"` a
  * checkbox on every item bound to the model's `checkedItems` (Space or a click on the checkbox
  * toggles it, and checks cascade). An item whose data is `disabled` is `aria-disabled`, is skipped
- * by the keys and typeahead, never holds the tab stop, and is neither activated, expanded nor
- * checked by the user (a check of its parent still includes it).
+ * by the keys and typeahead, never holds the tab stop (except while a pointer press has focused
+ * it), and is neither activated, expanded nor checked by the user (a check of its parent still
+ * includes it).
  *
  * When a branch collapses around the focused item (from code), focus moves to that branch, so it
  * never falls to the page. Items expand and collapse at once, without motion: there is no child

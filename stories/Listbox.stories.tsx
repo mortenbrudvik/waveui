@@ -166,6 +166,8 @@ export const TenThousandOptions: StoryObj<TenThousandOptionsArgs> = {
     items: { control: false },
     renderOption: { control: false },
     virtualWindow: { control: false },
+    // Heights an option fits in; a smaller one would overlap the options.
+    itemSize: { control: 'select', options: [32, 40, 48] },
   },
   render: (args) => <TenThousandListbox {...args} />,
 };

@@ -30,15 +30,19 @@ export interface TableResizeHandleProps extends Omit<
   maxWidth?: number;
   /**
    * Called with the width the user asks for, in whole pixels, held between `minWidth` and
-   * `maxWidth`: while a pointer drags (at most once per animation frame) and for every handled key. The handle
-   * keeps no width of its own, so a parent that ignores the call leaves the column where it is.
+   * `maxWidth`: while a pointer drags (at most once per animation frame) and for every handled
+   * key, then `details` with the event behind it. The handle always passes `details`; it is typed
+   * optional through 0.x, as every `details` argument. The handle keeps no width of its own, so a
+   * parent that ignores the call leaves the column where it is.
    */
-  onResize: (width: number, details: { event: Event }) => void;
+  onResize: (width: number, details?: { event: Event }) => void;
   /** Called with the event when the handle is double-clicked: reset the column's width. */
   onReset?: (details: { event: Event }) => void;
   /**
-   * Called when Enter, Space or Escape is pressed on the handle: move focus back to the header
-   * cell. Without it those keys are left to the handle's ancestors.
+   * Called when Escape is pressed on the handle, or Enter or Space is released on it after being
+   * pressed there: move focus back to the header cell. Enter and Space are consumed from their
+   * keydown on (their repeats included), so a held key never reaches the element that focus moves
+   * to. Without it those keys are left to the handle's ancestors.
    */
   onLeave?: () => void;
   /**
@@ -101,12 +105,16 @@ const TableResizeHandle = ({
   onLostPointerCapture,
   onDoubleClick,
   onKeyDown,
+  onKeyUp,
+  onBlur,
   className,
   ref,
   ...rest
 }: TableResizeHandleProps) => {
   const dragRef = React.useRef<DragState | null>(null);
   const [dragging, setDragging] = React.useState(false);
+  /** The Enter or Space pressed on the handle whose release leaves it; `null` otherwise. */
+  const leaveKeyRef = React.useRef<string | null>(null);
 
   const clamp = (value: number) => Math.max(minWidth, Math.min(maxWidth ?? Infinity, value));
 
@@ -132,9 +140,10 @@ const TableResizeHandle = ({
     setDragging(false);
   };
 
-  // A frame that is still waiting when the handle unmounts must not call `onResize`.
+  // A frame that is still waiting when the handle unmounts must not call `onResize`: cancelled in
+  // the commit that removes the handle, before a frame can run.
   const cancelDragOnUnmount = useEventCallback(() => endDrag(false));
-  React.useEffect(() => cancelDragOnUnmount, [cancelDragOnUnmount]);
+  React.useLayoutEffect(() => cancelDragOnUnmount, [cancelDragOnUnmount]);
 
   const startDrag = useEventCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || !event.isPrimary || dragRef.current) return;
@@ -189,39 +198,54 @@ const TableResizeHandle = ({
     },
   );
 
-  const handleKeyDown = composeEventHandlers(
-    onKeyDown,
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.target !== event.currentTarget || event.ctrlKey || event.altKey || event.metaKey) {
-        return;
-      }
-      const resizeTo = (next: number) => {
-        if (next !== width) onResize(next, { event: event.nativeEvent });
-      };
-      const intent = getArrowIntent(event.key, {
-        orientation: 'horizontal',
-        dir: getDirection(event.currentTarget),
-      });
-      if (intent) {
-        const step = event.shiftKey ? SHIFT_KEY_STEP : KEY_STEP;
-        resizeTo(clamp(Math.round(width + (intent === 'next' ? step : -step))));
-      } else if (event.key === 'Home') {
-        resizeTo(clamp(minWidth));
-      } else if (event.key === 'End' && maxWidth !== undefined) {
-        resizeTo(clamp(maxWidth));
-      } else if (
-        onLeave &&
-        (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape')
-      ) {
-        onLeave();
-      } else {
-        return;
-      }
-      // A handled key does not also move the grid.
-      event.preventDefault();
-      event.stopPropagation();
-    },
-  );
+  const handleKey = useEventCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || event.ctrlKey || event.altKey || event.metaKey) {
+      return;
+    }
+    const resizeTo = (next: number) => {
+      if (next !== width) onResize(next, { event: event.nativeEvent });
+    };
+    const intent = getArrowIntent(event.key, {
+      orientation: 'horizontal',
+      dir: getDirection(event.currentTarget),
+    });
+    if (intent) {
+      const step = event.shiftKey ? SHIFT_KEY_STEP : KEY_STEP;
+      resizeTo(clamp(Math.round(width + (intent === 'next' ? step : -step))));
+    } else if (event.key === 'Home') {
+      resizeTo(clamp(minWidth));
+    } else if (event.key === 'End' && maxWidth !== undefined) {
+      resizeTo(clamp(maxWidth));
+    } else if (onLeave && event.key === 'Escape') {
+      onLeave();
+    } else if (onLeave && (event.key === 'Enter' || event.key === ' ')) {
+      // Left on the release: focus moved now would hand the key's repeats (and Space's keyup,
+      // which activates a button) to the element focus moves to. A repeat alone, of a key
+      // pressed before focus came here, leaves nothing to release.
+      if (!event.repeat) leaveKeyRef.current = event.key;
+    } else {
+      return;
+    }
+    // A handled key does not also move the grid.
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  // Composed without the default-prevented check: the pressed key is forgotten at its release,
+  // also when a consumer handled the release (then nothing else happens).
+  const leaveOnRelease = useEventCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const pressed = leaveKeyRef.current !== null && event.key === leaveKeyRef.current;
+    if (pressed) leaveKeyRef.current = null;
+    if (!pressed || event.defaultPrevented || event.target !== event.currentTarget) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onLeave?.();
+  });
+
+  // A pressed Enter or Space is forgotten when focus leaves the handle before its release.
+  const forgetPressedKey = useEventCallback(() => {
+    leaveKeyRef.current = null;
+  });
 
   return (
     <div
@@ -256,7 +280,9 @@ const TableResizeHandle = ({
         checkDefaultPrevented: false,
       })}
       onDoubleClick={handleDoubleClick}
-      onKeyDown={handleKeyDown}
+      onKeyDown={composeEventHandlers(onKeyDown, handleKey)}
+      onKeyUp={composeEventHandlers(onKeyUp, leaveOnRelease, { checkDefaultPrevented: false })}
+      onBlur={composeEventHandlers(onBlur, forgetPressedKey, { checkDefaultPrevented: false })}
     />
   );
 };

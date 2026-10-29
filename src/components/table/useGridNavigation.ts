@@ -556,8 +556,6 @@ export function returnFocusToGridCell(element: Element): boolean {
  * plus a `MutationObserver`), so rows and widgets added later are covered without a re-render. Focus
  * moves re-sync only the cells involved, the observer only the cells that changed, and the grid's
  * own `tabindex` writes do not trigger a re-sync.
- *
- * Internal to the table package.
  */
 export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGridNavigationResult {
   const { model } = options;

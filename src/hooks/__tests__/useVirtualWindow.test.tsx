@@ -521,6 +521,36 @@ describe('useVirtualWindow', () => {
         }
       });
 
+      it('is forgotten when its scroller detaches: attached again, the scroller only measures', () => {
+        const ro = installResizeObserverMock();
+        try {
+          const ref = React.createRef<VirtualWindow>();
+          /** One scroller element whose ref is the window's only while `attached`. */
+          function Detachable({ attached }: { attached: boolean }) {
+            const virtualWindow = useVirtualWindow({ itemSize: ITEM });
+            React.useImperativeHandle(ref, () => virtualWindow, [virtualWindow]);
+            const { scrollRef } = virtualWindow;
+            return (
+              <div ref={attached ? scrollRef : undefined} data-scroller="" data-testid="scroller" />
+            );
+          }
+          const { rerender } = render(<Detachable attached={false} />);
+          act(() => current(ref).scrollToIndex(5000, { align: 'center' }));
+          rerender(<Detachable attached />);
+          const element = scroller();
+          expect(element.scrollTop).toBe(centred(440));
+
+          rerender(<Detachable attached={false} />);
+          rerender(<Detachable attached />);
+          expect(scroller()).toBe(element);
+          viewportHeight = 100;
+          ro.trigger(element);
+          expect(element.scrollTop).toBe(centred(440));
+        } finally {
+          ro.restore();
+        }
+      });
+
       it('is applied once more in StrictMode too', () => {
         const ro = installResizeObserverMock();
         try {

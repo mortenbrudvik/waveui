@@ -18,7 +18,12 @@ export interface FlatTreeItemData {
   itemType?: 'leaf' | 'branch';
   /** The text the item shows. */
   label?: string;
-  /** Whether the item is disabled. */
+  /**
+   * Whether the item is disabled. `FlatTree` reads it (the keys and typeahead skip the item, it is
+   * not the tab stop, and the user cannot activate, expand or check it); the model ignores it:
+   * `expand`, `collapse`, `toggle` and `setChecked` change a disabled item too, and a check of its
+   * parent includes it.
+   */
   disabled?: boolean;
 }
 
@@ -111,8 +116,10 @@ interface Draft {
 /**
  * Indexes `items` in one pass over them (linear time, no recursion). Repairs, each reported as an
  * issue: a repeated value keeps its first item; an item whose parent is unknown becomes a root;
- * a loop of parents is cut at the value met twice when walking up from the first item of the loop
- * in `items` order, and that value becomes a root. Siblings keep the order of `items`.
+ * a loop of parents is cut at the first of its values met by the walk up from the first item, in
+ * `items` order, whose parent chain reaches the loop (an item outside the loop that leads into it
+ * can start that walk: `[x→b, a→b, b→a]` cuts at `b`), and that value becomes a root. Siblings
+ * keep the order of `items`.
  */
 export function buildFlatTreeIndex(items: readonly FlatTreeItemData[]): FlatTreeIndex {
   const issues: FlatTreeIssue[] = [];

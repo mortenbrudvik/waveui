@@ -1836,7 +1836,7 @@ describe('0.14 collections, data grids and tours from the package entry', () => 
     expectTypeOf<Entry['Table']['ResizeHandle']>().toEqualTypeOf<Entry['TableResizeHandle']>();
     expectTypeOf<TableResizeHandleProps['width']>().toEqualTypeOf<number>();
     expectTypeOf<TableResizeHandleProps['onResize']>().toEqualTypeOf<
-      (width: number, details: { event: Event }) => void
+      (width: number, details?: { event: Event }) => void
     >();
 
     // @ts-expect-error a sortable header is sorted ascending or descending, or not at all (absent)

@@ -220,6 +220,23 @@ describe('DataGrid virtualWindow', () => {
       );
     });
 
+    it('keys the spacer rows apart from every row id, a spacer’s own key included', () => {
+      const error = vi.spyOn(console, 'error');
+      // The ids of the first rows are the keys a spacer row had (`spacer-end`) and has now.
+      const items = ITEMS.map((item, index) =>
+        index === 0
+          ? { ...item, id: 'spacer-end' }
+          : index === 1
+            ? { ...item, id: 'spacer:spacer-end' }
+            : item,
+      );
+      render(<Grid items={items} />);
+      expect(bodyOrder()).toEqual([...range(0, 17), 'spacer']);
+      scrollTo(5000 * ITEM);
+      expect(bodyOrder()).toEqual(['spacer', ...range(4994, 5017), 'spacer']);
+      expect(error).not.toHaveBeenCalled();
+    });
+
     it('gives every row the window’s height and keeps the header in view (sticky)', () => {
       render(<Grid />);
       for (const row of bodyRows()) expect(row.style.height).toBe(`${ITEM}px`);
@@ -732,6 +749,24 @@ describe('DataGrid virtualWindow', () => {
       contentHeight = viewportHeight;
       stubTableHeight(viewportHeight);
       render(<Grid items={ITEMS.slice(0, 100)} />);
+      expect(messages(warn)).toEqual([
+        '[WaveUI] DataGrid: the scroll wrapper of a grid with `virtualWindow` has no bounded height (it is as tall as its rows), so the window renders every row. Give it a height or a maximum height in `containerProps` (a class or a style).',
+      ]);
+    });
+
+    it('checks the height once rows arrive in a grid mounted with no items', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      // An unbounded wrapper holds only the header while there are no rows.
+      viewportHeight = HEADER;
+      contentHeight = HEADER;
+      const { rerender } = render(<Grid items={[]} />);
+      expect(warn).not.toHaveBeenCalled();
+      // The rows arrive: the window still lays out the header's height, and the wrapper grows
+      // with the rows.
+      viewportHeight = HEADER + COUNT * ITEM;
+      contentHeight = viewportHeight;
+      stubTableHeight(viewportHeight);
+      rerender(<Grid items={ITEMS} />);
       expect(messages(warn)).toEqual([
         '[WaveUI] DataGrid: the scroll wrapper of a grid with `virtualWindow` has no bounded height (it is as tall as its rows), so the window renders every row. Give it a height or a maximum height in `containerProps` (a class or a style).',
       ]);

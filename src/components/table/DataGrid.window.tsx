@@ -70,7 +70,8 @@ DataGridSpacerRow.displayName = 'DataGridSpacerRow';
 
 /**
  * The body rows of a windowed grid of `count` data rows: the window's layout, each of its rows
- * rendered by `renderRow(index)` (which keys it) and each gap as a spacer row.
+ * rendered by `renderRow(index)` (which keys it, with a `row:` prefix) and each gap as a spacer
+ * row (keyed `spacer:<key>`), so no row id can give a row a spacer's key.
  */
 export function renderWindowRows(
   context: DataGridWindowContextValue,
@@ -83,7 +84,11 @@ export function renderWindowRows(
       entry.kind === 'item' ? (
         renderRow(entry.index)
       ) : (
-        <DataGridSpacerRow key={entry.key} size={entry.size} columnCount={context.columnCount} />
+        <DataGridSpacerRow
+          key={`spacer:${entry.key}`}
+          size={entry.size}
+          columnCount={context.columnCount}
+        />
       ),
     );
 }
@@ -158,10 +163,10 @@ export interface DataGridWindowState {
  * The window of a DataGrid: the context its body renders the window from, the development checks
  * (a window that does not apply, a scroller without a bounded height), a focused row that the
  * sticky header covers scrolled below it (unless a pointer press gave the focus), and focus kept
- * through data changes. A sort, a filter
- * or new `items` move the keyed rows, and a browser blurs a focused row that is moved (or
- * removed): when focus was in a data row before such a change and is lost after it, focus goes
- * back to the same row (by id) and column, else to the mounted row nearest to its old index.
+ * through data changes. A sort, a filter or new `items` move the keyed rows, and a browser blurs
+ * a focused row that is moved (or removed): when focus was in a data row before such a change and
+ * is lost after it, focus goes back to the same row (by id) and column, else to the mounted row
+ * nearest to its old index.
  */
 export function useDataGridWindow(options: UseDataGridWindowOptions): DataGridWindowState {
   const {
@@ -204,8 +209,11 @@ export function useDataGridWindow(options: UseDataGridWindowOptions): DataGridWi
     }
   }, [ignored]);
 
-  // Once mounted: a scroller as tall as its rows (no bounded height) lets the window measure the
-  // whole list, so it would render every row. Read while the first window still has spacers.
+  // Once mounted, and again once rows arrive in a grid mounted without any (a grid with no row
+  // has no spacer to tell): a scroller as tall as its rows (no bounded height) lets the window
+  // measure the whole list, so it would render every row. Read while the first window still has
+  // spacers.
+  const hasRows = (rows?.length ?? 0) > 0;
   React.useEffect(() => {
     const scroller = scrollerElementRef.current;
     const tableElement = tableElementRef.current;
@@ -230,7 +238,7 @@ export function useDataGridWindow(options: UseDataGridWindowOptions): DataGridWi
           'height in `containerProps` (a class or a style).',
       );
     }
-  }, [enabled]);
+  }, [enabled, hasRows]);
 
   // --- focus through data changes ---------------------------------------------
   /**

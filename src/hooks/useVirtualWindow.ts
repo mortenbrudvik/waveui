@@ -204,6 +204,9 @@ export function useVirtualWindow({
 
   // Attach: the scroll listener, the size observer, and a request made before the scroller.
   useLayoutEffect(() => {
+    // The request applied on attach is forgotten with its scroller (a closed popup's list is not
+    // held). Not in the cleanup: StrictMode's second attach of the same element keeps it.
+    if (settlingRef.current && settlingRef.current.element !== scroller) settlingRef.current = null;
     if (!scroller) return;
     let frame: number | null = null;
     let released = false;

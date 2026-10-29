@@ -798,6 +798,25 @@ describe('DataGrid column sizing', () => {
       expect(header('Owner')).toHaveFocus();
     });
 
+    it.each(['{Enter>3/}', '[Space>3/]'])(
+      'a held key on the handle (%s, its keydown repeated) returns to the sort button on release and does not sort',
+      async (keys) => {
+        const user = userEvent.setup();
+        const onSortChange = vi.fn();
+        render(<Grid resizableColumns onSortChange={onSortChange} />);
+        act(() => header('Owner').focus());
+        await user.keyboard('{ArrowLeft}{F2}');
+        expect(handleOf('Item')).toHaveFocus();
+        await user.keyboard(keys);
+        expect(sortButton()).toHaveFocus();
+        expect(onSortChange).not.toHaveBeenCalled();
+        expect(header('Item')).toHaveAttribute('aria-sort', 'none');
+        // The button sorts with the next press.
+        await user.keyboard('{Enter}');
+        expect(onSortChange).toHaveBeenCalledTimes(1);
+      },
+    );
+
     it('mirrors the arrow keys of the handle in RTL', async () => {
       const user = userEvent.setup();
       renderWithProviders(<Grid resizableColumns defaultColumnWidths={{ item: 200 }} />, {

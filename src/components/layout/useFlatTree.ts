@@ -74,7 +74,8 @@ export interface FlatTreeModel {
    * nested in it, then its ancestors from their children. Nothing is called when the item is
    * already in that state; a mixed item is set to `checked` as requested. A value that matches no
    * item is added to, or removed from, the checked list. `event` becomes `details.event` of
-   * `onCheckedItemsChange`; without it the callback gets no `details`.
+   * `onCheckedItemsChange`; without it the callback gets no `details`. It works in any
+   * `selectionMode` (the rows carry `checked` only with `'multiple'`), and on a disabled item too.
    */
   setChecked(value: string, checked: boolean, event?: Event): void;
   /** The props `FlatTree` takes from the model, for `<FlatTree model={model} {...model.getTreeProps()} />`. */
@@ -158,7 +159,14 @@ export function useFlatTree(
     (value: string | readonly string[]) => {
       const values = typeof value === 'string' ? [value] : value;
       setExpandedList((prev) => {
-        const added = values.filter((v, at) => !prev.includes(v) && values.indexOf(v) === at);
+        // Sets, not array searches: `*` can expand thousands of siblings against a large set.
+        const seen = new Set(prev);
+        const added: string[] = [];
+        for (const v of values) {
+          if (seen.has(v)) continue;
+          seen.add(v);
+          added.push(v);
+        }
         return added.length > 0 ? [...prev, ...added] : prev;
       });
     },

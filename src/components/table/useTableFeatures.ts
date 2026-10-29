@@ -77,8 +77,11 @@ export interface TableResizeHandleBindings {
   width: number;
   /** The narrowest the column can be, in pixels. */
   minWidth: number;
-  /** Sets the column's width in pixels (held at or above `minWidth`). */
-  onResize(width: number, details: { event: Event }): void;
+  /**
+   * Sets the column's width in pixels (held at or above `minWidth`); `details.event` is the event
+   * behind it (without `details`, an untrusted `resize` event is reported).
+   */
+  onResize(width: number, details?: { event: Event }): void;
   /**
    * Sets the column back to its initial width (a double click on the handle). It changes nothing
    * while no width is state, since the table is then in its initial layout.

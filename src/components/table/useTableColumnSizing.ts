@@ -156,7 +156,7 @@ export function useTableColumnSizing<T>(
               width: widthOf(id),
               minWidth:
                 getColumnEntry(columnSizingOptions, id)?.minWidth ?? DEFAULT_MIN_COLUMN_WIDTH,
-              onResize: (width, { event }) => setColumnWidth(id, width, event),
+              onResize: (width, details) => setColumnWidth(id, width, details?.event),
               // A table without width state is in its initial layout: nothing to reset.
               onReset: ({ event }) => {
                 if (isSized) setColumnWidth(id, initialWidthOf(id), event);

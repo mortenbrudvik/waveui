@@ -233,6 +233,8 @@ export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
 /**
  * The list's structure: `list` (`ul`/`li`, `role="list"`), `listbox` (selectable, `option`s) or
  * `grid` (`div`s with `row`s: a selectable list with item actions, or `navigationMode="composite"`).
+ * The structure of a windowed list does not depend on its rendered items' actions, so a windowed
+ * selectable list is a grid only with `navigationMode="composite"`.
  */
 type ListMode = 'list' | 'listbox' | 'grid';
 

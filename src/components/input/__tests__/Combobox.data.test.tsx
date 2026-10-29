@@ -723,6 +723,49 @@ describe('Combobox windowed options (virtualWindow)', () => {
     expect(onValueChange).toHaveBeenCalledWith('item-5002');
   });
 
+  it('keeps every value of a multiselect whose selected option left the window, and submits each', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    function WindowedMultiselect() {
+      const virtualWindow = useTestWindow();
+      return (
+        <Combobox
+          aria-label="Item"
+          multiselect
+          name="items"
+          items={MANY_ITEMS}
+          onValueChange={onValueChange}
+          virtualWindow={virtualWindow}
+        />
+      );
+    }
+    render(
+      <form aria-label="Order">
+        <WindowedMultiselect />
+      </form>,
+    );
+    await user.click(combobox());
+    await user.click(within(list()).getByRole('option', { name: 'Item 2' }));
+    expect(onValueChange).toHaveBeenLastCalledWith(['item-2']);
+    scrollList(list(), 5000 * ITEM_SIZE);
+    await user.click(within(list()).getByRole('option', { name: 'Item 5001' }));
+    expect(onValueChange).toHaveBeenLastCalledWith(['item-2', 'item-5001']);
+    // Item 2 is no longer rendered, and still selected.
+    expect(within(list()).queryByRole('option', { name: 'Item 2' })).toBeNull();
+    expect(within(list()).getByRole('option', { name: 'Item 5001' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    expect(new FormData(form).getAll('items')).toEqual(['item-2', 'item-5001']);
+    scrollList(list(), 0);
+    expect(within(list()).getByRole('option', { name: 'Item 2' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(onValueChange).toHaveBeenCalledTimes(2);
+  });
+
   it("sets the window's height on the option renderOption returns, after the option's own style", async () => {
     const user = userEvent.setup();
     render(

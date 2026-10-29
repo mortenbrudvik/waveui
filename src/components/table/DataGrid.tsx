@@ -245,7 +245,9 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    * `rowId` wins for that row, but a row whose own id differs from its item's id is outside
    * select-all and its state, and select-all selects the item's id, which no row has (a
    * development warning says so): return the rows' ids here rather than setting `rowId`. Ids must
-   * be unique (a duplicate warns in development).
+   * be unique (a duplicate warns in development). Define it outside the component, or memoise it:
+   * a new function rebuilds the row of every item and the set of ids select-all works on (with a
+   * `virtualWindow`, the component that holds the window renders at every row the view enters).
    * @default the item's index in `items`, as a string
    */
   getRowId?: (item: T) => string;
@@ -350,6 +352,9 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    *
    * Needs `items` and `columns`, with the body rows rendered from them (no `DataGrid.Body` child,
    * or one whose child is a render function); otherwise it is ignored, with a development warning.
+   * The component that calls `useVirtualWindow` renders again at every row the view enters: keep
+   * `items`, `columns`, `getRowId` and `isSelectionDisabled` stable (defined outside it, or
+   * memoised), or each of those renders rebuilds the rows of every item.
    */
   virtualWindow?: VirtualWindow;
   /**
@@ -1509,7 +1514,7 @@ const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyPro
         const row = rows[position];
         return (
           <DataGridItemRow
-            key={row.key}
+            key={`row:${row.key}`}
             item={row.item}
             index={row.index}
             rowId={row.rowId}
