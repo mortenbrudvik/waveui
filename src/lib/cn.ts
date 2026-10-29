@@ -4,7 +4,8 @@ import { extendTailwindMerge } from 'tailwind-merge';
 /**
  * tailwind-merge configured with the Wave theme scales, so custom utilities are grouped
  * correctly: `text-body-1` is a font size (not a text colour), `shadow-4` is a shadow size (not a
- * shadow colour), `font-wave` is a font family, `animate-wave-*` are animations, and the motion
+ * shadow colour), `font-wave` and its monospace and numeric siblings are font families (never a
+ * weight or a size), `animate-wave-*` are animations, and the motion
  * tokens `duration-wave-*` and `ease-wave-*` are transition durations and timing functions.
  */
 export const twMerge = extendTailwindMerge({
@@ -51,7 +52,7 @@ export const twMerge = extendTailwindMerge({
         'display',
       ],
       shadow: ['2', '4', '8', '16', '28', '64'],
-      font: ['wave'],
+      font: ['wave', 'wave-mono', 'wave-numeric'],
       animate: [
         'wave-spin',
         'wave-spin-slow',

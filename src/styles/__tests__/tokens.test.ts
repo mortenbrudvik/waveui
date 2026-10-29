@@ -1083,6 +1083,26 @@ describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)',
     expect(constants.get('--wave-z-toast')).toBe('1100');
     expect(constants.get('--wave-z-tooltip')).toBe('1200');
   });
+
+  it('declares the monospace and numeric font stacks once, on :root only (0.17)', () => {
+    const constants = rootConstants();
+    expect(constants.get('--wave-font-family-monospace')).toBe(
+      "Consolas, 'Courier New', Courier, monospace",
+    );
+    expect(constants.get('--wave-font-family-numeric')?.replace(/\s+/g, ' ')).toBe(
+      "Bahnschrift, 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif",
+    );
+    for (const theme of THEMES) {
+      const names = [...themeDecls(theme).keys()].filter((name) =>
+        name.startsWith('--wave-font-family'),
+      );
+      expect(names, `${theme} group`).toEqual([]);
+    }
+    const source = stripComments(readCss('tokens.css'));
+    for (const name of ['--wave-font-family-monospace', '--wave-font-family-numeric']) {
+      expect(source.split(`${name}:`).length - 1, name).toBe(1);
+    }
+  });
 });
 
 /** Fluent's motion tokens (react-motion 9.16.4): name → value, declared on the bare `:root`. */
@@ -1273,6 +1293,8 @@ describe('tokens.css — Tailwind mapping (@theme inline)', () => {
   it('maps font-wave to the runtime font token and keeps the type ramp and shadows', () => {
     const decls = themeDeclarations();
     expect(decls.get('--font-wave')).toBe('var(--wave-font-family)');
+    expect(decls.get('--font-wave-mono')).toBe('var(--wave-font-family-monospace)');
+    expect(decls.get('--font-wave-numeric')).toBe('var(--wave-font-family-numeric)');
     expect(decls.get('--text-body-1')).toBe('14px');
     expect(decls.get('--text-body-1--line-height')).toBe('20px');
     expect(decls.get('--text-display')).toBe('68px');

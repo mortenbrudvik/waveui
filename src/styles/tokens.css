@@ -24,6 +24,10 @@
   --wave-font-family:
     'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto,
     'Helvetica Neue', sans-serif;
+  --wave-font-family-monospace: Consolas, 'Courier New', Courier, monospace;
+  --wave-font-family-numeric:
+    Bahnschrift, 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont,
+    Roboto, 'Helvetica Neue', sans-serif;
 
   --wave-z-overlay: 1000;
   --wave-z-toast: 1100;
@@ -622,8 +626,10 @@
   --color-brand-150: var(--wave-brand-150);
   --color-brand-160: var(--wave-brand-160);
 
-  /* Font family (utility `font-wave`) */
+  /* Font families (utilities `font-wave`, `font-wave-mono`, `font-wave-numeric`) */
   --font-wave: var(--wave-font-family);
+  --font-wave-mono: var(--wave-font-family-monospace);
+  --font-wave-numeric: var(--wave-font-family-numeric);
 
   /* Type ramp */
   --text-caption-2: 10px;
