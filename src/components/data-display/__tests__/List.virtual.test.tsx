@@ -703,6 +703,28 @@ describe('List virtualWindow', () => {
       expect(listRoot().scrollTop).toBe(100 * ITEM);
     });
 
+    it('moves focus to a rendered target where elements have no scrollIntoView (jsdom without a stub)', async () => {
+      const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+      const error = vi.spyOn(console, 'error');
+      // jsdom implements no scrollIntoView: a consumer's test environment may not stub it.
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+      try {
+        expect(Element.prototype.scrollIntoView).toBeUndefined();
+        render(<WindowedList selectable />);
+        await focus(item(6));
+        // Rendered targets (7, then 0) and one that is not (17).
+        await press('ArrowDown');
+        expect(document.activeElement).toBe(item(7));
+        await press('PageDown');
+        expect(document.activeElement).toBe(item(17));
+        await press('Home');
+        expect(document.activeElement).toBe(item(0));
+        expect(error).not.toHaveBeenCalled();
+      } finally {
+        if (descriptor) Object.defineProperty(Element.prototype, 'scrollIntoView', descriptor);
+      }
+    });
+
     it('does not scroll an item that a pointer press focuses', async () => {
       const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
       render(<WindowedList selectable />);

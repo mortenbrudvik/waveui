@@ -459,6 +459,54 @@ describe('FlatTree virtualWindow', () => {
       expect(row).toHaveAttribute('data-index', String(1 + 101));
       expect(treeRoot().scrollTop).toBe(top - ENTRIES * ITEM);
     });
+
+    it('keeps the focused item in place when the removal leaves less content than the offset, which the browser clamps first', async () => {
+      function Controlled({ expandedItems }: { expandedItems: readonly string[] }) {
+        const model = useFlatTree(ITEMS, { expandedItems });
+        const virtualWindow = useVirtualWindow({ itemSize: ITEM });
+        return <FlatTree aria-label="Archive" model={model} virtualWindow={virtualWindow} />;
+      }
+      const { rerender } = render(<Controlled expandedItems={BIG_EXPANDED} />);
+      const root = treeRoot();
+      // A browser's offset: at most the content (the inline heights of the rows and spacers) less
+      // the viewport, clamped when it is written and when content that shrank is laid out (read).
+      const maxOffset = () =>
+        Math.max(
+          0,
+          Array.from(root.children).reduce(
+            (sum, el) => sum + (Number.parseFloat((el as HTMLElement).style.height) || 0),
+            0,
+          ) - VIEWPORT,
+        );
+      let offset = 0;
+      Object.defineProperty(root, 'scrollTop', {
+        configurable: true,
+        get: () => {
+          offset = Math.min(offset, maxOffset());
+          return offset;
+        },
+        set: (value: number) => {
+          offset = Math.min(Math.max(0, value), maxOffset());
+        },
+      });
+      // Folder 101 at the bottom of the view, focused.
+      const top = (FOLDER_101 + 1) * ITEM - VIEWPORT;
+      await scrollTo(top);
+      expect(root.scrollTop).toBe(top);
+      const row = itemAt(FOLDER_101);
+      await focus(row);
+
+      // Archive collapses: 334 rows are 9,352 px, so the browser clamps 114,484 to 8,952 before
+      // the tree can look; the tree keeps Folder 101 where it was instead (372 px down the view).
+      rerender(<Controlled expandedItems={[]} />);
+      await act(async () => {});
+      expect(row).toHaveFocus();
+      expect(row).toHaveAttribute('data-index', String(1 + 101));
+      expect(root.scrollTop).toBe(top - ENTRIES * ITEM);
+      expect((1 + 101) * ITEM - root.scrollTop).toBe(VIEWPORT - ITEM);
+      // No frame ran: the window is on it (rows 88 to 102 in view, 9 more on each side).
+      expect(mountedIndexes()).toEqual(range(88 - 9, 88 + 15 + 9));
+    });
   });
 
   describe('server render', () => {

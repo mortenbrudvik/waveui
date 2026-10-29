@@ -850,7 +850,8 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
       // event. A browser's own focus scrolling would centre a hidden item, past the rendered ones
       // (a blank frame), or in Firefox leave a partly visible one clipped; and moving the window in
       // this update (`scrollToIndex`) gives Firefox long frames while a key is held.
-      element.scrollIntoView({ block: 'nearest' });
+      // jsdom has no `scrollIntoView`: a consumer's test without a stub still moves focus.
+      element.scrollIntoView?.({ block: 'nearest' });
       getItemFocusTarget(element)?.focus();
       return;
     }

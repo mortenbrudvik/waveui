@@ -458,8 +458,11 @@ const FlatTreeRoot = ({
     moveTo(root, goal);
   });
 
-  /** The focused item and its place in the visible rows at the last commit. */
-  const focusPlaceRef = React.useRef<{ value: string; index: number } | null>(null);
+  /**
+   * The focused item of a windowed tree, its place in the visible rows and the scroll offset, at
+   * the last commit (written by the layout effect below).
+   */
+  const focusPlaceRef = React.useRef<{ value: string; index: number; top: number } | null>(null);
 
   // After every commit of a windowed tree: rows inserted or removed above the focused item while
   // it was in view (`*`, a model change from code) move the view with it, so it stays where it
@@ -470,15 +473,27 @@ const FlatTreeRoot = ({
     const value = focusStore.getSnapshot().focused;
     const index = value === null ? undefined : model.getItem(value)?.index;
     const last = focusPlaceRef.current;
-    focusPlaceRef.current = value !== null && index !== undefined ? { value, index } : null;
-    if (!virtualWindow || !root || last?.value !== value || index === undefined) return;
-    if (index === last.index || !root.contains(root.ownerDocument.activeElement)) return;
+    focusPlaceRef.current = null;
+    if (!virtualWindow || !root || value === null || index === undefined) return;
     const size = virtualWindow.itemSize;
-    const top = root.scrollTop;
-    const lastTop = last.index * size;
-    if (lastTop + size <= top || lastTop >= top + root.clientHeight) return;
-    root.scrollTop = top + (index - last.index) * size;
-    virtualWindow.scrollToIndex(index, { align: 'auto' });
+    let top = root.scrollTop;
+    if (
+      last?.value === value &&
+      index !== last.index &&
+      root.contains(root.ownerDocument.activeElement)
+    ) {
+      // Rows removed above may leave less content than the offset, which the browser has clamped
+      // by now: an offset in another row than the one recorded (the tree commits at every row the
+      // view enters) stands for that, and the recorded one is where the view was.
+      const before = Math.floor(top / size) === Math.floor(last.top / size) ? top : last.top;
+      const lastTop = last.index * size;
+      if (lastTop + size > before && lastTop < before + root.clientHeight) {
+        root.scrollTop = before + (index - last.index) * size;
+        virtualWindow.scrollToIndex(index, { align: 'auto' });
+        top = root.scrollTop;
+      }
+    }
+    focusPlaceRef.current = { value, index, top };
   });
 
   // After every commit: focus the awaited item, which the commit rendered (it is kept), unless
