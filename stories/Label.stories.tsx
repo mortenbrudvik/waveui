@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Label } from '../src';
 import type { TextWeight } from '../src';
 
-const weights = ['regular', 'semibold', 'bold'] as const satisfies readonly TextWeight[];
+const weights = ['regular', 'medium', 'semibold', 'bold'] as const satisfies readonly TextWeight[];
 
 const meta = {
   title: 'Components/Input/Label',

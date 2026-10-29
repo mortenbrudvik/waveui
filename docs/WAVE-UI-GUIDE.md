@@ -166,7 +166,7 @@ The stack is the runtime token `--wave-font-family`, exposed as the Tailwind uti
 
 ### Font Weights
 
-`Text` and `Label` take `weight: 'regular' | 'semibold' | 'bold'` (the `TextWeight` type). Unset, `Text` uses its variant's ramp weight: semibold from `subtitle-2` up, inherited for the caption and body variants; pass `weight="regular"` for a regular-weight title.
+`Text` and `Label` take `weight: 'regular' | 'medium' | 'semibold' | 'bold'` (the `TextWeight` type). Unset, `Text` uses its variant's ramp weight: semibold from `subtitle-2` up, inherited for the caption and body variants; pass `weight="regular"` for a regular-weight title.
 
 | Weight | Value | Usage |
 |--------|-------|-------|
