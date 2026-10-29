@@ -70,7 +70,14 @@ const GREY_CHROMA = 0.005;
  * theme's selection fills under light text; 140, the light theme's pressed selection fill, must
  * stay a visible step below the hover fill at 150. The other stops round lighter: the dark
  * theme's fills under dark text, its text and focus ring on dark surfaces, and the light theme's
- * selection fills under dark text.
+ * selection fills under dark text (30, 50 and 130 are read by no theme; their side is arbitrary).
+ * Three stops have pairs on both sides and take the side of the thinner one: 40 rounds darker for
+ * the dark selected text on it (4.81:1) against its steps above the dark selection fills at 20 and
+ * 10 (1.38 and 1.56); 150 rounds lighter for its step above 140 (1.157) against its step below
+ * 160 (1.163); 140 rounds darker for that step against the light selected text at 60 on it
+ * (5.23:1). So the pairs whose two stops round the same way (150 and 160, 40 and 20, 10 and 40,
+ * 60 and 140) can lose up to one rounding step of contrast, and each has more margin over its
+ * floor (1.15 between the states of a fill, 4.5 for text) than that.
  */
 const ROUNDS_DARKER: readonly BrandStop[] = [10, 20, 30, 40, 50, 60, 70, 80, 140];
 
@@ -174,8 +181,9 @@ function colourAtLuminance(target: number, chroma: number, hue: number): Triple 
 /**
  * A linear colour as `#rrggbb`, rounded on the safe side: of the 8-bit colours at most one step
  * from it on each channel, the one nearest `target` in luminance that is no lighter (`darker`) or
- * no darker than it. So rounding never takes contrast from a stop against the colours the themes
- * pair it with; a grey stays a grey.
+ * no darker than it. So rounding never takes contrast from a stop against a colour that does not
+ * round the same way (a colour of the theme, or a stop that rounds the other way); two stops that
+ * round the same way lose at most one rounding step between them. A grey stays a grey.
  */
 function toHex(rgb: Triple, target: number, grey: boolean, darker: boolean): string {
   const rounded = rgb.map((channel) => Math.round(toEncoded(channel)));
@@ -282,11 +290,13 @@ function rampFromStops(ramp: BrandRamp): BrandTokens {
  * drifting a few degrees as the default's does), reduced where the colour would leave sRGB, and
  * rounded to a neighbouring 8-bit colour on the side that keeps its contrast. Contrast depends
  * only on luminance, so every text, fill, stroke and focus-ring pair of the light and dark themes
- * keeps the contrast it has with the default ramp, whatever the seed. The cost: the seed sets hue
- * and colourfulness, not lightness, so the primary fill (stop 80) is the seed's hue at the
- * default's lightness, and a light seed gives a darker button than itself. For a brand whose exact
- * colours matter, pass a full `BrandRamp`. The default seed `#0f6cbd` gives the default ramp, and
- * a grey seed (black, white or any grey) a grey ramp.
+ * keeps, to within 8-bit rounding, the contrast it has with the default ramp, and stays above the
+ * floor the themes are held to (4.5:1 for text, 3:1 for strokes, graphics and focus rings, 1.15:1
+ * between the states of a fill), whatever the seed. The cost: the seed sets hue and
+ * colourfulness, not lightness, so the primary fill (stop 80) is the seed's hue at the default's
+ * lightness, and a light seed gives a darker button than itself. For a brand whose exact colours
+ * matter, pass a full `BrandRamp`. The default seed `#0f6cbd` gives the default ramp, and a grey
+ * seed (black, white or any grey) a grey ramp.
  *
  * A full `BrandRamp` is returned as tokens with its colours unchanged; a stop that is missing or
  * not a hex colour takes the default ramp's colour, with a development warning. Any other seed
