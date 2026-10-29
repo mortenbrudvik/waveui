@@ -27,7 +27,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  BOUND_TEXT_SURFACES,
+  CONTRAST_PAIRS,
   CSS_FILE_NAMES,
+  NOT_TEXT_TOKENS,
+  PALETTE_HUES,
+  SURFACE_TEXT_TOKENS,
+  TEXT_MATRIX,
+  TEXT_SURFACES,
   THEMES,
   THEME_GROUPS,
   PROVIDER_SELECTORS,
@@ -55,22 +62,6 @@ import {
 // ---------------------------------------------------------------------------------------------
 // Expected values (spec §2.1.3)
 // ---------------------------------------------------------------------------------------------
-
-/** The 12 persona palette hues (Avatar `color`, chart series), in tokens.css order. */
-const PALETTE_HUES = [
-  'red',
-  'pumpkin',
-  'gold',
-  'forest',
-  'teal',
-  'blue',
-  'navy',
-  'lavender',
-  'purple',
-  'magenta',
-  'brown',
-  'steel',
-] as const;
 
 /** Token → [light, dark, high contrast], resolved values. */
 const TOKENS: Record<string, [string, string, string]> = {
@@ -308,135 +299,6 @@ const LEGACY_SEMANTIC_NAMES = [
 ];
 
 /**
- * Contrast pairs of §2.1.3 (plus the review's component combinations, §4.5): [foreground,
- * background, threshold]. 4.5 for text, 3 for non-text UI and graphics.
- *
- * §4.5 requires foreground, muted-foreground, primary-as-text and ring against `selected`,
- * `subtle-selected` and `card`/`subtle-hover`; `SECTION_4_5_MATRIX` below checks that every one of
- * those combinations is listed here.
- */
-const CONTRAST_PAIRS: Array<[string, string, number]> = [
-  ['foreground', 'background', 4.5],
-  ['foreground', 'card', 4.5],
-  ['foreground', 'subtle-hover', 4.5],
-  ['muted-foreground', 'background', 4.5],
-  ['muted-foreground', 'card', 4.5],
-  ['muted-foreground', 'muted', 4.5],
-  ['muted-foreground', 'subtle-hover', 4.5],
-  // ToggleButton `isAccessible` (0.7) draws the pressed state as a brand fill with on-brand text,
-  // on `primary` with an inset `primary-foreground` stroke, on the page and on cards. Its pairs
-  // are the three `primary-foreground` fills below and `primary` on `background` and `card`; they
-  // need no new entry.
-  ['primary-foreground', 'primary', 4.5],
-  ['primary-foreground', 'primary-hover', 4.5],
-  ['primary-foreground', 'primary-pressed', 4.5],
-  ['primary', 'background', 4.5],
-  ['primary', 'subtle-hover', 4.5],
-  ['primary', 'card', 4.5],
-  // Also the checked box of a multi-select Option on its selected row (0.10, D8), a non-text
-  // graphic that needs 3:1; the text threshold covers it.
-  ['primary', 'subtle-selected', 4.5],
-  ['foreground', 'subtle-selected', 4.5],
-  ['muted-foreground', 'subtle-selected', 4.5],
-  ['selected-foreground', 'selected', 4.5],
-  ['foreground', 'selected', 4.5],
-  ['muted-foreground', 'selected', 4.5],
-  ['primary', 'selected', 4.5],
-  ['ring', 'selected', 3],
-  ['ring', 'background', 3],
-  ['ring', 'subtle-selected', 3],
-  ['ring', 'card', 3],
-  ['ring', 'subtle-hover', 3],
-  ['stroke-accessible', 'background', 3],
-  // The unchecked box of a multi-select Option (0.10, D8) on the active and the selected row.
-  ['stroke-accessible', 'subtle-hover', 3],
-  ['stroke-accessible', 'subtle-selected', 3],
-  // Filled input focus ring and state colors on the input's own fill (Phase 4 D5).
-  ['primary', 'input-filled-darker', 3],
-  ['destructive', 'input-filled-darker', 3],
-  ['ring', 'input-filled-darker', 3],
-  ['primary', 'input-filled-lighter', 3],
-  ['destructive', 'input-filled-lighter', 3],
-  ['ring', 'input-filled-lighter', 3],
-  // AlphaSlider's checkerboard (0.8): squares in `stroke` on `background` under the rail. A
-  // pattern that must stay visible, not text or a control boundary: 1.5:1. (`muted` on
-  // `background` reaches only 1.14, 1.24 and 1.21:1.) The thumbs of the color parts reuse
-  // `foreground` on `background` and `ring` on `background` above.
-  ['stroke', 'background', 1.5],
-  // Progress fills on the track (ProgressBar `color`; its warning fill uses `severe`).
-  ['primary', 'track', 3],
-  ['success', 'track', 3],
-  ['error', 'track', 3],
-  ['severe', 'track', 3],
-  // CounterBadge dot fills on the page (a dot has no text). The primary, muted-foreground
-  // (informative) and warning-tint-foreground (warning) dots are asserted at 4.5 in this list.
-  ['success', 'background', 3],
-  ['destructive', 'background', 3],
-  ['severe', 'background', 3],
-  ['error', 'background', 4.5],
-  ['error', 'card', 4.5],
-  // Field warning and success messages, on the page and on cards.
-  ['warning-tint-foreground', 'background', 4.5],
-  ['warning-tint-foreground', 'card', 4.5],
-  ['success-tint-foreground', 'background', 4.5],
-  ['success-tint-foreground', 'card', 4.5],
-  ['error-foreground', 'error', 4.5],
-  ['destructive-foreground', 'destructive', 4.5],
-  ['success-foreground', 'success', 4.5],
-  ['warning-foreground', 'warning', 4.5],
-  ['severe-foreground', 'severe', 4.5],
-  ['info-foreground', 'info', 4.5],
-  ['success-tint-foreground', 'success-tint', 4.5],
-  ['warning-tint-foreground', 'warning-tint', 4.5],
-  ['error-tint-foreground', 'error-tint', 4.5],
-  ['severe-tint-foreground', 'severe-tint', 4.5],
-  ['info-tint-foreground', 'info-tint', 4.5],
-  ['inverted-foreground', 'inverted', 4.5],
-  ['rating', 'background', 3],
-  ['presence-available', 'background', 3],
-  ['presence-busy', 'background', 3],
-  ['presence-away', 'background', 3],
-  ['presence-offline', 'background', 3],
-  ['presence-oof', 'background', 3],
-  ['presence-glyph', 'presence-available', 3],
-  ['presence-glyph', 'presence-busy', 3],
-  ['presence-glyph', 'presence-away', 3],
-  ['presence-glyph', 'presence-oof', 3],
-  // Tags (0.11). Tag's Dismiss ring on the filled chip and an InteractionTag's ring over its
-  // filled neighbour; 0.10 already relied on it without asserting it: 4.72 / 4.18 / 16.21.
-  ['ring', 'muted', 3],
-  // Text on the hover and pressed fills of neutral chips (foreground text only):
-  // 11.76 / 10.05 / 12.63.
-  ['foreground', 'muted-hover', 4.5],
-  // 10.17 / 13.58 / 8.45.
-  ['foreground', 'muted-pressed', 4.5],
-  // State steps that must be seen (1.15:1, a floor of this phase; 0.10's dismiss hover was
-  // 1.05:1). The pressed step is judged against hover only, as Button's subtle-pressed is:
-  // muted-pressed is 1.07:1 on the dark background and card, so no pressed pair is asserted
-  // against a surface.
-  // 1.16 / 1.17 / 1.38.
-  ['muted-hover', 'muted', 1.15],
-  // 1.16 / 1.35 / 1.49.
-  ['muted-pressed', 'muted-hover', 1.15],
-  // 1.16 / 1.38 / 1.40.
-  ['selected-hover', 'selected', 1.15],
-  // 1.16 / 1.56 / 1.43.
-  ['selected-pressed', 'selected-hover', 1.15],
-  // An outline tag's Dismiss circle on the page: 1.32 / 1.45 / 1.66.
-  ['muted-hover', 'background', 1.15],
-  // On a card: 1.26 / 1.26 / 1.66.
-  ['muted-hover', 'card', 1.15],
-  // Outline tags in a filled-darker TagPicker: 1.21 / 1.83 / 1.66.
-  ['muted-hover', 'input-filled-darker', 1.15],
-  // Palette borders (0.17): the hue's stroke on the page and on its own tint (WCAG 1.4.11). The
-  // strong fill on the page (a chart series) has its own test in the palette block.
-  ...PALETTE_HUES.flatMap((hue): Array<[string, string, number]> => [
-    [`palette-${hue}-border`, 'background', 3],
-    [`palette-${hue}-border`, `palette-${hue}-tint`, 3],
-  ]),
-];
-
-/**
  * Ratios printed in §2.1.3 (rounded to two decimals there), plus the success, error and severe
  * progress fills on the track (recorded to two decimals in 0.6) and the unchecked multi-select
  * Option box on its rows (recorded to two decimals in 0.10). The unrounded ratio must match
@@ -534,151 +396,6 @@ type MinimumPair = [theme: ThemeName, fg: string, bg: string, minimum: number];
 const TABLED_MINIMUMS = ['presence-available', 'presence-busy', 'presence-away', 'presence-oof']
   .map((fill): MinimumPair => ['high-contrast', 'presence-glyph', fill, 7.09])
   .concat([['high-contrast', 'input-filled-stroke', 'background', 3] satisfies MinimumPair]);
-
-/**
- * Text contrast matrix (WCAG 1.4.3: 4.5:1, compared unrounded). The pairs above are the ones the
- * spec tables; components and consumers also combine a text token with any surface of its theme.
- * A real-browser axe sweep of every story found high-contrast `error` text at 4.27:1 in a selected,
- * pressed List row (a subtle Button with `text-error` on `subtle-pressed`), a pair no table listed.
- * So every text-capable token is checked against every surface it can sit on, and every colour
- * token is classified (text, surface or excluded with a reason), so a new token cannot skip it.
- */
-
-/**
- * Surfaces any text can sit on: the page (popovers, menus, dialogs and toasts are `background`
- * too), cards, neutral chips, the subtle control states, the selection tint, and the status tints
- * (MessageBar renders its title, body, links, actions and dismiss button on the tint).
- */
-const TEXT_SURFACES = [
-  'background',
-  'card',
-  'secondary',
-  'muted',
-  'subtle-hover',
-  'subtle-pressed',
-  'subtle-selected',
-  'selected',
-  'success-tint',
-  'warning-tint',
-  'error-tint',
-  'severe-tint',
-  'info-tint',
-  'input-filled-darker',
-  'input-filled-lighter',
-];
-
-/** Text tokens that may sit on every `TEXT_SURFACES` entry, with where they are used as text. */
-const SURFACE_TEXT_TOKENS: Record<string, string> = {
-  foreground: 'body text',
-  'card-foreground': 'alias of foreground',
-  'secondary-foreground': 'alias of foreground',
-  'muted-foreground': 'secondary text, placeholders, icon buttons',
-  primary: 'links, transparent buttons, selected Nav/TabList/Stepper text',
-  accent: 'alias of primary',
-  error: 'validation messages, required markers, destructive actions (`text-error`)',
-  // §2.1.3 gives destructive and error one value; 0.4 and shadcn-style code writes text-destructive.
-  destructive: 'alias of error',
-  success: 'completed Stepper steps (`text-success`)',
-  'warning-tint-foreground': "warning's text token (the warning fill is not text, see below)",
-  'info-tint-foreground': "info's text token (the info fill is a fill and border, see below)",
-};
-
-/** Text tokens bound to particular surfaces: their own fill or tint, or the inverted tooltip. */
-const BOUND_TEXT_SURFACES: Record<string, string[]> = {
-  'selected-foreground': ['selected', 'selected-hover', 'selected-pressed'],
-  'inverted-foreground': ['inverted'],
-  // Status icons and badge text: on their tint (MessageBar, Badge, Stepper) and on the page (Toast).
-  // Field success messages also sit on cards.
-  'success-tint-foreground': ['success-tint', 'background', 'card'],
-  'error-tint-foreground': ['error-tint', 'background'],
-  'severe-tint-foreground': ['severe-tint', 'background'],
-  // Text on fills.
-  'primary-foreground': ['primary', 'primary-hover', 'primary-pressed'],
-  'accent-foreground': ['accent'],
-  'error-foreground': ['error'],
-  'destructive-foreground': ['destructive'],
-  'success-foreground': ['success'],
-  'warning-foreground': ['warning'],
-  'severe-foreground': ['severe'],
-  'info-foreground': ['info'],
-  // Avatar colors (0.13): text on each persona palette fill, in every theme.
-  'palette-red-foreground': ['palette-red'],
-  'palette-pumpkin-foreground': ['palette-pumpkin'],
-  'palette-gold-foreground': ['palette-gold'],
-  'palette-forest-foreground': ['palette-forest'],
-  'palette-teal-foreground': ['palette-teal'],
-  'palette-blue-foreground': ['palette-blue'],
-  'palette-navy-foreground': ['palette-navy'],
-  'palette-lavender-foreground': ['palette-lavender'],
-  'palette-purple-foreground': ['palette-purple'],
-  'palette-magenta-foreground': ['palette-magenta'],
-  'palette-brown-foreground': ['palette-brown'],
-  'palette-steel-foreground': ['palette-steel'],
-  // Palette tints (0.17): text and icons on the tint, on the page and on cards, in every theme.
-  // The tints are surfaces for their own tint foreground only (not TEXT_SURFACES): muted text is
-  // under 4.5:1 on the light tints.
-  ...Object.fromEntries(
-    PALETTE_HUES.map((hue) => [
-      `palette-${hue}-tint-foreground`,
-      [`palette-${hue}-tint`, 'background', 'card'],
-    ]),
-  ),
-};
-
-/**
- * Colour tokens that are never text on a surface, with the reason. Non-text contrast (3:1, WCAG
- * 1.4.11) of the strokes and graphics is asserted in `CONTRAST_PAIRS`.
- */
-const NOT_TEXT_TOKENS: Record<string, string> = {
-  // Fills only by design, each carrying its own -foreground (BOUND_TEXT_SURFACES).
-  warning: 'fill only: 1.30:1 on white; warning text and icons use warning-tint-foreground',
-  severe: 'fill only (with severe-foreground); severe text uses severe-tint-foreground',
-  info: 'fill and start border only (with info-foreground); info text uses info-tint-foreground',
-  'primary-hover': 'fill state of primary (with primary-foreground)',
-  'primary-pressed': 'fill state of primary (with primary-foreground)',
-  // Not TEXT_SURFACES: primary text is 4.08 / 4.15:1 on muted-hover (light / dark) and
-  // muted-foreground 4.48:1 in dark; a light grey dark enough to be seen cannot keep every text
-  // token at 4.5:1 (#ebebeb, the darkest that does, is 1.05:1 from muted).
-  'muted-hover':
-    'fill state of muted chips (Tag, InteractionTag), with foreground text (CONTRAST_PAIRS)',
-  'muted-pressed':
-    'fill state of muted chips (Tag, InteractionTag), with foreground text (CONTRAST_PAIRS)',
-  'selected-hover': 'fill state of selected (with selected-foreground)',
-  'selected-pressed': 'fill state of selected (with selected-foreground)',
-  subtle: 'transparent rest state of subtle controls',
-  // Strokes, focus ring and graphics.
-  border: 'decorative divider',
-  stroke: 'control border (paired with stroke-accessible for 3:1 where it identifies a control)',
-  'stroke-hover': 'control border state',
-  'stroke-accessible': 'control border, Slider rail, Rating outline star (3:1)',
-  input: 'control border',
-  'input-filled-stroke': 'filled input border (transparent except in high contrast)',
-  ring: 'focus indicator (3:1)',
-  track: 'progress track (the primary, success, error and severe fills carry 3:1)',
-  skeleton: 'loading placeholder',
-  rating: 'Rating star glyph (3:1)',
-  'presence-available': 'presence glyph (3:1)',
-  'presence-busy': 'presence glyph (3:1)',
-  'presence-away': 'presence glyph (3:1)',
-  'presence-offline': 'presence glyph (3:1)',
-  'presence-oof': 'presence glyph (3:1)',
-  'presence-glyph': 'glyph drawn on a presence fill (3:1)',
-  'inverted-border': 'tooltip border',
-  backdrop: 'translucent overlay scrim',
-  // Palette borders (0.17).
-  ...Object.fromEntries(
-    PALETTE_HUES.map((hue) => [
-      `palette-${hue}-border`,
-      "the hue's stroke, declared as its fill (3:1 on background and on its tint)",
-    ]),
-  ),
-};
-
-/** Each text token with every surface it is checked against. */
-const TEXT_MATRIX: Array<{ fg: string; surfaces: string[] }> = [
-  ...Object.keys(SURFACE_TEXT_TOKENS).map((fg) => ({ fg, surfaces: TEXT_SURFACES })),
-  ...Object.entries(BOUND_TEXT_SURFACES).map(([fg, surfaces]) => ({ fg, surfaces })),
-];
 
 // ---------------------------------------------------------------------------------------------
 // Shared lookups
