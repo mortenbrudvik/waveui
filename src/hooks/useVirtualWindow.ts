@@ -13,8 +13,9 @@ export interface UseVirtualWindowOptions {
   itemSize: number;
   /**
    * Rows rendered beyond each edge of the viewport, so a fast scroll shows rows instead of blank
-   * space before the next window renders.
-   * @default 6
+   * space before the next window renders. A given number is a number of rows; the default covers
+   * at least 240 pixels, so small rows get more of them (9 rows of 28 pixels, 8 of 32).
+   * @default enough rows for 240 pixels, and at least 6
    */
   overscan?: number;
   /**
@@ -60,7 +61,9 @@ export interface VirtualWindow {
    * row is rendered once that update commits. `align` places it at the `start`, `center` or `end`
    * of the viewport; `auto` (the default) scrolls the least that shows it whole. The offset is
    * bounded by the rendered content. Before the scroller attaches, the last request is kept and
-   * applied when it does. Call it from an event handler or an effect, never during render.
+   * applied when it does, and once more when the scroller first changes height after that (a
+   * popup that positioning shrinks once it is shown), unless it was scrolled or another request
+   * came in between. Call it from an event handler or an effect, never during render.
    */
   scrollToIndex(index: number, options?: { align?: 'auto' | 'start' | 'center' | 'end' }): void;
 }
@@ -76,7 +79,18 @@ interface ScrollRequest {
   align: 'auto' | 'start' | 'center' | 'end';
 }
 
+/** A request applied on attach, with the viewport height and the offset it was applied with. */
+interface SettlingRequest {
+  element: HTMLElement;
+  request: ScrollRequest;
+  viewportSize: number;
+  offset: number;
+}
+
 const UNMEASURED: WindowState = { firstVisible: 0, viewportSize: 0 };
+
+/** The pixels the default overscan covers beyond each edge of the viewport (at least 6 rows). */
+const OVERSCAN_PIXELS = 240;
 
 function isValidItemSize(itemSize: number): boolean {
   return Number.isFinite(itemSize) && itemSize > 0;
@@ -116,11 +130,12 @@ function isValidItemSize(itemSize: number): boolean {
  */
 export function useVirtualWindow({
   itemSize,
-  overscan = 6,
+  overscan,
   initialViewportSize = 480,
   scrollPaddingStart = 0,
 }: UseVirtualWindowOptions): VirtualWindow {
   const size = isValidItemSize(itemSize) ? itemSize : 1;
+  const overscanRows = overscan ?? Math.max(6, Math.ceil(OVERSCAN_PIXELS / size));
   const paddingStart =
     Number.isFinite(scrollPaddingStart) && scrollPaddingStart > 0 ? scrollPaddingStart : 0;
   const [state, setState] = useState<WindowState>(UNMEASURED);
@@ -129,6 +144,9 @@ export function useVirtualWindow({
   // render a component once more for an update to an equal value).
   const measuredRef = useRef<WindowState>(UNMEASURED);
   const pendingRef = useRef<ScrollRequest | null>(null);
+  // The request applied on attach, applied once more at the scroller's first change of height
+  // unless the scroller moved or another request came first.
+  const settlingRef = useRef<SettlingRequest | null>(null);
 
   useEffect(() => {
     if (!isValidItemSize(itemSize))
@@ -175,6 +193,7 @@ export function useVirtualWindow({
   const scrollToIndex = useEventCallback(
     (index: number, options?: { align?: 'auto' | 'start' | 'center' | 'end' }) => {
       const request: ScrollRequest = { index, align: options?.align ?? 'auto' };
+      settlingRef.current = null;
       // A scroller that left the document but whose `null` has not committed yet counts as gone.
       if (scroller?.isConnected) scrollElementTo(scroller, request);
       else pendingRef.current = request;
@@ -198,12 +217,32 @@ export function useVirtualWindow({
       else measure(scroller);
     };
     scroller.addEventListener('scroll', onScroll, { passive: true });
-    const observer =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure(scroller));
+    // The first change of height after a request applied on attach applies it once more (the
+    // height it was applied with was not the final one), unless the scroller moved since.
+    const onResize = () => {
+      const settling = settlingRef.current;
+      if (settling?.element === scroller && scroller.clientHeight !== settling.viewportSize) {
+        settlingRef.current = null;
+        if (Math.abs(scroller.scrollTop - settling.offset) < 1) {
+          scrollElementTo(scroller, settling.request);
+          return;
+        }
+      }
+      measure(scroller);
+    };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize);
     observer?.observe(scroller);
     const pending = pendingRef.current;
     pendingRef.current = null;
-    if (pending) scrollElementTo(scroller, pending);
+    if (pending) {
+      scrollElementTo(scroller, pending);
+      settlingRef.current = {
+        element: scroller,
+        request: pending,
+        viewportSize: scroller.clientHeight,
+        offset: scroller.scrollTop,
+      };
+    }
     return () => {
       released = true;
       scroller.removeEventListener('scroll', onScroll);
@@ -229,10 +268,10 @@ export function useVirtualWindow({
           itemSize: size,
           firstVisible: state.firstVisible,
           viewportSize: state.viewportSize > 0 ? state.viewportSize : initialViewportSize,
-          overscan,
+          overscan: overscanRows,
           keep: options?.keep,
         }),
     }),
-    [size, scrollRef, scrollToIndex, state, overscan, initialViewportSize],
+    [size, scrollRef, scrollToIndex, state, overscanRows, initialViewportSize],
   );
 }

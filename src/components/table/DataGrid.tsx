@@ -334,7 +334,9 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    * in it. The columns are laid out from widths (as with `columnSizingOptions`), so they never
    * change width as rows come and go. The header stays at the top of the scroller: pass its height
    * as `scrollPaddingStart` to `useVirtualWindow`, so keyboard moves bring rows into the area below
-   * it.
+   * it. The scroller is no tab stop of its own (`tabIndex` -1, as Firefox would stop on it; a
+   * `tabIndex` in `containerProps` wins), and the browser's scroll anchoring is off on it (the
+   * window lays the rows out).
    *
    * The keyboard moves by the data: ArrowUp/ArrowDown, PageUp/PageDown and Ctrl+Home/Ctrl+End
    * scroll a target row that is not rendered into the window, then focus it, and the focused row
@@ -1361,6 +1363,9 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                 <DataGridResizeContext.Provider value={sizing.resizeContext}>
                   <DataGridFixedLayoutContext.Provider value={sizing.colgroup !== null}>
                     <div
+                      // A windowed grid's tab stop is its cell: the scroller is none of its own
+                      // (Firefox makes a scroller a tab stop). `containerProps.tabIndex` wins.
+                      tabIndex={windowed ? -1 : undefined}
                       {...containerRest}
                       ref={containerRef}
                       aria-label={containerHasRole ? containerLabel : undefined}
@@ -1368,6 +1373,9 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                       className={cn(
                         dataGridClassNames.container,
                         'overflow-x-auto rounded-md border border-border',
+                        // The window lays the rows out: the browser's scroll anchoring only
+                        // fights it.
+                        windowed && '[overflow-anchor:none]',
                         containerClassName,
                       )}
                     >

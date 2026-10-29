@@ -122,6 +122,18 @@ async function scrollTo(top: number): Promise<void> {
   await act(async () => {});
 }
 
+/**
+ * A browser's `scrollIntoView({ block: 'nearest' })` on an item of the list (jsdom has no layout):
+ * the least scroll of the list that shows the item whole, and the `scroll` event it fires.
+ */
+function nearestScrollIntoView(this: Element): void {
+  const root = listRoot();
+  const top = Number(this.getAttribute('data-index')) * ITEM;
+  if (top < root.scrollTop) root.scrollTop = top;
+  else if (top + ITEM > root.scrollTop + VIEWPORT) root.scrollTop = top + ITEM - VIEWPORT;
+  fireEvent.scroll(root);
+}
+
 async function focus(el: HTMLElement): Promise<void> {
   act(() => el.focus());
   await act(async () => {});
@@ -299,6 +311,18 @@ describe('List virtualWindow', () => {
       expect(screen.getByRole('listbox')).not.toHaveAttribute('aria-rowcount');
       expect(screen.getByRole('listbox').className).not.toContain('overflow-y-auto');
       expect(document.querySelector('[data-virtual-spacer]')).toBeNull();
+    });
+
+    it('turns the browser’s scroll anchoring off on its scroller (the window lays the items out)', () => {
+      const { unmount } = render(<WindowedList />);
+      expect(listRoot()).toHaveClass('[overflow-anchor:none]');
+      unmount();
+      render(
+        <List aria-label="Fruits">
+          <List.Item>Apple</List.Item>
+        </List>,
+      );
+      expect(listRoot()).not.toHaveClass('[overflow-anchor:none]');
     });
 
     it('right to left: the window sets only heights (no physical property)', async () => {
@@ -632,6 +656,71 @@ describe('List virtualWindow', () => {
       expect(document.activeElement).toBe(item(16));
     });
 
+    it('scrolls a rendered target that is out of view into view, the least, before focusing it; the rendered items cover the new view', async () => {
+      const scrollIntoView = vi
+        .spyOn(Element.prototype, 'scrollIntoView')
+        .mockImplementation(nearestScrollIntoView);
+      render(<WindowedList selectable />);
+      await focus(item(6));
+      // Item 16 is rendered (the overscan) but below the 480 px view.
+      const target = item(16);
+      let scrollTopAtFocus: number | null = null;
+      target.addEventListener('focus', () => {
+        scrollTopAtFocus = listRoot().scrollTop;
+      });
+      expect(await press('PageDown')).toBe(false);
+      expect(document.activeElement).toBe(target);
+      expect(scrollIntoView.mock.contexts).toEqual([target]);
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+      expect(scrollTopAtFocus).toBe(17 * ITEM - VIEWPORT);
+      // Before the window follows (no frame ran yet), the items in the new view (6 to 16) are all
+      // rendered: no frame shows a spacer there.
+      expect(mountedIndexes()).toEqual(range(0, 17));
+      runFrames();
+      await act(async () => {});
+      expect(mountedIndexes()).toEqual(range(0, 23));
+    });
+
+    it('scrolls a partly visible target whole into view, below and above the view', async () => {
+      const scrollIntoView = vi
+        .spyOn(Element.prototype, 'scrollIntoView')
+        .mockImplementation(nearestScrollIntoView);
+      render(<WindowedList selectable />);
+      await focus(item(9));
+      // Item 10 spans 440 to 484 px: its last 4 px are below the 480 px view.
+      await press('ArrowDown');
+      const tenth = item(10);
+      expect(document.activeElement).toBe(tenth);
+      expect(scrollIntoView.mock.contexts).toEqual([tenth]);
+      expect(listRoot().scrollTop).toBe(11 * ITEM - VIEWPORT);
+
+      await scrollTo(100 * ITEM + 20);
+      await focus(item(101));
+      // Item 100 starts 20 px above the view.
+      await press('ArrowUp');
+      expect(document.activeElement).toBe(item(100));
+      expect(scrollIntoView.mock.contexts).toEqual([tenth, item(100)]);
+      expect(listRoot().scrollTop).toBe(100 * ITEM);
+    });
+
+    it('does not scroll an item that a pointer press focuses', async () => {
+      const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+      render(<WindowedList selectable />);
+      const partly = item(10);
+      act(() => {
+        fireEvent.pointerDown(partly, { button: 0 });
+        fireEvent.mouseDown(partly, { button: 0 });
+        partly.focus();
+        fireEvent.pointerUp(partly, { button: 0 });
+        fireEvent.mouseUp(partly, { button: 0 });
+        fireEvent.click(partly, { button: 0 });
+      });
+      await act(async () => {});
+      expect(document.activeElement).toBe(partly);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(listRoot().scrollTop).toBe(0);
+    });
+
     it('moves from an item kept outside the window to its index neighbour, not its DOM neighbour', async () => {
       render(<WindowedList selectable />);
       await focus(item(2));
@@ -714,6 +803,26 @@ describe('List virtualWindow', () => {
       expect(mountedIndexes()).toEqual([0, ...range(9983, COUNT)]);
       await press('z');
       expect(document.activeElement).toBe(option('Zebra'));
+    });
+
+    it('typeahead scrolls a rendered match that is out of view into view, and the window with it', async () => {
+      render(
+        <WindowedList
+          selectable
+          renderItem={(index) => (
+            <List.Item value={`file-${index}`}>
+              {index === 15 ? 'Zebra' : `File ${index}`}
+            </List.Item>
+          )}
+        />,
+      );
+      await focus(item(0));
+      // Item 15 is rendered (the overscan), below the 480 px view.
+      await press('z');
+      expect(document.activeElement).toBe(option('Zebra'));
+      expect(listRoot().scrollTop).toBe(16 * ITEM - VIEWPORT);
+      // No scroll event or frame ran: 5 items above the view, 6 more beyond it.
+      expect(mountedIndexes()).toEqual(range(0, 22));
     });
 
     it('a key that targets the focused item drops an awaited item and shows the focused one', async () => {
@@ -912,6 +1021,38 @@ describe('List virtualWindow', () => {
       expect(focused).toHaveAttribute('role', 'row');
       expect(focused).toHaveAttribute('data-index', '5000');
       expect(focused).toHaveAttribute('aria-rowindex', '5001');
+    });
+  });
+
+  describe('the list element in the Tab order', () => {
+    it.each<[string, Partial<ListProps>]>([
+      ['a listbox', { selectable: true }],
+      ['a list navigated by its items', { navigationMode: 'items' }],
+      ['a grid', { navigationMode: 'composite' }],
+    ])('is no Tab stop of its own in %s, whose Tab stop is an item', (_, props) => {
+      render(<WindowedList {...props} />);
+      // A scroller is a Tab stop in Firefox unless it says otherwise.
+      expect(listRoot()).toHaveAttribute('tabindex', '-1');
+      expect(listRoot().querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    });
+
+    it('keeps the browser’s default in a plain windowed list, whose items are no Tab stops', () => {
+      render(<WindowedList />);
+      expect(listRoot()).not.toHaveAttribute('tabindex');
+    });
+
+    it('takes the consumer’s tabIndex instead', () => {
+      render(<WindowedList selectable tabIndex={0} />);
+      expect(listRoot()).toHaveAttribute('tabindex', '0');
+    });
+
+    it('a list without a window keeps no tabindex of its own', () => {
+      render(
+        <List aria-label="Fruits" selectable>
+          <List.Item value="a">Apple</List.Item>
+        </List>,
+      );
+      expect(screen.getByRole('listbox')).not.toHaveAttribute('tabindex');
     });
   });
 

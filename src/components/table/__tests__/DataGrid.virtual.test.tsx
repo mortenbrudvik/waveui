@@ -190,6 +190,24 @@ describe('DataGrid virtualWindow', () => {
       expect(screen.getAllByRole('row')).toHaveLength(18);
     });
 
+    it('makes the scroll wrapper no tab stop of its own, and turns the browser’s scroll anchoring off on it', () => {
+      const { unmount } = render(<Grid />);
+      // A scroller is a tab stop in Firefox unless it says otherwise: the grid's cell is the stop.
+      expect(scroller()).toHaveAttribute('tabindex', '-1');
+      expect(scroller()).toHaveClass('[overflow-anchor:none]');
+      expect(tabStops()).toHaveLength(1);
+      unmount();
+
+      render(<Grid windowed={false} items={ITEMS.slice(0, 5)} />);
+      expect(scroller()).not.toHaveAttribute('tabindex');
+      expect(scroller()).not.toHaveClass('[overflow-anchor:none]');
+    });
+
+    it('takes a tabIndex from containerProps instead', () => {
+      render(<Grid containerProps={{ tabIndex: 0, style: { height: VIEWPORT } }} />);
+      expect(scroller()).toHaveAttribute('tabindex', '0');
+    });
+
     it('sets aria-rowcount on the grid and aria-rowindex on every row, the header first', () => {
       render(<Grid />);
       expect(grid()).toHaveAttribute('aria-rowcount', '10001');

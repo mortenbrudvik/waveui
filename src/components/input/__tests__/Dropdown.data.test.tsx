@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { Dropdown, type DropdownProps } from '../Dropdown';
 import { Option, OptionGroup, type ListboxOptionRenderState } from '../Option';
 import { dropdownClassNames } from '../../../lib/classNames';
-import { expectNoA11yViolations } from '../../../test-utils';
+import { expectNoA11yViolations, installResizeObserverMock } from '../../../test-utils';
 import { __getAnnouncerText, __resetAnnouncer } from '../../../hooks/useAnnounce';
 import { collectOptionLabels, type ListboxItem } from '../../../hooks/useListbox';
 import type { VirtualWindow } from '../../../hooks/useVirtualWindow';
@@ -325,7 +325,7 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     render(<WindowedDropdown />);
     await user.click(combobox());
     expect(activeOption()).toHaveAccessibleName('Item 0');
-    expect(order(list())).toEqual([...range(1, 15), 'spacer']);
+    expect(order(list())).toEqual([...range(1, 17), 'spacer']);
     const [end] = spacers(list());
     expect(end.tagName).toBe('LI');
     expect(end).toHaveAttribute('aria-hidden', 'true');
@@ -336,7 +336,7 @@ describe('Dropdown windowed options (virtualWindow)', () => {
       expect(option).toHaveStyle({ height: '32px' });
     }
     scrollList(list(), 5000 * ITEM_SIZE);
-    expect(order(list())).toEqual([1, 'spacer', ...range(4995, 5015), 'spacer']);
+    expect(order(list())).toEqual([1, 'spacer', ...range(4993, 5017), 'spacer']);
     expect(options().length).toBeLessThanOrEqual(30);
     expect(activeOption()).toBe(within(list()).getByRole('option', { name: 'Item 0' }));
   });
@@ -353,14 +353,14 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     expect(last).toHaveAccessibleName('Item 9999');
     expect(last).toHaveAttribute('aria-posinset', '10000');
     expect(within(list()).getByRole('option', { name: 'Item 9999' })).toBe(last);
-    // No scroll event: the last 8 options in view, 6 more above them.
+    // No scroll event: the last 8 options in view, 8 more above them.
     expect(list().scrollTop).toBe(COUNT * ITEM_SIZE - VIEWPORT);
-    expect(order(list())).toEqual(['spacer', ...range(9987, 10001)]);
+    expect(order(list())).toEqual(['spacer', ...range(9985, 10001)]);
     expect(scrollIntoView.mock.contexts.at(-1)).toBe(last);
     await user.keyboard('{Home}');
     expect(activeOption()).toHaveAttribute('aria-posinset', '1');
     expect(list().scrollTop).toBe(0);
-    expect(order(list())).toEqual([...range(1, 15), 'spacer']);
+    expect(order(list())).toEqual([...range(1, 17), 'spacer']);
     // The opening asked for the first item and centered it; End and Home asked for theirs.
     expect(onScrollToIndex.mock.calls).toEqual([
       [0, { align: 'auto' }],
@@ -368,6 +368,17 @@ describe('Dropdown windowed options (virtualWindow)', () => {
       [9999, { align: 'auto' }],
       [0, { align: 'auto' }],
     ]);
+  });
+
+  it('turns the browser’s scroll anchoring off on the shown list only while windowed', async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<WindowedDropdown />);
+    await user.click(combobox());
+    expect(list()).toHaveClass('[overflow-anchor:none]');
+    unmount();
+    render(<Dropdown aria-label="Item" items={ITEMS} />);
+    await user.click(combobox());
+    expect(list()).not.toHaveClass('[overflow-anchor:none]');
   });
 
   it('makes no window request for a pointer highlight', async () => {
@@ -398,8 +409,38 @@ describe('Dropdown windowed options (virtualWindow)', () => {
       [5000, { align: 'center' }],
     ]);
     expect(list().scrollTop).toBe(centerOffset(5000));
-    expect(order(list())).toEqual(['spacer', ...range(4991, 5011), 'spacer']);
+    expect(order(list())).toEqual(['spacer', ...range(4989, 5013), 'spacer']);
     expect(within(list()).getByRole('option', { name: 'Item 5000' })).toBe(selected);
+  });
+
+  it('centers the active option again when positioning shrinks the list after it opened (fitViewport)', async () => {
+    const ro = installResizeObserverMock();
+    try {
+      let height = VIEWPORT;
+      vi.spyOn(Element.prototype, 'clientHeight', 'get').mockImplementation(function (
+        this: Element,
+      ) {
+        return this.getAttribute('role') === 'listbox' ? height : 0;
+      });
+      const user = userEvent.setup();
+      render(<WindowedDropdown defaultValue="item-5000" />);
+      await user.click(combobox());
+      expect(list().scrollTop).toBe(centerOffset(5000));
+      // The surface is fitted to a short viewport after the list mounted: 100 pixels of it show.
+      height = 100;
+      ro.trigger(list());
+      expect(list().scrollTop).toBe(5000 * ITEM_SIZE + ITEM_SIZE / 2 - height / 2);
+      // The active option is rendered, whole inside the 100 pixels (34 pixels from their top).
+      expect(activeOption()).toHaveAccessibleName('Item 5000');
+      expect(within(list()).getByRole('option', { name: 'Item 5000' })).toBe(activeOption());
+      expect(5000 * ITEM_SIZE - list().scrollTop).toBe((height - ITEM_SIZE) / 2);
+      // Once: a later change of height leaves the list where it is.
+      height = 250;
+      ro.trigger(list());
+      expect(list().scrollTop).toBe(5000 * ITEM_SIZE + ITEM_SIZE / 2 - 100 / 2);
+    } finally {
+      ro.restore();
+    }
   });
 
   it('PageDown and PageUp move ten options over the data', async () => {
@@ -426,7 +467,7 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     expect(last).toHaveAttribute('aria-posinset', '5000');
     expect(last).toHaveAttribute('aria-setsize', '5000');
     expect(list().scrollTop).toBe(5000 * ITEM_SIZE - VIEWPORT);
-    expect(order(list())).toEqual(['spacer', ...range(4987, 5001)]);
+    expect(order(list())).toEqual(['spacer', ...range(4985, 5001)]);
   });
 
   it('typeahead finds an item anywhere in the data and moves the window to it in the same update', async () => {
@@ -439,7 +480,7 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     expect(within(list()).getByRole('option', { name: 'Item 7777' })).toBe(active);
     // No scroll event: Item 7777 at the bottom edge of the list.
     expect(list().scrollTop).toBe(7778 * ITEM_SIZE - VIEWPORT);
-    expect(order(list())).toEqual(['spacer', ...range(7765, 7785), 'spacer']);
+    expect(order(list())).toEqual(['spacer', ...range(7763, 7787), 'spacer']);
   });
 
   it('selects once per click in StrictMode', async () => {

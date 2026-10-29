@@ -41,8 +41,8 @@ const BIG_EXPANDED: readonly string[] = ['big'];
 const VISIBLE = 1 + ENTRIES + FOLDERS;
 /** The largest `scrollTop`: the last row at the bottom of the viewport. */
 const MAX_SCROLL = VISIBLE * ITEM - VIEWPORT;
-/** Rows in view (400 / 28, rounded up) plus the overscan of 6 below them. */
-const FIRST_WINDOW = 15 + 6;
+/** Rows in view (400 / 28, rounded up) plus the default overscan of 9 below them (240 / 28). */
+const FIRST_WINDOW = 15 + 9;
 
 /** Frames requested through the `requestAnimationFrame` stub, run by {@link runFrames}. */
 const frames = new Map<number, FrameRequestCallback>();
@@ -186,12 +186,12 @@ describe('FlatTree virtualWindow', () => {
       render(<WindowedTree />);
       await scrollTo(3000 * ITEM);
       // The tab stop (the first item) stays rendered while the window is elsewhere.
-      expect(mountedIndexes()).toEqual([0, ...range(2994, 3021)]);
+      expect(mountedIndexes()).toEqual([0, ...range(2991, 3024)]);
       expect(items().length).toBeLessThanOrEqual(40);
-      expect(order()).toEqual([0, 'spacer', ...range(2994, 3021), 'spacer']);
+      expect(order()).toEqual([0, 'spacer', ...range(2991, 3024), 'spacer']);
       expect(spacers().map((el) => el.style.height)).toEqual([
-        `${(2994 - 1) * ITEM}px`,
-        `${(VISIBLE - 3021) * ITEM}px`,
+        `${(2991 - 1) * ITEM}px`,
+        `${(VISIBLE - 3024) * ITEM}px`,
       ]);
       expect(tabStops()).toEqual([itemAt(0)]);
       const row = itemAt(3000);
@@ -216,7 +216,7 @@ describe('FlatTree virtualWindow', () => {
       const row = itemAt(5);
       await focus(row);
       await scrollTo(3000 * ITEM);
-      expect(order()).toEqual(['spacer', 5, 'spacer', ...range(2994, 3021), 'spacer']);
+      expect(order()).toEqual(['spacer', 5, 'spacer', ...range(2991, 3024), 'spacer']);
       expect(row).toHaveFocus();
       expect(tabStops()).toEqual([row]);
       await scrollTo(0);
@@ -277,7 +277,7 @@ describe('FlatTree virtualWindow', () => {
       render(<WindowedTree />);
       await scrollTo(4300 * ITEM);
       const last = items().at(-1) as HTMLElement;
-      expect(last).toHaveAccessibleName('Folder 319');
+      expect(last).toHaveAccessibleName('Folder 322');
       expect(last).toHaveAttribute('aria-expanded', 'false');
       await focus(last);
       await press('ArrowRight');
@@ -285,7 +285,7 @@ describe('FlatTree virtualWindow', () => {
       expect(last).toHaveFocus();
       expect(last.isConnected).toBe(true);
       const index = Number(last.getAttribute('data-index'));
-      expect(itemAt(index + 1)).toHaveAccessibleName('File 319a');
+      expect(itemAt(index + 1)).toHaveAccessibleName('File 322a');
       expect(itemAt(index + 1)).toHaveAttribute('aria-level', '2');
       expect(items().length).toBeLessThanOrEqual(40);
     });
@@ -357,9 +357,113 @@ describe('FlatTree virtualWindow', () => {
     });
   });
 
+  describe('the tree element', () => {
+    /** A windowed tree over `items`, with the model's default options. */
+    function SmallTree({
+      items,
+      windowed = true,
+      ...props
+    }: Omit<FlatTreeProps, 'model'> & { items: readonly FlatTreeItemData[]; windowed?: boolean }) {
+      const model = useFlatTree(items);
+      const virtualWindow = useVirtualWindow({ itemSize: ITEM });
+      return (
+        <FlatTree
+          aria-label="Small"
+          model={model}
+          virtualWindow={windowed ? virtualWindow : undefined}
+          {...props}
+        />
+      );
+    }
+
+    it('is no tab stop of its own while windowed: the tab stop is an item', () => {
+      render(<WindowedTree />);
+      // A scroller is a tab stop in Firefox unless it says otherwise.
+      expect(treeRoot()).toHaveAttribute('tabindex', '-1');
+      expect(tabStops()).toEqual([itemAt(0)]);
+    });
+
+    it('takes the consumer’s tabIndex instead', () => {
+      render(<WindowedTree tabIndex={0} />);
+      expect(treeRoot()).toHaveAttribute('tabindex', '0');
+    });
+
+    it('keeps the browser’s default while it has no item to focus, and without a window', () => {
+      const { unmount } = render(<SmallTree items={[]} />);
+      expect(treeRoot()).not.toHaveAttribute('tabindex');
+      unmount();
+      render(<SmallTree items={[{ value: 'a', label: 'A' }]} windowed={false} />);
+      expect(treeRoot()).not.toHaveAttribute('tabindex');
+      expect(treeRoot()).not.toHaveClass('[overflow-anchor:none]');
+    });
+
+    it('turns the browser’s scroll anchoring off while windowed (the window lays the items out)', () => {
+      render(<WindowedTree />);
+      expect(treeRoot()).toHaveClass('[overflow-anchor:none]');
+    });
+  });
+
+  describe('rows inserted or removed above the focused item', () => {
+    /** Folder 101 is row 4,102 with Archive expanded; 4,304 once every folder is expanded. */
+    const FOLDER_101 = 1 + ENTRIES + 101;
+    /** Folders 0 to 100, two files each. */
+    const INSERTED = 101 * 2;
+
+    it('`*` keeps the focused item where it was in the view, and moves the window in the same update', async () => {
+      render(<WindowedTree />);
+      // Folder 101 at the bottom of the view.
+      const top = (FOLDER_101 + 1) * ITEM - VIEWPORT;
+      await scrollTo(top);
+      const row = itemAt(FOLDER_101);
+      expect(row).toHaveAccessibleName('Folder 101');
+      await focus(row);
+
+      await press('*');
+      expect(row).toHaveFocus();
+      expect(row).toHaveAttribute('data-index', String(FOLDER_101 + INSERTED));
+      expect(treeRoot().scrollTop).toBe(top + INSERTED * ITEM);
+      // No frame ran: the window is around the new offset, with the overscan of 9 rows.
+      const first = Math.floor((top + INSERTED * ITEM) / ITEM);
+      expect(mountedIndexes()).toEqual(range(first - 9, first + 15 + 9));
+      expect(tabStops()).toEqual([row]);
+    });
+
+    it('`*` leaves the view where it is while the focused item is scrolled away', async () => {
+      render(<WindowedTree />);
+      await scrollTo((FOLDER_101 + 1) * ITEM - VIEWPORT);
+      const row = itemAt(FOLDER_101);
+      await focus(row);
+      await scrollTo(0);
+      await press('*');
+      expect(row).toHaveFocus();
+      expect(row).toHaveAttribute('data-index', String(FOLDER_101 + INSERTED));
+      expect(treeRoot().scrollTop).toBe(0);
+    });
+
+    it('keeps the focused item in place when a model change from code removes rows above it', async () => {
+      function Controlled({ expandedItems }: { expandedItems: readonly string[] }) {
+        const model = useFlatTree(ITEMS, { expandedItems });
+        const virtualWindow = useVirtualWindow({ itemSize: ITEM });
+        return <FlatTree aria-label="Archive" model={model} virtualWindow={virtualWindow} />;
+      }
+      const { rerender } = render(<Controlled expandedItems={BIG_EXPANDED} />);
+      const top = (FOLDER_101 + 1) * ITEM - VIEWPORT;
+      await scrollTo(top);
+      const row = itemAt(FOLDER_101);
+      await focus(row);
+
+      // Archive collapses: its 4,000 entries above Folder 101 go.
+      rerender(<Controlled expandedItems={[]} />);
+      await act(async () => {});
+      expect(row).toHaveFocus();
+      expect(row).toHaveAttribute('data-index', String(1 + 101));
+      expect(treeRoot().scrollTop).toBe(top - ENTRIES * ITEM);
+    });
+  });
+
   describe('server render', () => {
     /** Rows in the assumed viewport of 480 pixels (480 / 28, rounded up) plus the overscan. */
-    const SERVER_WINDOW = 18 + 6;
+    const SERVER_WINDOW = 18 + 9;
 
     it('renders the first window only on the server', () => {
       const html = renderToString(<WindowedTree />);

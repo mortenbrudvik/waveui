@@ -140,9 +140,10 @@ export interface ListboxProps<M extends boolean = false> extends Omit<
    * The list element is the window's scroller: give it a bounded height (a height or a maximum
    * height, through `className` or `style`); without one the window measures the whole list and
    * renders every option. While windowed the list has no block padding (add none through
-   * `className`), so the options start at its top, where the window counts them. Every option is
-   * exactly `itemSize` tall (the list sets its height, after the option's own `style`), so an
-   * option's content must fit in it: the default `Option` with one line of text is 32 pixels tall.
+   * `className`), so the options start at its top, where the window counts them, and no scroll
+   * anchoring of the browser (the window lays the options out). Every option is exactly
+   * `itemSize` tall (the list sets its height, after the option's own `style`), so an option's
+   * content must fit in it: the default `Option` with one line of text is 32 pixels tall.
    *
    * The window counts the shown options (the items that are not `hidden`). The keys and typeahead
    * move over all of them (Home and End to the first and the last, PageUp and PageDown by ten); the
@@ -430,8 +431,9 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
         // Disabled: the options take no pointer input (inherited by the options of a group), so
         // none hovers and the list's own not-allowed cursor shows over them.
         disabled && 'cursor-not-allowed opacity-50 *:pointer-events-none',
-        // Windowed: the options start at the top of the scroller, where the window counts them.
-        activeWindow && 'py-0',
+        // Windowed: the options start at the top of the scroller, where the window counts them,
+        // and the window lays them out (the browser's scroll anchoring only fights it).
+        activeWindow && 'py-0 [overflow-anchor:none]',
         className,
       )}
     >

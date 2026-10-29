@@ -30,6 +30,12 @@ export interface FlatTreeProps extends Omit<
    * tree is then the scrolling element: give it a bounded height (a class or a style). Every item
    * is exactly `itemSize` pixels tall, so its content must fit in one row. Without it every visible
    * item is rendered.
+   *
+   * The tree element is then no tab stop of its own while an item is (`tabIndex` -1, as Firefox
+   * would stop on a scroller; a `tabIndex` you pass wins), and the browser's scroll anchoring is
+   * off on it (the window lays the items out): when rows are inserted or removed above the focused
+   * item while it is in view (`*`, or a change of the model from code), the tree moves the view
+   * with it, so it stays where it was.
    */
   virtualWindow?: VirtualWindow;
   /**
@@ -452,6 +458,29 @@ const FlatTreeRoot = ({
     moveTo(root, goal);
   });
 
+  /** The focused item and its place in the visible rows at the last commit. */
+  const focusPlaceRef = React.useRef<{ value: string; index: number } | null>(null);
+
+  // After every commit of a windowed tree: rows inserted or removed above the focused item while
+  // it was in view (`*`, a model change from code) move the view with it, so it stays where it
+  // was, and the window follows in the same update. The browser's scroll anchoring would do the
+  // same a frame before the window follows; it is off (the window lays the rows out).
+  React.useLayoutEffect(() => {
+    const root = rootRef.current;
+    const value = focusStore.getSnapshot().focused;
+    const index = value === null ? undefined : model.getItem(value)?.index;
+    const last = focusPlaceRef.current;
+    focusPlaceRef.current = value !== null && index !== undefined ? { value, index } : null;
+    if (!virtualWindow || !root || last?.value !== value || index === undefined) return;
+    if (index === last.index || !root.contains(root.ownerDocument.activeElement)) return;
+    const size = virtualWindow.itemSize;
+    const top = root.scrollTop;
+    const lastTop = last.index * size;
+    if (lastTop + size <= top || lastTop >= top + root.clientHeight) return;
+    root.scrollTop = top + (index - last.index) * size;
+    virtualWindow.scrollToIndex(index, { align: 'auto' });
+  });
+
   // After every commit: focus the awaited item, which the commit rendered (it is kept), unless
   // focus went outside the tree meanwhile; and when the focused item is no longer visible (a
   // branch collapsed around it, or the items changed) while focus is lost with it, move focus to
@@ -520,10 +549,14 @@ const FlatTreeRoot = ({
         role="tree"
         aria-multiselectable={selectionMode === 'multiple' ? true : undefined}
         data-selection-mode={selectionMode}
+        // A windowed tree's tab stop is an item: the scroller is none of its own (Firefox makes a
+        // scroller a tab stop). The consumer's `tabIndex` wins.
+        tabIndex={windowed && tabStop !== null ? -1 : undefined}
         className={cn(
           flatTreeClassNames.root,
           'text-body-1',
-          windowed && 'overflow-y-auto',
+          // The window lays the rows out: the browser's scroll anchoring only fights it.
+          windowed && 'overflow-y-auto [overflow-anchor:none]',
           className,
         )}
         {...rest}

@@ -314,14 +314,14 @@ describe('Listbox windowed options (virtualWindow)', () => {
 
   it('mounts at most 30 of 10,000 options in the list, which is the scroller', () => {
     render(<WindowedListbox />);
-    expect(order(list())).toEqual([...range(1, 15), 'spacer']);
+    expect(order(list())).toEqual([...range(1, 17), 'spacer']);
     const [end] = spacers(list());
     expect(end.tagName).toBe('LI');
     expect(end).toHaveAttribute('aria-hidden', 'true');
     expect(end).toHaveAttribute('role', 'presentation');
     expect(end).toHaveClass(listboxClassNames.spacer);
     // The list is a flex column: neither the spacers nor the options shrink.
-    expect(end).toHaveStyle({ height: `${(COUNT - 14) * ITEM_SIZE}px`, flexShrink: '0' });
+    expect(end).toHaveStyle({ height: `${(COUNT - 16) * ITEM_SIZE}px`, flexShrink: '0' });
     for (const option of screen.getAllByRole('option')) {
       expect(option).toHaveAttribute('aria-setsize', '10000');
       expect(option).toHaveStyle({ height: '32px', boxSizing: 'border-box', flexShrink: '0' });
@@ -329,8 +329,16 @@ describe('Listbox windowed options (virtualWindow)', () => {
     // Without its block padding, so the options start at the top of the scroller.
     expect(list()).toHaveClass('py-0');
     scrollList(list(), 5000 * ITEM_SIZE);
-    expect(order(list())).toEqual(['spacer', ...range(4995, 5015), 'spacer']);
+    expect(order(list())).toEqual(['spacer', ...range(4993, 5017), 'spacer']);
     expect(screen.getAllByRole('option').length).toBeLessThanOrEqual(30);
+  });
+
+  it('turns the browser’s scroll anchoring off on the list only while windowed', () => {
+    const { unmount } = render(<WindowedListbox />);
+    expect(list()).toHaveClass('[overflow-anchor:none]');
+    unmount();
+    render(<Listbox aria-label="Items" items={MANY_ITEMS.slice(0, 20)} />);
+    expect(list()).not.toHaveClass('[overflow-anchor:none]');
   });
 
   it('renders the first window on the server, with no dangling id', () => {
@@ -340,8 +348,8 @@ describe('Listbox windowed options (virtualWindow)', () => {
     parsed.innerHTML = html;
     const listElement = parsed.querySelector('[role="listbox"]');
     expect(listElement).not.toBeNull();
-    // 480 pixels assumed before the first measure: 15 options and 6 more.
-    expect(positions(listElement as Element)).toEqual(range(1, 22));
+    // 480 pixels assumed before the first measure: 15 options and 8 more.
+    expect(positions(listElement as Element)).toEqual(range(1, 24));
     expect(spacers(listElement as HTMLElement)).toHaveLength(1);
   });
 
@@ -357,7 +365,7 @@ describe('Listbox windowed options (virtualWindow)', () => {
         root = hydrateRoot(container, ui);
       });
       await act(async () => {});
-      expect(order(list())).toEqual([...range(1, 15), 'spacer']);
+      expect(order(list())).toEqual([...range(1, 17), 'spacer']);
       expect(screen.getByRole('option', { name: 'Item 3' })).toHaveAttribute(
         'aria-selected',
         'true',
@@ -378,11 +386,11 @@ describe('Listbox windowed options (virtualWindow)', () => {
     expect(active).toHaveAccessibleName('Item 5000');
     // No scroll event: Item 5000 at the bottom edge of the list, the window around it.
     expect(list().scrollTop).toBe(5001 * ITEM_SIZE - VIEWPORT);
-    expect(order(list())).toEqual(['spacer', ...range(4988, 5008), 'spacer']);
+    expect(order(list())).toEqual(['spacer', ...range(4986, 5010), 'spacer']);
     expect(scrollIntoView.mock.contexts.at(-1)).toBe(active);
     // Scrolled away (the wheel): it stays rendered, between spacers.
     scrollList(list(), 9000 * ITEM_SIZE);
-    expect(order(list())).toEqual(['spacer', 5001, 'spacer', ...range(8995, 9015), 'spacer']);
+    expect(order(list())).toEqual(['spacer', 5001, 'spacer', ...range(8993, 9017), 'spacer']);
     expect(activeOption()).toBe(active);
   });
 
@@ -393,16 +401,16 @@ describe('Listbox windowed options (virtualWindow)', () => {
     await user.keyboard('{End}');
     expect(activeOption()).toHaveAttribute('aria-posinset', '10000');
     expect(within(list()).getByRole('option', { name: 'Item 9999' })).toBe(activeOption());
-    // No scroll event: the last 8 options in view, 6 more above them.
+    // No scroll event: the last 8 options in view, 8 more above them.
     expect(list().scrollTop).toBe(COUNT * ITEM_SIZE - VIEWPORT);
-    expect(order(list())).toEqual(['spacer', ...range(9987, 10001)]);
+    expect(order(list())).toEqual(['spacer', ...range(9985, 10001)]);
     await user.keyboard('{Home}{PageDown}{PageDown}');
     expect(activeOption()).toHaveAttribute('aria-posinset', '21');
     await user.keyboard('Item 4321');
     expect(activeOption()).toHaveAccessibleName('Item 4321');
     expect(list()).toContainElement(activeOption());
     expect(list().scrollTop).toBe(4322 * ITEM_SIZE - VIEWPORT);
-    expect(order(list())).toEqual(['spacer', ...range(4309, 4329), 'spacer']);
+    expect(order(list())).toEqual(['spacer', ...range(4307, 4331), 'spacer']);
   });
 
   it('makes no window request for a pointer press, also on a disabled option that leaves the selected one active', () => {
@@ -447,12 +455,12 @@ describe('Listbox windowed options (virtualWindow)', () => {
     await user.tab();
     scrollList(list(), 9000 * ITEM_SIZE);
     await user.keyboard('{End}');
-    expect(order(list())).toEqual(['spacer', ...range(9987, 10001)]);
+    expect(order(list())).toEqual(['spacer', ...range(9985, 10001)]);
     rerender(<WindowedListbox items={MANY_ITEMS.slice(0, 100)} />);
     // Item 9999 left the items, so the first one is active: the render lays out the 100 under the
     // window clamped to their end (with Item 0 kept), then the window moves to Item 0.
     expect(list().scrollTop).toBe(0);
-    expect(order(list())).toEqual([...range(1, 15), 'spacer']);
+    expect(order(list())).toEqual([...range(1, 17), 'spacer']);
     expect(activeOption()).toHaveAccessibleName('Item 0');
     for (const option of screen.getAllByRole('option')) {
       expect(option).toHaveAttribute('aria-setsize', '100');

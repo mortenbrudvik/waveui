@@ -331,8 +331,10 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * arrow keys move over all of them; the active option stays rendered while it is scrolled away,
    * so `aria-activedescendant` always names an element, and when a key (or typing) makes it
    * active the list and the window move to it in the same update. Opening the list scrolls the
-   * active option, else the first selected one, to the middle of the list. A closed list renders
-   * no option.
+   * active option, else the first selected one, to the middle of the list, and again once the
+   * popup's positioning has given the list its height (a short viewport) unless it was scrolled
+   * first. A closed list renders no option. The browser's scroll anchoring is off on a windowed
+   * list (the window lays the options out).
    */
   virtualWindow?: VirtualWindow;
   /**
@@ -1021,7 +1023,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         floatingProps={floatingProps}
         open={open}
         expanded={expanded}
-        listClassName={comboboxClassNames.listbox}
+        // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
+        listClassName={cn(comboboxClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
         surfaceClassName={comboboxClassNames.surface}
         emptyContent={
           draft ? (

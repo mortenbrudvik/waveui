@@ -6576,8 +6576,8 @@ describe('compounds composed in a React Server Component', () => {
       serverHtml: (html) => {
         const host = document.createElement('div');
         host.innerHTML = html;
-        // 480 / 32: 15 options in view and 6 below them.
-        expect(host.querySelectorAll('[role="option"]')).toHaveLength(21);
+        // 480 / 32: 15 options in view and 8 below them (the default overscan of 240 pixels).
+        expect(host.querySelectorAll('[role="option"]')).toHaveLength(23);
         expect(host.querySelector('[role="option"][aria-selected="true"]')?.textContent).toBe(
           'Fruit 2',
         );
@@ -6603,16 +6603,17 @@ describe('compounds composed in a React Server Component', () => {
       serverHtml: (html) => {
         const host = document.createElement('div');
         host.innerHTML = html;
-        // 480 / 28, rounded up: 18 items in view and 6 below them.
+        // 480 / 28, rounded up: 18 items in view and 9 below them (the default overscan of 240
+        // pixels).
         expect(
           Array.from(host.querySelectorAll('[role="treeitem"]'), (el) =>
             el.getAttribute('data-index'),
           ),
-        ).toEqual(range(0, 24).map(String));
+        ).toEqual(range(0, 27).map(String));
       },
       interact: async (user) => {
         const tree = screen.getByRole('tree', { name: 'Archive' });
-        expect(within(tree).getAllByRole('treeitem')).toHaveLength(24);
+        expect(within(tree).getAllByRole('treeitem')).toHaveLength(27);
         await user.tab();
         expect(screen.getByRole('treeitem', { name: 'Archive' })).toHaveFocus();
         await user.keyboard('{End}');

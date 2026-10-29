@@ -59,13 +59,18 @@ export interface ListProps<M extends ListSelectionMode = ListSelectionMode> exte
    * are not rendered are replaced by spacers (`aria-hidden`, `data-virtual-spacer`) of their
    * height.
    *
-   * The list element becomes the window's scroller (it scrolls vertically): give it a bounded
-   * height, a height or a maximum height (a class or a style); without one the window measures the
-   * whole list and renders every item. Every item has the window's `itemSize` as its height (the
-   * list sets it, after the item's own `style`), so an item's content must fit in it. Each item
-   * carries `data-index` (its 0-based index) and its place in the whole list: `aria-setsize` and
-   * `aria-posinset`, or in a grid (`navigationMode="composite"`) the list's `aria-rowcount` and
-   * the row's `aria-rowindex`.
+   * The list element becomes the window's scroller (it scrolls vertically, without the browser's
+   * scroll anchoring): give it a bounded height, a height or a maximum height (a class or a style);
+   * without one the window measures the whole list and renders every item. Where the list
+   * navigates its items, one item is its Tab stop and the list element is none of its own
+   * (`tabIndex` -1, as Firefox would stop on a scroller); a plain windowed list keeps the browser's
+   * default, under which WebKit does not let the keyboard reach and scroll it: pass `tabIndex={0}`
+   * or navigate its items (`navigationMode="items"`). A `tabIndex` you pass wins.
+   *
+   * Every item has the window's `itemSize` as its height (the list sets it, after the item's own
+   * `style`), so an item's content must fit in it. Each item carries `data-index` (its 0-based
+   * index) and its place in the whole list: `aria-setsize` and `aria-posinset`, or in a grid
+   * (`navigationMode="composite"`) the list's `aria-rowcount` and the row's `aria-rowindex`.
    *
    * The item that has focus stays rendered when it is scrolled away (also while focus is in a
    * popup it opened), so it keeps focus, and while focus is in the list it is the list's Tab stop.
@@ -77,8 +82,11 @@ export interface ListProps<M extends ListSelectionMode = ListSelectionMode> exte
    * The keys move by index over the whole list, rendered or not, where the list navigates its
    * items (`navigationMode` `'items'` or `'composite'`, or a selectable list): ArrowUp/ArrowDown
    * (wrapping at the ends), Home/End, and PageUp/PageDown, which move ten items and stop at the
-   * ends. An item that is not rendered is scrolled into view (the window's `scrollToIndex`) and
-   * focused once it renders. Typeahead matches the labels of the rendered items only.
+   * ends. The target is scrolled into view before it is focused, the least that shows it whole: a
+   * rendered one by the browser (`scrollIntoView`, nearest), which the window follows, one that is
+   * not rendered through the window's `scrollToIndex`, and focused once it renders. An item that a
+   * pointer press focuses is not scrolled. Typeahead matches the labels of the rendered items
+   * only.
    *
    * Selection covers every value: the values of items that are not rendered stay selected, and
    * `onSelectionChange` reports them (a list without a window drops the values of items it no
@@ -734,9 +742,20 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     ? (registered.values.find((value) => selectedValues.has(value)) ?? null)
     : (effective[0] ?? null);
 
+  // A windowed list leaves only typeahead (and a grid's moves into its actions) to the roving tab
+  // index, which focuses a rendered item: the window moves to it in the same update, so no frame
+  // shows the browser's focus scrolling without the items around it.
+  const followRovingFocus = useEventCallback((_value: string, event: React.KeyboardEvent) => {
+    const root = event.currentTarget;
+    const active = root.ownerDocument.activeElement;
+    const index = active ? getWindowItemIndex(root, active) : null;
+    if (index !== null) activeWindow?.scrollToIndex(index, { align: 'auto' });
+  });
+
   const { containerProps, getTabIndex } = useRovingTabIndex({
     activeValue: selectable ? tabStopValue : null,
     orientation: 'vertical',
+    onFocusMove: windowed ? followRovingFocus : undefined,
     // A windowed list counts its items from `count` (most of them are not rendered).
     typeahead: (windowed ? itemCount : (registered?.count ?? 0)) > 7,
     // A list without selection returns to the item that last had focus. While focus is in a
@@ -799,9 +818,10 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
    * The keys of a windowed list in the `items` and `composite` modes (before the roving tab index,
    * which then skips them): ArrowUp/ArrowDown, Home/End and PageUp/PageDown move by index over the
    * whole list, from the item the key started in (or the item a key is awaiting). A rendered target
-   * is focused; one that is not is kept rendered, scrolled into view and focused after the commit
-   * that renders it. A key whose target is the focused item drops an awaited item and scrolls the
-   * focused one into view. The keys the roving tab index leaves alone are left alone too.
+   * is scrolled into view and focused; one that is not is kept rendered, scrolled into view and
+   * focused after the commit that renders it. A key whose target is the focused item drops an
+   * awaited item and scrolls the focused one into view. The keys the roving tab index leaves alone
+   * are left alone too.
    */
   const handleWindowKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
     if (!activeWindow || event.defaultPrevented || itemCount === 0) return;
@@ -825,6 +845,12 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     const element = getWindowItem(root, target);
     if (element) {
       windowFocus.update({ pending: null });
+      // A rendered target is at most the overscan away from the view, so the least scroll that
+      // shows it whole keeps the view on rendered items while the window follows from the scroll
+      // event. A browser's own focus scrolling would centre a hidden item, past the rendered ones
+      // (a blank frame), or in Firefox leave a partly visible one clipped; and moving the window in
+      // this update (`scrollToIndex`) gives Firefox long frames while a key is held.
+      element.scrollIntoView({ block: 'nearest' });
       getItemFocusTarget(element)?.focus();
       return;
     }
@@ -1027,10 +1053,14 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
         aria-rowcount={windowed && mode === 'grid' ? itemCount : undefined}
         data-navigation-mode={navigation}
         data-checkmark={drawsCheckmark ? '' : undefined}
+        // A windowed list that navigates its items has its Tab stop on an item: the scroller is
+        // none of its own (Firefox makes a scroller a Tab stop). The consumer's `tabIndex` wins.
+        tabIndex={windowed && navigable ? -1 : undefined}
         className={cn(
           listClassNames.root,
           'm-0 list-none p-0',
-          windowed && 'overflow-y-auto',
+          // The window lays the items out: the browser's scroll anchoring only fights it.
+          windowed && 'overflow-y-auto [overflow-anchor:none]',
           className,
         )}
         {...rest}
@@ -1595,8 +1625,8 @@ ListActionCell.displayName = 'ListActionCell';
  *   every item has the window's item size as its height, the focused item stays rendered and is
  *   the Tab stop while focus is in the list, each item carries its place in the whole list, and
  *   the values selected outside the window stay selected. The keys move by index over the whole
- *   list (ArrowUp/ArrowDown, Home/End, and PageUp/PageDown by ten), scrolling an item that is not
- *   rendered into view before focusing it; typeahead matches the rendered items. Its structure
+ *   list (ArrowUp/ArrowDown, Home/End, and PageUp/PageDown by ten), scrolling the target into view
+ *   before focusing it, rendered or not; typeahead matches the rendered items. Its structure
  *   never follows the rendered items: a selectable windowed list is a listbox unless
  *   `navigationMode="composite"` pins the grid (pin it when items have actions; a development
  *   warning says so).

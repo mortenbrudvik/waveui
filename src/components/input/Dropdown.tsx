@@ -258,7 +258,9 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    * active option stays rendered while it is scrolled away, so `aria-activedescendant` always names
    * an element, and when a key makes it active the list and the window move to it in the same
    * update. Opening the list scrolls the active option (the selected one, by default) to the
-   * middle of the list. A closed list renders no option.
+   * middle of the list, and again once the popup's positioning has given the list its height (a
+   * short viewport) unless it was scrolled first. A closed list renders no option. The browser's
+   * scroll anchoring is off on a windowed list (the window lays the options out).
    */
   virtualWindow?: VirtualWindow;
   /** Called when the `<button role="combobox">` receives focus (the root keeps other handlers). */
@@ -648,7 +650,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         floatingProps={floatingProps}
         open={open}
         expanded={expanded}
-        listClassName={dropdownClassNames.listbox}
+        // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
+        listClassName={cn(dropdownClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
         surfaceClassName={dropdownClassNames.surface}
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}

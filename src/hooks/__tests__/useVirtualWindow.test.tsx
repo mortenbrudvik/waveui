@@ -259,12 +259,13 @@ describe('useVirtualWindow', () => {
       runFrames();
       expect(renderedIndexes()).toEqual(range(94, 116));
 
-      // The same 4400 px offset is row 200 of 22 px rows, and 440 px hold 20 of them.
+      // The same 4400 px offset is row 200 of 22 px rows, and 440 px hold 20 of them; the default
+      // overscan is 11 of them (240 px).
       rerender(<Harness itemSize={22} count={COUNT} />);
-      expect(renderedIndexes()).toEqual(range(194, 226));
+      expect(renderedIndexes()).toEqual(range(189, 231));
       expect(renderedSpacers()).toEqual([
-        ['spacer-194', `${194 * 22}px`],
-        ['spacer-end', `${(COUNT - 226) * 22}px`],
+        ['spacer-189', `${189 * 22}px`],
+        ['spacer-end', `${(COUNT - 231) * 22}px`],
       ]);
 
       rerender(<Harness itemSize={22} overscan={2} count={COUNT} />);
@@ -276,6 +277,34 @@ describe('useVirtualWindow', () => {
       scrollTo(-30);
       runFrames();
       expect(renderedIndexes()).toEqual(range(0, 16));
+    });
+  });
+
+  describe('default overscan', () => {
+    it.each<[itemSize: number, inView: number, overscan: number]>([
+      // ceil(240 / 28) = 9 rows beyond each edge: 252 px.
+      [28, 16, 9],
+      // ceil(240 / 32) = 8 rows: 256 px.
+      [32, 14, 8],
+      // 6 rows are 240 px and more from 40 px on.
+      [40, 11, 6],
+      [44, 10, 6],
+      [80, 6, 6],
+    ])(
+      'covers at least 240 pixels beyond each edge, and at least 6 rows (itemSize %i)',
+      (itemSize, inView, overscan) => {
+        render(<Harness itemSize={itemSize} count={COUNT} />);
+        expect(renderedIndexes()).toEqual(range(0, inView + overscan));
+
+        scrollTo(1000 * itemSize);
+        runFrames();
+        expect(renderedIndexes()).toEqual(range(1000 - overscan, 1000 + inView + overscan));
+      },
+    );
+
+    it('keeps an explicit overscan as a number of rows', () => {
+      render(<Harness itemSize={28} overscan={2} count={COUNT} />);
+      expect(renderedIndexes()).toEqual(range(0, 16 + 2));
     });
   });
 
@@ -408,6 +437,112 @@ describe('useVirtualWindow', () => {
       rerender(<Harness itemSize={ITEM} count={COUNT} mounted windowRef={ref} />);
       expect(scroller().scrollTop).toBe(5000 * ITEM);
       expect(renderedIndexes()).toEqual(range(4994, 5016));
+    });
+
+    describe('a request made before the scroller attached, once the viewport settles', () => {
+      /** The offset that centres row 5000 in a viewport of `height` pixels. */
+      const centred = (height: number) => 5000 * ITEM + ITEM / 2 - height / 2;
+
+      /** Renders without a scroller, asks for row 5000 centred, then mounts the scroller. */
+      function attachCentred(ref: React.RefObject<VirtualWindow | null>) {
+        const { rerender } = render(
+          <Harness itemSize={ITEM} count={COUNT} mounted={false} windowRef={ref} />,
+        );
+        act(() => current(ref).scrollToIndex(5000, { align: 'center' }));
+        rerender(<Harness itemSize={ITEM} count={COUNT} mounted windowRef={ref} />);
+        expect(scroller().scrollTop).toBe(centred(440));
+      }
+
+      it('is applied once more, in the same update, when the viewport first changes height (a popup that positioning shrinks)', () => {
+        const ro = installResizeObserverMock();
+        try {
+          const ref = React.createRef<VirtualWindow>();
+          attachCentred(ref);
+          // The observer's first report of the same height changes nothing.
+          ro.trigger(scroller());
+          expect(scroller().scrollTop).toBe(centred(440));
+
+          viewportHeight = 100;
+          ro.trigger(scroller());
+          expect(scroller().scrollTop).toBe(centred(100));
+          // 100 / 44: rows 4999 to 5001 in view, 6 more on each side; no frame was run.
+          expect(renderedIndexes()).toEqual(range(4993, 5008));
+
+          // Once: a later change of height leaves the offset as it is.
+          viewportHeight = 300;
+          ro.trigger(scroller());
+          expect(scroller().scrollTop).toBe(centred(100));
+        } finally {
+          ro.restore();
+        }
+      });
+
+      it('is not applied again once the scroller was scrolled', () => {
+        const ro = installResizeObserverMock();
+        try {
+          const ref = React.createRef<VirtualWindow>();
+          attachCentred(ref);
+          scrollTo(centred(440) + 300);
+          runFrames();
+          viewportHeight = 100;
+          ro.trigger(scroller());
+          expect(scroller().scrollTop).toBe(centred(440) + 300);
+        } finally {
+          ro.restore();
+        }
+      });
+
+      it('is not applied again after another request', () => {
+        const ro = installResizeObserverMock();
+        try {
+          const ref = React.createRef<VirtualWindow>();
+          attachCentred(ref);
+          // Row 5003 is in view: the request moves nothing, but it is the latest.
+          act(() => current(ref).scrollToIndex(5003));
+          viewportHeight = 100;
+          ro.trigger(scroller());
+          expect(scroller().scrollTop).toBe(centred(440));
+        } finally {
+          ro.restore();
+        }
+      });
+
+      it('leaves a request made while the scroller was attached alone', () => {
+        const ro = installResizeObserverMock();
+        try {
+          const ref = React.createRef<VirtualWindow>();
+          render(<Harness itemSize={ITEM} count={COUNT} windowRef={ref} />);
+          act(() => current(ref).scrollToIndex(5000, { align: 'center' }));
+          viewportHeight = 100;
+          ro.trigger(scroller());
+          expect(scroller().scrollTop).toBe(centred(440));
+        } finally {
+          ro.restore();
+        }
+      });
+
+      it('is applied once more in StrictMode too', () => {
+        const ro = installResizeObserverMock();
+        try {
+          const ref = React.createRef<VirtualWindow>();
+          const { rerender } = render(
+            <React.StrictMode>
+              <Harness itemSize={ITEM} count={COUNT} mounted={false} windowRef={ref} />
+            </React.StrictMode>,
+          );
+          act(() => current(ref).scrollToIndex(5000, { align: 'center' }));
+          rerender(
+            <React.StrictMode>
+              <Harness itemSize={ITEM} count={COUNT} mounted windowRef={ref} />
+            </React.StrictMode>,
+          );
+          viewportHeight = 100;
+          ro.trigger(scroller());
+          expect(scroller().scrollTop).toBe(centred(100));
+        } finally {
+          ro.restore();
+        }
+      });
     });
 
     it('detaches from a scroller that unmounts and remembers requests for the next one', () => {
@@ -594,8 +729,8 @@ describe('useVirtualWindow', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const ref = React.createRef<VirtualWindow>();
       const { rerender } = render(<Harness itemSize={0} count={1000} windowRef={ref} />);
-      // 440 rows of 1 px in view, plus 6.
-      expect(renderedIndexes()).toEqual(range(0, 446));
+      // 440 rows of 1 px in view, plus the default overscan of 240 of them (240 px).
+      expect(renderedIndexes()).toEqual(range(0, 680));
       expect(current(ref).itemSize).toBe(1);
 
       rerender(<Harness itemSize={Number.NaN} count={1000} windowRef={ref} />);
