@@ -42,6 +42,9 @@ import type {
   AlphaSliderProps,
   BackdropAppearance,
   BadgeColor,
+  BrandRamp,
+  BrandStop,
+  BrandTokens,
   BreadcrumbItemAnchorProps,
   BreadcrumbItemButtonProps,
   BreadcrumbItemOwnProps,
@@ -2178,5 +2181,22 @@ describe('0.17 theming from the package entry', () => {
     // @ts-expect-error a misspelled token name
     const typo: WaveTokenOverrides = { primry: '#c43e00' };
     expect(typo).toBeDefined();
+  });
+
+  it('createBrandTokens: the stops, the ramp and the tokens it gives as overrides', () => {
+    expectTypeOf<BrandStop>().toEqualTypeOf<
+      10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 | 110 | 120 | 130 | 140 | 150 | 160
+    >();
+    expectTypeOf<BrandRamp>().toEqualTypeOf<Readonly<Record<BrandStop, string>>>();
+    expectTypeOf<BrandTokens>().toEqualTypeOf<{ [K in `brand${BrandStop}`]: string }>();
+    expectTypeOf<Entry['createBrandTokens']>().toEqualTypeOf<
+      (seed: string | BrandRamp) => BrandTokens
+    >();
+    expectTypeOf<BrandTokens>().toExtend<WaveTokenOverrides>();
+    expectTypeOf<BrandTokens['brand80']>().toEqualTypeOf<string>();
+
+    // @ts-expect-error a ramp has no stop 170
+    const ramp: Partial<BrandRamp> = { 170: '#000000' };
+    expect(ramp).toBeDefined();
   });
 });

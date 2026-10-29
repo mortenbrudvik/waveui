@@ -564,3 +564,32 @@ export function forEachContrastPair(
     callback({ fg, bg, threshold, fgValue, bgValue, ratio: contrastRatio(fgValue, bgValue) });
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Brand seeds
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The seeds the brand tests generate ramps from (`createBrandTokens`): the default blue, the
+ * extremes of the wheel at full chroma (yellow, lime, magenta, spring green), mid and dark hues,
+ * a pale pink, a dark navy, the greys (mid grey, black, white) and the other spellings (three
+ * digits, upper case). Several have a channel at 0.
+ */
+export const BRAND_SEEDS = [
+  '#0f6cbd',
+  '#ffd400',
+  '#00ff00',
+  '#ff00ff',
+  '#c43e00',
+  '#008080',
+  '#800080',
+  '#8b4513',
+  '#ffc0cb',
+  '#001f3f',
+  '#808080',
+  '#000000',
+  '#ffffff',
+  '#00ff7f',
+  '#F0F',
+  '#C43E00',
+] as const;
