@@ -104,7 +104,7 @@ The `gap` prop of `Stack`, `Flex` and `Grid` takes `'none' | 'xs' | 'sm' | 'md' 
 
 | Fluent token | Value | Tailwind | Used by |
 |---|---|---|---|
-| `borderRadiusNone` | 0 | `rounded-none` | — |
+| `borderRadiusNone` | 0 | `rounded-none` | Square and full-bleed variants: the `square` shape of Image, Skeleton, the swatches and the color controls, a full-size Dialog, Carousel's wide navigation buttons |
 | `borderRadiusSmall` | 2px | `rounded-xs` | Checkbox, the check boxes of options and tree items |
 | `borderRadiusMedium` | 4px | `rounded` (also `rounded-sm`) | **Default**: buttons, inputs, selects, tree rows |
 | `borderRadiusLarge` | 6px | `rounded-md` | Card, Menu, Popover, TeachingPopover, Table, DataGrid |
@@ -426,12 +426,12 @@ The shadows are tokens of each theme group, `--wave-shadow-2` … `--wave-shadow
 
 | Level | Tailwind | Token | Ambient layer | Key layer | Usage |
 |-------|----------|-------|---------------|-----------|-------|
-| **2** | `shadow-2` | `--wave-shadow-2` | `0 0 2px` | `0 1px 2px` | Cards at rest, subtle lift |
-| **4** | `shadow-4` | `--wave-shadow-4` | `0 0 2px` | `0 2px 4px` | Cards on hover, menus |
-| **8** | `shadow-8` | `--wave-shadow-8` | `0 0 2px` | `0 4px 8px` | Popovers, dropdowns, teaching callouts |
-| **16** | `shadow-16` | `--wave-shadow-16` | `0 0 2px` | `0 8px 16px` | Dialogs, drawers |
-| **28** | `shadow-28` | `--wave-shadow-28` | `0 0 8px` | `0 14px 28px` | Full-screen overlays |
-| **64** | `shadow-64` | `--wave-shadow-64` | `0 0 8px` | `0 32px 64px` | Topmost layers (rarely used) |
+| **2** | `shadow-2` | `--wave-shadow-2` | `0 0 2px` | `0 1px 2px` | Subtle lift: Carousel's round navigation buttons |
+| **4** | `shadow-4` | `--wave-shadow-4` | `0 0 2px` | `0 2px 4px` | Surfaces at rest and light popups: a `filled` Card, an `elevated` Carousel, an Image with `shadow`, a Card preview's logo, toasts, the ColorPicker; menus, popovers and the listbox popups (Combobox, Dropdown, TagPicker, `ListboxSurface`) |
+| **8** | `shadow-8` | `--wave-shadow-8` | `0 0 2px` | `0 4px 8px` | A selectable `filled` Card on hover, tooltips, TeachingPopover, the TimePicker list, Avatar's `shadow` and `ring-shadow` active looks |
+| **16** | `shadow-16` | `--wave-shadow-16` | `0 0 2px` | `0 8px 16px` | The DatePicker calendar, the InfoButton note, the AvatarGroup overflow popover |
+| **28** | `shadow-28` | `--wave-shadow-28` | `0 0 8px` | `0 14px 28px` | No component |
+| **64** | `shadow-64` | `--wave-shadow-64` | `0 0 8px` | `0 32px 64px` | Dialog, and the panel of an overlay Drawer or NavDrawer |
 
 The themes differ in the layers' opacity (both are black):
 
@@ -447,10 +447,12 @@ The light values are the shadows of 0.16 and earlier, unchanged; since 0.17 the 
 
 ### Elevation Guidelines
 
-- **Surfaces at rest**: shadow-2 or no shadow (flat)
-- **Interactive hover**: increase by one level (shadow-2 → shadow-4)
-- **Floating elements**: shadow-8 (dropdowns, tooltips, popovers)
-- **Modal overlays**: shadow-16 or shadow-28
+What the components do, and a guide for your own surfaces:
+
+- **Surfaces at rest**: no shadow (flat, an `outline` or `filled-alternative` Card) or shadow-4 (a `filled` Card, a toast)
+- **Interactive hover**: increase by one level (a selectable `filled` Card goes from shadow-4 to shadow-8)
+- **Floating elements**: shadow-4 for menus, popovers and listbox popups, shadow-8 for tooltips and teaching callouts, shadow-16 for the larger popups (the DatePicker calendar, the InfoButton note)
+- **Modal overlays**: shadow-64 (Dialog, overlay Drawer and NavDrawer)
 - Use elevation intentionally; avoid stacking multiple shadow levels close together
 - Forced-colors mode removes box shadows, so a surface whose edge comes only from its shadow needs a border there (Dialog and Drawer draw one; chapter 9)
 
@@ -857,7 +859,7 @@ export function useExpanded(expanded: boolean | undefined, defaultExpanded = fal
 
 ### Pattern 5: cn() Utility
 
-`cn()` combines `clsx` (conditional classes) with a `tailwind-merge` that knows Wave's type ramp (`text-caption-2` … `text-display`), shadow scale (`shadow-2` … `shadow-64`), `font-wave`, the `animate-wave-*` animations and the motion tokens (`duration-wave-*`, `ease-wave-*`):
+`cn()` combines `clsx` (conditional classes) with a `tailwind-merge` that knows Wave's type ramp (`text-caption-2` … `text-display`), shadow scale (`shadow-2` … `shadow-64`), the font families (`font-wave`, `font-wave-mono`, `font-wave-numeric`), the `animate-wave-*` animations and the motion tokens (`duration-wave-*`, `ease-wave-*`):
 
 ```tsx
 import { cn } from '@mortenbrudvik/waveui';
@@ -2015,11 +2017,11 @@ export const Shell = ({ children }: { children: React.ReactNode }) => (
 );
 ```
 
-**What `null` clears.** `tokens={null}` drops the inherited overrides from the provider's root and from its overlays. On the root, the tokens a theme declares (the semantic colors, the palette, the shadows) return to the theme's values, since its theme class re-declares them there. The theme-independent tokens (the brand and grey ramps, the font families, the stacking layers, the motion durations and curves) are declared on `:root` only, so an enclosing provider's inline values for them still reach the subtree's own elements through the cascade, and the theme colors built on the brand ramp follow them there; its overlays, which render outside the enclosing root, do not get them. So inside a branded app, a `tokens={null}` panel keeps the brand in its own content and loses it in its dialogs. To put a subtree back on the default ramp everywhere, pass the default ramp instead: `tokens={createBrandTokens('#0f6cbd')}` (the default seed returns the default ramp exactly).
+**What `null` clears.** `tokens={null}` drops the inherited overrides from the provider's root and from its overlays. On the root, the tokens a theme declares (the semantic colors, the palette, the shadows) return to the theme's values, since its theme class re-declares them there. The theme-independent tokens (the brand and grey ramps, the font families, the stacking layers, the motion durations and curves) are declared on `:root` only, so an enclosing provider's inline values for them still reach the subtree's own elements through the cascade, and the theme colors built on the brand ramp follow them there; its overlays, which with the default portal container render outside the enclosing root, do not get them (a `portalContainer` inside the enclosing root passes them on through the cascade). So inside a branded app, a `tokens={null}` panel keeps the brand in its own content and, with the default portal container, loses it in its dialogs. To put a subtree back on the default ramp everywhere, pass the default ramp instead: `tokens={createBrandTokens('#0f6cbd')}` (the default seed returns the default ramp exactly).
 
 ### Overlays: `applyStylesToPortals`
 
-`applyStylesToPortals` (default `true`, Fluent's prop of the same name) says whether the portals of the subtree carry its `tokens` overrides. With `false`, an overlay shows its theme's own values for the tokens the theme declares, and takes the theme-independent ones from the cascade of the element it renders into (`document.body`, or the `portalContainer`). The theme classes, the direction and the `wave-portal` wrapper are set either way, so an overlay of a dark provider stays dark. Use it for a panel with its own accent whose dialogs and menus should look like the rest of the page.
+`applyStylesToPortals` (default `true`, Fluent's prop of the same name) says whether the portals of the subtree carry its `tokens` overrides. With `false`, an overlay shows its theme's own values for the tokens the theme declares, and takes the theme-independent ones from the cascade of the element it renders into (`document.body`, or the `portalContainer`). The theme classes, the direction and the `wave-portal` wrapper are set either way, so an overlay of a dark provider stays dark. `false` drops every override the overlays would carry, those inherited from enclosing providers included. Use it for a panel with its own accent whose dialogs and menus should look like the rest of the page when the page's brand comes from CSS (`:root`) or from `getTokenStyle` on `<html>`: the overlays then take that brand through the cascade. Under an enclosing provider's `tokens` (`tokens={brand}`) they lose that brand too, and show the ramp of the element they render into (with the default portal container, the `:root` ramp), unlike both the panel and the page.
 
 Two differences from Fluent: a nested provider inherits an omitted value, like `theme` (Fluent's is not inherited); and Fluent's `false` keeps the theme on portals and drops the provider root's other classes, while Wave's portal wrapper never carried the root's look, so what `false` drops are the overrides.
 
@@ -2101,7 +2103,7 @@ On `<html>`, the overrides reach everything below it through the cascade, portal
 
 ### Strict Content Security Policy
 
-The overrides are inline `style` attributes, never a `<style>` element, so they need no nonce. Under a Content Security Policy whose `style-src` does not allow inline styles (no `'unsafe-inline'`), the browser ignores the server-rendered `style` attribute of the provider root, and of an `<html>` styled with `getTokenStyle`, and hydration does not apply it again. Ship the overrides in a stylesheet there, as in [Overriding Tokens in CSS](#overriding-tokens-in-css): the ramps and the other theme-independent tokens on `:root`, the semantic tokens under the theme selectors. Those rules apply to every provider and overlay of the theme; an accent for one subtree only needs a class of yours on the subtree and on the overlays it opens (their `className`). Fluent's provider avoids the limit by inserting a style element with the renderer's nonce; Wave renders no runtime stylesheet.
+The overrides are inline `style` attributes, never a `<style>` element, so a nonce cannot allow them. Under a Content Security Policy whose `style-src` does not allow inline styles (no `'unsafe-inline'`), the browser ignores the server-rendered `style` attribute of the provider root, and of an `<html>` styled with `getTokenStyle`, and hydration does not apply it again. Ship the overrides in a stylesheet there, as in [Overriding Tokens in CSS](#overriding-tokens-in-css): the ramps and the other theme-independent tokens on `:root`, the semantic tokens under the theme selectors. Those rules apply to every provider and overlay of the theme; an accent for one subtree only needs a class of yours on the subtree and on the overlays it opens (their `className`). Fluent's provider avoids the limit by inserting a style element with the renderer's nonce; Wave renders no runtime stylesheet.
 
 ### Overriding Tokens in CSS
 
@@ -2965,10 +2967,10 @@ rounded-full             /* Circular */
 border                   /* 1px solid */
 
 /* Shadows */
-shadow-2                 /* Cards at rest */
-shadow-4                 /* Hover state */
-shadow-8                 /* Popovers, dropdowns */
-shadow-16                /* Dialogs */
+shadow-4                 /* Cards at rest, menus, popovers, listboxes */
+shadow-8                 /* Card hover, tooltips */
+shadow-16                /* Larger popups (DatePicker calendar) */
+shadow-64                /* Dialogs, overlay drawers */
 
 /* Layout (logical) */
 flex items-center        /* Horizontal centering */
