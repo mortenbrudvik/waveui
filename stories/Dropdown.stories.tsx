@@ -1,10 +1,18 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Dropdown, Field, Option, type DropdownProps, type ListboxItem } from '../src';
+import {
+  Dropdown,
+  Field,
+  Option,
+  useVirtualWindow,
+  type DropdownProps,
+  type ListboxItem,
+} from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
-import { PEOPLE, teamOf } from './_people';
+import { MountedOptions } from './_mountedOptions';
+import { PEOPLE, TEN_THOUSAND_PEOPLE, teamOf } from './_people';
 
 const meta = {
   title: 'Components/Input/Dropdown',
@@ -264,6 +272,52 @@ export const DataMode: Story = {
     items: PEOPLE,
     renderOption: renderPerson,
   },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    virtualWindow: { control: false },
+  },
+};
+
+/** The args of the windowed story: the Dropdown's, and the window's option height. */
+type TenThousandOptionsArgs = DropdownProps & {
+  /** The height of every option in pixels: `useVirtualWindow({ itemSize })`. */
+  itemSize: number;
+};
+
+/** A Dropdown of 10,000 people, windowed by `useVirtualWindow`, with the mounted-option count. */
+function TenThousandDropdown({ itemSize, ...args }: TenThousandOptionsArgs) {
+  const virtualWindow = useVirtualWindow({ itemSize });
+  const [root, setRoot] = React.useState<HTMLDivElement | null>(null);
+  return (
+    <div className="flex flex-col gap-3">
+      <Dropdown {...args} ref={setRoot} items={TEN_THOUSAND_PEOPLE} virtualWindow={virtualWindow} />
+      <MountedOptions scope={root} total={TEN_THOUSAND_PEOPLE.length} />
+    </div>
+  );
+}
+
+/**
+ * 10,000 options with `virtualWindow`, drawn by the same `renderOption` as the data-mode story (one
+ * line, so each option fits in the window's 32 pixels): the open list renders only the options in
+ * view and a few beyond them, as the line below counts. It opens on the selected person in the
+ * middle of the list; End, Home, PageDown and typeahead reach any of the 10,000.
+ */
+export const TenThousandOptions: StoryObj<TenThousandOptionsArgs> = {
+  args: {
+    'aria-label': 'Person',
+    placeholder: 'Select a person',
+    defaultValue: 'person-5000',
+    renderOption: renderPerson,
+    itemSize: 32,
+    style: { width: 360 },
+  },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    virtualWindow: { control: false },
+  },
+  render: (args) => <TenThousandDropdown {...args} />,
 };
 
 export const SizesAndAppearances: Story = {

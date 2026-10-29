@@ -1,12 +1,28 @@
 import * as React from 'react';
-import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Dropdown, type DropdownProps } from '../Dropdown';
-import { Option, type ListboxOptionRenderState } from '../Option';
+import { Option, OptionGroup, type ListboxOptionRenderState } from '../Option';
+import { dropdownClassNames } from '../../../lib/classNames';
 import { expectNoA11yViolations } from '../../../test-utils';
 import { __getAnnouncerText, __resetAnnouncer } from '../../../hooks/useAnnounce';
 import { collectOptionLabels, type ListboxItem } from '../../../hooks/useListbox';
+import type { VirtualWindow } from '../../../hooks/useVirtualWindow';
+import {
+  centerOffset,
+  COUNT,
+  installWindowStubs,
+  ITEM_SIZE,
+  MANY_ITEMS,
+  order,
+  range,
+  scrollList,
+  spacers,
+  useTestWindow,
+  VIEWPORT,
+  type TestWindowOptions,
+} from './windowHarness';
 
 // Pass-through spy: data mode reads no labels from children.
 vi.mock('../../../hooks/useListbox', async (importOriginal) => {
@@ -239,19 +255,222 @@ describe('Dropdown data mode (items)', () => {
     expect(onValueChange).toHaveBeenCalledWith('item-42');
   });
 
-  // axe over 500 open options takes about 3 s in jsdom alone, more under a loaded runner, hence
-  // the 20 s timeout.
   it('has no axe violations while open', async () => {
     const user = userEvent.setup();
-    renderData({ defaultValue: 'item-3' });
+    renderData({ items: ITEMS.slice(0, 20), defaultValue: 'item-3' });
     await user.click(combobox());
     await expectNoA11yViolations();
-  }, 20_000);
+  });
 
   it('types items and renderOption', () => {
     expectTypeOf<DropdownProps['items']>().toEqualTypeOf<readonly ListboxItem[] | undefined>();
     expectTypeOf<DropdownProps['renderOption']>().toEqualTypeOf<
       ((item: ListboxItem, state: ListboxOptionRenderState) => React.ReactNode) | undefined
     >();
+  });
+
+  it('warns once that renderOption is ignored without items', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const view = render(
+      <Dropdown aria-label="Item" renderOption={() => null}>
+        <Option value="a">Apple</Option>
+      </Dropdown>,
+    );
+    view.rerender(
+      <Dropdown aria-label="Item" renderOption={() => null}>
+        <Option value="b">Banana</Option>
+      </Dropdown>,
+    );
+    expect(warn.mock.calls).toEqual([[RENDER_OPTION_WITHOUT_ITEMS]]);
+    warn.mockRestore();
+  });
+});
+
+const RENDER_OPTION_WITHOUT_ITEMS =
+  '[WaveUI] Dropdown: `renderOption` is ignored without `items`: it draws the options of data ' +
+  'mode only. Pass the options as `items`, or leave `renderOption` out.';
+
+const WINDOW_WITHOUT_ITEMS =
+  '[WaveUI] Dropdown: `virtualWindow` is ignored without `items`: only the options of data mode ' +
+  'are windowed, so every option child is rendered. Pass the options as `items`.';
+
+const WINDOW_GROUPS =
+  '[WaveUI] Dropdown: option groups cannot be windowed: `virtualWindow` renders the flat list of ' +
+  '`items` only, and `OptionGroup` children are not windowed. Pass the options as `items`, ' +
+  'without groups.';
+
+describe('Dropdown windowed options (virtualWindow)', () => {
+  beforeEach(() => {
+    installWindowStubs();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  type WindowedProps = Partial<DropdownProps> & { windowOptions?: TestWindowOptions };
+
+  /** A Dropdown over the 10,000 items, windowed by a 32-pixel window. */
+  function WindowedDropdown({ windowOptions, ...props }: WindowedProps) {
+    const virtualWindow = useTestWindow(windowOptions);
+    return (
+      <Dropdown aria-label="Item" items={MANY_ITEMS} {...props} virtualWindow={virtualWindow} />
+    );
+  }
+
+  const list = () => screen.getByRole('listbox');
+
+  it('mounts at most 30 of 10,000 options and keeps the active one rendered when scrolled away', async () => {
+    const user = userEvent.setup();
+    render(<WindowedDropdown />);
+    await user.click(combobox());
+    expect(activeOption()).toHaveAccessibleName('Item 0');
+    expect(order(list())).toEqual([...range(1, 15), 'spacer']);
+    const [end] = spacers(list());
+    expect(end.tagName).toBe('LI');
+    expect(end).toHaveAttribute('aria-hidden', 'true');
+    expect(end).toHaveAttribute('role', 'presentation');
+    expect(end).toHaveClass(dropdownClassNames.spacer);
+    for (const option of options()) {
+      expect(option).toHaveAttribute('aria-setsize', '10000');
+      expect(option).toHaveStyle({ height: '32px' });
+    }
+    scrollList(list(), 5000 * ITEM_SIZE);
+    expect(order(list())).toEqual([1, 'spacer', ...range(4995, 5015), 'spacer']);
+    expect(options().length).toBeLessThanOrEqual(30);
+    expect(activeOption()).toBe(within(list()).getByRole('option', { name: 'Item 0' }));
+  });
+
+  it('End and Home go to the last and the first item, rendered in the commit that activates them', async () => {
+    const user = userEvent.setup();
+    const onScrollToIndex = vi.fn();
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+    render(<WindowedDropdown windowOptions={{ onScrollToIndex }} />);
+    combobox().focus();
+    await user.keyboard('{Enter}');
+    await user.keyboard('{End}');
+    const last = activeOption();
+    expect(last).toHaveAccessibleName('Item 9999');
+    expect(last).toHaveAttribute('aria-posinset', '10000');
+    expect(within(list()).getByRole('option', { name: 'Item 9999' })).toBe(last);
+    expect(order(list())).toEqual([...range(1, 15), 'spacer', 10000]);
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(last);
+    // The browser scrolled it into view: the window follows.
+    scrollList(list(), COUNT * ITEM_SIZE - VIEWPORT);
+    expect(order(list())).toEqual(['spacer', ...range(9987, 10001)]);
+    await user.keyboard('{Home}');
+    expect(activeOption()).toHaveAttribute('aria-posinset', '1');
+    expect(order(list())).toEqual([1, 'spacer', ...range(9987, 10001)]);
+    // Only the opening asked the window to scroll (to the first item, at the top).
+    expect(onScrollToIndex.mock.calls).toEqual([[0, { align: 'center' }]]);
+  });
+
+  it('opens centered on the selected option deep in the list, which is rendered and scrolled into view first', async () => {
+    const user = userEvent.setup();
+    const onScrollToIndex = vi.fn();
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+    render(<WindowedDropdown defaultValue="item-5000" windowOptions={{ onScrollToIndex }} />);
+    await user.click(combobox());
+    const selected = activeOption();
+    expect(selected).toHaveAccessibleName('Item 5000');
+    // The kept option, scrolled into view in the commit that opened the list (before the window
+    // had the list), then the window's center scroll.
+    expect(scrollIntoView.mock.contexts).toHaveLength(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(selected);
+    expect(onScrollToIndex.mock.calls).toEqual([[5000, { align: 'center' }]]);
+    expect(list().scrollTop).toBe(centerOffset(5000));
+    expect(order(list())).toEqual(['spacer', ...range(4991, 5011), 'spacer']);
+    expect(within(list()).getByRole('option', { name: 'Item 5000' })).toBe(selected);
+  });
+
+  it('PageDown and PageUp move ten options over the data', async () => {
+    const user = userEvent.setup();
+    render(<WindowedDropdown defaultValue="item-5000" />);
+    combobox().focus();
+    await user.keyboard('{Enter}');
+    expect(activeOption()).toHaveAttribute('aria-posinset', '5001');
+    await user.keyboard('{PageDown}');
+    expect(activeOption()).toHaveAttribute('aria-posinset', '5011');
+    expect(within(list()).getByRole('option', { name: 'Item 5010' })).toBe(activeOption());
+    await user.keyboard('{PageUp}{PageUp}');
+    expect(activeOption()).toHaveAttribute('aria-posinset', '4991');
+  });
+
+  it('End reaches the last shown item: the window counts the items that are not hidden', async () => {
+    const user = userEvent.setup();
+    const items = MANY_ITEMS.map((item, i) => (i >= 5000 ? { ...item, hidden: true } : item));
+    render(<WindowedDropdown items={items} />);
+    combobox().focus();
+    await user.keyboard('{End}');
+    const last = activeOption();
+    expect(last).toHaveAccessibleName('Item 4999');
+    expect(last).toHaveAttribute('aria-posinset', '5000');
+    expect(last).toHaveAttribute('aria-setsize', '5000');
+    expect(list().scrollTop).toBe(5000 * ITEM_SIZE - VIEWPORT);
+    expect(order(list())).toEqual(['spacer', ...range(4987, 5001)]);
+  });
+
+  it('typeahead finds an item anywhere in the data', async () => {
+    const user = userEvent.setup();
+    render(<WindowedDropdown />);
+    combobox().focus();
+    await user.keyboard('Item 7777');
+    const active = activeOption();
+    expect(active).toHaveAccessibleName('Item 7777');
+    expect(within(list()).getByRole('option', { name: 'Item 7777' })).toBe(active);
+  });
+
+  it('selects once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <WindowedDropdown defaultValue="item-5000" onValueChange={onValueChange} />
+      </React.StrictMode>,
+    );
+    await user.click(combobox());
+    expect(list().scrollTop).toBe(centerOffset(5000));
+    await user.click(within(list()).getByRole('option', { name: 'Item 4998' }));
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith('item-4998');
+  });
+
+  it('warns once that virtualWindow is ignored without items, and renders every option child', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <WindowedDropdown items={undefined}>
+        <Option value="a">Apple</Option>
+        <Option value="b">Banana</Option>
+      </WindowedDropdown>,
+    );
+    await user.click(combobox());
+    expect(options().map((option) => option.textContent)).toEqual(['Apple', 'Banana']);
+    expect(spacers(list())).toEqual([]);
+    expect(warn.mock.calls).toEqual([[WINDOW_WITHOUT_ITEMS]]);
+  });
+
+  it('warns once that option groups cannot be windowed', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <WindowedDropdown items={undefined}>
+        <OptionGroup label="Pets">
+          <Option value="cat">Cat</Option>
+        </OptionGroup>
+      </WindowedDropdown>,
+    );
+    expect(warn.mock.calls).toEqual([[WINDOW_GROUPS]]);
+  });
+
+  it('has no axe violations while open between two spacers', async () => {
+    const user = userEvent.setup();
+    render(<WindowedDropdown defaultValue="item-5000" />);
+    await user.click(combobox());
+    expect(spacers(list())).toHaveLength(2);
+    await expectNoA11yViolations();
+  });
+
+  it('types virtualWindow', () => {
+    expectTypeOf<DropdownProps['virtualWindow']>().toEqualTypeOf<VirtualWindow | undefined>();
   });
 });

@@ -402,6 +402,13 @@ export interface ListboxOptionElementProps<E extends HTMLElement = HTMLElement> 
   'aria-setsize'?: number;
   /** The option's position among the shown options (from 1), with `aria-setsize`. */
   'aria-posinset'?: number;
+  /**
+   * The option's box in a windowed list (a `virtualWindow` of Listbox, Combobox or Dropdown): the
+   * window's `itemSize` as its height, padding and border included, and no shrinking in a flex
+   * list. Absent otherwise. Merge it after a style of your own: every option of a window must be
+   * exactly that tall.
+   */
+  style?: React.CSSProperties;
   /** While the option is active, for styling. */
   'data-active'?: '';
   /** While selected, for styling. */
@@ -780,12 +787,14 @@ ListboxContext.displayName = 'ListboxContext';
 
 /**
  * Where an option of a data-mode list stands among the shown options: `index` from 0 and the
- * number of shown options. Read by {@link useListboxOption}, which renders `aria-posinset` and
- * `aria-setsize` from it.
+ * number of shown options, and in a windowed list the window's `itemSize`. Read by
+ * {@link useListboxOption}, which renders `aria-posinset` and `aria-setsize` from it, and the
+ * option's height from `itemSize`.
  */
 export interface ListboxOptionPosition {
   index: number;
   setSize: number;
+  itemSize?: number;
 }
 
 /**
@@ -1476,7 +1485,8 @@ function optionFlags(store: ListboxStore, value: string): number {
  * it re-renders only when its own active/selected/hidden state changes. Spread `optionProps` onto
  * the `<li>` (`id`, `role="option"`, `aria-selected`, `aria-disabled`, `hidden`, and
  * `data-active`/`data-selected`/`data-disabled` for styling; `aria-posinset` and `aria-setsize`
- * when a `renderOption` of Listbox, Combobox or Dropdown renders it) and compose its `onClick` —
+ * when a `renderOption` of Listbox, Combobox or Dropdown renders it, and in a windowed list a
+ * `style` with its height, to merge after yours) and compose its `onClick` —
  * and in standalone mode its `onMouseDown`, the pointer press — with your own handlers. Mark the
  * component with {@link markListboxElement}, so its label is known before it registers.
  *
@@ -1576,6 +1586,10 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
   if (position) {
     optionProps['aria-setsize'] = position.setSize;
     optionProps['aria-posinset'] = position.index + 1;
+    // A windowed list lays its options out at exactly the window's item size.
+    if (position.itemSize !== undefined) {
+      optionProps.style = { height: position.itemSize, boxSizing: 'border-box', flexShrink: 0 };
+    }
   }
   if (disabled) {
     optionProps['aria-disabled'] = true;

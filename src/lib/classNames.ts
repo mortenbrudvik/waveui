@@ -541,8 +541,12 @@ export const optionGroupClassNames = {
   list: 'wave-option-group__list',
 } as const;
 
-/** Listbox: `root` on the `role="listbox"` list (its options carry Option's classes). */
-export const listboxClassNames = { root: 'wave-listbox' } as const;
+/**
+ * Listbox: `root` on the `role="listbox"` list (its options carry Option's classes); `spacer` on
+ * each spacer element of a list with a `virtualWindow` (the elements that stand in for the options
+ * that are not rendered).
+ */
+export const listboxClassNames = { root: 'wave-listbox', spacer: 'wave-listbox__spacer' } as const;
 
 /**
  * ListboxSurface: `root` on the portaled popup around the list, while it shows the list or the
@@ -559,7 +563,8 @@ export const listboxSurfaceClassNames = {
  * Combobox: `root` on the outer element; `input` on the `role="combobox"` input; `clearButton` on
  * the clear button; `expandButton` on the expand button and `expandIcon` on its glyph; `listbox`
  * on the `role="listbox"` list; `surface` on its portaled popup; `emptyMessage` on the
- * "No matches" row.
+ * "No matches" row; `spacer` on each spacer element of the list with a `virtualWindow` (the
+ * elements that stand in for the options that are not rendered).
  */
 export const comboboxClassNames = {
   root: 'wave-combobox',
@@ -570,12 +575,15 @@ export const comboboxClassNames = {
   listbox: 'wave-combobox__listbox',
   surface: 'wave-combobox__surface',
   emptyMessage: 'wave-combobox__empty-message',
+  spacer: 'wave-combobox__spacer',
 } as const;
 
 /**
  * Dropdown: `root` on the outer element; `button` on the `role="combobox"` button; `value` on the
  * value or placeholder span; `expandIcon` on the chevron `<svg>`; `clearButton` on the clear
- * button; `listbox` on the `role="listbox"` list; `surface` on its portaled popup.
+ * button; `listbox` on the `role="listbox"` list; `surface` on its portaled popup; `spacer` on
+ * each spacer element of the list with a `virtualWindow` (the elements that stand in for the
+ * options that are not rendered).
  */
 export const dropdownClassNames = {
   root: 'wave-dropdown',
@@ -585,6 +593,7 @@ export const dropdownClassNames = {
   clearButton: 'wave-dropdown__clear-button',
   listbox: 'wave-dropdown__listbox',
   surface: 'wave-dropdown__surface',
+  spacer: 'wave-dropdown__spacer',
 } as const;
 
 /**

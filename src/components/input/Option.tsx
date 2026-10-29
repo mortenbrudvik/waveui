@@ -265,6 +265,7 @@ function OptionImpl(props: OptionProps) {
     hidden = false,
     checkIcon,
     className,
+    style,
     children,
     onClick,
     onMouseDown,
@@ -286,6 +287,8 @@ function OptionImpl(props: OptionProps) {
     // Standalone mode only: the pointer press that focuses the list.
     onMouseDown: pressOption,
     onPointerMove: highlightOption,
+    // A windowed list only: the option's height, which wins over the consumer's.
+    style: windowStyle,
     ...optionAttributes
   } = optionProps;
 
@@ -307,6 +310,7 @@ function OptionImpl(props: OptionProps) {
       data-value={value}
       {...rest}
       {...optionAttributes}
+      style={windowStyle ? { ...style, ...windowStyle } : style}
       ref={optionRef}
       onClick={composeEventHandlers(onClick, selectOption)}
       onMouseDown={composeEventHandlers(onMouseDown, pressOption)}
@@ -341,7 +345,9 @@ MemoOption.displayName = 'Option';
  *
  * Options register with the surrounding listbox (in DOM order, groups included), so they can be
  * wrapped, grouped or rendered conditionally. The option is memoized: moving the highlight
- * re-renders only the previously and the newly active option.
+ * re-renders only the previously and the newly active option. In a windowed list (the
+ * `virtualWindow` of Listbox, Combobox or Dropdown) the option is exactly the window's `itemSize`
+ * tall, a height set after its own `style`, so its content must fit in it.
  *
  * Styling: `className` comes last. A plain background class (`className="bg-primary"`) replaces
  * the built-in hover, selected and active backgrounds in every state. To restyle one state only,

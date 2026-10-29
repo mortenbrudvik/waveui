@@ -12,9 +12,15 @@ import { useFormReset } from '../../hooks/useFormReset';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { HiddenInput } from '../internal/HiddenInput';
 import { ListboxProvider, Option, OptionGroup, type ListboxOptionRenderState } from './Option';
-import { renderListboxItems, useItemsAndChildrenWarning } from './Option.data';
+import {
+  renderListboxItems,
+  renderListboxWindow,
+  useDataModeWarnings,
+  useItemsAndChildrenWarning,
+} from './Option.data';
 import { announceToggle, PickerAnnouncer } from './pickerLabels';
 import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
 
@@ -116,12 +122,35 @@ export interface ListboxProps<M extends boolean = false> extends Omit<
   /**
    * Data mode: renders the option of an item, given its state (`selected`, `active`, and `index`
    * among the shown options). Return an `Option`, or an option component of your own on
-   * `useListboxOption`, with the item's `value` (and its `disabled`); its position is set for you.
-   * It is called again only when the item, its state or the function itself changes, so pass a
-   * stable function in a long list. Ignored without `items`.
+   * `useListboxOption`, with the item's `value` (and its `disabled`); its position is set for you,
+   * and in a windowed list (`virtualWindow`) its height. It is called again only when the item, its
+   * state, its position (`aria-posinset` and `aria-setsize`, which new `items` change) or the
+   * function itself changes, so pass a stable function in a long list. Ignored without `items`,
+   * with a development warning.
    * @default an `Option` with the item's `value`, `label` (also its text), `textValue` and `disabled`
    */
   renderOption?: (item: ListboxItem, state: ListboxOptionRenderState) => React.ReactNode;
+  /**
+   * Data mode: renders only the options in view of a long list, plus an overscan, and spacers
+   * (`aria-hidden`, `data-virtual-spacer`) as tall as the options they stand for: pass the result
+   * of `useVirtualWindow({ itemSize })`, or an object of your own that implements `VirtualWindow`.
+   * It needs `items`: without them, or beside `OptionGroup` children, it is ignored with a
+   * development warning (a window renders a flat list).
+   *
+   * The list element is the window's scroller: give it a bounded height (a height or a maximum
+   * height, through `className` or `style`); without one the window measures the whole list and
+   * renders every option. While windowed the list has no block padding (add none through
+   * `className`), so the options start at its top, where the window counts them. Every option is
+   * exactly `itemSize` tall (the list sets its height, after the option's own `style`), so an
+   * option's content must fit in it: the default `Option` with one line of text is 32 pixels tall.
+   *
+   * The window counts the shown options (the items that are not `hidden`). The keys and typeahead
+   * move over all of them (Home and End to the first and the last, PageUp and PageDown by ten); the
+   * active option stays rendered while it is scrolled away, so `aria-activedescendant` always names
+   * an element, and it is scrolled into view when the list gains focus or a key makes it active.
+   * The server renders the first window.
+   */
+  virtualWindow?: VirtualWindow;
   /**
    * Name of the value in form submissions (renders a hidden input inside the list; one per value
    * with `multiselect`).
@@ -172,6 +201,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     labels,
     items,
     renderOption,
+    virtualWindow,
     name,
     form,
     required,
@@ -245,6 +275,9 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     setFocused(!disabled && isFocused(list));
   }, [autoFocus, disabled, isClient]);
 
+  // A window renders data mode only; the list is its scroller.
+  const activeWindow = items === undefined ? undefined : virtualWindow;
+
   const listbox = useListbox({
     open: focused && !disabled,
     mode: 'standalone',
@@ -254,6 +287,11 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     loop: false,
     disabledOptionsFocusable,
     items,
+    // An active option that the window does not render (an adapter that keeps nothing): scrolled
+    // to by its index among the shown options, the window's count.
+    onScrollToItem: activeWindow
+      ? (index) => activeWindow.scrollToIndex(index, { align: 'auto' })
+      : undefined,
     onSelect: (next, details) => {
       if (disabled) return;
       if (!multiselect) {
@@ -272,7 +310,12 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
   });
   // The hook's ref must reach the list: a pointer press on an option focuses the list through it.
   const { ref: listElementRef, ...listProps } = listbox.getListboxProps();
-  const mergedRef = useMergedRefs<HTMLUListElement>(ref, listRef, listElementRef);
+  const mergedRef = useMergedRefs<HTMLUListElement>(
+    ref,
+    listRef,
+    listElementRef,
+    activeWindow?.scrollRef,
+  );
 
   // The active option's outline shows focus only while the option is in the list's view: scrolled
   // away (the wheel, a smaller list), the list draws its own ring as well (WCAG 2.4.7). A new active
@@ -322,6 +365,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     if (unnamed) warnOnce('Listbox:unnamed', UNNAMED_WARNING);
   }, [unnamed]);
   useItemsAndChildrenWarning('Listbox', items, children);
+  useDataModeWarnings('Listbox', { items, renderOption, virtualWindow, children });
 
   // C-COMPOSE: keys typed in a portal rendered inside the list bubble through it in React; they
   // are not the list's.
@@ -340,6 +384,13 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
   const handleBlur = (event: React.FocusEvent<HTMLUListElement>) => {
     const list = event.currentTarget;
     if (event.target === list && !isFocused(list)) setFocused(false);
+  };
+
+  // What every option of data mode is drawn from, besides its item.
+  const optionsState = {
+    selected: new Set(values),
+    activeValue: listbox.activeValue,
+    renderOption,
   };
 
   return (
@@ -378,19 +429,24 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
         // Disabled: the options take no pointer input (inherited by the options of a group), so
         // none hovers and the list's own not-allowed cursor shows over them.
         disabled && 'cursor-not-allowed opacity-50 *:pointer-events-none',
+        // Windowed: the options start at the top of the scroller, where the window counts them.
+        activeWindow && 'py-0',
         className,
       )}
     >
       {multiselect && <PickerAnnouncer />}
       <ListboxProvider value={listbox.context}>
-        {/* Data mode: the options of the shown items; the children are ignored. */}
+        {/* Data mode: the options of the shown items, or the window's; the children are ignored. */}
         {items === undefined
           ? children
-          : renderListboxItems(listbox.items, {
-              selected: new Set(values),
-              activeValue: listbox.activeValue,
-              renderOption,
-            })}
+          : activeWindow
+            ? renderListboxWindow(
+                listbox.items,
+                activeWindow,
+                optionsState,
+                listboxClassNames.spacer,
+              )
+            : renderListboxItems(listbox.items, optionsState)}
       </ListboxProvider>
       {/* Inside the list: a focused hidden input hands focus back to its parent element. */}
       <HiddenInput
@@ -447,7 +503,9 @@ export const ListboxOptionGroup = OptionGroup;
  * - **Data mode.** `items` passes the options as data instead of children: the list renders an
  *   option per item (`renderOption` draws it, an `Option` with the item's label by default), the
  *   keys, typeahead and the selection follow the data, and each option carries `aria-posinset`
- *   and `aria-setsize`.
+ *   and `aria-setsize`. A long list takes a `virtualWindow` (from `useVirtualWindow({ itemSize
+ *   })`): the list then renders only the options in view, plus an overscan, with spacers for the
+ *   others, every option `itemSize` tall, and the active option stays rendered.
  * - **Forms and Field.** With `name` the value is submitted with its form (one entry, or one per
  *   value with `multiselect`), and `required` needs a value (native validation; a missing value
  *   moves focus to the list). A reset of its form restores `defaultValue`, with or without a

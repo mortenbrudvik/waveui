@@ -1,10 +1,19 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Combobox, Field, Option, OptionGroup, type ComboboxProps, type ListboxItem } from '../src';
+import {
+  Combobox,
+  Field,
+  Option,
+  OptionGroup,
+  useVirtualWindow,
+  type ComboboxProps,
+  type ListboxItem,
+} from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
-import { PEOPLE } from './_people';
+import { MountedOptions } from './_mountedOptions';
+import { PEOPLE, TEN_THOUSAND_PEOPLE } from './_people';
 
 const meta = {
   title: 'Components/Input/Combobox',
@@ -312,6 +321,51 @@ export const DataMode: Story = {
     defaultValue: 'person-321',
     items: PEOPLE,
   },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    virtualWindow: { control: false },
+  },
+};
+
+/** The args of the windowed story: the Combobox's, and the window's option height. */
+type TenThousandOptionsArgs = ComboboxProps & {
+  /** The height of every option in pixels: `useVirtualWindow({ itemSize })`. */
+  itemSize: number;
+};
+
+/** A Combobox of 10,000 people, windowed by `useVirtualWindow`, with the mounted-option count. */
+function TenThousandCombobox({ itemSize, ...args }: TenThousandOptionsArgs) {
+  const virtualWindow = useVirtualWindow({ itemSize });
+  const [root, setRoot] = React.useState<HTMLDivElement | null>(null);
+  return (
+    <div className="flex flex-col gap-3">
+      <Combobox {...args} ref={setRoot} items={TEN_THOUSAND_PEOPLE} virtualWindow={virtualWindow} />
+      <MountedOptions scope={root} total={TEN_THOUSAND_PEOPLE.length} />
+    </div>
+  );
+}
+
+/**
+ * 10,000 options with `virtualWindow`: the open list renders only the options in view and a few
+ * beyond them, as the line below counts, every one 32 pixels tall. It opens on the selected person
+ * in the middle of the list; typing filters the 10,000 (try "oslo"), and the arrow keys reach the
+ * last one.
+ */
+export const TenThousandOptions: StoryObj<TenThousandOptionsArgs> = {
+  args: {
+    'aria-label': 'Person',
+    placeholder: 'Search 10,000 people...',
+    defaultValue: 'person-5000',
+    itemSize: 32,
+    style: { width: 300 },
+  },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    virtualWindow: { control: false },
+  },
+  render: (args) => <TenThousandCombobox {...args} />,
 };
 
 export const SizesAndAppearances: Story = {
