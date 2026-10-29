@@ -28,10 +28,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  BRAND_TOKENS_BUDGET,
   checkCjsParity,
   checkClassNameExports,
   checkDeclarations,
   checkDevEnvironment,
+  checkDevOnlyLibraries,
   checkDirectives,
   checkFlatExports,
   checkImports,
@@ -41,16 +43,20 @@ import {
   createWorkDir,
   DATA_GRID_BUDGET,
   DATA_SCALE_MODULES,
+  DEV_ONLY_LIBRARIES,
   directivePrologue,
   entryStatus,
   EXCLUSION_PROBES_0_11,
   EXCLUSION_PROBES_0_15,
   EXCLUSION_PROBES_0_16,
+  EXCLUSION_PROBES_0_17,
   expectsUseClient,
   HOOK_PROBES_0_16,
+  HOOK_PROBES_0_17,
   importSpecifiers,
   INCLUSION_PROBES_0_11,
   INCLUSION_PROBES_0_16,
+  INCLUSION_PROBES_0_17,
   isMainModule,
   main,
   measureImport,
@@ -69,13 +75,16 @@ import {
   probeSizeBudget,
   probeTreeShaking,
   RECORDED_IMPORTS,
+  RECORDED_IMPORTS_0_17,
   removeWorkDir,
   REQUIRED_DECLARATIONS,
   runScript,
+  TOKEN_MODULES,
   undocumentedComponents,
   VALUE_AND_TYPE_DECLARATIONS,
   verifyDist,
   VIRTUAL_BUDGET,
+  WAVE_TOKENS_BUDGET,
 } from '../verify-dist.mjs';
 // The source of `dist/lib/motion.mjs` (0.15): MOTION_RECIPE_MIN is the count of its literals.
 import * as motionSource from '../../src/lib/motion.ts';
@@ -87,7 +96,9 @@ const fixtureRun = createWorkDir(
   'run-',
 );
 const fixtureRoot = fixtureRun.work;
-afterAll(() => removeWorkDir(fixtureRun));
+// Some 170 fixtures of about 200 files each: removing them takes more than the 10 s default of a
+// hook on Windows, where a timed-out hook fails the file and leaves the directory behind.
+afterAll(() => removeWorkDir(fixtureRun), 120_000);
 
 const DIRECTIVE = '"use client";\n';
 
@@ -117,11 +128,11 @@ const EMPTY_ROLL_UP = 'export { }\n';
 
 /**
  * A correct preserveModules dist: Button, a Card and a Dialog compound, a hook and `cn`, the
- * modules of each phase since 0.11, the 0.15 modules of {@link withPhase10Modules} and the 0.16
- * modules of {@link withPhase11Modules}.
+ * modules of each phase since 0.11, the 0.15 modules of {@link withPhase10Modules}, the 0.16
+ * modules of {@link withPhase11Modules} and the 0.17 modules of {@link withPhase12Modules}.
  */
 function goodFiles() {
-  return withPhase11Modules(withPhase10Modules(goodFilesBefore015()));
+  return withPhase12Modules(withPhase11Modules(withPhase10Modules(goodFilesBefore015())));
 }
 
 /** The good files up to 0.14 ({@link goodFiles} adds the 0.15 modules). */
@@ -1102,13 +1113,16 @@ const PHASE11_MODULES = {
     body: 'function collectItems(nodes) { return computeCheckStates(nodes); }\n',
     exports: ['collectItems'],
   },
+  // The Tree reads the provider's context for its direction, as the real one does (`useDirection`;
+  // the provider module is one of the 0.17 modules of PHASE12_MODULES).
   'components/layout/Tree': {
     imports: [
       ['react', ['createElement']],
       ['components/layout/Tree.selection', ['collectItems']],
+      ['components/provider/WaveProvider', ['useWaveTheme']],
     ],
     body:
-      "function Tree(props) { collectItems(props.items ?? []); return createElement('div', { role: 'tree' }); }\n" +
+      "function Tree(props) { collectItems(props.items ?? []); return createElement('div', { role: 'tree', dir: useWaveTheme().dir }); }\n" +
       "Tree.displayName = 'Tree';\n",
     exports: ['Tree'],
     entry: true,
@@ -1132,6 +1146,91 @@ function withPhase11Modules(files) {
     if (!spec.entry) continue;
     result['dist/index.mjs'] += `export { ${spec.exports.join(', ')} } from './${path}.mjs';\n`;
     result['dist/index.cjs'] += spec.exports
+      .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
+      .join('');
+  }
+  return result;
+}
+
+/**
+ * The 0.17 modules of the fixture (INTEGRATION), in the shape of PHASE11_MODULES, except that
+ * `entry` lists the names the package entry exports (the others are module-only seams): the token
+ * core, the names tuple with `waveTokens` and `chartPalette`, the brand generator and the provider
+ * that reads the token core. The tuple is one string split at run time, as the build writes it, so
+ * a token name is a fragment of code and no string literal of its own; the brand generator's
+ * contrast check runs only outside production (`process.env.NODE_ENV`), as the real one does, and
+ * its seed warning in every build. Each `lib` module works on the server, where the react-server
+ * check calls it.
+ */
+const PHASE12_MODULES = {
+  'lib/tokens': {
+    imports: [],
+    body:
+      "function tokenVariable(name) { return '--wave-' + name.replace(/([A-Za-z])(\\d)/g, '$1-$2').replace(/[A-Z]/g, (capital) => '-' + capital).toLowerCase(); }\n" +
+      'function getTokenStyle(overrides) { if (overrides == null) return undefined; const style = {}; ' +
+      'for (const [key, value] of Object.entries(overrides)) if (value !== undefined) style[tokenVariable(key)] = String(value); ' +
+      'return Object.keys(style).length > 0 ? style : undefined; }\n' +
+      'function mergeTokenOverrides(parent, own) { return own === null ? {} : own === undefined ? parent : { ...parent, ...own }; }\n',
+    exports: ['tokenVariable', 'getTokenStyle', 'mergeTokenOverrides'],
+    entry: ['getTokenStyle'],
+  },
+  'lib/waveTokens': {
+    imports: [['lib/tokens', ['tokenVariable']]],
+    body:
+      "const WAVE_TOKEN_NAMES = /* @__PURE__ */ 'primary.brand80.paletteBlue.palettePurple.paletteSteelTintForeground'.split('.');\n" +
+      "const waveTokens = /* @__PURE__ */ Object.freeze(Object.fromEntries(WAVE_TOKEN_NAMES.map((name) => [name, 'var(' + tokenVariable(name) + ')'])));\n" +
+      "const chartPalette = /* @__PURE__ */ Object.freeze(['paletteBlue', 'palettePurple']);\n",
+    exports: ['WAVE_TOKEN_NAMES', 'waveTokens', 'chartPalette'],
+    entry: ['waveTokens', 'chartPalette'],
+  },
+  'lib/brand': {
+    imports: [['lib/dev', ['isDev']]],
+    body:
+      'const BRAND_STOPS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160];\n' +
+      "const DEFAULT_BRAND_RAMP = Object.fromEntries(BRAND_STOPS.map((stop) => [stop, stop === 80 ? '#0f6cbd' : '#7f7f7f']));\n" +
+      'function warnOnce(key, message) { if (isDev) console.warn(key, message); }\n' +
+      "function checkBrandRamp(ramp) { for (const stop of BRAND_STOPS) if (typeof ramp[stop] !== 'string') warnOnce('createBrandTokens:contrast:light:primary:' + stop, 'no colour'); }\n" +
+      'function toTokens(ramp) { return Object.fromEntries(BRAND_STOPS.map((stop) => [`brand${stop}`, ramp[stop]])); }\n' +
+      'function createBrandTokens(seed) {\n' +
+      "  if (typeof seed === 'object' && seed !== null) {\n" +
+      "    try { if (process.env.NODE_ENV !== 'production') checkBrandRamp(seed); } catch {}\n" +
+      '    return toTokens(seed);\n' +
+      '  }\n' +
+      "  if (!/^#[0-9a-f]{6}$/i.test(String(seed))) warnOnce('createBrandTokens:seed', 'not a colour');\n" +
+      '  return toTokens(DEFAULT_BRAND_RAMP);\n' +
+      '}\n',
+    exports: ['DEFAULT_BRAND_RAMP', 'checkBrandRamp', 'createBrandTokens'],
+    entry: ['createBrandTokens'],
+  },
+  'components/provider/WaveProvider': {
+    imports: [
+      ['react', ['createContext', 'createElement', 'useContext']],
+      ['lib/cn', ['cn']],
+      ['lib/tokens', ['getTokenStyle', 'mergeTokenOverrides']],
+    ],
+    body:
+      "const WaveContext = createContext({ dir: 'ltr', tokens: {} });\n" +
+      'function useWaveTheme() { return useContext(WaveContext); }\n' +
+      'function WaveProvider(props) { const parent = useWaveTheme(); const tokens = mergeTokenOverrides(parent.tokens, props.tokens); ' +
+      "return createElement(WaveContext.Provider, { value: { dir: props.dir ?? parent.dir, tokens } }, createElement('div', { className: cn('wave-root', props.className), style: getTokenStyle(tokens) }, props.children)); }\n" +
+      "WaveProvider.displayName = 'WaveProvider';\n",
+    exports: ['WaveProvider', 'useWaveTheme'],
+    entry: ['WaveProvider', 'useWaveTheme'],
+  },
+};
+
+/** The ESM and CommonJS code of the 0.17 module `path` (see PHASE12_MODULES). */
+const phase12Module = phase11Module;
+
+/** The good files with the 0.17 modules of PHASE12_MODULES, their `entry` names in the entry. */
+function withPhase12Modules(files) {
+  const result = { ...files };
+  for (const [path, spec] of Object.entries(PHASE12_MODULES)) {
+    const { esm, cjs } = phase12Module(path, spec);
+    result[`dist/${path}.mjs`] = esm;
+    result[`dist/${path}.cjs`] = cjs;
+    result['dist/index.mjs'] += `export { ${spec.entry.join(', ')} } from './${path}.mjs';\n`;
+    result['dist/index.cjs'] += spec.entry
       .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
       .join('');
   }
@@ -3853,8 +3952,9 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     const { errors, virtualBudget, recorded } = await verifyDist(dist, noPending);
     expect(errors).toEqual([]);
     expect(virtualBudget).toEqual({ minified: expect.any(Number), gzip: expect.any(Number) });
+    // 0.17 appends its own records (RECORDED_IMPORTS_0_17, against 0.16.0).
     expect(recorded).toEqual(
-      RECORDED_IMPORTS.map((entry) => ({
+      [...RECORDED_IMPORTS, ...RECORDED_IMPORTS_0_17].map((entry) => ({
         ...entry,
         minified: expect.any(Number),
         gzip: expect.any(Number),
@@ -3949,6 +4049,543 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       expect(MODULE_ONLY_NAMES, name).not.toContain(name);
     }
   }, 60_000);
+});
+
+describe('the 0.17 probes (INTEGRATION)', () => {
+  /** The fixture module of `path` (see PHASE12_MODULES, else PHASE11_MODULES) with `change` applied. */
+  const changed = (path, change) => {
+    const { esm, cjs } = phase12Module(
+      path,
+      change(PHASE12_MODULES[path] ?? PHASE11_MODULES[path]),
+    );
+    return { [`dist/${path}.mjs`]: esm, [`dist/${path}.cjs`]: cjs };
+  };
+  /** The fixture module of `path` that also imports `name` from `target` and calls it. */
+  const calling = (path, target, name) =>
+    changed(path, (spec) => ({
+      ...spec,
+      imports: [...spec.imports, [target, [name]]],
+      body: spec.body.replace(/\) \{ /, `) { ${name}(); `),
+    }));
+  /** The fixture component `path` (a module of goodFiles) that also imports `name` and calls it. */
+  const componentCalling = (path, target, name) => ({
+    [`dist/${path}.mjs`]: withCall(goodFiles()[`dist/${path}.mjs`], path, target, name),
+  });
+
+  it('lists the probes, the budgets and the recorded imports of the spec (§10)', () => {
+    const react = ['react', 'react-dom', 'react/jsx-runtime'];
+    expect(HOOK_PROBES_0_17).toEqual([
+      {
+        keep: 'createBrandTokens',
+        modules: ['lib/brand.mjs'],
+        dropModules: ['lib/waveTokens.mjs'],
+        dropPrefixes: ['components/'],
+        dropExternals: react,
+        dropSubstrings: ['createBrandTokens:contrast'],
+      },
+      {
+        keep: 'waveTokens',
+        modules: ['lib/waveTokens.mjs', 'lib/tokens.mjs'],
+        dropModules: ['lib/brand.mjs'],
+        dropPrefixes: ['components/'],
+        dropExternals: react,
+      },
+    ]);
+    expect(TOKEN_MODULES).toEqual(['lib/brand.mjs', 'lib/tokens.mjs', 'lib/waveTokens.mjs']);
+    expect(EXCLUSION_PROBES_0_17).toEqual([
+      {
+        keep: 'Dialog',
+        drop: null,
+        dropModules: ['lib/brand.mjs', 'lib/waveTokens.mjs'],
+        dropSubstrings: ['paletteSteelTintForeground', 'createBrandTokens:'],
+      },
+      { keep: 'Tree', drop: null, dropModules: ['lib/brand.mjs', 'lib/waveTokens.mjs'] },
+      { keep: 'Button', drop: 'WaveProvider', dropModules: TOKEN_MODULES },
+      { keep: 'MessageBar', drop: 'WaveProvider', dropModules: TOKEN_MODULES },
+    ]);
+    expect(INCLUSION_PROBES_0_17).toEqual([
+      {
+        keep: 'waveTokens',
+        modules: ['lib/waveTokens.mjs'],
+        substrings: ['paletteSteelTintForeground'],
+      },
+      { keep: 'createBrandTokens', modules: ['lib/brand.mjs'], substrings: ['createBrandTokens:'] },
+      {
+        keep: 'WaveProvider',
+        modules: ['components/provider/WaveProvider.mjs', 'lib/tokens.mjs'],
+      },
+      { keep: 'Tree', modules: ['components/provider/WaveProvider.mjs'] },
+    ]);
+    expect(DEV_ONLY_LIBRARIES).toEqual(['recharts', 'chart.js', 'kurkle']);
+
+    // Spec §10: 3 KiB gzip; minified, the size first measured for 0.17.0 (3,596 and 3,071 bytes)
+    // plus 25 %.
+    expect(BRAND_TOKENS_BUDGET).toEqual({
+      names: ['createBrandTokens'],
+      maxMinifiedBytes: 4495,
+      maxGzipBytes: 3072,
+      allowedExternals: [],
+    });
+    expect(WAVE_TOKENS_BUDGET).toEqual({
+      names: ['waveTokens'],
+      maxMinifiedBytes: 3839,
+      maxGzipBytes: 3072,
+      allowedExternals: [],
+    });
+    // The published 0.16.0 package, measured with this release's tools; the allowances of spec
+    // §10 as the build's rulings corrected them (bytes minified, bytes gzip).
+    const components = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
+    const portal = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
+    const allowances = [
+      [['Button'], { minified: 11195, gzip: 3855 }, [64, 32], components],
+      [['MessageBar'], { minified: 26831, gzip: 9312 }, [64, 32], components],
+      [['Tree'], { minified: 47248, gzip: 16196 }, [128, 64], components],
+      [['Dialog'], { minified: 70721, gzip: 23723 }, [1024, 409], portal],
+      [['WaveProvider', 'Dialog'], { minified: 71884, gzip: 24127 }, [1536, 716], portal],
+    ];
+    expect(RECORDED_IMPORTS_0_17).toEqual([
+      { names: ['createBrandTokens'], baseline: null, budget: BRAND_TOKENS_BUDGET },
+      { names: ['waveTokens'], baseline: null, budget: WAVE_TOKENS_BUDGET },
+      ...allowances.map(([names, baseline, [minified, gzip], allowedExternals]) => ({
+        names,
+        baseline: { version: '0.16.0', ...baseline },
+        budget: {
+          names,
+          maxMinifiedBytes: baseline.minified + minified,
+          maxGzipBytes: baseline.gzip + gzip,
+          allowedExternals,
+        },
+      })),
+    ]);
+    // 0.4 and 0.7 KiB, rounded down: a budget never above the spec's figure.
+    expect(Math.floor(0.4 * 1024)).toBe(409);
+    expect(Math.floor(0.7 * 1024)).toBe(716);
+    // The 0.16.0 figures of Button, MessageBar and Tree are those of the 0.16.0 CHANGELOG.
+    const changelog = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
+    const section = changelog.slice(changelog.indexOf('## [0.16.0]'));
+    for (const [name, minified, gzip] of [
+      ['Tree', '47,248', '16,196'],
+      ['Button', '11,195', '3,855'],
+      ['MessageBar', '26,831', '9,312'],
+    ]) {
+      expect(section, name).toMatch(
+        new RegExp(
+          `An import of only \`${name}\` \\| [^|]+ \\| ${minified} \\(${gzip} gzip\\) \\|`,
+        ),
+      );
+    }
+  });
+
+  it('the hook probes pass on a correct dist built for production, whatever NODE_ENV this process has', async () => {
+    // Vitest runs with NODE_ENV=test, from which Vite would define process.env.NODE_ENV: the probes
+    // define it as production, so the development contrast check of a full ramp is dropped.
+    expect(process.env.NODE_ENV).not.toBe('production');
+    for (const probe of HOOK_PROBES_0_17) {
+      expect(await probeHook(fixture().dist, probe), probe.keep).toEqual([]);
+    }
+  }, 30_000);
+
+  it('the createBrandTokens probe reports React, a component, the names tuple and the contrast check in the bundle', async () => {
+    const [brandProbe, tokensProbe] = HOOK_PROBES_0_17;
+    const withReact = fixture(
+      changed('lib/brand', (spec) => ({
+        ...spec,
+        imports: [...spec.imports, ['react', ['useState']]],
+        body: spec.body.replace(
+          'function toTokens(ramp) { ',
+          'function toTokens(ramp) { useState(0); ',
+        ),
+      })),
+    );
+    expect(await probeHook(withReact.dist, brandProbe)).toEqual([
+      'the bundle of an import of only createBrandTokens imports react',
+    ]);
+    const withButton = fixture(calling('lib/brand', 'components/button/Button', 'Button'));
+    expect(await probeHook(withButton.dist, brandProbe)).toEqual([
+      'components/button/Button.mjs is in the bundle of an import of only createBrandTokens (no module under components/ may be)',
+    ]);
+    const withTuple = fixture(calling('lib/brand', 'lib/waveTokens', 'chartPalette'));
+    expect(await probeHook(withTuple.dist, brandProbe)).toEqual([
+      'lib/waveTokens.mjs is in the bundle of an import of only createBrandTokens',
+    ]);
+    // A check without the mode test stays in a production bundle.
+    const unguarded = fixture(
+      changed('lib/brand', (spec) => ({
+        ...spec,
+        body: spec.body.replace(
+          "try { if (process.env.NODE_ENV !== 'production') checkBrandRamp(seed); } catch {}",
+          'checkBrandRamp(seed);',
+        ),
+      })),
+    );
+    expect(await probeHook(unguarded.dist, brandProbe)).toEqual([
+      'the bundle of an import of only createBrandTokens contains "createBrandTokens:contrast" outside comments (its minified code)',
+    ]);
+    // A fragment that no module of dist holds would let the probe pass vacuously.
+    const renamed = fixture(
+      changed('lib/brand', (spec) => ({
+        ...spec,
+        body: spec.body.replace("'createBrandTokens:contrast:light:primary:'", "'contrast:'"),
+      })),
+    );
+    expect(await probeHook(renamed.dist, brandProbe)).toEqual([
+      '"createBrandTokens:contrast", listed for the hook createBrandTokens, occurs in no module of dist (the probe would pass vacuously)',
+    ]);
+    const tokensWithButton = fixture(
+      changed('lib/waveTokens', (spec) => ({
+        ...spec,
+        imports: [...spec.imports, ['components/button/Button', ['Button']]],
+        body: spec.body.replace(
+          'Object.fromEntries(WAVE_TOKEN_NAMES',
+          'Object.fromEntries([...WAVE_TOKEN_NAMES, Button()]',
+        ),
+      })),
+    );
+    expect(await probeHook(tokensWithButton.dist, tokensProbe)).toEqual([
+      'components/button/Button.mjs is in the bundle of an import of only waveTokens (no module under components/ may be)',
+    ]);
+  }, 60_000);
+
+  /** For each exclusion probe: the call that leaks code into its bundle, and what it reports. */
+  const LEAKS = {
+    Dialog: {
+      leak: () => componentCalling('components/overlays/Dialog', 'lib/waveTokens', 'chartPalette'),
+      reports: [
+        'lib/waveTokens.mjs is in the bundle of an import of only Dialog (it must be dropped)',
+        'the bundle of an import of only Dialog contains "paletteSteelTintForeground" outside comments (its minified code)',
+      ],
+    },
+    Tree: {
+      leak: () => calling('components/layout/Tree', 'lib/brand', 'createBrandTokens'),
+      reports: ['lib/brand.mjs is in the bundle of an import of only Tree (it must be dropped)'],
+    },
+    Button: {
+      leak: () => componentCalling('components/button/Button', 'lib/tokens', 'getTokenStyle'),
+      reports: [
+        'lib/tokens.mjs is in the bundle of an import of only Button (WaveProvider must be dropped)',
+      ],
+    },
+    MessageBar: {
+      leak: () =>
+        componentCalling(
+          'components/feedback/MessageBar',
+          'components/provider/WaveProvider',
+          'useWaveTheme',
+        ),
+      reports: [
+        'components/provider/WaveProvider.mjs is in the bundle of an import of only MessageBar (WaveProvider must be dropped)',
+        'lib/tokens.mjs is in the bundle of an import of only MessageBar (WaveProvider must be dropped)',
+        'WaveProvider code (displayName "WaveProvider") is in the bundle of an import of only MessageBar',
+      ],
+    },
+  };
+
+  it.each(EXCLUSION_PROBES_0_17.map((probe) => [probe.keep, probe]))(
+    'an import of only %s holds no token code it does not use: passes on a correct dist, reports each leak',
+    async (keep, probe) => {
+      expect(await probeTreeShaking(fixture().dist, probe)).toEqual([]);
+      expect(LEAKS[keep], keep).toBeDefined();
+      const { dist } = fixture(LEAKS[keep].leak());
+      expect(await probeTreeShaking(dist, probe)).toEqual(LEAKS[keep].reports);
+    },
+    30_000,
+  );
+
+  it('a probe with drop: null drops no component by name', async () => {
+    // The Dialog holds the provider's module (for its context): no component or displayName is
+    // checked, only the listed modules and fragments.
+    const { dist } = fixture(
+      componentCalling(
+        'components/overlays/Dialog',
+        'components/provider/WaveProvider',
+        'useWaveTheme',
+      ),
+    );
+    expect(await probeTreeShaking(dist, { keep: 'Dialog', drop: null })).toEqual([]);
+    expect(
+      await probeTreeShaking(dist, { keep: 'Dialog', drop: null, dropModules: ['lib/tokens.mjs'] }),
+    ).toEqual(['lib/tokens.mjs is in the bundle of an import of only Dialog (it must be dropped)']);
+  }, 30_000);
+
+  /** For each inclusion probe: the fixture without the code the probe looks for, and the report. */
+  const WITHOUT = {
+    waveTokens: {
+      files: () =>
+        changed('lib/waveTokens', (spec) => ({
+          ...spec,
+          body: spec.body.replace('.paletteSteelTintForeground', ''),
+        })),
+      reports: [
+        'the bundle of an import of only waveTokens lacks "paletteSteelTintForeground" outside comments (its minified code)',
+      ],
+    },
+    createBrandTokens: {
+      files: () =>
+        changed('lib/brand', (spec) => ({
+          ...spec,
+          body: spec.body.replaceAll("'createBrandTokens:", "'brand:"),
+        })),
+      reports: [
+        'the bundle of an import of only createBrandTokens lacks "createBrandTokens:" outside comments (its minified code)',
+      ],
+    },
+    WaveProvider: {
+      files: () =>
+        changed('components/provider/WaveProvider', (spec) => ({
+          ...spec,
+          imports: spec.imports.filter(([module]) => module !== 'lib/tokens'),
+          body: spec.body
+            .replace('mergeTokenOverrides(parent.tokens, props.tokens)', 'props.tokens')
+            .replace('style: getTokenStyle(tokens)', 'style: tokens'),
+        })),
+      reports: ['lib/tokens.mjs is not in the bundle of an import of only WaveProvider'],
+    },
+    Tree: {
+      files: () =>
+        changed('components/layout/Tree', (spec) => ({
+          ...spec,
+          imports: spec.imports.filter(([module]) => module !== 'components/provider/WaveProvider'),
+          body: spec.body.replace(', dir: useWaveTheme().dir', ''),
+        })),
+      reports: [
+        'components/provider/WaveProvider.mjs is not in the bundle of an import of only Tree',
+      ],
+    },
+  };
+
+  it.each(INCLUSION_PROBES_0_17.map((probe) => [probe.keep, probe]))(
+    'an import of only %s holds the code its exclusion looks for: passes on a correct dist, reports it missing',
+    async (keep, probe) => {
+      expect(await probeIncludes(fixture().dist, probe)).toEqual([]);
+      expect(WITHOUT[keep], keep).toBeDefined();
+      const { dist } = fixture(WITHOUT[keep].files());
+      expect(await probeIncludes(dist, probe)).toEqual(WITHOUT[keep].reports);
+    },
+    30_000,
+  );
+
+  it('checkDevOnlyLibraries passes a correct dist and reports a chart library in code, styles or types, not in prose', () => {
+    expect(checkDevOnlyLibraries(fixture().dist)).toEqual([]);
+    const { dist } = fixture({
+      'dist/components/data-display/Chart.mjs':
+        `${DIRECTIVE}import { BarChart } from 'recharts';\n` +
+        '/** Works with Recharts and Chart.js, as the guide shows. */\nexport { BarChart };\n',
+      'dist/lib/chartColors.cjs':
+        '//#region node_modules/@kurkle/color/dist/color.esm.js\nexports.a = 1;\n',
+      'dist/styles.css': '.wave-chart { content: "chart.js"; }\n',
+      'dist/index.d.ts': `${DTS}import type { ChartData } from 'chart.js';\n`,
+    });
+    expect(checkDevOnlyLibraries(dist)).toEqual([
+      'components/data-display/Chart.mjs holds "recharts" (a library of the stories only, R14: it must not reach dist)',
+      'index.d.ts holds "chart.js" (a library of the stories only, R14: it must not reach dist)',
+      'lib/chartColors.cjs holds "kurkle" (a library of the stories only, R14: it must not reach dist)',
+      'styles.css holds "chart.js" (a library of the stories only, R14: it must not reach dist)',
+    ]);
+  });
+
+  it('checkServerImport reads the token helpers from lib and from the entry on the server', async () => {
+    expect(await checkServerImport(fixture().dist)).toEqual([]);
+    const missing = await checkServerImport(
+      fixture({ 'dist/lib/brand.cjs': null, 'dist/lib/waveTokens.mjs': null }).dist,
+    );
+    expect(missing).toEqual(['lib/brand.cjs is missing', 'lib/waveTokens.mjs is missing']);
+  }, 60_000);
+
+  it('checkServerImport reports a token style, a token object or a brand ramp that is wrong on the server', async () => {
+    const { dist } = fixture({
+      ...changed('lib/tokens', (spec) => ({
+        ...spec,
+        body: spec.body.replace(".replace(/([A-Za-z])(\\d)/g, '$1-$2')", ''),
+      })),
+      ...changed('lib/brand', (spec) => ({
+        ...spec,
+        body: spec.body.replace("stop === 80 ? '#0f6cbd' : '#7f7f7f'", "'#7f7f7f'"),
+      })),
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      'lib/brand.cjs under node --conditions=react-server: createBrandTokens(\'#0f6cbd\') returned a brand80 of "#7f7f7f", not "#0f6cbd"',
+      'lib/brand.mjs under node --conditions=react-server: createBrandTokens(\'#0f6cbd\') returned a brand80 of "#7f7f7f", not "#0f6cbd"',
+      'lib/tokens.cjs under node --conditions=react-server: getTokenStyle({ brand80: \'#c43e00\', zOverlay: 2000 }) returned {"--wave-brand80":"#c43e00","--wave-z-overlay":"2000"}',
+      'lib/tokens.mjs under node --conditions=react-server: getTokenStyle({ brand80: \'#c43e00\', zOverlay: 2000 }) returned {"--wave-brand80":"#c43e00","--wave-z-overlay":"2000"}',
+      'lib/waveTokens.cjs under node --conditions=react-server: waveTokens[chartPalette[0]] is "var(--wave-palette-blue)" and waveTokens.brand80 "var(--wave-brand80)", not "var(--wave-palette-blue)" and "var(--wave-brand-80)"',
+      'lib/waveTokens.mjs under node --conditions=react-server: waveTokens[chartPalette[0]] is "var(--wave-palette-blue)" and waveTokens.brand80 "var(--wave-brand80)", not "var(--wave-palette-blue)" and "var(--wave-brand-80)"',
+    ]);
+  }, 60_000);
+
+  it('checkServerImport reports an entry whose token helpers come from a "use client" module', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/hooks/useThing.mjs':
+        `${files['dist/hooks/useThing.mjs']}` +
+        "export { createBrandTokens } from '../lib/brand.mjs';\n" +
+        "export { waveTokens } from '../lib/waveTokens.mjs';\n",
+      'dist/index.mjs': files['dist/index.mjs']
+        .replace(
+          "export { createBrandTokens } from './lib/brand.mjs';",
+          "export { createBrandTokens } from './hooks/useThing.mjs';",
+        )
+        .replace(
+          "export { waveTokens, chartPalette } from './lib/waveTokens.mjs';",
+          "export { waveTokens } from './hooks/useThing.mjs';\nexport { chartPalette } from './lib/waveTokens.mjs';",
+        ),
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringMatching(
+        /^index\.mjs under node --conditions=react-server: createBrandTokens is a client reference/,
+      ),
+    ]);
+    const objectOnly = fixture({
+      'dist/hooks/useThing.mjs': `${files['dist/hooks/useThing.mjs']}export { waveTokens } from '../lib/waveTokens.mjs';\n`,
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        "export { waveTokens, chartPalette } from './lib/waveTokens.mjs';",
+        "export { waveTokens } from './hooks/useThing.mjs';\nexport { chartPalette } from './lib/waveTokens.mjs';",
+      ),
+    });
+    expect(await checkServerImport(objectOnly.dist)).toEqual([
+      expect.stringMatching(
+        /^index\.mjs under node --conditions=react-server: waveTokens is not a plain object \(missing, or a client reference/,
+      ),
+    ]);
+  }, 60_000);
+
+  it('verifyDist runs the 0.17 probes and the chart-library check', async () => {
+    const { dist } = fixture({
+      ...LEAKS.Tree.leak(),
+      ...changed('lib/brand', (spec) => ({
+        ...spec,
+        body: spec.body.replace(
+          "try { if (process.env.NODE_ENV !== 'production') checkBrandRamp(seed); } catch {}",
+          'checkBrandRamp(seed);',
+        ),
+      })),
+      ...WITHOUT.WaveProvider.files(),
+      'dist/styles.css': '/* chart.js */\n',
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'styles.css holds "chart.js" (a library of the stories only, R14: it must not reach dist)',
+      ...LEAKS.Tree.reports,
+      'the bundle of an import of only createBrandTokens contains "createBrandTokens:contrast" outside comments (its minified code)',
+      ...WITHOUT.WaveProvider.reports,
+    ]);
+  }, 60_000);
+
+  it('verifyDist gates the 0.17 budgets: passes on a correct dist, reports an import over its budget', async () => {
+    const good = await verifyDist(fixture().dist, noPending);
+    expect(good.errors).toEqual([]);
+    // 120,000 characters of random base64 (see the DataGrid budget): over every budget.
+    const table = randomBytes(90_000).toString('base64');
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': goodFiles()['dist/components/button/Button.mjs'].replace(
+        'function ButtonRoot(props) { return cn(',
+        `const TABLE = ${JSON.stringify(table)};\nfunction ButtonRoot(props) { return cn(TABLE, `,
+      ),
+      ...changed('lib/brand', (spec) => ({
+        ...spec,
+        body: `const TABLE = ${JSON.stringify(table)};\n${spec.body.replace("'#7f7f7f'", 'TABLE')}`,
+      })),
+    });
+    const result = await verifyDist(dist, noPending);
+    // The 0.17 records follow those of RECORDED_IMPORTS (against 0.15.0, without these budgets).
+    const records = result.recorded.slice(RECORDED_IMPORTS.length);
+    const brand = records.find(({ names }) => names.join() === 'createBrandTokens');
+    const button = records.find(({ names }) => names.join() === 'Button');
+    expect(brand.baseline).toBeNull();
+    expect(button.baseline.version).toBe('0.16.0');
+    expect(result.errors).toEqual([
+      `createBrandTokens: ${brand.minified} bytes minified, over the budget of 4495`,
+      `createBrandTokens: ${brand.gzip} bytes gzip, over the budget of 3072`,
+      `Button: ${button.minified} bytes minified, over the budget of 11259`,
+      `Button: ${button.gzip} bytes gzip, over the budget of 3887`,
+    ]);
+  }, 60_000);
+
+  it('main prints the 0.17 imports against 0.16.0, and the new ones with their budgets', async () => {
+    const lines = [];
+    const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
+    expect(await main(['--dist', fixture().dist, '--no-pending'], io)).toBe(0);
+    const output = lines.join('\n');
+    expect(output).toMatch(
+      /verify-dist: createBrandTokens-only import: \d+ B minified \(budget 4495\), \d+ B gzip \(budget 3072\)\n/,
+    );
+    expect(output).toMatch(
+      /verify-dist: waveTokens-only import: \d+ B minified \(budget 3839\), \d+ B gzip \(budget 3072\)\n/,
+    );
+    for (const [label, minified, gzip, maxMinified, maxGzip] of [
+      ['Button', 11195, 3855, 11259, 3887],
+      ['MessageBar', 26831, 9312, 26895, 9344],
+      ['Tree', 47248, 16196, 47376, 16260],
+      ['Dialog', 70721, 23723, 71745, 24132],
+      ['WaveProvider \\+ Dialog', 71884, 24127, 73420, 24843],
+    ]) {
+      expect(output).toMatch(
+        new RegExp(
+          `verify-dist: ${label}-only import: \\d+ B minified \\(budget ${maxMinified}\\), \\d+ B gzip \\(budget ${maxGzip}\\) \\(0\\.16\\.0: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
+        ),
+      );
+    }
+  }, 60_000);
+
+  it('the real exports carry the 0.17 names', async () => {
+    const mod = await import('../../src/index.ts');
+    for (const name of ['getTokenStyle', 'createBrandTokens']) {
+      expect(mod[name], name).toBeTypeOf('function');
+    }
+    expect(mod.waveTokens.primary).toBe('var(--wave-primary)');
+    expect(mod.waveTokens[mod.chartPalette[0]]).toBe('var(--wave-palette-blue)');
+    expect(mod.getTokenStyle({ brand80: '#c43e00' })).toEqual({ '--wave-brand-80': '#c43e00' });
+  }, 60_000);
+
+  it('lists every module-only export of the 0.17 modules, read with the compiler against the entry', () => {
+    const sources = ['src/lib/tokens.ts', 'src/lib/waveTokens.ts', 'src/lib/brand.ts'].map((path) =>
+      join(repoRoot, path),
+    );
+    const entry = join(repoRoot, 'src/index.ts');
+    const config = ts.readConfigFile(join(repoRoot, 'tsconfig.json'), ts.sys.readFile);
+    const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, repoRoot);
+    const program = ts.createProgram({
+      rootNames: [entry, ...sources],
+      options: { ...parsed.options, noEmit: true },
+    });
+    const checker = program.getTypeChecker();
+    const exportsOf = (file) => {
+      const source = program.getSourceFile(file);
+      expect(source, file).toBeDefined();
+      return checker.getExportsOfModule(checker.getSymbolAtLocation(source)).map((s) => s.name);
+    };
+    const entryNames = new Set(exportsOf(entry));
+    const moduleOnly = sources.flatMap((file) =>
+      exportsOf(file).filter((name) => !entryNames.has(name)),
+    );
+    expect(moduleOnly.filter((name) => !MODULE_ONLY_NAMES.includes(name))).toEqual([]);
+    expect([...moduleOnly].sort()).toEqual([
+      'BRAND_CONTRAST_PAIRS',
+      'DEFAULT_BRAND_RAMP',
+      'ROUNDS_DARKER',
+      'TokenVariable',
+      'WAVE_TOKEN_NAMES',
+      'checkBrandRamp',
+      'collectTokenStyle',
+      'mergeTokenOverrides',
+      'tokenVariable',
+    ]);
+    for (const name of ['getTokenStyle', 'waveTokens', 'chartPalette', 'createBrandTokens']) {
+      expect(MODULE_ONLY_NAMES, name).not.toContain(name);
+    }
+  }, 60_000);
+
+  it('the roll-up declares the module-only types it needs without exporting them', async () => {
+    // The checker reads `declare type TokenVariable` and `declare const WAVE_TOKEN_NAMES`, which
+    // the exported `waveTokens` and `WaveTokenName` refer to, as declared but not exported.
+    const dts =
+      `${DTS}declare type TokenVariable<Name extends string> = \`--wave-\${Name}\`;\n` +
+      "declare const WAVE_TOKEN_NAMES: readonly ['primary'];\n" +
+      'export declare type WaveTokenName = (typeof WAVE_TOKEN_NAMES)[number];\n';
+    expect(checkModuleOnlyNames({}, dts)).toEqual([]);
+    expect(checkModuleOnlyNames({}, `${dts}export { TokenVariable }\n`)).toEqual([
+      'index.d.ts exports TokenVariable, which is module-only (keep it out of the barrels)',
+    ]);
+  });
 });
 
 describe('verifyDist and main', () => {

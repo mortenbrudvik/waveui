@@ -27,6 +27,10 @@
  *     `dist/lib/color.*` and `dist/lib/toaster.*` must exist and work on the server (the color
  *     helpers convert; a handle's dispatch returns an id and adds no global), and `dist/index.*`
  *     must export `hsvToHex`, `hexToHsv` and `createToaster` from them, not from a client module;
+ *     so must the token modules of 0.17 (`dist/lib/tokens.*`, `dist/lib/waveTokens.*`,
+ *     `dist/lib/brand.*`: `getTokenStyle` writes the custom properties, `waveTokens` reads them,
+ *     `createBrandTokens` gives the default ramp for the default seed), and `dist/index.*` must
+ *     export `getTokenStyle`, `createBrandTokens`, `waveTokens` and `chartPalette` from them;
  *   - class names (P3-00): every export of `dist/lib/classNames.*` (the stable class-name
  *     registry) is exported by `dist/index.*` with the same value, in both formats
  *     ({@link checkClassNameExports}); under the react-server condition `dist/index.*` exports
@@ -65,10 +69,10 @@
  *     ({@link EXCLUSION_PROBES_0_15}, D21);
  *   - 0.11: the exclusion probes of {@link EXCLUSION_PROBES_0_11} and the inclusion probes of
  *     {@link INCLUSION_PROBES_0_11} (tags, TagPicker, Dialog and Drawer, Nav, Hamburger and
- *     NavDrawer); no name of {@link MODULE_ONLY_NAMES} (the motion internals of 0.15 and the
- *     data-scale seams of 0.16 among them) is exported from `dist/index.mjs` or `dist/index.d.ts`;
- *     the roll-ups export each of {@link VALUE_AND_TYPE_DECLARATIONS} both as a type and as a
- *     value (`TagPickerOption`);
+ *     NavDrawer); no name of {@link MODULE_ONLY_NAMES} (the motion internals of 0.15, the
+ *     data-scale seams of 0.16 and the token seams of 0.17 among them) is exported from
+ *     `dist/index.mjs` or `dist/index.d.ts`; the roll-ups export each of
+ *     {@link VALUE_AND_TYPE_DECLARATIONS} both as a type and as a value (`TagPickerOption`);
  *   - 0.16 (spec §11): an import of only `useVirtualWindow` or only `useSelection` holds no
  *     component ({@link HOOK_PROBES_0_16}); an import of only `DataGrid` holds no FlatTree code,
  *     one of only `FlatTree` no DataGrid code, one of only `Button` or only `MessageBar` none of
@@ -78,6 +82,22 @@
  *     nothing but `react`, and that of `DataGrid` within {@link DATA_GRID_BUDGET}. The CLI prints
  *     the measured sizes, and those of the imports of {@link RECORDED_IMPORTS} (DataGrid-only,
  *     Tree-only, Button-only, MessageBar-only) against 0.15.0;
+ *   - 0.17 (spec §10): an import of only `createBrandTokens` holds the brand generator and no
+ *     names tuple, component or React module, and none of the development contrast check of a
+ *     full ramp; one of only `waveTokens` the tuple and the token core, and no brand generator,
+ *     component or React module ({@link HOOK_PROBES_0_17}); one of only `Dialog` or only `Tree`
+ *     holds neither the tuple nor the brand generator (for the Dialog also no fragment of their
+ *     code: no token name, no brand warning key), one of only `Button` or only `MessageBar` none of
+ *     {@link TOKEN_MODULES} and not the provider ({@link EXCLUSION_PROBES_0_17}, with the positive
+ *     controls of {@link INCLUSION_PROBES_0_17}); the imports of {@link RECORDED_IMPORTS_0_17} stay
+ *     within their budgets (createBrandTokens-only and waveTokens-only 3 KiB gzip; Button-only,
+ *     MessageBar-only, Tree-only, Dialog-only and WaveProvider + Dialog within their allowances over
+ *     0.16.0), which the CLI prints with the 0.16.0 sizes; no JavaScript, CSS or declaration file
+ *     of dist names a chart library of the stories ({@link DEV_ONLY_LIBRARIES}, R14).
+ *
+ * Every probe and size bundles as a consumer's production build: `process.env.NODE_ENV` is defined
+ * as `"production"` whatever this process has (Vitest runs with `test`), so development-only code
+ * is neither seen nor measured.
  *
  * Usage: node scripts/verify-dist.mjs [--dist <dir>] [--no-pending | --final]
  *   --dist        the dist directory (default: dist); its parent holds the package.json
@@ -179,15 +199,22 @@ const TOASTER_INCLUDE_KEEP = 'Toaster';
 
 /**
  * The server-safe modules of 0.8 that a Server Component reaches through the entry (spec D18,
- * D33): each must exist, and pass its check in {@link serverProbeSource}.
+ * D33), with the token modules of 0.17 (spec §10, R16): each must exist, and pass its check in
+ * {@link serverProbeSource}.
  */
 const SERVER_SAFE_MODULES = [
+  'lib/brand.mjs',
+  'lib/brand.cjs',
   'lib/color.mjs',
   'lib/color.cjs',
   'lib/date.mjs',
   'lib/date.cjs',
   'lib/toaster.mjs',
   'lib/toaster.cjs',
+  'lib/tokens.mjs',
+  'lib/tokens.cjs',
+  'lib/waveTokens.mjs',
+  'lib/waveTokens.cjs',
 ];
 
 /**
@@ -582,6 +609,207 @@ export const RECORDED_IMPORTS = [
   { names: ['MessageBar'], baseline: { version: '0.15.0', minified: 26831, gzip: 9312 } },
 ];
 
+/** The token core of 0.17 (`src/lib/tokens.ts`): the provider's conversion and merge. */
+const TOKEN_CORE_MODULE = 'lib/tokens.mjs';
+/** The names tuple with `waveTokens` and `chartPalette` (`src/lib/waveTokens.ts`). */
+const WAVE_TOKENS_MODULE = 'lib/waveTokens.mjs';
+/** The brand generator (`src/lib/brand.ts`). */
+const BRAND_MODULE = 'lib/brand.mjs';
+/** The provider, whose context every Portal and `useDirection` reads. */
+const PROVIDER_MODULE = 'components/provider/WaveProvider.mjs';
+
+/** The modules of the 0.17 token features (spec §10), which a Button or MessageBar never holds. */
+export const TOKEN_MODULES = [BRAND_MODULE, TOKEN_CORE_MODULE, WAVE_TOKENS_MODULE];
+
+/**
+ * A token name of the names tuple (`WAVE_TOKEN_NAMES`, spec §10), found as a fragment of minified
+ * code: the build writes the tuple as one string that it splits at run time, so no name is a
+ * string literal of its own. No other token name contains this one.
+ */
+const TOKEN_NAMES_MARKER = 'paletteSteelTintForeground';
+
+/** A fragment of the brand generator's code: the prefix of its warning keys. */
+const BRAND_MARKER = 'createBrandTokens:';
+
+/**
+ * The key prefix of the development contrast check of a full ramp (R8): the check and its table
+ * read `process.env.NODE_ENV`, so a production bundle drops them.
+ */
+const BRAND_CHECK_MARKER = 'createBrandTokens:contrast';
+
+/** The React packages, which no server-safe helper imports. */
+const REACT_PACKAGES = ['react', 'react-dom', 'react/jsx-runtime'];
+
+/**
+ * The helper probes of 0.17 (spec §10): an import of only `createBrandTokens` holds the brand
+ * generator and neither the names tuple nor any component or React module, and, as every probe
+ * bundles for production, none of the development contrast check of a full ramp (spec §6.3, R8:
+ * {@link BRAND_CHECK_MARKER}); an import of only `waveTokens` holds the tuple and the token core,
+ * and neither the brand generator nor any component or React module.
+ */
+export const HOOK_PROBES_0_17 = [
+  {
+    keep: 'createBrandTokens',
+    modules: [BRAND_MODULE],
+    dropModules: [WAVE_TOKENS_MODULE],
+    dropPrefixes: ['components/'],
+    dropExternals: REACT_PACKAGES,
+    dropSubstrings: [BRAND_CHECK_MARKER],
+  },
+  {
+    keep: 'waveTokens',
+    modules: [WAVE_TOKENS_MODULE, TOKEN_CORE_MODULE],
+    dropModules: [BRAND_MODULE],
+    dropPrefixes: ['components/'],
+    dropExternals: REACT_PACKAGES,
+  },
+];
+
+/**
+ * The exclusion probes of 0.17 (spec §10, R6): an import of only `Dialog`, which holds a Portal and
+ * so the provider's context and token style, holds neither the names tuple nor the brand generator,
+ * no module of theirs and no fragment of their code ({@link TOKEN_NAMES_MARKER}, {@link
+ * BRAND_MARKER}); one of only `Tree`, which reads the provider's context for its direction, neither
+ * module either; one of only `Button` or only `MessageBar` none of {@link TOKEN_MODULES} and not
+ * the provider. `drop: null` drops no component by name: the Dialog and the Tree hold the
+ * provider's module for its context, though not the provider component.
+ */
+export const EXCLUSION_PROBES_0_17 = [
+  {
+    keep: 'Dialog',
+    drop: null,
+    dropModules: [BRAND_MODULE, WAVE_TOKENS_MODULE],
+    dropSubstrings: [TOKEN_NAMES_MARKER, BRAND_MARKER],
+  },
+  { keep: 'Tree', drop: null, dropModules: [BRAND_MODULE, WAVE_TOKENS_MODULE] },
+  { keep: 'Button', drop: 'WaveProvider', dropModules: TOKEN_MODULES },
+  { keep: 'MessageBar', drop: 'WaveProvider', dropModules: TOKEN_MODULES },
+];
+
+/**
+ * The inclusion probes of 0.17: the positive controls of {@link EXCLUSION_PROBES_0_17}. The code of
+ * an import of only `waveTokens` holds the tuple's marker and that of one of only
+ * `createBrandTokens` the brand marker, both in a production build, so the fragments the Dialog
+ * probe looks for are found where they are; an import of only `WaveProvider` holds the token core;
+ * one of only `Tree` the provider's module (`useDirection` reads its context, which is why the
+ * Tree's allowance in {@link RECORDED_IMPORTS_0_17} is larger than `cn`'s).
+ */
+export const INCLUSION_PROBES_0_17 = [
+  { keep: 'waveTokens', modules: [WAVE_TOKENS_MODULE], substrings: [TOKEN_NAMES_MARKER] },
+  { keep: 'createBrandTokens', modules: [BRAND_MODULE], substrings: [BRAND_MARKER] },
+  { keep: 'WaveProvider', modules: [PROVIDER_MODULE, TOKEN_CORE_MODULE] },
+  { keep: 'Tree', modules: [PROVIDER_MODULE] },
+];
+
+/**
+ * The budget of an import of only `createBrandTokens` (spec §10): 3 KiB gzip; minified, the size
+ * first measured for 0.17.0 (3,596 bytes, 1,932 gzip) plus 25 %, as {@link VIRTUAL_BUDGET} has it.
+ * The closure imports nothing.
+ */
+export const BRAND_TOKENS_BUDGET = {
+  names: ['createBrandTokens'],
+  maxMinifiedBytes: 4495,
+  maxGzipBytes: 3072,
+  allowedExternals: [],
+};
+
+/**
+ * The budget of an import of only `waveTokens` (spec §10): 3 KiB gzip; minified, the size first
+ * measured for 0.17.0 (3,071 bytes, 969 gzip) plus 25 %. The closure imports nothing.
+ */
+export const WAVE_TOKENS_BUDGET = {
+  names: ['waveTokens'],
+  maxMinifiedBytes: 3839,
+  maxGzipBytes: 3072,
+  allowedExternals: [],
+};
+
+/** The externals of a component's closure: `cn`'s two dependencies and React. */
+const COMPONENT_EXTERNALS = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
+/** The externals of a closure with a Portal, which also imports `react-dom`. */
+const PORTAL_EXTERNALS = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
+
+/**
+ * The 0.17 budgets (spec §10, with the build's rulings, which correct it for Tree and add the
+ * provider with a Dialog), measured as {@link measureImport} measures and printed against the size
+ * in the published 0.16.0 package where the import had one (`baseline: null` for the new ones),
+ * both measured with this release's build tools, as {@link RECORDED_IMPORTS} measures 0.15.0. Each
+ * budget is the 0.16.0 size plus its allowance, in bytes minified and gzip:
+ *   - `Button` and `MessageBar`: +64 and +32, for `cn`, which recognises the two new font families
+ *     (R13); otherwise byte for byte 0.16.0's;
+ *   - `Tree`: +128 and +64, `cn`'s allowance and the provider's context, which Tree reads for its
+ *     direction (`useDirection`) and which has three members more (R17);
+ *   - `Dialog` without the provider component: +1 KiB and +0.4 KiB (1,024 and 409), the Portal's
+ *     token style and the context;
+ *   - `WaveProvider` with `Dialog`: +1.5 KiB and +0.7 KiB (1,536 and 716), the provider's token
+ *     handling (`lib/tokens`) too;
+ *   - `createBrandTokens` and `waveTokens`: new, 3 KiB gzip ({@link BRAND_TOKENS_BUDGET}, {@link
+ *     WAVE_TOKENS_BUDGET}).
+ * A KiB fraction is rounded down, so no budget is above the spec's figure, and each closure
+ * imports only the externals it has.
+ */
+export const RECORDED_IMPORTS_0_17 = [
+  { names: ['createBrandTokens'], baseline: null, budget: BRAND_TOKENS_BUDGET },
+  { names: ['waveTokens'], baseline: null, budget: WAVE_TOKENS_BUDGET },
+  {
+    names: ['Button'],
+    baseline: { version: '0.16.0', minified: 11195, gzip: 3855 },
+    budget: {
+      names: ['Button'],
+      maxMinifiedBytes: 11259,
+      maxGzipBytes: 3887,
+      allowedExternals: COMPONENT_EXTERNALS,
+    },
+  },
+  {
+    names: ['MessageBar'],
+    baseline: { version: '0.16.0', minified: 26831, gzip: 9312 },
+    budget: {
+      names: ['MessageBar'],
+      maxMinifiedBytes: 26895,
+      maxGzipBytes: 9344,
+      allowedExternals: COMPONENT_EXTERNALS,
+    },
+  },
+  {
+    names: ['Tree'],
+    baseline: { version: '0.16.0', minified: 47248, gzip: 16196 },
+    budget: {
+      names: ['Tree'],
+      maxMinifiedBytes: 47376,
+      maxGzipBytes: 16260,
+      allowedExternals: COMPONENT_EXTERNALS,
+    },
+  },
+  {
+    names: ['Dialog'],
+    baseline: { version: '0.16.0', minified: 70721, gzip: 23723 },
+    budget: {
+      names: ['Dialog'],
+      maxMinifiedBytes: 71745,
+      maxGzipBytes: 24132,
+      allowedExternals: PORTAL_EXTERNALS,
+    },
+  },
+  {
+    names: ['WaveProvider', 'Dialog'],
+    baseline: { version: '0.16.0', minified: 71884, gzip: 24127 },
+    budget: {
+      names: ['WaveProvider', 'Dialog'],
+      maxMinifiedBytes: 73420,
+      maxGzipBytes: 24843,
+      allowedExternals: PORTAL_EXTERNALS,
+    },
+  },
+];
+
+/**
+ * The libraries of the chart stories (R14, 0.17): `recharts` and `chart.js`, devDependencies that
+ * only `stories/Charts.stories.tsx` imports, and Chart.js's colour dependency (`@kurkle/color`).
+ * No file of dist names them ({@link checkDevOnlyLibraries}).
+ */
+export const DEV_ONLY_LIBRARIES = ['recharts', 'chart.js', 'kurkle'];
+
 /**
  * The inclusion probes of 0.11 (spec §6.2): an import of only `keep` holds each of `modules`, so
  * the exclusion probes above cannot pass because a module is missing. A TagPicker is built on the
@@ -625,14 +853,21 @@ export const INCLUSION_PROBES_0_11 = [
  * the table plugin seam and the sort of the table hooks, the DataGrid's store, contexts, header,
  * window and sizing modules, the data mode of the pickers, FlatTree's context, and the predicates
  * and contexts the hooks share with them (`ownsArrowKeys`, `returnFocusToGridCell`,
- * `ListboxOptionPositionContext`, …). `verify-dist.test.mjs` reads both groups from the sources
- * (the 0.16 one with the TypeScript compiler, against the entry), so a new one cannot be missed.
- * Sorted.
+ * `ListboxOptionPositionContext`, …); since 0.17 (spec §10) the seams of the token modules: the
+ * token core's conversion, collection and merge (`tokenVariable`, `collectTokenStyle`,
+ * `mergeTokenOverrides`) and its type-level twin `TokenVariable`, the names tuple
+ * `WAVE_TOKEN_NAMES`, and the brand generator's default ramp, rounding sides, contrast table and
+ * check. The roll-up declares `TokenVariable` and `WAVE_TOKEN_NAMES` without exporting them (the
+ * exported `waveTokens` and `WaveTokenName` refer to them), which the check accepts.
+ * `verify-dist.test.mjs` reads the groups from the sources (those of 0.16 and 0.17 with the
+ * TypeScript compiler, against the entry), so a new one cannot be missed. Sorted.
  */
 export const MODULE_ONLY_NAMES = [
   'AvatarSizeContext',
   'AvatarSizeContextValue',
+  'BRAND_CONTRAST_PAIRS',
   'CreateOptionKnown',
+  'DEFAULT_BRAND_RAMP',
   'DEFAULT_COLUMN_WIDTH',
   'DEFAULT_MIN_COLUMN_WIDTH',
   'DEFAULT_SELECTION_HEADER_LABEL',
@@ -718,6 +953,7 @@ export const MODULE_ONLY_NAMES = [
   'NavValueKind',
   'OverflowStore',
   'PresenceGroupEntry',
+  'ROUNDS_DARKER',
   'ResolvedTagPickerLabels',
   'SELECTION_CELL_CLASSES',
   'SELECTION_COLUMN_WIDTH',
@@ -760,6 +996,7 @@ export const MODULE_ONLY_NAMES = [
   'TeachingPopoverSurfaceContextValue',
   'TeachingPopoverTarget',
   'TeachingSurface',
+  'TokenVariable',
   'TreeNode',
   'UseCollapsePresenceOptions',
   'UseCollapsePresenceResult',
@@ -772,14 +1009,17 @@ export const MODULE_ONLY_NAMES = [
   'UseTagOverflowOptions',
   'UseToolbarNavigationOptions',
   'VirtualLayoutInput',
+  'WAVE_TOKEN_NAMES',
   'buildFlatTreeIndex',
   'carouselFadeMotion',
   'carouselSlideMotion',
   'cellBase',
+  'checkBrandRamp',
   'clampColumnWidth',
   'clearIds',
   'collapseMotion',
   'collapseStructure',
+  'collectTokenStyle',
   'computeCheckStates',
   'computeVirtualLayout',
   'containsValue',
@@ -815,6 +1055,7 @@ export const MODULE_ONLY_NAMES = [
   'isTextEntryElement',
   'markNavPart',
   'markTablePart',
+  'mergeTokenOverrides',
   'messageBarGroupEnterMotion',
   'messageBarGroupExitMotion',
   'messageBarGroupItemStructure',
@@ -842,6 +1083,7 @@ export const MODULE_ONLY_NAMES = [
   'toastStructure',
   'toggleCheck',
   'toggleId',
+  'tokenVariable',
   'tooltipMotion',
   'totalWidth',
   'useBackdropAppearance',
@@ -1350,6 +1592,29 @@ export function checkImports(dist, pkg) {
 }
 
 /**
+ * No JavaScript, CSS or declaration file of `dist` holds the name of a library of `names` (default
+ * {@link DEV_ONLY_LIBRARIES}; R14, 0.17): a chart library of the stories reaches the package
+ * neither as an import, nor as bundled code (whose region comments name its `node_modules` path),
+ * nor as a type. The names are matched as packages write them (case-sensitive), so prose in a
+ * JSDoc ("Recharts", "Chart.js") does not count; source maps, which quote the sources, are not
+ * read.
+ */
+export function checkDevOnlyLibraries(dist, names = DEV_ONLY_LIBRARIES) {
+  const errors = [];
+  for (const path of listFiles(dist).filter((file) => /\.([cm]?js|css|d\.[cm]?ts)$/.test(file))) {
+    const text = readFileSync(join(dist, path), 'utf8');
+    for (const name of names) {
+      if (text.includes(name)) {
+        errors.push(
+          `${path} holds "${name}" (a library of the stories only, R14: it must not reach dist)`,
+        );
+      }
+    }
+  }
+  return errors;
+}
+
+/**
  * `path` without the Windows namespace prefix (`\\?\C:\…`, `\\?\UNC\server\…`) that
  * `mkdirSync(…, { recursive: true })` returns on Windows, so it compares with plain paths.
  */
@@ -1589,11 +1854,56 @@ const check = (path, m) => {
     }
     if (day.getDate() !== 31) throw new Error('addDays changed its argument');
   }
+  if (/^lib\\/tokens\\.[cm]?js$/.test(path)) {
+    const style =
+      typeof m.getTokenStyle === 'function'
+        ? m.getTokenStyle({ brand80: '#c43e00', zOverlay: 2000 })
+        : undefined;
+    if (JSON.stringify(style) !== '{"--wave-brand-80":"#c43e00","--wave-z-overlay":"2000"}') {
+      throw new Error("getTokenStyle({ brand80: '#c43e00', zOverlay: 2000 }) returned " + JSON.stringify(style));
+    }
+    if (m.getTokenStyle(null) !== undefined) {
+      throw new Error('getTokenStyle(null) returned ' + JSON.stringify(m.getTokenStyle(null)) + ', not undefined');
+    }
+  }
+  if (/^lib\\/waveTokens\\.[cm]?js$/.test(path)) {
+    const tokens = m.waveTokens;
+    if (typeof tokens !== 'object' || tokens === null || !Array.isArray(m.chartPalette)) {
+      throw new Error('waveTokens and chartPalette are not both exported');
+    }
+    const first = tokens[m.chartPalette[0]];
+    if (first !== 'var(--wave-palette-blue)' || tokens.brand80 !== 'var(--wave-brand-80)') {
+      throw new Error(
+        'waveTokens[chartPalette[0]] is ' + JSON.stringify(first) + ' and waveTokens.brand80 ' +
+          JSON.stringify(tokens.brand80) + ', not "var(--wave-palette-blue)" and "var(--wave-brand-80)"',
+      );
+    }
+  }
+  if (/^lib\\/brand\\.[cm]?js$/.test(path)) {
+    if (typeof m.createBrandTokens !== 'function') throw new Error('createBrandTokens is not exported');
+    // The default seed gives the default ramp: its 16 stops, stop 80 the seed itself.
+    const brand = m.createBrandTokens('#0f6cbd');
+    if (!brand || Object.keys(brand).length !== 16 || brand.brand80 !== '#0f6cbd') {
+      throw new Error(
+        "createBrandTokens('#0f6cbd') returned " +
+          (brand && Object.keys(brand).length === 16
+            ? 'a brand80 of ' + JSON.stringify(brand.brand80) + ', not "#0f6cbd"'
+            : JSON.stringify(brand)),
+      );
+    }
+  }
   if (/^index\\.[cm]?js$/.test(path)) {
-    for (const name of ['hsvToHex', 'hexToHsv', 'createToaster', 'addDays']) {
+    for (const name of ['hsvToHex', 'hexToHsv', 'createToaster', 'addDays', 'getTokenStyle', 'createBrandTokens']) {
       if (typeof m[name] !== 'function') throw new Error(name + ' is not exported');
       if (m[name].$$typeof === Symbol.for('react.client.reference')) {
         throw new Error(name + ' is a client reference (re-exported from a "use client" module)');
+      }
+    }
+    for (const name of ['waveTokens', 'chartPalette']) {
+      if (typeof m[name] !== 'object' || m[name] === null) {
+        throw new Error(
+          name + ' is not a plain object (missing, or a client reference re-exported from a "use client" module)',
+        );
       }
     }
     const next = m.addDays(new Date(2024, 0, 31), 1);
@@ -1937,8 +2247,12 @@ function isBareImport(id) {
 
 /**
  * Bundles an entry that imports `names` from `dist/index.mjs` with Vite's `build()` API (no
- * write, bare imports external) and returns the output chunks. `minify` builds as a consumer's
- * production bundle does.
+ * write, bare imports external) and returns the output chunks. Every bundle is a production build,
+ * whatever `NODE_ENV` this process has: `process.env.NODE_ENV` is defined as `"production"`, as a
+ * consumer's production build defines it, so development-only code (the warnings of `lib/dev`, the
+ * contrast check of a full brand ramp) is dropped from what the probes see and measure. Vite would
+ * otherwise define it from the environment (Vitest runs with `test`). `minify` minifies, as a
+ * consumer's production bundle does.
  */
 async function bundleImport(distRoot, names, { minify = false } = {}) {
   const { build } = await import('vite');
@@ -1956,6 +2270,7 @@ async function bundleImport(distRoot, names, { minify = false } = {}) {
       root: probeDir,
       logLevel: 'silent',
       publicDir: false,
+      define: { 'process.env.NODE_ENV': JSON.stringify('production') },
       build: {
         write: false,
         minify,
@@ -2020,7 +2335,9 @@ async function minifiedCode(distRoot, keep) {
  * checked on a second, minified bundle of the same entry, which drops comments and keeps string
  * contents. Since the motion resolver's own literal holds `[presence=`, a bundle that reaches
  * `lib/motion` always contains it: the positive control of the recipes is
- * {@link probeIncludes}'s `strings` (the recipe literals), never the fragment alone.
+ * {@link probeIncludes}'s `strings` (the recipe literals), never the fragment alone. `drop: null`
+ * drops no component by name, only `dropModules` and the strings (the 0.17 token probes: a Dialog
+ * holds the provider's module for its context, but none of the token modules it does not use).
  *
  * The bundler reports module ids as real paths, so the probe imports and matches them through
  * the real path of `dist`: a dist reached through a symlink or a junction (a linked checkout or
@@ -2066,7 +2383,7 @@ export async function probeTreeShaking(
     }
   }
   const dropped = new Set([
-    ...components.filter((path) => path.endsWith(`/${drop}.mjs`)).map(fold),
+    ...(drop === null ? [] : components.filter((path) => path.endsWith(`/${drop}.mjs`)).map(fold)),
     ...listedModules,
   ]);
   if (keepModules.length === 0) {
@@ -2088,14 +2405,14 @@ export async function probeTreeShaking(
   for (const path of [...included].sort()) {
     if (dropped.has(fold(path))) {
       errors.push(
-        `${path} is in the bundle of an import of only ${keep} (${drop} must be dropped)`,
+        `${path} is in the bundle of an import of only ${keep} (${drop === null ? 'it' : drop} must be dropped)`,
       );
     } else if (!allowed.has(fold(path))) {
       errors.push(`${path} is in the bundle of an import of only ${keep} (not one of its imports)`);
     }
   }
   const displayName = (name) => new RegExp(`\\.displayName\\s*=\\s*(["'\`])${name}\\1`);
-  if (displayName(drop).test(code)) {
+  if (drop !== null && displayName(drop).test(code)) {
     errors.push(
       `${drop} code (displayName "${drop}") is in the bundle of an import of only ${keep}`,
     );
@@ -2320,12 +2637,21 @@ export async function probeIncludes(dist, { keep, modules, strings = [], substri
  * `modules` missing from the bundle, each of `dropModules` in it (a listed module that does not
  * exist in `dist` is an error: the probe would pass vacuously), each other module of the bundle
  * under one of the `dropPrefixes` (dist directories such as `components/`; a prefix that no module
- * of `dist` is under is an error for the same reason) and each of `dropExternals` that the bundle
- * imports.
+ * of `dist` is under is an error for the same reason), each of `dropExternals` that the bundle
+ * imports, and each of `dropSubstrings` that the code of its minified bundle holds (fragments of
+ * code that a production build drops, such as a development check's warning keys; a fragment that
+ * no JavaScript module of `dist` holds is an error, for the same reason).
  */
 export async function probeHook(
   dist,
-  { keep, modules = [], dropModules = [], dropPrefixes = [], dropExternals = [] },
+  {
+    keep,
+    modules = [],
+    dropModules = [],
+    dropPrefixes = [],
+    dropExternals = [],
+    dropSubstrings = [],
+  },
 ) {
   const distRoot = realpathSync(resolve(dist));
   const files = listFiles(distRoot);
@@ -2371,6 +2697,24 @@ export async function probeHook(
   );
   for (const id of dropExternals) {
     if (imported.has(id)) errors.push(`the bundle of an import of only ${keep} imports ${id}`);
+  }
+  if (dropSubstrings.length > 0) {
+    const distCode = files
+      .filter((path) => JS_FILE.test(path))
+      .map((path) => readFileSync(join(distRoot, path), 'utf8'))
+      .join('\n');
+    const minified = await minifiedCode(distRoot, keep);
+    for (const text of dropSubstrings) {
+      if (!distCode.includes(text)) {
+        errors.push(
+          `"${text}", listed for the hook ${keep}, occurs in no module of dist (the probe would pass vacuously)`,
+        );
+      } else if (minified.includes(text)) {
+        errors.push(
+          `the bundle of an import of only ${keep} contains "${text}" outside comments (its minified code)`,
+        );
+      }
+    }
   }
   return errors;
 }
@@ -2429,8 +2773,9 @@ export async function probeSizeBudget(
  * the flat names still pending and the listed components that are no compound yet (see
  * {@link PENDING_FLAT_EXPORTS}), the measured sizes of the presence core (`budget`) and of the
  * window (`virtualBudget`; minified and gzip bytes, `null` when the probe failed), and the
- * measured sizes of {@link RECORDED_IMPORTS} (`recorded`: `{ names, minified, gzip, baseline }`
- * each, and its `budget` where it has one, whose errors join the others); `final` closes the
+ * measured sizes of {@link RECORDED_IMPORTS} and then of {@link RECORDED_IMPORTS_0_17}
+ * (`recorded`: `{ names, minified, gzip, baseline }` each, `baseline` `null` for an import new in
+ * 0.17, and its `budget` where it has one, whose errors join the others); `final` closes the
  * pending bridge.
  */
 export async function verifyDist(
@@ -2452,6 +2797,7 @@ export async function verifyDist(
     ...checkDevEnvironment(distRoot),
     ...checkDirectives(distRoot),
     ...checkImports(distRoot, pkg),
+    ...checkDevOnlyLibraries(distRoot),
   ];
   try {
     errors.push(...(await checkServerImport(distRoot)));
@@ -2531,6 +2877,11 @@ export async function verifyDist(
     for (const probe of EXCLUSION_PROBES_0_16) {
       errors.push(...(await probeTreeShaking(distRoot, probe)));
     }
+    // 0.17 (spec §10): a Dialog and a Tree hold neither the names tuple nor the brand generator,
+    // and a Button and a MessageBar no token module and not the provider.
+    for (const probe of EXCLUSION_PROBES_0_17) {
+      errors.push(...(await probeTreeShaking(distRoot, probe)));
+    }
   } catch (error) {
     errors.push(`tree-shaking probe failed: ${error.message}`);
   }
@@ -2563,6 +2914,13 @@ export async function verifyDist(
     errors.push(`0.16 hook probe failed: ${error.message}`);
   }
   try {
+    for (const probe of HOOK_PROBES_0_17) {
+      errors.push(...(await probeHook(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.17 helper probe failed: ${error.message}`);
+  }
+  try {
     for (const probe of INCLUSION_PROBES_0_11) {
       errors.push(...(await probeIncludes(distRoot, probe)));
     }
@@ -2575,6 +2933,13 @@ export async function verifyDist(
     }
   } catch (error) {
     errors.push(`0.16 include probe failed: ${error.message}`);
+  }
+  try {
+    for (const probe of INCLUSION_PROBES_0_17) {
+      errors.push(...(await probeIncludes(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.17 include probe failed: ${error.message}`);
   }
   try {
     errors.push(
@@ -2633,7 +2998,10 @@ export async function verifyDist(
   }
   const recorded = [];
   try {
-    for (const { names, baseline, budget: importBudget } of RECORDED_IMPORTS) {
+    for (const { names, baseline, budget: importBudget } of [
+      ...RECORDED_IMPORTS,
+      ...RECORDED_IMPORTS_0_17,
+    ]) {
       if (importBudget) {
         const {
           minified,
@@ -2701,12 +3069,15 @@ export async function main(argv = process.argv.slice(2), io = console) {
   }
   for (const { names, minified, gzip, baseline, budget: importBudget } of recorded ?? []) {
     const limit = (max) => (importBudget ? ` (budget ${max})` : '');
+    // An import new in 0.17 has no baseline to compare with.
+    const against = baseline
+      ? ` (${baseline.version}: ${baseline.minified} B, ${baseline.gzip} B; ` +
+        `${percentChange(minified, baseline.minified)}, ${percentChange(gzip, baseline.gzip)})`
+      : '';
     io.log(
       `verify-dist: ${names.join(' + ')}-only import: ` +
         `${minified} B minified${limit(importBudget?.maxMinifiedBytes)}, ` +
-        `${gzip} B gzip${limit(importBudget?.maxGzipBytes)} ` +
-        `(${baseline.version}: ${baseline.minified} B, ${baseline.gzip} B; ` +
-        `${percentChange(minified, baseline.minified)}, ${percentChange(gzip, baseline.gzip)})`,
+        `${gzip} B gzip${limit(importBudget?.maxGzipBytes)}${against}`,
     );
   }
   if (errors.length > 0) {

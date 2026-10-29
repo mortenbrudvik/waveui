@@ -135,6 +135,7 @@ import {
   TagPickerOption,
   TagPickerOptionGroup,
   TeachingPopover,
+  Text,
   Textarea,
   TimePicker,
   Toast,
@@ -149,9 +150,13 @@ import {
   Tooltip,
   Tree,
   TreeItem,
+  chartPalette,
   colorAreaClassNames,
+  createBrandTokens,
   createTableColumn,
   createToaster,
+  getTokenStyle,
+  textClassNames,
   useFlatTree,
   useListbox,
   useListboxPopup,
@@ -163,6 +168,8 @@ import {
   useToastController,
   useVirtualWindow,
   WaveProvider,
+  waveProviderClassNames,
+  waveTokens,
   Avatar,
   ColorPickerHexField,
   ColorPickerPreview,
@@ -201,6 +208,7 @@ import {
   type ListboxItem,
   type MenuProps,
   type VisibleFlatItem,
+  type WaveTokenOverrides,
 } from '../index';
 import { getOpenLayers } from '../lib/layers';
 import * as motionInternals from '../lib/motion';
@@ -220,6 +228,10 @@ import * as dataGridWindow from '../components/table/DataGrid.window';
 import * as dataGridSizing from '../components/table/DataGrid.sizing';
 import * as optionData from '../components/input/Option.data';
 import * as flatTreeContext from '../components/layout/FlatTree.context';
+// The 0.17 token modules: their public values reach the barrel, their seams do not.
+import * as tokensCore from '../lib/tokens';
+import * as waveTokensModule from '../lib/waveTokens';
+import * as brandModule from '../lib/brand';
 import {
   asClientReference,
   expectNoA11yViolations,
@@ -579,6 +591,36 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
         'FlatTreeContext',
       ]),
     );
+    expect(internal.filter((name) => name in barrel)).toEqual([]);
+  });
+
+  it('exports the 0.17 token helpers from their server-safe modules, and keeps the seams of those modules out', () => {
+    const helpers = ['getTokenStyle', 'createBrandTokens', 'waveTokens', 'chartPalette'];
+    for (const name of ['getTokenStyle', 'createBrandTokens']) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+    expect(Wave.getTokenStyle).toBe(tokensCore.getTokenStyle);
+    expect(Wave.createBrandTokens).toBe(brandModule.createBrandTokens);
+    expect(Wave.waveTokens).toBe(waveTokensModule.waveTokens);
+    expect(Wave.chartPalette).toBe(waveTokensModule.chartPalette);
+    expect(Object.isFrozen(Wave.waveTokens)).toBe(true);
+    expect(Object.isFrozen(Wave.chartPalette)).toBe(true);
+    // Every other value of the three modules is a seam (MODULE_ONLY_NAMES of verify-dist).
+    const internal = [
+      ...Object.keys(tokensCore),
+      ...Object.keys(waveTokensModule),
+      ...Object.keys(brandModule),
+    ].filter((name) => !helpers.includes(name));
+    expect(internal.sort()).toEqual([
+      'BRAND_CONTRAST_PAIRS',
+      'DEFAULT_BRAND_RAMP',
+      'ROUNDS_DARKER',
+      'WAVE_TOKEN_NAMES',
+      'checkBrandRamp',
+      'collectTokenStyle',
+      'mergeTokenOverrides',
+      'tokenVariable',
+    ]);
     expect(internal.filter((name) => name in barrel)).toEqual([]);
   });
 
@@ -10937,5 +10979,149 @@ describe('Phase 11 data at scale across components (0.16)', () => {
       defaultProps: { item: STATIC_ROWS[2], children: 'README.md' },
       wrapper: InFlatTree,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 12 (0.17): the theming API across components
+// ---------------------------------------------------------------------------
+
+/**
+ * Computed at module scope, as the module of a React Server Component computes them (spec §10,
+ * R16): the three helpers are server-safe, so no client boundary is involved.
+ */
+const ORANGE_BRAND = createBrandTokens('#c43e00');
+const ORANGE_TOKENS = {
+  ...ORANGE_BRAND,
+  fontFamily: 'Inter, sans-serif',
+} satisfies WaveTokenOverrides;
+const ORANGE_STYLE = getTokenStyle(ORANGE_TOKENS);
+const SERIES_COLORS = chartPalette.slice(0, 3).map((name) => waveTokens[name]);
+
+describe('Phase 12 theming across components (0.17)', () => {
+  /** The custom properties of an element's inline style, with their values. */
+  function customProperties(el: Element): Record<string, string> {
+    const { style } = el as HTMLElement;
+    return Object.fromEntries(
+      Array.from(style)
+        .filter((name) => name.startsWith('--'))
+        .map((name) => [name, style.getPropertyValue(name)]),
+    );
+  }
+
+  it('WaveProvider tokens reach a Dialog and a Menu opened in it; the Field controls keep their wiring and carry no style', async () => {
+    const user = userEvent.setup();
+    render(
+      <WaveProvider tokens={ORANGE_TOKENS}>
+        <Field label="Name" hint="As on your badge.">
+          <Input />
+        </Field>
+        <Dialog>
+          <Dialog.Trigger>
+            <Button>Edit profile</Button>
+          </Dialog.Trigger>
+          <Dialog.Content title="Profile">
+            <Field label="Display name" hint="Shown to your team.">
+              <Input />
+            </Field>
+            <Menu>
+              <Menu.Trigger>
+                <Button>More</Button>
+              </Menu.Trigger>
+              <Menu.Popover>
+                <Menu.Item>Reset</Menu.Item>
+              </Menu.Popover>
+            </Menu>
+          </Dialog.Content>
+        </Dialog>
+      </WaveProvider>,
+    );
+    const expected = { ...ORANGE_STYLE } as Record<string, string>;
+    expect(Object.keys(expected)).toContain('--wave-brand-80');
+    expect(expected['--wave-font-family']).toBe('Inter, sans-serif');
+
+    // In flow, the provider root carries the overrides; the control inherits them, unchanged.
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    expect(name).toHaveAccessibleDescription('As on your badge.');
+    expect(name).not.toHaveAttribute('style');
+    const root = name.closest(`.${waveProviderClassNames.root}`);
+    expect(root).not.toBeNull();
+    expect(customProperties(root!)).toEqual(expected);
+
+    await user.click(button('Edit profile'));
+    const dialog = screen.getByRole('dialog', { name: 'Profile' });
+    const dialogWrapper = portalOf(dialog);
+    expect(dialogWrapper).not.toBeNull();
+    expect(customProperties(dialogWrapper!)).toEqual(expected);
+    expect(dialogWrapper).toHaveClass('wave-portal', 'wave-light');
+    const displayName = within(dialog).getByRole('textbox', { name: 'Display name' });
+    expect(displayName).toHaveAccessibleDescription('Shown to your team.');
+    expect(displayName).not.toHaveAttribute('style');
+
+    await user.click(within(dialog).getByRole('button', { name: 'More' }));
+    const menu = screen.getByRole('menu');
+    const menuWrapper = portalOf(menu);
+    expect(menuWrapper).not.toBeNull();
+    expect(customProperties(menuWrapper!)).toEqual(expected);
+    expect(menuWrapper).toHaveClass('wave-portal', 'wave-light');
+    expect(within(menu).getByRole('menuitem', { name: 'Reset' })).not.toHaveAttribute('style');
+    expect(duplicateIds()).toEqual([]);
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('getTokenStyle, createBrandTokens and waveTokens work at module scope and in a server render', () => {
+    /** A Server Component: styles its markup with the token helpers, no client code. */
+    function ServerShell({ children }: { children: React.ReactNode }) {
+      return (
+        <main style={ORANGE_STYLE} data-accent={waveTokens.primary}>
+          <ul aria-label="Series">
+            {SERIES_COLORS.map((color) => (
+              <li key={color} style={{ color }}>
+                {color}
+              </li>
+            ))}
+          </ul>
+          {children}
+        </main>
+      );
+    }
+    const html = renderToString(
+      <ServerShell>
+        <Button>Save</Button>
+      </ServerShell>,
+    );
+    expect(html).toContain(`--wave-brand-80:${ORANGE_BRAND.brand80}`);
+    expect(html).toContain('--wave-font-family:Inter, sans-serif');
+    expect(html).toContain('data-accent="var(--wave-primary)"');
+    expect(html).toContain('<li style="color:var(--wave-palette-blue)">');
+    expect(html).toMatch(new RegExp(`<button[^>]* class="${buttonClassNames.root}[ "]`));
+    // A provider applies the same style for the same map: one function, two callers.
+    const provider = renderToString(<WaveProvider tokens={ORANGE_TOKENS}>Content</WaveProvider>);
+    const style = /style="([^"]*)"/.exec(provider)?.[1];
+    expect(style).toBeDefined();
+    expect(html).toContain(`<main style="${style}"`);
+    // The brand stops are hex colours, one per stop, and stop 80 is the seed's hue at the default
+    // ramp's luminance (not the seed itself).
+    expect(Object.keys(ORANGE_BRAND)).toHaveLength(16);
+    expect(Object.values(ORANGE_BRAND).every((value) => /^#[0-9a-f]{6}$/.test(value))).toBe(true);
+  });
+
+  it('a provider with tokens renders its style, and a monospace Text its family class, on the server', () => {
+    const html = renderToString(
+      <WaveProvider
+        tokens={{ fontFamilyMonospace: 'JetBrains Mono, monospace', brand80: '#c43e00' }}
+      >
+        <Text font="monospace">npm install</Text>
+      </WaveProvider>,
+    );
+    expect(html).toContain(
+      'style="--wave-font-family-monospace:JetBrains Mono, monospace;--wave-brand-80:#c43e00"',
+    );
+    expect(html).toMatch(
+      new RegExp(
+        `<span class="${textClassNames.root}( [^"]*)? font-wave-mono( [^"]*)?">npm install</span>`,
+      ),
+    );
+    expect(findDanglingIdRefsInHtml(html)).toEqual([]);
   });
 });
