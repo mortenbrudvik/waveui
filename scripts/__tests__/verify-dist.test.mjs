@@ -9,6 +9,7 @@
  * exactly as it does from the real `dist/` (the react-server check needs it).
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import {
   existsSync,
   lstatSync,
@@ -38,6 +39,7 @@ import {
   checkServerImport,
   clientReferenceStub,
   createWorkDir,
+  DATA_GRID_BUDGET,
   DATA_SCALE_MODULES,
   directivePrologue,
   entryStatus,
@@ -3591,9 +3593,22 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       maxGzipBytes: 2048,
       allowedExternals: ['react'],
     });
+    // Measured in 0.16.0 (69,592 and 23,545 bytes), plus 25 %.
+    expect(DATA_GRID_BUDGET).toEqual({
+      names: ['DataGrid'],
+      maxMinifiedBytes: 86990,
+      maxGzipBytes: 29431,
+      allowedExternals: ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'],
+    });
     expect(RECORDED_IMPORTS).toEqual([
-      { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
+      {
+        names: ['DataGrid'],
+        baseline: { version: '0.15.0', minified: 48403, gzip: 16520 },
+        budget: DATA_GRID_BUDGET,
+      },
       { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
+      { names: ['Button'], baseline: { version: '0.15.0', minified: 11195, gzip: 3855 } },
+      { names: ['MessageBar'], baseline: { version: '0.15.0', minified: 26831, gzip: 9312 } },
     ]);
   });
 
@@ -3794,15 +3809,53 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     ]);
   }, 30_000);
 
-  it('verifyDist measures the recorded imports, and main prints them with the window budget', async () => {
+  it('verifyDist gates the DataGrid-only import: passes on a correct dist, reports a grid over its budget and an import outside the dependencies', async () => {
+    const good = await probeSizeBudget(fixture().dist, DATA_GRID_BUDGET);
+    expect(good.errors).toEqual([]);
+    expect(good.minified).toBeLessThanOrEqual(DATA_GRID_BUDGET.maxMinifiedBytes);
+
+    // 120,000 characters of random base64, which gzip cannot shrink below 6 bits each (`noise`
+    // repeats too soon at this length): over both budgets.
+    const table = randomBytes(90_000).toString('base64');
+    const big = changed('components/table/DataGrid', (spec) => ({
+      ...spec,
+      body: `const TABLE = ${JSON.stringify(table)};\n${spec.body.replace("createElement('table', null", "createElement('table', { title: TABLE }")}`,
+    }));
+    const result = await verifyDist(fixture(big).dist, noPending);
+    const [dataGrid] = result.recorded;
+    expect(dataGrid.minified).toBeGreaterThan(DATA_GRID_BUDGET.maxMinifiedBytes);
+    expect(dataGrid.gzip).toBeGreaterThan(DATA_GRID_BUDGET.maxGzipBytes);
+    expect(result.errors).toEqual([
+      `DataGrid: ${dataGrid.minified} bytes minified, over the budget of 86990`,
+      `DataGrid: ${dataGrid.gzip} bytes gzip, over the budget of 29431`,
+    ]);
+
+    const withLibrary = changed('components/table/DataGrid.window', (spec) => ({
+      ...spec,
+      imports: [...spec.imports, ['virtual-rows', ['rows']]],
+      body: spec.body.replace(
+        'window: options.virtualWindow',
+        'window: rows(options.virtualWindow)',
+      ),
+    }));
+    expect(await probeSizeBudget(fixture(withLibrary).dist, DATA_GRID_BUDGET)).toEqual({
+      minified: expect.any(Number),
+      gzip: expect.any(Number),
+      externals: ['react', 'virtual-rows'],
+      errors: [
+        'DataGrid imports virtual-rows, outside the measured closure (allowed: clsx, react, react-dom, react/jsx-runtime, tailwind-merge)',
+      ],
+    });
+  }, 30_000);
+
+  it('verifyDist measures the recorded imports, and main prints them with the window and DataGrid budgets', async () => {
     const { dist } = fixture();
     const { errors, virtualBudget, recorded } = await verifyDist(dist, noPending);
     expect(errors).toEqual([]);
     expect(virtualBudget).toEqual({ minified: expect.any(Number), gzip: expect.any(Number) });
     expect(recorded).toEqual(
-      RECORDED_IMPORTS.map(({ names, baseline }) => ({
-        names,
-        baseline,
+      RECORDED_IMPORTS.map((entry) => ({
+        ...entry,
         minified: expect.any(Number),
         gzip: expect.any(Number),
       })),
@@ -3815,11 +3868,19 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       /verify-dist: window \(useVirtualWindow\): \d+ B minified \(budget 4415\), \d+ B gzip \(budget 2048\)/,
     );
     expect(output).toMatch(
-      /verify-dist: DataGrid-only import: \d+ B minified, \d+ B gzip \(0\.15\.0: 48403 B, 16520 B; [+-]\d+\.\d{2} %, [+-]\d+\.\d{2} %\)/,
+      /verify-dist: DataGrid-only import: \d+ B minified \(budget 86990\), \d+ B gzip \(budget 29431\) \(0\.15\.0: 48403 B, 16520 B; [+-]\d+\.\d{2} %, [+-]\d+\.\d{2} %\)/,
     );
-    expect(output).toMatch(
-      /verify-dist: Tree-only import: \d+ B minified, \d+ B gzip \(0\.15\.0: 47248 B, 16201 B; [+-]\d+\.\d{2} %, [+-]\d+\.\d{2} %\)/,
-    );
+    for (const [name, minified, gzip] of [
+      ['Tree', 47248, 16201],
+      ['Button', 11195, 3855],
+      ['MessageBar', 26831, 9312],
+    ]) {
+      expect(output).toMatch(
+        new RegExp(
+          `verify-dist: ${name}-only import: \\d+ B minified, \\d+ B gzip \\(0\\.15\\.0: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
+        ),
+      );
+    }
   }, 30_000);
 
   it('the real exports carry the 0.16 flat names', async () => {

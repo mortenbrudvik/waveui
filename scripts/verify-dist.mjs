@@ -75,8 +75,9 @@
  *     {@link DATA_SCALE_MODULES} and one of only `Tree` none but the moved cascade
  *     ({@link EXCLUSION_PROBES_0_16}, with the positive controls of {@link INCLUSION_PROBES_0_16});
  *     the closure of `useVirtualWindow`, minified, stays within {@link VIRTUAL_BUDGET} and imports
- *     nothing but `react`. The CLI prints the measured sizes, and those of the imports of
- *     {@link RECORDED_IMPORTS} (DataGrid-only, Tree-only) against 0.15.0, which have no budget;
+ *     nothing but `react`, and that of `DataGrid` within {@link DATA_GRID_BUDGET}. The CLI prints
+ *     the measured sizes, and those of the imports of {@link RECORDED_IMPORTS} (DataGrid-only,
+ *     Tree-only, Button-only, MessageBar-only) against 0.15.0;
  *
  * Usage: node scripts/verify-dist.mjs [--dist <dir>] [--no-pending | --final]
  *   --dist        the dist directory (default: dist); its parent holds the package.json
@@ -550,14 +551,35 @@ export const VIRTUAL_BUDGET = {
 };
 
 /**
- * Imports whose size verify-dist measures and prints without a budget (spec §11, recorded in
- * §16), each with its size in the published 0.15.0 package (minified and gzip bytes, bare imports
- * external): a DataGrid-only import grows by the selection core, the column sizing and the window
- * support, and a Tree-only import changes only by the moved cascade (R20).
+ * The DataGrid-only budget (spec §11): the import grows by the selection core, the column sizing
+ * and the window support, so its size was measured first, for 0.16.0 (69,592 bytes minified,
+ * 23,545 gzip), and the budget is that plus 25 %; raise it only deliberately. The closure imports
+ * nothing but the package's own dependencies and peers (every component reaches `clsx` and
+ * `tailwind-merge` through `cn`; the grid uses `react-dom`), so a new dependency fails it.
+ */
+export const DATA_GRID_BUDGET = {
+  names: ['DataGrid'],
+  maxMinifiedBytes: 86990,
+  maxGzipBytes: 29431,
+  allowedExternals: ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'],
+};
+
+/**
+ * Imports whose size verify-dist measures and prints against their size in the published 0.15.0
+ * package (minified and gzip bytes, bare imports external; spec §11, recorded in §16). The
+ * DataGrid-only import also has a `budget` ({@link DATA_GRID_BUDGET}); the others are printed for
+ * drift only: a Tree-only import changes only by the moved cascade (R20), and Button-only and
+ * MessageBar-only imports are as they were in 0.15.0.
  */
 export const RECORDED_IMPORTS = [
-  { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
+  {
+    names: ['DataGrid'],
+    baseline: { version: '0.15.0', minified: 48403, gzip: 16520 },
+    budget: DATA_GRID_BUDGET,
+  },
   { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
+  { names: ['Button'], baseline: { version: '0.15.0', minified: 11195, gzip: 3855 } },
+  { names: ['MessageBar'], baseline: { version: '0.15.0', minified: 26831, gzip: 9312 } },
 ];
 
 /**
@@ -2408,7 +2430,8 @@ export async function probeSizeBudget(
  * {@link PENDING_FLAT_EXPORTS}), the measured sizes of the presence core (`budget`) and of the
  * window (`virtualBudget`; minified and gzip bytes, `null` when the probe failed), and the
  * measured sizes of {@link RECORDED_IMPORTS} (`recorded`: `{ names, minified, gzip, baseline }`
- * each); `final` closes the pending bridge.
+ * each, and its `budget` where it has one, whose errors join the others); `final` closes the
+ * pending bridge.
  */
 export async function verifyDist(
   dist,
@@ -2610,9 +2633,19 @@ export async function verifyDist(
   }
   const recorded = [];
   try {
-    for (const { names, baseline } of RECORDED_IMPORTS) {
-      const { minified, gzip } = await measureImport(distRoot, names);
-      recorded.push({ names, minified, gzip, baseline });
+    for (const { names, baseline, budget: importBudget } of RECORDED_IMPORTS) {
+      if (importBudget) {
+        const {
+          minified,
+          gzip,
+          errors: budgetErrors,
+        } = await probeSizeBudget(distRoot, importBudget);
+        errors.push(...budgetErrors);
+        recorded.push({ names, minified, gzip, baseline, budget: importBudget });
+      } else {
+        const { minified, gzip } = await measureImport(distRoot, names);
+        recorded.push({ names, minified, gzip, baseline });
+      }
     }
   } catch (error) {
     errors.push(`recorded size measurement failed: ${error.message}`);
@@ -2666,9 +2699,12 @@ export async function main(argv = process.argv.slice(2), io = console) {
         `${virtualBudget.gzip} B gzip (budget ${VIRTUAL_BUDGET.maxGzipBytes})`,
     );
   }
-  for (const { names, minified, gzip, baseline } of recorded ?? []) {
+  for (const { names, minified, gzip, baseline, budget: importBudget } of recorded ?? []) {
+    const limit = (max) => (importBudget ? ` (budget ${max})` : '');
     io.log(
-      `verify-dist: ${names.join(' + ')}-only import: ${minified} B minified, ${gzip} B gzip ` +
+      `verify-dist: ${names.join(' + ')}-only import: ` +
+        `${minified} B minified${limit(importBudget?.maxMinifiedBytes)}, ` +
+        `${gzip} B gzip${limit(importBudget?.maxGzipBytes)} ` +
         `(${baseline.version}: ${baseline.minified} B, ${baseline.gzip} B; ` +
         `${percentChange(minified, baseline.minified)}, ${percentChange(gzip, baseline.gzip)})`,
     );
