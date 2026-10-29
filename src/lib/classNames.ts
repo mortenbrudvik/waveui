@@ -994,6 +994,29 @@ export const treeItemPersonaLayoutClassNames = {
 } as const;
 
 /**
+ * FlatTree: `root` on the `role="tree"` element (the scrolling element of a tree with a
+ * `virtualWindow`); `spacer` on each spacer element of a windowed tree (the elements that stand in
+ * for the items that are not rendered, 0.16).
+ */
+export const flatTreeClassNames = {
+  root: 'wave-flat-tree',
+  spacer: 'wave-flat-tree__spacer',
+} as const;
+
+/**
+ * FlatTree.Item: `root` on the `role="treeitem"` element; `row` on its row; `expandIcon` on the
+ * chevron of a branch; `indicator` on the checkbox of a multi-select tree or the radio of a
+ * single-select one; `label` on the span around the item's content (0.16).
+ */
+export const flatTreeItemClassNames = {
+  root: 'wave-flat-tree-item',
+  row: 'wave-flat-tree-item__row',
+  expandIcon: 'wave-flat-tree-item__expand-icon',
+  indicator: 'wave-flat-tree-item__indicator',
+  label: 'wave-flat-tree-item__label',
+} as const;
+
+/**
  * Carousel: `root` on the `role="region"` element; `autoPlayButton` on the pause and start
  * button; `viewport` on the clipping element around the track; `track` on the moving element
  * around the slides; `slide` on each slide wrapper;

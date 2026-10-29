@@ -57,8 +57,12 @@ export interface FlatTreeModel {
   visibleItems: readonly (VisibleFlatItem & { checked?: CheckState })[];
   /** The visible row of `value`; `undefined` for an item under a collapsed branch or an unknown value. */
   getItem(value: string): (VisibleFlatItem & { checked?: CheckState }) | undefined;
-  /** Expands `value`. Nothing happens, and nothing is called, if it is already in the expanded set. */
-  expand(value: string): void;
+  /**
+   * Expands `value`, or every value of a list in one change (one `onExpandedItemsChange` call, as
+   * `*` on a tree item makes). Nothing happens, and nothing is called, if every value is already in
+   * the expanded set.
+   */
+  expand(value: string | readonly string[]): void;
   /** Collapses `value`. Nothing happens, and nothing is called, if it is not in the expanded set. */
   collapse(value: string): void;
   /** Expands `value` when it is collapsed and collapses it when it is expanded. */
@@ -151,8 +155,12 @@ export function useFlatTree(
   const expandedSet = React.useMemo(() => new Set(expandedList), [expandedList]);
 
   const expand = React.useCallback(
-    (value: string) => {
-      setExpandedList((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    (value: string | readonly string[]) => {
+      const values = typeof value === 'string' ? [value] : value;
+      setExpandedList((prev) => {
+        const added = values.filter((v, at) => !prev.includes(v) && values.indexOf(v) === at);
+        return added.length > 0 ? [...prev, ...added] : prev;
+      });
     },
     [setExpandedList],
   );

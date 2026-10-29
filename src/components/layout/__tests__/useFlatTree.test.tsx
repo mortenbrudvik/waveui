@@ -171,6 +171,20 @@ describe('useFlatTree', () => {
       expect(onExpandedItemsChange).toHaveBeenCalledWith(['docs']);
     });
 
+    it('expands a list of values in one change, adding each new value once', () => {
+      const onExpandedItemsChange = vi.fn();
+      const { result } = setup(FILES, { defaultExpandedItems: ['work'], onExpandedItemsChange });
+      act(() => result.current.expand(['docs', 'work', 'images', 'docs']));
+      expect(onExpandedItemsChange).toHaveBeenCalledTimes(1);
+      expect(onExpandedItemsChange).toHaveBeenCalledWith(['work', 'docs', 'images']);
+      act(() => result.current.expand(['docs', 'images']));
+      act(() => result.current.expand([]));
+      expect(onExpandedItemsChange).toHaveBeenCalledTimes(1);
+      expectTypeOf<FlatTreeModel['expand']>().parameters.toEqualTypeOf<
+        [value: string | readonly string[]]
+      >();
+    });
+
     it('emits a new mutable array', () => {
       const onExpandedItemsChange = vi.fn();
       const defaultExpandedItems = ['docs'] as const;

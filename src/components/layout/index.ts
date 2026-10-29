@@ -44,6 +44,8 @@ export type {
 
 export { useFlatTree } from './useFlatTree';
 export type { UseFlatTreeOptions, FlatTreeModel } from './useFlatTree';
+export { FlatTree, FlatTreeItem } from './FlatTree';
+export type { FlatTreeProps, FlatTreeItemProps } from './FlatTree';
 export type { FlatTreeItemData, VisibleFlatItem } from '../../lib/flatTree';
 export type { CheckState } from '../../lib/treeCascade';
 
