@@ -107,19 +107,21 @@ describe('waveTokens', () => {
 });
 
 describe('chartPalette', () => {
+  // Chosen with a colour-vision simulation (Machado 2009 at full severity, OKLab ΔE ×100): every
+  // two neighbours stay apart in the light and dark themes; the numbers are in the JSDoc (spec §3).
   const ORDER = [
     'paletteBlue',
-    'palettePumpkin',
-    'paletteForest',
-    'paletteMagenta',
-    'paletteGold',
     'palettePurple',
+    'paletteBrown',
     'paletteTeal',
     'paletteRed',
-    'paletteSteel',
-    'paletteBrown',
-    'paletteLavender',
     'paletteNavy',
+    'palettePumpkin',
+    'paletteSteel',
+    'paletteGold',
+    'paletteLavender',
+    'paletteForest',
+    'paletteMagenta',
   ];
 
   it('lists the 12 palette fills in the order that keeps neighbouring series apart', () => {

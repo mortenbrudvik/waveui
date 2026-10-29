@@ -256,27 +256,33 @@ export const waveTokens: { readonly [K in WaveTokenName]: `var(${TokenVariable<K
   /* @__PURE__ */ createWaveTokens();
 
 /**
- * The 12 palette fills as token names, in the order a categorical chart gives them to its series:
- * neighbouring series stay apart, and the first six are the most distinct. Read each colour
- * through `waveTokens` (`waveTokens[chartPalette[index]]`), so the series follow the theme. A
- * chart with more than six series, or one shown in high contrast (where every palette fill is
- * white), needs a second encoding: a pattern, a marker shape or a direct label. Frozen and
- * server-safe.
+ * The 12 palette fills as token names, in the order a categorical chart gives them to its series.
+ * The order keeps neighbouring series as far apart as the palette allows, for colour vision and
+ * for hue: in the light and dark themes, every two neighbours (the first and second, the second
+ * and third, up to the eleventh and twelfth) differ by at least 6.3 (OKLab ΔE ×100) under
+ * simulated protanopia, deuteranopia and tritanopia and by at least 15.7 for full colour vision,
+ * and their hues are at least 49° apart. The first six are the six fills that stay furthest apart
+ * as a set, yet no six fills of the palette keep every pair apart for colour-vision deficiencies:
+ * two series that are not neighbours can differ by only about 3.2 among the first six, and by
+ * less further on. So colour never identifies a series on its own: every chart needs a second
+ * encoding (a pattern, a marker shape or a direct label), whatever its number of series, and in
+ * high contrast every palette fill is white. Read each colour through `waveTokens`
+ * (`waveTokens[chartPalette[index]]`), so the series follow the theme. Frozen and server-safe.
  *
  * @example
  * const color = waveTokens[chartPalette[index % chartPalette.length]];
  */
 export const chartPalette: readonly WaveTokenName[] = /* @__PURE__ */ Object.freeze([
   'paletteBlue',
-  'palettePumpkin',
-  'paletteForest',
-  'paletteMagenta',
-  'paletteGold',
   'palettePurple',
+  'paletteBrown',
   'paletteTeal',
   'paletteRed',
-  'paletteSteel',
-  'paletteBrown',
-  'paletteLavender',
   'paletteNavy',
+  'palettePumpkin',
+  'paletteSteel',
+  'paletteGold',
+  'paletteLavender',
+  'paletteForest',
+  'paletteMagenta',
 ]);
