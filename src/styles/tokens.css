@@ -7,6 +7,9 @@
  *   `.dark` and `.high-contrast` are deprecated aliases; they set only `--wave-*` variables.
  * - Every theme group declares every token, including the derived ones, so a nested theme
  *   re-resolves all of them.
+ * - Shadows are per-theme tokens too: `--wave-shadow-{2,4,8,16,28,64}` in each theme group, and the
+ *   `shadow-N` utilities alias them (`--shadow-4: var(--wave-shadow-4)`). Light keeps Fluent's ambient
+ *   0.12 / key 0.14; dark and high contrast use 0.24 / 0.28 with the same offsets and blurs.
  * - To override a semantic token, target the theme selector: `:root, .wave-light { --wave-primary: … }`.
  *   To re-brand, override the ramp on `:root` (`--wave-brand-80`, or the 0.4 name `--brand-80`).
  * - Contrast ratios of every pair, and of every text token on every surface it can sit on (4.5:1,
@@ -211,6 +214,14 @@
   --wave-palette-steel-foreground: #ffffff;
   --wave-backdrop: rgb(0 0 0 / 0.4);
 
+  /* Elevation: Fluent's ambient 0.12 / key 0.14 shadows, the 0.16 literals */
+  --wave-shadow-2: 0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14);
+  --wave-shadow-4: 0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14);
+  --wave-shadow-8: 0 0 2px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.14);
+  --wave-shadow-16: 0 0 2px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.14);
+  --wave-shadow-28: 0 0 8px rgba(0, 0, 0, 0.12), 0 14px 28px rgba(0, 0, 0, 0.14);
+  --wave-shadow-64: 0 0 8px rgba(0, 0, 0, 0.12), 0 32px 64px rgba(0, 0, 0, 0.14);
+
   /* Derived (re-declared per theme so nested themes re-resolve them) */
   --wave-card-foreground: var(--wave-foreground);
   --wave-secondary-foreground: var(--wave-foreground);
@@ -334,6 +345,14 @@
   --wave-palette-steel-foreground: #000000;
   --wave-backdrop: rgb(0 0 0 / 0.5);
 
+  /* Elevation: Fluent's dark shadows, ambient 0.24 / key 0.28 (the same offsets and blurs) */
+  --wave-shadow-2: 0 0 2px rgba(0, 0, 0, 0.24), 0 1px 2px rgba(0, 0, 0, 0.28);
+  --wave-shadow-4: 0 0 2px rgba(0, 0, 0, 0.24), 0 2px 4px rgba(0, 0, 0, 0.28);
+  --wave-shadow-8: 0 0 2px rgba(0, 0, 0, 0.24), 0 4px 8px rgba(0, 0, 0, 0.28);
+  --wave-shadow-16: 0 0 2px rgba(0, 0, 0, 0.24), 0 8px 16px rgba(0, 0, 0, 0.28);
+  --wave-shadow-28: 0 0 8px rgba(0, 0, 0, 0.24), 0 14px 28px rgba(0, 0, 0, 0.28);
+  --wave-shadow-64: 0 0 8px rgba(0, 0, 0, 0.24), 0 32px 64px rgba(0, 0, 0, 0.28);
+
   /* Derived (re-declared per theme so nested themes re-resolve them) */
   --wave-card-foreground: var(--wave-foreground);
   --wave-secondary-foreground: var(--wave-foreground);
@@ -456,6 +475,14 @@
   --wave-palette-steel: #ffffff;
   --wave-palette-steel-foreground: #000000;
   --wave-backdrop: rgb(0 0 0 / 0.8);
+
+  /* Elevation: as dark */
+  --wave-shadow-2: 0 0 2px rgba(0, 0, 0, 0.24), 0 1px 2px rgba(0, 0, 0, 0.28);
+  --wave-shadow-4: 0 0 2px rgba(0, 0, 0, 0.24), 0 2px 4px rgba(0, 0, 0, 0.28);
+  --wave-shadow-8: 0 0 2px rgba(0, 0, 0, 0.24), 0 4px 8px rgba(0, 0, 0, 0.28);
+  --wave-shadow-16: 0 0 2px rgba(0, 0, 0, 0.24), 0 8px 16px rgba(0, 0, 0, 0.28);
+  --wave-shadow-28: 0 0 8px rgba(0, 0, 0, 0.24), 0 14px 28px rgba(0, 0, 0, 0.28);
+  --wave-shadow-64: 0 0 8px rgba(0, 0, 0, 0.24), 0 32px 64px rgba(0, 0, 0, 0.28);
 
   /* Derived (re-declared per theme so nested themes re-resolve them) */
   --wave-card-foreground: var(--wave-foreground);
@@ -630,12 +657,12 @@
   --text-display--font-weight: 600;
 
   /* Box shadows */
-  --shadow-2: 0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14);
-  --shadow-4: 0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14);
-  --shadow-8: 0 0 2px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.14);
-  --shadow-16: 0 0 2px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.14);
-  --shadow-28: 0 0 8px rgba(0, 0, 0, 0.12), 0 14px 28px rgba(0, 0, 0, 0.14);
-  --shadow-64: 0 0 8px rgba(0, 0, 0, 0.12), 0 32px 64px rgba(0, 0, 0, 0.14);
+  --shadow-2: var(--wave-shadow-2);
+  --shadow-4: var(--wave-shadow-4);
+  --shadow-8: var(--wave-shadow-8);
+  --shadow-16: var(--wave-shadow-16);
+  --shadow-28: var(--wave-shadow-28);
+  --shadow-64: var(--wave-shadow-64);
 
   /* Motion durations and curves (utilities `duration-wave-*`, `ease-wave-*`). No keyframes. */
   --transition-duration-wave-ultra-fast: var(--wave-duration-ultra-fast);

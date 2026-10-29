@@ -929,6 +929,113 @@ describe('tokens.css — theme groups (repo-level#7, button-provider#6)', () => 
   });
 });
 
+describe('tokens.css — per-theme shadows (0.17)', () => {
+  const LEVELS = ['2', '4', '8', '16', '28', '64'] as const;
+  /** [ambient blur, key offset, key blur] of each level; the alphas differ per theme. */
+  const GEOMETRY: Record<(typeof LEVELS)[number], [string, string, string]> = {
+    '2': ['2px', '1px', '2px'],
+    '4': ['2px', '2px', '4px'],
+    '8': ['2px', '4px', '8px'],
+    '16': ['2px', '8px', '16px'],
+    '28': ['8px', '14px', '28px'],
+    '64': ['8px', '32px', '64px'],
+  };
+  /** The 0.16 `--shadow-N` literals, byte for byte: the light values. */
+  const LIGHT_0_16: Record<(typeof LEVELS)[number], string> = {
+    '2': '0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14)',
+    '4': '0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14)',
+    '8': '0 0 2px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.14)',
+    '16': '0 0 2px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.14)',
+    '28': '0 0 8px rgba(0, 0, 0, 0.12), 0 14px 28px rgba(0, 0, 0, 0.14)',
+    '64': '0 0 8px rgba(0, 0, 0, 0.12), 0 32px 64px rgba(0, 0, 0, 0.14)',
+  };
+  const AMBIENT = { light: '0.12', dark: '0.24', 'high-contrast': '0.24' } as const;
+  const KEY = { light: '0.14', dark: '0.28', 'high-contrast': '0.28' } as const;
+
+  function shadow(level: (typeof LEVELS)[number], ambient: string, key: string): string {
+    const [ambientBlur, keyOffset, keyBlur] = GEOMETRY[level];
+    return `0 0 ${ambientBlur} rgba(0, 0, 0, ${ambient}), 0 ${keyOffset} ${keyBlur} rgba(0, 0, 0, ${key})`;
+  }
+
+  function alphas(value: string): number[] {
+    return [...value.matchAll(/rgba\(0, 0, 0, ([\d.]+)\)/g)].map((match) => Number(match[1]));
+  }
+
+  it('builds the light values from the same geometry as the 0.16 literals', () => {
+    for (const level of LEVELS) {
+      expect(shadow(level, AMBIENT.light, KEY.light)).toBe(LIGHT_0_16[level]);
+    }
+  });
+
+  it.each(THEMES)('declares the six shadow tokens directly in the %s group', (theme) => {
+    const decls = themeDecls(theme);
+    const missing = LEVELS.filter((level) => !decls.has(`--wave-shadow-${level}`));
+    expect(missing).toEqual([]);
+  });
+
+  it('keeps the light values equal to the 0.16 literals', () => {
+    const decls = themeDecls('light');
+    for (const level of LEVELS) {
+      expect(decls.get(`--wave-shadow-${level}`), `shadow-${level}`).toBe(LIGHT_0_16[level]);
+    }
+  });
+
+  it.each(['dark', 'high-contrast'] as const)(
+    'gives %s the light offsets and blurs with the ambient 0.24 and key 0.28 alphas',
+    (theme) => {
+      const decls = themeDecls(theme);
+      for (const level of LEVELS) {
+        expect(decls.get(`--wave-shadow-${level}`), `shadow-${level}`).toBe(
+          shadow(level, AMBIENT[theme], KEY[theme]),
+        );
+      }
+    },
+  );
+
+  it.each(['dark', 'high-contrast'] as const)(
+    'every %s ambient and key alpha is greater than the light one',
+    (theme) => {
+      for (const level of LEVELS) {
+        const light = alphas(themeDecls('light').get(`--wave-shadow-${level}`) ?? '');
+        const other = alphas(themeDecls(theme).get(`--wave-shadow-${level}`) ?? '');
+        expect(light, `light shadow-${level}`).toHaveLength(2);
+        expect(other, `${theme} shadow-${level}`).toHaveLength(2);
+        expect(other[0], `${theme} ambient ${level}`).toBeGreaterThan(light[0]);
+        expect(other[1], `${theme} key ${level}`).toBeGreaterThan(light[1]);
+      }
+    },
+  );
+
+  it('declares the shadows in no theme-independent constant rule', () => {
+    const names = [...rootConstants().keys()].filter((name) => name.startsWith('--wave-shadow-'));
+    expect(names).toEqual([]);
+  });
+
+  it('maps --shadow-N in @theme inline to the runtime tokens and declares no literal shadow', () => {
+    const decls = declarations(themeBlock().children ?? []);
+    for (const level of LEVELS) {
+      expect(decls.get(`--shadow-${level}`), `--shadow-${level}`).toBe(
+        `var(--wave-shadow-${level})`,
+      );
+    }
+    const literals = [...decls.entries()].filter(
+      ([name, value]) => name.startsWith('--shadow') && !/^var\(--wave-shadow-\d+\)$/.test(value),
+    );
+    expect(literals).toEqual([]);
+  });
+
+  it.each(THEMES)('resolves every shadow token in a nested %s theme', (theme) => {
+    const scope = declsMatching(tokensNodes(), PROVIDER_SELECTORS[theme]);
+    const html = declsMatching(tokensNodes(), [':root']);
+    for (const level of LEVELS) {
+      const value = resolveToken(`--wave-shadow-${level}`, [scope, html]);
+      expect(value, `${theme} shadow-${level}`).toBe(
+        shadow(level, AMBIENT[theme], KEY[theme]).toLowerCase(),
+      );
+    }
+  });
+});
+
 describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)', () => {
   it('declares the brand ramp on :root, reading the 0.4 names as fallbacks', () => {
     const constants = rootConstants();
