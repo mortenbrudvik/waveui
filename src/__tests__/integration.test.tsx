@@ -58,12 +58,16 @@ import {
   DropdownOption,
   EmptySwatch,
   Field,
+  FlatTree,
+  FlatTreeItem,
   ImageSwatch,
   InfoButton,
   InfoLabel,
   Input,
   Label,
   Link,
+  List,
+  ListItem,
   Listbox,
   ListboxOption,
   ListboxOptionGroup,
@@ -146,12 +150,18 @@ import {
   Tree,
   TreeItem,
   colorAreaClassNames,
+  createTableColumn,
   createToaster,
+  useFlatTree,
   useListbox,
   useListboxPopup,
   useMergedRefs,
   useOverflowMenu,
+  useTableFeatures,
+  useTableSelection,
+  useTableSort,
   useToastController,
+  useVirtualWindow,
   WaveProvider,
   Avatar,
   ColorPickerHexField,
@@ -184,9 +194,13 @@ import {
   toolbarToggleButtonClassNames,
   type CarouselMotion,
   type CheckedValuesChangeDetails,
+  type DataGridSort,
   type DialogProps,
+  type FlatTreeItemData,
+  type FlatTreeModel,
   type ListboxItem,
   type MenuProps,
+  type VisibleFlatItem,
 } from '../index';
 import { getOpenLayers } from '../lib/layers';
 import * as motionInternals from '../lib/motion';
@@ -194,6 +208,18 @@ import * as useMotionInternals from '../hooks/useMotion';
 import * as collapseInternals from '../hooks/useCollapsePresence';
 import * as focusBeforeCloseInternals from '../hooks/useFocusBeforeClose';
 import * as presenceGroupInternals from '../hooks/usePresenceGroup';
+// The 0.16 module-only modules: none of their exports may reach the barrel.
+import * as selectionCore from '../lib/selection';
+import * as virtualCore from '../lib/virtual';
+import * as columnSizingCore from '../lib/columnSizing';
+import * as treeCascadeCore from '../lib/treeCascade';
+import * as flatTreeCore from '../lib/flatTree';
+import * as dataGridStore from '../components/table/DataGrid.store';
+import * as dataGridContext from '../components/table/DataGrid.context';
+import * as dataGridWindow from '../components/table/DataGrid.window';
+import * as dataGridSizing from '../components/table/DataGrid.sizing';
+import * as optionData from '../components/input/Option.data';
+import * as flatTreeContext from '../components/layout/FlatTree.context';
 import {
   asClientReference,
   expectNoA11yViolations,
@@ -203,6 +229,8 @@ import {
   mockAnimations,
   mockRect,
   motionClasses,
+  testCompoundExposure,
+  testSystemProps,
 } from '../test-utils';
 
 afterEach(() => {
@@ -480,6 +508,75 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
         'useCollapsePresence',
         'useFocusBeforeClose',
         'usePresenceGroup',
+      ]),
+    );
+    expect(internal.filter((name) => name in barrel)).toEqual([]);
+  });
+
+  it('exports the 0.16 compound parts under their flat names, the hooks and the class names', () => {
+    const members: Array<[string, string]> = [
+      ['FlatTree', 'Item'],
+      ['Table', 'ResizeHandle'],
+    ];
+    for (const [compound, member] of members) {
+      const flat = `${compound}${member}`;
+      expect(barrel[flat], flat).toBeTypeOf('function');
+      expect(barrel[flat], flat).toBe((barrel[compound] as Record<string, unknown>)[member]);
+    }
+    expect(FlatTreeItem).toBe(FlatTree.Item);
+    for (const name of [
+      'useSelection',
+      'useVirtualWindow',
+      'useTableFeatures',
+      'useTableSort',
+      'useTableSelection',
+      'useTableColumnSizing',
+      'useFlatTree',
+    ]) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+    for (const name of [
+      'flatTreeClassNames',
+      'flatTreeItemClassNames',
+      'tableResizeHandleClassNames',
+    ]) {
+      expect(barrel[name], name).toBeTypeOf('object');
+    }
+  });
+
+  it('keeps the 0.16 seams out of the public API: every value of the module-only modules, and the named seams', () => {
+    const internal = [
+      ...Object.keys(selectionCore),
+      ...Object.keys(virtualCore),
+      ...Object.keys(columnSizingCore),
+      ...Object.keys(treeCascadeCore),
+      ...Object.keys(flatTreeCore),
+      ...Object.keys(dataGridStore),
+      ...Object.keys(dataGridContext),
+      ...Object.keys(dataGridWindow),
+      ...Object.keys(dataGridSizing),
+      ...Object.keys(optionData),
+      ...Object.keys(flatTreeContext),
+      'createTableFeaturePlugin',
+      'sortTableRows',
+      'returnFocusToGridCell',
+      'ownsArrowKeys',
+      'ListboxOptionPositionContext',
+      'isSelectionCellElement',
+      'cellBase',
+      'DataGridSelectionHeaderSlot',
+    ];
+    expect(internal).toEqual(
+      expect.arrayContaining([
+        'toggleId',
+        'computeVirtualLayout',
+        'resolveColumnWidths',
+        'computeCheckStates',
+        'buildFlatTreeIndex',
+        'createSelectionStore',
+        'renderListboxWindow',
+        'useFlatTreeContext',
+        'FlatTreeContext',
       ]),
     );
     expect(internal.filter((name) => name in barrel)).toEqual([]);
@@ -4887,6 +4984,147 @@ describe('compounds composed in a React Server Component', () => {
     );
   }
 
+  // 0.16: windowed components (spec §13). jsdom has no layout, so every window lays out the
+  // assumed viewport of 480 pixels, on the server and on the client alike.
+  interface Person {
+    id: string;
+    name: string;
+    role: string;
+  }
+  const PEOPLE: readonly Person[] = Array.from({ length: 1000 }, (_, index) => ({
+    id: `person-${index}`,
+    name: `Person ${String(index).padStart(4, '0')}`,
+    role: ['Engineer', 'Designer', 'Manager'][index % 3],
+  }));
+  const personId = (person: Person) => person.id;
+  const PEOPLE_COLUMNS = [
+    createTableColumn<Person>({
+      columnId: 'name',
+      label: 'Name',
+      compare: (a, b) => a.name.localeCompare(b.name),
+    }),
+    createTableColumn<Person>({ columnId: 'role', label: 'Role' }),
+  ];
+  /** The body rows of a windowed grid that are rendered, by their data index. */
+  const renderedRows = (grid: Element) =>
+    Array.from(grid.querySelectorAll('tbody > tr[data-row-index]'), (row) =>
+      Number(row.getAttribute('data-row-index')),
+    );
+  /** `[from, to)`. */
+  const range = (from: number, to: number) =>
+    Array.from({ length: to - from }, (_, index) => from + index);
+
+  type GridParts = {
+    Body: typeof DataGridBody;
+    Row: typeof DataGridRow;
+    Cell: typeof DataGridCell;
+  };
+  /** 1,000 people in a windowed DataGrid (44-pixel rows under a 44-pixel sticky header). */
+  function WindowedPeople({ parts: { Body, Row, Cell } }: { parts: GridParts }) {
+    const virtualWindow = useVirtualWindow({ itemSize: 44, scrollPaddingStart: 44 });
+    return (
+      <DataGrid
+        aria-label="People"
+        items={PEOPLE}
+        columns={PEOPLE_COLUMNS}
+        getRowId={personId}
+        selectionMode="multiple"
+        virtualWindow={virtualWindow}
+      >
+        <Body>
+          {(person: Person) => (
+            <Row>
+              <Cell>{person.name}</Cell>
+              <Cell>{person.role}</Cell>
+            </Row>
+          )}
+        </Body>
+      </DataGrid>
+    );
+  }
+
+  /** 1,000 files in a windowed, selectable List (44-pixel items). */
+  function WindowedFiles({ parts: { Item } }: { parts: { Item: typeof ListItem } }) {
+    const virtualWindow = useVirtualWindow({ itemSize: 44 });
+    return (
+      <List
+        aria-label="Files"
+        selectable
+        selectionMode="multiple"
+        defaultSelectedItems={['file-2']}
+        virtualWindow={virtualWindow}
+        count={1000}
+      >
+        {(index: number) => <Item value={`file-${index}`}>{`File ${index}`}</Item>}
+      </List>
+    );
+  }
+
+  const FRUIT_ITEMS: readonly ListboxItem[] = Array.from({ length: 1000 }, (_, index) => ({
+    value: `fruit-${index}`,
+    label: `Fruit ${index}`,
+  }));
+  type OptionParts = { Opt: typeof ComboboxOption };
+  /** A data-mode Combobox of 1,000 fruits with a window of 32-pixel options. */
+  function WindowedFruitPicker({ parts: { Opt } }: { parts: OptionParts }) {
+    const virtualWindow = useVirtualWindow({ itemSize: 32 });
+    const renderOption = React.useCallback(
+      (item: ListboxItem) => <Opt value={item.value}>{item.label}</Opt>,
+      [Opt],
+    );
+    return (
+      <Combobox
+        aria-label="Fruit"
+        items={FRUIT_ITEMS}
+        defaultValue="fruit-2"
+        renderOption={renderOption}
+        virtualWindow={virtualWindow}
+      />
+    );
+  }
+  /** A data-mode Listbox of 1,000 fruits with a window of 32-pixel options. */
+  function WindowedFruitList({ parts: { Opt } }: { parts: OptionParts }) {
+    const virtualWindow = useVirtualWindow({ itemSize: 32 });
+    const renderOption = React.useCallback(
+      (item: ListboxItem) => <Opt value={item.value}>{item.label}</Opt>,
+      [Opt],
+    );
+    return (
+      <Listbox
+        aria-label="Fruits"
+        items={FRUIT_ITEMS}
+        defaultValue="fruit-2"
+        renderOption={renderOption}
+        virtualWindow={virtualWindow}
+      />
+    );
+  }
+
+  /** "Archive" with 500 entries, expanded, then "Readme.md": 502 visible rows. */
+  const ARCHIVE: readonly FlatTreeItemData[] = [
+    { value: 'archive', label: 'Archive' },
+    ...Array.from({ length: 500 }, (_, index) => ({
+      value: `entry-${index}`,
+      parentValue: 'archive',
+      label: `Entry ${index}`,
+    })),
+    { value: 'readme', label: 'Readme.md' },
+  ];
+  const ARCHIVE_EXPANDED: readonly string[] = ['archive'];
+  /** A windowed FlatTree over {@link ARCHIVE} (28-pixel items); the tree itself is the part. */
+  function WindowedArchive({ parts: { Tree: TreeRoot } }: { parts: { Tree: typeof FlatTree } }) {
+    const model = useFlatTree(ARCHIVE, { defaultExpandedItems: ARCHIVE_EXPANDED });
+    const virtualWindow = useVirtualWindow({ itemSize: 28 });
+    return (
+      <TreeRoot
+        aria-label="Archive"
+        model={model}
+        {...model.getTreeProps()}
+        virtualWindow={virtualWindow}
+      />
+    );
+  }
+
   const cases: SsrCase[] = [
     ssrCase({
       name: 'Carousel',
@@ -6225,6 +6463,171 @@ describe('compounds composed in a React Server Component', () => {
         expect(screen.queryByText('Changes saved.')).toBeNull();
         // Focus leaves the dismissed bar for the next bar's Dismiss button.
         expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+      },
+    }),
+    // 0.16 (spec §13): the first window is the server HTML, the same with lazy part types, and
+    // the hydrated window keeps working by the data.
+    ssrCase({
+      name: 'DataGrid (a windowed body of 1,000 rows from a render function)',
+      parts: { Body: DataGridBody, Row: DataGridRow, Cell: DataGridCell },
+      tree: (parts) => <WindowedPeople parts={parts} />,
+      serverText: 'aria-rowcount="1001"',
+      serverHtml: (html) => {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        // 480 / 44: 11 rows in view and 6 below them; a spacer for the other 983.
+        expect(renderedRows(host)).toEqual(range(0, 17));
+        expect(host.querySelectorAll('tbody > tr[data-virtual-spacer]')).toHaveLength(1);
+      },
+      interact: async (user) => {
+        const grid = screen.getByRole('grid', { name: 'People' });
+        expect(renderedRows(grid)).toEqual(range(0, 17));
+        const selectAll = within(grid).getByRole('checkbox', { name: 'Select all rows' });
+        await user.click(selectAll);
+        expect(selectAll).toBeChecked();
+        // A row's control is named by its first cell, a lazy DataGrid.Cell.
+        await user.click(within(grid).getByRole('checkbox', { name: 'Person 0003' }));
+        expect(selectAll).toBePartiallyChecked();
+        await user.click(within(grid).getByText('Person 0001'));
+        await user.keyboard('{Control>}{End}{/Control}');
+        // The last row of the data, rendered for the key and focused; still selected.
+        const row = document.activeElement?.closest('tr');
+        expect(row).toHaveAttribute('data-row-index', '999');
+        expect(row).toHaveAttribute('aria-rowindex', '1001');
+        expect(row).toHaveAttribute('aria-selected', 'true');
+      },
+    }),
+    ssrCase({
+      name: 'List (a windowed, selectable list of 1,000 items from a function child)',
+      parts: { Item: ListItem },
+      tree: (parts) => <WindowedFiles parts={parts} />,
+      serverText: 'File 16',
+      serverHtml: (html) => {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        expect(
+          Array.from(host.querySelectorAll('[role="option"]'), (el) =>
+            el.getAttribute('data-index'),
+          ),
+        ).toEqual(range(0, 17).map(String));
+      },
+      interact: async (user) => {
+        const list = screen.getByRole('listbox', { name: 'Files' });
+        expect(within(list).getAllByRole('option')).toHaveLength(17);
+        expect(screen.getByRole('option', { name: 'File 2' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        await user.click(screen.getByRole('option', { name: 'File 5' }));
+        expect(screen.getByRole('option', { name: 'File 5' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        await user.keyboard('{End}');
+        await act(async () => {});
+        const last = document.activeElement;
+        expect(last).toHaveAccessibleName('File 999');
+        expect(last).toHaveAttribute('aria-posinset', '1000');
+        expect(screen.queryByRole('option', { name: 'File 2' })).toBeNull();
+        // Back at the top, the selection of the items that were not rendered is intact.
+        await user.keyboard('{Home}');
+        await act(async () => {});
+        expect(document.activeElement).toHaveAccessibleName('File 0');
+        for (const name of ['File 2', 'File 5']) {
+          expect(screen.getByRole('option', { name })).toHaveAttribute('aria-selected', 'true');
+        }
+      },
+    }),
+    ssrCase({
+      name: 'Combobox (data mode, a windowed list of 1,000 options)',
+      parts: { Opt: ComboboxOption },
+      tree: (parts) => <WindowedFruitPicker parts={parts} />,
+      serverText: 'value="Fruit 2"',
+      interact: async (user) => {
+        const combobox = screen.getByRole('combobox', { name: 'Fruit' });
+        await user.click(combobox);
+        const listbox = screen.getByRole('listbox');
+        expect(within(listbox).getAllByRole('option').length).toBeLessThanOrEqual(30);
+        expect(within(listbox).getByRole('option', { name: 'Fruit 2' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        // The keys move over the data: ArrowUp, with no option active yet, reaches the last one,
+        // rendered for it.
+        await user.keyboard('{ArrowUp}');
+        const activeOption = () =>
+          document.getElementById(combobox.getAttribute('aria-activedescendant') ?? '');
+        expect(activeOption()).toHaveAccessibleName('Fruit 999');
+        expect(activeOption()).toHaveAttribute('aria-posinset', '1000');
+        // Typing narrows the shown items; the first match is active and Enter selects it.
+        await user.clear(combobox);
+        await user.type(combobox, 'Fruit 42');
+        expect(activeOption()).toHaveAccessibleName('Fruit 42');
+        expect(activeOption()).toHaveAttribute('aria-setsize', '11');
+        await user.keyboard('{Enter}');
+        expect(combobox).toHaveValue('Fruit 42');
+      },
+    }),
+    ssrCase({
+      name: 'Listbox (data mode, a windowed list of 1,000 options rendered on the server)',
+      parts: { Opt: ListboxOption },
+      tree: (parts) => <WindowedFruitList parts={parts} />,
+      serverText: 'Fruit 20',
+      serverHtml: (html) => {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        // 480 / 32: 15 options in view and 6 below them.
+        expect(host.querySelectorAll('[role="option"]')).toHaveLength(21);
+        expect(host.querySelector('[role="option"][aria-selected="true"]')?.textContent).toBe(
+          'Fruit 2',
+        );
+      },
+      interact: async (user) => {
+        const listbox = screen.getByRole('listbox', { name: 'Fruits' });
+        await user.click(within(listbox).getByRole('option', { name: 'Fruit 5' }));
+        expect(within(listbox).getByRole('option', { name: 'Fruit 5' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        await user.keyboard('{End}');
+        const active = document.getElementById(listbox.getAttribute('aria-activedescendant') ?? '');
+        expect(active).toHaveAccessibleName('Fruit 999');
+        expect(active).toHaveAttribute('aria-posinset', '1000');
+      },
+    }),
+    ssrCase({
+      name: 'FlatTree (a windowed tree of 502 visible items; the tree is the lazy part)',
+      parts: { Tree: FlatTree },
+      tree: (parts) => <WindowedArchive parts={parts} />,
+      serverText: 'Entry 22',
+      serverHtml: (html) => {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        // 480 / 28, rounded up: 18 items in view and 6 below them.
+        expect(
+          Array.from(host.querySelectorAll('[role="treeitem"]'), (el) =>
+            el.getAttribute('data-index'),
+          ),
+        ).toEqual(range(0, 24).map(String));
+      },
+      interact: async (user) => {
+        const tree = screen.getByRole('tree', { name: 'Archive' });
+        expect(within(tree).getAllByRole('treeitem')).toHaveLength(24);
+        await user.tab();
+        expect(screen.getByRole('treeitem', { name: 'Archive' })).toHaveFocus();
+        await user.keyboard('{End}');
+        await act(async () => {});
+        const last = document.activeElement;
+        expect(last).toHaveAccessibleName('Readme.md');
+        expect(last).toHaveAttribute('data-index', '501');
+        expect(last).toHaveAttribute('aria-posinset', '2');
+        await user.keyboard('{Home}{ArrowLeft}');
+        await act(async () => {});
+        expect(screen.getByRole('treeitem', { name: 'Archive' })).toHaveAttribute(
+          'aria-expanded',
+          'false',
+        );
+        expect(within(tree).getAllByRole('treeitem')).toHaveLength(2);
       },
     }),
   ];
@@ -10195,5 +10598,343 @@ describe('Phase 10 motion across components (0.15)', () => {
         expect(c.target()).toHaveClass(...motionClasses(c.recipe));
       },
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 11 (0.16): data at scale across components
+// ---------------------------------------------------------------------------
+
+describe('Phase 11 data at scale across components (0.16)', () => {
+  describe('the real Field around a data-mode Combobox', () => {
+    const FRUITS: readonly ListboxItem[] = [
+      { value: 'apple', label: 'Apple' },
+      { value: 'banana', label: 'Banana' },
+      { value: 'cherry', label: 'Cherry', disabled: true },
+    ];
+    const MANY: readonly ListboxItem[] = Array.from({ length: 1000 }, (_, index) => ({
+      value: `item-${index}`,
+      label: `Item ${index}`,
+    }));
+    function WindowedPicker() {
+      const virtualWindow = useVirtualWindow({ itemSize: 32 });
+      return <Combobox items={MANY} name="item" virtualWindow={virtualWindow} />;
+    }
+
+    it('takes the Field label, hint and error; a required Field blocks an empty submit; the form gets the item value', async () => {
+      const user = userEvent.setup();
+      render(
+        <form aria-label="Order">
+          <Field label="Fruit" hint="Pick one." error="Choose a fruit" required>
+            <Combobox items={FRUITS} name="fruit" />
+          </Field>
+        </form>,
+      );
+      const combobox = screen.getByRole('combobox', { name: /Fruit/ });
+      expect(combobox).toHaveAccessibleDescription(/Choose a fruit/);
+      expect(combobox).toHaveAccessibleDescription(/Pick one\./);
+      expect(combobox).toHaveAttribute('aria-invalid', 'true');
+      expect(combobox).toHaveAttribute('aria-required', 'true');
+      expect(duplicateIds()).toEqual([]);
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      expect(formIsValid(form)).toBe(false);
+      await user.click(combobox);
+      // The options come from the data; a disabled item is an aria-disabled option.
+      expect(screen.getByRole('option', { name: 'Cherry' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await user.click(screen.getByRole('option', { name: 'Banana' }));
+      expect(combobox).toHaveValue('Banana');
+      expect(formIsValid(form)).toBe(true);
+      expect(new FormData(form).getAll('fruit')).toEqual(['banana']);
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('a windowed Combobox in a Field: the label and the warning reach it, and a deep item is submitted', async () => {
+      const user = userEvent.setup();
+      render(
+        <form aria-label="Order">
+          <Field label="Item" validationState="warning" validationMessage="Popular items sell out">
+            <WindowedPicker />
+          </Field>
+        </form>,
+      );
+      const combobox = screen.getByRole('combobox', { name: 'Item' });
+      expect(combobox).toHaveAccessibleDescription('Popular items sell out');
+      expect(combobox).not.toHaveAttribute('aria-invalid');
+      act(() => combobox.focus());
+      await user.keyboard('{ArrowUp}');
+      const active = document.getElementById(combobox.getAttribute('aria-activedescendant') ?? '');
+      expect(active).toHaveAccessibleName('Item 999');
+      expect(screen.getAllByRole('option').length).toBeLessThanOrEqual(30);
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{Enter}');
+      expect(combobox).toHaveValue('Item 999');
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      expect(new FormData(form).getAll('item')).toEqual(['item-999']);
+    });
+  });
+
+  describe('a DataGrid and a static Table on one useTableFeatures state', () => {
+    interface Member {
+      id: string;
+      name: string;
+      role: string;
+    }
+    const MEMBERS: readonly Member[] = [
+      { id: 'm1', name: 'Carol', role: 'Designer' },
+      { id: 'm2', name: 'Alice', role: 'Engineer' },
+      { id: 'm3', name: 'Bob', role: 'Manager' },
+    ];
+    const memberId = (member: Member) => member.id;
+    const MEMBER_COLUMNS = [
+      createTableColumn<Member>({
+        columnId: 'name',
+        label: 'Name',
+        compare: (a, b) => a.name.localeCompare(b.name),
+        renderCell: (member) => member.name,
+      }),
+      createTableColumn<Member>({
+        columnId: 'role',
+        label: 'Role',
+        renderCell: (member) => member.role,
+      }),
+    ];
+
+    /**
+     * The selection and the sort live in the hooks' controlled state; the DataGrid renders and
+     * changes the same state, and the static Table renders the hooks' rows and selection.
+     */
+    function Members({
+      onSelectedItemsChange,
+    }: {
+      onSelectedItemsChange: (ids: string[]) => void;
+    }) {
+      const [selected, setSelected] = React.useState<readonly string[]>([]);
+      const [sort, setSort] = React.useState<DataGridSort | null>(null);
+      const handleSelected = (ids: string[]) => {
+        setSelected(ids);
+        onSelectedItemsChange(ids);
+      };
+      const {
+        getRows,
+        selection,
+        sort: sortState,
+      } = useTableFeatures({ items: MEMBERS, columns: MEMBER_COLUMNS, getRowId: memberId }, [
+        useTableSort({ sort, onSortChange: setSort }),
+        useTableSelection({
+          selectionMode: 'multiple',
+          selectedItems: selected,
+          onSelectedItemsChange: handleSelected,
+        }),
+      ]);
+      const selectAll = selection.allRowsSelected
+        ? true
+        : selection.someRowsSelected
+          ? 'mixed'
+          : false;
+      return (
+        <>
+          <DataGrid
+            aria-label="Members grid"
+            items={MEMBERS}
+            columns={MEMBER_COLUMNS}
+            getRowId={memberId}
+            selectionMode="multiple"
+            selectedItems={selected}
+            onSelectedItemsChange={handleSelected}
+            sort={sort}
+            onSortChange={setSort}
+          />
+          <Table aria-label="Members table">
+            <Table.Header>
+              <Table.Row>
+                <Table.SelectionCell
+                  aria-label="Select all members"
+                  checked={selectAll}
+                  onCheckedChange={(_checked, details) => selection.toggleAllRows(details?.event)}
+                />
+                {MEMBER_COLUMNS.map((column) => (
+                  <Table.HeaderCell
+                    key={column.columnId}
+                    sortable
+                    sortDirection={sortState.getSortDirection(column.columnId!)}
+                    onSortClick={(event) =>
+                      sortState.toggleColumnSort(column.columnId!, event.nativeEvent)
+                    }
+                  >
+                    {column.label}
+                  </Table.HeaderCell>
+                ))}
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {getRows().map(({ item, rowId }) => (
+                <Table.Row key={rowId}>
+                  <Table.SelectionCell
+                    aria-label={`Select ${item.name}`}
+                    checked={selection.isRowSelected(rowId)}
+                    onCheckedChange={(_checked, details) =>
+                      selection.toggleRow(rowId, details?.event)
+                    }
+                  />
+                  <Table.Cell>{item.name}</Table.Cell>
+                  <Table.Cell>{item.role}</Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table>
+        </>
+      );
+    }
+
+    const NAMES = ['Alice', 'Bob', 'Carol'];
+    /** The member names of a table's body rows, in order. */
+    const memberOrder = (table: HTMLElement) =>
+      within(table)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => NAMES.find((name) => row.textContent?.includes(name)));
+
+    it('selection made in either one shows in both, select-all included', async () => {
+      const user = userEvent.setup();
+      const onSelectedItemsChange = vi.fn();
+      render(<Members onSelectedItemsChange={onSelectedItemsChange} />);
+      const grid = screen.getByRole('grid', { name: 'Members grid' });
+      const table = screen.getByRole('table', { name: 'Members table' });
+
+      await user.click(within(grid).getByRole('checkbox', { name: 'Select all rows' }));
+      expect(onSelectedItemsChange.mock.calls).toEqual([[['m1', 'm2', 'm3']]]);
+      expect(within(table).getByRole('checkbox', { name: 'Select all members' })).toBeChecked();
+      for (const name of NAMES) {
+        expect(within(table).getByRole('checkbox', { name: `Select ${name}` })).toBeChecked();
+      }
+
+      await user.click(within(table).getByRole('checkbox', { name: 'Select Alice' }));
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['m1', 'm3']);
+      expect(
+        within(grid).getByRole('checkbox', { name: 'Select all rows' }),
+      ).toBePartiallyChecked();
+      expect(within(grid).getByRole('checkbox', { name: 'Alice' })).not.toBeChecked();
+      expect(within(grid).getByRole('checkbox', { name: 'Carol' })).toBeChecked();
+
+      await user.click(within(table).getByRole('checkbox', { name: 'Select all members' }));
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['m1', 'm3', 'm2']);
+      expect(within(grid).getByRole('checkbox', { name: 'Select all rows' })).toBeChecked();
+      expect(onSelectedItemsChange).toHaveBeenCalledTimes(3);
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('a sort made in either one orders both', async () => {
+      const user = userEvent.setup();
+      render(<Members onSelectedItemsChange={() => {}} />);
+      const grid = screen.getByRole('grid', { name: 'Members grid' });
+      const table = screen.getByRole('table', { name: 'Members table' });
+      expect(memberOrder(grid)).toEqual(['Carol', 'Alice', 'Bob']);
+      expect(memberOrder(table)).toEqual(['Carol', 'Alice', 'Bob']);
+
+      await user.click(within(table).getByRole('button', { name: 'Name' }));
+      expect(memberOrder(grid)).toEqual(['Alice', 'Bob', 'Carol']);
+      expect(memberOrder(table)).toEqual(['Alice', 'Bob', 'Carol']);
+      expect(within(grid).getByRole('columnheader', { name: 'Name' })).toHaveAttribute(
+        'aria-sort',
+        'ascending',
+      );
+
+      await user.click(within(grid).getByRole('button', { name: 'Name' }));
+      expect(memberOrder(grid)).toEqual(['Carol', 'Bob', 'Alice']);
+      expect(memberOrder(table)).toEqual(['Carol', 'Bob', 'Alice']);
+      expect(within(table).getByRole('columnheader', { name: 'Name' })).toHaveAttribute(
+        'aria-sort',
+        'descending',
+      );
+    });
+  });
+
+  // FlatTree's system props (testSystemProps): the root on a static model, and FlatTree.Item in
+  // the context a tree gives its rows.
+  const STATIC_ROWS: readonly VisibleFlatItem[] = [
+    {
+      item: { value: 'docs', label: 'Documents' },
+      level: 1,
+      position: 1,
+      setSize: 2,
+      parentValue: undefined,
+      hasChildren: true,
+      isBranch: true,
+      expanded: true,
+      index: 0,
+    },
+    {
+      item: { value: 'work', parentValue: 'docs', label: 'Work' },
+      level: 2,
+      position: 1,
+      setSize: 1,
+      parentValue: 'docs',
+      hasChildren: false,
+      isBranch: false,
+      expanded: false,
+      index: 1,
+    },
+    {
+      item: { value: 'readme', label: 'README.md' },
+      level: 1,
+      position: 2,
+      setSize: 2,
+      parentValue: undefined,
+      hasChildren: false,
+      isBranch: false,
+      expanded: false,
+      index: 2,
+    },
+  ];
+  /** A model that never changes: the rows above, Documents expanded. */
+  const STATIC_MODEL: FlatTreeModel = {
+    visibleItems: STATIC_ROWS,
+    getItem: (value) => STATIC_ROWS.find((row) => row.item.value === value),
+    expand: () => {},
+    collapse: () => {},
+    toggle: () => {},
+    isExpanded: (value) => value === 'docs',
+    setChecked: () => {},
+    getTreeProps: () => ({ selectionMode: 'none' }),
+  };
+  const ITEM_CONTEXT: flatTreeContext.FlatTreeContextValue = {
+    selectionMode: 'none',
+    selected: undefined,
+    current: undefined,
+    tabStop: 'readme',
+    itemSize: undefined,
+    activate: () => {},
+    toggleChecked: () => {},
+  };
+  /** The context and the tree element a FlatTree gives its rows. */
+  function InFlatTree({ children }: { children: React.ReactNode }) {
+    return (
+      <flatTreeContext.FlatTreeContext.Provider value={ITEM_CONTEXT}>
+        <div role="tree" aria-label="Files">
+          {children}
+        </div>
+      </flatTreeContext.FlatTreeContext.Provider>
+    );
+  }
+
+  describe('FlatTree (system props)', () => {
+    testSystemProps(FlatTree, {
+      expectedTag: 'div',
+      displayName: 'FlatTree',
+      defaultProps: { model: STATIC_MODEL, 'aria-label': 'Files' },
+    });
+    testCompoundExposure(FlatTree, ['Item']);
+  });
+
+  describe('FlatTree.Item (system props)', () => {
+    testSystemProps(FlatTreeItem, {
+      expectedTag: 'div',
+      displayName: 'FlatTreeItem',
+      defaultProps: { item: STATIC_ROWS[2], children: 'README.md' },
+      wrapper: InFlatTree,
+    });
   });
 });

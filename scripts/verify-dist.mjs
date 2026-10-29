@@ -65,9 +65,18 @@
  *     ({@link EXCLUSION_PROBES_0_15}, D21);
  *   - 0.11: the exclusion probes of {@link EXCLUSION_PROBES_0_11} and the inclusion probes of
  *     {@link INCLUSION_PROBES_0_11} (tags, TagPicker, Dialog and Drawer, Nav, Hamburger and
- *     NavDrawer); no name of {@link MODULE_ONLY_NAMES} (the motion internals of 0.15 among them)
- *     is exported from `dist/index.mjs` or `dist/index.d.ts`; the roll-ups export each of
- *     {@link VALUE_AND_TYPE_DECLARATIONS} both as a type and as a value (`TagPickerOption`);
+ *     NavDrawer); no name of {@link MODULE_ONLY_NAMES} (the motion internals of 0.15 and the
+ *     data-scale seams of 0.16 among them) is exported from `dist/index.mjs` or `dist/index.d.ts`;
+ *     the roll-ups export each of {@link VALUE_AND_TYPE_DECLARATIONS} both as a type and as a
+ *     value (`TagPickerOption`);
+ *   - 0.16 (spec §11): an import of only `useVirtualWindow` or only `useSelection` holds no
+ *     component ({@link HOOK_PROBES_0_16}); an import of only `DataGrid` holds no FlatTree code,
+ *     one of only `FlatTree` no DataGrid code, one of only `Button` or only `MessageBar` none of
+ *     {@link DATA_SCALE_MODULES} and one of only `Tree` none but the moved cascade
+ *     ({@link EXCLUSION_PROBES_0_16}, with the positive controls of {@link INCLUSION_PROBES_0_16});
+ *     the closure of `useVirtualWindow`, minified, stays within {@link VIRTUAL_BUDGET} and imports
+ *     nothing but `react`. The CLI prints the measured sizes, and those of the imports of
+ *     {@link RECORDED_IMPORTS} (DataGrid-only, Tree-only) against 0.15.0, which have no budget;
  *
  * Usage: node scripts/verify-dist.mjs [--dist <dir>] [--no-pending | --final]
  *   --dist        the dist directory (default: dist); its parent holds the package.json
@@ -398,6 +407,160 @@ export const HOOK_PROBES_0_14 = [
 ];
 
 /**
+ * The modules that 0.16 adds to dist (spec §11): the pure cores of `src/lib`, the selection and
+ * window hooks, the table hooks, the DataGrid's store, contexts, header, window and column sizing,
+ * `Table.ResizeHandle`, the data mode of the pickers and `FlatTree` with its model. An import of
+ * only `Button` or only `MessageBar` holds none of them, so both stay as they were in 0.15
+ * ({@link EXCLUSION_PROBES_0_16}). Sorted.
+ */
+export const DATA_SCALE_MODULES = [
+  'components/input/Option.data.mjs',
+  'components/layout/FlatTree.context.mjs',
+  'components/layout/FlatTree.item.mjs',
+  'components/layout/FlatTree.mjs',
+  'components/layout/useFlatTree.mjs',
+  'components/table/DataGrid.context.mjs',
+  'components/table/DataGrid.header.mjs',
+  'components/table/DataGrid.sizing.mjs',
+  'components/table/DataGrid.store.mjs',
+  'components/table/DataGrid.window.mjs',
+  'components/table/Table.resize.mjs',
+  'components/table/useTableColumnSizing.mjs',
+  'components/table/useTableFeatures.mjs',
+  'components/table/useTableSelection.mjs',
+  'components/table/useTableSort.mjs',
+  'hooks/useSelection.mjs',
+  'hooks/useVirtualWindow.mjs',
+  'lib/columnSizing.mjs',
+  'lib/flatTree.mjs',
+  'lib/selection.mjs',
+  'lib/treeCascade.mjs',
+  'lib/virtual.mjs',
+];
+
+/** The tree cascade, moved out of `Tree.selection` in 0.16 (R20): Tree and FlatTree share it. */
+const TREE_CASCADE_MODULE = 'lib/treeCascade.mjs';
+
+/** The modules of FlatTree and its model, which an import of only `DataGrid` must not hold. */
+const FLAT_TREE_MODULES = [
+  'components/layout/FlatTree.context.mjs',
+  'components/layout/FlatTree.item.mjs',
+  'components/layout/useFlatTree.mjs',
+  'lib/flatTree.mjs',
+  TREE_CASCADE_MODULE,
+];
+
+/**
+ * The DataGrid's modules and the table code it is built on, which an import of only `FlatTree`
+ * must not hold.
+ */
+const DATA_GRID_MODULES = [
+  'components/table/DataGrid.context.mjs',
+  'components/table/DataGrid.header.mjs',
+  'components/table/DataGrid.sizing.mjs',
+  'components/table/DataGrid.store.mjs',
+  'components/table/DataGrid.window.mjs',
+  'components/table/Table.resize.mjs',
+  'components/table/Table.shared.mjs',
+  'components/table/useGridNavigation.mjs',
+  'lib/columnSizing.mjs',
+  'lib/selection.mjs',
+];
+
+/**
+ * The hook probes of 0.16 (spec §11): an import of only `useVirtualWindow` holds the window and
+ * its layout core and no component, and one of only `useSelection` holds the selection core and
+ * no component, so no table code (`dropPrefixes`: no module under `components/`). Neither
+ * renders, so neither imports the JSX runtime.
+ */
+export const HOOK_PROBES_0_16 = [
+  {
+    keep: 'useVirtualWindow',
+    modules: ['hooks/useVirtualWindow.mjs', 'lib/virtual.mjs'],
+    dropModules: [],
+    dropPrefixes: ['components/'],
+    dropExternals: ['react/jsx-runtime'],
+  },
+  {
+    keep: 'useSelection',
+    modules: ['hooks/useSelection.mjs', 'lib/selection.mjs'],
+    dropModules: [
+      'components/table/DataGrid.store.mjs',
+      'components/table/useTableFeatures.mjs',
+      'components/table/useTableSelection.mjs',
+    ],
+    dropPrefixes: ['components/'],
+    dropExternals: ['react/jsx-runtime'],
+  },
+];
+
+/**
+ * The exclusion probes of 0.16 (spec §11, R20): an import of only `DataGrid` holds no FlatTree and
+ * one of only `FlatTree` no DataGrid; an import of only `Button` or only `MessageBar` holds none of
+ * the 0.16 modules, and one of only `Tree` none but the cascade it moved to (`lib/treeCascade`).
+ */
+export const EXCLUSION_PROBES_0_16 = [
+  { keep: 'DataGrid', drop: 'FlatTree', dropModules: FLAT_TREE_MODULES },
+  { keep: 'FlatTree', drop: 'DataGrid', dropModules: DATA_GRID_MODULES },
+  { keep: 'Button', drop: 'DataGrid', dropModules: DATA_SCALE_MODULES },
+  { keep: 'MessageBar', drop: 'DataGrid', dropModules: DATA_SCALE_MODULES },
+  {
+    keep: 'Tree',
+    drop: 'FlatTree',
+    dropModules: DATA_SCALE_MODULES.filter((path) => path !== TREE_CASCADE_MODULE),
+  },
+];
+
+/**
+ * The inclusion probes of 0.16: the positive controls of {@link EXCLUSION_PROBES_0_16}, so an
+ * exclusion cannot pass because a module is missing. A DataGrid holds its selection store, its
+ * window, its column sizing and the selection core; a FlatTree its item and context; a Tree the
+ * moved cascade.
+ */
+export const INCLUSION_PROBES_0_16 = [
+  {
+    keep: 'DataGrid',
+    modules: [
+      'components/table/DataGrid.store.mjs',
+      'components/table/DataGrid.window.mjs',
+      'components/table/DataGrid.sizing.mjs',
+      'lib/selection.mjs',
+      'lib/columnSizing.mjs',
+    ],
+  },
+  {
+    keep: 'FlatTree',
+    modules: ['components/layout/FlatTree.item.mjs', 'components/layout/FlatTree.context.mjs'],
+  },
+  { keep: 'Tree', modules: [TREE_CASCADE_MODULE] },
+];
+
+/**
+ * The window's budget (spec §11): the closure of an import of only `useVirtualWindow`, minified
+ * with bare imports external (the window, its layout core and the development warning it shares
+ * with every component), imports nothing but `react`. The budget is the size first measured for
+ * 0.16.0 (3,532 bytes minified, 1,695 gzip) plus 25 %, the gzip size held at the spec's ceiling of
+ * 2 KiB (25 % more would be 2,119).
+ */
+export const VIRTUAL_BUDGET = {
+  names: ['useVirtualWindow'],
+  maxMinifiedBytes: 4415,
+  maxGzipBytes: 2048,
+  allowedExternals: ['react'],
+};
+
+/**
+ * Imports whose size verify-dist measures and prints without a budget (spec §11, recorded in
+ * §16), each with its size in the published 0.15.0 package (minified and gzip bytes, bare imports
+ * external): a DataGrid-only import grows by the selection core, the column sizing and the window
+ * support, and a Tree-only import changes only by the moved cascade (R20).
+ */
+export const RECORDED_IMPORTS = [
+  { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
+  { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
+];
+
+/**
  * The inclusion probes of 0.11 (spec §6.2): an import of only `keep` holds each of `modules`, so
  * the exclusion probes above cannot pass because a module is missing. A TagPicker is built on the
  * tags, and Dialog, Drawer and NavDrawer mount through the presence core.
@@ -434,13 +597,52 @@ export const INCLUSION_PROBES_0_11 = [
  * TeachingPopover's root, context and surface, and the event predicates of the selectable
  * containers; since 0.15 (spec §16 Q1) every export of the motion internals: the recipe
  * constants, `resolveMotion` and `usesLegacyMotion` of `lib/motion`, and the hooks `useMotion`,
- * `useCollapsePresence`, `useFocusBeforeClose` and `usePresenceGroup` with their types
- * (`verify-dist.test.mjs` reads them from the sources, so a new one cannot be missed). Sorted.
+ * `useCollapsePresence`, `useFocusBeforeClose` and `usePresenceGroup` with their types; since
+ * 0.16 (spec §11) every export of the data-scale modules that the entry does not export: the pure
+ * cores (`lib/selection`, `lib/virtual`, `lib/columnSizing`, `lib/treeCascade`, `lib/flatTree`),
+ * the table plugin seam and the sort of the table hooks, the DataGrid's store, contexts, header,
+ * window and sizing modules, the data mode of the pickers, FlatTree's context, and the predicates
+ * and contexts the hooks share with them (`ownsArrowKeys`, `returnFocusToGridCell`,
+ * `ListboxOptionPositionContext`, …). `verify-dist.test.mjs` reads both groups from the sources
+ * (the 0.16 one with the TypeScript compiler, against the entry), so a new one cannot be missed.
+ * Sorted.
  */
 export const MODULE_ONLY_NAMES = [
   'AvatarSizeContext',
   'AvatarSizeContextValue',
   'CreateOptionKnown',
+  'DEFAULT_COLUMN_WIDTH',
+  'DEFAULT_MIN_COLUMN_WIDTH',
+  'DEFAULT_SELECTION_HEADER_LABEL',
+  'DEFAULT_SELECT_ALL_LABEL',
+  'DataGridColumnResizeHandle',
+  'DataGridColumnSizing',
+  'DataGridContext',
+  'DataGridContextValue',
+  'DataGridFixedLayoutContext',
+  'DataGridHeaderRowHintContext',
+  'DataGridHeaderSlotsContext',
+  'DataGridItemRowData',
+  'DataGridItemSelectionDisabledContext',
+  'DataGridItemsContext',
+  'DataGridItemsContextValue',
+  'DataGridRenderRow',
+  'DataGridResizeContext',
+  'DataGridResizeContextValue',
+  'DataGridRowContext',
+  'DataGridRowContextValue',
+  'DataGridRowIdContext',
+  'DataGridSection',
+  'DataGridSectionContext',
+  'DataGridSelectionHeaderSlot',
+  'DataGridSortContext',
+  'DataGridSortContextValue',
+  'DataGridSpacerRow',
+  'DataGridWindowContext',
+  'DataGridWindowContextValue',
+  'DataGridWindowRow',
+  'DataGridWindowRowContext',
+  'DataGridWindowState',
   'DrawerCloseButton',
   'DrawerCloseButtonProps',
   'DrawerContext',
@@ -454,13 +656,24 @@ export const MODULE_ONLY_NAMES = [
   'DrawerScrollState',
   'DrawerScrollStateContext',
   'ExactMatchCandidate',
+  'FlatTreeContext',
+  'FlatTreeContextValue',
+  'FlatTreeIndex',
+  'FlatTreeIssue',
+  'FlatTreeNodeRecord',
+  'FlatTreeRow',
   'FocusWithin',
   'ForeignEventOptions',
   'GroupVisibilityRecord',
+  'HeaderSlotRegistry',
   'HeldFocus',
   'INTERACTIVE_SELECTOR',
   'InteractionTagContext',
   'ItemMeta',
+  'ListboxContext',
+  'ListboxItemsState',
+  'ListboxOptionPosition',
+  'ListboxOptionPositionContext',
   'ModalBackdrop',
   'ModalBackdropProps',
   'ModalBackdropSlot',
@@ -485,6 +698,10 @@ export const MODULE_ONLY_NAMES = [
   'PresenceGroupEntry',
   'ResolvedTagPickerLabels',
   'SELECTION_CELL_CLASSES',
+  'SELECTION_COLUMN_WIDTH',
+  'ScrollOffsetInput',
+  'SelectionStore',
+  'SelectionUniverse',
   'SortArrowDownIcon',
   'SortArrowUpIcon',
   'StoreConfig',
@@ -492,6 +709,7 @@ export const MODULE_ONLY_NAMES = [
   'TAG_GROUP_SELECTOR',
   'TAG_ITEM_SELECTOR',
   'TOOLBAR_ITEM_SELECTOR',
+  'TableFeaturePluginImplementation',
   'TablePartKind',
   'TableSelectionControl',
   'TableSelectionControlProps',
@@ -520,21 +738,34 @@ export const MODULE_ONLY_NAMES = [
   'TeachingPopoverSurfaceContextValue',
   'TeachingPopoverTarget',
   'TeachingSurface',
+  'TreeNode',
   'UseCollapsePresenceOptions',
   'UseCollapsePresenceResult',
+  'UseDataGridColumnSizingOptions',
+  'UseDataGridWindowOptions',
   'UseFocusBeforeCloseOptions',
   'UseNavRootStateOptions',
   'UsePresenceGroupResult',
   'UseTagGroupItemOptions',
   'UseTagOverflowOptions',
   'UseToolbarNavigationOptions',
+  'VirtualLayoutInput',
+  'buildFlatTreeIndex',
   'carouselFadeMotion',
   'carouselSlideMotion',
+  'cellBase',
+  'clampColumnWidth',
+  'clearIds',
   'collapseMotion',
   'collapseStructure',
+  'computeCheckStates',
+  'computeVirtualLayout',
   'containsValue',
   'createCategoryStore',
+  'createHeaderSlotRegistry',
   'createOptionText',
+  'createSelectionStore',
+  'createTableFeaturePlugin',
   'dialogBackdropMotion',
   'dialogMotion',
   'drawerBackdropMotion',
@@ -544,40 +775,69 @@ export const MODULE_ONLY_NAMES = [
   'expandIconMotion',
   'findCategoriesContaining',
   'findExactMatch',
+  'flatTreeForest',
+  'getColumnEntry',
   'getNavPartKind',
   'getTablePartKind',
+  'getWindowNavigationModel',
   'hasIsolatingModalBelow',
   'hasResizeObserver',
+  'initialColumnWidth',
   'inlineDrawerMotion',
   'inlineDrawerStructure',
   'isDismissKey',
   'isForeignEvent',
+  'isHiddenByCss',
   'isRepeatedActivation',
+  'isSelectionCellElement',
+  'isTextEntryElement',
   'markNavPart',
   'markTablePart',
   'messageBarGroupEnterMotion',
   'messageBarGroupExitMotion',
   'messageBarGroupItemStructure',
   'navActionsRevealMotion',
+  'ownsArrowKeys',
   'popupMotion',
   'progressIndeterminateMotion',
+  'renderListboxItem',
+  'renderListboxItems',
+  'renderListboxWindow',
+  'renderWindowRows',
+  'resolveColumnWidths',
   'resolveMotion',
+  'returnFocusToGridCell',
   'sameIds',
+  'scrollOffsetForIndex',
   'scrollSeparatorClasses',
+  'selectAllIds',
+  'sortTableRows',
+  'summarizeSelection',
   'tabIndicatorMotion',
   'tagListControls',
   'tagRootClasses',
   'toastMotion',
   'toastStructure',
+  'toggleCheck',
+  'toggleId',
   'tooltipMotion',
+  'totalWidth',
   'useBackdropAppearance',
   'useCollapsePresence',
+  'useDataGridColumnSizing',
+  'useDataGridContext',
+  'useDataGridRowContext',
+  'useDataGridSortContext',
+  'useDataGridWindow',
+  'useDataModeWarnings',
   'useDismissControlFocus',
   'useDrawerContext',
   'useDrawerOpen',
+  'useFlatTreeContext',
   'useFocusBeforeClose',
   'useFocusWithin',
   'useHeldFocus',
+  'useItemsAndChildrenWarning',
   'useModalOpener',
   'useMotionClasses',
   'useMotionPreference',
@@ -588,6 +848,7 @@ export const MODULE_ONLY_NAMES = [
   'usePresenceGroup',
   'useRecordCategory',
   'useScrollState',
+  'useShownListScroll',
   'useTagGroupContext',
   'useTagGroupItem',
   'useTagOverflow',
@@ -596,6 +857,7 @@ export const MODULE_ONLY_NAMES = [
   'useTeachingPopoverContext',
   'useToolbarNavigation',
   'usesLegacyMotion',
+  'visibleFlatItems',
 ];
 
 /**
@@ -2034,29 +2296,50 @@ export async function probeIncludes(dist, { keep, modules, strings = [], substri
 /**
  * Hook probe: bundles an entry that imports only `keep` from `dist/index.mjs` and reports each of
  * `modules` missing from the bundle, each of `dropModules` in it (a listed module that does not
- * exist in `dist` is an error: the probe would pass vacuously) and each of `dropExternals` that
- * the bundle imports.
+ * exist in `dist` is an error: the probe would pass vacuously), each other module of the bundle
+ * under one of the `dropPrefixes` (dist directories such as `components/`; a prefix that no module
+ * of `dist` is under is an error for the same reason) and each of `dropExternals` that the bundle
+ * imports.
  */
 export async function probeHook(
   dist,
-  { keep, modules = [], dropModules = [], dropExternals = [] },
+  { keep, modules = [], dropModules = [], dropPrefixes = [], dropExternals = [] },
 ) {
   const distRoot = realpathSync(resolve(dist));
-  const existing = new Set(listFiles(distRoot).map(fold));
+  const files = listFiles(distRoot);
+  const existing = new Set(files.map(fold));
   const errors = [];
   for (const path of [...modules, ...dropModules]) {
     if (!existing.has(fold(path)))
       errors.push(`${path}, listed for the hook ${keep}, does not exist in dist`);
   }
+  for (const prefix of dropPrefixes) {
+    if (!files.some((path) => fold(path).startsWith(fold(prefix)))) {
+      errors.push(
+        `no module of dist is under ${prefix}, listed for the hook ${keep} (the probe would pass vacuously)`,
+      );
+    }
+  }
   const chunks = await bundleImport(distRoot, [keep]);
-  const included = new Set([...bundledModules(distRoot, chunks)].map(fold));
+  const bundled = [...bundledModules(distRoot, chunks)].sort();
+  const included = new Set(bundled.map(fold));
   for (const path of modules) {
     if (!included.has(fold(path)))
       errors.push(`${path} is not in the bundle of an import of only ${keep}`);
   }
+  const listed = new Set(dropModules.map(fold));
   for (const path of dropModules) {
     if (included.has(fold(path)))
       errors.push(`${path} is in the bundle of an import of only ${keep}`);
+  }
+  for (const path of bundled) {
+    if (listed.has(fold(path))) continue;
+    const prefix = dropPrefixes.find((candidate) => fold(path).startsWith(fold(candidate)));
+    if (prefix !== undefined) {
+      errors.push(
+        `${path} is in the bundle of an import of only ${keep} (no module under ${prefix} may be)`,
+      );
+    }
   }
   const chunkNames = new Set(chunks.map((chunk) => chunk.fileName));
   const imported = new Set(
@@ -2071,16 +2354,11 @@ export async function probeHook(
 }
 
 /**
- * Size budget probe: a minified Vite build of an entry that imports `names` from
- * `dist/index.mjs`, bare imports external. Returns the minified and gzip (`node:zlib`) sizes in
- * bytes, the external ids the closure imports (sorted), an error for each budget exceeded, and an
- * error for each external id not in `allowedExternals` (a dependency outside the measurement,
- * such as tailwind-merge through `cn`, would hide its size).
+ * The size of an import of `names` from `dist/index.mjs`: a minified Vite build of an entry that
+ * imports them, bare imports external, as a consumer's production bundle has it. Returns the
+ * minified and gzip (`node:zlib`) sizes in bytes and the external ids the closure imports (sorted).
  */
-export async function probeSizeBudget(
-  dist,
-  { names, maxMinifiedBytes, maxGzipBytes, allowedExternals },
-) {
+export async function measureImport(dist, names) {
   const distRoot = realpathSync(resolve(dist));
   const chunks = await bundleImport(distRoot, names, { minify: true });
   const code = chunks.map((chunk) => chunk.code).join('\n');
@@ -2092,8 +2370,20 @@ export async function probeSizeBudget(
         .filter((id) => !chunkNames.has(id)),
     ),
   ].sort();
-  const minified = Buffer.byteLength(code);
-  const gzip = gzipSync(code).length;
+  return { minified: Buffer.byteLength(code), gzip: gzipSync(code).length, externals };
+}
+
+/**
+ * Size budget probe: measures an import of `names` ({@link measureImport}). Returns the minified
+ * and gzip sizes in bytes, the external ids the closure imports (sorted), an error for each budget
+ * exceeded, and an error for each external id not in `allowedExternals` (a dependency outside the
+ * measurement, such as tailwind-merge through `cn`, would hide its size).
+ */
+export async function probeSizeBudget(
+  dist,
+  { names, maxMinifiedBytes, maxGzipBytes, allowedExternals },
+) {
+  const { minified, gzip, externals } = await measureImport(dist, names);
   const label = names.join(' + ');
   const errors = [];
   if (minified > maxMinifiedBytes) {
@@ -2115,8 +2405,10 @@ export async function probeSizeBudget(
 /**
  * Runs every check on `dist` (its parent directory holds the package.json). Returns the errors,
  * the flat names still pending and the listed components that are no compound yet (see
- * {@link PENDING_FLAT_EXPORTS}), and the measured size of the presence core (`budget`: minified
- * and gzip bytes, `null` when the probe failed); `final` closes the pending bridge.
+ * {@link PENDING_FLAT_EXPORTS}), the measured sizes of the presence core (`budget`) and of the
+ * window (`virtualBudget`; minified and gzip bytes, `null` when the probe failed), and the
+ * measured sizes of {@link RECORDED_IMPORTS} (`recorded`: `{ names, minified, gzip, baseline }`
+ * each); `final` closes the pending bridge.
  */
 export async function verifyDist(
   dist,
@@ -2211,6 +2503,11 @@ export async function verifyDist(
     for (const probe of EXCLUSION_PROBES_0_15) {
       errors.push(...(await probeTreeShaking(distRoot, probe)));
     }
+    // 0.16 (spec §11): the grid and the flat tree hold none of each other's code, and a Button, a
+    // MessageBar and a Tree none of the new modules (a Tree only the cascade it moved to).
+    for (const probe of EXCLUSION_PROBES_0_16) {
+      errors.push(...(await probeTreeShaking(distRoot, probe)));
+    }
   } catch (error) {
     errors.push(`tree-shaking probe failed: ${error.message}`);
   }
@@ -2236,11 +2533,25 @@ export async function verifyDist(
     errors.push(`0.14 helper probe failed: ${error.message}`);
   }
   try {
+    for (const probe of HOOK_PROBES_0_16) {
+      errors.push(...(await probeHook(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.16 hook probe failed: ${error.message}`);
+  }
+  try {
     for (const probe of INCLUSION_PROBES_0_11) {
       errors.push(...(await probeIncludes(distRoot, probe)));
     }
   } catch (error) {
     errors.push(`0.11 include probe failed: ${error.message}`);
+  }
+  try {
+    for (const probe of INCLUSION_PROBES_0_16) {
+      errors.push(...(await probeIncludes(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.16 include probe failed: ${error.message}`);
   }
   try {
     errors.push(
@@ -2285,7 +2596,37 @@ export async function verifyDist(
   } catch (error) {
     errors.push(`presence size budget probe failed: ${error.message}`);
   }
-  return { errors, pending, planned, budget };
+  let virtualBudget = null;
+  try {
+    const {
+      minified,
+      gzip,
+      errors: budgetErrors,
+    } = await probeSizeBudget(distRoot, VIRTUAL_BUDGET);
+    errors.push(...budgetErrors);
+    virtualBudget = { minified, gzip };
+  } catch (error) {
+    errors.push(`window size budget probe failed: ${error.message}`);
+  }
+  const recorded = [];
+  try {
+    for (const { names, baseline } of RECORDED_IMPORTS) {
+      const { minified, gzip } = await measureImport(distRoot, names);
+      recorded.push({ names, minified, gzip, baseline });
+    }
+  } catch (error) {
+    errors.push(`recorded size measurement failed: ${error.message}`);
+  }
+  return { errors, pending, planned, budget, virtualBudget, recorded };
+}
+
+/**
+ * `size` against `base` as a signed percentage with two decimals (`+43.78 %`, `-0.03 %`), fine
+ * enough for the ±1 % of the Tree-only import.
+ */
+function percentChange(size, base) {
+  const change = ((size - base) / base) * 100;
+  return `${change < 0 ? '' : '+'}${change.toFixed(2)} %`;
 }
 
 function parseArgs(argv) {
@@ -2306,7 +2647,7 @@ function parseArgs(argv) {
 /** CLI entry; returns the exit code. `io` receives the report (default: the console). */
 export async function main(argv = process.argv.slice(2), io = console) {
   const { dist, pendingFlatExports, final } = parseArgs(argv);
-  const { errors, pending, planned, budget } = await verifyDist(dist, {
+  const { errors, pending, planned, budget, virtualBudget, recorded } = await verifyDist(dist, {
     pendingFlatExports,
     final,
   });
@@ -2316,6 +2657,20 @@ export async function main(argv = process.argv.slice(2), io = console) {
       `verify-dist: presence core (${PRESENCE_BUDGET.names.join(' + ')}): ` +
         `${budget.minified} B minified (budget ${PRESENCE_BUDGET.maxMinifiedBytes}), ` +
         `${budget.gzip} B gzip (budget ${PRESENCE_BUDGET.maxGzipBytes})`,
+    );
+  }
+  if (virtualBudget) {
+    io.log(
+      `verify-dist: window (${VIRTUAL_BUDGET.names.join(' + ')}): ` +
+        `${virtualBudget.minified} B minified (budget ${VIRTUAL_BUDGET.maxMinifiedBytes}), ` +
+        `${virtualBudget.gzip} B gzip (budget ${VIRTUAL_BUDGET.maxGzipBytes})`,
+    );
+  }
+  for (const { names, minified, gzip, baseline } of recorded ?? []) {
+    io.log(
+      `verify-dist: ${names.join(' + ')}-only import: ${minified} B minified, ${gzip} B gzip ` +
+        `(${baseline.version}: ${baseline.minified} B, ${baseline.gzip} B; ` +
+        `${percentChange(minified, baseline.minified)}, ${percentChange(gzip, baseline.gzip)})`,
     );
   }
   if (errors.length > 0) {

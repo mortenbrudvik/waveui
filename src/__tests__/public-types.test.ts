@@ -60,6 +60,7 @@ import type {
   CheckedValues,
   CheckedValuesChangeDetails,
   CheckedValuesChangeHandler,
+  CheckState,
   collectOptionLabels,
   ColorAreaLabels,
   ColorAreaProps,
@@ -72,6 +73,7 @@ import type {
   ColorSliderLabels,
   ColorSliderProps,
   ColorSwatchProps,
+  ColumnSizingOption,
   Combobox,
   ComboboxComponent,
   ComboboxLabels,
@@ -85,6 +87,7 @@ import type {
   DataGridColumn,
   DataGridItemsProps,
   DataGridItemsSortProps,
+  DataGridLabels,
   DataGridRowProps,
   DataGridRowSelectionCellProps,
   DataGridSelectedItemsChangeDetails,
@@ -124,9 +127,14 @@ import type {
   FieldControlIdClaim,
   FieldProps,
   FirstWeekOfYear,
+  FlatTreeItemData,
+  FlatTreeItemProps,
+  FlatTreeModel,
+  FlatTreeProps,
   FocusMode,
   getWeekNumber,
   GetWeekNumberOptions,
+  GridNavigationModel,
   HamburgerProps,
   HeadingLevel,
   HsvColor,
@@ -155,6 +163,7 @@ import type {
   ListboxListProps,
   ListboxOpenChangeReason,
   ListboxOptionElementProps,
+  ListboxOptionRenderState,
   ListboxProps,
   ListboxProvider,
   ListboxProviderProps,
@@ -277,6 +286,7 @@ import type {
   SwitchSize,
   TableCellActionsProps,
   TableCellLayoutProps,
+  TableColumnWidthsChangeDetails,
   TableHeaderCellProps,
   TableResizeHandleProps,
   TableSelectionCellCheckedChangeDetails,
@@ -352,6 +362,7 @@ import type {
   useActiveDescendant,
   UseActiveDescendantOptions,
   UseActiveDescendantResult,
+  UseFlatTreeOptions,
   useListbox,
   useListboxOption,
   UseListboxOptionProps,
@@ -364,8 +375,15 @@ import type {
   UsePresenceOptions,
   UsePresenceResult,
   UseRovingTabIndexOptions,
+  UseSelectionChangeDetails,
+  UseSelectionOptions,
+  UseSelectionResult,
+  UseVirtualWindowOptions,
   ValidationState,
   VirtualElement,
+  VirtualEntry,
+  VirtualWindow,
+  VisibleFlatItem,
   WaveContextValue,
   WaveDir,
   WaveProviderProps,
@@ -1978,5 +1996,156 @@ describe('0.15 motion from the package entry', () => {
     // @ts-expect-error a group animates its exits, or its exits and enters
     const enterOnly: MessageBarGroupProps['animate'] = 'enter-only';
     expect(enterOnly).toBe('enter-only');
+  });
+});
+
+// The 0.16 additions (Phase 11), imported from the package entry (compile-time, `tsconfig.dev.json`).
+describe('0.16 data at scale from the package entry', () => {
+  it('useVirtualWindow: the options, the window and its entries, taken by every windowed component', () => {
+    expectTypeOf<Entry['useVirtualWindow']>().toEqualTypeOf<
+      (options: UseVirtualWindowOptions) => VirtualWindow
+    >();
+    expectTypeOf<UseVirtualWindowOptions['itemSize']>().toEqualTypeOf<number>();
+    expectTypeOf<UseVirtualWindowOptions['overscan']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<UseVirtualWindowOptions['initialViewportSize']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<UseVirtualWindowOptions['scrollPaddingStart']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<VirtualWindow['itemSize']>().toEqualTypeOf<number>();
+    expectTypeOf<VirtualWindow['scrollRef']>().toEqualTypeOf<RefCallback<HTMLElement>>();
+    expectTypeOf<VirtualWindow['layout']>().toEqualTypeOf<
+      (count: number, options?: { keep?: readonly number[] }) => readonly VirtualEntry[]
+    >();
+    expectTypeOf<VirtualWindow['scrollToIndex']>().toEqualTypeOf<
+      (index: number, options?: { align?: 'auto' | 'start' | 'center' | 'end' }) => void
+    >();
+    expectTypeOf<VirtualEntry>().toEqualTypeOf<
+      { kind: 'item'; index: number } | { kind: 'spacer'; size: number; key: string }
+    >();
+
+    type Window = VirtualWindow | undefined;
+    expectTypeOf<DataGridBaseProps['virtualWindow']>().toEqualTypeOf<Window>();
+    expectTypeOf<ListProps['virtualWindow']>().toEqualTypeOf<Window>();
+    expectTypeOf<ListProps['count']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<ComboboxProps['virtualWindow']>().toEqualTypeOf<Window>();
+    expectTypeOf<DropdownProps['virtualWindow']>().toEqualTypeOf<Window>();
+    expectTypeOf<ListboxProps['virtualWindow']>().toEqualTypeOf<Window>();
+    expectTypeOf<FlatTreeProps['virtualWindow']>().toEqualTypeOf<Window>();
+    // A grid that windows by the data takes a model of its rows.
+    expectTypeOf<GridNavigationModel>().toEqualTypeOf<{
+      rowCount: number;
+      headerRowCount: number;
+      scrollToRow(index: number): void;
+    }>();
+  });
+
+  it('useSelection: row ids in, a new array of ids out, with the details', () => {
+    expectTypeOf<Entry['useSelection']>().toEqualTypeOf<
+      (options: UseSelectionOptions) => UseSelectionResult
+    >();
+    expectTypeOf<UseSelectionOptions['selectionMode']>().toEqualTypeOf<SelectionMode>();
+    expectTypeOf<UseSelectionOptions['selectedItems']>().toEqualTypeOf<
+      readonly string[] | undefined
+    >();
+    expectTypeOf<NonNullable<UseSelectionOptions['onSelectedItemsChange']>>().toEqualTypeOf<
+      (selectedItems: string[], details?: UseSelectionChangeDetails) => void
+    >();
+    expectTypeOf<UseSelectionChangeDetails>().toEqualTypeOf<{ event?: Event; id?: string }>();
+    expectTypeOf<UseSelectionResult['selectedItems']>().toEqualTypeOf<ReadonlySet<string>>();
+    expectTypeOf<UseSelectionResult['toggleAll']>().toEqualTypeOf<
+      (universe: readonly string[], event?: Event) => void
+    >();
+  });
+
+  it('DataGrid: selection by the data, the column widths and their labels', () => {
+    interface Person {
+      id: string;
+      name: string;
+    }
+    expectTypeOf<DataGridBaseProps<Person>['isSelectionDisabled']>().toEqualTypeOf<
+      ((item: Person, index: number) => boolean) | undefined
+    >();
+    expectTypeOf<DataGridBaseProps['resizableColumns']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DataGridBaseProps['columnSizingOptions']>().toEqualTypeOf<
+      Record<string, ColumnSizingOption> | undefined
+    >();
+    expectTypeOf<ColumnSizingOption>().toEqualTypeOf<{
+      minWidth?: number;
+      idealWidth?: number;
+      defaultWidth?: number;
+    }>();
+    expectTypeOf<DataGridBaseProps['columnWidths']>().toEqualTypeOf<
+      Record<string, number> | undefined
+    >();
+    expectTypeOf<DataGridBaseProps['defaultColumnWidths']>().toEqualTypeOf<
+      Record<string, number> | undefined
+    >();
+    expectTypeOf<NonNullable<DataGridBaseProps['onColumnWidthsChange']>>().toEqualTypeOf<
+      (widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void
+    >();
+    expectTypeOf<TableColumnWidthsChangeDetails>().toEqualTypeOf<{
+      columnId: string;
+      width: number;
+      event: Event;
+    }>();
+    expectTypeOf<DataGridLabels['resizeColumn']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<DataGridLabels['columnWidth']>().toEqualTypeOf<
+      ((width: number) => string) | undefined
+    >();
+  });
+
+  it('the data mode of Combobox, Dropdown and Listbox: items, renderOption and its state', () => {
+    type RenderOption =
+      ((item: ListboxItem, state: ListboxOptionRenderState) => ReactNode) | undefined;
+    expectTypeOf<ComboboxProps['items']>().toEqualTypeOf<readonly ListboxItem[] | undefined>();
+    expectTypeOf<DropdownProps['items']>().toEqualTypeOf<readonly ListboxItem[] | undefined>();
+    expectTypeOf<ListboxProps['items']>().toEqualTypeOf<readonly ListboxItem[] | undefined>();
+    expectTypeOf<ComboboxProps['renderOption']>().toEqualTypeOf<RenderOption>();
+    expectTypeOf<DropdownProps['renderOption']>().toEqualTypeOf<RenderOption>();
+    expectTypeOf<ListboxProps['renderOption']>().toEqualTypeOf<RenderOption>();
+    expectTypeOf<ListboxOptionRenderState>().toEqualTypeOf<{
+      selected: boolean;
+      active: boolean;
+      index: number;
+    }>();
+  });
+
+  it('FlatTree and useFlatTree: the flat data, the model, the rows and the compound', () => {
+    expectTypeOf<Entry['useFlatTree']>().toEqualTypeOf<
+      (items: readonly FlatTreeItemData[], options?: UseFlatTreeOptions) => FlatTreeModel
+    >();
+    expectTypeOf<FlatTreeItemData>().toEqualTypeOf<{
+      value: string;
+      parentValue?: string;
+      itemType?: 'leaf' | 'branch';
+      label?: string;
+      disabled?: boolean;
+    }>();
+    expectTypeOf<CheckState>().toEqualTypeOf<'checked' | 'mixed' | 'unchecked'>();
+    expectTypeOf<NonNullable<UseFlatTreeOptions['onCheckedItemsChange']>>().toEqualTypeOf<
+      (checkedItems: string[], details?: TreeCheckedItemsChangeDetails) => void
+    >();
+    expectTypeOf<UseFlatTreeOptions['selectionMode']>().toEqualTypeOf<
+      'none' | SelectionMode | undefined
+    >();
+    type Row = VisibleFlatItem & { checked?: CheckState };
+    expectTypeOf<FlatTreeModel['visibleItems']>().toEqualTypeOf<readonly Row[]>();
+    expectTypeOf<VisibleFlatItem['isBranch']>().toEqualTypeOf<boolean>();
+    expectTypeOf<FlatTreeProps['model']>().toEqualTypeOf<FlatTreeModel>();
+    expectTypeOf<FlatTreeProps['renderItem']>().toEqualTypeOf<
+      ((item: Row) => ReactNode) | undefined
+    >();
+    expectTypeOf<FlatTreeProps['onItemSelect']>().toEqualTypeOf<
+      ((value: string) => void) | undefined
+    >();
+    expectTypeOf<FlatTreeProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<FlatTreeItemProps['item']>().toEqualTypeOf<Row>();
+    expectTypeOf<Entry['FlatTree']['Item']>().toEqualTypeOf<Entry['FlatTreeItem']>();
+    expectTypeOf<Entry['flatTreeClassNames']['root']>().toEqualTypeOf<'wave-flat-tree'>();
+    expectTypeOf<
+      Entry['tableResizeHandleClassNames']['root']
+    >().toEqualTypeOf<'wave-table-resize-handle'>();
   });
 });

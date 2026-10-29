@@ -24,6 +24,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   checkCjsParity,
@@ -37,15 +38,20 @@ import {
   checkServerImport,
   clientReferenceStub,
   createWorkDir,
+  DATA_SCALE_MODULES,
   directivePrologue,
   entryStatus,
   EXCLUSION_PROBES_0_11,
   EXCLUSION_PROBES_0_15,
+  EXCLUSION_PROBES_0_16,
   expectsUseClient,
+  HOOK_PROBES_0_16,
   importSpecifiers,
   INCLUSION_PROBES_0_11,
+  INCLUSION_PROBES_0_16,
   isMainModule,
   main,
+  measureImport,
   missingDeclarations,
   missingValueAndTypeDeclarations,
   MODULE_ONLY_NAMES,
@@ -56,15 +62,18 @@ import {
   motionRecipeValues,
   OPT_IN_MODULES,
   PENDING_FLAT_EXPORTS,
+  probeHook,
   probeIncludes,
   probeSizeBudget,
   probeTreeShaking,
+  RECORDED_IMPORTS,
   removeWorkDir,
   REQUIRED_DECLARATIONS,
   runScript,
   undocumentedComponents,
   VALUE_AND_TYPE_DECLARATIONS,
   verifyDist,
+  VIRTUAL_BUDGET,
 } from '../verify-dist.mjs';
 // The source of `dist/lib/motion.mjs` (0.15): MOTION_RECIPE_MIN is the count of its literals.
 import * as motionSource from '../../src/lib/motion.ts';
@@ -106,10 +115,11 @@ const EMPTY_ROLL_UP = 'export { }\n';
 
 /**
  * A correct preserveModules dist: Button, a Card and a Dialog compound, a hook and `cn`, the
- * modules of each phase since 0.11, and the 0.15 modules of {@link withPhase10Modules}.
+ * modules of each phase since 0.11, the 0.15 modules of {@link withPhase10Modules} and the 0.16
+ * modules of {@link withPhase11Modules}.
  */
 function goodFiles() {
-  return withPhase10Modules(goodFilesBefore015());
+  return withPhase11Modules(withPhase10Modules(goodFilesBefore015()));
 }
 
 /** The good files up to 0.14 ({@link goodFiles} adds the 0.15 modules). */
@@ -892,6 +902,229 @@ function withPhase10Modules(files) {
   const result = { ...files };
   for (const [path, spec] of Object.entries(PHASE10_MODULES)) {
     const { esm, cjs } = phase10Module(path, spec);
+    result[`dist/${path}.mjs`] = esm;
+    result[`dist/${path}.cjs`] = cjs;
+    if (!spec.entry) continue;
+    result['dist/index.mjs'] += `export { ${spec.exports.join(', ')} } from './${path}.mjs';\n`;
+    result['dist/index.cjs'] += spec.exports
+      .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
+      .join('');
+  }
+  return result;
+}
+
+/**
+ * The 0.16 modules of the fixture (INTEGRATION), in the shape of PHASE10_MODULES: every module of
+ * DATA_SCALE_MODULES, wired where a probe looks as the real ones are. The window and the selection
+ * hooks sit on their cores and import no component; a DataGrid holds its selection store (on the
+ * selection core), its header, window and column sizing (with `Table.ResizeHandle`); a FlatTree
+ * compound holds its item and context; a Tree reaches the moved cascade through `Tree.selection`;
+ * `useFlatTree` sits on the flat model and the cascade; the table hooks, the pickers' data mode and
+ * the grid navigation hook stand alone. A `lib` module carries no `"use client"`.
+ */
+const PHASE11_MODULES = {
+  'lib/virtual': {
+    imports: [],
+    body: "function computeVirtualLayout(options) { return [{ kind: 'item', index: options.first }]; }\n",
+    exports: ['computeVirtualLayout'],
+  },
+  'hooks/useVirtualWindow': {
+    imports: [
+      ['react', ['useState']],
+      ['lib/virtual', ['computeVirtualLayout']],
+    ],
+    body:
+      'function useVirtualWindow(options) { const [first] = useState(0); ' +
+      'return { itemSize: options.itemSize, layout: (count) => computeVirtualLayout({ count, first }) }; }\n',
+    exports: ['useVirtualWindow'],
+    entry: true,
+  },
+  'lib/selection': {
+    imports: [],
+    body: 'function toggleId(selected, id) { return selected.includes(id) ? selected.filter((other) => other !== id) : [...selected, id]; }\n',
+    exports: ['toggleId'],
+  },
+  'hooks/useSelection': {
+    imports: [
+      ['react', ['useState']],
+      ['lib/selection', ['toggleId']],
+    ],
+    body:
+      'function useSelection(options) { const [selected, setSelected] = useState(options.defaultSelectedItems ?? []); ' +
+      'return { selected, toggle: (id) => setSelected(toggleId(selected, id)) }; }\n',
+    exports: ['useSelection'],
+    entry: true,
+  },
+  'lib/columnSizing': {
+    imports: [],
+    body: 'function totalWidth(widths) { return Object.values(widths).reduce((sum, width) => sum + width, 0); }\n',
+    exports: ['totalWidth'],
+  },
+  'lib/treeCascade': {
+    imports: [],
+    body: "function computeCheckStates(nodes) { return new Map(nodes.map((node) => [node.value, 'unchecked'])); }\n",
+    exports: ['computeCheckStates'],
+  },
+  'lib/flatTree': {
+    imports: [['lib/treeCascade', ['computeCheckStates']]],
+    body: 'function buildFlatTreeIndex(items) { return { items, checks: computeCheckStates(items) }; }\n',
+    exports: ['buildFlatTreeIndex'],
+  },
+  'components/table/useTableFeatures': {
+    imports: [['react', ['useMemo']]],
+    body: 'function useTableFeatures(options) { return useMemo(() => ({ items: options.items }), [options.items]); }\n',
+    exports: ['useTableFeatures'],
+    entry: true,
+  },
+  'components/table/useTableSort': {
+    imports: [['react', ['useState']]],
+    body: 'function useTableSort(options) { const [sort] = useState(options.defaultSort ?? null); return { sort }; }\n',
+    exports: ['useTableSort'],
+    entry: true,
+  },
+  'components/table/useTableSelection': {
+    imports: [['hooks/useSelection', ['useSelection']]],
+    body: 'function useTableSelection(options) { return useSelection(options); }\n',
+    exports: ['useTableSelection'],
+    entry: true,
+  },
+  'components/table/useTableColumnSizing': {
+    imports: [['lib/columnSizing', ['totalWidth']]],
+    body: 'function useTableColumnSizing(options) { return { total: totalWidth(options.widths ?? {}) }; }\n',
+    exports: ['useTableColumnSizing'],
+    entry: true,
+  },
+  'components/table/useGridNavigation': {
+    imports: [['react', ['useRef']]],
+    body: 'function useGridNavigation() { return { gridRef: useRef(null) }; }\n',
+    exports: ['useGridNavigation'],
+  },
+  'components/table/Table.resize': {
+    imports: [['lib/cn', ['cn']]],
+    body:
+      "function TableResizeHandle(props) { return cn('resize-handle', props.className); }\n" +
+      "TableResizeHandle.displayName = 'TableResizeHandle';\n",
+    exports: ['TableResizeHandle'],
+  },
+  'components/table/DataGrid.store': {
+    imports: [['lib/selection', ['toggleId']]],
+    body: 'function createSelectionStore(ids) { return { toggle: (id) => toggleId(ids, id) }; }\n',
+    exports: ['createSelectionStore'],
+  },
+  'components/table/DataGrid.context': {
+    imports: [['react', ['createContext']]],
+    body: 'const DataGridContext = createContext(null);\n',
+    exports: ['DataGridContext'],
+  },
+  'components/table/DataGrid.header': {
+    imports: [['components/table/DataGrid.context', ['DataGridContext']]],
+    body:
+      'function DataGridHeader() { return DataGridContext; }\n' +
+      "DataGridHeader.displayName = 'DataGridHeader';\n",
+    exports: ['DataGridHeader'],
+  },
+  'components/table/DataGrid.window': {
+    imports: [['components/table/DataGrid.context', ['DataGridContext']]],
+    body: 'function useDataGridWindow(options) { return { context: DataGridContext, window: options.virtualWindow }; }\n',
+    exports: ['useDataGridWindow'],
+  },
+  'components/table/DataGrid.sizing': {
+    imports: [
+      ['lib/columnSizing', ['totalWidth']],
+      ['components/table/Table.resize', ['TableResizeHandle']],
+    ],
+    body: 'function useDataGridColumnSizing(options) { return { total: totalWidth(options.widths ?? {}), handle: TableResizeHandle }; }\n',
+    exports: ['useDataGridColumnSizing'],
+  },
+  // Replaces the 0.14 stand-in: the grid on its 0.16 modules (no `Table.shared`, which the 0.14
+  // helper probe lists, so that probe's cases stay as they were).
+  'components/table/DataGrid': {
+    imports: [
+      ['react', ['createElement']],
+      ['components/table/DataGrid.store', ['createSelectionStore']],
+      ['components/table/DataGrid.header', ['DataGridHeader']],
+      ['components/table/DataGrid.window', ['useDataGridWindow']],
+      ['components/table/DataGrid.sizing', ['useDataGridColumnSizing']],
+    ],
+    body:
+      'function DataGrid(props) { createSelectionStore([]); useDataGridWindow(props); useDataGridColumnSizing(props); ' +
+      "return createElement('table', null, createElement(DataGridHeader)); }\n" +
+      "DataGrid.displayName = 'DataGrid';\n",
+    exports: ['DataGrid'],
+    entry: true,
+  },
+  'components/input/Option.data': {
+    imports: [['components/input/Option', ['Option']]],
+    body: 'function renderListboxItem(item) { return Option(item); }\n',
+    exports: ['renderListboxItem'],
+  },
+  'components/layout/FlatTree.context': {
+    imports: [['react', ['createContext']]],
+    body: 'const FlatTreeContext = createContext(null);\n',
+    exports: ['FlatTreeContext'],
+  },
+  'components/layout/FlatTree.item': {
+    imports: [
+      ['react', ['useContext']],
+      ['components/layout/FlatTree.context', ['FlatTreeContext']],
+    ],
+    body:
+      'function FlatTreeItem() { return useContext(FlatTreeContext); }\n' +
+      "FlatTreeItem.displayName = 'FlatTreeItem';\n",
+    exports: ['FlatTreeItem'],
+  },
+  'components/layout/FlatTree': {
+    imports: [
+      ['react', ['createElement']],
+      ['components/layout/FlatTree.context', ['FlatTreeContext']],
+      ['components/layout/FlatTree.item', ['FlatTreeItem']],
+    ],
+    body:
+      'function FlatTreeRoot(props) { return createElement(FlatTreeContext.Provider, { value: props.model }, createElement(FlatTreeItem)); }\n' +
+      "FlatTreeRoot.displayName = 'FlatTree';\n" +
+      'const FlatTree = /* @__PURE__ */ Object.assign(FlatTreeRoot, { Item: FlatTreeItem });\n',
+    exports: ['FlatTree', 'FlatTreeItem'],
+    entry: true,
+  },
+  'components/layout/useFlatTree': {
+    imports: [
+      ['react', ['useMemo']],
+      ['lib/flatTree', ['buildFlatTreeIndex']],
+    ],
+    body: 'function useFlatTree(items) { return useMemo(() => buildFlatTreeIndex(items), [items]); }\n',
+    exports: ['useFlatTree'],
+    entry: true,
+  },
+  'components/layout/Tree.selection': {
+    imports: [['lib/treeCascade', ['computeCheckStates']]],
+    body: 'function collectItems(nodes) { return computeCheckStates(nodes); }\n',
+    exports: ['collectItems'],
+  },
+  'components/layout/Tree': {
+    imports: [
+      ['react', ['createElement']],
+      ['components/layout/Tree.selection', ['collectItems']],
+    ],
+    body:
+      "function Tree(props) { collectItems(props.items ?? []); return createElement('div', { role: 'tree' }); }\n" +
+      "Tree.displayName = 'Tree';\n",
+    exports: ['Tree'],
+    entry: true,
+  },
+};
+
+/** The ESM and CommonJS code of the 0.16 module `path` (see PHASE11_MODULES). */
+function phase11Module(path, spec) {
+  const { esm, cjs } = phase10Module(path, spec);
+  if (expectsUseClient(`${path}.mjs`)) return { esm, cjs };
+  return { esm: esm.replace(DIRECTIVE, ''), cjs: cjs.replace(DIRECTIVE, '') };
+}
+
+/** The good files with the 0.16 modules of PHASE11_MODULES, their public names in the entry. */
+function withPhase11Modules(files) {
+  const result = { ...files };
+  for (const [path, spec] of Object.entries(PHASE11_MODULES)) {
+    const { esm, cjs } = phase11Module(path, spec);
     result[`dist/${path}.mjs`] = esm;
     result[`dist/${path}.cjs`] = cjs;
     if (!spec.entry) continue;
@@ -1810,6 +2043,18 @@ describe('probeIncludes', () => {
   });
 });
 
+/** A string that gzip cannot shrink much: `length` pseudo-random letters and digits. */
+function noise(length) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let seed = 42;
+  let text = '';
+  for (let i = 0; i < length; i++) {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    text += alphabet[seed % alphabet.length];
+  }
+  return text;
+}
+
 describe('probeSizeBudget', () => {
   const presenceBudget = {
     names: ['usePresence', 'Presence'],
@@ -1817,18 +2062,6 @@ describe('probeSizeBudget', () => {
     maxGzipBytes: 2048,
     allowedExternals: ['react', 'react/jsx-runtime'],
   };
-
-  /** A string that gzip cannot shrink much: `length` pseudo-random letters and digits. */
-  function noise(length) {
-    const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let seed = 42;
-    let text = '';
-    for (let i = 0; i < length; i++) {
-      seed = (seed * 1103515245 + 12345) % 2147483648;
-      text += alphabet[seed % alphabet.length];
-    }
-    return text;
-  }
 
   it('measures a small closure and passes it', async () => {
     const result = await probeSizeBudget(fixture().dist, presenceBudget);
@@ -3292,6 +3525,371 @@ describe('the 0.15 probes (INTEGRATION)', () => {
   }, 30_000);
 });
 
+describe('the 0.16 probes (INTEGRATION)', () => {
+  /** The fixture module of `path` (see PHASE11_MODULES) with `change` applied to its spec. */
+  const changed = (path, change) => {
+    const { esm, cjs } = phase11Module(path, change(PHASE11_MODULES[path]));
+    return { [`dist/${path}.mjs`]: esm, [`dist/${path}.cjs`]: cjs };
+  };
+  /** The fixture module of `path` that also imports `name` from `target` and calls it. */
+  const calling = (path, target, name) =>
+    changed(path, (spec) => ({
+      ...spec,
+      imports: [...spec.imports, [target, [name]]],
+      body: spec.body.replace(/\{ /, `{ ${name}(options); `),
+    }));
+
+  it('lists the 0.16 modules: every one has its source, and the fixture holds each', () => {
+    expect(DATA_SCALE_MODULES).toEqual([...new Set(DATA_SCALE_MODULES)].sort());
+    for (const path of DATA_SCALE_MODULES) {
+      const source = join(repoRoot, 'src', path.replace(/\.mjs$/, ''));
+      expect(
+        existsSync(`${source}.ts`) || existsSync(`${source}.tsx`),
+        `src/${path} has no source`,
+      ).toBe(true);
+    }
+    const files = goodFiles();
+    expect(DATA_SCALE_MODULES.filter((path) => !(`dist/${path}` in files))).toEqual([]);
+  });
+
+  it('lists the probes, the budget and the recorded imports of the spec (§11)', () => {
+    expect(HOOK_PROBES_0_16.map(({ keep, dropPrefixes }) => [keep, dropPrefixes])).toEqual([
+      ['useVirtualWindow', ['components/']],
+      ['useSelection', ['components/']],
+    ]);
+    expect(HOOK_PROBES_0_16.map(({ modules }) => modules)).toEqual([
+      ['hooks/useVirtualWindow.mjs', 'lib/virtual.mjs'],
+      ['hooks/useSelection.mjs', 'lib/selection.mjs'],
+    ]);
+    expect(EXCLUSION_PROBES_0_16.map(({ keep, drop }) => `${keep} without ${drop}`)).toEqual([
+      'DataGrid without FlatTree',
+      'FlatTree without DataGrid',
+      'Button without DataGrid',
+      'MessageBar without DataGrid',
+      'Tree without FlatTree',
+    ]);
+    const [dataGrid, flatTree, buttonOnly, messageBarOnly, treeOnly] = EXCLUSION_PROBES_0_16;
+    expect(dataGrid.dropModules).toEqual(
+      expect.arrayContaining(['components/layout/FlatTree.item.mjs', 'lib/flatTree.mjs']),
+    );
+    expect(flatTree.dropModules).toEqual(
+      expect.arrayContaining(['components/table/DataGrid.store.mjs', 'lib/selection.mjs']),
+    );
+    expect(buttonOnly.dropModules).toEqual(DATA_SCALE_MODULES);
+    expect(messageBarOnly.dropModules).toEqual(DATA_SCALE_MODULES);
+    // R20: a Tree reaches the cascade it moved to, and no other module of 0.16.
+    expect(treeOnly.dropModules).toEqual(
+      DATA_SCALE_MODULES.filter((path) => path !== 'lib/treeCascade.mjs'),
+    );
+    expect(INCLUSION_PROBES_0_16.map(({ keep }) => keep)).toEqual(['DataGrid', 'FlatTree', 'Tree']);
+    expect(INCLUSION_PROBES_0_16[2].modules).toEqual(['lib/treeCascade.mjs']);
+
+    // Measured in 0.16.0 (3,532 and 1,695 bytes), plus 25 %; gzip at the ceiling of 2 KiB.
+    expect(VIRTUAL_BUDGET).toEqual({
+      names: ['useVirtualWindow'],
+      maxMinifiedBytes: 4415,
+      maxGzipBytes: 2048,
+      allowedExternals: ['react'],
+    });
+    expect(RECORDED_IMPORTS).toEqual([
+      { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
+      { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
+    ]);
+  });
+
+  it('the hook probes pass on a correct dist and report a component or the JSX runtime in the bundle', async () => {
+    for (const probe of HOOK_PROBES_0_16) {
+      expect(await probeHook(fixture().dist, probe), probe.keep).toEqual([]);
+    }
+    const [windowProbe, selectionProbe] = HOOK_PROBES_0_16;
+    // A module under components/ that no list names is reported by its directory.
+    const withButton = fixture(
+      calling('hooks/useVirtualWindow', 'components/button/Button', 'Button'),
+    );
+    expect(await probeHook(withButton.dist, windowProbe)).toEqual([
+      'components/button/Button.mjs is in the bundle of an import of only useVirtualWindow (no module under components/ may be)',
+    ]);
+    const windowFile = 'dist/hooks/useVirtualWindow.mjs';
+    const withJsx = fixture({
+      [windowFile]: goodFiles()
+        [windowFile].replace(DIRECTIVE, `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n`)
+        .replace('{ const [first]', "{ jsx('div', {}); const [first]"),
+    });
+    expect(await probeHook(withJsx.dist, windowProbe)).toEqual([
+      'the bundle of an import of only useVirtualWindow imports react/jsx-runtime',
+    ]);
+    // A listed module is reported once, by name.
+    const withStore = fixture(
+      calling('hooks/useSelection', 'components/table/DataGrid.store', 'createSelectionStore'),
+    );
+    expect(await probeHook(withStore.dist, selectionProbe)).toEqual([
+      'components/table/DataGrid.store.mjs is in the bundle of an import of only useSelection',
+    ]);
+  }, 30_000);
+
+  it('probeHook reports a prefix that no module of dist is under (the probe would pass vacuously)', async () => {
+    expect(
+      await probeHook(fixture().dist, {
+        keep: 'useVirtualWindow',
+        modules: ['hooks/useVirtualWindow.mjs'],
+        dropPrefixes: ['widgets/'],
+      }),
+    ).toEqual([
+      'no module of dist is under widgets/, listed for the hook useVirtualWindow (the probe would pass vacuously)',
+    ]);
+  });
+
+  /** For each exclusion probe: the call that leaks code into its bundle, and what it reports. */
+  const LEAKS = {
+    DataGrid: {
+      leak: calling('components/table/DataGrid', 'components/layout/FlatTree.item', 'FlatTreeItem'),
+      reports: [
+        'components/layout/FlatTree.context.mjs is in the bundle of an import of only DataGrid (FlatTree must be dropped)',
+        'components/layout/FlatTree.item.mjs is in the bundle of an import of only DataGrid (FlatTree must be dropped)',
+      ],
+    },
+    FlatTree: {
+      leak: calling(
+        'components/layout/FlatTree',
+        'components/table/DataGrid.store',
+        'createSelectionStore',
+      ),
+      reports: [
+        'components/table/DataGrid.store.mjs is in the bundle of an import of only FlatTree (DataGrid must be dropped)',
+        'lib/selection.mjs is in the bundle of an import of only FlatTree (DataGrid must be dropped)',
+      ],
+    },
+    Button: {
+      leak: {
+        'dist/components/button/Button.mjs': withCall(
+          goodFiles()['dist/components/button/Button.mjs'],
+          'components/button/Button',
+          'hooks/useVirtualWindow',
+          'useVirtualWindow',
+        ),
+      },
+      reports: [
+        'hooks/useVirtualWindow.mjs is in the bundle of an import of only Button (DataGrid must be dropped)',
+        'lib/virtual.mjs is in the bundle of an import of only Button (DataGrid must be dropped)',
+      ],
+    },
+    MessageBar: {
+      leak: {
+        'dist/components/feedback/MessageBar.mjs': withCall(
+          goodFiles()['dist/components/feedback/MessageBar.mjs'],
+          'components/feedback/MessageBar',
+          'hooks/useSelection',
+          'useSelection',
+        ),
+      },
+      reports: [
+        'hooks/useSelection.mjs is in the bundle of an import of only MessageBar (DataGrid must be dropped)',
+        'lib/selection.mjs is in the bundle of an import of only MessageBar (DataGrid must be dropped)',
+      ],
+    },
+    Tree: {
+      leak: calling('components/layout/Tree', 'lib/flatTree', 'buildFlatTreeIndex'),
+      reports: [
+        'lib/flatTree.mjs is in the bundle of an import of only Tree (FlatTree must be dropped)',
+      ],
+    },
+  };
+
+  it.each(EXCLUSION_PROBES_0_16.map((probe) => [probe.keep, probe.drop, probe]))(
+    'an import of only %s drops %s: passes on a correct dist, reports each module it leaks',
+    async (keep, _drop, probe) => {
+      expect(await probeTreeShaking(fixture().dist, probe)).toEqual([]);
+      expect(LEAKS[keep], keep).toBeDefined();
+      const { dist } = fixture(LEAKS[keep].leak);
+      expect(await probeTreeShaking(dist, probe)).toEqual(LEAKS[keep].reports);
+    },
+    30_000,
+  );
+
+  /** For each inclusion probe: the fixture module without the code the probe looks for. */
+  const WITHOUT = {
+    DataGrid: () =>
+      changed('components/table/DataGrid', (spec) => ({
+        ...spec,
+        imports: [['react', ['createElement']]],
+        body: "function DataGrid() { return createElement('table'); }\nDataGrid.displayName = 'DataGrid';\n",
+      })),
+    FlatTree: () =>
+      changed('components/layout/FlatTree', (spec) => ({
+        ...spec,
+        imports: [['react', ['createElement']]],
+        body:
+          "function FlatTreeRoot() { return createElement('div', { role: 'tree' }); }\n" +
+          "FlatTreeRoot.displayName = 'FlatTree';\n" +
+          'function FlatTreeItem() { return null; }\n' +
+          "FlatTreeItem.displayName = 'FlatTreeItem';\n" +
+          'const FlatTree = /* @__PURE__ */ Object.assign(FlatTreeRoot, { Item: FlatTreeItem });\n',
+      })),
+    Tree: () =>
+      changed('components/layout/Tree.selection', (spec) => ({
+        ...spec,
+        imports: [],
+        body: 'function collectItems(nodes) { return nodes; }\n',
+      })),
+  };
+
+  it.each(INCLUSION_PROBES_0_16.map((probe) => [probe.keep, probe]))(
+    'an import of only %s holds its modules: passes on a correct dist, reports each one missing',
+    async (keep, probe) => {
+      expect(await probeIncludes(fixture().dist, probe)).toEqual([]);
+      const { dist } = fixture(WITHOUT[keep]());
+      expect(await probeIncludes(dist, probe)).toEqual(
+        probe.modules.map((path) => `${path} is not in the bundle of an import of only ${keep}`),
+      );
+    },
+    30_000,
+  );
+
+  it('measureImport measures the minified closure of an import, as the size budget does', async () => {
+    const { dist } = fixture();
+    const measured = await measureImport(dist, ['useVirtualWindow']);
+    expect(measured.externals).toEqual(['react']);
+    expect(measured.minified).toBeGreaterThan(0);
+    expect(measured.gzip).toBeGreaterThan(0);
+    const budget = await probeSizeBudget(dist, VIRTUAL_BUDGET);
+    expect(budget).toEqual({ ...measured, errors: [] });
+  });
+
+  it('verifyDist runs the exclusion, hook and inclusion probes of 0.16', async () => {
+    const { dist } = fixture({
+      ...LEAKS.Tree.leak,
+      ...calling('hooks/useSelection', 'components/table/DataGrid.store', 'createSelectionStore'),
+      ...WITHOUT.FlatTree(),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      ...LEAKS.Tree.reports,
+      'components/table/DataGrid.store.mjs is in the bundle of an import of only useSelection',
+      ...INCLUSION_PROBES_0_16[1].modules.map(
+        (path) => `${path} is not in the bundle of an import of only FlatTree`,
+      ),
+    ]);
+  }, 30_000);
+
+  it('verifyDist reports a window over its budget, and an import outside react', async () => {
+    const big = changed('lib/virtual', (spec) => ({
+      ...spec,
+      body: `const TABLE = ${JSON.stringify(noise(8000))};\n${spec.body.replace('[{', '[TABLE, {')}`,
+    }));
+    const result = await verifyDist(fixture(big).dist, noPending);
+    expect(result.virtualBudget.minified).toBeGreaterThan(VIRTUAL_BUDGET.maxMinifiedBytes);
+    expect(result.virtualBudget.gzip).toBeGreaterThan(VIRTUAL_BUDGET.maxGzipBytes);
+    expect(result.errors).toEqual([
+      `useVirtualWindow: ${result.virtualBudget.minified} bytes minified, over the budget of 4415`,
+      `useVirtualWindow: ${result.virtualBudget.gzip} bytes gzip, over the budget of 2048`,
+    ]);
+
+    const withClsx = changed('lib/virtual', (spec) => ({
+      ...spec,
+      imports: [['clsx', ['clsx']]],
+      body: spec.body.replace("kind: 'item'", "kind: clsx('item')"),
+    }));
+    expect((await verifyDist(fixture(withClsx).dist, noPending)).errors).toEqual([
+      'useVirtualWindow imports clsx, outside the measured closure (allowed: react)',
+    ]);
+  }, 30_000);
+
+  it('verifyDist measures the recorded imports, and main prints them with the window budget', async () => {
+    const { dist } = fixture();
+    const { errors, virtualBudget, recorded } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([]);
+    expect(virtualBudget).toEqual({ minified: expect.any(Number), gzip: expect.any(Number) });
+    expect(recorded).toEqual(
+      RECORDED_IMPORTS.map(({ names, baseline }) => ({
+        names,
+        baseline,
+        minified: expect.any(Number),
+        gzip: expect.any(Number),
+      })),
+    );
+    const lines = [];
+    const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
+    expect(await main(['--dist', dist, '--no-pending'], io)).toBe(0);
+    const output = lines.join('\n');
+    expect(output).toMatch(
+      /verify-dist: window \(useVirtualWindow\): \d+ B minified \(budget 4415\), \d+ B gzip \(budget 2048\)/,
+    );
+    expect(output).toMatch(
+      /verify-dist: DataGrid-only import: \d+ B minified, \d+ B gzip \(0\.15\.0: 48403 B, 16520 B; [+-]\d+\.\d{2} %, [+-]\d+\.\d{2} %\)/,
+    );
+    expect(output).toMatch(
+      /verify-dist: Tree-only import: \d+ B minified, \d+ B gzip \(0\.15\.0: 47248 B, 16201 B; [+-]\d+\.\d{2} %, [+-]\d+\.\d{2} %\)/,
+    );
+  }, 30_000);
+
+  it('the real exports carry the 0.16 flat names', async () => {
+    const mod = await import('../../src/index.ts');
+    expect(mod.FlatTreeItem).toBe(mod.FlatTree.Item);
+    expect(mod.TableResizeHandle).toBe(mod.Table.ResizeHandle);
+    for (const name of ['useVirtualWindow', 'useSelection', 'useFlatTree', 'useTableFeatures']) {
+      expect(mod[name], name).toBeTypeOf('function');
+    }
+  }, 60_000);
+
+  it('lists every module-only export of the 0.16 modules, read with the compiler against the entry', () => {
+    // The modules 0.16 adds, and those whose exports it changed. Every export the entry does not
+    // export must be listed, so a new seam is checked before it ships.
+    const sources = [
+      ...DATA_SCALE_MODULES.map((path) => {
+        const base = join(repoRoot, 'src', path.replace(/\.mjs$/, ''));
+        return existsSync(`${base}.ts`) ? `${base}.ts` : `${base}.tsx`;
+      }),
+      join(repoRoot, 'src/hooks/useRovingTabIndex.ts'),
+      join(repoRoot, 'src/hooks/useListbox.ts'),
+      join(repoRoot, 'src/components/table/useGridNavigation.ts'),
+    ];
+    const entry = join(repoRoot, 'src/index.ts');
+    const config = ts.readConfigFile(join(repoRoot, 'tsconfig.json'), ts.sys.readFile);
+    const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, repoRoot);
+    const program = ts.createProgram({
+      rootNames: [entry, ...sources],
+      options: { ...parsed.options, noEmit: true },
+    });
+    const checker = program.getTypeChecker();
+    const exportsOf = (file) => {
+      const source = program.getSourceFile(file);
+      expect(source, file).toBeDefined();
+      return checker.getExportsOfModule(checker.getSymbolAtLocation(source)).map((s) => s.name);
+    };
+    const entryNames = new Set(exportsOf(entry));
+    const moduleOnly = sources.flatMap((file) =>
+      exportsOf(file).filter((name) => !entryNames.has(name)),
+    );
+    expect(moduleOnly.filter((name) => !MODULE_ONLY_NAMES.includes(name))).toEqual([]);
+    // The seams the reviews named, and the public names that stay out of the list.
+    expect(moduleOnly).toEqual(
+      expect.arrayContaining([
+        'computeVirtualLayout',
+        'resolveColumnWidths',
+        'createTableFeaturePlugin',
+        'TableFeaturePluginImplementation',
+        'sortTableRows',
+        'returnFocusToGridCell',
+        'createSelectionStore',
+        'buildFlatTreeIndex',
+        'visibleFlatItems',
+        'flatTreeForest',
+        'FlatTreeContext',
+        'useFlatTreeContext',
+        'renderListboxWindow',
+        'useShownListScroll',
+        'useDataModeWarnings',
+        'renderListboxItem',
+        'ListboxOptionPositionContext',
+        'ownsArrowKeys',
+      ]),
+    );
+    for (const name of ['useVirtualWindow', 'VirtualEntry', 'FlatTreeItem', 'TableRowData']) {
+      expect(MODULE_ONLY_NAMES, name).not.toContain(name);
+    }
+  }, 60_000);
+});
+
 describe('verifyDist and main', () => {
   // Every test runs the whole check: its probes bundle the fixture with Vite several times and
   // load it in child Node.js processes. That takes about a second alone, and more than Vitest's
@@ -3498,6 +4096,8 @@ describe('verifyDist and main', () => {
       pending: ['CardHeader'],
       planned: [],
       budget: { minified: expect.any(Number), gzip: expect.any(Number) },
+      virtualBudget: { minified: expect.any(Number), gzip: expect.any(Number) },
+      recorded: expect.any(Array),
     });
     expect((await verifyDist(dist, { pendingFlatExports: ['Card'], final: true })).errors).toEqual([
       expect.stringMatching(/CardHeader is not exported/),
