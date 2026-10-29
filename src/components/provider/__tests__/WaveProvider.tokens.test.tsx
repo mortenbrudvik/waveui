@@ -161,18 +161,26 @@ describe('WaveProvider tokens: nesting', () => {
     });
   });
 
-  it('null clears every inherited override', () => {
+  // Asserts the context, the root's style attribute and the portal only: jsdom does not cascade
+  // custom properties, and the theme-independent tokens (ramps, font families, stacking order,
+  // motion) of the outer root still reach the inner subtree's own elements in a browser (a check of
+  // the real-browser pass).
+  it('null clears the inherited overrides from the context, the root style and the portal', () => {
     let inner: WaveContextValue | undefined;
     render(
       <WaveProvider tokens={BRAND}>
         <WaveProvider tokens={null} data-testid="inner">
           <Capture onValue={(value) => (inner = value)} />
+          <Portal>
+            <span>Cleared</span>
+          </Portal>
         </WaveProvider>
       </WaveProvider>,
     );
     expect(inner?.tokens).toEqual({});
     expect(inner?.tokenStyle).toBeUndefined();
     expect(screen.getByTestId('inner')).not.toHaveAttribute('style');
+    expect(customProperties(wrapperOf(screen.getByText('Cleared')))).toEqual({});
   });
 
   it('an omitted map, and a key whose value is undefined, inherit', () => {

@@ -76,10 +76,15 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
    * counterpart.
    *
    * A nested provider merges its overrides over the enclosing provider's, key by key: an omitted
-   * `tokens` inherits them all, a key whose value is `undefined` inherits that key, and `null`
-   * clears everything inherited. A nested provider that sets another `theme` inherits them too, so
-   * set an override of a semantic colour (`primary`) in the provider that sets the theme it was
-   * chosen for. A whole brand ramp is better made with `createBrandTokens` than written by hand.
+   * `tokens` inherits them all, and a key whose value is `undefined` inherits that key. `null`
+   * clears the inherited overrides of the tokens the theme declares (the semantic colours, shadows,
+   * palette) and of the subtree's overlays; theme-independent tokens (the brand and grey ramps,
+   * font families, stacking order, motion durations and curves) of an enclosing provider still
+   * reach the subtree's own elements through the CSS cascade, and the theme's colours built on the
+   * brand ramp follow them there. A nested provider that sets another `theme` inherits the
+   * overrides too, so set an override of a semantic colour (`primary`) in the provider that sets
+   * the theme it was chosen for. A whole brand ramp is better made with `createBrandTokens` than
+   * written by hand.
    * A key that is not a camelCase identifier, or a value that is neither a string nor a finite
    * number, is skipped with a development warning; a well-formed name is not checked against the
    * list of tokens (TypeScript refuses a misspelled one).
@@ -95,8 +100,9 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
   tokens?: WaveTokenOverrides | null;
   /**
    * Whether the portals of the subtree (dialogs, popovers, menus, tooltips, toasts) carry the
-   * overrides of `tokens`. `false` leaves them out, so the overlays show the theme's own values
-   * (or overrides set on the document itself); the theme classes and the direction are set on
+   * overrides of `tokens`. `false` leaves them out: an overlay then shows its theme's own values
+   * for the tokens the theme declares, and keeps the surrounding cascade (that of the element it
+   * renders into) for the theme-independent ones. The theme classes and the direction are set on
    * every portal either way, so an overlay of a dark provider is still dark. Fluent's
    * `applyStylesToPortals` is the counterpart; unlike Fluent's, a nested provider inherits an
    * omitted value, like `theme`.
@@ -126,11 +132,15 @@ export interface WaveContextValue {
   inputDefaults: InputDefaults;
   /** The motion preference of the providers above (`'default'` outside a provider). */
   motion: MotionPreference;
-  /** The merged token overrides of the providers above (`{}` outside a provider). */
+  /**
+   * The merged token overrides of the providers above (`{}` outside a provider), as given: an
+   * entry skipped for a malformed key or value stays in it, and only `tokenStyle` leaves it out.
+   */
   tokens: WaveTokenOverrides;
   /**
-   * The inline style that applies `tokens`, as the provider's root and its portals carry it;
-   * `undefined` when there is nothing to set (also outside a provider).
+   * The inline style that applies `tokens`, as the provider's root and, unless
+   * `applyStylesToPortals` is `false`, its portals carry it; `undefined` when there is nothing to
+   * set (also outside a provider).
    */
   tokenStyle: TokenStyle | undefined;
   /** Whether portals carry `tokenStyle` (`true` outside a provider). */
@@ -200,8 +210,10 @@ export function useWaveTheme(): WaveContextValue {
  * - `tokens` overrides design tokens in the subtree with inline custom properties on the root
  *   (rendered on the server too) and on every portal of the subtree, unless
  *   `applyStylesToPortals` is `false`. A nested provider merges its overrides over the enclosing
- *   provider's key by key, also when it sets another `theme`, and `tokens={null}` clears them.
- *   Without overrides the root renders no `style` attribute.
+ *   provider's key by key, also when it sets another `theme`; `tokens={null}` clears them for the
+ *   tokens the theme declares and for the overlays, while the theme-independent ones of an
+ *   enclosing provider still reach the subtree through the CSS cascade. Without overrides the root
+ *   renders no `style` attribute unless you pass `style`.
  */
 export const WaveProvider = ({
   theme: themeProp,
