@@ -231,6 +231,22 @@ const PROVIDER_SELECTORS: Record<ThemeName, string[]> = {
   'high-contrast': ['.wave-high-contrast', '.high-contrast'],
 };
 
+/** The 12 persona palette hues (Avatar `color`, chart series), in tokens.css order. */
+const PALETTE_HUES = [
+  'red',
+  'pumpkin',
+  'gold',
+  'forest',
+  'teal',
+  'blue',
+  'navy',
+  'lavender',
+  'purple',
+  'magenta',
+  'brown',
+  'steel',
+] as const;
+
 /** Token → [light, dark, high contrast], resolved values. */
 const TOKENS: Record<string, [string, string, string]> = {
   background: ['#ffffff', '#292929', '#000000'],
@@ -300,30 +316,68 @@ const TOKENS: Record<string, [string, string, string]> = {
   'presence-offline': ['#616161', '#adadad', '#ffffff'],
   'presence-oof': ['#b4009e', '#d696c8', '#ff80ff'],
   'presence-glyph': ['#ffffff', '#000000', '#000000'],
+  // Persona palette: the fill and its text (0.13); the tint, its text and the border (0.17; the
+  // border resolves to the fill).
   'palette-red': ['#c50f1f', '#f48a94', '#ffffff'],
   'palette-red-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-red-tint': ['#eeb7bc', '#760913', '#000000'],
+  'palette-red-tint-foreground': ['#a30c1a', '#f48a94', '#ffffff'],
+  'palette-red-border': ['#c50f1f', '#f48a94', '#ffffff'],
   'palette-pumpkin': ['#b5470a', '#f2a46b', '#ffffff'],
   'palette-pumpkin-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-pumpkin-tint': ['#e9c8b6', '#6d2b06', '#000000'],
+  'palette-pumpkin-tint-foreground': ['#953b08', '#f2a46b', '#ffffff'],
+  'palette-pumpkin-border': ['#b5470a', '#f2a46b', '#ffffff'],
   'palette-gold': ['#8a6200', '#f7b538', '#ffffff'],
   'palette-gold-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-gold-tint': ['#dcd0b3', '#533b00', '#000000'],
+  'palette-gold-tint-foreground': ['#745300', '#f7b538', '#ffffff'],
+  'palette-gold-border': ['#8a6200', '#f7b538', '#ffffff'],
   'palette-forest': ['#107c10', '#6fcf6f', '#ffffff'],
   'palette-forest-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-forest-tint': ['#b7d8b7', '#0a4a0a', '#000000'],
+  'palette-forest-tint-foreground': ['#0d660d', '#6fcf6f', '#ffffff'],
+  'palette-forest-border': ['#107c10', '#6fcf6f', '#ffffff'],
   'palette-teal': ['#0a6b6b', '#4cc2c2', '#ffffff'],
   'palette-teal-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-teal-tint': ['#b6d3d3', '#064040', '#000000'],
+  'palette-teal-tint-foreground': ['#096060', '#4cc2c2', '#ffffff'],
+  'palette-teal-border': ['#0a6b6b', '#4cc2c2', '#ffffff'],
   'palette-blue': ['#0f6cbd', '#479ef5', '#ffffff'],
   'palette-blue-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-blue-tint': ['#b7d3eb', '#094171', '#000000'],
+  'palette-blue-tint-foreground': ['#0c599c', '#6ab1f7', '#ffffff'],
+  'palette-blue-border': ['#0f6cbd', '#479ef5', '#ffffff'],
   'palette-navy': ['#103a73', '#7fa7e0', '#ffffff'],
   'palette-navy-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-navy-tint': ['#b7c4d5', '#0a2345', '#000000'],
+  'palette-navy-tint-foreground': ['#103a73', '#7fa7e0', '#ffffff'],
+  'palette-navy-border': ['#103a73', '#7fa7e0', '#ffffff'],
   'palette-lavender': ['#6a5cb8', '#b4a7f0', '#ffffff'],
   'palette-lavender-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-lavender-tint': ['#d2ceea', '#40376e', '#000000'],
+  'palette-lavender-tint-foreground': ['#594e9b', '#b4a7f0', '#ffffff'],
+  'palette-lavender-border': ['#6a5cb8', '#b4a7f0', '#ffffff'],
   'palette-purple': ['#5c2e91', '#c8a6f0', '#ffffff'],
   'palette-purple-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-purple-tint': ['#cec0de', '#371c57', '#000000'],
+  'palette-purple-tint-foreground': ['#5c2e91', '#c8a6f0', '#ffffff'],
+  'palette-purple-border': ['#5c2e91', '#c8a6f0', '#ffffff'],
   'palette-magenta': ['#b4009e', '#ec8fdc', '#ffffff'],
   'palette-magenta-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-magenta-tint': ['#e9b3e2', '#6c005f', '#000000'],
+  'palette-magenta-tint-foreground': ['#950083', '#ec8fdc', '#ffffff'],
+  'palette-magenta-border': ['#b4009e', '#ec8fdc', '#ffffff'],
   'palette-brown': ['#8e562e', '#d4a373', '#ffffff'],
   'palette-brown-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-brown-tint': ['#ddccc0', '#55341c', '#000000'],
+  'palette-brown-tint-foreground': ['#7d4b28', '#d4a373', '#ffffff'],
+  'palette-brown-border': ['#8e562e', '#d4a373', '#ffffff'],
   'palette-steel': ['#4f7391', '#9fb8cc', '#ffffff'],
   'palette-steel-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-steel-tint': ['#cad5de', '#2f4557', '#000000'],
+  'palette-steel-tint-foreground': ['#405d76', '#9fb8cc', '#ffffff'],
+  'palette-steel-border': ['#4f7391', '#9fb8cc', '#ffffff'],
   backdrop: ['rgb(0 0 0 / 0.4)', 'rgb(0 0 0 / 0.5)', 'rgb(0 0 0 / 0.8)'],
 };
 
@@ -549,6 +603,12 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['muted-hover', 'card', 1.15],
   // Outline tags in a filled-darker TagPicker: 1.21 / 1.83 / 1.66.
   ['muted-hover', 'input-filled-darker', 1.15],
+  // Palette borders (0.17): the hue's stroke on the page and on its own tint (WCAG 1.4.11). The
+  // strong fill on the page (a chart series) has its own test in the palette block.
+  ...PALETTE_HUES.flatMap((hue): Array<[string, string, number]> => [
+    [`palette-${hue}-border`, 'background', 3],
+    [`palette-${hue}-border`, `palette-${hue}-tint`, 3],
+  ]),
 ];
 
 /**
@@ -729,6 +789,15 @@ const BOUND_TEXT_SURFACES: Record<string, string[]> = {
   'palette-magenta-foreground': ['palette-magenta'],
   'palette-brown-foreground': ['palette-brown'],
   'palette-steel-foreground': ['palette-steel'],
+  // Palette tints (0.17): text and icons on the tint, on the page and on cards, in every theme.
+  // The tints are surfaces for their own tint foreground only (not TEXT_SURFACES): muted text is
+  // under 4.5:1 on the light tints.
+  ...Object.fromEntries(
+    PALETTE_HUES.map((hue) => [
+      `palette-${hue}-tint-foreground`,
+      [`palette-${hue}-tint`, 'background', 'card'],
+    ]),
+  ),
 };
 
 /**
@@ -771,6 +840,13 @@ const NOT_TEXT_TOKENS: Record<string, string> = {
   'presence-glyph': 'glyph drawn on a presence fill (3:1)',
   'inverted-border': 'tooltip border',
   backdrop: 'translucent overlay scrim',
+  // Palette borders (0.17).
+  ...Object.fromEntries(
+    PALETTE_HUES.map((hue) => [
+      `palette-${hue}-border`,
+      "the hue's stroke, declared as its fill (3:1 on background and on its tint)",
+    ]),
+  ),
 };
 
 /** Each text token with every surface it is checked against. */
@@ -1034,6 +1110,94 @@ describe('tokens.css — per-theme shadows (0.17)', () => {
       );
     }
   });
+});
+
+describe('tokens.css — palette tints, tint foregrounds and borders (0.17)', () => {
+  const ROLES = ['tint', 'tint-foreground', 'border'] as const;
+  const NAMES = PALETTE_HUES.flatMap((hue) => ROLES.map((role) => `--wave-palette-${hue}-${role}`));
+
+  /** HSL hue (degrees) and saturation of a 6-digit hex colour. */
+  function hueAndSaturation(hex: string): { hue: number; saturation: number } {
+    const match = /^#([0-9a-f]{6})$/i.exec(hex);
+    if (!match) throw new Error(`not a 6-digit hex colour: ${hex}`);
+    const [r, g, b] = [0, 2, 4].map(
+      (offset) => parseInt(match[1].slice(offset, offset + 2), 16) / 255,
+    );
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    if (delta === 0) return { hue: 0, saturation: 0 };
+    const sector =
+      max === r ? ((g - b) / delta + 6) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    return { hue: sector * 60, saturation: delta / (1 - Math.abs(max + min - 1)) };
+  }
+
+  it.each(THEMES)('declares the 36 tokens of the 12 hues directly in the %s group', (theme) => {
+    expect(NAMES).toHaveLength(36);
+    const decls = themeDecls(theme);
+    expect(NAMES.filter((name) => !decls.has(name))).toEqual([]);
+  });
+
+  it.each(THEMES)('declares every %s border as its fill, so the border moves with it', (theme) => {
+    const decls = themeDecls(theme);
+    for (const hue of PALETTE_HUES) {
+      expect(decls.get(`--wave-palette-${hue}-border`), hue).toBe(`var(--wave-palette-${hue})`);
+    }
+  });
+
+  it('collapses every hue to black and white in high contrast (R15)', () => {
+    const decls = themeDecls('high-contrast');
+    for (const hue of PALETTE_HUES) {
+      expect(decls.get(`--wave-palette-${hue}-tint`), `${hue} tint`).toBe('#000000');
+      expect(decls.get(`--wave-palette-${hue}-tint-foreground`), `${hue} tint foreground`).toBe(
+        '#ffffff',
+      );
+      expect(resolved('high-contrast', `palette-${hue}-border`), `${hue} border`).toBe('#ffffff');
+    }
+  });
+
+  it.each(THEMES)(
+    '%s: the strong fill of every hue is at least 3:1 on background (a chart series)',
+    (theme) => {
+      const page = resolved(theme, 'background');
+      const below = PALETTE_HUES.map((hue) => ({ hue, fill: resolved(theme, `palette-${hue}`) }))
+        .map(({ hue, fill }) => ({ hue, fill, ratio: contrastRatio(fill, page) }))
+        .filter(({ ratio }) => ratio < 3)
+        .map(({ hue, fill, ratio }) => `${hue} ${fill} on ${page}: ${ratio.toFixed(3)}:1`);
+      expect(below).toEqual([]);
+    },
+  );
+
+  it.each(['light', 'dark'] as const)(
+    '%s: every tint and tint foreground keeps the hue of its fill and is no grey',
+    (theme) => {
+      const off = PALETTE_HUES.flatMap((hue) => {
+        const fill = hueAndSaturation(resolved(theme, `palette-${hue}`));
+        return (['tint', 'tint-foreground'] as const).flatMap((role) => {
+          const value = resolved(theme, `palette-${hue}-${role}`);
+          const { hue: angle, saturation } = hueAndSaturation(value);
+          const distance = Math.abs(angle - fill.hue);
+          const drift = Math.min(distance, 360 - distance);
+          return drift <= 10 && saturation >= 0.2
+            ? []
+            : [
+                `${hue}-${role} ${value}: ${drift.toFixed(1)}° off, saturation ${saturation.toFixed(2)}`,
+              ];
+        });
+      });
+      expect(off).toEqual([]);
+    },
+  );
+
+  it.each(THEMES)(
+    'every colour token of the %s group is in the contrast tables (none skips classification)',
+    (theme) => {
+      const unlisted = [...themeDecls(theme).keys()]
+        .filter((name) => !name.startsWith('--wave-shadow-'))
+        .filter((name) => !(name.replace(/^--wave-/, '') in TOKENS));
+      expect(unlisted).toEqual([]);
+    },
+  );
 });
 
 describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)', () => {

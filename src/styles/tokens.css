@@ -10,6 +10,24 @@
  * - Shadows are per-theme tokens too: `--wave-shadow-{2,4,8,16,28,64}` in each theme group, and the
  *   `shadow-N` utilities alias them (`--shadow-4: var(--wave-shadow-4)`). Light keeps Fluent's ambient
  *   0.12 / key 0.14; dark and high contrast use 0.24 / 0.28 with the same offsets and blurs.
+ * - Persona palette: 12 hues (`red`, `pumpkin`, `gold`, `forest`, `teal`, `blue`, `navy`,
+ *   `lavender`, `purple`, `magenta`, `brown`, `steel`; Avatar `color`, chart series), each with
+ *   five tokens in every theme group, Fluent's persona roles (Background2, Foreground2,
+ *   BorderActive) in the grammar of the status tints:
+ *
+ *     token                                 role                              contrast
+ *     --wave-palette-<hue>                  strong fill                       3:1 on background
+ *     --wave-palette-<hue>-foreground       text on the fill                  4.5:1 on the fill
+ *     --wave-palette-<hue>-tint             surface (light; dark in dark)     -
+ *     --wave-palette-<hue>-tint-foreground  text and icons on the tint,       4.5:1 on the tint,
+ *                                           the page and cards                background and card
+ *     --wave-palette-<hue>-border           the hue's stroke (the fill)       3:1 on background
+ *                                                                             and on the tint
+ *
+ *   Light tints are the light fill mixed 70% toward white and dark tints the light fill mixed 40%
+ *   toward black (Fluent's tint40 and shade30 of a hue); each tint foreground is its theme's fill
+ *   mixed toward black (light) or white (dark) until it is 4.6:1 on its three surfaces. High
+ *   contrast collapses every hue: fill, tint foreground and border white, foreground and tint black.
  * - To override a semantic token, target the theme selector: `:root, .wave-light { --wave-primary: … }`.
  *   To re-brand, override the ramp on `:root` (`--wave-brand-80`, or the 0.4 name `--brand-80`).
  * - Contrast ratios of every pair, and of every text token on every surface it can sit on (4.5:1,
@@ -191,31 +209,68 @@
   --wave-presence-oof: #b4009e;
   --wave-presence-glyph: #ffffff;
 
-  /* Persona palette: avatar colors (Avatar `color`), each with its text color */
+  /* Persona palette (the table in the file header): avatar colors (Avatar `color`), each with its
+     text color, its tint with the tint's text color, and its border */
   --wave-palette-red: #c50f1f;
   --wave-palette-red-foreground: #ffffff;
+  --wave-palette-red-tint: #eeb7bc;
+  --wave-palette-red-tint-foreground: #a30c1a;
+  --wave-palette-red-border: var(--wave-palette-red);
   --wave-palette-pumpkin: #b5470a;
   --wave-palette-pumpkin-foreground: #ffffff;
+  --wave-palette-pumpkin-tint: #e9c8b6;
+  --wave-palette-pumpkin-tint-foreground: #953b08;
+  --wave-palette-pumpkin-border: var(--wave-palette-pumpkin);
   --wave-palette-gold: #8a6200;
   --wave-palette-gold-foreground: #ffffff;
+  --wave-palette-gold-tint: #dcd0b3;
+  --wave-palette-gold-tint-foreground: #745300;
+  --wave-palette-gold-border: var(--wave-palette-gold);
   --wave-palette-forest: #107c10;
   --wave-palette-forest-foreground: #ffffff;
+  --wave-palette-forest-tint: #b7d8b7;
+  --wave-palette-forest-tint-foreground: #0d660d;
+  --wave-palette-forest-border: var(--wave-palette-forest);
   --wave-palette-teal: #0a6b6b;
   --wave-palette-teal-foreground: #ffffff;
+  --wave-palette-teal-tint: #b6d3d3;
+  --wave-palette-teal-tint-foreground: #096060;
+  --wave-palette-teal-border: var(--wave-palette-teal);
   --wave-palette-blue: #0f6cbd;
   --wave-palette-blue-foreground: #ffffff;
+  --wave-palette-blue-tint: #b7d3eb;
+  --wave-palette-blue-tint-foreground: #0c599c;
+  --wave-palette-blue-border: var(--wave-palette-blue);
   --wave-palette-navy: #103a73;
   --wave-palette-navy-foreground: #ffffff;
+  --wave-palette-navy-tint: #b7c4d5;
+  --wave-palette-navy-tint-foreground: #103a73;
+  --wave-palette-navy-border: var(--wave-palette-navy);
   --wave-palette-lavender: #6a5cb8;
   --wave-palette-lavender-foreground: #ffffff;
+  --wave-palette-lavender-tint: #d2ceea;
+  --wave-palette-lavender-tint-foreground: #594e9b;
+  --wave-palette-lavender-border: var(--wave-palette-lavender);
   --wave-palette-purple: #5c2e91;
   --wave-palette-purple-foreground: #ffffff;
+  --wave-palette-purple-tint: #cec0de;
+  --wave-palette-purple-tint-foreground: #5c2e91;
+  --wave-palette-purple-border: var(--wave-palette-purple);
   --wave-palette-magenta: #b4009e;
   --wave-palette-magenta-foreground: #ffffff;
+  --wave-palette-magenta-tint: #e9b3e2;
+  --wave-palette-magenta-tint-foreground: #950083;
+  --wave-palette-magenta-border: var(--wave-palette-magenta);
   --wave-palette-brown: #8e562e;
   --wave-palette-brown-foreground: #ffffff;
+  --wave-palette-brown-tint: #ddccc0;
+  --wave-palette-brown-tint-foreground: #7d4b28;
+  --wave-palette-brown-border: var(--wave-palette-brown);
   --wave-palette-steel: #4f7391;
   --wave-palette-steel-foreground: #ffffff;
+  --wave-palette-steel-tint: #cad5de;
+  --wave-palette-steel-tint-foreground: #405d76;
+  --wave-palette-steel-border: var(--wave-palette-steel);
   --wave-backdrop: rgb(0 0 0 / 0.4);
 
   /* Elevation: Fluent's ambient 0.12 / key 0.14 shadows, the 0.16 literals */
@@ -322,31 +377,70 @@
   --wave-presence-oof: #d696c8;
   --wave-presence-glyph: #000000;
 
-  /* Persona palette: avatar colors (Avatar `color`), each with its text color */
+  /* Persona palette (the table in the file header): avatar colors (Avatar `color`), each with its
+     text color, its tint with the tint's text color, and its border. The tints are the light
+     fills shaded (deep and saturated, as Fluent's dark persona backgrounds); a tint foreground
+     equal to its fill already reaches 4.6:1 on its three surfaces. */
   --wave-palette-red: #f48a94;
   --wave-palette-red-foreground: #000000;
+  --wave-palette-red-tint: #760913;
+  --wave-palette-red-tint-foreground: #f48a94;
+  --wave-palette-red-border: var(--wave-palette-red);
   --wave-palette-pumpkin: #f2a46b;
   --wave-palette-pumpkin-foreground: #000000;
+  --wave-palette-pumpkin-tint: #6d2b06;
+  --wave-palette-pumpkin-tint-foreground: #f2a46b;
+  --wave-palette-pumpkin-border: var(--wave-palette-pumpkin);
   --wave-palette-gold: #f7b538;
   --wave-palette-gold-foreground: #000000;
+  --wave-palette-gold-tint: #533b00;
+  --wave-palette-gold-tint-foreground: #f7b538;
+  --wave-palette-gold-border: var(--wave-palette-gold);
   --wave-palette-forest: #6fcf6f;
   --wave-palette-forest-foreground: #000000;
+  --wave-palette-forest-tint: #0a4a0a;
+  --wave-palette-forest-tint-foreground: #6fcf6f;
+  --wave-palette-forest-border: var(--wave-palette-forest);
   --wave-palette-teal: #4cc2c2;
   --wave-palette-teal-foreground: #000000;
+  --wave-palette-teal-tint: #064040;
+  --wave-palette-teal-tint-foreground: #4cc2c2;
+  --wave-palette-teal-border: var(--wave-palette-teal);
   --wave-palette-blue: #479ef5;
   --wave-palette-blue-foreground: #000000;
+  --wave-palette-blue-tint: #094171;
+  --wave-palette-blue-tint-foreground: #6ab1f7;
+  --wave-palette-blue-border: var(--wave-palette-blue);
   --wave-palette-navy: #7fa7e0;
   --wave-palette-navy-foreground: #000000;
+  --wave-palette-navy-tint: #0a2345;
+  --wave-palette-navy-tint-foreground: #7fa7e0;
+  --wave-palette-navy-border: var(--wave-palette-navy);
   --wave-palette-lavender: #b4a7f0;
   --wave-palette-lavender-foreground: #000000;
+  --wave-palette-lavender-tint: #40376e;
+  --wave-palette-lavender-tint-foreground: #b4a7f0;
+  --wave-palette-lavender-border: var(--wave-palette-lavender);
   --wave-palette-purple: #c8a6f0;
   --wave-palette-purple-foreground: #000000;
+  --wave-palette-purple-tint: #371c57;
+  --wave-palette-purple-tint-foreground: #c8a6f0;
+  --wave-palette-purple-border: var(--wave-palette-purple);
   --wave-palette-magenta: #ec8fdc;
   --wave-palette-magenta-foreground: #000000;
+  --wave-palette-magenta-tint: #6c005f;
+  --wave-palette-magenta-tint-foreground: #ec8fdc;
+  --wave-palette-magenta-border: var(--wave-palette-magenta);
   --wave-palette-brown: #d4a373;
   --wave-palette-brown-foreground: #000000;
+  --wave-palette-brown-tint: #55341c;
+  --wave-palette-brown-tint-foreground: #d4a373;
+  --wave-palette-brown-border: var(--wave-palette-brown);
   --wave-palette-steel: #9fb8cc;
   --wave-palette-steel-foreground: #000000;
+  --wave-palette-steel-tint: #2f4557;
+  --wave-palette-steel-tint-foreground: #9fb8cc;
+  --wave-palette-steel-border: var(--wave-palette-steel);
   --wave-backdrop: rgb(0 0 0 / 0.5);
 
   /* Elevation: Fluent's dark shadows, ambient 0.24 / key 0.28 (the same offsets and blurs) */
@@ -453,31 +547,68 @@
   --wave-presence-oof: #ff80ff;
   --wave-presence-glyph: #000000;
 
-  /* Persona palette: avatar colors (Avatar `color`), each with its text color */
+  /* Persona palette (the table in the file header): every hue collapses to black and white, like
+     Fluent's high-contrast palette, so colour never tells two hues apart here */
   --wave-palette-red: #ffffff;
   --wave-palette-red-foreground: #000000;
+  --wave-palette-red-tint: #000000;
+  --wave-palette-red-tint-foreground: #ffffff;
+  --wave-palette-red-border: var(--wave-palette-red);
   --wave-palette-pumpkin: #ffffff;
   --wave-palette-pumpkin-foreground: #000000;
+  --wave-palette-pumpkin-tint: #000000;
+  --wave-palette-pumpkin-tint-foreground: #ffffff;
+  --wave-palette-pumpkin-border: var(--wave-palette-pumpkin);
   --wave-palette-gold: #ffffff;
   --wave-palette-gold-foreground: #000000;
+  --wave-palette-gold-tint: #000000;
+  --wave-palette-gold-tint-foreground: #ffffff;
+  --wave-palette-gold-border: var(--wave-palette-gold);
   --wave-palette-forest: #ffffff;
   --wave-palette-forest-foreground: #000000;
+  --wave-palette-forest-tint: #000000;
+  --wave-palette-forest-tint-foreground: #ffffff;
+  --wave-palette-forest-border: var(--wave-palette-forest);
   --wave-palette-teal: #ffffff;
   --wave-palette-teal-foreground: #000000;
+  --wave-palette-teal-tint: #000000;
+  --wave-palette-teal-tint-foreground: #ffffff;
+  --wave-palette-teal-border: var(--wave-palette-teal);
   --wave-palette-blue: #ffffff;
   --wave-palette-blue-foreground: #000000;
+  --wave-palette-blue-tint: #000000;
+  --wave-palette-blue-tint-foreground: #ffffff;
+  --wave-palette-blue-border: var(--wave-palette-blue);
   --wave-palette-navy: #ffffff;
   --wave-palette-navy-foreground: #000000;
+  --wave-palette-navy-tint: #000000;
+  --wave-palette-navy-tint-foreground: #ffffff;
+  --wave-palette-navy-border: var(--wave-palette-navy);
   --wave-palette-lavender: #ffffff;
   --wave-palette-lavender-foreground: #000000;
+  --wave-palette-lavender-tint: #000000;
+  --wave-palette-lavender-tint-foreground: #ffffff;
+  --wave-palette-lavender-border: var(--wave-palette-lavender);
   --wave-palette-purple: #ffffff;
   --wave-palette-purple-foreground: #000000;
+  --wave-palette-purple-tint: #000000;
+  --wave-palette-purple-tint-foreground: #ffffff;
+  --wave-palette-purple-border: var(--wave-palette-purple);
   --wave-palette-magenta: #ffffff;
   --wave-palette-magenta-foreground: #000000;
+  --wave-palette-magenta-tint: #000000;
+  --wave-palette-magenta-tint-foreground: #ffffff;
+  --wave-palette-magenta-border: var(--wave-palette-magenta);
   --wave-palette-brown: #ffffff;
   --wave-palette-brown-foreground: #000000;
+  --wave-palette-brown-tint: #000000;
+  --wave-palette-brown-tint-foreground: #ffffff;
+  --wave-palette-brown-border: var(--wave-palette-brown);
   --wave-palette-steel: #ffffff;
   --wave-palette-steel-foreground: #000000;
+  --wave-palette-steel-tint: #000000;
+  --wave-palette-steel-tint-foreground: #ffffff;
+  --wave-palette-steel-border: var(--wave-palette-steel);
   --wave-backdrop: rgb(0 0 0 / 0.8);
 
   /* Elevation: as dark */
@@ -584,28 +715,64 @@
   --color-presence-glyph: var(--wave-presence-glyph);
   --color-palette-red: var(--wave-palette-red);
   --color-palette-red-foreground: var(--wave-palette-red-foreground);
+  --color-palette-red-tint: var(--wave-palette-red-tint);
+  --color-palette-red-tint-foreground: var(--wave-palette-red-tint-foreground);
+  --color-palette-red-border: var(--wave-palette-red-border);
   --color-palette-pumpkin: var(--wave-palette-pumpkin);
   --color-palette-pumpkin-foreground: var(--wave-palette-pumpkin-foreground);
+  --color-palette-pumpkin-tint: var(--wave-palette-pumpkin-tint);
+  --color-palette-pumpkin-tint-foreground: var(--wave-palette-pumpkin-tint-foreground);
+  --color-palette-pumpkin-border: var(--wave-palette-pumpkin-border);
   --color-palette-gold: var(--wave-palette-gold);
   --color-palette-gold-foreground: var(--wave-palette-gold-foreground);
+  --color-palette-gold-tint: var(--wave-palette-gold-tint);
+  --color-palette-gold-tint-foreground: var(--wave-palette-gold-tint-foreground);
+  --color-palette-gold-border: var(--wave-palette-gold-border);
   --color-palette-forest: var(--wave-palette-forest);
   --color-palette-forest-foreground: var(--wave-palette-forest-foreground);
+  --color-palette-forest-tint: var(--wave-palette-forest-tint);
+  --color-palette-forest-tint-foreground: var(--wave-palette-forest-tint-foreground);
+  --color-palette-forest-border: var(--wave-palette-forest-border);
   --color-palette-teal: var(--wave-palette-teal);
   --color-palette-teal-foreground: var(--wave-palette-teal-foreground);
+  --color-palette-teal-tint: var(--wave-palette-teal-tint);
+  --color-palette-teal-tint-foreground: var(--wave-palette-teal-tint-foreground);
+  --color-palette-teal-border: var(--wave-palette-teal-border);
   --color-palette-blue: var(--wave-palette-blue);
   --color-palette-blue-foreground: var(--wave-palette-blue-foreground);
+  --color-palette-blue-tint: var(--wave-palette-blue-tint);
+  --color-palette-blue-tint-foreground: var(--wave-palette-blue-tint-foreground);
+  --color-palette-blue-border: var(--wave-palette-blue-border);
   --color-palette-navy: var(--wave-palette-navy);
   --color-palette-navy-foreground: var(--wave-palette-navy-foreground);
+  --color-palette-navy-tint: var(--wave-palette-navy-tint);
+  --color-palette-navy-tint-foreground: var(--wave-palette-navy-tint-foreground);
+  --color-palette-navy-border: var(--wave-palette-navy-border);
   --color-palette-lavender: var(--wave-palette-lavender);
   --color-palette-lavender-foreground: var(--wave-palette-lavender-foreground);
+  --color-palette-lavender-tint: var(--wave-palette-lavender-tint);
+  --color-palette-lavender-tint-foreground: var(--wave-palette-lavender-tint-foreground);
+  --color-palette-lavender-border: var(--wave-palette-lavender-border);
   --color-palette-purple: var(--wave-palette-purple);
   --color-palette-purple-foreground: var(--wave-palette-purple-foreground);
+  --color-palette-purple-tint: var(--wave-palette-purple-tint);
+  --color-palette-purple-tint-foreground: var(--wave-palette-purple-tint-foreground);
+  --color-palette-purple-border: var(--wave-palette-purple-border);
   --color-palette-magenta: var(--wave-palette-magenta);
   --color-palette-magenta-foreground: var(--wave-palette-magenta-foreground);
+  --color-palette-magenta-tint: var(--wave-palette-magenta-tint);
+  --color-palette-magenta-tint-foreground: var(--wave-palette-magenta-tint-foreground);
+  --color-palette-magenta-border: var(--wave-palette-magenta-border);
   --color-palette-brown: var(--wave-palette-brown);
   --color-palette-brown-foreground: var(--wave-palette-brown-foreground);
+  --color-palette-brown-tint: var(--wave-palette-brown-tint);
+  --color-palette-brown-tint-foreground: var(--wave-palette-brown-tint-foreground);
+  --color-palette-brown-border: var(--wave-palette-brown-border);
   --color-palette-steel: var(--wave-palette-steel);
   --color-palette-steel-foreground: var(--wave-palette-steel-foreground);
+  --color-palette-steel-tint: var(--wave-palette-steel-tint);
+  --color-palette-steel-tint-foreground: var(--wave-palette-steel-tint-foreground);
+  --color-palette-steel-border: var(--wave-palette-steel-border);
   --color-backdrop: var(--wave-backdrop);
 
   /* Brand ramp (for designers; components use the semantic colors) */

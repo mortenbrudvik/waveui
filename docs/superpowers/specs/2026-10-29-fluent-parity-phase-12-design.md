@@ -265,6 +265,8 @@ Order A, B, C, D, E, F, G; D and E may swap. If the schedule forces a cut, F sli
 
 (To be filled during the build: every place the code deliberately departs from this document, each edit to an existing assertion, and the measured sizes.)
 
+- **Task 3, palette tints (§5.3):** **The dark tints are shaded from the hue's light fill, not from the dark fill.** Fluent's dark `Background2` is `shade30` of the same hue ramp whose `primary` is the light `BorderActive`, and Wave's light fill stands for that primary. The dark fills are pastels: shaded to the depth of Fluent's `shade30` they turn muddy and collapse together (lavender and purple 8 apart in RGB, pumpkin and brown 13), while the light fill mixed 40% toward black lands on Fluent's own values (red `#760913` for `#751d1f`, blue `#094171` for `#004377`, purple `#371c57` for `#341a51`). The rest follows §5.3: light tints are the light fill mixed 70% toward white (the lightness of Fluent's `tint40`), and each tint foreground is its theme's fill mixed toward black (light) or white (dark) in 0.1% steps until it is 4.6:1 on the tint, `background` and `card` (11 of the 12 dark ones need no step). `@theme inline` maps the 36 tokens as `--color-palette-<hue>-tint`, `-tint-foreground` and `-border` (the existing "maps every token" test requires it of every tabled token). The tests also gained two guards: every declaration of a theme group except the shadows is in `TOKENS`, so a new colour token cannot skip the contrast classification, and every light and dark tint and tint foreground stays within 10° of its fill's HSL hue at a saturation of 0.2 or more. No existing assertion was edited.
+
 ## 16. Risks
 
 - **Strict CSP** blocks the server-rendered `style` (R2): documented, checked per engine.
