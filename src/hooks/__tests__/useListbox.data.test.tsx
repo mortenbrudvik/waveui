@@ -107,7 +107,7 @@ describe('useListbox data mode: onScrollToItem', () => {
     expect(onScrollToItem).toHaveBeenLastCalledWith(1);
   });
 
-  it('is not called for an option that is mounted', () => {
+  it('is called for an option that is mounted too, which is also scrolled into view', () => {
     const onScrollToItem = vi.fn();
     const original = Element.prototype.scrollIntoView;
     const scrollIntoView = vi.fn();
@@ -117,7 +117,7 @@ describe('useListbox data mode: onScrollToItem', () => {
       const button = screen.getByRole('combobox');
       fireEvent.keyDown(button, { key: 'ArrowDown' });
       fireEvent.keyDown(button, { key: 'End' });
-      expect(onScrollToItem).not.toHaveBeenCalled();
+      expect(onScrollToItem.mock.calls).toEqual([[0], [4]]);
       expect(scrollIntoView).toHaveBeenCalledTimes(2);
     } finally {
       Element.prototype.scrollIntoView = original;

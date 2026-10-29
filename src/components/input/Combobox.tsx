@@ -329,9 +329,10 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    *
    * The window counts the shown options: typing narrows it, as it narrows `aria-setsize`. The
    * arrow keys move over all of them; the active option stays rendered while it is scrolled away,
-   * so `aria-activedescendant` always names an element, and it is scrolled into view when a key
-   * makes it active. Opening the list scrolls the active option, else the first selected one, to
-   * the middle of the list. A closed list renders no option.
+   * so `aria-activedescendant` always names an element, and when a key (or typing) makes it
+   * active the list and the window move to it in the same update. Opening the list scrolls the
+   * active option, else the first selected one, to the middle of the list. A closed list renders
+   * no option.
    */
   virtualWindow?: VirtualWindow;
   /**

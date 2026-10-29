@@ -182,7 +182,8 @@ export function renderListboxWindow(
  * Scrolls a windowed popup list to its active option, else to its first selected one, centred,
  * from the commit that shows the list. That commit mounts a new list element (a closed list is
  * another element, without options), which the window attaches only in the next commit: it keeps
- * the request until then.
+ * the last request until then. Call it after `useListbox`, so this request comes after the active
+ * option's own (`onScrollToItem`, from `useListbox`'s layout effect) and replaces it.
  */
 export function useShownListScroll(
   shown: boolean,

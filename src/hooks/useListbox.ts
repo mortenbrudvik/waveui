@@ -169,12 +169,13 @@ export interface UseListboxOptions {
    */
   onActiveValueChange?: (value: string | null) => void;
   /**
-   * Called instead of scrolling the active option into view when the option has no mounted
-   * element, as in a list that renders only part of its options (a virtual window): `index` is the
-   * option's index in {@link UseListboxResult.items}, the shown options (filtered-out and hidden
-   * items are not counted, disabled ones are). Scroll the list so that the option renders (a
-   * window's `scrollToIndex(index)`); `aria-activedescendant` names it meanwhile. Passed to
-   * {@link useActiveDescendant}'s `onScrollToItem`, mapped to that index.
+   * Called for every move that scrolls the active option into view, for a list that renders only
+   * part of its options (a virtual window): `index` is the option's index in
+   * {@link UseListboxResult.items}, the shown options (filtered-out and hidden items are not
+   * counted, disabled ones are). Scroll the list so that it shows and renders the option (a
+   * window's `scrollToIndex(index)`, which moves the window in the same update); an element, when
+   * there is one, is then scrolled into view as well. `aria-activedescendant` names the option
+   * meanwhile. Passed to {@link useActiveDescendant}'s `onScrollToItem`, mapped to that index.
    */
   onScrollToItem?: (index: number) => void;
   /** Prefix of the generated listbox id. @default 'listbox' */
@@ -1005,7 +1006,8 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   before registration (SSR/first render). `filter` is the navigability predicate, which a
  *   picker builds from its query. In data mode the keys, typeahead, the labels and the filter
  *   read `items` only, so a picker may render just the shown options (`items` of the result), or
- *   part of them: `onScrollToItem` receives an active option that has no element.
+ *   part of them: `onScrollToItem` receives every active option that scrolls into view, rendered
+ *   or not.
  * - **Active option** is derived during render: the highlighted value, else the `autoHighlight`
  *   fallback. The highlight is reset on close and after a single-select commit that closes the
  *   listbox, and dropped once it is not navigable any more (filtered out, hidden, removed by an
@@ -1152,9 +1154,9 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   // and with the options before opening, so the keystroke that opens the listbox and filters it in
   // one update counts; opening with unchanged options (ArrowDown, a click) keeps the autoHighlight
   // start. Every highlight but the pointer's (a hover, a standalone press) is scrolled into view
-  // (the list would scroll under the pointer). An active option without an element (a windowed
-  // list) goes to onScrollToItem by its index among the shown options, which differs from its
-  // index among the navigation values when disabled options are skipped.
+  // (the list would scroll under the pointer). With onScrollToItem (a windowed list), every such
+  // highlight goes to it first by its index among the shown options, which differs from its index
+  // among the navigation values when disabled options are skipped.
   const scrollToItem = useEventCallback((navigationIndex: number) => {
     const value = navigationValues[navigationIndex];
     const index = navigable.findIndex((item) => item.value === value);

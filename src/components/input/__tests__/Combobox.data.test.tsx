@@ -501,7 +501,7 @@ describe('Combobox windowed options (virtualWindow)', () => {
     ]);
   });
 
-  it('renders the option an arrow key moves past the window in the same commit and scrolls it into view', async () => {
+  it('moves the window to the option an arrow key reaches in the same update, and scrolls it into view', async () => {
     const user = userEvent.setup();
     const onScrollToIndex = vi.fn();
     const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
@@ -513,16 +513,32 @@ describe('Combobox windowed options (virtualWindow)', () => {
     const active = activeOption();
     expect(active).toHaveAccessibleName('Item 20');
     expect(within(list()).getByRole('option', { name: 'Item 20' })).toBe(active);
-    // Kept past the window (options 0 … 13), between two spacers.
-    expect(order(list())).toEqual([...range(1, 15), 'spacer', 21, 'spacer']);
+    // No scroll event: the keys moved the list (Item 20 at its bottom edge, 422 pixels) and the
+    // window with it.
+    expect(list().scrollTop).toBe(21 * ITEM_SIZE - VIEWPORT);
+    expect(order(list())).toEqual(['spacer', ...range(8, 28), 'spacer']);
     expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' });
     expect(scrollIntoView.mock.contexts.at(-1)).toBe(active);
-    // Only the opening asked the window to scroll; the browser scrolls the rendered option.
-    expect(onScrollToIndex.mock.calls).toEqual([[0, { align: 'center' }]]);
-    // The browser scrolled it to the bottom edge (422 pixels): the window follows.
-    scrollList(list(), 21 * ITEM_SIZE - VIEWPORT);
-    expect(order(list())).toEqual(['spacer', ...range(8, 28), 'spacer']);
-    expect(activeOption()).toBe(active);
+    // The opening asked for the first option and then centered it; each key asked for its option.
+    expect(onScrollToIndex.mock.calls).toEqual([
+      [0, { align: 'auto' }],
+      [0, { align: 'center' }],
+      ...range(1, 21).map((index) => [index, { align: 'auto' }]),
+    ]);
+  });
+
+  it('moves the window to the first match in the same update when typing while scrolled deep', async () => {
+    const user = userEvent.setup();
+    render(<WindowedCombobox />);
+    await user.click(combobox());
+    scrollList(list(), 5000 * ITEM_SIZE);
+    expect(order(list())).toEqual(['spacer', ...range(4995, 5015), 'spacer']);
+    await user.type(combobox(), 'Item 5');
+    // Item 5, 50 … 59, 500 … 599 and 5000 … 5999: the first match is active, at the top.
+    expect(activeOption()).toHaveAccessibleName('Item 5');
+    expect(list().scrollTop).toBe(0);
+    expect(order(list())).toEqual([...range(1, 15), 'spacer']);
+    for (const option of options()) expect(option).toHaveAttribute('aria-setsize', '1111');
   });
 
   it('scrolls an active option that the window does not render through scrollToIndex', async () => {
@@ -534,8 +550,9 @@ describe('Combobox windowed options (virtualWindow)', () => {
     await user.keyboard('{ArrowDown}');
     await user.keyboard('{ArrowDown}'.repeat(14));
     expect(onScrollToIndex.mock.calls).toEqual([
+      [0, { align: 'auto' }],
       [0, { align: 'center' }],
-      [14, { align: 'auto' }],
+      ...range(1, 15).map((index) => [index, { align: 'auto' }]),
     ]);
     expect(list().scrollTop).toBe(15 * ITEM_SIZE - VIEWPORT);
     const active = activeOption();

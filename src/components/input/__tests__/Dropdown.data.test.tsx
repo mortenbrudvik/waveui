@@ -341,7 +341,7 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     expect(activeOption()).toBe(within(list()).getByRole('option', { name: 'Item 0' }));
   });
 
-  it('End and Home go to the last and the first item, rendered in the commit that activates them', async () => {
+  it('End and Home move the window to the last and the first item in the same update', async () => {
     const user = userEvent.setup();
     const onScrollToIndex = vi.fn();
     const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
@@ -353,16 +353,32 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     expect(last).toHaveAccessibleName('Item 9999');
     expect(last).toHaveAttribute('aria-posinset', '10000');
     expect(within(list()).getByRole('option', { name: 'Item 9999' })).toBe(last);
-    expect(order(list())).toEqual([...range(1, 15), 'spacer', 10000]);
-    expect(scrollIntoView.mock.contexts.at(-1)).toBe(last);
-    // The browser scrolled it into view: the window follows.
-    scrollList(list(), COUNT * ITEM_SIZE - VIEWPORT);
+    // No scroll event: the last 8 options in view, 6 more above them.
+    expect(list().scrollTop).toBe(COUNT * ITEM_SIZE - VIEWPORT);
     expect(order(list())).toEqual(['spacer', ...range(9987, 10001)]);
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(last);
     await user.keyboard('{Home}');
     expect(activeOption()).toHaveAttribute('aria-posinset', '1');
-    expect(order(list())).toEqual([1, 'spacer', ...range(9987, 10001)]);
-    // Only the opening asked the window to scroll (to the first item, at the top).
-    expect(onScrollToIndex.mock.calls).toEqual([[0, { align: 'center' }]]);
+    expect(list().scrollTop).toBe(0);
+    expect(order(list())).toEqual([...range(1, 15), 'spacer']);
+    // The opening asked for the first item and centered it; End and Home asked for theirs.
+    expect(onScrollToIndex.mock.calls).toEqual([
+      [0, { align: 'auto' }],
+      [0, { align: 'center' }],
+      [9999, { align: 'auto' }],
+      [0, { align: 'auto' }],
+    ]);
+  });
+
+  it('makes no window request for a pointer highlight', async () => {
+    const user = userEvent.setup();
+    const onScrollToIndex = vi.fn();
+    render(<WindowedDropdown windowOptions={{ onScrollToIndex }} />);
+    await user.click(combobox());
+    expect(onScrollToIndex).toHaveBeenCalledTimes(2);
+    await user.hover(within(list()).getByRole('option', { name: 'Item 7' }));
+    expect(activeOption()).toHaveAccessibleName('Item 7');
+    expect(onScrollToIndex).toHaveBeenCalledTimes(2);
   });
 
   it('opens centered on the selected option deep in the list, which is rendered and scrolled into view first', async () => {
@@ -373,11 +389,14 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     await user.click(combobox());
     const selected = activeOption();
     expect(selected).toHaveAccessibleName('Item 5000');
-    // The kept option, scrolled into view in the commit that opened the list (before the window
-    // had the list), then the window's center scroll.
+    // In the commit that opened the list (before the window had it): the request for the kept
+    // option, which is scrolled into view, then the center request, which replaces it.
     expect(scrollIntoView.mock.contexts).toHaveLength(1);
     expect(scrollIntoView.mock.contexts[0]).toBe(selected);
-    expect(onScrollToIndex.mock.calls).toEqual([[5000, { align: 'center' }]]);
+    expect(onScrollToIndex.mock.calls).toEqual([
+      [5000, { align: 'auto' }],
+      [5000, { align: 'center' }],
+    ]);
     expect(list().scrollTop).toBe(centerOffset(5000));
     expect(order(list())).toEqual(['spacer', ...range(4991, 5011), 'spacer']);
     expect(within(list()).getByRole('option', { name: 'Item 5000' })).toBe(selected);
@@ -410,7 +429,7 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     expect(order(list())).toEqual(['spacer', ...range(4987, 5001)]);
   });
 
-  it('typeahead finds an item anywhere in the data', async () => {
+  it('typeahead finds an item anywhere in the data and moves the window to it in the same update', async () => {
     const user = userEvent.setup();
     render(<WindowedDropdown />);
     combobox().focus();
@@ -418,6 +437,9 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     const active = activeOption();
     expect(active).toHaveAccessibleName('Item 7777');
     expect(within(list()).getByRole('option', { name: 'Item 7777' })).toBe(active);
+    // No scroll event: Item 7777 at the bottom edge of the list.
+    expect(list().scrollTop).toBe(7778 * ITEM_SIZE - VIEWPORT);
+    expect(order(list())).toEqual(['spacer', ...range(7765, 7785), 'spacer']);
   });
 
   it('selects once per click in StrictMode', async () => {

@@ -147,8 +147,9 @@ export interface ListboxProps<M extends boolean = false> extends Omit<
    * The window counts the shown options (the items that are not `hidden`). The keys and typeahead
    * move over all of them (Home and End to the first and the last, PageUp and PageDown by ten); the
    * active option stays rendered while it is scrolled away, so `aria-activedescendant` always names
-   * an element, and it is scrolled into view when the list gains focus or a key makes it active.
-   * The server renders the first window.
+   * an element, and when the list gains focus or a key makes it active the list and the window
+   * move to it in the same update (a pointer press moves neither). The server renders the first
+   * window.
    */
   virtualWindow?: VirtualWindow;
   /**

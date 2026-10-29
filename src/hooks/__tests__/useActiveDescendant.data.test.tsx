@@ -65,12 +65,30 @@ describe('useActiveDescendant onScrollToItem', () => {
       // The active descendant points at the item before it mounts.
       expect(ref.current!.activeDescendantId).toBe('opt-d');
 
-      // A mounted item is scrolled into view as before.
+      // A mounted item is passed on too (a window moves to it), then scrolled into view as before.
       act(() => ref.current!.setActiveValue('b'));
       expect(scrollIntoView).toHaveBeenCalledTimes(1);
       expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
-      expect(onScrollToItem).toHaveBeenCalledTimes(1);
+      expect(onScrollToItem.mock.calls).toEqual([[3], [1]]);
     });
+  });
+
+  it('is called before a mounted element is scrolled into view', () => {
+    const calls: string[] = [];
+    const target = document.createElement('div');
+    target.scrollIntoView = () => calls.push('scrollIntoView');
+    const ref = React.createRef<UseActiveDescendantResult>();
+    render(
+      <WindowProbe
+        items={ITEMS}
+        mounted={[]}
+        getElement={(value) => (value === 'c' ? target : null)}
+        onScrollToItem={(index) => calls.push(`onScrollToItem ${index}`)}
+        resultRef={ref}
+      />,
+    );
+    act(() => ref.current!.setActiveValue('c'));
+    expect(calls).toEqual(['onScrollToItem 2', 'scrollIntoView']);
   });
 
   it('follows the moves of the keys: last, prev and move', () => {
@@ -124,7 +142,7 @@ describe('useActiveDescendant onScrollToItem', () => {
     expect(onScrollToItem).not.toHaveBeenCalled();
   });
 
-  it('prefers a mounted element found by getElement', () => {
+  it('scrolls a mounted element found by getElement into view as well', () => {
     const target = document.createElement('div');
     target.scrollIntoView = vi.fn();
     const onScrollToItem = vi.fn();
@@ -140,7 +158,7 @@ describe('useActiveDescendant onScrollToItem', () => {
     );
     act(() => ref.current!.setActiveValue('c'));
     expect(target.scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
-    expect(onScrollToItem).not.toHaveBeenCalled();
+    expect(onScrollToItem.mock.calls).toEqual([[2]]);
   });
 
   it('reports each move once in StrictMode', () => {

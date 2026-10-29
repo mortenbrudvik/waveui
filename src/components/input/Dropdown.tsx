@@ -256,9 +256,9 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    * The window counts the shown options (the items that are not `hidden`). The keys and typeahead
    * move over all of them (Home and End to the first and the last, PageUp and PageDown by ten); the
    * active option stays rendered while it is scrolled away, so `aria-activedescendant` always names
-   * an element, and it is scrolled into view when a key makes it active. Opening the list scrolls
-   * the active option (the selected one, by default) to the middle of the list. A closed list
-   * renders no option.
+   * an element, and when a key makes it active the list and the window move to it in the same
+   * update. Opening the list scrolls the active option (the selected one, by default) to the
+   * middle of the list. A closed list renders no option.
    */
   virtualWindow?: VirtualWindow;
   /** Called when the `<button role="combobox">` receives focus (the root keeps other handlers). */

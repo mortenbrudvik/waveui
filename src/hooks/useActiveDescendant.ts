@@ -32,13 +32,14 @@ export interface UseActiveDescendantOptions {
   /** The element of an item, for scrolling it into view. @default document.getElementById(getId(value)) */
   getElement?: (value: string) => HTMLElement | null;
   /**
-   * Called instead of scrolling an item into view when the item that became active has no
-   * element (`getElement`, then the id lookup, finds none): a windowed list that renders part of
-   * its items. `index` is the item's index in `items`. Scroll the list so that it renders the item
-   * (a virtual window's `scrollToIndex`); `aria-activedescendant` already names the item, and
-   * points at its element once it mounts. Called after the same moves that scroll (not after a
-   * pointer move or a `scroll: false` move), from a layout effect, once per change of the active
-   * item. Without it, an item without an element is not scrolled to.
+   * Called for every move that scrolls the active item into view, for a windowed list that renders
+   * part of its items: `index` is the item's index in `items`. Scroll the list so that it shows and
+   * renders the item (a virtual window's `scrollToIndex`, which moves the window in the same
+   * update); an element, when there is one (`getElement`, then the id lookup), is then scrolled
+   * into view as well. `aria-activedescendant` already names the item, and points at its element
+   * once it mounts. Called after the same moves that scroll (not after a pointer move or a
+   * `scroll: false` move), from a layout effect, once per change of the active item. Without it,
+   * an item without an element is not scrolled to.
    */
   onScrollToItem?: (index: number) => void;
   /** Called after the active item changed (from an effect), `null` included. */
@@ -107,8 +108,9 @@ function step(values: readonly string[], current: string | null, delta: number, 
  * - The moved-to item is dropped when it leaves `items` or while `enabled` is `false`, and does not
  *   come back without a user action; `fallback` is active while nothing was moved to.
  * - Keyboard and programmatic moves are scrolled into view (`{ block: 'nearest' }`); pointer moves
- *   (`highlight`) and `setActiveValue(value, { scroll: false })` are not. An item without an element
- *   (a windowed list) is passed to `onScrollToItem` by its index instead.
+ *   (`highlight`) and `setActiveValue(value, { scroll: false })` are not. With `onScrollToItem` (a
+ *   windowed list) each such move is first passed to it by the item's index, also for an item
+ *   without an element.
  * - `onActiveValueChange` reports every change after the commit, once (StrictMode included).
  *
  * `useListbox` is built on it; use it directly for composites that are not listboxes.
@@ -182,8 +184,8 @@ export function useActiveDescendant(
     if (custom) return custom;
     return typeof document === 'undefined' ? null : document.getElementById(getId(value));
   });
-  // An item without an element (a windowed list renders part of its items) is handed to
-  // onScrollToItem by its index, read from the items of the commit.
+  // A windowed list (it renders part of its items) gets every item that scrolls by its index, read
+  // from the items of the commit.
   const scrollToItem = useEventCallback((value: string) => {
     if (!onScrollToItem) return;
     const index = items.indexOf(value);
@@ -193,9 +195,11 @@ export function useActiveDescendant(
     const suppressed = activeValue !== null && activeValue === noScrollRef.current;
     noScrollRef.current = null;
     if (activeValue === null || suppressed) return;
-    const element = resolveElement(activeValue);
-    if (element) element.scrollIntoView?.({ block: 'nearest' });
-    else scrollToItem(activeValue);
+    // The window moves to the item first, in this update, so the frame never paints the new scroll
+    // position over the old window; its element, when there is one, is then scrolled into view as
+    // well (for the list itself no change by then, its ancestors as before).
+    scrollToItem(activeValue);
+    resolveElement(activeValue)?.scrollIntoView?.({ block: 'nearest' });
   }, [activeValue, resolveElement, scrollToItem]);
 
   const reportedRef = React.useRef<string | null>(null);

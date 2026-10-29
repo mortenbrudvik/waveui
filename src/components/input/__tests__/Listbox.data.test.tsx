@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
@@ -369,14 +369,16 @@ describe('Listbox windowed options (virtualWindow)', () => {
     }
   });
 
-  it('keeps the active option rendered: focus starts on the selected one deep in the list', async () => {
+  it('moves the window to the selected option deep in the list on focus, and keeps it rendered when scrolled away', async () => {
     const user = userEvent.setup();
     const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
     render(<WindowedListbox defaultValue="item-5000" />);
     await user.tab();
     const active = activeOption();
     expect(active).toHaveAccessibleName('Item 5000');
-    expect(order(list())).toEqual([...range(1, 15), 'spacer', 5001, 'spacer']);
+    // No scroll event: Item 5000 at the bottom edge of the list, the window around it.
+    expect(list().scrollTop).toBe(5001 * ITEM_SIZE - VIEWPORT);
+    expect(order(list())).toEqual(['spacer', ...range(4988, 5008), 'spacer']);
     expect(scrollIntoView.mock.contexts.at(-1)).toBe(active);
     // Scrolled away (the wheel): it stays rendered, between spacers.
     scrollList(list(), 9000 * ITEM_SIZE);
@@ -384,18 +386,45 @@ describe('Listbox windowed options (virtualWindow)', () => {
     expect(activeOption()).toBe(active);
   });
 
-  it('End, Home, PageDown and typeahead move over the data', async () => {
+  it('End, Home, PageDown and typeahead move over the data, and the window with them', async () => {
     const user = userEvent.setup();
     render(<WindowedListbox />);
     await user.tab();
     await user.keyboard('{End}');
     expect(activeOption()).toHaveAttribute('aria-posinset', '10000');
     expect(within(list()).getByRole('option', { name: 'Item 9999' })).toBe(activeOption());
+    // No scroll event: the last 8 options in view, 6 more above them.
+    expect(list().scrollTop).toBe(COUNT * ITEM_SIZE - VIEWPORT);
+    expect(order(list())).toEqual(['spacer', ...range(9987, 10001)]);
     await user.keyboard('{Home}{PageDown}{PageDown}');
     expect(activeOption()).toHaveAttribute('aria-posinset', '21');
     await user.keyboard('Item 4321');
     expect(activeOption()).toHaveAccessibleName('Item 4321');
     expect(list()).toContainElement(activeOption());
+    expect(list().scrollTop).toBe(4322 * ITEM_SIZE - VIEWPORT);
+    expect(order(list())).toEqual(['spacer', ...range(4309, 4329), 'spacer']);
+  });
+
+  it('makes no window request for a pointer press, also on a disabled option that leaves the selected one active', () => {
+    const onScrollToIndex = vi.fn();
+    const items = MANY_ITEMS.map((item, i) => (i === 3 ? { ...item, disabled: true } : item));
+    render(
+      <WindowedListbox
+        items={items}
+        defaultValue="item-5000"
+        windowOptions={{ onScrollToIndex }}
+      />,
+    );
+    // The disabled Item 3 cannot be active: the press focuses the list on its fallback, the
+    // selected Item 5000, without scrolling to it (the list stays under the pointer).
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'Item 3' }), { button: 0 });
+    expect(list()).toHaveFocus();
+    expect(activeOption()).toHaveAccessibleName('Item 5000');
+    expect(list().scrollTop).toBe(0);
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'Item 5' }), { button: 0 });
+    expect(activeOption()).toHaveAccessibleName('Item 5');
+    expect(list().scrollTop).toBe(0);
+    expect(onScrollToIndex).not.toHaveBeenCalled();
   });
 
   it('scrolls an active option that the window does not render through scrollToIndex', async () => {
@@ -405,7 +434,8 @@ describe('Listbox windowed options (virtualWindow)', () => {
     render(<WindowedListbox windowOptions={{ onScrollToIndex, keep: false }} />);
     await user.tab();
     await user.keyboard('{ArrowDown}'.repeat(14));
-    expect(onScrollToIndex.mock.calls).toEqual([[14, { align: 'auto' }]]);
+    // Focus made Item 0 active, then each key asked for its option.
+    expect(onScrollToIndex.mock.calls).toEqual(range(0, 15).map((i) => [i, { align: 'auto' }]));
     expect(list().scrollTop).toBe(15 * ITEM_SIZE - VIEWPORT);
     expect(activeOption()).toHaveAccessibleName('Item 14');
     expect(list()).toContainElement(activeOption());
@@ -417,11 +447,12 @@ describe('Listbox windowed options (virtualWindow)', () => {
     await user.tab();
     scrollList(list(), 9000 * ITEM_SIZE);
     await user.keyboard('{End}');
-    expect(order(list())).toEqual(['spacer', ...range(8995, 9015), 'spacer', 10000]);
+    expect(order(list())).toEqual(['spacer', ...range(9987, 10001)]);
     rerender(<WindowedListbox items={MANY_ITEMS.slice(0, 100)} />);
-    // Item 9999 left the items, so the first one is active (kept); the window is clamped to the
-    // last options of the 100.
-    expect(order(list())).toEqual([1, 'spacer', ...range(87, 101)]);
+    // Item 9999 left the items, so the first one is active: the render lays out the 100 under the
+    // window clamped to their end (with Item 0 kept), then the window moves to Item 0.
+    expect(list().scrollTop).toBe(0);
+    expect(order(list())).toEqual([...range(1, 15), 'spacer']);
     expect(activeOption()).toHaveAccessibleName('Item 0');
     for (const option of screen.getAllByRole('option')) {
       expect(option).toHaveAttribute('aria-setsize', '100');
