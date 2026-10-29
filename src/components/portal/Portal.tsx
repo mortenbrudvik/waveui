@@ -44,7 +44,8 @@ PortalDepthContext.displayName = 'PortalDepthContext';
 
 /**
  * Renders its children into `document.body` (or the WaveProvider `portalContainer`), wrapped in a
- * `<div class="wave-portal …">` that carries the provider's theme classes, direction and font, so
+ * `<div class="wave-portal …">` that carries the provider's theme classes, direction and font, and
+ * its token overrides (WaveProvider `tokens`, unless its `applyStylesToPortals` is `false`), so
  * portaled overlays look like the rest of the themed tree. The wrapper paints no background.
  *
  * - **Client only, first commit**: nothing is rendered on the server or during hydration (no
@@ -70,7 +71,7 @@ export const Portal = ({
   ref,
 }: PortalProps) => {
   const isClient = useIsClient();
-  const { themeClassName, portalContainer } = useWaveTheme();
+  const { themeClassName, portalContainer, tokenStyle, applyStylesToPortals } = useWaveTheme();
   const dir = useDirection();
   const depth = React.useContext(PortalDepthContext);
   const parentLayerId = React.useContext(DismissLayerContext);
@@ -103,7 +104,12 @@ export const Portal = ({
       dir={dir}
       data-wave-portal=""
       data-layer={layer}
-      style={{ position: 'relative', zIndex: `calc(${Z_INDEX[layer]} + ${depth})` }}
+      // The provider's token overrides first, so the wrapper's own two properties win.
+      style={{
+        ...(applyStylesToPortals ? tokenStyle : undefined),
+        position: 'relative',
+        zIndex: `calc(${Z_INDEX[layer]} + ${depth})`,
+      }}
     >
       <PortalDepthContext.Provider value={depth + 1}>{content}</PortalDepthContext.Provider>
     </div>,

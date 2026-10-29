@@ -3,6 +3,12 @@ import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { waveProviderClassNames } from '../../lib/classNames';
 import { getThemeClassName, isWaveTheme, WAVE_THEMES, type WaveTheme } from '../../lib/theme';
+import {
+  collectTokenStyle,
+  mergeTokenOverrides,
+  type TokenStyle,
+  type WaveTokenOverrides,
+} from '../../lib/tokens';
 import type { CoreSize, InputAppearance, MotionPreference } from '../../lib/types';
 
 // The theme helper lives in server-safe src/lib (no "use client"), so React Server Components can
@@ -60,6 +66,43 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
    * @default the enclosing WaveProvider's motion, else 'default'
    */
   motion?: MotionPreference;
+  /**
+   * Design token overrides for the subtree: CSS values by token name, the CSS variable in camelCase
+   * without its `--wave-` prefix (`brand80` for `--wave-brand-80`, `primaryForeground` for
+   * `--wave-primary-foreground`; a number is written as its string). `theme` still names one of
+   * the three themes, and the overrides apply over it as inline custom properties on the root and
+   * on every portal of the subtree (see `applyStylesToPortals`), so its dialogs, menus, popovers,
+   * tooltips and toasts take them too. Fluent's `theme` prop with a partial theme is the
+   * counterpart.
+   *
+   * A nested provider merges its overrides over the enclosing provider's, key by key: an omitted
+   * `tokens` inherits them all, a key whose value is `undefined` inherits that key, and `null`
+   * clears everything inherited. A nested provider that sets another `theme` inherits them too, so
+   * set an override of a semantic colour (`primary`) in the provider that sets the theme it was
+   * chosen for. A whole brand ramp is better made with `createBrandTokens` than written by hand.
+   * A key that is not a camelCase identifier, or a value that is neither a string nor a finite
+   * number, is skipped with a development warning; a well-formed name is not checked against the
+   * list of tokens (TypeScript refuses a misspelled one).
+   *
+   * The overrides are rendered on the server too. Under a Content Security Policy that blocks
+   * inline style attributes (`style-src` without `'unsafe-inline'`), the server-rendered overrides
+   * do not apply and hydration does not apply them again: ship them in a stylesheet there.
+   *
+   * @example
+   * <WaveProvider tokens={{ fontFamily: 'Inter, sans-serif', zOverlay: 2000 }}>
+   * @default the enclosing WaveProvider's overrides, else none
+   */
+  tokens?: WaveTokenOverrides | null;
+  /**
+   * Whether the portals of the subtree (dialogs, popovers, menus, tooltips, toasts) carry the
+   * overrides of `tokens`. `false` leaves them out, so the overlays show the theme's own values
+   * (or overrides set on the document itself); the theme classes and the direction are set on
+   * every portal either way, so an overlay of a dark provider is still dark. Fluent's
+   * `applyStylesToPortals` is the counterpart; unlike Fluent's, a nested provider inherits an
+   * omitted value, like `theme`.
+   * @default the enclosing WaveProvider's value, else true
+   */
+  applyStylesToPortals?: boolean;
   /** Content rendered inside the themed container. */
   children: React.ReactNode;
   /** Ref to the themed root `<div>`. */
@@ -83,6 +126,15 @@ export interface WaveContextValue {
   inputDefaults: InputDefaults;
   /** The motion preference of the providers above (`'default'` outside a provider). */
   motion: MotionPreference;
+  /** The merged token overrides of the providers above (`{}` outside a provider). */
+  tokens: WaveTokenOverrides;
+  /**
+   * The inline style that applies `tokens`, as the provider's root and its portals carry it;
+   * `undefined` when there is nothing to set (also outside a provider).
+   */
+  tokenStyle: TokenStyle | undefined;
+  /** Whether portals carry `tokenStyle` (`true` outside a provider). */
+  applyStylesToPortals: boolean;
   /** `false` when no {@link WaveProvider} is above the caller (the defaults are returned). */
   hasProvider: boolean;
 }
@@ -94,13 +146,26 @@ const DEFAULT_CONTEXT: WaveContextValue = {
   portalContainer: null,
   inputDefaults: {},
   motion: 'default',
+  tokens: {},
+  tokenStyle: undefined,
+  applyStylesToPortals: true,
   hasProvider: false,
 };
 
 const WaveContext = React.createContext<WaveContextValue>(DEFAULT_CONTEXT);
 
+/** Whether two override maps have the same keys in the same order, with the same values. */
+function sameTokens(a: WaveTokenOverrides, b: WaveTokenOverrides): boolean {
+  const keys = Object.keys(a) as (keyof WaveTokenOverrides)[];
+  const others = Object.keys(b);
+  return (
+    keys.length === others.length &&
+    keys.every((key, index) => key === others[index] && Object.is(a[key], b[key]))
+  );
+}
+
 /**
- * Reads the theme, direction, theme classes and portal container of the nearest
+ * Reads the theme, direction, theme classes, portal container and token overrides of the nearest
  * {@link WaveProvider}. Outside a provider it returns light/ltr defaults with `hasProvider: false`.
  *
  * @returns The {@link WaveContextValue} of the nearest provider.
@@ -132,6 +197,11 @@ export function useWaveTheme(): WaveContextValue {
  *   slots, Carousel's slide, TabList's sliding line, the reveal of Nav item actions; a part's own
  *   `motion` still wins), while transitions without a slot keep running (Accordion's and Tree's
  *   chevron turns, colour changes); a nested provider inherits an omitted `motion` like `theme`.
+ * - `tokens` overrides design tokens in the subtree with inline custom properties on the root
+ *   (rendered on the server too) and on every portal of the subtree, unless
+ *   `applyStylesToPortals` is `false`. A nested provider merges its overrides over the enclosing
+ *   provider's key by key, also when it sets another `theme`, and `tokens={null}` clears them.
+ *   Without overrides the root renders no `style` attribute.
  */
 export const WaveProvider = ({
   theme: themeProp,
@@ -139,8 +209,11 @@ export const WaveProvider = ({
   portalContainer: portalContainerProp,
   inputDefaults: inputDefaultsProp,
   motion: motionProp,
+  tokens: tokensProp,
+  applyStylesToPortals: applyStylesToPortalsProp,
   children,
   className,
+  style,
   ref,
   ...rest
 }: WaveProviderProps) => {
@@ -151,8 +224,30 @@ export const WaveProvider = ({
   const theme = themeProp ?? parent.theme;
   const dir = dirProp ?? parent.dir;
   const motion = motionProp ?? parent.motion;
+  const applyStylesToPortals = applyStylesToPortalsProp ?? parent.applyStylesToPortals;
   const portalContainer =
     portalContainerProp === undefined ? parent.portalContainer : portalContainerProp;
+
+  // The own overrides merged over the enclosing provider's. The merged map keeps its identity while
+  // its entries are equal (a previous-value state, C-HOOKS), so an inline `tokens={{ … }}` neither
+  // re-renders the consumers nor rebuilds the style.
+  const mergedTokens = mergeTokenOverrides(parent.tokens, tokensProp);
+  const [tokens, setTokens] = React.useState(mergedTokens);
+  if (!sameTokens(tokens, mergedTokens)) setTokens(mergedTokens);
+  // Collected without warnings during render; the skipped entries are reported from an effect.
+  const { style: tokenStyle, invalid } = React.useMemo(() => collectTokenStyle(tokens), [tokens]);
+
+  React.useEffect(() => {
+    for (const { key, reason } of invalid) {
+      warnOnce(
+        `WaveProvider:tokens:${reason}:${key}`,
+        `WaveProvider: \`tokens\` skips \`${key}\`: ` +
+          (reason === 'name'
+            ? 'not a token name (the CSS variable in camelCase without `--wave-`, such as `primaryForeground`).'
+            : 'its value is not a string or a finite number.'),
+      );
+    }
+  }, [invalid]);
 
   // Defined keys override the enclosing provider's; the merged object keeps its identity while the
   // two values are equal, so an inline `inputDefaults={{ … }}` does not re-render every input.
@@ -186,15 +281,32 @@ export const WaveProvider = ({
       portalContainer,
       inputDefaults,
       motion,
+      tokens,
+      tokenStyle,
+      applyStylesToPortals,
       hasProvider: true,
     }),
-    [resolvedTheme, dir, themeClassName, portalContainer, inputDefaults, motion],
+    [
+      resolvedTheme,
+      dir,
+      themeClassName,
+      portalContainer,
+      inputDefaults,
+      motion,
+      tokens,
+      tokenStyle,
+      applyStylesToPortals,
+    ],
   );
 
   return (
     <WaveContext.Provider value={value}>
       <div
         {...rest}
+        // The merged overrides (a nested root re-declares what its theme class would shadow), then
+        // the consumer's `style`, which wins. Without overrides the consumer's `style` as given, so
+        // the root has no style attribute unless the consumer passes one.
+        style={tokenStyle ? { ...tokenStyle, ...style } : style}
         ref={ref}
         dir={dir}
         data-wave-theme={resolvedTheme}
