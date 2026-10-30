@@ -3,7 +3,8 @@ import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Text } from '../Text';
 import type { TextOwnProps, TextProps } from '../Text';
-import { testSystemProps, renderWithProviders } from '../../../test-utils';
+import { testSystemProps, renderWithProviders, expectNoA11yViolations } from '../../../test-utils';
+import { textClassNames } from '../../../lib/classNames';
 import type { TextWeight, TypographyVariant } from '../../../lib/types';
 
 const VARIANTS: TypographyVariant[] = [
@@ -115,6 +116,7 @@ describe('Text', () => {
   describe('weight (layout#16)', () => {
     const weights: Array<[TextWeight, string]> = [
       ['regular', 'font-normal'],
+      ['medium', 'font-medium'],
       ['semibold', 'font-semibold'],
       ['bold', 'font-bold'],
     ];
@@ -150,6 +152,95 @@ describe('Text', () => {
       expect(text).not.toHaveClass('font-normal');
       expect(text).not.toHaveClass('font-semibold');
       expect(text).not.toHaveClass('font-bold');
+      expect(text).not.toHaveClass('font-medium');
+    });
+
+    it('a consumer weight class replaces the weight prop', () => {
+      render(
+        <Text weight="medium" className="font-bold">
+          Content
+        </Text>,
+      );
+      const text = screen.getByText('Content');
+      expect(text).toHaveClass('font-bold');
+      expect(text).not.toHaveClass('font-medium');
+    });
+  });
+
+  describe('font (R13)', () => {
+    it.each([
+      ['monospace', 'font-wave-mono'],
+      ['numeric', 'font-wave-numeric'],
+    ] as const)('font "%s" applies %s', (font, cls) => {
+      render(<Text font={font}>Content</Text>);
+      expect(screen.getByText('Content')).toHaveClass(cls);
+    });
+
+    it.each([undefined, 'base'] as const)('font %s adds no font family class', (font) => {
+      render(<Text font={font}>Content</Text>);
+      const families = Array.from(screen.getByText('Content').classList).filter((c) =>
+        /^font-wave/.test(c),
+      );
+      expect(families).toEqual([]);
+    });
+
+    it('a consumer font family class replaces the font prop', () => {
+      render(
+        <Text font="numeric" className="font-wave-mono">
+          Content
+        </Text>,
+      );
+      const text = screen.getByText('Content');
+      expect(text).toHaveClass('font-wave-mono');
+      expect(text).not.toHaveClass('font-wave-numeric');
+    });
+
+    it('a consumer font-wave replaces the font prop', () => {
+      render(
+        <Text font="monospace" className="font-wave">
+          Content
+        </Text>,
+      );
+      const text = screen.getByText('Content');
+      expect(text).toHaveClass('font-wave');
+      expect(text).not.toHaveClass('font-wave-mono');
+    });
+
+    it('keeps the font next to a weight and the stable class', () => {
+      render(
+        <Text font="monospace" weight="medium">
+          Content
+        </Text>,
+      );
+      expect(screen.getByText('Content')).toHaveClass(
+        textClassNames.root,
+        'font-wave-mono',
+        'font-medium',
+      );
+    });
+
+    it('renders no data attribute for the font', () => {
+      render(<Text font="monospace">Content</Text>);
+      const text = screen.getByText('Content');
+      expect(text.getAttributeNames().filter((n) => n.startsWith('data-'))).toEqual([]);
+    });
+
+    it('has no axe violations with a font and a weight', async () => {
+      const { container } = render(
+        <Text font="numeric" weight="medium">
+          1,234.56
+        </Text>,
+      );
+      await expectNoA11yViolations(container);
+    });
+
+    it('font is typed as base, monospace or numeric', () => {
+      expectTypeOf<TextOwnProps['font']>().toEqualTypeOf<
+        'base' | 'monospace' | 'numeric' | undefined
+      >();
+      // @ts-expect-error an unknown font family
+      const unknown = <Text font="serif" />;
+      expect(unknown).toBeTruthy();
     });
   });
 
@@ -187,7 +278,7 @@ describe('Text', () => {
       expectTypeOf<MyTextProps>().toHaveProperty('extra');
       expectTypeOf<TextProps>().toEqualTypeOf<TextProps<'span'>>();
       expectTypeOf<TextProps['ref']>().toEqualTypeOf<React.Ref<HTMLSpanElement> | undefined>();
-      expectTypeOf<keyof TextOwnProps>().toEqualTypeOf<'variant' | 'weight'>();
+      expectTypeOf<keyof TextOwnProps>().toEqualTypeOf<'variant' | 'weight' | 'font'>();
       expectTypeOf<TextWeight>().toMatchTypeOf<NonNullable<TextOwnProps['weight']>>();
     });
   });

@@ -53,8 +53,8 @@ export type Orientation = 'horizontal' | 'vertical';
 /** How many items a selectable collection allows (List, DataGrid, Accordion, …). */
 export type SelectionMode = 'single' | 'multiple';
 
-/** Font weight vocabulary shared by Text and Label (400 / 600 / 700). */
-export type TextWeight = 'regular' | 'semibold' | 'bold';
+/** Font weight vocabulary shared by Text and Label (400 / 500 / 600 / 700). */
+export type TextWeight = 'regular' | 'medium' | 'semibold' | 'bold';
 
 /**
  * The three-step size of text inputs, pickers, Field and Label (Fluent's field sizes): `small`

@@ -93,6 +93,21 @@ describe('cn — Wave font family and animations', () => {
     expect(cn('font-wave', 'font-semibold')).toBe('font-wave font-semibold');
   });
 
+  it('font-wave-mono and font-wave-numeric share the font family group of font-wave', () => {
+    expect(cn('font-wave', 'font-wave-mono')).toBe('font-wave-mono');
+    expect(cn('font-wave-numeric', 'font-wave')).toBe('font-wave');
+    expect(cn('font-wave-mono', 'font-wave-numeric')).toBe('font-wave-numeric');
+    expect(cn('font-wave-mono', 'font-sans')).toBe('font-sans');
+  });
+
+  it('font-wave-mono and font-wave-numeric are not weights or sizes', () => {
+    expect(cn('font-wave-mono', 'font-medium')).toBe('font-wave-mono font-medium');
+    expect(cn('font-wave-mono', 'font-bold')).toBe('font-wave-mono font-bold');
+    expect(cn('font-wave-numeric', 'font-semibold')).toBe('font-wave-numeric font-semibold');
+    expect(cn('font-medium', 'font-wave-mono')).toBe('font-medium font-wave-mono');
+    expect(cn('font-wave-mono', 'text-body-1')).toBe('font-wave-mono text-body-1');
+  });
+
   it('wave animations merge with each other and with animate-none', () => {
     expect(cn('animate-wave-spin', 'animate-wave-pulse')).toBe('animate-wave-pulse');
     expect(cn('animate-wave-indeterminate', 'animate-none')).toBe('animate-none');

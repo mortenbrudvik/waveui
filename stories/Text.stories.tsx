@@ -26,7 +26,11 @@ const meta = {
     },
     weight: {
       control: 'select',
-      options: ['regular', 'semibold', 'bold'],
+      options: ['regular', 'medium', 'semibold', 'bold'],
+    },
+    font: {
+      control: 'select',
+      options: ['base', 'monospace', 'numeric'],
     },
   },
   args: {
@@ -68,12 +72,37 @@ export const Weights: Story = {
       <Text {...args} weight="regular">
         Regular
       </Text>
+      <Text {...args} weight="medium">
+        Medium
+      </Text>
       <Text {...args} weight="semibold">
         Semibold
       </Text>
       <Text {...args} weight="bold">
         Bold
       </Text>
+    </div>
+  ),
+};
+
+/** `font` picks the family (`base` keeps the inherited one) and `weight` one of four weights. */
+export const FontsAndWeights: Story = {
+  name: 'Fonts and weights',
+  argTypes: {
+    font: { control: false },
+    weight: { control: false },
+  },
+  render: (args) => (
+    <div className="flex flex-col gap-4">
+      {(['base', 'monospace', 'numeric'] as const).map((font) => (
+        <div key={font} className="flex flex-col gap-1">
+          {(['regular', 'medium', 'semibold', 'bold'] as const).map((weight) => (
+            <Text key={weight} {...args} font={font} weight={weight}>
+              {font} {weight}: 0123456789 const total = 1,234.56;
+            </Text>
+          ))}
+        </div>
+      ))}
     </div>
   ),
 };

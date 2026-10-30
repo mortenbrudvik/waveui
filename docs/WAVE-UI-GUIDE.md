@@ -10,7 +10,7 @@ A reference for designing and building features with this library: design princi
 |---|---|---|
 | **Styling** | Tailwind CSS utilities + `--wave-*` CSS variables (`src/styles/tokens.css`); precompiled `styles.css` for apps without Tailwind | Griffel CSS-in-JS + `makeStyles()` |
 | **Class merging** | `cn()` (clsx + tailwind-merge, extended with Wave's scales) | `mergeClasses()` |
-| **Theming** | `WaveProvider` + theme classes (`wave-light`, `wave-dark`, `wave-high-contrast`) that set `--wave-*` variables | `FluentProvider` with JS theme objects |
+| **Theming** | `WaveProvider` + theme classes (`wave-light`, `wave-dark`, `wave-high-contrast`) that set `--wave-*` variables; `tokens` overrides as inline custom properties that reach portals; `createBrandTokens` | `FluentProvider` with JS theme objects (`createLightTheme(brand)`, `createDarkTheme(brand)`) |
 | **Slot system** | `resolveSlot()` / `renderSlot()` (lightweight) | `slot()` / `resolveShorthand()` |
 | **State hooks** | `useControllable()` | `useControllableState()` |
 | **Keyboard navigation** | `useRovingTabIndex`, a listbox hook and grid navigation, hand-rolled per WAI-ARIA APG pattern | Tabster |
@@ -36,8 +36,9 @@ All APIs, token values and patterns below refer to **this library's implementati
 10. [Theming](#10-theming)
 11. [Common UI Patterns](#11-common-ui-patterns)
 12. [Data at Scale](#12-data-at-scale)
-13. [Quick Reference](#13-quick-reference)
-14. [Deprecated APIs](#14-deprecated-apis)
+13. [Charts with WaveUI](#13-charts-with-waveui)
+14. [Quick Reference](#14-quick-reference)
+15. [Deprecated APIs](#15-deprecated-apis)
 
 ---
 
@@ -77,25 +78,54 @@ This library follows the **Wave UI design principles**, inspired by the Fluent U
 
 All spacing derives from a **4px base unit**. Every margin, padding, gap and size should be a multiple of 4px; Tailwind's default spacing scale (`p-1` = 4px) follows it.
 
-### Spacing Scale
+### Spacing, Radius and Stroke Scales
 
-Fluent's spacing names, with the Tailwind class to use:
+Fluent has tokens for spacing (`spacingHorizontalM`), border radius (`borderRadiusMedium`) and stroke width (`strokeWidthThin`). Wave has **no tokens for them**: they are Tailwind's own scales, which Wave never overrides (radius names included), so there is no `--wave-*` variable and no `waveTokens` entry for a spacing, a radius or a stroke width. The tables map each Fluent token to the Tailwind class with the same size. Tailwind's spacing and radius steps are in `rem`, so the pixel values hold at the default 16px root font size; Fluent's tokens are in pixels.
 
-| Fluent name | Value | Tailwind | Usage |
-|-------|-------|----------|-------|
-| `none` | 0 | `p-0` | No spacing |
-| `xxs` | 2px | `p-0.5` | Micro adjustments (nudge) |
-| `xs` | 4px | `p-1` | Tight spacing between related elements |
-| `sNudge` | 6px | `p-1.5` | Small nudge for optical alignment |
-| `s` | 8px | `p-2` | Default inner padding |
-| `mNudge` | 10px | `p-2.5` | Medium nudge |
-| `m` | 12px | `p-3` | Standard gap between elements |
-| `l` | 16px | `p-4` | Section spacing, card padding |
-| `xl` | 20px | `p-5` | Large section gaps |
-| `xxl` | 24px | `p-6` | Major section separation |
-| `xxxl` | 32px | `p-8` | Page-level spacing |
+**Spacing.** Fluent's `spacingHorizontal*` and `spacingVertical*` tokens share one scale. Tailwind 4 computes a spacing class from its number (`calc(var(--spacing) * n)`, with `--spacing` at `0.25rem`), so every value has a class; the ones marked † are half steps off the 4px grid, for optical nudges only. The padding class is shown; `m-`, `gap-`, `space-x-`, `inset-` and the logical `ps-`, `pe-`, `ms-`, `me-` take the same numbers.
+
+| Fluent token (`spacingHorizontal…`, `spacingVertical…`) | Value | Tailwind | Usage |
+|---|---|---|---|
+| `None` | 0 | `p-0` | No spacing |
+| `XXS` | 2px | `p-0.5` † | Micro adjustments (nudge) |
+| `XS` | 4px | `p-1` | Tight spacing between related elements |
+| `SNudge` | 6px | `p-1.5` † | Small nudge for optical alignment |
+| `S` | 8px | `p-2` | Default inner padding |
+| `MNudge` | 10px | `p-2.5` † | Medium nudge |
+| `M` | 12px | `p-3` | Standard gap between elements |
+| `L` | 16px | `p-4` | Section spacing, card padding |
+| `XL` | 20px | `p-5` | Large section gaps |
+| `XXL` | 24px | `p-6` | Major section separation |
+| `XXXL` | 32px | `p-8` | Page-level spacing |
 
 The `gap` prop of `Stack`, `Flex` and `Grid` takes `'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl'`: 0, 4, 8, 12, 16 and 24px.
+
+**Border radius.** Tailwind 4's default radius names (C-RADIUS: the components use them, and Wave declares no `--radius-*` value of its own). Bare `rounded` is Tailwind 3's name for 4px, which Tailwind 4 keeps for compatibility next to its new name `rounded-sm`; Wave's components use `rounded`.
+
+| Fluent token | Value | Tailwind | Used by |
+|---|---|---|---|
+| `borderRadiusNone` | 0 | `rounded-none` | Square and full-bleed variants: the `square` shape of Image, Skeleton, the swatches and the color controls, a full-size Dialog, Carousel's wide navigation buttons |
+| `borderRadiusSmall` | 2px | `rounded-xs` | Checkbox, the check boxes of options and tree items |
+| `borderRadiusMedium` | 4px | `rounded` (also `rounded-sm`) | **Default**: buttons, inputs, selects, tree rows |
+| `borderRadiusLarge` | 6px | `rounded-md` | Card, Menu, Popover, TeachingPopover, Table, DataGrid |
+| `borderRadiusXLarge` | 8px | `rounded-lg` | Dialog |
+| `borderRadius2XLarge` | 12px | `rounded-xl` | No component (large panels) |
+| `borderRadius3XLarge` | 16px | `rounded-2xl` | No component (extra-large surfaces) |
+| `borderRadius4XLarge` | 24px | `rounded-3xl` | No component |
+| `borderRadius5XLarge` | 32px | `rounded-4xl` | No component |
+| `borderRadius6XLarge` | 40px | none: Tailwind has **no named step**; use `rounded-[40px]` | No component |
+| `borderRadiusCircular` | 10000px | `rounded-full` (Tailwind's is `calc(infinity * 1px)`) | Avatars, badges, tags, Switch |
+
+**Stroke width.** Tailwind 4's `border-<number>` and `outline-<number>` take any number of pixels, so every Fluent stroke width has a class.
+
+| Fluent token | Value | Tailwind | Used by |
+|---|---|---|---|
+| `strokeWidthThin` | 1px | `border` (`border-b`, `border-s`, …), `outline` | Control and surface borders, dividers |
+| `strokeWidthThick` | 2px | `border-2`, `outline-2` | The focus ring (`outline-2`), a focused input's bottom border and TabList's line (`border-b-2`), the Spinner ring and a selected radio |
+| `strokeWidthThicker` | 3px | `border-3`, `outline-3` | No component |
+| `strokeWidthThickest` | 4px | `border-4`, `outline-4` | The status edge of MessageBar and Toast (`border-s-4`) |
+
+On the Tailwind path every class above works. The precompiled `./styles` holds only the utilities Wave's components use, so a class that no component uses (the "No component" rows, for one) is not there: write the value in your own CSS.
 
 ### Content Density
 
@@ -137,14 +167,21 @@ Wave uses Tailwind's default breakpoints (it does not redefine them):
 
 ## 3. Typography
 
-### Font Stack
+### Font Families
 
-```css
-font-family: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto,
-  'Helvetica Neue', sans-serif;
-```
+Three families, Fluent's three stacks (`fontFamilyBase`, `fontFamilyMonospace`, `fontFamilyNumeric`), each a theme-independent token on `:root` with a Tailwind utility:
 
-The stack is the runtime token `--wave-font-family`, exposed as the Tailwind utility `font-wave`. `WaveProvider` and portaled overlays apply it. Wave does not change Tailwind's `font-sans`.
+| Family | Token | Utility | `Text font` | Stack |
+|---|---|---|---|---|
+| Base | `--wave-font-family` | `font-wave` | `'base'` (the default: no class, the inherited family) | `'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif` |
+| Monospace | `--wave-font-family-monospace` | `font-wave-mono` | `'monospace'` | `Consolas, 'Courier New', Courier, monospace` |
+| Numeric | `--wave-font-family-numeric` | `font-wave-numeric` | `'numeric'` | `Bahnschrift`, then the base stack |
+
+- `WaveProvider` and portaled overlays apply the base family (`font-wave`). Wave does not change Tailwind's `font-sans` or `font-mono`.
+- Use the monospace family for code, identifiers and keyboard input, and the numeric one for figures read in columns (tables, counters). Both are in the precompiled `./styles`, since `Text` uses them.
+- `Text font` sets the family, as Fluent's `Text font` does: `<Text font="monospace">npm install</Text>`. The numeric family changes the face only; where figures must line up, add `tabular-nums` (Tailwind path) or `font-variant-numeric: tabular-nums`, which neither Fluent's `Text` nor Wave's sets.
+- `cn()` treats the three as font families, never as weights: `cn('font-wave', 'font-wave-mono')` keeps the last, and `cn('font-wave-mono', 'font-medium')` keeps both. A family class in `Text`'s `className` replaces its `font`.
+- Override a stack on `:root` (`--wave-font-family-monospace: 'Cascadia Code', monospace;`) or through `WaveProvider tokens` (`fontFamilyMonospace`, chapter 10).
 
 ### Type Ramp
 
@@ -166,13 +203,16 @@ The stack is the runtime token `--wave-font-family`, exposed as the Tailwind uti
 
 ### Font Weights
 
-`Text` and `Label` take `weight: 'regular' | 'semibold' | 'bold'` (the `TextWeight` type). Unset, `Text` uses its variant's ramp weight: semibold from `subtitle-2` up, inherited for the caption and body variants; pass `weight="regular"` for a regular-weight title.
+`Text` and `Label` take `weight: 'regular' | 'medium' | 'semibold' | 'bold'` (the `TextWeight` type), Fluent's four weights. Unset, `Text` uses its variant's ramp weight: semibold from `subtitle-2` up, inherited for the caption and body variants; pass `weight="regular"` for a regular-weight title.
 
-| Weight | Value | Usage |
-|--------|-------|-------|
-| `regular` | 400 | Body text, descriptions |
-| `semibold` | 600 | Headings, labels, emphasis |
-| `bold` | 700 | Strong emphasis (use sparingly) |
+| Weight | Value | Fluent token | Class | Usage |
+|--------|-------|--------------|-------|-------|
+| `regular` | 400 | `fontWeightRegular` | `font-normal` (`Label` sets none and inherits) | Body text, descriptions |
+| `medium` | 500 | `fontWeightMedium` | `font-medium` | Light emphasis: a value or label that should stand out less than semibold |
+| `semibold` | 600 | `fontWeightSemibold` | `font-semibold` | Headings, labels, emphasis |
+| `bold` | 700 | `fontWeightBold` | `font-bold` | Strong emphasis (use sparingly) |
+
+Whether `medium` looks different depends on the faces the font ships: where a family has no face at weight 500, the browser draws a neighbouring face instead, and the engines do not pick the same one. On Windows 11, none of Segoe UI, Bahnschrift and Consolas has a 500 face: measured in the 0.17 exit browser pass, Firefox draws a `medium` Segoe UI or Bahnschrift line with the regular face, Chromium and WebKit with the semibold face, and all three draw Consolas with its regular face. So `medium` is distinct from both `regular` and `semibold` only where the font has a 500 face; with the default stacks on Windows it looks like one of them, depending on the browser, and `semibold` is the weight to use where the emphasis must show.
 
 ### Typography Best Practices
 
@@ -205,6 +245,7 @@ Ramps (theme-independent)   →  Semantic tokens (per theme)  →  Tailwind util
 - **Ramps**: `--wave-brand-10` … `--wave-brand-160` and `--wave-grey-2` … `--wave-grey-98` on `:root`. They read the 0.4 names as fallbacks (`--wave-brand-80: var(--brand-80, #0f6cbd)`). Components never use them directly.
 - **Semantic tokens**: `--wave-background`, `--wave-primary`, `--wave-border`, … declared by each theme class. Components use only these, through the Tailwind color utilities.
 - **Tailwind mapping**: `@theme inline` maps `--color-<name>` to `var(--wave-<name>)`, so the utility name is the token name without the prefix (`bg-subtle-hover`, `border-stroke-accessible`, `text-error-tint-foreground`).
+- **JavaScript**: `waveTokens` holds every token as the value that reads it, under its camelCase name (`waveTokens.mutedForeground` is `'var(--wave-muted-foreground)'`; chapter 10).
 
 ### Semantic Tokens
 
@@ -289,16 +330,17 @@ How the groups are used:
 - **Strokes**: `border` for dividers and surfaces, `stroke` for control borders, `stroke-accessible` where the edge itself must reach 3:1 (unchecked checkboxes, the Switch track, Slider rail, carousel dots, input bottom borders).
 - **Status**: fills (`success`, `warning`, `error`, `severe`, `info`) with their `*-foreground`, and light tints (`*-tint`) with `*-tint-foreground` text for MessageBar and Badge.
 - **Specials**: `inverted` (Tooltip), `track` (ProgressBar), `skeleton`, `rating`, `presence-*` (PresenceBadge), `backdrop` (Dialog, Drawer).
+- **Palette**: 12 hues with five tokens each (`palette-<hue>`, `-foreground`, `-tint`, `-tint-foreground`, `-border`) for Avatar colors, tags of your own and chart series; see [Persona Palette](#persona-palette).
 
 ### Brand Color Ramp
 
-16 shades (indexed 10–160) from darkest to lightest:
+16 shades (indexed 10–160) from darkest to lightest, Fluent's brand ramp (`BrandVariants`):
 
 ```
- 10 #061724  (darkest)
+ 10 #061724  ← selected pressed (dark)
  20 #082338  ← selected surface (dark)
  30 #0a2e4a
- 40 #0c3b5e  ← primary pressed (light)
+ 40 #0c3b5e  ← primary pressed (light), selected hover (dark)
  50 #0e4775
  60 #0f548c  ← selected text (light)
  70 #115ea3  ← primary hover (light)
@@ -308,12 +350,12 @@ How the groups are used:
 110 #62abf5  ← PRIMARY and selected text (dark)
 120 #77b7f7  ← primary hover (dark)
 130 #96c6fa
-140 #b4d6fa
-150 #cfe4fa
+140 #b4d6fa  ← selected pressed (light)
+150 #cfe4fa  ← selected hover (light)
 160 #ebf3fc  ← selected surface (light)
 ```
 
-The dark theme uses brand-110 with **black** text (8.66:1); 0.4 used brand-100 with white text, which failed contrast (2.81:1). The high-contrast theme uses fixed colors.
+The dark theme uses brand-110 with **black** text (8.66:1); 0.4 used brand-100 with white text, which failed contrast (2.81:1). The high-contrast theme uses fixed colors and reads no stop. `createBrandTokens` builds a whole ramp from one brand color with the contrast of this one ([chapter 10](#brand-colors-createbrandtokens)).
 
 ### Neutral Grey Palette
 
@@ -330,6 +372,40 @@ The dark theme uses brand-110 with **black** text (8.66:1); 0.4 used brand-100 w
 | `grey-96` | `#f5f5f5` | Hover states |
 | `grey-98` | `#fafafa` | Card backgrounds |
 
+### Persona Palette
+
+12 hues for categorical color: Avatar `color`, tags or badges of your own, and chart series (`chartPalette`, chapter 13). Each hue has five tokens in every theme group, so a nested theme re-resolves them. Fluent's persona palette has three tokens per hue (`colorPalette<Hue>Background2`, `Foreground2` and `BorderActive`); Wave keeps its strong fill and the fill's text (Avatar's colors since 0.13) and adds those three roles in the grammar of its status tints (`success-tint`, `success-tint-foreground`):
+
+| Token (`--wave-…`) | Utility | Role | Fluent | Contrast (`tokens.test.ts`, light and dark) |
+|---|---|---|---|---|
+| `palette-<hue>` | `bg-palette-<hue>` | Strong fill: an Avatar, a chart series, a solid tag | the hue itself (Fluent's light `BorderActive`) | 3:1 on `background` |
+| `palette-<hue>-foreground` | `text-palette-<hue>-foreground` | Text and icons on the fill | — | 4.5:1 on the fill |
+| `palette-<hue>-tint` | `bg-palette-<hue>-tint` | Surface: a light tint in light, a deep shade in dark | `colorPalette<Hue>Background2` | — |
+| `palette-<hue>-tint-foreground` | `text-palette-<hue>-tint-foreground` | Text and icons on the tint, and the hue as text on the page | `colorPalette<Hue>Foreground2` | 4.5:1 on the tint, `background` and `card` |
+| `palette-<hue>-border` | `border-palette-<hue>-border` | The hue's stroke | `colorPalette<Hue>BorderActive` | 3:1 on `background` and on the tint |
+
+Values per hue (the chart slot is the hue's position in `chartPalette`):
+
+| Hue | Chart slot | Light fill | Light tint | Light tint foreground | Dark fill | Dark tint | Dark tint foreground |
+|---|---|---|---|---|---|---|---|
+| `red` | 5 | `#c50f1f` | `#eeb7bc` | `#a30c1a` | `#f48a94` | `#760913` | `#f48a94` |
+| `pumpkin` | 7 | `#b5470a` | `#e9c8b6` | `#953b08` | `#f2a46b` | `#6d2b06` | `#f2a46b` |
+| `gold` | 9 | `#8a6200` | `#dcd0b3` | `#745300` | `#f7b538` | `#533b00` | `#f7b538` |
+| `forest` | 11 | `#107c10` | `#b7d8b7` | `#0d660d` | `#6fcf6f` | `#0a4a0a` | `#6fcf6f` |
+| `teal` | 4 | `#0a6b6b` | `#b6d3d3` | `#096060` | `#4cc2c2` | `#064040` | `#4cc2c2` |
+| `blue` | 1 | `#0f6cbd` | `#b7d3eb` | `#0c599c` | `#479ef5` | `#094171` | `#6ab1f7` |
+| `navy` | 6 | `#103a73` | `#b7c4d5` | `#103a73` | `#7fa7e0` | `#0a2345` | `#7fa7e0` |
+| `lavender` | 10 | `#6a5cb8` | `#d2ceea` | `#594e9b` | `#b4a7f0` | `#40376e` | `#b4a7f0` |
+| `purple` | 2 | `#5c2e91` | `#cec0de` | `#5c2e91` | `#c8a6f0` | `#371c57` | `#c8a6f0` |
+| `magenta` | 12 | `#b4009e` | `#e9b3e2` | `#950083` | `#ec8fdc` | `#6c005f` | `#ec8fdc` |
+| `brown` | 3 | `#8e562e` | `#ddccc0` | `#7d4b28` | `#d4a373` | `#55341c` | `#d4a373` |
+| `steel` | 8 | `#4f7391` | `#cad5de` | `#405d76` | `#9fb8cc` | `#2f4557` | `#9fb8cc` |
+
+- `-foreground` is `#ffffff` for every hue in light and `#000000` in dark; `-border` is declared as the fill (`var(--wave-palette-<hue>)`) in every theme.
+- **High contrast collapses the palette**, as Fluent's does: every fill, tint foreground and border is `#ffffff`, every foreground and tint `#000000`. Color then tells no two hues apart, so whatever a hue means needs a second cue there (a label, an icon, a pattern).
+- The light tints are the light fill mixed 70% toward white and the dark tints the light fill mixed 40% toward black (the depth of Fluent's `tint40` and `shade30`); each tint foreground is its theme's fill moved toward black (light) or white (dark) until it is 4.6:1 on its three surfaces.
+- Avatar, Badge and Tag keep their own looks: no component uses the tints and borders yet. On the precompiled `./styles` only the utilities the components use exist (`bg-palette-<hue>`, `text-palette-<hue>-foreground`); there, read the other three through their variables (`var(--wave-palette-blue-tint)`) or `waveTokens`.
+
 ### Color Usage Rules
 
 1. **Never use raw hex values** in components or stories: use the semantic tokens through Tailwind (the repo's conventions gate fails on raw colors).
@@ -342,29 +418,43 @@ The dark theme uses brand-110 with **black** text (8.66:1); 0.4 used brand-100 w
 
 ## 5. Elevation & Shadows
 
-Wave uses a **dual-layer shadow** model simulating ambient light (diffuse) + key light (directional).
+Wave uses a **dual-layer shadow** model simulating ambient light (diffuse) + key light (directional): Fluent's `shadow2` … `shadow64`, with Fluent's values per theme.
 
 ### Shadow Levels
 
-| Level | Tailwind | CSS value | Usage |
-|-------|-------|-----------|-------|
-| **2** | `shadow-2` | `0 0 2px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.14)` | Cards at rest, subtle lift |
-| **4** | `shadow-4` | `0 0 2px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.14)` | Cards on hover, menus |
-| **8** | `shadow-8` | `0 0 2px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.14)` | Popovers, dropdowns, teaching callouts |
-| **16** | `shadow-16` | `0 0 2px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.14)` | Dialogs, drawers |
-| **28** | `shadow-28` | `0 0 8px rgba(0,0,0,0.12), 0 14px 28px rgba(0,0,0,0.14)` | Full-screen overlays |
-| **64** | `shadow-64` | `0 0 8px rgba(0,0,0,0.12), 0 32px 64px rgba(0,0,0,0.14)` | Topmost layers (rarely used) |
+The shadows are tokens of each theme group, `--wave-shadow-2` … `--wave-shadow-64`, and the `shadow-N` utilities read them (`@theme inline` maps `--shadow-4: var(--wave-shadow-4)`), so the same class draws the theme's shadow, in a nested theme and in a portaled overlay too. Every level is an ambient layer with no offset and a key layer offset downward:
 
-`cn()` merges this scale with Tailwind's: `cn('shadow-4', 'shadow-8')` gives `shadow-8`, and a consumer `shadow-lg` replaces a component's `shadow-4`.
+| Level | Tailwind | Token | Ambient layer | Key layer | Usage |
+|-------|----------|-------|---------------|-----------|-------|
+| **2** | `shadow-2` | `--wave-shadow-2` | `0 0 2px` | `0 1px 2px` | Subtle lift: Carousel's round navigation buttons |
+| **4** | `shadow-4` | `--wave-shadow-4` | `0 0 2px` | `0 2px 4px` | Surfaces at rest and light popups: a `filled` Card, an `elevated` Carousel, an Image with `shadow`, a Card preview's logo, toasts, the ColorPicker; menus, popovers and the listbox popups (Combobox, Dropdown, TagPicker, `ListboxSurface`) |
+| **8** | `shadow-8` | `--wave-shadow-8` | `0 0 2px` | `0 4px 8px` | A selectable `filled` Card on hover, tooltips, TeachingPopover, the TimePicker list, Avatar's `shadow` and `ring-shadow` active looks |
+| **16** | `shadow-16` | `--wave-shadow-16` | `0 0 2px` | `0 8px 16px` | The DatePicker calendar, the InfoButton note, the AvatarGroup overflow popover |
+| **28** | `shadow-28` | `--wave-shadow-28` | `0 0 8px` | `0 14px 28px` | No component |
+| **64** | `shadow-64` | `--wave-shadow-64` | `0 0 8px` | `0 32px 64px` | Dialog, and the panel of an overlay Drawer or NavDrawer |
+
+The themes differ in the layers' opacity (both are black):
+
+| Theme | Ambient | Key | `--wave-shadow-4`, for example |
+|-------|---------|-----|--------------------------------|
+| Light | 0.12 | 0.14 | `0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14)` |
+| Dark | 0.24 | 0.28 | `0 0 2px rgba(0, 0, 0, 0.24), 0 2px 4px rgba(0, 0, 0, 0.28)` |
+| High contrast | 0.24 | 0.28 | `0 0 2px rgba(0, 0, 0, 0.24), 0 2px 4px rgba(0, 0, 0, 0.28)` |
+
+The light values are the shadows of 0.16 and earlier, unchanged; since 0.17 the dark and high-contrast shadows are stronger, at twice the opacity (Fluent's dark values). On a dark page the border still carries most of a raised surface's separation: the 0.17 exit browser pass measured the page just below a card or menu at about 1.07:1 against the page further away in dark (1.13 to 1.15:1 in light), and in dark the default Card and a menu have the page's own fill, so their 1px border is what sets them apart. Fluent's brand-colored shadows (`shadow2Brand` …) have no Wave counterpart.
+
+`cn()` merges this scale with Tailwind's: `cn('shadow-4', 'shadow-8')` gives `shadow-8`, and a consumer `shadow-lg` replaces a component's `shadow-4`. Override a level per theme like any token (`.wave-dark { --wave-shadow-8: … }`, or `tokens={{ shadow8: … }}` on a provider); an app whose own `@theme` sets `--shadow-4` keeps that value, which replaces Wave's alias. A shadow color utility or an opacity modifier (`shadow-black`, `shadow-4/50`) does not change these levels (it did through 0.16): a level's value is a token, which Tailwind cannot take apart to recolor, so override the token instead. Tailwind's own `shadow-sm` … `shadow-2xl` still take them.
 
 ### Elevation Guidelines
 
-- **Surfaces at rest**: shadow-2 or no shadow (flat)
-- **Interactive hover**: increase by one level (shadow-2 → shadow-4)
-- **Floating elements**: shadow-8 (dropdowns, tooltips, popovers)
-- **Modal overlays**: shadow-16 or shadow-28
+What the components do, and a guide for your own surfaces:
+
+- **Surfaces at rest**: no shadow (flat, an `outline` or `filled-alternative` Card) or shadow-4 (a `filled` Card, a toast)
+- **Interactive hover**: increase by one level (a selectable `filled` Card goes from shadow-4 to shadow-8)
+- **Floating elements**: shadow-4 for menus, popovers and listbox popups, shadow-8 for tooltips and teaching callouts, shadow-16 for the larger popups (the DatePicker calendar, the InfoButton note)
+- **Modal overlays**: shadow-64 (Dialog, overlay Drawer and NavDrawer)
 - Use elevation intentionally; avoid stacking multiple shadow levels close together
-- In the dark theme shadows are less visible; rely more on borders for separation
+- Forced-colors mode removes box shadows, so a surface whose edge comes only from its shadow needs a border there (Dialog and Drawer draw one; chapter 9)
 
 ### Stacking
 
@@ -769,7 +859,7 @@ export function useExpanded(expanded: boolean | undefined, defaultExpanded = fal
 
 ### Pattern 5: cn() Utility
 
-`cn()` combines `clsx` (conditional classes) with a `tailwind-merge` that knows Wave's type ramp (`text-caption-2` … `text-display`), shadow scale (`shadow-2` … `shadow-64`), `font-wave`, the `animate-wave-*` animations and the motion tokens (`duration-wave-*`, `ease-wave-*`):
+`cn()` combines `clsx` (conditional classes) with a `tailwind-merge` that knows Wave's type ramp (`text-caption-2` … `text-display`), shadow scale (`shadow-2` … `shadow-64`), the font families (`font-wave`, `font-wave-mono`, `font-wave-numeric`), the `animate-wave-*` animations and the motion tokens (`duration-wave-*`, `ease-wave-*`):
 
 ```tsx
 import { cn } from '@mortenbrudvik/waveui';
@@ -1803,10 +1893,10 @@ export const Root = ({ children }: { children: React.ReactNode }) => (
 ```
 
 - It renders `<div class="wave-root wave-<theme>">` that paints `bg-background text-foreground font-wave text-body-1` (a `className` you pass wins) and sets `dir` and `data-wave-theme`.
-- Providers nest in any order; every theme class re-declares all tokens, so a light panel inside a dark app is fully light. A nested provider inherits every prop it omits (`theme`, `dir`, `portalContainer`) from the enclosing one, so a theme-only panel in an RTL app stays RTL and keeps its overlays in the app's container; `portalContainer={null}` sends a nested subtree's overlays to `document.body`.
-- Portaled overlays receive the provider's theme classes and direction; `portalContainer` sets where they render.
+- Providers nest in any order; every theme class re-declares all the tokens a theme sets (the semantic colors, the palette and the shadows), so a light panel inside a dark app is fully light. The ramps, font families, stacking layers and motion tokens are theme-independent constants on `:root`. A nested provider inherits every prop it omits (`theme`, `dir`, `portalContainer`, `motion`, `applyStylesToPortals`; `inputDefaults` and `tokens` merge key by key) from the enclosing one, so a theme-only panel in an RTL app stays RTL and keeps its overlays in the app's container; `portalContainer={null}` sends a nested subtree's overlays to `document.body`.
+- Portaled overlays receive the provider's theme classes and direction, and its token overrides ([`tokens`](#token-overrides-tokens)); `portalContainer` sets where they render.
 - `inputDefaults` (`{ size?: CoreSize; appearance?: InputAppearance }`) sets the default size and appearance of the text controls and pickers below it. A nested provider merges its defined keys over the enclosing provider's and inherits the rest.
-- `useWaveTheme()` returns `{ theme, dir, themeClassName, portalContainer, inputDefaults, hasProvider }` (`inputDefaults` is `{}` outside a provider).
+- `useWaveTheme()` returns `{ theme, dir, themeClassName, portalContainer, inputDefaults, motion, tokens, tokenStyle, applyStylesToPortals, hasProvider }`. Outside a provider `inputDefaults` and `tokens` are `{}`, `tokenStyle` is `undefined` and `applyStylesToPortals` is `true`.
 - With the precompiled `@mortenbrudvik/waveui/styles`, the provider is **required**: the base styles and the native-element reset apply only inside `.wave-root` and `.wave-portal`.
 
 Theme classes select the tokens:
@@ -1821,11 +1911,12 @@ Theme classes select the tokens:
 
 ```css
 :root {
-  /* Theme-independent: ramps (0.4 names as fallbacks), font, stacking */
+  /* Theme-independent: ramps (0.4 names as fallbacks), fonts, stacking, motion */
   --wave-brand-80: var(--brand-80, #0f6cbd);
   --wave-grey-14: var(--grey-14, #242424);
   --wave-font-family: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont,
     Roboto, 'Helvetica Neue', sans-serif;
+  --wave-font-family-monospace: Consolas, 'Courier New', Courier, monospace;
   --wave-z-overlay: 1000;
 }
 
@@ -1836,7 +1927,9 @@ Theme classes select the tokens:
   --wave-primary: var(--wave-brand-80);
   --wave-primary-hover: var(--wave-brand-70);
   --wave-border: #e0e0e0;
-  /* … every semantic token (see the table in section 4) */
+  --wave-palette-blue-tint: #b7d3eb;
+  --wave-shadow-4: 0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14);
+  /* … every semantic token (see the table in section 4), the palette and the shadows */
 }
 
 .wave-dark,
@@ -1844,6 +1937,7 @@ Theme classes select the tokens:
   --wave-background: #292929;
   --wave-primary: var(--wave-brand-110);
   --wave-primary-foreground: #000000;
+  --wave-shadow-4: 0 0 2px rgba(0, 0, 0, 0.24), 0 2px 4px rgba(0, 0, 0, 0.28);
   /* … */
 }
 ```
@@ -1853,20 +1947,167 @@ Theme classes select the tokens:
 `@theme inline` in `src/styles/tokens.css` maps the tokens to Tailwind theme values:
 
 ```
-bg-background     → --color-background: var(--wave-background)
-text-foreground   → --color-foreground: var(--wave-foreground)
-bg-primary        → --color-primary: var(--wave-primary)
-border-border     → --color-border: var(--wave-border)
-bg-brand-80       → --color-brand-80: var(--wave-brand-80)
-font-wave         → --font-wave: var(--wave-font-family)
-text-body-1       → 14px / 20px
-shadow-4          → dual-layer shadow
-animate-wave-spin → wave-spin 0.8s linear infinite
+bg-background        → --color-background: var(--wave-background)
+text-foreground      → --color-foreground: var(--wave-foreground)
+bg-primary           → --color-primary: var(--wave-primary)
+border-border        → --color-border: var(--wave-border)
+bg-brand-80          → --color-brand-80: var(--wave-brand-80)
+bg-palette-blue-tint → --color-palette-blue-tint: var(--wave-palette-blue-tint)
+font-wave            → --font-wave: var(--wave-font-family)
+font-wave-mono       → --font-wave-mono: var(--wave-font-family-monospace)
+text-body-1          → 14px / 20px
+shadow-4             → --shadow-4: var(--wave-shadow-4)
+animate-wave-spin    → wave-spin 0.8s linear infinite
 ```
 
 Override the `--wave-*` variables, never the `--color-*` ones: the utilities are compiled against `var(--wave-*)`.
 
-### Overriding Tokens
+### Token Overrides: `tokens`
+
+`WaveProvider tokens` overrides design tokens for its subtree, the counterpart of Fluent's `theme` prop with a partial theme. `theme` still names one of the three themes, and the overrides apply over it:
+
+```tsx
+import { WaveProvider } from '@mortenbrudvik/waveui';
+
+export const Workspace = ({ children }: { children: React.ReactNode }) => (
+  <WaveProvider theme="light" tokens={{ fontFamily: "Inter, 'Segoe UI', sans-serif", zOverlay: 2000 }}>
+    {children}
+  </WaveProvider>
+);
+```
+
+- **Names.** A key is the token's CSS variable in camelCase without `--wave-`: a hyphen before each capital and before a run of digits. `primaryForeground` is `--wave-primary-foreground`, `brand80` is `--wave-brand-80`, `paletteRedTint` is `--wave-palette-red-tint`, `shadow16`, `zOverlay` and `durationNormal` are `--wave-shadow-16`, `--wave-z-overlay` and `--wave-duration-normal`. The object is a `WaveTokenOverrides`, so TypeScript refuses a misspelled name; the provider converts names by the rule and does not check them against the list of tokens, so in JavaScript a misspelling sets a custom property nothing reads.
+- **Values.** A CSS value as a string, without `;`, `{` or `}`; a number is written as its string (`zOverlay: 2000`), and a key whose value is `undefined` sets nothing. A key that is not a camelCase identifier, or a value that is neither a finite number nor a string without `;`, `{` or `}`, is skipped with a development warning. The rule keeps a value from adding a declaration of its own to the server-rendered `style` attribute (`'red;background:url(…)'`), so a brand color read from a tenant's settings cannot inject CSS; no token needs those characters (font stacks, shadows, curves and `color-mix()` pass).
+- **Where they apply.** The provider writes them as inline custom properties on its root (`style="--wave-primary: …"`) and on the wrapper of every portal in its subtree, so its dialogs, drawers, menus, popovers, tooltips, listboxes and toasts take them too. An inline style beats every stylesheet rule on the same element (an `!important` declaration aside), so an override also wins over `.wave-light { --wave-primary: … }` and over the root's own theme class. A `style` you pass to the provider is merged after the overrides and wins a conflicting property.
+- **No cost without them.** With no overrides above it, the root renders no `style` attribute (unless you pass one), and a portal wrapper carries only its position and stacking. An inline `tokens={{ … }}` is fine: while its entries stay equal, the merged overrides and the provider's context value keep their identity.
+- **Server rendering.** The root's style is in the server HTML, so the first paint has the overrides without JavaScript (but see [Strict Content Security Policy](#strict-content-security-policy)). Portals render on the client only, as always.
+
+### Nesting Rules
+
+A nested provider merges its `tokens` over the enclosing provider's, key by key, as a nested `FluentProvider` merges its theme:
+
+| Nested `tokens` | Result |
+|---|---|
+| omitted (`undefined`) | Every override of the enclosing providers |
+| `{ primary: '#c4314b' }` | The enclosing overrides, with `primary` added or replaced |
+| a key whose value is `undefined` | That key keeps the enclosing value |
+| `null` | No inherited overrides (what that clears is below) |
+
+The nested root carries the whole merged map, not only its own keys: its theme class re-declares the theme's tokens on that element, which would otherwise hide the enclosing root's inline values.
+
+**A nested `theme` keeps the overrides.** A provider that sets another `theme` still inherits the enclosing `tokens`. That is right for a brand ramp, which both themes read at their own stops, but an override of a semantic color chosen for one theme then applies in the other, where it can fail contrast: a crimson `primary` carries white text in the light theme and black text in a nested dark panel. Set a semantic override in the provider that sets the theme it was chosen for:
+
+```tsx
+import { WaveProvider, createBrandTokens } from '@mortenbrudvik/waveui';
+
+const brand = createBrandTokens('#c43e00');
+// Fixtures of a light-theme accent: white text on each of them is at least 4.5:1.
+const crimson = { primary: '#c4314b', primaryHover: '#a9283f', primaryPressed: '#7a1c2d' };
+
+export const Shell = ({ children }: { children: React.ReactNode }) => (
+  <WaveProvider theme="light" tokens={brand}>
+    {children}
+    {/* A light panel with its own accent: the override sits where its theme is set. */}
+    <WaveProvider theme="light" tokens={crimson}>
+      {children}
+    </WaveProvider>
+    {/* A dark panel: it inherits the brand ramp, which the dark theme reads at its own stops. */}
+    <WaveProvider theme="dark">{children}</WaveProvider>
+  </WaveProvider>
+);
+```
+
+**What `null` clears.** `tokens={null}` drops the inherited overrides from the provider's root and from its overlays. On the root, the tokens a theme declares (the semantic colors, the palette, the shadows) return to the theme's values, since its theme class re-declares them there. The theme-independent tokens (the brand and grey ramps, the font families, the stacking layers, the motion durations and curves) are declared on `:root` only, so an enclosing provider's inline values for them still reach the subtree's own elements through the cascade, and the theme colors built on the brand ramp follow them there; its overlays, which with the default portal container render outside the enclosing root, do not get them (a `portalContainer` inside the enclosing root passes them on through the cascade). So inside a branded app, a `tokens={null}` panel keeps the brand in its own content and, with the default portal container, loses it in its dialogs. To put a subtree back on the default ramp everywhere, pass the default ramp instead: `tokens={createBrandTokens('#0f6cbd')}` (the default seed returns the default ramp exactly).
+
+### Overlays: `applyStylesToPortals`
+
+`applyStylesToPortals` (default `true`, Fluent's prop of the same name) says whether the portals of the subtree carry its `tokens` overrides. With `false`, an overlay shows its theme's own values for the tokens the theme declares, and takes the theme-independent ones from the cascade of the element it renders into (`document.body`, or the `portalContainer`). The theme classes, the direction and the `wave-portal` wrapper are set either way, so an overlay of a dark provider stays dark. `false` drops every override the overlays would carry, those inherited from enclosing providers included. Use it for a panel with its own accent whose dialogs and menus should look like the rest of the page when the page's brand comes from CSS (`:root`) or from `getTokenStyle` on `<html>`: the overlays then take that brand through the cascade. Under an enclosing provider's `tokens` (`tokens={brand}`) they lose that brand too, and show the ramp of the element they render into (with the default portal container, the `:root` ramp), unlike both the panel and the page.
+
+Two differences from Fluent: a nested provider inherits an omitted value, like `theme` (Fluent's is not inherited); and Fluent's `false` keeps the theme on portals and drops the provider root's other classes, while Wave's portal wrapper never carried the root's look, so what `false` drops are the overrides.
+
+### Brand Colors: `createBrandTokens`
+
+The light and dark primary, hover, pressed, focus-ring and selected colors are built from the brand ramp, so a 16-stop ramp re-brands both themes. `createBrandTokens(seed)` builds one from a single color and returns its 16 tokens, `brand10` … `brand160` (`BrandTokens`), for `tokens` (alone or spread with other overrides) or `getTokenStyle`:
+
+```tsx
+import { WaveProvider, createBrandTokens } from '@mortenbrudvik/waveui';
+
+// Once, at module scope: each call returns a new object.
+const brand = createBrandTokens('#c43e00');
+
+export const App = ({ children }: { children: React.ReactNode }) => (
+  <WaveProvider tokens={brand}>{children}</WaveProvider>
+);
+```
+
+- **The luminance rule.** Each stop keeps the relative luminance of the default ramp's stop and takes its hue and colorfulness from the seed: the seed's OKLCH hue and chroma, shaped per stop like the default ramp (less colorful toward both ends, the hue drifting a few degrees as the default's does) and reduced where the color would leave sRGB. Contrast depends only on luminance, so every text, fill, stroke and focus-ring pair of the light and dark themes keeps the contrast it has with the default ramp, to within 8-bit rounding (which each stop takes on the side that keeps its contrast), and stays above the floors the themes are held to (4.5:1 for text, 3:1 for strokes and focus rings, 1.15:1 between the states of a fill), whatever the seed: yellow, lime, a pale pink and black included. The test suite runs the whole contrast matrix of the light and dark themes over many seeds.
+- **The cost.** The seed sets the hue and colorfulness, not the lightness: stop 80, the light primary, is the seed's hue at the default's lightness, so a light seed gives a darker button than itself. The default seed `#0f6cbd` returns the default ramp exactly, and a grey seed (black, white or any grey) a grey ramp.
+- **Seeds.** `#rgb` or `#rrggbb`, any case, with the `#`. Anything else returns the default ramp, with a development warning.
+- **A full ramp.** For a brand whose exact colors matter, pass a `BrandRamp` instead: a hex color for each stop from 10 to 160, the shape of Fluent's `BrandVariants`. `createBrandTokens(ramp)` returns its colors unchanged; a missing or invalid stop takes the default ramp's color, with a development warning. In development the ramp is also checked against the pairs the light and dark themes read from it, and each pair below its minimum logs one warning that names the theme, the tokens, the stops and the ratio, such as ``createBrandTokens: in the light theme, `primary` on `subtle-selected` (stop 80 on #ebebeb) is 1.26:1; needs 4.5:1.`` The check is advisory (the ramp applies as given), and a production build drops it.
+- **The stops the themes read.** Light: 80 (primary, focus ring), 70 (hover), 40 (pressed), 160, 150 and 140 (the selection fill and its hover and pressed states) and 60 (selected text). Dark: 110 (primary, selected text), 120 (hover), 90 (pressed), 100 (focus ring), and 20, 40 and 10 (the selection fill and its hover and pressed states). No theme reads 30, 50 or 130. The `info` status color is fixed in every theme and does not follow the brand.
+- **High contrast ignores the brand.** The high-contrast theme reads no stop: its colors are fixed (`primary` `#1aebff`, the focus ring `#ffff00`) and the same for every app, as Fluent's high-contrast theme takes no brand. A brand ramp leaves it unchanged; a semantic override such as `primary` still applies there, like everywhere it is set.
+
+The ramp can also be set in CSS, on `:root` (the 0.4 names `--brand-10` … `--brand-160` still work, read as fallbacks); a hand-made ramp there is not checked, so check it against the stops above, or have it checked by passing it to `createBrandTokens` in development:
+
+```css
+:root {
+  --wave-brand-40: #3b1a6b;
+  --wave-brand-60: #53258f;
+  --wave-brand-70: #5f2aa3;
+  --wave-brand-80: #6b2fb3;
+  --wave-brand-160: #f3edfb;
+  /* … every stop the themes read */
+}
+```
+
+### Tokens in JavaScript: `waveTokens` and `getTokenStyle`
+
+`waveTokens` holds every token as the CSS value that reads it, typed as that literal: `waveTokens.primary` is `'var(--wave-primary)'` and `waveTokens.shadow8` is `'var(--wave-shadow-8)'`. Use it where a style is written in JavaScript (an inline style, a CSS-in-JS rule, the colors of an SVG chart): the values follow the theme and the overrides, because they are `var()` reads. It is Fluent's `tokens` object (`tokens.colorBrandBackground`) with Wave's names, frozen and server-safe; no component imports it, so it adds nothing to a bundle that does not use it. `WaveTokenName` is the union of its keys.
+
+```tsx
+import { waveTokens } from '@mortenbrudvik/waveui';
+
+export const Draft = () => (
+  <span style={{ color: waveTokens.primary, boxShadow: waveTokens.shadow8 }}>Draft</span>
+);
+```
+
+A canvas cannot read a `var()`: resolve the variable with `getComputedStyle` instead (chapter 13).
+
+`getTokenStyle(overrides)` returns the inline style `WaveProvider` applies for `tokens` (a `TokenStyle`: a React style object of `--wave-*` properties), or `undefined` for `null`, `undefined` or a map with nothing to set; it skips the keys and values the provider skips, each with a development warning (once per key). It is server-safe, so a Server Component can style an element that no provider renders, such as the document element:
+
+```tsx
+// app/layout.tsx (a Server Component)
+import '@mortenbrudvik/waveui/styles';
+import {
+  WaveProvider,
+  createBrandTokens,
+  getThemeClassName,
+  getTokenStyle,
+} from '@mortenbrudvik/waveui';
+
+const brand = createBrandTokens('#c43e00');
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={getThemeClassName('light')} style={getTokenStyle(brand)}>
+      <body>
+        <WaveProvider theme="light">{children}</WaveProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+On `<html>`, the overrides reach everything below it through the cascade, portals included (they render into `<body>`), but only for the tokens no theme class re-declares: the theme-independent ones (the ramps, font families, stacking layers, motion). A semantic override (`primary`) on `<html>` is hidden by the theme class of every provider root and portal wrapper below it; pass those as `WaveProvider tokens`. `createBrandTokens` and `WaveProvider tokens` work from a Server Component as well: the tokens are plain strings.
+
+### Strict Content Security Policy
+
+The overrides are inline `style` attributes, never a `<style>` element, so a nonce cannot allow them. Under a Content Security Policy whose `style-src` does not allow inline styles (no `'unsafe-inline'`), the browser ignores the server-rendered `style` attribute of the provider root, and of an `<html>` styled with `getTokenStyle`, and hydration does not apply it again. Ship the overrides in a stylesheet there, as in [Overriding Tokens in CSS](#overriding-tokens-in-css): the ramps and the other theme-independent tokens on `:root`, the semantic tokens under the theme selectors. And pass no `tokens` (nor `getTokenStyle`) there: the policy does not cover a style set from script, so the portal wrappers, a provider mounted after hydration and a later change of `tokens` would still take the overrides while the server-rendered root does not, and the page would be half branded (an unbranded page with branded dialogs). Those rules apply to every provider and overlay of the theme; an accent for one subtree only needs a class of yours on the subtree and on the overlays it opens (their `className`). Fluent's provider avoids the limit by inserting a style element with the renderer's nonce; Wave renders no runtime stylesheet.
+
+The 0.17 exit browser pass checked this in Chromium, Firefox and WebKit, on a server-rendered page with `WaveProvider tokens` served with `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'`, and found the same in all three: the root's server-rendered `style` is blocked with JavaScript off, before hydration and after it, and each engine reports it as one violation (a `securitypolicyviolation` event of the directive `style-src-attr`, disposition `enforce`, on the provider root; Chromium's console reads "Applying inline style violates the following Content Security Policy directive 'style-src 'self''. … The action has been blocked."), while the styles set from script after hydration (the wrapper of a Dialog opened then, a provider mounted in the client, a later change of `tokens`) apply and report no violation, which leaves the page half branded as described above. One difference: Firefox empties the `style` attribute it blocked, where Chromium and WebKit keep its text, so React's development build logs a hydration mismatch on the provider root in Firefox ("A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up."). Nothing looks different, and a production build does not log it.
+
+### Overriding Tokens in CSS
 
 ```css
 /* One token, light theme */
@@ -1881,53 +2122,14 @@ Override the `--wave-*` variables, never the `--color-*` ones: the utilities are
 }
 ```
 
-With the precompiled stylesheet, load your overrides after Wave's (same specificity). With the Tailwind entry, Wave's tokens sit in the `theme` layer, so any unlayered override wins.
-
-### Creating Custom Brand Colors
-
-The light and dark primary, hover, pressed, focus-ring and selected colors are built from the brand ramp, so a 16-stop ramp re-brands both themes:
-
-1. Start with your primary color (e.g. `#6b2fb3`) as stop 80.
-2. Generate darker stops (10–70) by reducing lightness and lighter stops (90–160) by increasing it.
-3. Override `--wave-brand-10` … `--wave-brand-160` on `:root` (the 0.4 names `--brand-10` … `--brand-160` still work, they are read as fallbacks).
-4. Check contrast: stop 80 against white (light primary text), stop 110 against black (dark primary text), stops 60 and 110 against stops 160 and 20 (selected text on selected surfaces).
-
-```css
-:root {
-  --wave-brand-20: #1e0a38;
-  --wave-brand-40: #3b1a6b;
-  --wave-brand-60: #53258f;
-  --wave-brand-70: #5f2aa3;
-  --wave-brand-80: #6b2fb3;
-  --wave-brand-90: #8450c4;
-  --wave-brand-100: #9c70d4;
-  --wave-brand-110: #b18cf2;
-  --wave-brand-120: #c2a5f5;
-  --wave-brand-160: #f3edfb;
-}
-```
-
-Which stops each theme reads: light — 80 (primary, ring), 70 (hover), 40 (pressed), 160 (selected surface), 60 (selected text); dark — 110 (primary, selected text), 120 (hover), 90 (pressed), 100 (ring), 20 (selected surface). The high-contrast theme and the `info` status color do not follow the ramp.
+With the precompiled stylesheet, load your overrides after Wave's (same specificity). With the Tailwind entry, Wave's tokens sit in the `theme` layer, so any unlayered override wins. A provider's `tokens` win over these rules on the elements that carry them.
 
 ### 0.4 Variable Names
 
 - Overrides of the 0.4 ramp names (`--brand-*`, `--grey-*`) keep working: they are read as fallbacks. Reads do not: 0.5 never defines the 0.4 ramp names, so custom CSS such as `var(--brand-80)` or `var(--grey-14)` resolves to nothing. Use `var(--wave-brand-80)`, `var(--wave-grey-14)`.
 - The 0.4 semantic names (`--primary`, `--background`, `--border`, `--ring`, …) are neither read nor defined. Rename overrides **and reads** (`outline: 2px solid var(--ring)` becomes `var(--wave-ring)`) to `--wave-*`, or load the deprecated `@mortenbrudvik/waveui/legacy-tokens.css` after the Wave styles, which defines the 0.4 names again. Never load it in an app that defines shadcn/ui-style variables.
 
-### Border Radius Scale
-
-Wave uses Tailwind's default radius scale (it no longer overrides it):
-
-| Tailwind | Value | Used by |
-|----------|-------|---------|
-| `rounded-none` | 0 | — |
-| `rounded-xs` | 2px | Checkbox |
-| `rounded-sm` / `rounded` | 4px | **Default**: buttons, inputs, selects, tree rows |
-| `rounded-md` | 6px | Card, Menu, Popover, TeachingPopover, Table, DataGrid |
-| `rounded-lg` | 8px | Dialog |
-| `rounded-xl` | 12px | Large panels |
-| `rounded-2xl` | 16px | Extra-large surfaces |
-| `rounded-full` | 9999px | Avatars, badges, tags, Switch |
+Spacing, radius and stroke widths are Tailwind's scales, not tokens: chapter 2 maps Fluent's names to them.
 
 ---
 
@@ -2370,6 +2572,8 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Label fields | `Label`, `InfoLabel`, `Field` |
 | Show thousands of rows, items or options | `virtualWindow` (from `useVirtualWindow`) on `DataGrid`, `List`, `Listbox`, `Combobox`, `Dropdown`; `FlatTree` for trees (chapter 12) |
 | Keep table state outside the DOM | `useTableFeatures` with `useTableSort`, `useTableSelection`, `useTableColumnSizing`; `useSelection` |
+| Re-brand the app, or give a panel its own accent | `WaveProvider tokens` with `createBrandTokens` (chapter 10) |
+| Draw a chart in the theme's colors | A chart library with `chartPalette` and `waveTokens` (chapter 13) |
 
 ---
 
@@ -2537,7 +2741,157 @@ What the adapter must keep, and what it costs:
 
 ---
 
-## 13. Quick Reference
+## 13. Charts with WaveUI
+
+WaveUI ships no chart component (building charts is a non-goal of the [roadmap](ROADMAP.md#13-non-goals)). It ships the colors a chart needs, in the order a chart uses them, and this recipe for drawing with a chart library. A chart library draws either SVG, which reads a CSS variable as it is, or a canvas, which needs the colors resolved first; the Storybook page **Guides/Charts** (`stories/Charts.stories.tsx`) runs one of each, the same bar chart in Recharts and in Chart.js, with everything below.
+
+### Series Colors: `chartPalette`
+
+`chartPalette` lists the 12 [palette](#persona-palette) fills as token names, in the order a categorical chart gives them to its series: `paletteBlue`, `palettePurple`, `paletteBrown`, `paletteTeal`, `paletteRed`, `paletteNavy`, `palettePumpkin`, `paletteSteel`, `paletteGold`, `paletteLavender`, `paletteForest`, `paletteMagenta`. Read the colors through `waveTokens`, so the series follow the theme and the provider's `tokens`:
+
+```ts
+import { chartPalette, waveTokens } from '@mortenbrudvik/waveui';
+
+const seriesColors = chartPalette.map((name) => waveTokens[name]);
+// ['var(--wave-palette-blue)', 'var(--wave-palette-purple)', …]
+```
+
+What the order guarantees, and what it cannot:
+
+- **Neighbours are far apart.** In the light and dark themes, every two neighbouring series (the first and second, the second and third, up to the eleventh and twelfth) differ by at least 6.3 (OKLab ΔE × 100) under simulated protanopia, deuteranopia and tritanopia, and by at least 15.7 for full color vision, with hues at least 49° apart.
+- **Others can be close.** Series that are not neighbours can be much closer: down to about 3.2 among the first six, less further on. No six fills of the palette stay 6 apart for every pair under those simulations, whatever the order (blue and navy, slots 1 and 6, share a hue family and look alike in the dark theme).
+- **High contrast has one color.** In the high-contrast theme every palette fill is white.
+
+So color never identifies a series on its own: **every chart needs a second, non-color encoding**, whatever its number of series. A fill pattern per series (the stories' choice), a marker shape per line (Chart.js `pointStyle`, a custom `dot` in Recharts) or a label written next to each series all work.
+
+The other palette tokens have a part in a chart too:
+
+| Token | In a chart |
+|---|---|
+| `palette<Hue>` | The series' marks: bars, lines, points, areas. 3:1 on `background`, so a mark stands out from the page; not a text color |
+| `palette<Hue>Foreground` | Ink on the fill: the lines or dots of a pattern, a value inside a bar (4.5:1 on its fill in every theme: black on the white fills of high contrast) |
+| `palette<Hue>Tint` | A band behind a series: a range, a highlighted period, a legend chip |
+| `palette<Hue>TintForeground` | The series as text: a direct label, a legend entry, a value on the page or on the tint (4.5:1 on the tint, `background` and `card`) |
+| `palette<Hue>Border` | The outline of a mark or a band (3:1 on `background` and on the tint) |
+
+### Text, Axes and Tooltips
+
+Text and lines that belong to no series take the theme's colors, never a series fill (a fill is only 3:1 on the page): titles and legend text `foreground`, tick labels `mutedForeground`, grid and axis lines `border`, a hover band `subtleHover`, a tooltip `inverted` with `invertedForeground` text and an `invertedBorder` edge (the colors of WaveUI's Tooltip), and the font `fontFamily`. Controls next to the chart (a series toggle, a "show the data table" switch) are WaveUI components, so focus and keyboard behave like the rest of the page.
+
+### SVG Libraries: Recharts, visx, Victory
+
+SVG takes a `var()` as a `fill` or a `stroke` as it is: pass the `waveTokens` values, and the chart follows the theme, a nested provider and its overrides with no code of yours. visx and Victory take the same values the same way.
+
+```tsx
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { chartPalette, waveTokens } from '@mortenbrudvik/waveui';
+
+const seriesColors = chartPalette.map((name) => waveTokens[name]);
+const regions = ['north', 'south', 'east'] as const;
+
+export function SalesChart({ data }: { data: Record<string, string | number>[] }) {
+  return (
+    <BarChart data={data} width={480} height={320} accessibilityLayer={false}>
+      <CartesianGrid vertical={false} stroke={waveTokens.border} />
+      <XAxis
+        dataKey="quarter"
+        stroke={waveTokens.border}
+        tick={{ fill: waveTokens.mutedForeground }}
+      />
+      <YAxis stroke={waveTokens.border} tick={{ fill: waveTokens.mutedForeground }} />
+      {regions.map((region, index) => (
+        <Bar key={region} dataKey={region} fill={seriesColors[index]} />
+      ))}
+    </BarChart>
+  );
+}
+```
+
+A pattern is an SVG `<pattern>` whose background is the fill and whose lines are the fill's `-foreground` token, given to the series as `url(#id)`. Keep the SVG that holds the patterns in the layout at zero size (`width={0} height={0}`), not `display: none`, under which its patterns do not paint:
+
+```tsx
+<pattern id={id} width={8} height={8} patternUnits="userSpaceOnUse">
+  <rect width={8} height={8} fill={waveTokens.paletteBlue} />
+  <path d="M0,8 l8,-8" stroke={waveTokens.paletteBlueForeground} strokeWidth={1.5} />
+</pattern>
+// <Bar dataKey="north" fill={`url(#${id})`} />
+```
+
+What the Recharts story (Recharts 3.10) found:
+
+- **Its keyboard layer.** `accessibilityLayer` is on by default and gives the chart a Tab stop of its own. Inside a `role="img"` frame whose data table is the keyboard and screen-reader route (below), turn it off.
+- **A span left in `<body>`.** Recharts measures text in a hidden `<span id="recharts_measurement_span">` that it appends to `document.body` the first time it measures, and leaves there after the chart unmounts. A test suite that fails on leftover body content (WaveUI's own does, after every test) meets it; the story removes it when the chart unmounts, and Recharts creates it again when it next measures:
+
+  ```tsx
+  React.useEffect(() => () => document.getElementById('recharts_measurement_span')?.remove(), []);
+  ```
+
+- **Tooltip order and legend swatches.** The tooltip sorts its items by name (`itemSorter` keeps the series order), and the built-in legend draws its swatches too small to show a pattern, so the story renders its legend in HTML.
+- **Motion.** Recharts 3 already leaves out a bar's animation under `prefers-reduced-motion: reduce` (`Bar`'s `isAnimationActive` defaults to `'auto'`).
+
+### Canvas Libraries: Chart.js, ECharts
+
+A canvas paints with resolved colors and cannot read a `var()` (ECharts with its canvas renderer is the same case). Resolve each token at draw time from an element inside the provider, so the value is the theme's and the overrides' of that moment, and draw again when the theme changes:
+
+```ts
+import { chartPalette, waveTokens, type WaveTokenName } from '@mortenbrudvik/waveui';
+
+/** The custom property a token reads: '--wave-palette-blue' for 'paletteBlue'. */
+const property = (name: WaveTokenName) => waveTokens[name].slice('var('.length, -1);
+
+/** The token's value at `element`: the theme and the overrides around it, now. */
+export const resolveToken = (element: Element, name: WaveTokenName) =>
+  getComputedStyle(element).getPropertyValue(property(name)).trim();
+
+// The series colors of a chart drawn on `canvas`:
+// chartPalette.map((name) => resolveToken(canvas, name))
+
+/** Calls `redraw` whenever the theme or the overrides around `canvas` change; returns the cleanup. */
+export function watchTheme(canvas: HTMLCanvasElement, redraw: () => void): () => void {
+  // A change of `theme` or `tokens` changes the class, data-wave-theme or style of the root.
+  const themed = canvas.closest('[data-wave-theme], [data-wave-portal]');
+  if (!themed) return () => {};
+  const observer = new MutationObserver(redraw);
+  observer.observe(themed, {
+    attributes: true,
+    attributeFilter: ['class', 'data-wave-theme', 'style'],
+  });
+  return () => observer.disconnect();
+}
+```
+
+- **The observer needs a themed ancestor.** A provider root carries `data-wave-theme`, with the theme classes in `class` and the overrides in `style`. A chart in a portaled overlay (a Dialog) has no provider root above it in the DOM, only the portal wrapper (`data-wave-portal`), which carries the same classes and overrides; `closest` with both selectors finds whichever is nearer. Without either there is nothing to observe. The story observes `closest('[data-wave-theme]')`, since its chart is in the page. Inside React, an effect that depends on `useWaveTheme()`'s `theme` and `tokenStyle` also runs after each change made through the providers.
+- **A full update after a theme change (Chart.js 4.5).** Set the new colors on the datasets and options, turn the animation off in the options and call `chart.update()`. After `chart.update('none')` the bars kept the old theme's colors while the legend changed, because Chart.js refreshes the options its bars share only in a full update.
+- **Patterns on a canvas.** Draw a pattern on a small tile canvas at the device pixel ratio and pass `context.createPattern(tile, 'repeat')` as the dataset's `backgroundColor`; the story draws the same path strings as its SVG patterns, through `Path2D`.
+- **Motion.** Chart.js animates by default: the story passes `animation: false` under `prefers-reduced-motion: reduce`.
+- **Tests.** jsdom has no 2D canvas: the story checks `typeof CanvasRenderingContext2D === 'function'` and renders only the chart's frame and table in a test DOM.
+
+### High Contrast and Forced Colors
+
+- **The high-contrast theme** (`theme="high-contrast"`) paints every palette fill white with black `-foreground`, so the second encoding is what tells the series apart there. Ink the patterns in each fill's `-foreground` token, as the stories do: black on the white fills of high contrast, and readable on the fill in light and dark (the `foreground` token would be white on white).
+- **Forced colors** (Windows High Contrast, `forced-colors: active`) replace author colors with the user's. The stories read the media query (`matchMedia('(forced-colors: active)')`, through `useSyncExternalStore`) and then draw as the high-contrast theme does, in system colors: every mark `CanvasText` with its pattern in `Canvas`, grid lines `GrayText`; the chart's frame sets `forced-color-adjust: none`, so these colors stay as drawn. The Chart.js story resolves each system color to a value through the computed `color` of a probe element before it paints.
+
+### Accessibility
+
+- **An image with a name and a description.** Wrap the chart in an element with `role="img"`, an `aria-label` that says what it shows, and `aria-describedby` pointing at visible text with the takeaway (the stories: "North sells the most in every quarter; Online grows the fastest").
+- **A data table.** Give the data as a native `<table>` with a caption and row and column headers, in the accessibility tree at all times: visually hidden (`sr-only`) behind a "Show the data table" Switch, as in the stories, or always shown. It is the keyboard and screen-reader route to the values, which is why the library's own keyboard layer stays off. The stories use a plain `<table>`: a horizontally scrolling WaveUI `Table` makes its wrapper a focusable region, an invisible Tab stop inside a visually hidden box.
+- **Never color alone.** Every series has its second encoding (above), in the legend too.
+- **Direction.** The stories do not mirror their charts for right-to-left pages; in a right-to-left layout reverse the category axis and the legend through the library's own options.
+
+### Fluent's Chart Packages
+
+| Package | What it is | Why WaveUI does not ship or wrap it |
+|---|---|---|
+| `@fluentui/react-charts` | Fluent UI React v9's charts, stable and released apart from `@fluentui/react-components`: D3-based charts of many kinds (bar, line, area, donut, gauge, heat map, Sankey, …) with legends and callouts | Built on Fluent's runtime (Griffel styles, Fluent's theme, Tabster focus, Fluent's popover and tooltip packages), none of which WaveUI uses; its series colors come from a fixed palette of 40 hex slots (`DataVizPalette`, some with a dark-theme value), not from theme tokens, and it has no guidance for other chart libraries |
+| `@fluentui/react-charting` | The same family of charts for Fluent UI React v8 (`@fluentui/react` is its peer) | Built on Fluent v8 |
+| `@fluentui/chart-web-components` | Charts as web components, before 1.0 | Not React, not stable |
+| `@fluentui/chart-utilities` | Helpers shared by the chart packages | — |
+
+Charts are a project of their own (Fluent ships them as separate packages too), and a chart library already draws well with WaveUI's tokens, SVG ones directly and canvas ones through `getComputedStyle`. So WaveUI documents the pairing and ships what a chart needs from the design system instead: `chartPalette`, the palette's tints and borders, `waveTokens`, and these two stories. Recharts and Chart.js are development dependencies of the stories only; neither is part of the package.
+
+---
+
+## 14. Quick Reference
 
 ### Component Catalog (80 components)
 
@@ -2571,6 +2925,9 @@ What the adapter must keep, and what it costs:
 **Provider** (1)
 `WaveProvider` (plus the `Portal` utility)
 
+**Theming** (utilities)
+`createBrandTokens`, `waveTokens`, `chartPalette`, `getTokenStyle`, `getThemeClassName` (chapters 10 and 13)
+
 **Motion** (utility)
 `Presence` (`usePresence` is its hook form)
 
@@ -2586,6 +2943,7 @@ text-caption-1           /* 12px labels */
 text-subtitle-1          /* 20px semibold headings */
 font-semibold            /* 600 weight */
 font-wave                /* Wave font stack */
+font-wave-mono           /* Wave monospace stack (Text font="monospace") */
 
 /* Colors */
 bg-background            /* Page background */
@@ -2611,10 +2969,10 @@ rounded-full             /* Circular */
 border                   /* 1px solid */
 
 /* Shadows */
-shadow-2                 /* Cards at rest */
-shadow-4                 /* Hover state */
-shadow-8                 /* Popovers, dropdowns */
-shadow-16                /* Dialogs */
+shadow-4                 /* Cards at rest, menus, popovers, listboxes */
+shadow-8                 /* Card hover, tooltips */
+shadow-16                /* Larger popups (DatePicker calendar) */
+shadow-64                /* Dialogs, overlay drawers */
 
 /* Layout (logical) */
 flex items-center        /* Horizontal centering */
@@ -2683,7 +3041,10 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | `src/lib/date.ts` | `addDays`, `addMonths`, `isSameDay`, `startOfWeek`, `getWeekNumber` (public, server-safe) |
 | `src/hooks/useDismiss.ts`, `src/lib/layers.ts` | Layered Escape and outside-press dismissal (internal; the `DismissReason` type is public) |
 | `src/components/provider/WaveProvider.tsx` | Theme provider |
-| `src/components/portal/Portal.tsx` | Themed portal |
+| `src/components/portal/Portal.tsx` | Themed portal (it carries the provider's token overrides) |
+| `src/lib/tokens.ts`, `src/lib/waveTokens.ts` | `getTokenStyle` and the token types; `waveTokens` and `chartPalette` (public, server-safe) |
+| `src/lib/brand.ts` | `createBrandTokens` and the brand types (public, server-safe) |
+| `stories/Charts.stories.tsx` | The chart recipes of chapter 13 (Recharts, Chart.js) |
 | `src/test-utils.ts`, `src/test-utils-field.tsx` | Shared test helpers |
 
 ### Keyboard Pattern Cheat Sheet
@@ -2718,7 +3079,7 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 
 ---
 
-## 14. Deprecated APIs
+## 15. Deprecated APIs
 
 Deprecated names still work through 0.x, warn once in development and will be removed in 1.0. The CHANGELOG has the full table with callback semantics.
 

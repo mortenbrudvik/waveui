@@ -121,6 +121,7 @@ describe('Label', () => {
 
   describe('weight (layout#16)', () => {
     it.each([
+      ['medium', 'font-medium'],
       ['semibold', 'font-semibold'],
       ['bold', 'font-bold'],
     ] as const)('weight %s uses %s', (weight, cls) => {
@@ -135,6 +136,7 @@ describe('Label', () => {
     it('regular adds no bold weight class', () => {
       render(<Label data-testid="label">Name</Label>);
       const label = screen.getByTestId('label');
+      expect(label).not.toHaveClass('font-medium');
       expect(label).not.toHaveClass('font-semibold');
       expect(label).not.toHaveClass('font-bold');
     });

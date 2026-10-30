@@ -18,6 +18,7 @@ import { __resetWarnings } from '../../../lib/dev';
 import { useDirection } from '../../../hooks/useDirection';
 import { Portal } from '../../portal/Portal';
 import type { MotionPreference } from '../../../lib/types';
+import type { TokenStyle, WaveTokenOverrides } from '../../../lib/tokens';
 
 function root(container: HTMLElement): HTMLElement {
   return container.firstElementChild as HTMLElement;
@@ -241,6 +242,9 @@ describe('WaveProvider', () => {
         portalContainer: appRoot,
         inputDefaults: {},
         motion: 'default',
+        tokens: {},
+        tokenStyle: undefined,
+        applyStylesToPortals: true,
         hasProvider: true,
       });
     });
@@ -401,6 +405,9 @@ describe('useWaveTheme', () => {
       portalContainer: portalTarget,
       inputDefaults: {},
       motion: 'default',
+      tokens: {},
+      tokenStyle: undefined,
+      applyStylesToPortals: true,
       hasProvider: true,
     });
   });
@@ -440,6 +447,9 @@ describe('useWaveTheme', () => {
       portalContainer: HTMLElement | null;
       inputDefaults: InputDefaults;
       motion: MotionPreference;
+      tokens: WaveTokenOverrides;
+      tokenStyle: TokenStyle | undefined;
+      applyStylesToPortals: boolean;
       hasProvider: boolean;
     }>();
   });

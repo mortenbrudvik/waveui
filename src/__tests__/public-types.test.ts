@@ -42,6 +42,9 @@ import type {
   AlphaSliderProps,
   BackdropAppearance,
   BadgeColor,
+  BrandRamp,
+  BrandStop,
+  BrandTokens,
   BreadcrumbItemAnchorProps,
   BreadcrumbItemButtonProps,
   BreadcrumbItemOwnProps,
@@ -342,6 +345,7 @@ import type {
   ToastTitleProps,
   toggleButtonClassNames,
   ToggleButtonProps,
+  TokenStyle,
   Toolbar,
   ToolbarButton,
   ToolbarButtonOwnProps,
@@ -388,6 +392,9 @@ import type {
   WaveDir,
   WaveProviderProps,
   waveProviderClassNames,
+  WaveTokenName,
+  WaveTokenOverrides,
+  WaveTokens,
 } from '../index';
 
 const srcDir = fileURLToPath(new URL('..', import.meta.url));
@@ -536,8 +543,10 @@ function findUnexportedPublicTypes(program: ts.Program, entry: string, ownDir: s
 /**
  * Named types that public declarations refer to but that are deliberately not public API: they
  * name no concept of their own, and exporting them would make every rename a breaking change.
- * Each is a key union for an `Omit` (the handlers a composite routes to its focusable control) or
- * a mask whose members are all `undefined`/`never` (it only makes other props a type error).
+ * Each is a key union for an `Omit` (the handlers a composite routes to its focusable control), a
+ * mask whose members are all `undefined`/`never` (it only makes other props a type error), or a
+ * type-level conversion that only spells out literal types (its accumulator parameters are an
+ * implementation detail).
  */
 const INTERNAL_HELPERS: Record<string, string> = {
   'components/input/Checkbox.tsx#CheckboxControlHandlers':
@@ -552,6 +561,8 @@ const INTERNAL_HELPERS: Record<string, string> = {
     'mask: link-only attributes are a type error on items without `href`',
   'components/table/DataGrid.tsx#NoDeprecatedSortProps':
     'mask: the 0.4 sort props are a type error next to the 0.5 sort API',
+  'lib/tokens.ts#TokenVariable':
+    'conversion: spells out the literal `var(--wave-…)` value of each `waveTokens` member',
 };
 
 /**
@@ -2147,5 +2158,45 @@ describe('0.16 data at scale from the package entry', () => {
     expectTypeOf<
       Entry['tableResizeHandleClassNames']['root']
     >().toEqualTypeOf<'wave-table-resize-handle'>();
+  });
+});
+
+// The 0.17 additions (Phase 12), imported from the package entry (compile-time, `tsconfig.dev.json`).
+describe('0.17 theming from the package entry', () => {
+  it('the token names, the token object, the overrides, the token style and the chart palette', () => {
+    expectTypeOf<'primary'>().toExtend<WaveTokenName>();
+    expectTypeOf<'paletteSteelTintForeground'>().toExtend<WaveTokenName>();
+    expectTypeOf<WaveTokens>().toEqualTypeOf<{ readonly [K in WaveTokenName]: string }>();
+    expectTypeOf<WaveTokenOverrides>().toEqualTypeOf<{
+      [K in WaveTokenName]?: string | number;
+    }>();
+    expectTypeOf<{ '--wave-brand-80': string; position: 'relative' }>().toExtend<TokenStyle>();
+    expectTypeOf<Entry['getTokenStyle']>().toEqualTypeOf<
+      (overrides: WaveTokenOverrides | null | undefined) => TokenStyle | undefined
+    >();
+    expectTypeOf<Entry['waveTokens']>().toExtend<WaveTokens>();
+    expectTypeOf<Entry['waveTokens']['brand80']>().toEqualTypeOf<'var(--wave-brand-80)'>();
+    expectTypeOf<Entry['chartPalette']>().toEqualTypeOf<readonly WaveTokenName[]>();
+
+    // @ts-expect-error a misspelled token name
+    const typo: WaveTokenOverrides = { primry: '#c43e00' };
+    expect(typo).toBeDefined();
+  });
+
+  it('createBrandTokens: the stops, the ramp and the tokens it gives as overrides', () => {
+    expectTypeOf<BrandStop>().toEqualTypeOf<
+      10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 | 110 | 120 | 130 | 140 | 150 | 160
+    >();
+    expectTypeOf<BrandRamp>().toEqualTypeOf<Readonly<Record<BrandStop, string>>>();
+    expectTypeOf<BrandTokens>().toEqualTypeOf<{ [K in `brand${BrandStop}`]: string }>();
+    expectTypeOf<Entry['createBrandTokens']>().toEqualTypeOf<
+      (seed: string | BrandRamp) => BrandTokens
+    >();
+    expectTypeOf<BrandTokens>().toExtend<WaveTokenOverrides>();
+    expectTypeOf<BrandTokens['brand80']>().toEqualTypeOf<string>();
+
+    // @ts-expect-error a ramp has no stop 170
+    const ramp: Partial<BrandRamp> = { 170: '#000000' };
+    expect(ramp).toBeDefined();
   });
 });

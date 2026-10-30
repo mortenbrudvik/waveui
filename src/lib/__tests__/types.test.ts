@@ -57,7 +57,7 @@ describe('shared vocabulary (layout#16, data-display#30)', () => {
   });
 
   it('TextWeight is the word vocabulary shared by Text and Label', () => {
-    expectTypeOf<TextWeight>().toEqualTypeOf<'regular' | 'semibold' | 'bold'>();
+    expectTypeOf<TextWeight>().toEqualTypeOf<'regular' | 'medium' | 'semibold' | 'bold'>();
     expectTypeOf<600>().not.toMatchTypeOf<TextWeight>();
   });
 

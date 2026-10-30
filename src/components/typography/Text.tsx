@@ -15,13 +15,20 @@ export interface TextOwnProps {
    */
   variant?: TypographyVariant;
   /**
-   * Font weight: `'regular'`, `'semibold'` or `'bold'`. Unset, the variant's own weight applies:
-   * semibold for `'subtitle-2'` and every larger variant (`'subtitle-1'`, the titles,
-   * `'large-title'`, `'display'`), inherited for the caption and body variants. Pass `'regular'`
-   * for a title at regular weight. The numeric 0.4 values `400`, `600` and `700` still work but
-   * are deprecated.
+   * Font weight: `'regular'`, `'medium'`, `'semibold'` or `'bold'`. Unset, the variant's own
+   * weight applies: semibold for `'subtitle-2'` and every larger variant (`'subtitle-1'`, the
+   * titles, `'large-title'`, `'display'`), inherited for the caption and body variants. Pass
+   * `'regular'` for a title at regular weight. The numeric 0.4 values `400`, `600` and `700` still
+   * work but are deprecated.
    */
   weight?: TextWeight | 400 | 600 | 700;
+  /**
+   * Font family: `'base'` keeps the inherited family (the Wave sans-serif), `'monospace'` sets the
+   * Wave monospace stack for code and identifiers, `'numeric'` the stack for figures that should
+   * align in columns. Fluent's `font` prop. A `className` that sets a font family replaces it.
+   * @default 'base'
+   */
+  font?: 'base' | 'monospace' | 'numeric';
 }
 
 /**
@@ -58,8 +65,14 @@ const variantClasses: Record<TypographyVariant, string> = {
 
 const weightClasses: Record<TextWeight, string> = {
   regular: 'font-normal',
+  medium: 'font-medium',
   semibold: 'font-semibold',
   bold: 'font-bold',
+};
+
+const fontClasses: Record<Exclude<NonNullable<TextOwnProps['font']>, 'base'>, string> = {
+  monospace: 'font-wave-mono',
+  numeric: 'font-wave-numeric',
 };
 
 const numericWeights: Record<DeprecatedNumericWeight, TextWeight> = {
@@ -82,7 +95,7 @@ const numericWeights: Record<DeprecatedNumericWeight, TextWeight> = {
  * <Text variant="caption-1" className="text-muted-foreground">Last saved 2 minutes ago</Text>
  */
 export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
-  const { as, variant = 'body-1', weight, className, ...rest } = props as TextImplProps;
+  const { as, variant = 'body-1', weight, font, className, ...rest } = props as TextImplProps;
 
   let resolvedWeight: TextWeight | undefined;
   if (typeof weight === 'number') {
@@ -101,6 +114,7 @@ export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
         textClassNames.root,
         variantClasses[variant],
         resolvedWeight && weightClasses[resolvedWeight],
+        font && font !== 'base' && Object.hasOwn(fontClasses, font) && fontClasses[font],
         className,
       )}
     />

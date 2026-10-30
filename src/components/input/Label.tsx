@@ -37,6 +37,7 @@ const sizeMap: Record<CoreSize, string> = {
 
 const weightMap: Record<TextWeight, string | undefined> = {
   regular: undefined,
+  medium: 'font-medium',
   semibold: 'font-semibold',
   bold: 'font-bold',
 };

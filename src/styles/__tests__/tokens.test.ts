@@ -18,7 +18,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -27,209 +26,42 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-
-// Vitest runs with CSS processing disabled, which empties every `*.css?raw` import, so the files
-// are read from disk.
-const STYLES_DIR = join(import.meta.dirname, '..');
-const CSS_FILE_NAMES = readdirSync(STYLES_DIR).filter((name) => name.endsWith('.css'));
-
-function readCss(name: string): string {
-  const path = join(STYLES_DIR, name);
-  if (!existsSync(path)) throw new Error(`src/styles/${name} does not exist`);
-  return readFileSync(path, 'utf8');
-}
-
-// ---------------------------------------------------------------------------------------------
-// Minimal CSS parser
-// ---------------------------------------------------------------------------------------------
-
-interface CssNode {
-  /** Selector list or at-rule prelude (`@theme inline`, `@keyframes wave-spin`, `@import …`). */
-  prelude: string;
-  /** `null` for statements (`@import …;`) and declarations. */
-  children: CssNode[] | null;
-}
-
-// Removes comments. A comment opener inside a quoted string (an `@source` glob with a double-star
-// directory segment) is part of the string, not a comment.
-function stripComments(css: string): string {
-  return css.replace(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\/\*[\s\S]*?\*\//g, (_, string) =>
-    typeof string === 'string' ? string : '',
-  );
-}
-
-function parse(css: string): CssNode[] {
-  const nodes: CssNode[] = [];
-  let depth = 0;
-  let start = 0;
-  let bodyStart = 0;
-  let quote: string | null = null;
-  for (let i = 0; i < css.length; i++) {
-    const ch = css[i];
-    if (quote) {
-      if (ch === '\\') i++;
-      else if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-    } else if (ch === '{') {
-      if (depth === 0) bodyStart = i + 1;
-      depth++;
-    } else if (ch === '}') {
-      depth--;
-      if (depth === 0) {
-        nodes.push({
-          prelude: css.slice(start, bodyStart - 1).trim(),
-          children: parse(css.slice(bodyStart, i)),
-        });
-        start = i + 1;
-      }
-    } else if (ch === ';' && depth === 0) {
-      const statement = css.slice(start, i).trim();
-      if (statement) nodes.push({ prelude: statement, children: null });
-      start = i + 1;
-    }
-  }
-  const rest = css.slice(start).trim();
-  if (rest) nodes.push({ prelude: rest, children: null });
-  return nodes;
-}
-
-function parseFile(name: string): CssNode[] {
-  return parse(stripComments(readCss(name)));
-}
-
-type Decls = Map<string, string>;
-
-function declarations(nodes: CssNode[]): Decls {
-  const decls: Decls = new Map();
-  for (const node of nodes) {
-    if (node.children !== null || node.prelude.startsWith('@')) continue;
-    const colon = node.prelude.indexOf(':');
-    if (colon === -1) continue;
-    decls.set(node.prelude.slice(0, colon).trim(), node.prelude.slice(colon + 1).trim());
-  }
-  return decls;
-}
-
-/** Collapses whitespace and uses single quotes, so selectors compare independently of format. */
-function normalizeSelector(selector: string): string {
-  return selector
-    .replace(/\s+/g, ' ')
-    .replace(/\s*,\s*/g, ', ')
-    .replace(/"/g, "'")
-    .trim();
-}
-
-function selectorList(prelude: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let current = '';
-  for (const ch of prelude) {
-    if (ch === '(') depth++;
-    if (ch === ')') depth--;
-    if (ch === ',' && depth === 0) {
-      parts.push(current);
-      current = '';
-    } else current += ch;
-  }
-  parts.push(current);
-  return parts.map(normalizeSelector);
-}
-
-function styleRules(nodes: CssNode[]): CssNode[] {
-  return nodes.filter((node) => node.children !== null && !node.prelude.startsWith('@'));
-}
-
-/** The rule whose selector list is exactly `selectors` (order-insensitive). */
-function ruleWithSelectors(nodes: CssNode[], selectors: string[]): CssNode | undefined {
-  const wanted = selectors.map(normalizeSelector).sort().join('|');
-  return styleRules(nodes).find(
-    (rule) => [...selectorList(rule.prelude)].sort().join('|') === wanted,
-  );
-}
-
-/** Declarations of every rule whose selector list contains one of `selectors`, in source order. */
-function declsMatching(nodes: CssNode[], selectors: string[]): Decls {
-  const wanted = selectors.map(normalizeSelector);
-  const merged: Decls = new Map();
-  for (const rule of styleRules(nodes)) {
-    if (!selectorList(rule.prelude).some((selector) => wanted.includes(selector))) continue;
-    for (const [name, value] of declarations(rule.children ?? [])) merged.set(name, value);
-  }
-  return merged;
-}
-
-function merge(...maps: Decls[]): Decls {
-  const merged: Decls = new Map();
-  for (const map of maps) for (const [name, value] of map) merged.set(name, value);
-  return merged;
-}
-
-/**
- * Resolves `var()` references like the cascade does for custom properties: `scopes[0]` is the
- * element's own declarations, later scopes are its ancestors (inherited values).
- */
-function resolveValue(value: string, scopes: Decls[], seen: string[] = []): string {
-  const match = /^var\(\s*(--[\w-]+)\s*(?:,\s*([\s\S]+))?\)$/.exec(value.trim());
-  if (!match) return value.trim().toLowerCase();
-  const [, name, fallback] = match;
-  if (seen.includes(name)) throw new Error(`var() cycle: ${[...seen, name].join(' -> ')}`);
-  for (let depth = 0; depth < scopes.length; depth++) {
-    const declared = scopes[depth].get(name);
-    if (declared !== undefined) {
-      // An inherited custom property was computed on the ancestor that declared it.
-      return resolveValue(declared, scopes.slice(depth), [...seen, name]);
-    }
-  }
-  if (fallback !== undefined) return resolveValue(fallback, scopes, seen);
-  throw new Error(`unresolved custom property ${name} (via ${seen.join(' -> ') || 'root'})`);
-}
-
-function resolveToken(name: string, scopes: Decls[]): string {
-  return resolveValue(`var(${name})`, scopes);
-}
-
-// ---------------------------------------------------------------------------------------------
-// WCAG 2.2 contrast
-// ---------------------------------------------------------------------------------------------
-
-function relativeLuminance(hex: string): number {
-  const match = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!match) throw new Error(`not a 6-digit hex colour: ${hex}`);
-  const [r, g, b] = [0, 2, 4].map((offset) => {
-    const channel = parseInt(match[1].slice(offset, offset + 2), 16) / 255;
-    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-function contrastRatio(a: string, b: string): number {
-  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
-  return (light + 0.05) / (dark + 0.05);
-}
+import {
+  BOUND_TEXT_SURFACES,
+  CONTRAST_PAIRS,
+  CSS_FILE_NAMES,
+  NOT_TEXT_TOKENS,
+  PALETTE_HUES,
+  SURFACE_TEXT_TOKENS,
+  TEXT_MATRIX,
+  TEXT_SURFACES,
+  THEMES,
+  THEME_GROUPS,
+  PROVIDER_SELECTORS,
+  contrastRatio,
+  declarations,
+  declsMatching,
+  merge,
+  normalizeSelector,
+  parseFile,
+  readCss,
+  resolveToken,
+  resolved,
+  rootConstants,
+  ruleWithSelectors,
+  selectorList,
+  stripComments,
+  styleRules,
+  themeDecls,
+  tokensNodes,
+  type CssNode,
+  type Decls,
+  type ThemeName,
+} from './tokensHarness';
 
 // ---------------------------------------------------------------------------------------------
 // Expected values (spec §2.1.3)
 // ---------------------------------------------------------------------------------------------
-
-type ThemeName = 'light' | 'dark' | 'high-contrast';
-const THEMES: ThemeName[] = ['light', 'dark', 'high-contrast'];
-
-/** Selector list of each theme group in tokens.css (§2.1.2). */
-const THEME_GROUPS: Record<ThemeName, string[]> = {
-  light: [':root', '.wave-light'],
-  dark: ['.wave-dark', '.dark'],
-  'high-contrast': ['.wave-high-contrast', '.high-contrast'],
-};
-
-/** Classes a WaveProvider root / portal wrapper carries per theme (F3 `getThemeClassName`). */
-const PROVIDER_SELECTORS: Record<ThemeName, string[]> = {
-  light: ['.wave-light'],
-  dark: ['.wave-dark', '.dark'],
-  'high-contrast': ['.wave-high-contrast', '.high-contrast'],
-};
 
 /** Token → [light, dark, high contrast], resolved values. */
 const TOKENS: Record<string, [string, string, string]> = {
@@ -300,30 +132,68 @@ const TOKENS: Record<string, [string, string, string]> = {
   'presence-offline': ['#616161', '#adadad', '#ffffff'],
   'presence-oof': ['#b4009e', '#d696c8', '#ff80ff'],
   'presence-glyph': ['#ffffff', '#000000', '#000000'],
+  // Persona palette: the fill and its text (0.13); the tint, its text and the border (0.17; the
+  // border resolves to the fill).
   'palette-red': ['#c50f1f', '#f48a94', '#ffffff'],
   'palette-red-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-red-tint': ['#eeb7bc', '#760913', '#000000'],
+  'palette-red-tint-foreground': ['#a30c1a', '#f48a94', '#ffffff'],
+  'palette-red-border': ['#c50f1f', '#f48a94', '#ffffff'],
   'palette-pumpkin': ['#b5470a', '#f2a46b', '#ffffff'],
   'palette-pumpkin-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-pumpkin-tint': ['#e9c8b6', '#6d2b06', '#000000'],
+  'palette-pumpkin-tint-foreground': ['#953b08', '#f2a46b', '#ffffff'],
+  'palette-pumpkin-border': ['#b5470a', '#f2a46b', '#ffffff'],
   'palette-gold': ['#8a6200', '#f7b538', '#ffffff'],
   'palette-gold-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-gold-tint': ['#dcd0b3', '#533b00', '#000000'],
+  'palette-gold-tint-foreground': ['#745300', '#f7b538', '#ffffff'],
+  'palette-gold-border': ['#8a6200', '#f7b538', '#ffffff'],
   'palette-forest': ['#107c10', '#6fcf6f', '#ffffff'],
   'palette-forest-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-forest-tint': ['#b7d8b7', '#0a4a0a', '#000000'],
+  'palette-forest-tint-foreground': ['#0d660d', '#6fcf6f', '#ffffff'],
+  'palette-forest-border': ['#107c10', '#6fcf6f', '#ffffff'],
   'palette-teal': ['#0a6b6b', '#4cc2c2', '#ffffff'],
   'palette-teal-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-teal-tint': ['#b6d3d3', '#064040', '#000000'],
+  'palette-teal-tint-foreground': ['#096060', '#4cc2c2', '#ffffff'],
+  'palette-teal-border': ['#0a6b6b', '#4cc2c2', '#ffffff'],
   'palette-blue': ['#0f6cbd', '#479ef5', '#ffffff'],
   'palette-blue-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-blue-tint': ['#b7d3eb', '#094171', '#000000'],
+  'palette-blue-tint-foreground': ['#0c599c', '#6ab1f7', '#ffffff'],
+  'palette-blue-border': ['#0f6cbd', '#479ef5', '#ffffff'],
   'palette-navy': ['#103a73', '#7fa7e0', '#ffffff'],
   'palette-navy-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-navy-tint': ['#b7c4d5', '#0a2345', '#000000'],
+  'palette-navy-tint-foreground': ['#103a73', '#7fa7e0', '#ffffff'],
+  'palette-navy-border': ['#103a73', '#7fa7e0', '#ffffff'],
   'palette-lavender': ['#6a5cb8', '#b4a7f0', '#ffffff'],
   'palette-lavender-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-lavender-tint': ['#d2ceea', '#40376e', '#000000'],
+  'palette-lavender-tint-foreground': ['#594e9b', '#b4a7f0', '#ffffff'],
+  'palette-lavender-border': ['#6a5cb8', '#b4a7f0', '#ffffff'],
   'palette-purple': ['#5c2e91', '#c8a6f0', '#ffffff'],
   'palette-purple-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-purple-tint': ['#cec0de', '#371c57', '#000000'],
+  'palette-purple-tint-foreground': ['#5c2e91', '#c8a6f0', '#ffffff'],
+  'palette-purple-border': ['#5c2e91', '#c8a6f0', '#ffffff'],
   'palette-magenta': ['#b4009e', '#ec8fdc', '#ffffff'],
   'palette-magenta-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-magenta-tint': ['#e9b3e2', '#6c005f', '#000000'],
+  'palette-magenta-tint-foreground': ['#950083', '#ec8fdc', '#ffffff'],
+  'palette-magenta-border': ['#b4009e', '#ec8fdc', '#ffffff'],
   'palette-brown': ['#8e562e', '#d4a373', '#ffffff'],
   'palette-brown-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-brown-tint': ['#ddccc0', '#55341c', '#000000'],
+  'palette-brown-tint-foreground': ['#7d4b28', '#d4a373', '#ffffff'],
+  'palette-brown-border': ['#8e562e', '#d4a373', '#ffffff'],
   'palette-steel': ['#4f7391', '#9fb8cc', '#ffffff'],
   'palette-steel-foreground': ['#ffffff', '#000000', '#000000'],
+  'palette-steel-tint': ['#cad5de', '#2f4557', '#000000'],
+  'palette-steel-tint-foreground': ['#405d76', '#9fb8cc', '#ffffff'],
+  'palette-steel-border': ['#4f7391', '#9fb8cc', '#ffffff'],
   backdrop: ['rgb(0 0 0 / 0.4)', 'rgb(0 0 0 / 0.5)', 'rgb(0 0 0 / 0.8)'],
 };
 
@@ -429,129 +299,6 @@ const LEGACY_SEMANTIC_NAMES = [
 ];
 
 /**
- * Contrast pairs of §2.1.3 (plus the review's component combinations, §4.5): [foreground,
- * background, threshold]. 4.5 for text, 3 for non-text UI and graphics.
- *
- * §4.5 requires foreground, muted-foreground, primary-as-text and ring against `selected`,
- * `subtle-selected` and `card`/`subtle-hover`; `SECTION_4_5_MATRIX` below checks that every one of
- * those combinations is listed here.
- */
-const CONTRAST_PAIRS: Array<[string, string, number]> = [
-  ['foreground', 'background', 4.5],
-  ['foreground', 'card', 4.5],
-  ['foreground', 'subtle-hover', 4.5],
-  ['muted-foreground', 'background', 4.5],
-  ['muted-foreground', 'card', 4.5],
-  ['muted-foreground', 'muted', 4.5],
-  ['muted-foreground', 'subtle-hover', 4.5],
-  // ToggleButton `isAccessible` (0.7) draws the pressed state as a brand fill with on-brand text,
-  // on `primary` with an inset `primary-foreground` stroke, on the page and on cards. Its pairs
-  // are the three `primary-foreground` fills below and `primary` on `background` and `card`; they
-  // need no new entry.
-  ['primary-foreground', 'primary', 4.5],
-  ['primary-foreground', 'primary-hover', 4.5],
-  ['primary-foreground', 'primary-pressed', 4.5],
-  ['primary', 'background', 4.5],
-  ['primary', 'subtle-hover', 4.5],
-  ['primary', 'card', 4.5],
-  // Also the checked box of a multi-select Option on its selected row (0.10, D8), a non-text
-  // graphic that needs 3:1; the text threshold covers it.
-  ['primary', 'subtle-selected', 4.5],
-  ['foreground', 'subtle-selected', 4.5],
-  ['muted-foreground', 'subtle-selected', 4.5],
-  ['selected-foreground', 'selected', 4.5],
-  ['foreground', 'selected', 4.5],
-  ['muted-foreground', 'selected', 4.5],
-  ['primary', 'selected', 4.5],
-  ['ring', 'selected', 3],
-  ['ring', 'background', 3],
-  ['ring', 'subtle-selected', 3],
-  ['ring', 'card', 3],
-  ['ring', 'subtle-hover', 3],
-  ['stroke-accessible', 'background', 3],
-  // The unchecked box of a multi-select Option (0.10, D8) on the active and the selected row.
-  ['stroke-accessible', 'subtle-hover', 3],
-  ['stroke-accessible', 'subtle-selected', 3],
-  // Filled input focus ring and state colors on the input's own fill (Phase 4 D5).
-  ['primary', 'input-filled-darker', 3],
-  ['destructive', 'input-filled-darker', 3],
-  ['ring', 'input-filled-darker', 3],
-  ['primary', 'input-filled-lighter', 3],
-  ['destructive', 'input-filled-lighter', 3],
-  ['ring', 'input-filled-lighter', 3],
-  // AlphaSlider's checkerboard (0.8): squares in `stroke` on `background` under the rail. A
-  // pattern that must stay visible, not text or a control boundary: 1.5:1. (`muted` on
-  // `background` reaches only 1.14, 1.24 and 1.21:1.) The thumbs of the color parts reuse
-  // `foreground` on `background` and `ring` on `background` above.
-  ['stroke', 'background', 1.5],
-  // Progress fills on the track (ProgressBar `color`; its warning fill uses `severe`).
-  ['primary', 'track', 3],
-  ['success', 'track', 3],
-  ['error', 'track', 3],
-  ['severe', 'track', 3],
-  // CounterBadge dot fills on the page (a dot has no text). The primary, muted-foreground
-  // (informative) and warning-tint-foreground (warning) dots are asserted at 4.5 in this list.
-  ['success', 'background', 3],
-  ['destructive', 'background', 3],
-  ['severe', 'background', 3],
-  ['error', 'background', 4.5],
-  ['error', 'card', 4.5],
-  // Field warning and success messages, on the page and on cards.
-  ['warning-tint-foreground', 'background', 4.5],
-  ['warning-tint-foreground', 'card', 4.5],
-  ['success-tint-foreground', 'background', 4.5],
-  ['success-tint-foreground', 'card', 4.5],
-  ['error-foreground', 'error', 4.5],
-  ['destructive-foreground', 'destructive', 4.5],
-  ['success-foreground', 'success', 4.5],
-  ['warning-foreground', 'warning', 4.5],
-  ['severe-foreground', 'severe', 4.5],
-  ['info-foreground', 'info', 4.5],
-  ['success-tint-foreground', 'success-tint', 4.5],
-  ['warning-tint-foreground', 'warning-tint', 4.5],
-  ['error-tint-foreground', 'error-tint', 4.5],
-  ['severe-tint-foreground', 'severe-tint', 4.5],
-  ['info-tint-foreground', 'info-tint', 4.5],
-  ['inverted-foreground', 'inverted', 4.5],
-  ['rating', 'background', 3],
-  ['presence-available', 'background', 3],
-  ['presence-busy', 'background', 3],
-  ['presence-away', 'background', 3],
-  ['presence-offline', 'background', 3],
-  ['presence-oof', 'background', 3],
-  ['presence-glyph', 'presence-available', 3],
-  ['presence-glyph', 'presence-busy', 3],
-  ['presence-glyph', 'presence-away', 3],
-  ['presence-glyph', 'presence-oof', 3],
-  // Tags (0.11). Tag's Dismiss ring on the filled chip and an InteractionTag's ring over its
-  // filled neighbour; 0.10 already relied on it without asserting it: 4.72 / 4.18 / 16.21.
-  ['ring', 'muted', 3],
-  // Text on the hover and pressed fills of neutral chips (foreground text only):
-  // 11.76 / 10.05 / 12.63.
-  ['foreground', 'muted-hover', 4.5],
-  // 10.17 / 13.58 / 8.45.
-  ['foreground', 'muted-pressed', 4.5],
-  // State steps that must be seen (1.15:1, a floor of this phase; 0.10's dismiss hover was
-  // 1.05:1). The pressed step is judged against hover only, as Button's subtle-pressed is:
-  // muted-pressed is 1.07:1 on the dark background and card, so no pressed pair is asserted
-  // against a surface.
-  // 1.16 / 1.17 / 1.38.
-  ['muted-hover', 'muted', 1.15],
-  // 1.16 / 1.35 / 1.49.
-  ['muted-pressed', 'muted-hover', 1.15],
-  // 1.16 / 1.38 / 1.40.
-  ['selected-hover', 'selected', 1.15],
-  // 1.16 / 1.56 / 1.43.
-  ['selected-pressed', 'selected-hover', 1.15],
-  // An outline tag's Dismiss circle on the page: 1.32 / 1.45 / 1.66.
-  ['muted-hover', 'background', 1.15],
-  // On a card: 1.26 / 1.26 / 1.66.
-  ['muted-hover', 'card', 1.15],
-  // Outline tags in a filled-darker TagPicker: 1.21 / 1.83 / 1.66.
-  ['muted-hover', 'input-filled-darker', 1.15],
-];
-
-/**
  * Ratios printed in §2.1.3 (rounded to two decimals there), plus the success, error and severe
  * progress fills on the track (recorded to two decimals in 0.6) and the unchecked multi-select
  * Option box on its rows (recorded to two decimals in 0.10). The unrounded ratio must match
@@ -650,169 +397,14 @@ const TABLED_MINIMUMS = ['presence-available', 'presence-busy', 'presence-away',
   .map((fill): MinimumPair => ['high-contrast', 'presence-glyph', fill, 7.09])
   .concat([['high-contrast', 'input-filled-stroke', 'background', 3] satisfies MinimumPair]);
 
-/**
- * Text contrast matrix (WCAG 1.4.3: 4.5:1, compared unrounded). The pairs above are the ones the
- * spec tables; components and consumers also combine a text token with any surface of its theme.
- * A real-browser axe sweep of every story found high-contrast `error` text at 4.27:1 in a selected,
- * pressed List row (a subtle Button with `text-error` on `subtle-pressed`), a pair no table listed.
- * So every text-capable token is checked against every surface it can sit on, and every colour
- * token is classified (text, surface or excluded with a reason), so a new token cannot skip it.
- */
-
-/**
- * Surfaces any text can sit on: the page (popovers, menus, dialogs and toasts are `background`
- * too), cards, neutral chips, the subtle control states, the selection tint, and the status tints
- * (MessageBar renders its title, body, links, actions and dismiss button on the tint).
- */
-const TEXT_SURFACES = [
-  'background',
-  'card',
-  'secondary',
-  'muted',
-  'subtle-hover',
-  'subtle-pressed',
-  'subtle-selected',
-  'selected',
-  'success-tint',
-  'warning-tint',
-  'error-tint',
-  'severe-tint',
-  'info-tint',
-  'input-filled-darker',
-  'input-filled-lighter',
-];
-
-/** Text tokens that may sit on every `TEXT_SURFACES` entry, with where they are used as text. */
-const SURFACE_TEXT_TOKENS: Record<string, string> = {
-  foreground: 'body text',
-  'card-foreground': 'alias of foreground',
-  'secondary-foreground': 'alias of foreground',
-  'muted-foreground': 'secondary text, placeholders, icon buttons',
-  primary: 'links, transparent buttons, selected Nav/TabList/Stepper text',
-  accent: 'alias of primary',
-  error: 'validation messages, required markers, destructive actions (`text-error`)',
-  // §2.1.3 gives destructive and error one value; 0.4 and shadcn-style code writes text-destructive.
-  destructive: 'alias of error',
-  success: 'completed Stepper steps (`text-success`)',
-  'warning-tint-foreground': "warning's text token (the warning fill is not text, see below)",
-  'info-tint-foreground': "info's text token (the info fill is a fill and border, see below)",
-};
-
-/** Text tokens bound to particular surfaces: their own fill or tint, or the inverted tooltip. */
-const BOUND_TEXT_SURFACES: Record<string, string[]> = {
-  'selected-foreground': ['selected', 'selected-hover', 'selected-pressed'],
-  'inverted-foreground': ['inverted'],
-  // Status icons and badge text: on their tint (MessageBar, Badge, Stepper) and on the page (Toast).
-  // Field success messages also sit on cards.
-  'success-tint-foreground': ['success-tint', 'background', 'card'],
-  'error-tint-foreground': ['error-tint', 'background'],
-  'severe-tint-foreground': ['severe-tint', 'background'],
-  // Text on fills.
-  'primary-foreground': ['primary', 'primary-hover', 'primary-pressed'],
-  'accent-foreground': ['accent'],
-  'error-foreground': ['error'],
-  'destructive-foreground': ['destructive'],
-  'success-foreground': ['success'],
-  'warning-foreground': ['warning'],
-  'severe-foreground': ['severe'],
-  'info-foreground': ['info'],
-  // Avatar colors (0.13): text on each persona palette fill, in every theme.
-  'palette-red-foreground': ['palette-red'],
-  'palette-pumpkin-foreground': ['palette-pumpkin'],
-  'palette-gold-foreground': ['palette-gold'],
-  'palette-forest-foreground': ['palette-forest'],
-  'palette-teal-foreground': ['palette-teal'],
-  'palette-blue-foreground': ['palette-blue'],
-  'palette-navy-foreground': ['palette-navy'],
-  'palette-lavender-foreground': ['palette-lavender'],
-  'palette-purple-foreground': ['palette-purple'],
-  'palette-magenta-foreground': ['palette-magenta'],
-  'palette-brown-foreground': ['palette-brown'],
-  'palette-steel-foreground': ['palette-steel'],
-};
-
-/**
- * Colour tokens that are never text on a surface, with the reason. Non-text contrast (3:1, WCAG
- * 1.4.11) of the strokes and graphics is asserted in `CONTRAST_PAIRS`.
- */
-const NOT_TEXT_TOKENS: Record<string, string> = {
-  // Fills only by design, each carrying its own -foreground (BOUND_TEXT_SURFACES).
-  warning: 'fill only: 1.30:1 on white; warning text and icons use warning-tint-foreground',
-  severe: 'fill only (with severe-foreground); severe text uses severe-tint-foreground',
-  info: 'fill and start border only (with info-foreground); info text uses info-tint-foreground',
-  'primary-hover': 'fill state of primary (with primary-foreground)',
-  'primary-pressed': 'fill state of primary (with primary-foreground)',
-  // Not TEXT_SURFACES: primary text is 4.08 / 4.15:1 on muted-hover (light / dark) and
-  // muted-foreground 4.48:1 in dark; a light grey dark enough to be seen cannot keep every text
-  // token at 4.5:1 (#ebebeb, the darkest that does, is 1.05:1 from muted).
-  'muted-hover':
-    'fill state of muted chips (Tag, InteractionTag), with foreground text (CONTRAST_PAIRS)',
-  'muted-pressed':
-    'fill state of muted chips (Tag, InteractionTag), with foreground text (CONTRAST_PAIRS)',
-  'selected-hover': 'fill state of selected (with selected-foreground)',
-  'selected-pressed': 'fill state of selected (with selected-foreground)',
-  subtle: 'transparent rest state of subtle controls',
-  // Strokes, focus ring and graphics.
-  border: 'decorative divider',
-  stroke: 'control border (paired with stroke-accessible for 3:1 where it identifies a control)',
-  'stroke-hover': 'control border state',
-  'stroke-accessible': 'control border, Slider rail, Rating outline star (3:1)',
-  input: 'control border',
-  'input-filled-stroke': 'filled input border (transparent except in high contrast)',
-  ring: 'focus indicator (3:1)',
-  track: 'progress track (the primary, success, error and severe fills carry 3:1)',
-  skeleton: 'loading placeholder',
-  rating: 'Rating star glyph (3:1)',
-  'presence-available': 'presence glyph (3:1)',
-  'presence-busy': 'presence glyph (3:1)',
-  'presence-away': 'presence glyph (3:1)',
-  'presence-offline': 'presence glyph (3:1)',
-  'presence-oof': 'presence glyph (3:1)',
-  'presence-glyph': 'glyph drawn on a presence fill (3:1)',
-  'inverted-border': 'tooltip border',
-  backdrop: 'translucent overlay scrim',
-};
-
-/** Each text token with every surface it is checked against. */
-const TEXT_MATRIX: Array<{ fg: string; surfaces: string[] }> = [
-  ...Object.keys(SURFACE_TEXT_TOKENS).map((fg) => ({ fg, surfaces: TEXT_SURFACES })),
-  ...Object.entries(BOUND_TEXT_SURFACES).map(([fg, surfaces]) => ({ fg, surfaces })),
-];
-
 // ---------------------------------------------------------------------------------------------
 // Shared lookups
 // ---------------------------------------------------------------------------------------------
-
-function tokensNodes(): CssNode[] {
-  return parseFile('tokens.css');
-}
-
-function themeRule(theme: ThemeName): CssNode {
-  const rule = ruleWithSelectors(tokensNodes(), THEME_GROUPS[theme]);
-  if (!rule) throw new Error(`tokens.css has no rule for "${THEME_GROUPS[theme].join(', ')}"`);
-  return rule;
-}
-
-function themeDecls(theme: ThemeName): Decls {
-  return declarations(themeRule(theme).children ?? []);
-}
-
-/** Theme-independent constants (ramps, font family, z-index, motion) on the bare `:root` rule. */
-function rootConstants(): Decls {
-  const rule = ruleWithSelectors(tokensNodes(), [':root']);
-  if (!rule) throw new Error('tokens.css has no bare `:root` rule for the constants');
-  return declarations(rule.children ?? []);
-}
 
 function themeBlock(): CssNode {
   const block = tokensNodes().find((node) => /^@theme\b/.test(node.prelude));
   if (!block || !block.children) throw new Error('tokens.css has no @theme block');
   return block;
-}
-
-/** Resolved `--wave-<token>` of a theme in the default entries (no legacy file). */
-function resolved(theme: ThemeName, token: string): string {
-  return resolveToken(`--wave-${token}`, [themeDecls(theme), rootConstants()]);
 }
 
 function allRules(nodes: CssNode[]): CssNode[] {
@@ -929,6 +521,201 @@ describe('tokens.css — theme groups (repo-level#7, button-provider#6)', () => 
   });
 });
 
+describe('tokens.css — per-theme shadows (0.17)', () => {
+  const LEVELS = ['2', '4', '8', '16', '28', '64'] as const;
+  /** [ambient blur, key offset, key blur] of each level; the alphas differ per theme. */
+  const GEOMETRY: Record<(typeof LEVELS)[number], [string, string, string]> = {
+    '2': ['2px', '1px', '2px'],
+    '4': ['2px', '2px', '4px'],
+    '8': ['2px', '4px', '8px'],
+    '16': ['2px', '8px', '16px'],
+    '28': ['8px', '14px', '28px'],
+    '64': ['8px', '32px', '64px'],
+  };
+  /** The 0.16 `--shadow-N` literals, byte for byte: the light values. */
+  const LIGHT_0_16: Record<(typeof LEVELS)[number], string> = {
+    '2': '0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14)',
+    '4': '0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14)',
+    '8': '0 0 2px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.14)',
+    '16': '0 0 2px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.14)',
+    '28': '0 0 8px rgba(0, 0, 0, 0.12), 0 14px 28px rgba(0, 0, 0, 0.14)',
+    '64': '0 0 8px rgba(0, 0, 0, 0.12), 0 32px 64px rgba(0, 0, 0, 0.14)',
+  };
+  const AMBIENT = { light: '0.12', dark: '0.24', 'high-contrast': '0.24' } as const;
+  const KEY = { light: '0.14', dark: '0.28', 'high-contrast': '0.28' } as const;
+
+  function shadow(level: (typeof LEVELS)[number], ambient: string, key: string): string {
+    const [ambientBlur, keyOffset, keyBlur] = GEOMETRY[level];
+    return `0 0 ${ambientBlur} rgba(0, 0, 0, ${ambient}), 0 ${keyOffset} ${keyBlur} rgba(0, 0, 0, ${key})`;
+  }
+
+  function alphas(value: string): number[] {
+    return [...value.matchAll(/rgba\(0, 0, 0, ([\d.]+)\)/g)].map((match) => Number(match[1]));
+  }
+
+  it('builds the light values from the same geometry as the 0.16 literals', () => {
+    for (const level of LEVELS) {
+      expect(shadow(level, AMBIENT.light, KEY.light)).toBe(LIGHT_0_16[level]);
+    }
+  });
+
+  it.each(THEMES)('declares the six shadow tokens directly in the %s group', (theme) => {
+    const decls = themeDecls(theme);
+    const missing = LEVELS.filter((level) => !decls.has(`--wave-shadow-${level}`));
+    expect(missing).toEqual([]);
+  });
+
+  it('keeps the light values equal to the 0.16 literals', () => {
+    const decls = themeDecls('light');
+    for (const level of LEVELS) {
+      expect(decls.get(`--wave-shadow-${level}`), `shadow-${level}`).toBe(LIGHT_0_16[level]);
+    }
+  });
+
+  it.each(['dark', 'high-contrast'] as const)(
+    'gives %s the light offsets and blurs with the ambient 0.24 and key 0.28 alphas',
+    (theme) => {
+      const decls = themeDecls(theme);
+      for (const level of LEVELS) {
+        expect(decls.get(`--wave-shadow-${level}`), `shadow-${level}`).toBe(
+          shadow(level, AMBIENT[theme], KEY[theme]),
+        );
+      }
+    },
+  );
+
+  it.each(['dark', 'high-contrast'] as const)(
+    'every %s ambient and key alpha is greater than the light one',
+    (theme) => {
+      for (const level of LEVELS) {
+        const light = alphas(themeDecls('light').get(`--wave-shadow-${level}`) ?? '');
+        const other = alphas(themeDecls(theme).get(`--wave-shadow-${level}`) ?? '');
+        expect(light, `light shadow-${level}`).toHaveLength(2);
+        expect(other, `${theme} shadow-${level}`).toHaveLength(2);
+        expect(other[0], `${theme} ambient ${level}`).toBeGreaterThan(light[0]);
+        expect(other[1], `${theme} key ${level}`).toBeGreaterThan(light[1]);
+      }
+    },
+  );
+
+  it('declares the shadows in no theme-independent constant rule', () => {
+    const names = [...rootConstants().keys()].filter((name) => name.startsWith('--wave-shadow-'));
+    expect(names).toEqual([]);
+  });
+
+  it('maps --shadow-N in @theme inline to the runtime tokens and declares no literal shadow', () => {
+    const decls = declarations(themeBlock().children ?? []);
+    for (const level of LEVELS) {
+      expect(decls.get(`--shadow-${level}`), `--shadow-${level}`).toBe(
+        `var(--wave-shadow-${level})`,
+      );
+    }
+    const literals = [...decls.entries()].filter(
+      ([name, value]) => name.startsWith('--shadow') && !/^var\(--wave-shadow-\d+\)$/.test(value),
+    );
+    expect(literals).toEqual([]);
+  });
+
+  it.each(THEMES)('resolves every shadow token in a nested %s theme', (theme) => {
+    const scope = declsMatching(tokensNodes(), PROVIDER_SELECTORS[theme]);
+    const html = declsMatching(tokensNodes(), [':root']);
+    for (const level of LEVELS) {
+      const value = resolveToken(`--wave-shadow-${level}`, [scope, html]);
+      expect(value, `${theme} shadow-${level}`).toBe(
+        shadow(level, AMBIENT[theme], KEY[theme]).toLowerCase(),
+      );
+    }
+  });
+});
+
+describe('tokens.css — palette tints, tint foregrounds and borders (0.17)', () => {
+  const ROLES = ['tint', 'tint-foreground', 'border'] as const;
+  const NAMES = PALETTE_HUES.flatMap((hue) => ROLES.map((role) => `--wave-palette-${hue}-${role}`));
+
+  /** HSL hue (degrees) and saturation of a 6-digit hex colour. */
+  function hueAndSaturation(hex: string): { hue: number; saturation: number } {
+    const match = /^#([0-9a-f]{6})$/i.exec(hex);
+    if (!match) throw new Error(`not a 6-digit hex colour: ${hex}`);
+    const [r, g, b] = [0, 2, 4].map(
+      (offset) => parseInt(match[1].slice(offset, offset + 2), 16) / 255,
+    );
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    if (delta === 0) return { hue: 0, saturation: 0 };
+    const sector =
+      max === r ? ((g - b) / delta + 6) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    return { hue: sector * 60, saturation: delta / (1 - Math.abs(max + min - 1)) };
+  }
+
+  it.each(THEMES)('declares the 36 tokens of the 12 hues directly in the %s group', (theme) => {
+    expect(NAMES).toHaveLength(36);
+    const decls = themeDecls(theme);
+    expect(NAMES.filter((name) => !decls.has(name))).toEqual([]);
+  });
+
+  it.each(THEMES)('declares every %s border as its fill, so the border moves with it', (theme) => {
+    const decls = themeDecls(theme);
+    for (const hue of PALETTE_HUES) {
+      expect(decls.get(`--wave-palette-${hue}-border`), hue).toBe(`var(--wave-palette-${hue})`);
+    }
+  });
+
+  it('collapses every hue to black and white in high contrast (R15)', () => {
+    const decls = themeDecls('high-contrast');
+    for (const hue of PALETTE_HUES) {
+      expect(decls.get(`--wave-palette-${hue}-tint`), `${hue} tint`).toBe('#000000');
+      expect(decls.get(`--wave-palette-${hue}-tint-foreground`), `${hue} tint foreground`).toBe(
+        '#ffffff',
+      );
+      expect(resolved('high-contrast', `palette-${hue}-border`), `${hue} border`).toBe('#ffffff');
+    }
+  });
+
+  it.each(THEMES)(
+    '%s: the strong fill of every hue is at least 3:1 on background (a chart series)',
+    (theme) => {
+      const page = resolved(theme, 'background');
+      const below = PALETTE_HUES.map((hue) => ({ hue, fill: resolved(theme, `palette-${hue}`) }))
+        .map(({ hue, fill }) => ({ hue, fill, ratio: contrastRatio(fill, page) }))
+        .filter(({ ratio }) => ratio < 3)
+        .map(({ hue, fill, ratio }) => `${hue} ${fill} on ${page}: ${ratio.toFixed(3)}:1`);
+      expect(below).toEqual([]);
+    },
+  );
+
+  it.each(['light', 'dark'] as const)(
+    '%s: every tint and tint foreground keeps the hue of its fill and is no grey',
+    (theme) => {
+      const off = PALETTE_HUES.flatMap((hue) => {
+        const fill = hueAndSaturation(resolved(theme, `palette-${hue}`));
+        return (['tint', 'tint-foreground'] as const).flatMap((role) => {
+          const value = resolved(theme, `palette-${hue}-${role}`);
+          const { hue: angle, saturation } = hueAndSaturation(value);
+          const distance = Math.abs(angle - fill.hue);
+          const drift = Math.min(distance, 360 - distance);
+          return drift <= 10 && saturation >= 0.2
+            ? []
+            : [
+                `${hue}-${role} ${value}: ${drift.toFixed(1)}° off, saturation ${saturation.toFixed(2)}`,
+              ];
+        });
+      });
+      expect(off).toEqual([]);
+    },
+  );
+
+  it.each(THEMES)(
+    'every colour token of the %s group is in the contrast tables (none skips classification)',
+    (theme) => {
+      const unlisted = [...themeDecls(theme).keys()]
+        .filter((name) => !name.startsWith('--wave-shadow-'))
+        .filter((name) => !(name.replace(/^--wave-/, '') in TOKENS));
+      expect(unlisted).toEqual([]);
+    },
+  );
+});
+
 describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)', () => {
   it('declares the brand ramp on :root, reading the 0.4 names as fallbacks', () => {
     const constants = rootConstants();
@@ -975,6 +762,26 @@ describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)',
     expect(constants.get('--wave-z-overlay')).toBe('1000');
     expect(constants.get('--wave-z-toast')).toBe('1100');
     expect(constants.get('--wave-z-tooltip')).toBe('1200');
+  });
+
+  it('declares the monospace and numeric font stacks once, on :root only (0.17)', () => {
+    const constants = rootConstants();
+    expect(constants.get('--wave-font-family-monospace')).toBe(
+      "Consolas, 'Courier New', Courier, monospace",
+    );
+    expect(constants.get('--wave-font-family-numeric')?.replace(/\s+/g, ' ')).toBe(
+      "Bahnschrift, 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif",
+    );
+    for (const theme of THEMES) {
+      const names = [...themeDecls(theme).keys()].filter((name) =>
+        name.startsWith('--wave-font-family'),
+      );
+      expect(names, `${theme} group`).toEqual([]);
+    }
+    const source = stripComments(readCss('tokens.css'));
+    for (const name of ['--wave-font-family-monospace', '--wave-font-family-numeric']) {
+      expect(source.split(`${name}:`).length - 1, name).toBe(1);
+    }
   });
 });
 
@@ -1166,6 +973,8 @@ describe('tokens.css — Tailwind mapping (@theme inline)', () => {
   it('maps font-wave to the runtime font token and keeps the type ramp and shadows', () => {
     const decls = themeDeclarations();
     expect(decls.get('--font-wave')).toBe('var(--wave-font-family)');
+    expect(decls.get('--font-wave-mono')).toBe('var(--wave-font-family-monospace)');
+    expect(decls.get('--font-wave-numeric')).toBe('var(--wave-font-family-numeric)');
     expect(decls.get('--text-body-1')).toBe('14px');
     expect(decls.get('--text-body-1--line-height')).toBe('20px');
     expect(decls.get('--text-display')).toBe('68px');

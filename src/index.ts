@@ -35,6 +35,11 @@ export type { CreateTableColumnOptions } from './lib/table';
 export type { ColumnSizingOption } from './lib/columnSizing';
 export { createToaster } from './lib/toaster';
 export type { ToasterHandle } from './lib/toaster';
+export { getTokenStyle } from './lib/tokens';
+export type { TokenStyle, WaveTokenName, WaveTokenOverrides, WaveTokens } from './lib/tokens';
+export { waveTokens, chartPalette } from './lib/waveTokens';
+export { createBrandTokens } from './lib/brand';
+export type { BrandRamp, BrandStop, BrandTokens } from './lib/brand';
 
 // Hooks
 export { useControllable } from './hooks/useControllable';
