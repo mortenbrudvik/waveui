@@ -5,6 +5,7 @@ import {
   getNativeElementProps,
   NATIVE_EVENT_NAMES,
   NATIVE_GLOBAL_PROPS,
+  NATIVE_NO_CAPTURE_EVENTS,
   NATIVE_TAG_PROPS,
 } from '../nativeProps';
 
@@ -36,6 +37,15 @@ describe('the attribute lists are valid for React (type level)', () => {
     expectTypeOf<Names<(typeof NATIVE_TAG_PROPS)['textarea']>>().toExtend<Props<'textarea'>>();
     type EventKey = `on${Names<typeof NATIVE_EVENT_NAMES>}`;
     expectTypeOf<EventKey>().toExtend<keyof React.DOMAttributes<Element>>();
+    // Every capture handler the helper can produce is a prop of React's DOM attributes.
+    type CaptureKey = `on${Exclude<
+      Names<typeof NATIVE_EVENT_NAMES>,
+      Names<typeof NATIVE_NO_CAPTURE_EVENTS>
+    >}Capture`;
+    expectTypeOf<CaptureKey>().toExtend<keyof React.DOMAttributes<Element>>();
+    expectTypeOf<Names<typeof NATIVE_NO_CAPTURE_EVENTS>>().toExtend<
+      Names<typeof NATIVE_EVENT_NAMES>
+    >();
   });
 
   it('gives each tag with extras a list in the table of tags', () => {
@@ -59,7 +69,7 @@ describe('the attribute lists are valid for React (type level)', () => {
 });
 
 describe('getNativeElementProps', () => {
-  it('keeps the global attributes, event handlers, data-*, aria-*, ref and key of a tag without extras', () => {
+  it('keeps the global attributes, event handlers, data-*, aria-*, and ref of a tag without extras', () => {
     const onClick = () => {};
     const ref = () => {};
     const props = {
@@ -80,15 +90,70 @@ describe('getNativeElementProps', () => {
       slot: 's',
       inert: true,
       popover: 'auto',
+      autoFocus: true,
+      autoCapitalize: 'none',
+      inputMode: 'numeric',
+      enterKeyHint: 'done',
+      nonce: 'n',
+      suppressHydrationWarning: true,
+      suppressContentEditableWarning: true,
       onClick,
       onKeyDownCapture: onClick,
       onGotPointerCapture: onClick,
+      onDragEnterCapture: onClick,
+      onDragLeaveCapture: onClick,
       'data-x': '1',
       'aria-label': 'l',
       ref,
-      key: 'k',
     };
     expect(getNativeElementProps('div', props)).toEqual(props);
+  });
+
+  it('drops key, which is no prop and makes React warn when spread', () => {
+    expect(getNativeElementProps('div', { key: 'k', id: 'a' })).toEqual({ id: 'a' });
+  });
+
+  it('ignores inherited properties and keeps the order of the props', () => {
+    const inherited = Object.assign(Object.create({ id: 'inherited', title: 't' }), {
+      className: 'c',
+      'data-b': 1,
+      'aria-a': 2,
+      lang: 'en',
+    });
+    const result = getNativeElementProps('div', inherited);
+    expect(result).toEqual({ className: 'c', 'data-b': 1, 'aria-a': 2, lang: 'en' });
+    expect(Object.keys(result)).toEqual(['className', 'data-b', 'aria-a', 'lang']);
+  });
+
+  it('is not changed by own __proto__ or constructor keys and returns a plain object', () => {
+    const props = JSON.parse(
+      '{"__proto__": {"id": "x", "polluted": true}, "constructor": 1, "id": "a"}',
+    );
+    expect(Object.keys(props)).toContain('__proto__');
+    const result = getNativeElementProps('div', props);
+    expect(result).toEqual({ id: 'a' });
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(getNativeElementProps('div', props, ['id'])).toEqual({});
+  });
+
+  it('matches data-* and aria-* by their hyphenated prefix only', () => {
+    expect(
+      getNativeElementProps('div', {
+        data: 1,
+        dataX: 2,
+        'data-x': 3,
+        aria: 4,
+        ariaLabel: 5,
+        'aria-label': 6,
+      }),
+    ).toEqual({ 'data-x': 3, 'aria-label': 6 });
+  });
+
+  it('does not throw for a tag name that is a member of Object.prototype', () => {
+    const tag = 'constructor' as unknown as 'div';
+    expect(getNativeElementProps(tag, { id: 'a', href: '#' })).toEqual({ id: 'a' });
+    expect(getNativeElementProps('toString' as unknown as 'div', { id: 'a' })).toEqual({ id: 'a' });
   });
 
   it('drops the props only a component understands', () => {
@@ -259,6 +324,8 @@ describe('getNativeElementProps', () => {
 
 /** A plausible value for each attribute whose value is no string. */
 const VALUES: Record<string, unknown> = {
+  suppressHydrationWarning: true,
+  suppressContentEditableWarning: true,
   style: { color: 'red' },
   tabIndex: 0,
   hidden: true,
@@ -348,7 +415,7 @@ describe('React accepts every attribute the lists keep', () => {
     try {
       const own = (NATIVE_TAG_PROPS as Record<string, string | undefined>)[tag];
       const keys = [...names(NATIVE_GLOBAL_PROPS), ...(own ? names(own) : [])].filter(
-        (key) => key !== 'ref' && key !== 'key',
+        (key) => key !== 'ref',
       );
       // A control takes either the controlled or the default value, not both.
       for (const skip of [
@@ -356,7 +423,6 @@ describe('React accepts every attribute the lists keep', () => {
         ['value', 'checked'],
       ]) {
         const props: Record<string, unknown> = {
-          key: 'k',
           ref: () => {},
           'data-x': '1',
           'aria-label': 'l',
@@ -367,15 +433,15 @@ describe('React accepts every attribute the lists keep', () => {
         if (tag === 'select')
           for (const key of ['value', 'defaultValue']) if (key in props) props[key] = ['x'];
         if (tag === 'button' || tag === 'input') props.type = 'submit';
+        const noCapture = names(NATIVE_NO_CAPTURE_EVENTS);
         for (const event of names(NATIVE_EVENT_NAMES)) {
           props[`on${event}`] = () => {};
-          // React has no capture-phase handler for these.
-          if (!/Enter|Leave|Toggle/.test(event)) props[`on${event}Capture`] = () => {};
+          if (!noCapture.includes(event)) props[`on${event}Capture`] = () => {};
         }
         const wrap = PARENTS[tag] ?? ((child: React.ReactElement) => child);
         const kept = getNativeElementProps(tag, { ...props, appearance: 'x' });
         expect(kept).not.toHaveProperty('appearance');
-        expect(Object.keys(kept).length).toBeGreaterThan(Object.keys(props).length - 1);
+        expect(Object.keys(kept).sort()).toEqual(Object.keys(props).sort());
         const { unmount } = render(wrap(React.createElement(tag, kept as object)));
         unmount();
       }
