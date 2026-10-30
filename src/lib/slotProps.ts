@@ -66,7 +66,7 @@ export interface SlotPartOwn {
    * activate, as a `disabledFocusable` control: the consumer's click never runs, as on a
    * natively disabled element.
    */
-  blockHandlers?: readonly string[] | true;
+  blockHandlers?: true | readonly `on${Capitalize<string>}`[];
 }
 
 type Props = Record<string, unknown>;
@@ -80,6 +80,10 @@ const HANDLER_KEY = /^on[A-Z]/;
 const NOT_FORWARDED = new Set(['children', 'as', 'key', 'dangerouslySetInnerHTML', '__proto__']);
 /** The merged ref of each pair of refs, so the result is stable while both refs are. */
 const mergedRefs = new WeakMap<object, WeakMap<object, React.RefCallback<unknown>>>();
+
+/** A value React takes as a ref: a callback or a ref object (`cond && ref` may give neither). */
+const isRef = (value: unknown): value is object =>
+  typeof value === 'function' || (typeof value === 'object' && value !== null);
 
 /** Copies the values of `source` that are not `null` or `undefined` into `target`. */
 function assignPresent(target: Props, source: Props): Props {
@@ -119,7 +123,9 @@ function mergeRefPair(ours: object, theirs: object): React.RefCallback<unknown> 
  *   neither side has a value.
  * - **Id lists** (`aria-describedby`, `aria-labelledby`, the lists `mergeProps` joins) are
  *   joined, the component's ids first (locked, else default), then the consumer's, without
- *   duplicates: a consumer id adds to the component's wiring and never removes it.
+ *   duplicates: a consumer id adds to the component's wiring and never removes it. Only a
+ *   string counts as a consumer list. A joined list the component does not give (in neither
+ *   `defaults` nor `locked`) comes after the locked attributes in the markup's attribute order.
  * - **Handlers** (a key of `on` and a capital letter; only a function counts, so
  *   `onClick: cond && fn` never removes anything) run the consumer's first, then the
  *   component's through `composeEventHandlers`, unless the consumer called `preventDefault()`.
@@ -132,8 +138,10 @@ function mergeRefPair(ours: object, theirs: object): React.RefCallback<unknown> 
  *   `checkDefaultPrevented: false`.
  * - **`ref`**: both refs merged with `mergeRefs` (the same merged callback for the same pair of
  *   refs, so React keeps it attached across renders while both refs stay the same); one ref
- *   is passed through as it is. Pass the component's own as a stable callback ref
- *   (`useMergedRefs(localRef)`): the `react-hooks/refs` lint rejects a ref object here. A part
+ *   is passed through as it is; a value that is neither a function nor an object
+ *   (`ref: cond && myRef`) is no ref and is skipped. Pass the component's own as a stable
+ *   callback ref (`useMergedRefs(localRef)`): the `react-hooks/refs` lint rejects a ref object
+ *   here. A part
  *   whose own ref must never be detached, even while the consumer passes an inline ref, gets
  *   no `own.ref` and sets `ref={useMergedRefs(localRef, slotProps?.track?.ref)}` after the
  *   spread instead.
@@ -143,14 +151,21 @@ function mergeRefPair(ours: object, theirs: object): React.RefCallback<unknown> 
  *   in order after the component's, and every consumer handler in order (each runs; the
  *   component's runs after them unless one prevented the default); `locked` still wins last.
  *   `undefined` entries are skipped; an empty array is no part. A single part behaves exactly
- *   as an array of one.
+ *   as an array of one. Input's recipe: `mergeSlotProps([slotProps?.root, slotProps?.input],
+ *   own)` compiles with no type argument (it infers `'span'`, which both parts fit) or with
+ *   `<'span' | 'input'>`, never with `<'input'>`. Without content slots the root part is
+ *   spread on the input element, so Input types the root part's ref for any element:
+ *   `Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> }`.
  * - **Never forwarded:** `children`, `as`, `key` and `dangerouslySetInnerHTML` (type errors on
  *   {@link SlotPart}; the component owns the part's content and element), and an own
  *   `__proto__` key (parsed JSON), which never reaches the result or its prototype.
  * - **No part, or `{}`:** exactly `{ ...defaults, className, style, ref, ...locked }`, each of
  *   the three only when given: the same props and the same markup as before the part existed.
  *
- * `className`, `style` and `ref` belong in `own` itself, never in `defaults` or `locked`.
+ * `className`, `style` and `ref` belong in `own` itself, never in `defaults` or `locked`. A
+ * handler belongs in one of `defaults` and `locked`, never both: a locked `undefined` next to a
+ * default handler hides the default only while the consumer gives no handler of that key; with
+ * one, the default runs after it again.
  *
  * Fluent UI's nearest counterpart is `slot.always(props.<part>, { defaultProps })`, which
  * merges by a shallow spread: there a consumer handler or ref replaces the component's.
@@ -178,23 +193,25 @@ export function mergeSlotProps<E extends keyof React.JSX.IntrinsicElements = 'sp
 ): Record<string, unknown> {
   const defaults = own.defaults ?? {};
   const locked = own.locked ?? {};
-  const blocked = own.blockHandlers;
+  const blocked = own.blockHandlers as true | readonly string[] | undefined;
   const result: Props = { ...defaults };
   const classes: unknown[] = [];
   /** The consumer's handlers and id lists, in layer order, for each key. */
   const lists: Record<string, unknown[]> = {};
   let style = own.style as Props | undefined;
-  let ref = own.ref;
+  let ref: React.Ref<unknown> | undefined = isRef(own.ref) ? own.ref : undefined;
 
   for (const layer of [part].flat() as (Props | undefined)[]) {
     for (const [key, value] of Object.entries(layer ?? {})) {
       if (value == null || NOT_FORWARDED.has(key)) continue;
       const handler = HANDLER_KEY.test(key);
       if (handler || ID_LIST_KEYS.has(key)) {
-        // Only a function counts as a handler: `onClick: cond && fn` never removes ours.
+        // Only a function counts as a handler (`onClick: cond && fn` never removes ours), and
+        // only a string as an id list.
         if (
-          !handler ||
-          (typeof value === 'function' && blocked !== true && !blocked?.includes(key))
+          handler
+            ? typeof value === 'function' && blocked !== true && !blocked?.includes(key)
+            : typeof value === 'string'
         ) {
           (lists[key] ??= []).push(value);
         }
@@ -203,7 +220,7 @@ export function mergeSlotProps<E extends keyof React.JSX.IntrinsicElements = 'sp
       } else if (key === 'style') {
         style = assignPresent({ ...style }, value as Props);
       } else if (key === 'ref') {
-        ref = ref ? mergeRefPair(ref, value as object) : (value as React.Ref<unknown>);
+        if (isRef(value)) ref = ref ? mergeRefPair(ref, value) : (value as React.Ref<unknown>);
       } else {
         result[key] = value;
       }

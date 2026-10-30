@@ -271,6 +271,10 @@ describe('mergeSlotProps handlers', () => {
     );
     fire(merged, 'onClick');
     expect(calls).toEqual(['consumer', 'default']);
+    // Without a consumer handler the locked undefined hides the default (the documented edge of
+    // a handler in both defaults and locked).
+    const own: SlotPartOwn = { defaults: { onClick: () => {} }, locked: { onClick: undefined } };
+    expect(mergeSlotProps(undefined, own).onClick).toBeUndefined();
   });
 
   it('replaces a function-valued attribute that is no handler (on and a capital letter)', () => {
@@ -338,6 +342,33 @@ describe('mergeSlotProps refs', () => {
     expect(mergeSlotProps(asPart({ ref: null }), { ref: ours }).ref).toBe(ours);
     expect('ref' in mergeSlotProps({}, {})).toBe(false);
   });
+
+  it.each<[string, unknown]>([
+    ['false', false],
+    ['0', 0],
+    ["''", ''],
+    ['NaN', NaN],
+    ["'x'", 'x'],
+    ['5', 5],
+  ])(
+    'skips a consumer ref that is no function or object (%s), without throwing',
+    (_label, value) => {
+      const ours = vi.fn<(node: unknown) => void>();
+      const theirs = React.createRef<HTMLSpanElement>();
+      const bad = asPart({ ref: value });
+      expect(mergeSlotProps(bad, { ref: ours }).ref).toBe(ours);
+      expect('ref' in mergeSlotProps(bad, {})).toBe(false);
+      expect(mergeSlotProps([bad, bad], { ref: ours }).ref).toBe(ours);
+      expect(mergeSlotProps([{ ref: theirs }, bad], {}).ref).toBe(theirs);
+      expect(mergeSlotProps([bad, { ref: theirs }], { ref: ours }).ref).toBe(
+        mergeSlotProps({ ref: theirs }, { ref: ours }).ref,
+      );
+      // The component's own value is held to the same rule (`ref: cond && localRef`).
+      expect(mergeSlotProps({ ref: theirs }, { ref: value as SlotPartOwn['ref'] }).ref).toBe(
+        theirs,
+      );
+    },
+  );
 
   it('gives the same merged ref for the same pair of refs, and a new one for a new pair', () => {
     const ours = vi.fn();
@@ -500,6 +531,33 @@ describe('mergeSlotProps id lists', () => {
       { locked: { 'aria-describedby': undefined } },
     );
     expect(merged['aria-describedby']).toBe('hint');
+  });
+
+  it.each<[string, unknown]>([
+    ['5', 5],
+    ['true', true],
+    ["['hint']", ['hint']],
+    ['{}', {}],
+  ])('skips a consumer list that is no string (%s), without throwing', (_label, value) => {
+    const bad = asPart({ 'aria-describedby': value, 'aria-labelledby': value });
+    const merged = mergeSlotProps([bad, { 'aria-labelledby': 'mine' }], {
+      locked: { 'aria-describedby': 'message' },
+      defaults: { 'aria-labelledby': 'label' },
+    });
+    expect(merged['aria-describedby']).toBe('message');
+    expect(merged['aria-labelledby']).toBe('label mine');
+    expect('aria-describedby' in mergeSlotProps(bad, {})).toBe(false);
+  });
+
+  it('puts a joined list the component does not give after the locked attributes', () => {
+    const merged = mergeSlotProps(
+      { 'aria-describedby': 'hint', title: 'Mine' },
+      { defaults: { id: 'part-1' }, locked: { role: 'switch' } },
+    );
+    expect(Object.keys(merged)).toEqual(['id', 'title', 'role', 'aria-describedby']);
+    expect(renderToStaticMarkup(<span {...merged} />)).toBe(
+      '<span id="part-1" title="Mine" role="switch" aria-describedby="hint"></span>',
+    );
   });
 
   it('keeps the component ids on a rendered part', () => {
@@ -836,10 +894,15 @@ describe('mergeSlotProps on real elements', () => {
 describe('mergeSlotProps invariants (seeded random combinations)', () => {
   const ATTRIBUTE_KEYS = ['id', 'role', 'title', 'tabIndex', 'aria-label', 'data-state'];
   const ID_LIST_KEY = 'aria-describedby';
-  const HANDLER_KEYS = ['onClick', 'onKeyDown', 'onFocus'];
+  const HANDLER_KEYS = ['onClick', 'onKeyDown', 'onFocus'] as const;
   /** Handler values that are no function: they must never remove or replace ours. */
   const NOT_HANDLERS = [undefined, null, false, 0, '', 'x', {}];
   const IDS = ['id-a', 'id-b shared', 'shared', 'id-c id-a'];
+  /** Id-list and ref values a consumer may pass by mistake: skipped, never thrown on. */
+  const NOT_IDS = [5, true, ['id-a'], {}];
+  const NOT_REFS = [false, 0, '', NaN, 'x', 5];
+  const isRefLike = (value: unknown) =>
+    typeof value === 'function' || (typeof value === 'object' && value !== null);
   const RUNS = 600;
 
   /** mulberry32: a small seeded generator, so a failing case is reproducible from its run. */
@@ -881,7 +944,7 @@ describe('mergeSlotProps invariants (seeded random combinations)', () => {
       if (random() < 0.5) defaults[ID_LIST_KEY] = pick(IDS);
       if (random() < 0.4) locked[ID_LIST_KEY] = random() < 0.8 ? pick(IDS) : undefined;
       for (const layer of layers) {
-        if (random() < 0.5) layer[ID_LIST_KEY] = pick(IDS);
+        if (random() < 0.5) layer[ID_LIST_KEY] = random() < 0.75 ? pick(IDS) : pick(NOT_IDS);
       }
       for (const key of HANDLER_KEYS) {
         if (random() < 0.5) defaults[key] = handler(`default:${key}`, false);
@@ -897,13 +960,41 @@ describe('mergeSlotProps invariants (seeded random combinations)', () => {
       const b = random();
       const blockHandlers: SlotPartOwn['blockHandlers'] =
         b < 0.6 ? undefined : b < 0.85 ? HANDLER_KEYS.filter(() => random() < 0.5) : true;
-      const isBlocked = (key: string) => blockHandlers === true || !!blockHandlers?.includes(key);
+      const isBlocked = (key: string) =>
+        blockHandlers === true ||
+        (blockHandlers as readonly string[] | undefined)?.includes(key) === true;
       const ownClass = pick([undefined, 'own-a', 'own-a own-b']);
       for (const [index, layer] of layers.entries()) {
         const theirClass = pick([undefined, '', `their-${index}`]);
         if (theirClass !== undefined) layer.className = theirClass;
       }
-      const own: SlotPartOwn = { className: ownClass, defaults, locked, blockHandlers };
+      const refCalls: string[] = [];
+      const refNames = new Map<unknown, string>();
+      const refOf = (name: string): unknown => {
+        const r = random();
+        const ref =
+          r < 0.35
+            ? (node: unknown) => void refCalls.push(`${name}:${node === null ? 'null' : 'node'}`)
+            : r < 0.55
+              ? { current: null }
+              : r < 0.8
+                ? pick(NOT_REFS)
+                : undefined;
+        if (isRefLike(ref)) refNames.set(ref, name);
+        return ref;
+      };
+      const ownRef = refOf('own') as SlotPartOwn['ref'];
+      for (const [index, layer] of layers.entries()) {
+        const ref = refOf(`consumer${index}`);
+        if (ref !== undefined) layer.ref = ref;
+      }
+      const own: SlotPartOwn = {
+        className: ownClass,
+        defaults,
+        locked,
+        blockHandlers,
+        ref: ownRef,
+      };
       const parts = layers.map(asPart);
       const merged = mergeSlotProps(parts.length === 1 ? parts[0] : parts, own);
       const fail = (message: string) => failures.push(`run ${run}: ${message}`);
@@ -917,8 +1008,8 @@ describe('mergeSlotProps invariants (seeded random combinations)', () => {
       }
 
       const consumerIds = layers
-        .map((layer) => layer[ID_LIST_KEY] as string | undefined)
-        .filter((ids): ids is string => ids != null);
+        .map((layer) => layer[ID_LIST_KEY])
+        .filter((ids): ids is string => typeof ids === 'string');
       const ownIds = (ID_LIST_KEY in locked ? locked : defaults)[ID_LIST_KEY] as string | undefined;
       const expectedIds = consumerIds.length
         ? joinIds(ownIds, ...consumerIds)
@@ -969,16 +1060,41 @@ describe('mergeSlotProps invariants (seeded random combinations)', () => {
       }
       if (expectedClass === undefined && 'className' in merged) fail('className without a class');
 
+      // Refs: the component's, then each part's, every one that is a function or an object.
+      const refs = [ownRef, ...layers.map((layer) => layer.ref)].filter(isRefLike);
+      if (refs.length === 0 && 'ref' in merged) fail('ref without a ref');
+      if (refs.length === 1 && merged.ref !== refs[0]) fail('one ref is not passed through');
+      if (refs.length > 1) {
+        const node = {};
+        refCalls.length = 0;
+        const cleanup = (merged.ref as (node: unknown) => () => void)(node);
+        const callbacks = refs.filter((ref) => typeof ref === 'function');
+        const attached = callbacks.map((ref) => `${refNames.get(ref)}:node`);
+        if (refCalls.join() !== attached.join()) {
+          fail(`the refs got ${refCalls.join(', ')}, not ${attached.join(', ')}`);
+        }
+        const objects = refs.filter((ref) => typeof ref === 'object') as { current: unknown }[];
+        if (objects.some((ref) => ref.current !== node)) fail('an object ref was not attached');
+        cleanup();
+        if (objects.some((ref) => ref.current !== null)) fail('an object ref was not detached');
+      }
+
       const allowed = new Set(['className', ...Object.keys(defaults), ...Object.keys(locked)]);
       for (const layer of layers) {
         for (const key of Object.keys(layer)) {
           const value = layer[key];
-          const isHandler = HANDLER_KEYS.includes(key);
-          if (isHandler ? typeof value === 'function' && !isBlocked(key) : value != null) {
-            allowed.add(key);
-          }
+          const forwarded = (HANDLER_KEYS as readonly string[]).includes(key)
+            ? typeof value === 'function' && !isBlocked(key)
+            : key === ID_LIST_KEY
+              ? typeof value === 'string'
+              : key === 'ref'
+                ? isRefLike(value)
+                : value != null;
+          if (forwarded) allowed.add(key);
         }
       }
+      if (refs.length) allowed.add('ref');
+      else allowed.delete('ref');
       for (const key of Object.keys(merged)) {
         if (!allowed.has(key)) fail(`unexpected key ${key}`);
       }
@@ -1089,6 +1205,17 @@ describe('SlotPart and mergeSlotProps types', () => {
     expectTypeOf(inferred([slotProps.root, slotProps.input], {})).toEqualTypeOf<'span'>();
     expectTypeOf(inferred([slotProps.input, slotProps.root], {})).toEqualTypeOf<'span'>();
     expectTypeOf(inferred([], {})).toEqualTypeOf<'span'>();
+
+    // Input's recipe, with its root part's ref typed for any element (the JSDoc's advice).
+    type InputRootPart = Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
+    const input: { root?: InputRootPart; input?: SlotPart<'input'> } = {};
+    expect(mergeSlotProps([input.root, input.input], {})).toStrictEqual({});
+    expect(mergeSlotProps<'span' | 'input'>([input.root, input.input], {})).toStrictEqual({});
+    expect(mergeSlotProps<'span' | 'input'>([slotProps.root, slotProps.input], {})).toStrictEqual(
+      {},
+    );
+    // @ts-expect-error a span root is no input part
+    expect(mergeSlotProps<'input'>([slotProps.root, slotProps.input], {})).toStrictEqual({});
     expectTypeOf(inferred(slotProps.button, {})).toEqualTypeOf<'button'>();
     expectTypeOf(inferred(undefined, {})).toEqualTypeOf<'span'>();
     expectTypeOf(inferred({ title: 'Inline' }, {})).toEqualTypeOf<'span'>();
@@ -1120,13 +1247,17 @@ describe('SlotPart and mergeSlotProps types', () => {
     expect(mergeSlotProps([{ children: 'x' }], {})).toStrictEqual({});
 
     expectTypeOf<SlotPartOwn['blockHandlers']>().toEqualTypeOf<
-      readonly string[] | true | undefined
+      true | readonly `on${Capitalize<string>}`[] | undefined
     >();
     const blockAll: SlotPartOwn = { blockHandlers: true };
     const blockSome: SlotPartOwn = { blockHandlers: ['onClick'] as const };
     // @ts-expect-error false is not a value: leave the option out
     const blockNone: SlotPartOwn = { blockHandlers: false };
-    expect([blockAll, blockSome, blockNone]).toHaveLength(3);
+    // @ts-expect-error a handler key is on and a capital letter: a typo is caught
+    const blockTypo: SlotPartOwn = { blockHandlers: ['onclick'] };
+    // @ts-expect-error nor is an attribute a handler key
+    const blockAttribute: SlotPartOwn = { blockHandlers: ['title'] };
+    expect([blockAll, blockSome, blockNone, blockTypo, blockAttribute]).toHaveLength(5);
   });
 });
 

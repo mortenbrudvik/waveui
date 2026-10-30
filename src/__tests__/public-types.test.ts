@@ -2224,7 +2224,7 @@ describe('0.18 customization surface from the package entry', () => {
       ref?: Ref<unknown>;
       defaults?: Record<string, unknown>;
       locked?: Record<string, unknown>;
-      blockHandlers?: readonly string[] | true;
+      blockHandlers?: true | readonly `on${Capitalize<string>}`[];
     }>();
 
     // @ts-expect-error a part never takes children
