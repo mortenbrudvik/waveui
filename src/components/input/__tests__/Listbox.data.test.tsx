@@ -104,7 +104,8 @@ describe('Listbox data mode (items)', () => {
   });
 
   it('selects by typeahead over the labels of items', async () => {
-    const user = userEvent.setup();
+    // delay: null types all keys in one task: the 500 ms typeahead timer cannot fire between them.
+    const user = userEvent.setup({ delay: null });
     const onValueChange = vi.fn();
     renderData({ onValueChange });
     await user.tab();
@@ -395,7 +396,8 @@ describe('Listbox windowed options (virtualWindow)', () => {
   });
 
   it('End, Home, PageDown and typeahead move over the data, and the window with them', async () => {
-    const user = userEvent.setup();
+    // delay: null types all keys in one task: the 500 ms typeahead timer cannot fire between them.
+    const user = userEvent.setup({ delay: null });
     render(<WindowedListbox />);
     await user.tab();
     await user.keyboard('{End}');

@@ -925,6 +925,7 @@ describe('Tooltip openDelay', () => {
 ```
 
 - Wrap direct `vi.advanceTimersByTime(…)` calls in `act()`: timers that set state outside `act()` log warnings.
+- Multi-character typeahead tests (`user.keyboard('Item 42')`) set up `userEvent.setup({ delay: null })`: the 500 ms typeahead buffer is a real timer that a slow runner exceeds between keys typed with the default delay, and without a delay every key of one `keyboard()` call runs in one task, before the timer can fire (strict fake timers would hang the awaited call).
 - `queueMicrotask` stays real (never add it to `toFake`). Focus moves that run in a microtask (a removed toast moving focus on, a focus trap returning focus that landed outside it) are asserted after `await act(async () => {})` or a `userEvent` action: after `act(() => el.focus())` on an element outside an open Dialog, Drawer or DatePicker calendar, flush before asserting where focus ended up. Focus-outside dismissal is decided in a microtask too: after focusing an element outside an open Menu, listbox popup, AvatarGroup popup or InfoLabel popup with a synchronous `act(() => el.focus())`, flush (or write `await act(async () => el.focus())`) before asserting that it closed.
 - Switch back to real timers (or keep `shouldAdvanceTime`) before an axe audit.
 - Tooltip's 0.6 `delay` prop is deprecated and warns: write `openDelay` (and `closeDelay`); keep `delay` only in a test that asserts the deprecation warning.

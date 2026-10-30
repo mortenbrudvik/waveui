@@ -115,7 +115,8 @@ describe('Dropdown data mode (items)', () => {
   });
 
   it('selects by typeahead over the labels of items', async () => {
-    const user = userEvent.setup();
+    // delay: null types all keys in one task: the 500 ms typeahead timer cannot fire between them.
+    const user = userEvent.setup({ delay: null });
     const onValueChange = vi.fn();
     renderData({ onValueChange });
     combobox().focus();
@@ -471,7 +472,8 @@ describe('Dropdown windowed options (virtualWindow)', () => {
   });
 
   it('typeahead finds an item anywhere in the data and moves the window to it in the same update', async () => {
-    const user = userEvent.setup();
+    // delay: null types all keys in one task: the 500 ms typeahead timer cannot fire between them.
+    const user = userEvent.setup({ delay: null });
     render(<WindowedDropdown />);
     combobox().focus();
     await user.keyboard('Item 7777');
