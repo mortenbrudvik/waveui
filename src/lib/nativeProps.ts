@@ -87,16 +87,17 @@ function getAllowedNames(tag: string): ReadonlySet<string> {
  * It keeps the global attributes (`id`, `className`, `style`, `title`, `lang`, `dir`, `hidden`,
  * `role`, `tabIndex`, `draggable`, `contentEditable`, `spellCheck`, `translate`, `accessKey`,
  * `slot`, `inert`, `popover`, `autoFocus`, `autoCapitalize`, `inputMode`, `enterKeyHint`, `nonce`,
- * `suppressHydrationWarning` and `suppressContentEditableWarning`), every DOM
- * event handler (`onClick`, and the capture-phase `onClickCapture` where React has one), every
- * `data-*` and `aria-*` attribute and `ref`, plus the attributes of the tag for `a`, `button`,
- * `img`, `input`, `label`, `li`, `ol`, `option`, `select`, `td`, `textarea` and `th` (`div`,
- * `span`, `ul` and the table containers have none of their own). A tag outside that table keeps
- * the global set only: the attributes of `form`, `video`, `audio`, `iframe`, `dialog`, `details`,
- * `progress`, `meter`, `fieldset` and the other tags are deliberately a later addition, as are the
- * global `part`, `exportparts`, `is` and microdata (`itemProp`, …) attributes, `media` on `a`, `useMap`
- * on `img` and `popoverTarget` on `input`: they are dropped. Everything else is dropped too, `children` and `key`
- * included (`key` is no prop, and React warns when a props object that carries one is spread).
+ * `suppressHydrationWarning` and `suppressContentEditableWarning`), every DOM event handler
+ * (`onClick`, and the capture-phase `onClickCapture` where React has one), every `data-*` and
+ * `aria-*` attribute and `ref`, plus the attributes of the tag for `a`, `button`, `img`, `input`,
+ * `label`, `li`, `ol`, `option`, `select`, `td`, `textarea` and `th` (`div`, `span`, `ul` and the
+ * table containers have none of their own). A tag outside that table keeps the global set only:
+ * the attributes of `form`, `video`, `audio`, `iframe`, `dialog`, `details`, `progress`, `meter`,
+ * `fieldset` and the other tags are deliberately a later addition, as are the global `part`,
+ * `exportparts`, `is` and microdata (`itemProp`, …) attributes, `media` on `a`, `useMap` on `img`
+ * and `popoverTarget` on `input`; all of them are dropped. Everything else is dropped too,
+ * `children` and `key` included (`key` is no prop, and React warns when a props object that
+ * carries one is spread).
  * Server-safe: the module holds no React runtime and touches no DOM, and it costs nothing in a
  * bundle that does not import it.
  *
