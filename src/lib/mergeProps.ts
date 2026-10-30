@@ -18,7 +18,8 @@ type AnyHandler = (event: { defaultPrevented: boolean }) => void;
 type UnknownProps = Record<string, unknown>;
 
 const HANDLER_KEY = /^on[A-Z]/;
-const ID_LIST_KEYS = new Set(['aria-describedby', 'aria-labelledby']);
+/** The id reference lists that merge by joining (here and in `mergeSlotProps`). */
+export const ID_LIST_KEYS: ReadonlySet<string> = new Set(['aria-describedby', 'aria-labelledby']);
 
 /**
  * Merges the props a component wants to put on an element (`ours`) with the props the consumer or

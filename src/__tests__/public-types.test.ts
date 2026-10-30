@@ -2210,7 +2210,7 @@ describe('0.18 customization surface from the package entry', () => {
   it('mergeSlotProps, the parts it merges and what the component puts on them', () => {
     expectTypeOf<Entry['mergeSlotProps']>().toEqualTypeOf<
       <E extends keyof JSX.IntrinsicElements = 'span'>(
-        part: SlotPart<E> | undefined,
+        part: SlotPart<E> | readonly (SlotPart<E> | undefined)[] | undefined,
         own: SlotPartOwn,
       ) => Record<string, unknown>
     >();
@@ -2224,6 +2224,7 @@ describe('0.18 customization surface from the package entry', () => {
       ref?: Ref<unknown>;
       defaults?: Record<string, unknown>;
       locked?: Record<string, unknown>;
+      blockHandlers?: readonly string[] | true;
     }>();
 
     // @ts-expect-error a part never takes children

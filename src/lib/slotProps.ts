@@ -1,6 +1,8 @@
 import type * as React from 'react';
+import { joinIds } from './aria';
 import { cn } from './cn';
 import { composeEventHandlers } from './composeEventHandlers';
+import { ID_LIST_KEYS } from './mergeProps';
 import { mergeRefs } from './mergeRefs';
 
 /**
@@ -40,8 +42,9 @@ export interface SlotPartOwn {
   style?: React.CSSProperties;
   /**
    * The component's ref to the part's element, merged with the consumer's: a stable callback
-   * ref (a `useMergedRefs` result, a state setter). The React Compiler's lint rejects a ref
-   * object, or the component's `ref` prop itself, passed to a function during render.
+   * ref, preferably a `useMergedRefs` result (a state setter also works, but is set again on
+   * each render in which the consumer passes an inline ref). The React Compiler's lint rejects
+   * a ref object, or the component's `ref` prop itself, passed to a function during render.
    */
   ref?: React.Ref<unknown>;
   /**
@@ -52,33 +55,36 @@ export interface SlotPartOwn {
   /**
    * Attributes and handlers the component's wiring needs (role, id, the ARIA references, the
    * tab index, the disabled and hidden state, the Field wiring): an attribute here always wins,
-   * also when its value is `undefined`; a handler here runs after the consumer's (which may
-   * cancel it with `preventDefault()`) and is never replaced. Never `className`, `style` or `ref`.
+   * also when its value is `undefined` (an id list is joined instead: see
+   * {@link mergeSlotProps}); a handler here runs after the consumer's (which may cancel it with
+   * `preventDefault()`) and is never replaced. Never `className`, `style` or `ref`.
    */
   locked?: Record<string, unknown>;
+  /**
+   * Handler keys whose consumer handlers are dropped, neither called nor forwarded (`true`:
+   * every handler); the component's own handler of the key stays. For a part that must not
+   * activate, as a `disabledFocusable` control: the consumer's click never runs, as on a
+   * natively disabled element.
+   */
+  blockHandlers?: readonly string[] | true;
 }
 
 type Props = Record<string, unknown>;
 type Handler = (event: { defaultPrevented: boolean }) => void;
 
 const HANDLER_KEY = /^on[A-Z]/;
-/** Keys never taken from a part: merged on their own, or owned by the component. */
-const NOT_FORWARDED = new Set([
-  'className',
-  'style',
-  'ref',
-  'children',
-  'as',
-  'key',
-  'dangerouslySetInnerHTML',
-]);
+/**
+ * Keys never taken from a part: owned by the component, or (`__proto__`, an own key of parsed
+ * JSON) one whose assignment would replace the result's prototype.
+ */
+const NOT_FORWARDED = new Set(['children', 'as', 'key', 'dangerouslySetInnerHTML', '__proto__']);
 /** The merged ref of each pair of refs, so the result is stable while both refs are. */
 const mergedRefs = new WeakMap<object, WeakMap<object, React.RefCallback<unknown>>>();
 
 /** Copies the values of `source` that are not `null` or `undefined` into `target`. */
-function assignPresent(target: Props, source: Props, skip?: ReadonlySet<string>): Props {
+function assignPresent(target: Props, source: Props): Props {
   for (const key of Object.keys(source)) {
-    if (source[key] != null && !skip?.has(key)) target[key] = source[key];
+    if (source[key] != null && key !== '__proto__') target[key] = source[key];
   }
   return target;
 }
@@ -111,20 +117,36 @@ function mergeRefPair(ours: object, theirs: object): React.RefCallback<unknown> 
  *   through untouched, so the markup cannot change.
  * - **`style`** is the component's object with the consumer's keys over it; omitted when
  *   neither side has a value.
- * - **Handlers** (a key of `on` and a capital letter whose consumer value is a function) run
- *   the consumer's first, then the component's through `composeEventHandlers`, unless the
- *   consumer called `preventDefault()`. A locked handler is composed the same way, never
- *   replaced, and never removes the consumer's; it takes the place of a default handler of the
- *   same key. A handler only one side has is passed through as it is. A function-valued prop
- *   that is no handler (`formAction`) is replaced like any attribute. Internal work that must
- *   run even when the consumer prevents the default is composed after the spread, with
+ * - **Id lists** (`aria-describedby`, `aria-labelledby`, the lists `mergeProps` joins) are
+ *   joined, the component's ids first (locked, else default), then the consumer's, without
+ *   duplicates: a consumer id adds to the component's wiring and never removes it.
+ * - **Handlers** (a key of `on` and a capital letter; only a function counts, so
+ *   `onClick: cond && fn` never removes anything) run the consumer's first, then the
+ *   component's through `composeEventHandlers`, unless the consumer called `preventDefault()`.
+ *   A locked handler is composed the same way, never replaced, and never removes the
+ *   consumer's; it takes the place of a default handler of the same key. A handler only one
+ *   side has is passed through as it is. `own.blockHandlers` drops the consumer's handlers of
+ *   the keys it names (all with `true`). A function-valued prop that is no handler
+ *   (`formAction`) is replaced like any attribute. Internal work that must run even when the
+ *   consumer prevents the default is composed after the spread, with
  *   `checkDefaultPrevented: false`.
  * - **`ref`**: both refs merged with `mergeRefs` (the same merged callback for the same pair of
  *   refs, so React keeps it attached across renders while both refs stay the same); one ref
  *   is passed through as it is. Pass the component's own as a stable callback ref
- *   (`useMergedRefs(localRef)`): the `react-hooks/refs` lint rejects a ref object here.
+ *   (`useMergedRefs(localRef)`): the `react-hooks/refs` lint rejects a ref object here. A part
+ *   whose own ref must never be detached, even while the consumer passes an inline ref, gets
+ *   no `own.ref` and sets `ref={useMergedRefs(localRef, slotProps?.track?.ref)}` after the
+ *   spread instead.
+ * - **Several parts** (`[slotProps?.root, slotProps?.input]`, Input's two parts on one
+ *   element) apply left to right as layers of the consumer: classes in order after the
+ *   component's, style and attributes the later winning, id lists joined in order, refs merged
+ *   in order after the component's, and every consumer handler in order (each runs; the
+ *   component's runs after them unless one prevented the default); `locked` still wins last.
+ *   `undefined` entries are skipped; an empty array is no part. A single part behaves exactly
+ *   as an array of one.
  * - **Never forwarded:** `children`, `as`, `key` and `dangerouslySetInnerHTML` (type errors on
- *   {@link SlotPart}; the component owns the part's content and element).
+ *   {@link SlotPart}; the component owns the part's content and element), and an own
+ *   `__proto__` key (parsed JSON), which never reaches the result or its prototype.
  * - **No part, or `{}`:** exactly `{ ...defaults, className, style, ref, ...locked }`, each of
  *   the three only when given: the same props and the same markup as before the part existed.
  *
@@ -145,41 +167,73 @@ function mergeRefPair(ours: object, theirs: object): React.RefCallback<unknown> 
  *
  * @typeParam E - The part's element, inferred from `part` (`'span'` when nothing can be
  *   inferred, as for a part written inline).
- * @param part The consumer's props for the part (`slotProps?.track`), or `undefined`.
+ * @param part The consumer's props for the part (`slotProps?.track`), several parts applied in
+ *   order, or `undefined`.
  * @param own  What the component puts on the part.
  * @returns The props to spread on the part's element.
  */
 export function mergeSlotProps<E extends keyof React.JSX.IntrinsicElements = 'span'>(
-  part: SlotPart<E> | undefined,
+  part: SlotPart<E> | readonly (SlotPart<E> | undefined)[] | undefined,
   own: SlotPartOwn,
 ): Record<string, unknown> {
-  const theirs = (part ?? {}) as Props;
   const defaults = own.defaults ?? {};
   const locked = own.locked ?? {};
-  const result = assignPresent({ ...defaults }, theirs, NOT_FORWARDED);
+  const blocked = own.blockHandlers;
+  const result: Props = { ...defaults };
+  const classes: unknown[] = [];
+  /** The consumer's handlers and id lists, in layer order, for each key. */
+  const lists: Record<string, unknown[]> = {};
+  let style = own.style as Props | undefined;
+  let ref = own.ref;
 
-  const className = theirs.className
-    ? cn(own.className, theirs.className as string)
-    : own.className;
+  for (const layer of [part].flat() as (Props | undefined)[]) {
+    for (const [key, value] of Object.entries(layer ?? {})) {
+      if (value == null || NOT_FORWARDED.has(key)) continue;
+      const handler = HANDLER_KEY.test(key);
+      if (handler || ID_LIST_KEYS.has(key)) {
+        // Only a function counts as a handler: `onClick: cond && fn` never removes ours.
+        if (
+          !handler ||
+          (typeof value === 'function' && blocked !== true && !blocked?.includes(key))
+        ) {
+          (lists[key] ??= []).push(value);
+        }
+      } else if (key === 'className') {
+        if (value) classes.push(value);
+      } else if (key === 'style') {
+        style = assignPresent({ ...style }, value as Props);
+      } else if (key === 'ref') {
+        ref = ref ? mergeRefPair(ref, value as object) : (value as React.Ref<unknown>);
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+
+  const className = classes.length ? cn(own.className, classes) : own.className;
   if (className !== undefined) result.className = className;
-
-  const style = theirs.style ? assignPresent({ ...own.style }, theirs.style as Props) : own.style;
   if (own.style || (style && Object.keys(style).length)) result.style = style;
-
-  const theirRef = theirs.ref as React.Ref<unknown> | undefined;
-  const ref = own.ref && theirRef ? mergeRefPair(own.ref, theirRef) : (own.ref ?? theirRef);
   if (ref) result.ref = ref;
 
   Object.assign(result, locked);
-  for (const key of Object.keys(theirs)) {
-    const handler = theirs[key];
-    if (typeof handler === 'function' && HANDLER_KEY.test(key)) {
-      const ours = typeof locked[key] === 'function' ? locked[key] : defaults[key];
-      result[key] =
-        typeof ours === 'function'
-          ? composeEventHandlers(handler as Handler, ours as Handler)
-          : handler;
+  for (const [key, list] of Object.entries(lists)) {
+    if (!HANDLER_KEY.test(key)) {
+      result[key] = joinIds(
+        (key in locked ? locked : defaults)[key] as string,
+        ...(list as string[]),
+      );
+      continue;
     }
+    const handlers = list as Handler[];
+    const theirs: Handler =
+      handlers.length > 1
+        ? (event) => {
+            for (const handler of handlers) handler(event);
+          }
+        : handlers[0];
+    const ours = typeof locked[key] === 'function' ? locked[key] : defaults[key];
+    result[key] =
+      typeof ours === 'function' ? composeEventHandlers(theirs, ours as Handler) : theirs;
   }
   return result;
 }

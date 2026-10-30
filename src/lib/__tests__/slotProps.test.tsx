@@ -2,6 +2,7 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { joinIds } from '../aria';
 import { mergeSlotProps, type SlotPart, type SlotPartOwn } from '../slotProps';
 import slotPropsSource from '../slotProps.ts?raw';
 
@@ -229,14 +230,25 @@ describe('mergeSlotProps handlers', () => {
     expect(merged.onMouseDown).toBe(lockedOnly);
   });
 
-  it('never lets a nullish consumer handler remove ours', () => {
-    const ours = vi.fn();
-    for (const value of [null, undefined]) {
-      expect(
-        mergeSlotProps(asPart({ onClick: value }), { defaults: { onClick: ours } }).onClick,
-      ).toBe(ours);
-    }
-  });
+  it.each<[string, unknown]>([
+    ['null', null],
+    ['undefined', undefined],
+    ['false', false],
+    ['0', 0],
+    ["''", ''],
+    ["'x'", 'x'],
+    ['{}', {}],
+  ])(
+    'never lets a consumer handler value that is no function (%s) remove ours',
+    (_label, value) => {
+      const ours = vi.fn();
+      const part = asPart({ onClick: value, onKeyDown: value });
+      expect(mergeSlotProps(part, { defaults: { onClick: ours } }).onClick).toBe(ours);
+      expect(mergeSlotProps(part, { locked: { onClick: ours } }).onClick).toBe(ours);
+      // Nor is it forwarded where the component has no handler (`onClick: cond && fn`).
+      expect('onKeyDown' in mergeSlotProps(part, { defaults: { onClick: ours } })).toBe(false);
+    },
+  );
 
   it('composes the locked handler, not the default, when a key is in both', () => {
     const calls: string[] = [];
@@ -383,8 +395,6 @@ describe('mergeSlotProps defaults and locked attributes', () => {
     ['hidden', true, false],
     ['aria-checked', true, false],
     ['aria-controls', 'popup-1', 'other'],
-    ['aria-labelledby', 'label-1', 'other'],
-    ['aria-describedby', 'message-1', 'other'],
     ['aria-invalid', true, false],
   ])('keeps the locked %s over the consumer value', (key, ours, theirs) => {
     const merged = mergeSlotProps(asPart({ [key]: theirs }), {
@@ -445,6 +455,225 @@ describe('mergeSlotProps defaults and locked attributes', () => {
   });
 });
 
+describe('mergeSlotProps id lists', () => {
+  it.each(['aria-describedby', 'aria-labelledby'])(
+    'joins a locked %s with the consumer ids, the component ids first and once',
+    (key) => {
+      const merged = mergeSlotProps(asPart({ [key]: 'hint message' }), {
+        locked: { [key]: 'message label' },
+      });
+      expect(merged[key]).toBe('message label hint');
+    },
+  );
+
+  it('joins a default list with the consumer ids', () => {
+    const merged = mergeSlotProps(
+      { 'aria-describedby': 'hint' },
+      { defaults: { 'aria-describedby': 'message' } },
+    );
+    expect(merged['aria-describedby']).toBe('message hint');
+  });
+
+  it('takes the locked list over the default one before joining', () => {
+    const merged = mergeSlotProps(
+      { 'aria-labelledby': 'mine' },
+      { defaults: { 'aria-labelledby': 'default' }, locked: { 'aria-labelledby': 'label' } },
+    );
+    expect(merged['aria-labelledby']).toBe('label mine');
+  });
+
+  it('passes the consumer list alone, and leaves the component list alone without one', () => {
+    expect(mergeSlotProps({ 'aria-describedby': 'hint' }, {})['aria-describedby']).toBe('hint');
+    expect(
+      mergeSlotProps({}, { locked: { 'aria-describedby': 'message' } })['aria-describedby'],
+    ).toBe('message');
+    expect(
+      mergeSlotProps(asPart({ 'aria-describedby': undefined }), {
+        locked: { 'aria-describedby': 'message' },
+      })['aria-describedby'],
+    ).toBe('message');
+  });
+
+  it('adds the consumer ids to a locked list that is undefined (ids are only added)', () => {
+    const merged = mergeSlotProps(
+      { 'aria-describedby': 'hint' },
+      { locked: { 'aria-describedby': undefined } },
+    );
+    expect(merged['aria-describedby']).toBe('hint');
+  });
+
+  it('keeps the component ids on a rendered part', () => {
+    render(
+      <span
+        data-testid="part"
+        {...mergeSlotProps(
+          { 'aria-describedby': 'extra' },
+          { locked: { 'aria-describedby': 'message' } },
+        )}
+      />,
+    );
+    expect(screen.getByTestId('part')).toHaveAttribute('aria-describedby', 'message extra');
+  });
+});
+
+describe('mergeSlotProps blocked handlers', () => {
+  it('neither calls nor forwards the consumer handlers of the blocked keys', () => {
+    const consumer = vi.fn();
+    const ours = vi.fn();
+    const keyDown = vi.fn();
+    const merged = mergeSlotProps(
+      { onClick: consumer, onKeyDown: keyDown, title: 'Mine' },
+      { locked: { onClick: ours }, blockHandlers: ['onClick'] },
+    );
+    expect(merged.onClick).toBe(ours);
+    expect(merged.onKeyDown).toBe(keyDown);
+    expect(merged.title).toBe('Mine');
+    fire(merged, 'onClick');
+    expect(consumer).not.toHaveBeenCalled();
+    expect('onClick' in mergeSlotProps({ onClick: consumer }, { blockHandlers: ['onClick'] })).toBe(
+      false,
+    );
+  });
+
+  it('blocks every consumer handler with true, and still merges the attributes', () => {
+    const ours = vi.fn();
+    const merged = mergeSlotProps(
+      {
+        onClick: vi.fn(),
+        onKeyDown: vi.fn(),
+        onFocus: vi.fn(),
+        className: 'mine',
+        'data-part': 'root',
+        title: 'Mine',
+      },
+      { className: 'own', defaults: { onKeyDown: ours }, blockHandlers: true },
+    );
+    expect(merged).toStrictEqual({
+      onKeyDown: ours,
+      'data-part': 'root',
+      title: 'Mine',
+      className: 'own mine',
+    });
+  });
+
+  it('changes nothing without blockHandlers or with an empty list', () => {
+    for (const blockHandlers of [undefined, []]) {
+      const calls: string[] = [];
+      const merged = mergeSlotProps(
+        { onClick: () => calls.push('consumer') },
+        { defaults: { onClick: () => calls.push('ours') }, blockHandlers },
+      );
+      fire(merged, 'onClick');
+      expect(calls).toEqual(['consumer', 'ours']);
+    }
+  });
+
+  it('keeps a consumer click from reaching a disabledFocusable rendered part', () => {
+    const consumer = vi.fn();
+    const keyDown = vi.fn();
+    render(
+      <Toggle disabledFocusable slotProps={{ root: { onClick: consumer, onKeyDown: keyDown } }} />,
+    );
+    const button = screen.getByRole('button', { name: 'Bold' });
+    fireEvent.click(button);
+    fireEvent.keyDown(button, { key: 'a' });
+    expect(consumer).not.toHaveBeenCalled();
+    expect(keyDown).toHaveBeenCalledTimes(1);
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('mergeSlotProps with several parts', () => {
+  it('applies the parts left to right, then the locked attributes (Input root and input on one element)', () => {
+    const calls: string[] = [];
+    const ownRef = vi.fn<(node: unknown) => void>();
+    const rootRef = React.createRef<HTMLInputElement>();
+    const inputRef = React.createRef<HTMLInputElement>();
+    const root: SlotPart<'input'> = {
+      className: 'root-class',
+      style: { color: 'red', margin: 1 },
+      title: 'Root',
+      placeholder: 'Root',
+      id: 'mine',
+      'aria-describedby': 'root-hint',
+      ref: rootRef,
+      onClick: () => calls.push('root'),
+    };
+    const input: SlotPart<'input'> = {
+      className: 'input-class',
+      style: { color: 'blue' },
+      title: 'Input',
+      'aria-describedby': 'input-hint',
+      ref: inputRef,
+      onClick: () => calls.push('input'),
+    };
+    const merged = mergeSlotProps([root, input], {
+      className: 'wave-input',
+      ref: ownRef,
+      defaults: { placeholder: 'Default', title: 'Default' },
+      locked: { id: 'field-1', 'aria-describedby': 'message', onClick: () => calls.push('ours') },
+    });
+    expect(merged.className).toBe('wave-input root-class input-class');
+    expect(merged.style).toEqual({ color: 'blue', margin: 1 });
+    expect(merged.title).toBe('Input');
+    expect(merged.placeholder).toBe('Root');
+    expect(merged.id).toBe('field-1');
+    expect(merged['aria-describedby']).toBe('message root-hint input-hint');
+    fire(merged, 'onClick');
+    expect(calls).toEqual(['root', 'input', 'ours']);
+
+    render(<input {...merged} />);
+    const element = screen.getByRole('textbox');
+    expect(ownRef).toHaveBeenCalledWith(element);
+    expect(rootRef.current).toBe(element);
+    expect(inputRef.current).toBe(element);
+  });
+
+  it('runs every consumer handler, and the component one only when none prevented the default', () => {
+    const calls: string[] = [];
+    const merged = mergeSlotProps(
+      [
+        {
+          onKeyDown: (event) => {
+            calls.push('root');
+            event.preventDefault();
+          },
+        },
+        { onKeyDown: () => calls.push('input') },
+      ],
+      { locked: { onKeyDown: () => calls.push('ours') } },
+    );
+    fire(merged, 'onKeyDown');
+    expect(calls).toEqual(['root', 'input']);
+  });
+
+  it('skips undefined entries; an empty array is no part; one part equals an array of one', () => {
+    const ref = vi.fn<(node: unknown) => void>();
+    const own: SlotPartOwn = {
+      className: 'wave-input',
+      style: { margin: 1 },
+      ref,
+      defaults: { title: 'Default' },
+      locked: { id: 'field-1' },
+    };
+    const part: SlotPart<'span'> = {
+      className: 'mine',
+      style: { color: 'blue' },
+      title: 'Mine',
+      'data-part': 'root',
+      ref: React.createRef<HTMLSpanElement>(),
+    };
+    const none = mergeSlotProps(undefined, own);
+    expect(mergeSlotProps([], own)).toStrictEqual(none);
+    expect(mergeSlotProps([undefined, undefined], own)).toStrictEqual(none);
+    expect(mergeSlotProps([undefined, part, undefined], own)).toStrictEqual(
+      mergeSlotProps(part, own),
+    );
+    expect(mergeSlotProps([part], own)).toStrictEqual(mergeSlotProps(part, own));
+  });
+});
+
 describe('mergeSlotProps keys a part never forwards', () => {
   it('drops children, as, key and dangerouslySetInnerHTML at run time', () => {
     const merged = mergeSlotProps(
@@ -480,6 +709,66 @@ describe('mergeSlotProps keys a part never forwards', () => {
     expect(thumb).toBeEmptyDOMElement();
     expect(error).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('never lets an own __proto__ key (parsed JSON) reach the result, its style or Object.prototype', () => {
+    const objectKeys = Object.getOwnPropertyNames(Object.prototype).join();
+    const part = asPart(
+      JSON.parse(
+        '{"__proto__": {"role": "button", "polluted": 1}, "title": "Mine",' +
+          ' "style": {"__proto__": {"color": "red"}, "margin": 1}}',
+      ),
+    );
+    const merged = mergeSlotProps([part, part], {
+      locked: { role: 'switch' },
+      style: { padding: 2 },
+    });
+    expect(Object.getPrototypeOf(merged)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(merged.style)).toBe(Object.prototype);
+    expect(Object.hasOwn(merged, '__proto__')).toBe(false);
+    expect(merged).toStrictEqual({
+      title: 'Mine',
+      style: { padding: 2, margin: 1 },
+      role: 'switch',
+    });
+    expect(({} as Props).polluted).toBeUndefined();
+    expect(Object.getOwnPropertyNames(Object.prototype).join()).toBe(objectKeys);
+  });
+
+  it('keeps the locked attributes when a part carries a prototype with setters', () => {
+    const trap = {};
+    for (const key of ['role', 'aria-checked']) {
+      Object.defineProperty(trap, key, { set() {}, get: () => undefined });
+    }
+    const part = {};
+    Object.defineProperty(part, '__proto__', {
+      value: trap,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+    const merged = mergeSlotProps(asPart(part), {
+      locked: { role: 'switch', 'aria-checked': true },
+    });
+    expect(Object.hasOwn(merged, 'role')).toBe(true);
+    expect(renderToStaticMarkup(<span {...merged} />)).toBe(
+      '<span role="switch" aria-checked="true"></span>',
+    );
+  });
+
+  it('copies constructor, toString and prototype keys as plain data', () => {
+    const objectKeys = Object.getOwnPropertyNames(Object.prototype).join();
+    const merged = mergeSlotProps(asPart({ constructor: 'x', toString: 'y', prototype: 'z' }), {
+      locked: { role: 'switch' },
+    });
+    expect(Object.getPrototypeOf(merged)).toBe(Object.prototype);
+    expect(merged).toStrictEqual({
+      constructor: 'x',
+      toString: 'y',
+      prototype: 'z',
+      role: 'switch',
+    });
+    expect(Object.getOwnPropertyNames(Object.prototype).join()).toBe(objectKeys);
   });
 });
 
@@ -546,8 +835,12 @@ describe('mergeSlotProps on real elements', () => {
 
 describe('mergeSlotProps invariants (seeded random combinations)', () => {
   const ATTRIBUTE_KEYS = ['id', 'role', 'title', 'tabIndex', 'aria-label', 'data-state'];
+  const ID_LIST_KEY = 'aria-describedby';
   const HANDLER_KEYS = ['onClick', 'onKeyDown', 'onFocus'];
-  const RUNS = 400;
+  /** Handler values that are no function: they must never remove or replace ours. */
+  const NOT_HANDLERS = [undefined, null, false, 0, '', 'x', {}];
+  const IDS = ['id-a', 'id-b shared', 'shared', 'id-c id-a'];
+  const RUNS = 600;
 
   /** mulberry32: a small seeded generator, so a failing case is reproducible from its run. */
   function seeded(seed: number): () => number {
@@ -560,10 +853,11 @@ describe('mergeSlotProps invariants (seeded random combinations)', () => {
     };
   }
 
-  it('locked attributes win, the consumer class is last, its handler runs first and never removes a locked one', () => {
+  it('locked attributes win, consumer classes come last, consumer handlers run first and never remove ours', () => {
     const failures: string[] = [];
     for (let run = 1; run <= RUNS; run++) {
       const random = seeded(run);
+      const pick = <T,>(items: readonly T[]): T => items[Math.floor(random() * items.length)];
       const calls: string[] = [];
       const handler = (name: string, prevent: boolean) => (event: FakeEvent) => {
         calls.push(name);
@@ -571,62 +865,93 @@ describe('mergeSlotProps invariants (seeded random combinations)', () => {
       };
       const defaults: Props = {};
       const locked: Props = {};
-      const part: Props = {};
+      const layers: Props[] = random() < 0.35 ? [{}, {}] : [{}];
       for (const key of ATTRIBUTE_KEYS) {
         if (random() < 0.5) defaults[key] = `default-${key}`;
         const l = random();
         if (l < 0.3) locked[key] = `locked-${key}`;
         else if (l < 0.4) locked[key] = undefined;
-        const c = random();
-        if (c < 0.4) part[key] = `consumer-${key}`;
-        else if (c < 0.5) part[key] = undefined;
-        else if (c < 0.6) part[key] = null;
+        for (const [index, layer] of layers.entries()) {
+          const c = random();
+          if (c < 0.4) layer[key] = `consumer${index}-${key}`;
+          else if (c < 0.5) layer[key] = undefined;
+          else if (c < 0.6) layer[key] = null;
+        }
+      }
+      if (random() < 0.5) defaults[ID_LIST_KEY] = pick(IDS);
+      if (random() < 0.4) locked[ID_LIST_KEY] = random() < 0.8 ? pick(IDS) : undefined;
+      for (const layer of layers) {
+        if (random() < 0.5) layer[ID_LIST_KEY] = pick(IDS);
       }
       for (const key of HANDLER_KEYS) {
         if (random() < 0.5) defaults[key] = handler(`default:${key}`, false);
         const l = random();
         if (l < 0.4) locked[key] = handler(`locked:${key}`, false);
         else if (l < 0.5) locked[key] = undefined;
-        const c = random();
-        if (c < 0.5) part[key] = handler(`consumer:${key}`, random() < 0.3);
-        else if (c < 0.6) part[key] = undefined;
-        else if (c < 0.7) part[key] = null;
+        for (const [index, layer] of layers.entries()) {
+          const c = random();
+          if (c < 0.5) layer[key] = handler(`consumer${index}:${key}`, random() < 0.3);
+          else if (c < 0.8) layer[key] = pick(NOT_HANDLERS);
+        }
       }
-      const ownClass = [undefined, 'own-a', 'own-a own-b'][Math.floor(random() * 3)];
-      const theirClass = [undefined, '', 'their-c'][Math.floor(random() * 3)];
-      if (theirClass !== undefined) part.className = theirClass;
-      const own: SlotPartOwn = { className: ownClass, defaults, locked };
-      const merged = mergeSlotProps(asPart(part), own);
+      const b = random();
+      const blockHandlers: SlotPartOwn['blockHandlers'] =
+        b < 0.6 ? undefined : b < 0.85 ? HANDLER_KEYS.filter(() => random() < 0.5) : true;
+      const isBlocked = (key: string) => blockHandlers === true || !!blockHandlers?.includes(key);
+      const ownClass = pick([undefined, 'own-a', 'own-a own-b']);
+      for (const [index, layer] of layers.entries()) {
+        const theirClass = pick([undefined, '', `their-${index}`]);
+        if (theirClass !== undefined) layer.className = theirClass;
+      }
+      const own: SlotPartOwn = { className: ownClass, defaults, locked, blockHandlers };
+      const parts = layers.map(asPart);
+      const merged = mergeSlotProps(parts.length === 1 ? parts[0] : parts, own);
       const fail = (message: string) => failures.push(`run ${run}: ${message}`);
 
       for (const key of ATTRIBUTE_KEYS) {
-        const expected =
-          key in locked
-            ? locked[key]
-            : part[key] != null
-              ? part[key]
-              : key in defaults
-                ? defaults[key]
-                : undefined;
-        if (merged[key] !== expected)
+        const given = layers.map((layer) => layer[key]).filter((value) => value != null);
+        const expected = key in locked ? locked[key] : given.length ? given.at(-1) : defaults[key];
+        if (merged[key] !== expected) {
           fail(`${key} is ${String(merged[key])}, not ${String(expected)}`);
+        }
+      }
+
+      const consumerIds = layers
+        .map((layer) => layer[ID_LIST_KEY] as string | undefined)
+        .filter((ids): ids is string => ids != null);
+      const ownIds = (ID_LIST_KEY in locked ? locked : defaults)[ID_LIST_KEY] as string | undefined;
+      const expectedIds = consumerIds.length
+        ? joinIds(ownIds, ...consumerIds)
+        : ID_LIST_KEY in locked
+          ? locked[ID_LIST_KEY]
+          : defaults[ID_LIST_KEY];
+      if (merged[ID_LIST_KEY] !== expectedIds) {
+        fail(`${ID_LIST_KEY} is ${String(merged[ID_LIST_KEY])}, not ${String(expectedIds)}`);
+      }
+      for (const id of (ownIds ?? '').split(' ').filter(Boolean)) {
+        if (consumerIds.length && !String(merged[ID_LIST_KEY]).split(' ').includes(id)) {
+          fail(`the consumer ids removed the component id ${id}`);
+        }
       }
 
       for (const key of HANDLER_KEYS) {
-        const consumer = part[key];
+        const consumers = layers
+          .map((layer, index) => ({ value: layer[key], name: `consumer${index}:${key}` }))
+          .filter(({ value }) => typeof value === 'function' && !isBlocked(key));
         const lockedHandler = typeof locked[key] === 'function' ? locked[key] : undefined;
         const ours =
           lockedHandler ?? (typeof defaults[key] === 'function' ? defaults[key] : undefined);
-        if (typeof consumer !== 'function') {
+        if (consumers.length === 0) {
           const expected = key in locked ? locked[key] : defaults[key];
           if (merged[key] !== expected) fail(`${key} is not ours unchanged`);
+          if (!(key in locked) && !(key in defaults) && key in merged) {
+            fail(`${key} forwarded a value that is no handler, or a blocked one`);
+          }
           continue;
         }
         calls.length = 0;
         const event = fire(merged, key);
-        if (calls[0] !== `consumer:${key}`)
-          fail(`${key} ran ${calls.join(', ')}, not the consumer first`);
-        const expectedCalls = [`consumer:${key}`];
+        const expectedCalls = consumers.map(({ name }) => name);
         if (ours && !event.defaultPrevented) {
           expectedCalls.push(lockedHandler ? `locked:${key}` : `default:${key}`);
         }
@@ -635,31 +960,37 @@ describe('mergeSlotProps invariants (seeded random combinations)', () => {
         }
       }
 
-      const expectedClass = theirClass
-        ? [ownClass, theirClass].filter(Boolean).join(' ')
+      const theirClasses = layers.map((layer) => layer.className).filter(Boolean);
+      const expectedClass = theirClasses.length
+        ? [ownClass, ...theirClasses].filter(Boolean).join(' ')
         : ownClass;
       if (merged.className !== expectedClass) {
         fail(`className is ${String(merged.className)}, not ${String(expectedClass)}`);
       }
       if (expectedClass === undefined && 'className' in merged) fail('className without a class');
 
-      const allowed = new Set([
-        'className',
-        ...Object.keys(defaults),
-        ...Object.keys(locked),
-        ...Object.keys(part).filter((key) => part[key] != null),
-      ]);
+      const allowed = new Set(['className', ...Object.keys(defaults), ...Object.keys(locked)]);
+      for (const layer of layers) {
+        for (const key of Object.keys(layer)) {
+          const value = layer[key];
+          const isHandler = HANDLER_KEYS.includes(key);
+          if (isHandler ? typeof value === 'function' && !isBlocked(key) : value != null) {
+            allowed.add(key);
+          }
+        }
+      }
       for (const key of Object.keys(merged)) {
         if (!allowed.has(key)) fail(`unexpected key ${key}`);
       }
 
       const none = mergeSlotProps(undefined, own);
-      const empty = mergeSlotProps({}, own);
-      if (Object.keys(none).join() !== Object.keys(empty).join()) {
-        fail('an empty part gives other keys than no part');
-      }
-      for (const key of Object.keys(none)) {
-        if (none[key] !== empty[key]) fail(`an empty part changes ${key}`);
+      for (const empty of [mergeSlotProps({}, own), mergeSlotProps([], own)]) {
+        if (Object.keys(none).join() !== Object.keys(empty).join()) {
+          fail('an empty part gives other keys than no part');
+        }
+        for (const key of Object.keys(none)) {
+          if (none[key] !== empty[key]) fail(`an empty part changes ${key}`);
+        }
       }
     }
     expect(failures).toEqual([]);
@@ -676,11 +1007,13 @@ describe('mergeSlotProps on the server', () => {
     );
   });
 
-  it('imports cn, composeEventHandlers and mergeRefs at run time, and types only otherwise', () => {
+  it('imports the merge helpers and the id-list rule at run time, and types only otherwise', () => {
     const statements = importStatements(slotPropsSource);
     expect(statements.filter(({ typeOnly }) => !typeOnly).map(({ text }) => text)).toEqual([
+      "import { joinIds } from './aria'",
       "import { cn } from './cn'",
       "import { composeEventHandlers } from './composeEventHandlers'",
+      "import { ID_LIST_KEYS } from './mergeProps'",
       "import { mergeRefs } from './mergeRefs'",
     ]);
     expect(statements.filter(({ typeOnly }) => typeOnly).map(({ specifier }) => specifier)).toEqual(
@@ -735,18 +1068,27 @@ describe('SlotPart and mergeSlotProps types', () => {
 
   it('infers the element from a typed part, and falls back to a span', () => {
     type Signature = <E extends keyof React.JSX.IntrinsicElements = 'span'>(
-      part: SlotPart<E> | undefined,
+      part: SlotPart<E> | readonly (SlotPart<E> | undefined)[] | undefined,
       own: SlotPartOwn,
     ) => Record<string, unknown>;
     expectTypeOf(mergeSlotProps).toEqualTypeOf<Signature>();
     // The same signature, returning the element it infers. A part of another element would be
     // assignable to a span part anyway, so only inference shows which element a call takes.
     const inferred = <E extends keyof React.JSX.IntrinsicElements = 'span'>(
-      part: SlotPart<E> | undefined,
+      part: SlotPart<E> | readonly (SlotPart<E> | undefined)[] | undefined,
       own: SlotPartOwn,
     ): E => [part, own] as unknown as E;
-    const slotProps: { input?: SlotPart<'input'>; button?: SlotPart<'button'> } = {};
+    const slotProps: {
+      root?: SlotPart<'span'>;
+      input?: SlotPart<'input'>;
+      button?: SlotPart<'button'>;
+    } = {};
     expectTypeOf(inferred(slotProps.input, {})).toEqualTypeOf<'input'>();
+    expectTypeOf(inferred([slotProps.input, undefined], {})).toEqualTypeOf<'input'>();
+    // A span root and an input part together, in either order: the span, which both parts fit.
+    expectTypeOf(inferred([slotProps.root, slotProps.input], {})).toEqualTypeOf<'span'>();
+    expectTypeOf(inferred([slotProps.input, slotProps.root], {})).toEqualTypeOf<'span'>();
+    expectTypeOf(inferred([], {})).toEqualTypeOf<'span'>();
     expectTypeOf(inferred(slotProps.button, {})).toEqualTypeOf<'button'>();
     expectTypeOf(inferred(undefined, {})).toEqualTypeOf<'span'>();
     expectTypeOf(inferred({ title: 'Inline' }, {})).toEqualTypeOf<'span'>();
@@ -756,7 +1098,7 @@ describe('SlotPart and mergeSlotProps types', () => {
   it('returns the props to spread', () => {
     expectTypeOf(mergeSlotProps<'input'>)
       .parameter(0)
-      .toEqualTypeOf<SlotPart<'input'> | undefined>();
+      .toEqualTypeOf<SlotPart<'input'> | readonly (SlotPart<'input'> | undefined)[] | undefined>();
     expectTypeOf(mergeSlotProps<'input'>)
       .parameter(1)
       .toEqualTypeOf<SlotPartOwn>();
@@ -773,16 +1115,30 @@ describe('SlotPart and mergeSlotProps types', () => {
     mergeSlotProps({ placeholder: 'Name' }, {});
     expect(mergeSlotProps(slotProps.track, {})).toStrictEqual({});
     expect(mergeSlotProps(slotProps.input, {})).toStrictEqual({});
+    expect(mergeSlotProps([slotProps.track, slotProps.input], {})).toStrictEqual({});
+    // @ts-expect-error a part in an array takes no children either
+    expect(mergeSlotProps([{ children: 'x' }], {})).toStrictEqual({});
+
+    expectTypeOf<SlotPartOwn['blockHandlers']>().toEqualTypeOf<
+      readonly string[] | true | undefined
+    >();
+    const blockAll: SlotPartOwn = { blockHandlers: true };
+    const blockSome: SlotPartOwn = { blockHandlers: ['onClick'] as const };
+    // @ts-expect-error false is not a value: leave the option out
+    const blockNone: SlotPartOwn = { blockHandlers: false };
+    expect([blockAll, blockSome, blockNone]).toHaveLength(3);
   });
 });
 
 interface ToggleProps {
+  /** Focusable but inert: no toggle, and the consumer's click never runs (C-DISABLED). */
+  disabledFocusable?: boolean;
   onPressedChange?: (pressed: boolean) => void;
   slotProps?: { root?: SlotPart<'button'>; thumb?: SlotPart<'span'> };
 }
 
 /** A component with two parts, as a rollout writes them. */
-function Toggle({ onPressedChange, slotProps }: ToggleProps) {
+function Toggle({ disabledFocusable, onPressedChange, slotProps }: ToggleProps) {
   const [pressed, setPressed] = React.useState(false);
   return (
     <button
@@ -795,11 +1151,17 @@ function Toggle({ onPressedChange, slotProps }: ToggleProps) {
           id: 'toggle-1',
           tabIndex: 0,
           disabled: undefined,
-          onClick: () => {
+          'aria-disabled': disabledFocusable || undefined,
+          onClick: (event: React.MouseEvent) => {
+            if (disabledFocusable) {
+              event.preventDefault();
+              return;
+            }
             setPressed(!pressed);
             onPressedChange?.(!pressed);
           },
         },
+        blockHandlers: disabledFocusable ? ['onClick'] : undefined,
       })}
     >
       <span
