@@ -1,0 +1,200 @@
+# Phase 13 (0.18.0): customization surface and 1.0 notices
+
+Status: design, written 2026-10-30 on `feat/fluent-parity-phase-13` from `main` at `5ffa7b7` (0.17.1). The maintainer opted out of the brainstorm questions ("Go"), so every design call below is the author's and is marked **Ruling**; each states what it costs if wrong. The roadmap entry is `docs/ROADMAP.md`, Phase 13 (P13-01 to P13-03). Inputs: three read-only surveys of WaveUI's code (the slot machinery and class-name registry; the contexts; the deprecation inventory) and a read of Fluent UI v9's source at `microsoft/fluentui@a65a0665` (slots, `getIntrinsicElementProps`, Field's render-function child, the exported contexts, `customStyleHooks_unstable`, deprecation practice).
+
+## 1. Intent
+
+An app must be able to **style and extend WaveUI components without forking them**, and **nothing in 1.0 may change that 0.18 did not announce**.
+
+Today:
+
+- **Inner parts are closed.** The 94 `Slot<>`/`SlotObject<>` props and 24 `MotionSlot` props are all leaves (icons, media, dismiss and close buttons, backdrops, motion). No structural part takes consumer props: a Switch's track and thumb, a Checkbox's indicator, a Dialog's body, an Input's wrapper. Only the stable class names (0.8) reach them, and only from CSS.
+- **Slots cannot be replaced.** A slot object takes props and children, never a render function; there is no helper to pass native props to a custom element.
+- **Extension needs internals.** No context object is public. A custom radio card, a custom menu item, a MessageBar-aware child or a DataGrid cell that reads the sort has to reach into private modules. `FieldContext` is internal, and Field clones its first child instead of handing a third-party control its props.
+- **1.0 is not announced.** The inventory has 52 deprecated names. Four runtime-detectable removals do not warn yet, three notices are CHANGELOG-only, six `details` parameters were never announced, and there is no "Upgrading to 1.0" guide.
+
+### Goals
+
+1. **Structural `slotProps`** (P13-01): every component's DOM parts that the class-name registry lists and that are not already a named slot take consumer props, merged by the C-COMPOSE rules, with a mechanical completeness gate.
+2. **Replaceable slots** (P13-01): render-function children on slot objects, and a public `getNativeElementProps`.
+3. **Extension points** (P13-02): Field's render-function child, and public hooks and providers for Field, RadioGroup, Menu, MessageBar and DataGrid.
+4. **1.0 notices** (P13-03): a development warning for every removal code can detect, a CHANGELOG announcement for every removal and default change it cannot, the decisions 0.x deferred (ref placement, the TimePicker default), and a drafted "Upgrading to 1.0" guide.
+
+### Non-goals
+
+- `WaveProvider classNames` (app-wide class hooks): deferred (R17).
+- Changing any behaviour of a component that gets no `slotProps`; changing any default look.
+- A new design for contexts (Fluent's selector contexts, `_unstable` names): R11.
+- Removing anything: that is Phase 14. Nothing deprecated here is removed.
+- The 0.16/0.17 follow-ups (`medium` weight, Firefox CSP log, bundle headroom): separate.
+
+### Anti-goals
+
+- A `slotProps` that can break a component: a consumer must not be able to remove an element, replace its structural children, or silence an internal handler by accident. Locked attributes win (R5).
+- A frozen internal: a public context that exposes hover-intent, dismiss or registry internals would make every later refactor a breaking change. Hooks are narrow views (R11).
+- A silent 1.0: any removal or default change in Phase 14 that this phase did not announce.
+
+## 2. Rulings and reference
+
+### 2.1 Rulings
+
+| # | Ruling (author's call) | Why | Costs if wrong |
+|---|---|---|---|
+| R1 | **One prop, `slotProps?: { <part>?: SlotPart<'<element>'> }`**, whose keys are the class-name registry's part keys (the roadmap's rule). A part's value takes the props of its element (plus `ref` and `data-*`), not `children` (R5). | One consistent name instead of a prop per part (Fluent's shape: `indicator={{ ... }}`), which would collide with WaveUI's existing named slot props and 363 new top-level names. `slotProps` is what the roadmap, MUI and Radix-style libraries use. | Fluent users expect `indicator={{}}`; the migration table says `slotProps.indicator`. |
+| R2 | **Existing named slots stay as they are and are not duplicated in `slotProps`** (icon, media, dismiss, closeButton, backdrop, motion, ...). | 118 declarations in 58 files are public API; renaming them is a 0.x break with no gain. | A part reachable two ways in no component, but two vocabularies in the API (named slots for leaves, `slotProps` for structure); the guide explains the split. |
+| R3 | **Parts that are separate components get no `slotProps`** (`Card.Header`, `Accordion.Item`, `Menu.Item`, table cells): the consumer writes them as JSX and passes props directly. 75 of the 186 registry constants have a `root` only and need nothing. | Nothing to forward. | None. |
+| R4 | **A part is excluded only with a reason**, in a data table `SLOT_PART_EXCLUSIONS` (component, key, one-line reason) checked by the gate: elements that exist only for layout, motion or measurement (virtual spacers, motion collapse elements, positioners, viewports, probes). The Phase 3 spec's Appendix A (119 constants) is **superseded**: the registry is the source (186 constants, 363 part keys), and the appendix gets a one-line pointer. | The registry is a strict superset of the appendix and the appendix's rule D4 (spacers are not parts) conflicts with registry keys `spacer`, `positioner`, `collapse`, `viewport`. | An excluded part that consumers need later is added to `slotProps` without breaking anything (additive). |
+| R5 | **Merge rules of a part** (C-COMPOSE for slots): `className` is `cn(<stable class>, <component classes>, consumer className)` (consumer last); `style` merges with the consumer's keys winning; every `on*` handler composes **consumer first** with `composeEventHandlers` (`preventDefault()` cancels ours); `ref` merges (`mergeRefs`); any other attribute from the consumer replaces the component's **default** for it; attributes the component marks **locked** (role, id, aria-controls, aria-labelledby on wired parts, `tabIndex`, `disabled`, `hidden`, the Field wiring) are applied after the consumer's and win. `children` is not accepted on a structural part (the component owns it); a part that is documented as content (for example a label) may take `children`. | Same rules as `rest` spreads today (consumer first, must-win attributes after), so a slot behaves like the root. Fluent's own rule varies per component (`mergeCallbacks` versus `isDefaultPrevented`-gated). | A consumer wanting to replace a locked attribute cannot; the guide lists each part's locked attributes. |
+| R6 | **Input's `root` and `input`**: without `contentBefore`/`contentAfter` they are one `<input>` element carrying both classes; `slotProps.root` and `slotProps.input` both apply to it, `input` after `root`. With content slots the wrapper is `root`. | The only component whose part list changes shape; documenting it beats inventing a wrapper. | A consumer sets the same prop twice; `input` wins, documented. |
+| R7 | **A completeness gate**: for every registry constant, every part key is a `slotProps` key of its component, a named slot prop (R2), a separate component part (R3), or listed in `SLOT_PART_EXCLUSIONS`. It uses the pending-list pattern of earlier phases (`PENDING_SLOT_PARTS`), emptied by the integration package. | The completeness question ("did we cover all 363?") becomes a test, like the class-name gate of 0.8. | A part whose element type is wrong still passes the gate; per-component type tests cover it. |
+| R8 | **Render-function children on slot objects, once, in `renderSlot`**: `children` of a `SlotObject` may be `(Component, props) => ReactNode` (`SlotRenderFunction`), `Component` the element type (tag or component) and `props` the fully merged props (className and ref included). It is not accepted on a `slotProps` part (R5). | All 72 call sites go through `renderSlot`/`resolveSlot`, so one change gives every slot the escape hatch of Fluent's `children: (Component, props) => ReactNode`. | A consumer who drops `props` loses the wiring; the JSDoc says so (Fluent's docs call it an escape hatch too). |
+| R9 | **`getNativeElementProps(tag, props, excludedNames?)` is public and server-safe**, in its own module: it keeps the global attributes, the event handlers, `data-*`/`aria-*`, and the per-tag attributes of the tags WaveUI renders (a, button, div, img, input, label, li, ol, option, select, span, table parts, textarea, ul) and drops everything else; unknown tags get the global set. | Fluent's `getIntrinsicElementProps` is the same whitelist; custom slot components need it. Its own module keeps it out of every bundle that does not import it. | A tag outside the table gets the global set only; adding a tag's extras is additive. |
+| R10 | **Field's `children` may be a function** `(controlProps: FieldControlProps) => ReactNode`, `FieldControlProps` being the id/`aria-labelledby`/`aria-describedby`/`aria-invalid`/`aria-required` that `useFieldControl` computes for a labelable control. Field renders the result inside its provider without cloning. | Fluent has the same shape and the same five props; third-party controls need it. Field already computes them for its clone. | Controls needing `required` or `size` read `useFieldContext()` (R12). |
+| R11 | **Public contexts are wrappers and narrow views, never the context objects or the internal values.** Providers are functions (`ListboxProvider` is the precedent: no `.Provider` member access, RSC-safe); hooks return a **narrow, documented value**. A hook that must be inside its component calls `reportMissingContext` (C-CONTEXT: throws in development, returns an inert value in production). A hook that is optional by design returns `null` and is exempt (Field, which the roadmap's acceptance line did not foresee). | Exporting Menu's 30-member context would freeze hover-intent, context-gesture and dismiss internals; Fluent returns inert defaults and never throws, which hides misuse. | A consumer needing more reads a new narrow member, added without a break. |
+| R12 | **Field**: public `FieldContextProvider` and `useFieldContext(): FieldContextValue \| null` (optional). | `FieldContextValue` is already a public type; a custom control built on `useFieldControl` already needs the context. | None. |
+| R13 | **RadioGroup**: `useRadioGroupContext()` (required: `{ value, disabled, select(value) }`) and `useRadioGroupItem(value, { disabled })` returning the props to spread on a custom radio card (`role="radio"`, `aria-checked`, `tabIndex` from the roving state, `data-roving-value`, the click and key handlers, `disabled`). | A custom radio card must carry `data-roving-value` and the roving tab stop, which the group scans for; the raw context is not enough. | The returned props are the contract, not the context. |
+| R14 | **Menu**: narrow hooks `useMenuContext(): { open, close(), isSubmenu }` and `useMenuListContext(): { hasIcons, hasCheckmarks }` (both required). | A custom item needs to close the menu and to align its icon and check columns; nothing else. | A custom item that needs hover intent or typeahead registration uses `Menu.Item` with `asChild`. |
+| R15 | **MessageBar**: `useMessageBarContext(): { intent, layout }` (required; the resolved intent and layout, which MessageBar's context does not carry today: it only records placement). | The gap `messagebar-6`: children (custom actions) adapt to intent and layout. | Placement stays internal. |
+| R16 | **DataGrid**: three narrow required hooks, `useDataGridSort(): { sort, setSort }`, `useDataGridSelection(): { selectedItems, isSelected(id), toggle(id) }` and `useDataGridRowId(): string` (inside a row). The static Table has no context; its hooks (`useTableFeatures`, `useSelection`, ...) are already public. | The roadmap names sort, selection and row id; DataGrid has about 15 internal contexts and only three report a missing provider. | A custom cell needing more composes the headless hooks. |
+| R17 | **`WaveProvider classNames` is deferred** (post-1.0, additive). | The stable class is a literal member access at 655 sites in 110 files with no common helper; the conventions gate requires the literal; `verify-dist` requires Button-only and MessageBar-only to hold no provider code. A per-component hook would change 110 files, the gate and every bundle budget, beside the `slotProps` rollout. It breaks nothing to add later; CSS already targets `.wave-<name>`. | Tailwind users cannot attach app-wide utility classes through the provider yet. |
+| R18 | **P13-03's scope is the inventory**, reconciled: the four detectable removals that do not warn get a development warning (Badge and CounterBadge `color="important"` with its own message: the meaning changes, it is not removed; `useRovingTabIndex(ref, options)`; DataGrid's positional `onSortChange`; the `[presence=` className compatibility rule); the CHANGELOG-only items (`legacy-tokens.css`, the `.dark`/`.high-contrast` classes, `animations.css`) and the six missing `details` notices (AvatarGroup `onOpenChange`; `onColumnWidthsChange`; `Table.ResizeHandle onResize`; `useTableSort`, `useSelection`, `useTableColumnSizing`; FlatTree and `useFlatTree` `onCheckedItemsChange`) get CHANGELOG "Deprecated" lines; `Image.alt` already warns and gets its notice. | The acceptance line: every Phase 14 item announced, with a warning where code can detect the use and a test per warning. | A missed item is found by the inventory test (section 6.3), not by a user. |
+| R19 | **Ref placement (P14-04) is decided: keep.** `ref` stays on the root element (the one that receives `className`), `controlRef` on the focusable element, `slotProps.<part>.ref` on parts. No change in 1.0; P14-04 closes. Announced in the 0.18 CHANGELOG. | Moving `ref` would break every consumer who uses it for layout, buys parity with Fluent's primary-slot placement only, and `controlRef` exists on 14 controls; `slotProps` now gives every part a ref. | Fluent migrants expect `ref` on the input; the migration table says `controlRef`. |
+| R20 | **P14-06's wording is corrected**: TimePicker has no `hourCycle` prop; the 1.0 change is that `format` (today default `'12h'`) defaults from the locale. Announced as such. | The roadmap names a prop that does not exist. | None. |
+| R21 | **P14-02's list is completed** from the inventory: every row not named there (the tag-picker legacy classes, the Slider numeric `size`, and any other row the inventory marks "not named by P14-02") joins the removal list and the announcements. | Phase 14 removes only what 0.x announced. | A row missed here is not removable in 1.0. |
+| R22 | **"Upgrading to 1.0" is drafted now** as `docs/UPGRADING-TO-1.0.md` (migration table from the 0.5 CHANGELOG, one row per removal and default change with before/after and the version that announced it), linked from the README and CHANGELOG; Phase 14 finalises it. | Roadmap P13-03 scope. | None. |
+| R23 | **Budgets are re-based** (section 7): the helper is shared, each rolled-out component pays a small allowance, and the WaveProvider + Dialog budget (17 B headroom) is re-set from its measured figure at the end of the overlay group, as a recorded ruling. | The 0.17.1 headroom cannot absorb Dialog's parts. | Budget numbers move; no earlier budget is silently raised. |
+| R24 | **The builder check and the questions are skipped** (the maintainer opted out); the plan's pre-flight scan substitutes. | Process, as in Phases 11 and 12. | A gap found while building costs a ruling. |
+
+### 2.2 Fluent v9 reference
+
+Read at `microsoft/fluentui@a65a0665` (2026-10-30).
+
+| Topic | Fluent v9 | Wave 0.18 |
+|---|---|---|
+| Part customisation | Each part is a **prop of its own name** (`<Switch indicator={{ className }} input={{ ... }} />`); native props go to the primary slot, `className`/`style` to the root; `slot.always`/`slot.optional` resolve shorthand. | R1: a single `slotProps` object keyed by the registry's part keys. **Intentional difference.** |
+| Merge rules | No single rule: styles hooks put the consumer class last; handlers use `mergeCallbacks` (always both) or `isDefaultPrevented`-gated (Dialog); `{...defaultProps, ...props}` shallow-replaces, so a consumer `ref` replaces a default ref. | R5: one rule: consumer first and cancellable, refs merged, locked attributes win. |
+| Render-function children | `children: (Component, props) => ReactNode` on any slot, documented as an escape hatch. | R8: the same type, in `renderSlot`. |
+| Native props helper | `getIntrinsicElementProps` (and deprecated `getNativeElementProps`): per-tag whitelist plus `data-*`/`aria-*`. | R9: `getNativeElementProps`, same whitelist idea. |
+| Field render function | `children: (props: FieldControlProps) => ReactNode` with five props; `useFieldContext_unstable()` returns `undefined` outside a Field, no throw. | R10, R12: same five props; `useFieldContext()` returns `null`. |
+| Contexts | `use<X>Context_unstable` + `<X>Provider`; selector contexts return inert defaults and never throw; the `_unstable` suffix is "a naming bug" kept for compatibility. | R11: no suffix, narrow views, required hooks throw in development (C-CONTEXT). **Intentional difference.** |
+| App-wide class hooks | `customStyleHooks_unstable` per style-hook name; `*ClassNames` constants; the consumer's class is guaranteed last. | R17: deferred. Wave's per-instance `className` already wins. |
+| Deprecation practice | JSDoc `@deprecated` plus a kept export until the next major; a rare dev `console.error`; no runtime warning system; no v9 codemod. | R18: a development warning where detectable plus a CHANGELOG line per item. Wave's practice is stricter. |
+
+## 3. `slotProps` (P13-01)
+
+### 3.1 Types and helper (`src/lib/slotProps.ts`, server-safe)
+
+```ts
+export type SlotPart<E extends keyof React.JSX.IntrinsicElements> =
+  Omit<React.ComponentPropsWithRef<E>, 'children' | 'className' | 'style'> & {
+    className?: string; style?: React.CSSProperties; } & { [K in `data-${string}`]?: string | number | boolean | undefined };
+export function mergeSlotProps<E extends keyof React.JSX.IntrinsicElements>(
+  part: SlotPart<E> | undefined,
+  own: { className?: string; style?: React.CSSProperties; ref?: React.Ref<unknown>; defaults?: object; locked?: object },
+): object;  // the props object to spread on the part's element
+```
+
+`mergeSlotProps` applies R5: `{ ...own.defaults, ...part (handlers composed, className/style/ref merged), ...own.locked }`. A component declares `slotProps?: { track?: SlotPart<'span'>; thumb?: SlotPart<'span'> }` and spreads `mergeSlotProps(slotProps?.track, { className: cn(switchClassNames.track, ...), locked: {...} })` on the element. It is pure (no hook); `ref` merging calls `mergeRefs` only when both refs exist.
+
+### 3.2 Parts, per group
+
+The rollout follows the registry (111 constants with parts, 363 keys; counts by folder: inputs 31/131, navigation 21/68, layout 13/42, data display 12/40, overlays 10/32, table 8/18, feedback 8/17, button 8/15). Each rolled-out component:
+
+- declares `slotProps` with the keys of its non-excluded, non-slot parts and documents each part in its JSDoc (the element, what it is, its locked attributes, the stable class: the "per-part documentation of the stable class names" of P13-01 lands here);
+- spreads `mergeSlotProps` on every such element, with no change in markup or behaviour when `slotProps` is absent (a test per component compares the markup with and without an empty `slotProps`);
+- gets the standard test set: className and style reach the part; a consumer handler runs first and `preventDefault()` cancels the internal one (where the part has a handler); a ref reaches the element; a locked attribute cannot be overridden; `children` is a type error; StrictMode once-only callbacks; RTL where directional.
+
+The groups are the packages of section 8. The **exclusions table** and the **completeness gate** (R4, R7) are built first (Task 3); its first output is the list of keys per component, committed as the checklist the rollout tasks work through.
+
+### 3.3 Slot render functions and `getNativeElementProps`
+
+- `SlotRenderFunction<Props> = (Component: React.ElementType<Props>, props: Omit<Props, 'as'>) => React.ReactNode`; `SlotObject['children']` accepts `ReactNode | SlotRenderFunction`. `renderSlot` calls it with the element type and the merged props; `slotRendersContent` treats a function as content. Every existing slot gains it with no per-component change; a test per slot family (icon, dismiss, media, backdrop, motion) proves it through `renderSlot`.
+- `getNativeElementProps` lives in `src/lib/nativeProps.ts` (server-safe, own module, exported from the entry with its types) per R9.
+
+## 4. Field and public contexts (P13-02)
+
+### 4.1 Field
+
+`FieldProps['children']` becomes `ReactNode | ((props: FieldControlProps) => ReactNode)`; `FieldControlProps` is exported (the five ARIA/id attributes). A function child is called with the props `useFieldControl` would give a labelable first control and rendered in Field's provider; no cloning. `FieldContextProvider` and `useFieldContext` are exported from the entry (R12). The existing clone path is unchanged for element children.
+
+### 4.2 Hooks
+
+Each is built on the existing internal context, exposes only the narrow value of its ruling, calls `reportMissingContext` when required (R11) and has: a missing-provider test (throws in development, inert value in production under `vi.stubEnv`), a value test, an RSC/`asClientReference` check where the module is a client module, a story (below) and C-DOCS JSDoc naming Fluent's counterpart.
+
+- R13 `useRadioGroupContext`, `useRadioGroupItem`; story **Custom radio card** (cards with a title and description, arrows move, Space selects, `RadioGroup` unchanged).
+- R14 `useMenuContext`, `useMenuListContext`; story **Custom menu item** (an item with a rich layout built on `Menu.Item asChild` that closes the menu through `useMenuContext().close()` and aligns with `hasIcons`).
+- R15 `useMessageBarContext`; the MessageBar provides the resolved `intent` and `layout` in the context it already has (placement stays internal); story **MessageBar with an intent-aware action**.
+- R16 `useDataGridSort`, `useDataGridSelection`, `useDataGridRowId`; story **DataGrid with a custom cell** (a cell that shows the sort direction of its column and a selection toggle).
+
+## 5. Budgets
+
+- **Helper**: `lib/slotProps` is shared; target at most 0.4 KiB gzip, measured when built (Task 1) and recorded.
+- **Per component**: the markup helper call costs a few tens of bytes; each rolled-out component's single-import growth is recorded as it lands and enforced from the 0.17.1 baseline plus a recorded allowance (the `RECORDED_IMPORTS` mechanism of earlier phases), never a blanket raise.
+- **Button-only** is unchanged unless Button gets a part (its registry has `root` and the `icon` slot only); **MessageBar-only** grows by the context change; **Tree-only** by its parts. Each is stated in the spec's section 15 when measured.
+- **WaveProvider + Dialog** (17 B headroom): re-set after the overlay group from the measured figure plus a stated margin, as a ruling (R23).
+- `getNativeElementProps`-only and each new hook-only import get a size probe and an exclusion probe (no component module in a hook-only import), following `HOOK_PROBES_0_17`.
+
+## 6. 1.0 notices (P13-03)
+
+### 6.1 Runtime warnings (each in an effect, `warnOnce`, a test per warning)
+
+- **Badge and CounterBadge `color="important"`**: its meaning changes in 1.0 (neutral high emphasis); the message says so and names the explicit colour to use if the 0.x look is wanted. It is not a removal, so it does not use `warnDeprecated`'s "removed in 1.0" wording.
+- **`useRovingTabIndex(ref, options)`** (positional form), **DataGrid's positional `onSortChange`**, **the `[presence=` className compatibility rule**: `warnDeprecated` with the replacement named.
+
+### 6.2 CHANGELOG announcements
+
+A "Deprecated" subsection in the 0.18.0 entry listing: `legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, `animations.css`; the 1.0 default and type changes (TimePicker `format` default from the locale (R20); the `details` parameter of every `onOpenChange`, `onCheckedValuesChange`, `onCheckedItemsChange` and the six callbacks R18 names becomes required; `Image.alt` required); the ref decision (R19, "no change"); Badge `important`. Each line names the 0.x replacement.
+
+### 6.3 The inventory and the guide
+
+- **Inventory test** (`src/__tests__/deprecations.test.ts`): a data table of every removal and default change Phase 14 makes (the 52-row inventory, reconciled with P14-02, R21), each with its announcing version, the warning key where one exists and the CHANGELOG anchor; the test asserts that every row's CHANGELOG text exists, that every row marked "warns" fires its warning once, and that `warnDeprecated`/`resolveDeprecatedProp` call sites in `src` equal the rows marked "warns" (so a new alias cannot be added without an inventory row).
+- **`docs/UPGRADING-TO-1.0.md`** (R22), the roadmap's P14 items corrected for R19 to R21, and the README gets a short pointer.
+
+## 7. Testing
+
+- The completeness gate, the inventory test and the per-component `slotProps` set (section 3.2) are the structural tests; the markup-equality test proves "no behaviour change without `slotProps`".
+- Contexts: missing-provider (throw / inert), narrow value, story smoke through the a11y gate; Field function child with a plain third-party `<input>`.
+- `renderSlot` render functions: per slot family; Server Component and `renderToString` checks for the new lib modules.
+- Existing suites pass unedited except assertions that pin a component's exact props or the `WaveContextValue`; each edit is recorded in section 11.
+
+## 8. Packages and order
+
+A. **CORE**: `lib/slotProps`, render-function children in `renderSlot`, `getNativeElementProps`, the exclusions table and the completeness gate with its pending list.
+B. **NOTICES** (P13-03): the four warnings, the inventory test, the CHANGELOG/ROADMAP corrections (R19 to R21), `docs/UPGRADING-TO-1.0.md`. (Early: Phase 14 depends on it, and it is the one package that cannot slip.)
+C. **CONTEXTS** (P13-02): Field (function child, provider, hook), RadioGroup, Menu, MessageBar, DataGrid, with stories.
+D. **ROLLOUT** (P13-01), by group: D1 form basics (Switch, Checkbox, Radio, Input, Textarea, Select, Slider, SpinButton, Rating, Label, Field parts), D2 pickers (Combobox, Dropdown, Listbox, TagPicker, SearchBox, TimePicker, DatePicker, Calendar), D3 other inputs (ColorPicker, swatches, Toggle/Button family, Upload-like, the rest of 31 input constants), D4 overlays (Dialog, Drawer, Popover, Menu popover, Tooltip, TeachingPopover, Toast), D5 navigation (TabList, Tree, Nav, Breadcrumb, Pagination, Stepper, Accordion, Overflow, Toolbar), D6 layout and data display (Card, Avatar, AvatarGroup, Carousel, List, Image, Badge, Divider, Stack...), D7 table, feedback and typography (Table, DataGrid, MessageBar, Spinner, ProgressBar, Skeleton, Text...). The exact member lists come from the gate's checklist.
+E. **INTEGRATION and DOCS**: public types, verify-dist probes and budgets, the README "Slots" chapter rewritten, the guide's customization chapter, CHANGELOG 0.18.0, ROADMAP, CLAUDE.md, the testing guide.
+
+Order A, B, C, D1 to D7, E. **Cut line:** if the schedule forces one, D5 to D7 slip to 0.18.x (additive: nothing breaks, nothing in Phase 14 depends on them) and the gate's pending list names them; **B cannot slip** (Phase 14's entry criterion is the notices).
+
+## 9. Real-browser checklist (Chromium, Firefox, WebKit)
+
+1. `slotProps` on Switch, Checkbox, Input, Dialog and a Tree item: the consumer's class, style, `data-*` and handlers land on the right element; the focus ring and hit areas are unchanged; a consumer class overrides a component class; a consumer `onClick` with `preventDefault()` cancels the internal toggle.
+2. Input with and without `contentBefore`: `slotProps.root`/`input` land per R6.
+3. Slot render function on an icon slot and on Dialog's `closeButton`: the replaced element keeps the wiring (label, click).
+4. Field with a function child and a plain `<input>`: label click focuses it, the validation message is announced, `aria-invalid` appears.
+5. Custom radio card: arrow keys move through cards (LTR and RTL), Space selects, Tab leaves the group, the roving tab stop is right.
+6. Custom menu item: arrows, typeahead, Enter closes the menu and returns focus.
+7. DataGrid custom cell: sort direction and selection toggle follow the grid; keyboard grid navigation is unchanged.
+8. Dark and high-contrast spot checks of one customised component.
+
+## 10. Upgrading from 0.17 (for the CHANGELOG)
+
+1. **Nothing is removed and no default changes.** Components without `slotProps` render exactly as in 0.17.
+2. **New warnings** in development: Badge and CounterBadge `color="important"`, the positional `useRovingTabIndex`, the positional `onSortChange`, the `[presence=` className rule. A test that spies on `console.warn` asserts them.
+3. **`WaveContextValue`** is unchanged. `FieldProps['children']` widens; `SlotObject['children']` widens.
+4. **Decisions announced for 1.0:** `ref` placement stays; TimePicker `format` will default from the locale; the `details` parameters become required; `Image.alt` becomes required; `docs/UPGRADING-TO-1.0.md`.
+5. Everything else is opt-in: `slotProps`, the render-function slot children, `getNativeElementProps`, the context hooks, the Field function child.
+
+## 11. Implementation notes
+
+(To be filled during the build: every place the code deliberately departs from this document, each edit to an existing assertion, the checklist of keys per component, and the measured sizes.)
+
+## 12. Risks
+
+- **Scale.** 111 constants and 363 keys; the gate makes completeness mechanical, but each component's element type and locked attributes are judgment: per-component review is the control.
+- **Locked attributes are a list per part** and a wrong list lets a consumer break wiring (R5): every part's JSDoc names them and a test per component tries to override one.
+- **Budgets.** The helper is shared but every component grows; the recorded-allowance mechanism keeps it visible (R23).
+- **Narrow hooks are API.** Each member added is a commitment; the narrow views (R12 to R16) are deliberately minimal and additive to grow.
+- **The inventory test can rot** if a new alias is added without a row: the call-site count assertion makes that a failing test.
+- **`classNames` deferral** (R17) leaves Tailwind app-wide hooks for a later minor.
