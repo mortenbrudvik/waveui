@@ -9,6 +9,7 @@ import { hasIsolatingModalBelow, subscribeLayers } from '../../lib/layers';
 import {
   materialiseSlotContent,
   resolveSlot,
+  resolveWiredSlot,
   slotRendersContent,
   slotWrapsDefaultContent,
   type Slot,
@@ -146,7 +147,8 @@ function resolveCloseButton(closeButton: Slot<'span'> | undefined): CloseButtonP
     );
   }
 
-  const resolved = resolveSlot(closeButton, 'span');
+  // A render function is merged with a button `as`, or dropped when it renders nothing.
+  const resolved = resolveWiredSlot(resolveSlot(closeButton, 'span'), isButtonType);
   if (!resolved) return defaultParts();
   const { Component, props, children } = resolved;
   if (isButtonType(Component)) {

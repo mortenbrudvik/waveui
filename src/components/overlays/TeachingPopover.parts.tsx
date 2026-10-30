@@ -46,6 +46,7 @@ import {
   TeachingPopoverContext,
   TeachingPopoverSurfaceContext,
   useTeachingPopoverContext,
+  withoutRenderFunction,
   type TeachingPopoverAction,
   type TeachingPopoverContextValue,
   type TeachingPopoverTarget,
@@ -183,7 +184,8 @@ function renderAction(
       ...(isWaveButton ? { appearance: ownAppearance ?? appearance } : undefined),
     });
   }
-  const resolved = resolveSlot<React.ElementType>(action, Button, className);
+  // A render function is no action content (the root warns): the action renders without it.
+  const resolved = resolveSlot<React.ElementType>(withoutRenderFunction(action), Button, className);
   if (!resolved) return null;
   const { onClick, ...props } = resolved.props as ActionElementProps & Record<string, unknown>;
   // The slot's `as` changes Button's element, never the component: Button keeps the link behaviour,

@@ -1288,6 +1288,42 @@ describe('Card composition', () => {
       expect(box).toHaveAttribute('type', 'checkbox');
     });
 
+    it('drops the children of a checkbox slot object: an `<input>` takes none (P13-01)', () => {
+      const error = vi.spyOn(console, 'error');
+      const renderFn = vi.fn(() => null);
+      const { rerender } = render(
+        <Card
+          selectionControl="checkbox"
+          onSelect={() => {}}
+          selectLabel="Pick"
+          checkbox={
+            { className: 'custom-box', children: 'text' } as unknown as CardProps['checkbox']
+          }
+        >
+          x
+        </Card>,
+      );
+      expect(screen.getByRole('checkbox', { name: 'Pick' })).toHaveClass('custom-box');
+      rerender(
+        <Card
+          selectionControl="checkbox"
+          onSelect={() => {}}
+          selectLabel="Pick"
+          checkbox={
+            { className: 'custom-box', children: renderFn } as unknown as CardProps['checkbox']
+          }
+        >
+          x
+        </Card>,
+      );
+      expect(screen.getByRole('checkbox', { name: 'Pick' })).toHaveClass('custom-box');
+      expect(renderFn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+      // @ts-expect-error — the checkbox object takes no children
+      const typed: CardProps['checkbox'] = { children: 'text' };
+      expect(typed).toBeDefined();
+    });
+
     it('checkbox={null} removes the built-in control, with no role on the card and no warning', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(

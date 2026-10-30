@@ -16,7 +16,9 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useTargetConflictWarning } from '../../hooks/useResolvedTarget';
 import {
+  hasRenderFunction,
   TeachingPopoverContext,
+  withoutRenderFunction,
   type TeachingPopoverAction,
   type TeachingPopoverContextValue,
   type TeachingPopoverLabels,
@@ -204,6 +206,9 @@ function pickAction(
   return slotRendersContent(fallback) ? fallback : undefined;
 }
 
+const ACTION_RENDER_FUNCTION_WARNING =
+  'TeachingPopover: a `primaryAction` or `secondaryAction` slot object took a render function as `children`; it was ignored, since an action always renders as a Wave Button. Pass the label as `children`, or change the element with `as`.';
+
 function clampStep(step: number, count: number): number {
   if (!Number.isFinite(step)) return 0;
   return Math.min(Math.max(Math.trunc(step), 0), count - 1);
@@ -320,8 +325,25 @@ export const TeachingPopoverRoot = ({
   const isFirst = index === 0;
   const isLast = index === count - 1;
   const stepPosition = count > 0 ? (labels?.step ?? defaultStepLabel)(index, count) : '';
-  const primaryAction = step ? pickAction(step.primaryAction, primaryActionProp) : undefined;
-  const secondaryAction = step ? pickAction(step.secondaryAction, secondaryActionProp) : undefined;
+  // A render function as an action's `children` is ignored (with a warning, below).
+  const primaryAction = step
+    ? pickAction(
+        withoutRenderFunction(step.primaryAction),
+        withoutRenderFunction(primaryActionProp),
+      )
+    : undefined;
+  const secondaryAction = step
+    ? pickAction(
+        withoutRenderFunction(step.secondaryAction),
+        withoutRenderFunction(secondaryActionProp),
+      )
+    : undefined;
+  const ignoresActionRenderFunction = [
+    step?.primaryAction,
+    step?.secondaryAction,
+    primaryActionProp,
+    secondaryActionProp,
+  ].some(hasRenderFunction);
   const backLabel = labels?.back ?? DEFAULT_BACK_LABEL;
   const nextLabel = labels?.next ?? DEFAULT_NEXT_LABEL;
   const doneLabel = labels?.done ?? DEFAULT_DONE_LABEL;
@@ -406,6 +428,11 @@ export const TeachingPopoverRoot = ({
   React.useEffect(() => {
     if (ignoresSurfaceProps) warnOnce(SURFACE_PROPS_WARNING_KEY, SURFACE_PROPS_WARNING);
   }, [ignoresSurfaceProps]);
+  React.useEffect(() => {
+    if (ignoresActionRenderFunction) {
+      warnOnce('TeachingPopover:action:render-function', ACTION_RENDER_FUNCTION_WARNING);
+    }
+  }, [ignoresActionRenderFunction]);
 
   React.useEffect(() => {
     if (!outOfRange) return;

@@ -296,6 +296,85 @@ describe('MessageBar', () => {
       expect(onDismiss).toHaveBeenCalledTimes(1);
     });
 
+    describe('a render function (P13-01)', () => {
+      it('renders the content element inside the wired button, given the default glyph', async () => {
+        const user = userEvent.setup();
+        const onDismiss = vi.fn();
+        const renderContent = vi.fn((Component: React.ElementType, props: object) => (
+          <Component {...props} data-testid="content" />
+        ));
+        render(
+          <MessageBar
+            onDismiss={onDismiss}
+            dismiss={{ className: 'text-error', children: renderContent }}
+          >
+            Msg
+          </MessageBar>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss' });
+        const content = screen.getByTestId('content');
+        expect(button).toContainElement(content);
+        expect(content.tagName).toBe('SPAN');
+        expect(content).toHaveClass(messageBarClassNames.dismissIcon, 'text-error');
+        expect(content).toHaveAttribute('aria-hidden', 'true');
+        expect(renderContent).toHaveBeenCalledWith(
+          'span',
+          expect.objectContaining({ children: expect.anything() }),
+        );
+        expect(content.querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
+        await user.click(content);
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+      });
+
+      it('one that renders nothing leaves the default glyph, with the object’s other attributes', () => {
+        render(
+          <MessageBar
+            onDismiss={() => {}}
+            dismiss={{ className: 'text-error', 'data-part': 'x', children: () => null }}
+          >
+            Msg
+          </MessageBar>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss' });
+        const content = button.querySelector<HTMLElement>('[data-part="x"]')!;
+        expect(content).toHaveClass(messageBarClassNames.dismissIcon, 'text-error');
+        expect(content.querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
+      });
+
+      it.each([
+        ['"button"', 'button'],
+        ['a Wave Button', Button],
+      ] as const)(
+        'merges an object whose `as` is %s into the wired button, never nesting one, with the warning',
+        async (_name, as) => {
+          const warn = spyOnWarn();
+          const user = userEvent.setup();
+          const onDismiss = vi.fn();
+          const renderContent = vi.fn((Component: React.ElementType, props: object) => (
+            <Component {...props} data-testid="content">
+              ×
+            </Component>
+          ));
+          render(
+            <MessageBar
+              onDismiss={onDismiss}
+              dismiss={{ as, children: renderContent } as Slot<'span'>}
+            >
+              Msg
+            </MessageBar>,
+          );
+          const button = screen.getByRole('button', { name: 'Dismiss' });
+          expect(screen.getAllByRole('button')).toEqual([button]);
+          expect(renderContent).toHaveBeenCalledWith('span', {});
+          expect(button).toContainElement(screen.getByTestId('content'));
+          expect(screen.getByTestId('content').tagName).toBe('SPAN');
+          await user.click(screen.getByTestId('content'));
+          expect(onDismiss).toHaveBeenCalledTimes(1);
+          expect(warn.mock.calls).toEqual([[BUTTON_OBJECT_WARNING]]);
+        },
+      );
+    });
+
     it('does not render a dismiss button without onDismiss or a dismiss slot', () => {
       render(<MessageBar>Msg</MessageBar>);
       expect(screen.queryByRole('button')).not.toBeInTheDocument();

@@ -11,6 +11,7 @@ import {
   materialiseSlotContent,
   renderSlot,
   resolveSlot,
+  resolveWiredSlot,
   slotRendersContent,
   slotWrapsDefaultContent,
 } from '../../lib/slot';
@@ -313,7 +314,8 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss'], size: CoreSize): Dis
   }
   // Resolved once: a generator is materialised (and cached) by resolveSlot, so it can be checked
   // for emptiness and rendered without being consumed twice.
-  const resolved = resolveSlot(dismiss as Slot<'span'>, 'span');
+  // A render function is merged with a button `as`, or dropped when it renders nothing.
+  const resolved = resolveWiredSlot(resolveSlot(dismiss as Slot<'span'>, 'span'), isButtonType);
   if (!resolved) return DEFAULT_DISMISS;
   const { Component, props, children } = resolved;
   if (isButtonType(Component)) {

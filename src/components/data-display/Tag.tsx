@@ -318,9 +318,17 @@ function defaultDismissContent(glyphSize: number, className?: string): React.Rea
  * @param glyphSize The size (px) of the default glyph, by the tag's size.
  */
 function resolveDismissSlot(
-  slot: TagOwnProps['dismissIcon'],
+  dismissIcon: TagOwnProps['dismissIcon'],
   glyphSize: number,
 ): ResolvedDismissSlot {
+  // A render function that renders nothing leaves the default glyph and the object's other
+  // attributes (C-SLOTS): the slot is the object without it.
+  const slot =
+    isPlainObject(dismissIcon) &&
+    typeof dismissIcon.children === 'function' &&
+    !slotRendersContent(dismissIcon)
+      ? ({ ...dismissIcon, children: undefined } as TagOwnProps['dismissIcon'])
+      : dismissIcon;
   if (!slotRendersContent(slot)) {
     return {
       buttonProps: null,
@@ -418,20 +426,27 @@ function resolveDismissSlot(
     // `iconPosition="after"`).
     // The dismiss icon part is the merged Button's icon element when there is one, else the
     // element this slot object renders (a default glyph inside it stays without the part class).
-    // A render function is no content of its own: it stays, and receives the default glyph as its
-    // `children` prop (C-SLOTS).
+    // A render function is no content of its own: it stays, and receives what the element would
+    // hold (the default glyph, or a merged Button's icon) as its `children` prop (C-SLOTS).
     const render = contentProps.children;
     const isRender = typeof render === 'function';
+    const receive = (content: React.ReactNode) =>
+      isRender
+        ? (Component: React.ElementType, props: object) =>
+            (render as SlotRenderFunction<object>)(Component, { ...props, children: content })
+        : content;
     const hasButtonIcon = slotRendersContent(ownProps.icon);
     if (hasButtonIcon) {
-      contentProps.children = placeButtonIcon(
-        renderSlot(
-          ownProps.icon as Slot<'span'>,
-          'span',
-          cn(tagClassNames.dismissIcon, iconClassName),
+      contentProps.children = receive(
+        placeButtonIcon(
+          renderSlot(
+            ownProps.icon as Slot<'span'>,
+            'span',
+            cn(tagClassNames.dismissIcon, iconClassName),
+          ),
+          isRender ? undefined : materialiseSlotContent(contentProps.children),
+          ownProps.iconPosition,
         ),
-        materialiseSlotContent(contentProps.children),
-        ownProps.iconPosition,
       );
     } else if (
       slotWrapsDefaultContent(
@@ -439,11 +454,7 @@ function resolveDismissSlot(
         isRender ? { ...contentProps, children: undefined } : contentProps,
       )
     ) {
-      const glyph = defaultDismissContent(glyphSize);
-      contentProps.children = isRender
-        ? (Component: React.ElementType, props: object) =>
-            (render as SlotRenderFunction<object>)(Component, { ...props, children: glyph })
-        : glyph;
+      contentProps.children = receive(defaultDismissContent(glyphSize));
     }
     return {
       buttonProps: isButtonObject || Object.keys(buttonProps).length > 0 ? buttonProps : null,

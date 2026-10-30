@@ -13,7 +13,7 @@ import { CheckIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
-import type { CoreSize, Orientation, Slot } from '../../lib/types';
+import type { CoreSize, Orientation, Slot, SlotObject } from '../../lib/types';
 import { CardCornersContext, CardOrientationContext } from './Card.context';
 import { CardPreview } from './Card.preview';
 
@@ -175,9 +175,15 @@ export interface CardOwnProps {
    * merged onto it (a class, `aria-describedby`, `name`; its type, checked state and change
    * handling stay the card's), an element replaces it (give that control its own name and call
    * `onSelect` from it), and `null` or `false` removes it, for a control you render elsewhere.
-   * Ignored with the default `selectionControl`.
+   * Ignored with the default `selectionControl`. An `<input>` has no content, so the object takes
+   * no `children` (any are dropped).
    */
-  checkbox?: Slot<'input'>;
+  checkbox?:
+    | (Omit<SlotObject<'input'>, 'children'> & {
+        /** An `<input>` has no content: none is taken. */
+        children?: never;
+      })
+    | React.ReactNode;
   /**
    * An action over the top end corner of the card (a menu button, say). A card with one is
    * positioned; with `selectionControl="checkbox"` the built-in checkbox then moves to the top
@@ -238,7 +244,8 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
     checkbox !== null &&
     !React.isValidElement(checkbox) &&
     !Array.isArray(checkbox)
-      ? (checkbox as React.InputHTMLAttributes<HTMLInputElement>)
+      ? // An `<input>` takes no children: React would throw for any.
+        { ...(checkbox as React.InputHTMLAttributes<HTMLInputElement>), children: undefined }
       : undefined;
   const corners = React.useMemo(
     () => ({

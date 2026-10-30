@@ -11,6 +11,7 @@ import {
   materialiseSlotContent,
   renderSlot,
   resolveSlot,
+  resolveWiredSlot,
   slotRendersContent,
   slotWrapsDefaultContent,
 } from '../../lib/slot';
@@ -305,7 +306,8 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
 
   // Everything else is classified by the slot system (F2): shorthand content resolves to the
   // default `span` with no attributes; a slot object resolves to its element and attributes.
-  const resolved = resolveSlot(dismiss as Slot<'span'>, 'span');
+  // A render function is merged with a button `as`, or dropped when it renders nothing.
+  const resolved = resolveWiredSlot(resolveSlot(dismiss as Slot<'span'>, 'span'), isButtonType);
   if (!resolved) return defaultDismiss();
   const { Component, props, children } = resolved;
   const asButton = isButtonType(Component);

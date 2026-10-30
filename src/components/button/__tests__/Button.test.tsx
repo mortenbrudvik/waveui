@@ -11,7 +11,7 @@ import {
   testNoImplicitSubmit,
   renderWithProviders,
 } from '../../../test-utils';
-import type { Appearance, IconPosition, Size, Slot } from '../../../lib/types';
+import type { Appearance, IconPosition, Size, Slot, SlotRenderFunction } from '../../../lib/types';
 import { buttonClassNames } from '../../../lib/classNames';
 
 const HOVER_GATE = 'not-disabled:not-aria-disabled:hover:';
@@ -802,6 +802,19 @@ describe('Button', () => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
       expect(button).toContainElement(icon);
       expect(button).toHaveClass('gap-1.5');
+    });
+
+    it('takes a reusable render function annotated with the bare SlotRenderFunction (P13-01)', () => {
+      const icon: SlotRenderFunction = (Component, props) => (
+        <Component {...props} data-testid="icon">
+          <PaperclipIcon />
+        </Component>
+      );
+      render(<Button icon={{ children: icon }}>Attach</Button>);
+      expect(screen.getByTestId('icon')).toHaveClass(buttonClassNames.icon);
+      expect(screen.getByRole('button', { name: 'Attach' })).toContainElement(
+        screen.getByTestId('icon'),
+      );
     });
 
     it('a render function that renders nothing is no icon: no span, no gap (P13-01)', () => {

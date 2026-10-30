@@ -9,6 +9,7 @@ import { Portal } from '../../portal/Portal';
 import { WaveProvider } from '../../provider/WaveProvider';
 import type { Slot, SlotObject } from '../../../lib/types';
 import { inputInvalidWithin } from '../../../lib/styles';
+import { searchBoxClassNames } from '../../../lib/classNames';
 import {
   testSystemProps,
   testFocusEvents,
@@ -459,6 +460,102 @@ describe('SearchBox', () => {
       const clear = screen.getByRole('button', { name: 'Clear search' });
       expect(clear).toContainElement(screen.getByTestId('dismiss-slot'));
       expect(screen.getByTestId('dismiss-slot').parentElement).toHaveClass('custom');
+    });
+
+    describe('a render function (P13-01)', () => {
+      it('renders the content element inside the wired clear button, given the default glyph', async () => {
+        const user = userEvent.setup();
+        const onClear = vi.fn();
+        const renderContent = vi.fn((Component: React.ElementType, props: object) => (
+          <Component {...props} data-testid="content" />
+        ));
+        render(
+          <SearchBox
+            aria-label="Search"
+            defaultValue="test"
+            onClear={onClear}
+            dismiss={{ className: 'custom', children: renderContent }}
+          />,
+        );
+        const clear = screen.getByRole('button', { name: 'Clear search' });
+        const content = screen.getByTestId('content');
+        // The resolved element (and its render function) reaches the content path: the object is
+        // not the default clear content even though it has no attribute but its class.
+        expect(clear).toContainElement(content);
+        expect(content.tagName).toBe('SPAN');
+        expect(content).toHaveClass(searchBoxClassNames.dismissIcon, 'custom');
+        expect(content).toHaveAttribute('aria-hidden', 'true');
+        expect(renderContent).toHaveBeenCalledWith(
+          'span',
+          expect.objectContaining({ children: expect.anything() }),
+        );
+        expect(content.querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
+        await user.click(content);
+        expect(onClear).toHaveBeenCalledOnce();
+      });
+
+      it('passes the function to the content path without other attributes too', () => {
+        const renderContent = vi.fn((Component: React.ElementType, props: object) => (
+          <Component {...props} data-testid="content" />
+        ));
+        render(
+          <SearchBox
+            aria-label="Search"
+            defaultValue="test"
+            dismiss={{ children: renderContent }}
+          />,
+        );
+        expect(screen.getByRole('button', { name: 'Clear search' })).toContainElement(
+          screen.getByTestId('content'),
+        );
+        expect(renderContent).toHaveBeenCalled();
+      });
+
+      it('one that renders nothing leaves the default glyph, with the object’s other attributes', () => {
+        render(
+          <SearchBox
+            aria-label="Search"
+            defaultValue="test"
+            dismiss={{ className: 'custom', 'data-part': 'x', children: () => null }}
+          />,
+        );
+        const clear = screen.getByRole('button', { name: 'Clear search' });
+        const content = clear.querySelector<HTMLElement>('[data-part="x"]')!;
+        expect(content).toHaveClass(searchBoxClassNames.dismissIcon, 'custom');
+        expect(content.querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
+      });
+
+      it.each([
+        ['"button"', 'button'],
+        ['a Wave Button', Button],
+      ] as const)(
+        'merges an object whose `as` is %s into the wired button, never nesting one, with the warning',
+        async (_name, as) => {
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const user = userEvent.setup();
+          const onClear = vi.fn();
+          const renderContent = vi.fn((Component: React.ElementType, props: object) => (
+            <Component {...props} data-testid="content">
+              ×
+            </Component>
+          ));
+          render(
+            <SearchBox
+              aria-label="Search"
+              defaultValue="test"
+              onClear={onClear}
+              dismiss={{ as, children: renderContent } as Slot<'span'>}
+            />,
+          );
+          expect(screen.getAllByRole('button')).toHaveLength(1);
+          const clear = screen.getByRole('button', { name: 'Clear search' });
+          expect(renderContent).toHaveBeenCalledWith('span', {});
+          expect(clear).toContainElement(screen.getByTestId('content'));
+          await user.click(screen.getByTestId('content'));
+          expect(onClear).toHaveBeenCalledOnce();
+          expectWarnings(warn, [OBJECT_WARNING]);
+        },
+      );
     });
 
     it('merges a <button> element slot into the wired button (no nesting) and warns', async () => {

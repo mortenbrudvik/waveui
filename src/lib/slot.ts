@@ -4,6 +4,17 @@ import { cn } from './cn';
 import { warnOnce } from './dev';
 
 /**
+ * The props a {@link SlotRenderFunction} of a slot object receives, as typed: the attributes that
+ * every HTML element has and `data-*` attributes, whatever the slot's element, so one function
+ * fits each slot (and each member of a slot union such as `Slot<'span'> | SlotObject<'button'>`)
+ * and its props spread onto any tag. The `ref` and the element's own attributes (an image's `src`)
+ * arrive too, untyped, and spread with them.
+ */
+export type SlotRenderProps = React.HTMLAttributes<HTMLElement> & {
+  [dataAttribute: `data-${string}`]: unknown;
+};
+
+/**
  * A render function as the `children` of a slot object (the escape hatch of Fluent UI's slots,
  * `children: (Component, props) => ReactNode`): it renders the slot in place of the slot's element.
  *
@@ -19,10 +30,17 @@ import { warnOnce } from './dev';
  *   {...props} />` renders what the object without the function renders; dropping `props` drops
  *   the component's wiring (its classes, `aria-hidden`, handlers, `ref`).
  *
- * In the slots that render inside a component's own button (dismiss, clear, close and glyph
- * slots) the button stays: the function renders the content element inside it, so name no button
- * in `as`. The glyph slots and Tag's `dismissIcon` unwrap or merge an `as` that names one before
- * the function renders, which then receives a span.
+ * Annotate a function of your own with the bare type (`const icon: SlotRenderFunction = …`), which
+ * fits every slot: a type argument makes another function type, which a slot does not take.
+ *
+ * In the slots that render inside a component's own button (dismiss, clear, close and glyph slots)
+ * that button stays and the function renders the content inside it:
+ * - a function that renders nothing at the check below leaves the default glyph, with the
+ *   object's other attributes (an empty dismiss button is never left);
+ * - a slot object whose `as` names a button (a `<button>` or a Wave `Button`) is merged into the
+ *   component's button or unwrapped, as the slot's rules say, with their warning: the function
+ *   then renders the content, a span (in the dismiss and close slots it receives `'span'` and no
+ *   props), so no button ever nests in a button.
  *
  * It must be pure and call no hooks: one render can call it more than once (StrictMode, and the
  * check whether the slot renders anything, which calls it with the object's `as`, else `'span'`,
@@ -30,14 +48,18 @@ import { warnOnce } from './dev';
  * renders nothing for the rules that read it: an optional indicator is left out, a required
  * indicator keeps its default glyph (with a development warning), a status icon shows none.
  *
+ * A render function is code, which cannot cross from a Server Component into WaveUI's client
+ * components (functions are not serializable): write the slot in a client component.
+ *
  * @example
  * <Button icon={{ children: (Component, props) => <Component {...props}><MyIcon /></Component> }}>
  *   Save
  * </Button>
  *
- * @typeParam Props - The props of the slot's element.
+ * @typeParam Props - The props of the slot's element; slot objects take the default,
+ *   {@link SlotRenderProps}.
  */
-export type SlotRenderFunction<Props> = (
+export type SlotRenderFunction<Props = SlotRenderProps> = (
   Component: React.ElementType<Props>,
   props: Omit<Props, 'as'>,
 ) => React.ReactNode;
@@ -59,17 +81,10 @@ export type SlotObject<T extends React.ElementType = 'span'> = {
   as?: React.ElementType;
   /**
    * Content to render inside the slot element (ignored for void elements such as `img`), or a
-   * {@link SlotRenderFunction} that renders the slot in place of the element. Its `props` are
-   * typed with the attributes that every HTML element has and `data-*` attributes, whatever the
-   * slot's element, so one function fits each member of a slot union such as
-   * `Slot<'span'> | SlotObject<'button'>` and its props spread onto any tag; the `ref` and the
-   * element's own attributes (an image's `src`) arrive too, untyped, and spread with them.
+   * {@link SlotRenderFunction} that renders the slot in place of the element, its `props` typed
+   * as {@link SlotRenderProps}.
    */
-  children?:
-    | React.ReactNode
-    | SlotRenderFunction<
-        React.HTMLAttributes<HTMLElement> & { [dataAttribute: `data-${string}`]: unknown }
-      >;
+  children?: React.ReactNode | SlotRenderFunction;
   /** Class name(s) merged after the component's base classes (yours win). */
   className?: string;
   /** Inline styles for the slot element. */
@@ -133,8 +148,11 @@ type UnknownProps = Record<string, unknown>;
 const RENDER_KEY = '$slot';
 
 /** The props of {@link SlotRender}: the element's props and the render function with its type. */
-interface SlotRenderProps {
-  [RENDER_KEY]: [render: SlotRenderFunction<UnknownProps>, type: React.ElementType];
+interface SlotHostProps {
+  [RENDER_KEY]: [
+    render: (type: unknown, props: UnknownProps) => React.ReactNode,
+    type: React.ElementType,
+  ];
   [prop: string]: unknown;
 }
 
@@ -143,7 +161,7 @@ interface SlotRenderProps {
  * function: it renders what the function returns for the slot's element type and the props it
  * receives, those of the resolved slot and whatever its renderer adds (`children` included).
  */
-const SlotRender = ({ [RENDER_KEY]: [render, type], ...props }: SlotRenderProps) =>
+const SlotRender = ({ [RENDER_KEY]: [render, type], ...props }: SlotHostProps) =>
   render(type, props);
 
 /**
@@ -196,7 +214,7 @@ function rendersContent(node: unknown, visiting: Set<object>, nested?: boolean):
   }
   if (isSlotObject(node) && typeof node.children === 'function') {
     return rendersContent(
-      SlotRender(resolveSlot(node as Slot)!.props as SlotRenderProps),
+      SlotRender(resolveSlot(node as Slot)!.props as SlotHostProps),
       visiting,
       true,
     );
@@ -235,8 +253,9 @@ function rendersContent(node: unknown, visiting: Set<object>, nested?: boolean):
  *
  * A slot object whose `children` are a {@link SlotRenderFunction} renders content when what the
  * function returns does: it is called once with the object's `as` (else `'span'`) and its other
- * attributes, so `{ children: () => null }` renders nothing. A function anywhere else (given bare,
- * or nested in a collection) is not called, and counts as content.
+ * attributes, so `{ children: () => null }` renders nothing. Such an object is checked wherever
+ * it is, an item of a collection included (`[{ children: fn }]`); a function given bare, or as an
+ * item of a collection itself (`[fn]`), is not called and counts as content.
  *
  * A top-level generator is materialised once and cached, so checking it does not consume it:
  * render the checked value through `renderSlot`/`resolveSlot`, or, when you render it yourself,
@@ -303,9 +322,39 @@ export function slotWrapsDefaultContent(
   type: unknown,
   props: { children?: unknown; dangerouslySetInnerHTML?: unknown },
 ): boolean {
-  type = (props as Partial<SlotRenderProps>)[RENDER_KEY]?.[1] ?? type;
+  type = (props as Partial<SlotHostProps>)[RENDER_KEY]?.[1] ?? type;
   if (typeof type !== 'string' || VOID_ELEMENTS.has(type)) return false;
   return props.dangerouslySetInnerHTML == null && !slotRendersContent(props.children);
+}
+
+/**
+ * The rules of the slots that render inside a component's own button (the dismiss, clear and close
+ * slots) for a slot object with a {@link SlotRenderFunction}, applied to what {@link resolveSlot}
+ * resolved it to; any other `resolved` is returned as given:
+ * - when `isButton` accepts the element type the function receives (the object's `as` names a
+ *   button), the triple has that type, the object's attributes and, as its children, what the
+ *   function returns for `'span'` and no props: the component merges it into its own button as it
+ *   merges such an object with content, so nothing nests a button;
+ * - when the function renders nothing (called with the type and the object's attributes), the
+ *   triple has the type and the attributes and no children: the object without the function,
+ *   which keeps the default glyph inside its element;
+ * - otherwise the function renders the content element, `resolved` as given.
+ *
+ * @param resolved The slot as `resolveSlot` resolved it.
+ * @param isButton Whether an element type is a button (`'button'`, Wave's `Button`).
+ */
+export function resolveWiredSlot(
+  resolved: ResolvedSlot | null,
+  isButton: (type: unknown) => boolean,
+): ResolvedSlot | null {
+  const render = (resolved?.props as Partial<SlotHostProps> | undefined)?.[RENDER_KEY];
+  if (!render) return resolved;
+  const [fn, type] = render;
+  const { [RENDER_KEY]: _render, ...props } = resolved!.props;
+  if (isButton(type)) return { Component: type, props, children: fn('span', {}) };
+  return rendersContent(fn(type, props), new Set(), true)
+    ? resolved
+    : { Component: type, props, children: undefined };
 }
 
 /** `cn(base, own)`, or `undefined` when there are no classes, so no empty `class=""` renders. */

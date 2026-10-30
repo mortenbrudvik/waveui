@@ -1333,6 +1333,44 @@ describe('TeachingPopover', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
+    it('ignores a render function as an action’s children, with one warning; the action stays a wired Button (P13-01)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const onFinish = vi.fn();
+      const renderAction = vi.fn(() => <b>never</b>);
+      const action = { as: 'span', 'aria-label': 'Got it', children: renderAction };
+      render(
+        <React.StrictMode>
+          <TeachingPopover
+            steps={tip}
+            onFinish={onFinish}
+            primaryAction={action as unknown as TeachingPopoverAction}
+          />
+        </React.StrictMode>,
+      );
+      const gotIt = screen.getByRole('button', { name: 'Got it' });
+      // Rendered as without the function: a span that is still a Wave Button, with its wiring.
+      expect(gotIt.tagName).toBe('SPAN');
+      expect(gotIt).toHaveClass(buttonClassNames.root, teachingPopoverClassNames.primaryButton);
+      expect(gotIt).toHaveAttribute('tabindex', '0');
+      expect(gotIt).toBeEmptyDOMElement();
+      expect(renderAction).not.toHaveBeenCalled();
+      await user.click(gotIt);
+      expect(onFinish).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TeachingPopover: a `primaryAction` or `secondaryAction` slot object took a render function as `children`; it was ignored, since an action always renders as a Wave Button. Pass the label as `children`, or change the element with `as`.',
+        ],
+      ]);
+    });
+
+    it('types an action’s children as its label: a render function is a type error (P13-01)', () => {
+      expectTypeOf<{ children: React.ReactNode }>().toMatchTypeOf<TeachingPopoverAction>();
+      // @ts-expect-error — an action takes no render function
+      const action: TeachingPopoverAction = { children: () => null };
+      expect(action).toBeDefined();
+    });
+
     it.each(['Enter', ' '])(
       'a slot object rendered as a span is a keyboard-operable Button (%j)',
       async (key) => {

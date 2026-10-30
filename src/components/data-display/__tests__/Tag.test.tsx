@@ -407,6 +407,51 @@ describe('Tag', () => {
       expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
     });
 
+    it('a render function that renders nothing leaves the default glyph, with the object’s other attributes (P13-01)', () => {
+      render(
+        <Tag
+          dismissible
+          dismissIcon={{ className: 'text-error', 'data-part': 'x', children: () => null }}
+        >
+          Cherry
+        </Tag>,
+      );
+      const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+      const content = button.querySelector<HTMLElement>('[data-part="x"]')!;
+      expect(content).toHaveClass(tagClassNames.dismissIcon, 'text-error');
+      expect(content).toHaveAttribute('aria-hidden', 'true');
+      expect(content.querySelector('svg')).not.toBeNull();
+    });
+
+    it('gives a render function of the button-object form with an icon the merged icon as its children (P13-01)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
+      const renderContent = vi.fn((Component: React.ElementType, props: object) => (
+        <Component {...props} data-testid="content" />
+      ));
+      render(
+        <Tag
+          dismissible
+          dismissIcon={
+            {
+              as: Button,
+              icon: <svg data-testid="button-icon" />,
+              children: renderContent,
+            } as Slot<'span'>
+          }
+        >
+          Cherry
+        </Tag>,
+      );
+      const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+      const content = screen.getByTestId('content');
+      expect(button.querySelector('button')).toBeNull();
+      expect(content).toHaveAttribute('aria-hidden', 'true');
+      expect(content).toContainElement(screen.getByTestId('button-icon'));
+      expect(error).not.toHaveBeenCalled();
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+    });
+
     it('merges a <button> slot into the wired button instead of nesting it', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();

@@ -543,6 +543,61 @@ describe('Dialog.Content closeButton (P6-06 D95)', () => {
     );
   });
 
+  it('a render function that renders nothing leaves the default glyph, with the object’s other attributes (P13-01)', () => {
+    render(
+      <Open
+        contentProps={{
+          closeButton: { className: 'text-error', 'data-testid': 'g', children: () => null },
+        }}
+      />,
+    );
+    const content = screen.getByTestId('g');
+    expect(button('Close')).toContainElement(content);
+    expect(content).toHaveClass('text-error');
+    expect(content.querySelector('svg')).not.toBeNull();
+  });
+
+  it.each([
+    ['"button"', 'button'],
+    ['a Wave Button', Button],
+  ] as const)(
+    'merges an object whose `as` is %s and whose children are a render function, never nesting a button (P13-01)',
+    async (_name, as) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        const renderContent = vi.fn((Component: React.ElementType, props: object) => (
+          <Component {...props}>Done</Component>
+        ));
+        render(
+          <Open
+            dialogProps={{ onOpenChange }}
+            contentProps={{ closeButton: { as, children: renderContent } as Slot<'span'> }}
+          />,
+        );
+        // The function renders the merged button's content: its text names the button.
+        const done = button('Done');
+        expect(done).toHaveClass(buttonClassNames.root, dialogContentClassNames.closeButton);
+        expect(done.querySelector('button')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+        expect(renderContent).toHaveBeenCalledWith('span', {});
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] Dialog.Content: `closeButton` received a slot object that renders a button; its props were merged into the built-in Close button (buttons cannot be nested). Pass icon content instead, e.g. `closeButton={<CloseIcon />}`.',
+          ],
+        ]);
+        await user.click(done);
+        expect(onOpenChange).toHaveBeenCalledWith(
+          false,
+          expect.objectContaining({ reason: 'close-button' }),
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
+
   it('a slot object’s aria-label names the button', () => {
     render(
       <Open

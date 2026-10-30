@@ -274,6 +274,7 @@ import type {
   SlotPart,
   SlotPartOwn,
   SlotRenderFunction,
+  SlotRenderProps,
   SortDirection,
   SpinButton,
   SpinButtonAllowEmptyProps,
@@ -2233,6 +2234,19 @@ describe('0.18 customization surface from the package entry', () => {
     // @ts-expect-error a part never takes children
     const part: SlotPart<'span'> = { children: 'x' };
     expect(part).toBeDefined();
+  });
+
+  it('SlotRenderProps, and SlotRenderFunction defaulting to it', () => {
+    expectTypeOf<SlotRenderProps>().toEqualTypeOf<
+      HTMLAttributes<HTMLElement> & { [dataAttribute: `data-${string}`]: unknown }
+    >();
+    expectTypeOf<SlotRenderFunction>().toEqualTypeOf<SlotRenderFunction<SlotRenderProps>>();
+    expectTypeOf<SlotObject<'span'>['children']>().toEqualTypeOf<
+      ReactNode | SlotRenderFunction | undefined
+    >();
+    const reusable: SlotRenderFunction = () => null;
+    expectTypeOf({ children: reusable }).toMatchTypeOf<Slot<'span'>>();
+    expectTypeOf({ alt: '', children: reusable }).toMatchTypeOf<Slot<'img'>>();
   });
 
   it('SlotRenderFunction, the children of a slot object that renders the slot itself', () => {

@@ -15,11 +15,40 @@ import type { PopupAlign, PopupPositioning, PopupSide, VirtualElement } from '..
  *
  * The consumer's `onClick` runs first; then the step's normal action runs (Next or Done for the
  * primary action, Back for the secondary one) unless the handler called `event.preventDefault()`.
+ *
+ * A slot object's `children` are its label: an action takes no render function, since its element
+ * is always a Wave Button (one is ignored, with a development warning); change the element with
+ * `as`.
  */
 export type TeachingPopoverAction =
   | React.ReactNode
-  | (SlotObject<'button'> &
-      Pick<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'target' | 'rel' | 'download'>);
+  | (Omit<SlotObject<'button'>, 'children'> & {
+      /** The action's label. */
+      children?: React.ReactNode;
+    } & Pick<
+        React.AnchorHTMLAttributes<HTMLAnchorElement>,
+        'href' | 'target' | 'rel' | 'download'
+      >);
+
+/**
+ * Whether an action is a slot object whose `children` are a function: a render function, which an
+ * action does not take (its element is always a Wave Button).
+ */
+export function hasRenderFunction(action: TeachingPopoverAction | undefined): boolean {
+  return (
+    typeof action === 'object' &&
+    action !== null &&
+    !('$$typeof' in action) &&
+    typeof (action as { children?: unknown }).children === 'function'
+  );
+}
+
+/** An action without a render function as its `children`: the action renders as without it. */
+export function withoutRenderFunction(
+  action: TeachingPopoverAction | undefined,
+): TeachingPopoverAction | undefined {
+  return hasRenderFunction(action) ? { ...(action as object), children: undefined } : action;
+}
 
 /** Defines a single step in a teaching popover sequence. */
 export interface TeachingPopoverStep {

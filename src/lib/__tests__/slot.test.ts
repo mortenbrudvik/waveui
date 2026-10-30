@@ -4,12 +4,13 @@ import { render, screen } from '@testing-library/react';
 import {
   materialiseSlotContent,
   resolveSlot,
+  resolveWiredSlot,
   renderSlot,
   slotRendersContent,
   slotWrapsDefaultContent,
   VOID_ELEMENTS,
 } from '../slot';
-import type { ResolvedSlot, Slot, SlotObject, SlotRenderFunction } from '../slot';
+import type { ResolvedSlot, Slot, SlotObject, SlotRenderFunction, SlotRenderProps } from '../slot';
 import type * as Types from '../types';
 import { __resetWarnings } from '../dev';
 import { asClientReference } from '../../test-utils';
@@ -1006,6 +1007,57 @@ describe('render-function children (P13-01, spec R8)', () => {
       expect(renderFn).not.toHaveBeenCalled();
     });
   });
+
+  describe('resolveWiredSlot (the dismiss, clear and close slots)', () => {
+    const isButton = (type: unknown) => type === 'button' || type === Glyph;
+    const noop = () => {};
+
+    it('returns a slot without a render function, and null, as given', () => {
+      const resolved = resolveSlot({ as: 'button', className: 'x', children: 'X' }, 'span');
+      expect(resolveWiredSlot(resolved, isButton)).toBe(resolved);
+      expect(resolveWiredSlot(null, isButton)).toBeNull();
+    });
+
+    it('keeps the element of a function that renders content and names no button', () => {
+      const resolved = resolveSlot({ className: 'x', children: renderStar() }, 'span');
+      expect(resolveWiredSlot(resolved, isButton)).toBe(resolved);
+    });
+
+    it.each<[label: string, as: React.ElementType]>([
+      ['"button"', 'button'],
+      ['a button component', Glyph],
+    ])(
+      'gives an object whose `as` is %s its type, attributes and the function’s content for a span',
+      (_label, as) => {
+        const renderFn = vi.fn(() => 'content');
+        const wired = resolveWiredSlot(
+          resolveSlot({ as, onClick: noop, children: renderFn }, 'span'),
+          isButton,
+        )!;
+        expect(wired).toEqual({
+          Component: as,
+          props: { onClick: noop, className: undefined },
+          children: 'content',
+        });
+        expect(renderFn.mock.calls).toEqual([['span', {}]]);
+      },
+    );
+
+    it('leaves out a function that renders nothing, keeping the object’s attributes', () => {
+      const renderFn = vi.fn(() => null);
+      const wired = resolveWiredSlot(
+        resolveSlot({ className: 'x', 'data-part': 'p', children: renderFn }, 'span'),
+        isButton,
+      )!;
+      expect(wired).toEqual({
+        Component: 'span',
+        props: { className: 'x', 'data-part': 'p' },
+        children: undefined,
+      });
+      expect(renderFn.mock.calls).toEqual([['span', { className: 'x', 'data-part': 'p' }]]);
+      expect(slotWrapsDefaultContent(wired.Component, wired.props)).toBe(true);
+    });
+  });
 });
 
 describe('Slot types (table-core#18)', () => {
@@ -1083,6 +1135,19 @@ describe('Slot types (table-core#18)', () => {
     const node = renderSlot(dismiss, 'span');
     expect(node).not.toBeNull();
     expect(resolveSlot(dismiss, 'span')!.props).toMatchObject({ type: 'button', disabled: true });
+  });
+
+  it('takes a function annotated with the bare SlotRenderFunction in every slot (P13-01)', () => {
+    expectTypeOf<SlotRenderFunction>().toEqualTypeOf<SlotRenderFunction<SlotRenderProps>>();
+    expectTypeOf<SlotObject<'span'>['children']>().toEqualTypeOf<
+      React.ReactNode | SlotRenderFunction | undefined
+    >();
+    const reusable: SlotRenderFunction = (Component, props) =>
+      React.createElement(Component, props);
+    const span: Slot<'span'> = { children: reusable };
+    const img: Slot<'img'> = { alt: '', children: reusable };
+    const dismiss: Slot<'span'> | SlotObject<'button'> = { children: reusable };
+    expect([span, img, dismiss]).toHaveLength(3);
   });
 
   it('takes a render function as the children of a slot object, typed for any slot element', () => {
