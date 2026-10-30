@@ -58,7 +58,8 @@ const NAME_WARNING = (key: string) =>
   'camelCase without `--wave-`, such as `primaryForeground`).';
 const VALUE_WARNING = (key: string) =>
   `[WaveUI] WaveProvider: \`tokens\` skips \`${key}\`: its value must be a finite number, or CSS ` +
-  'text without `;`, `{`, `}` and with balanced quotes, brackets and comments.';
+  'text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(` and without ' +
+  '`!` outside a string.';
 
 /** The markup of a provider without overrides (0.16's), which a skipped override leaves as it is. */
 const PLAIN_MARKUP =
@@ -117,9 +118,10 @@ describe('WaveProvider tokens: the root style', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  // An open string, comment or parenthesis would run on to the end of the server-rendered
-  // attribute, and a trailing backslash would escape the semicolon after it, so the declarations
-  // after the value (a later token, the consumer's `style`) would be lost on the server only.
+  // An open string, comment, parenthesis or bracket (also one after an unquoted URL's first `)`)
+  // would run on to the end of the server-rendered attribute, and a trailing backslash would escape
+  // the semicolon after it, so the declarations after the value (a later token, the consumer's
+  // `style`) would be lost on the server only; `!important` would be a priority there only.
   it.each([
     ['an unclosed single quote', "'abc"],
     ['an unclosed double quote', '"abc'],
@@ -128,6 +130,8 @@ describe('WaveProvider tokens: the root style', () => {
     ['a trailing backslash', '#c43e00\\'],
     ['a stray closing parenthesis', '#c43e00)'],
     ['an unclosed square bracket', '[content-start'],
+    ['a quote inside an unquoted url(', 'url(a"b)c")'],
+    ['an important flag', '#c43e00 !important'],
   ])(
     'renders no declaration of a value with %s on the server, and keeps the ones after it',
     (_label, value) => {

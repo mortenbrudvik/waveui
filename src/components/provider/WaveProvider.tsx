@@ -86,12 +86,13 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
    * the theme it was chosen for. A whole brand ramp is better made with `createBrandTokens` than
    * written by hand.
    * A key that is not a camelCase identifier is skipped with a development warning, and so is a
-   * value unless it is a finite number or CSS text without `;`, `{` or `}` whose quotes,
-   * parentheses, square brackets and comments are balanced and that ends in no unpaired backslash
-   * (in the server-rendered `style` attribute such a character could add a declaration of its own,
-   * and an open string, comment or bracket, or a trailing backslash, would swallow the declarations
-   * after it there, though not in the client); a well-formed name is not checked against the list
-   * of tokens (TypeScript refuses a misspelled one).
+   * value unless it is a finite number or CSS text without `;`, `{`, `}` or `url(` whose quotes,
+   * parentheses, square brackets and comments are balanced, with no `!` outside strings and
+   * comments and no unpaired backslash at the end (in the server-rendered `style` attribute such a
+   * character could add a declaration of its own, an open string, comment or bracket, or a trailing
+   * backslash, would swallow the declarations after it there, though not in the client, and
+   * `!important` would be a priority the client refuses); a well-formed name is not checked
+   * against the list of tokens (TypeScript refuses a misspelled one).
    *
    * The overrides are rendered on the server too. Under a Content Security Policy that blocks
    * inline style attributes (`style-src` without `'unsafe-inline'`), the server-rendered overrides
@@ -220,9 +221,10 @@ export function useWaveTheme(): WaveContextValue {
  *   tokens the theme declares and for the overlays, while the theme-independent ones of an
  *   enclosing provider still reach the subtree through the CSS cascade. An override whose key is
  *   not a camelCase identifier is skipped with a development warning, and so is a value unless it
- *   is a finite number or CSS text without `;`, `{` or `}` with balanced quotes, parentheses,
- *   square brackets and comments and no trailing unpaired backslash. Without overrides the root
- *   renders no `style` attribute unless you pass `style`.
+ *   is a finite number or CSS text without `;`, `{`, `}` or `url(` with balanced quotes,
+ *   parentheses, square brackets and comments, no `!` outside strings and comments and no
+ *   trailing unpaired backslash. Without overrides the root renders no `style` attribute unless you
+ *   pass `style`.
  */
 export const WaveProvider = ({
   theme: themeProp,
@@ -270,7 +272,7 @@ export const WaveProvider = ({
             `WaveProvider: \`tokens\` skips \`${key}\`: ` +
               (reason === 'name'
                 ? 'not a token name (the CSS variable in camelCase without `--wave-`, such as `primaryForeground`).'
-                : 'its value must be a finite number, or CSS text without `;`, `{`, `}` and with balanced quotes, brackets and comments.'),
+                : 'its value must be a finite number, or CSS text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(` and without `!` outside a string.'),
           );
         }
       }

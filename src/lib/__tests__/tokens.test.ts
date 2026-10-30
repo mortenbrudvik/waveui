@@ -26,14 +26,16 @@ const loose = (overrides: Record<string, unknown>) => overrides as WaveTokenOver
 /** The warning of `getTokenStyle` for a value it skips. */
 const VALUE_WARNING = (key: string) =>
   `[WaveUI] getTokenStyle: the value of \`${key}\` is skipped: it must be a finite number, or CSS ` +
-  'text without `;`, `{`, `}` and with balanced quotes, brackets and comments.';
+  'text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(` and without ' +
+  '`!` outside a string.';
 
 /**
  * Strings that end a server-rendered `style` attribute's text in the middle of a construct: an
  * open string, comment, parenthesis or square bracket runs on to the end of the attribute, and a
  * trailing backslash escapes the semicolon after it, so the declarations after it (later tokens,
  * the consumer's `style`) are swallowed, while the client sets each property on its own. A stray
- * closer, which the client refuses in a custom property, is skipped too.
+ * closer, which the client refuses in a custom property, is skipped too, and so are `url(` and a
+ * `!` outside a string, which the two read differently.
  */
 const MALFORMED_VALUES = [
   ['an unclosed single quote', "'Segoe UI, sans-serif"],
@@ -58,6 +60,15 @@ const MALFORMED_VALUES = [
   ['a square bracket closed only inside a string', "[a ']'"],
   ['a trailing backslash', '#c43e00\\'],
   ['an odd run of trailing backslashes', '#c43e00\\\\\\'],
+  // An unquoted URL ends at its first `)` whatever it holds, so the quote after that one would
+  // open a string; no token takes a URL, so `url(` is refused in any form.
+  ['a quote inside an unquoted url(', 'url(a"b)c")'],
+  ['an unquoted url(', 'url(x)'],
+  ['a quoted URL( in capitals', "URL( 'x' )"],
+  ['a url( inside a string', "'url(x)', sans-serif"],
+  // The server reads `!important` as the declaration's priority, the client refuses the value.
+  ['an important flag', '#c43e00 !important'],
+  ['an exclamation mark inside a function', 'var(--wave-brand-80, red !important)'],
 ] as const;
 
 /** Every `--wave-*` declaration of tokens.css: the constants and ramps, then each theme group. */
@@ -235,6 +246,8 @@ describe('collectTokenStyle', () => {
     ['a fallback in a reference', 'primary', 'var(--x, #fff)'],
     ['balanced square brackets', 'fontFamily', '[content-start] repeat(2, [col] 1fr) [end]'],
     ['brackets inside a string and a comment', 'fontFamily', "'[(' /* ]) */, sans-serif"],
+    ['the letters url without a parenthesis', 'fontFamily', "'Curlz MT', curly-url, fantasy"],
+    ['an exclamation mark inside a string and a comment', 'fontFamily', "'Wave!' /* ! */, serif"],
     [
       'nested functions and a division',
       'shadow2',

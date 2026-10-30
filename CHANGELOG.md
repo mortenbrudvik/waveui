@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Token values with an unclosed quote, comment, parenthesis or square bracket, a stray `)` or `]`, or a trailing backslash are now skipped with a warning, like values with `;`, `{` or `}`, by `WaveProvider tokens` and `getTokenStyle`; before, in a server-rendered `style` attribute such a value swallowed the declarations after it (the later overrides and your `style`), so the server and the client could render different overrides (the 0.17.0 note that both render the same overrides held for well-formed values only). The value is scanned once, as the CSS tokenizer reads it: parentheses and brackets inside a string or a comment, the other quote inside a string and escaped characters do not count, a string must close on its own line, and a closer must match the innermost open parenthesis or bracket. Every token of `tokens.css`, font stacks with quoted names such as `'Segoe UI Web (West European)'`, shadows, curves, `var()` with a fallback and `color-mix()` still pass. Both warnings now say that a value must be "a finite number, or CSS text without `;`, `{`, `}` and with balanced quotes, brackets and comments".
+- Token values with an unclosed quote, comment, parenthesis or square bracket, a stray `)` or `]`, or a trailing backslash are now skipped with a warning, like values with `;`, `{` or `}`, by `WaveProvider tokens` and `getTokenStyle`; before, in a server-rendered `style` attribute such a value swallowed the declarations after it (the later overrides and your `style`), so the server and the client could render different overrides (the 0.17.0 note that both render the same overrides held for well-formed values only). The value is scanned once, as the CSS tokenizer reads it: parentheses and brackets inside a string or a comment, the other quote inside a string and escaped characters do not count, a string must close on its own line, and a closer must match the innermost open parenthesis or bracket. Every token of `tokens.css`, font stacks with quoted names such as `'Segoe UI Web (West European)'`, shadows, curves, `var()` with a fallback and `color-mix()` still pass.
+- Token values that hold `url(` (in any case) or a `!` outside strings and comments are skipped with the same warning. No token takes a URL, and an unquoted URL ends at its first `)` whatever it holds, so `url(a"b)c")` opened a string after it that swallowed the later declarations on the server; and the server read `red !important` as `red` with the important priority, while the client refuses the value. After these fixes every value `tokens` and `getTokenStyle` apply is balanced CSS text without `;`, `{`, `}`, `url(` or a `!` outside strings and comments, which the server-rendered `style` attribute and the client read alike, except a `url` spelt with a CSS escape (`u\rl(a"b)c")`), which still passes and still swallows the declarations after it on the server ([ROADMAP §8.5](docs/ROADMAP.md#85-follow-ups-outside-the-gap-list)).
+- Both value warnings now say that a value must be "a finite number, or CSS text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(` and without `!` outside a string".
 
 ### Changed
 
-- `WaveProvider`'s `tokens` warnings (`WaveProvider:tokens:name:<key>` and `WaveProvider:tokens:value:<key>`) read `process.env.NODE_ENV` written out, as the full-ramp check of `createBrandTokens` does, so a production bundle drops them and their text, which keeps `WaveProvider` with `Dialog` within its budget with the new check. Development builds warn as before; imported without a bundler (no `process`), the provider skips them. `getTokenStyle`'s warnings are unchanged.
+- `WaveProvider`'s `tokens` warnings (`WaveProvider:tokens:name:<key>` and `WaveProvider:tokens:value:<key>`) read `process.env.NODE_ENV` written out, as the full-ramp check of `createBrandTokens` does, so a production bundle drops them and their text, which keeps `WaveProvider` with `Dialog` within its budget with the new checks. Development builds warn as before; imported without a bundler (no `process`), the provider skips them. `getTokenStyle`'s warnings are unchanged.
 
 ### Size
 
@@ -21,11 +23,11 @@ Against 0.17.0, measured as its Size table was (`verify-dist`'s `measureImport`)
 
 | Import | 0.17.0 | 0.17.1 |
 |---|---|---|
-| An import of only `getTokenStyle` | 1,350 (772 gzip) | 1,743 (986 gzip) |
-| An import of only `WaveProvider` | 3,902 (1,844 gzip) | 3,957 (1,884 gzip) |
-| An import of `WaveProvider` and `Dialog` | 73,335 (24,747 gzip) | 73,393 (24,768 gzip) |
+| An import of only `getTokenStyle` | 1,350 (772 gzip) | 1,795 (1,011 gzip) |
+| An import of only `WaveProvider` | 3,902 (1,844 gzip) | 3,965 (1,889 gzip) |
+| An import of `WaveProvider` and `Dialog` | 73,335 (24,747 gzip) | 73,401 (24,776 gzip) |
 
-- `getTokenStyle` grows by 393 bytes (214 gzip), the check and its longer warning. In the provider the warnings that a production bundle now drops pay for most of the check: `WaveProvider` alone grows by 55 bytes (40 gzip) and with `Dialog` by 58 (21 gzip), within its budget of 73,420 and 24,843. Every other import of the 0.17.0 table, and `dist/styles.css`, is unchanged.
+- `getTokenStyle` grows by 445 bytes (239 gzip), the checks and the longer warning. In the provider the warnings that a production bundle now drops pay for most of the checks: `WaveProvider` alone grows by 63 bytes (45 gzip) and with `Dialog` by 66 (29 gzip), within its budget of 73,420 and 24,843. Every other import of the 0.17.0 table, and `dist/styles.css`, is unchanged.
 
 ## [0.17.0] - 2026-10-30
 
