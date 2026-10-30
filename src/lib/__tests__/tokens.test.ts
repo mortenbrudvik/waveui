@@ -14,6 +14,7 @@ import {
 import type { WAVE_TOKEN_NAMES } from '../waveTokens';
 import tokensSource from '../tokens.ts?raw';
 import waveTokensSource from '../waveTokens.ts?raw';
+import { rootConstants, themeDecls, THEMES } from '../../styles/__tests__/tokensHarness';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -24,8 +25,48 @@ const loose = (overrides: Record<string, unknown>) => overrides as WaveTokenOver
 
 /** The warning of `getTokenStyle` for a value it skips. */
 const VALUE_WARNING = (key: string) =>
-  `[WaveUI] getTokenStyle: the value of \`${key}\` is skipped: it must be a finite number or a ` +
-  'string without `;`, `{` or `}`.';
+  `[WaveUI] getTokenStyle: the value of \`${key}\` is skipped: it must be a finite number, or CSS ` +
+  'text without `;`, `{`, `}` and with balanced quotes, brackets and comments.';
+
+/**
+ * Strings that end a server-rendered `style` attribute's text in the middle of a construct: an
+ * open string, comment, parenthesis or square bracket runs on to the end of the attribute, and a
+ * trailing backslash escapes the semicolon after it, so the declarations after it (later tokens,
+ * the consumer's `style`) are swallowed, while the client sets each property on its own. A stray
+ * closer, which the client refuses in a custom property, is skipped too.
+ */
+const MALFORMED_VALUES = [
+  ['an unclosed single quote', "'Segoe UI, sans-serif"],
+  ['an unclosed double quote', '"Segoe UI, sans-serif'],
+  ['a string closed by an escaped quote only', "'Segoe UI\\', sans-serif"],
+  ['a quote closed by the other quote', '\'Segoe UI", sans-serif'],
+  ['a newline inside a string', "'Segoe\nUI', sans-serif"],
+  ['a carriage return inside a string', "'Segoe\rUI', sans-serif"],
+  ['a form feed inside a string', "'Segoe\fUI', sans-serif"],
+  ['an unterminated comment', '#c43e00 /* brand'],
+  ['a comment opener closed by its own slash', '#c43e00 /*/'],
+  ['an unclosed parenthesis', 'rgba(0, 0, 0, 0.5'],
+  ['an unclosed nested parenthesis', 'color-mix(in srgb, var(--wave-brand-80) 80%, #000000'],
+  ['a parenthesis closed only inside a string', "rgb(0 0 0 ')'"],
+  ['a parenthesis closed only inside a comment', 'rgb(0 0 0 /* ) */'],
+  ['a stray closing parenthesis', '#c43e00)'],
+  ['a closing parenthesis before its opening one', 'rgb)0 0 0('],
+  ['an unclosed square bracket', '[content-start'],
+  ['a stray closing square bracket', 'content-start]'],
+  ['a parenthesis closed inside a square bracket', 'calc([a)]'],
+  ['a square bracket closed inside a parenthesis', '[a (b] c)'],
+  ['a square bracket closed only inside a string', "[a ']'"],
+  ['a trailing backslash', '#c43e00\\'],
+  ['an odd run of trailing backslashes', '#c43e00\\\\\\'],
+] as const;
+
+/** Every `--wave-*` declaration of tokens.css: the constants and ramps, then each theme group. */
+const TOKENS_CSS_VALUES = [
+  ...[...rootConstants()].map(([variable, value]) => [':root', variable, value] as const),
+  ...THEMES.flatMap((theme) =>
+    [...themeDecls(theme)].map(([variable, value]) => [theme, variable, value] as const),
+  ),
+].filter(([, variable]) => variable.startsWith('--wave-'));
 
 describe('tokenVariable', () => {
   it.each([
@@ -178,9 +219,59 @@ describe('collectTokenStyle', () => {
     ['a duration', 'durationFast', '150ms'],
     ['a reference to another token', 'primary', 'var(--wave-brand-70)'],
     ['a colour mix', 'primaryHover', 'color-mix(in srgb, #c43e00 80%, #000000)'],
+    [
+      'a font stack with a parenthesis in a quoted name',
+      'fontFamily',
+      "'Segoe UI', 'Segoe UI Web (West European)', sans-serif",
+    ],
+    ['an escaped quote inside a string', 'fontFamily', '\'Wave\\\'s Sans\', "A \\"B\\"", serif'],
+    ['a quote of the other kind inside a string', 'fontFamily', '"Wave\'s Sans", \'A "B"\''],
+    ['a line continuation inside a string', 'fontFamily', "'Segoe\\\nUI', sans-serif"],
+    ['a comment opener inside a string', 'fontFamily', "'/* Wave', sans-serif"],
+    ['a balanced comment', 'primary', "#c43e00 /* brand (it's orange) */"],
+    ['a backslash before the end of a comment', 'primary', '#c43e00 /* a \\*/'],
+    ['an escaped backslash at the end', 'fontFamily', 'Wave\\\\'],
+    ['an escaped parenthesis', 'fontFamily', 'Wave\\)Sans'],
+    ['a fallback in a reference', 'primary', 'var(--x, #fff)'],
+    ['balanced square brackets', 'fontFamily', '[content-start] repeat(2, [col] 1fr) [end]'],
+    ['brackets inside a string and a comment', 'fontFamily', "'[(' /* ]) */, sans-serif"],
+    [
+      'nested functions and a division',
+      'shadow2',
+      '0 0 calc(4px / 2) color-mix(in srgb, var(--wave-brand-80) 50%, rgb(0 0 0 / 0.5))',
+    ],
   ] as const)('applies %s as it is', (_label, key, value) => {
     expect(collectTokenStyle({ [key]: value } as WaveTokenOverrides)).toEqual({
       style: { [tokenVariable(key)]: value },
+      invalid: [],
+    });
+  });
+
+  it.each(MALFORMED_VALUES)(
+    'skips a string with %s and lists it, without a warning',
+    (_, value) => {
+      const warn = vi.spyOn(console, 'warn');
+      expect(collectTokenStyle({ fontFamily: value, ring: '#ffff00' })).toEqual({
+        style: { '--wave-ring': '#ffff00' },
+        invalid: [{ key: 'fontFamily', reason: 'value' }],
+      });
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reads the declarations of tokens.css', () => {
+    const variables = TOKENS_CSS_VALUES.map(([, variable]) => variable);
+    expect(variables).toContain('--wave-font-family');
+    expect(variables).toContain('--wave-shadow-64');
+    expect(variables).toContain('--wave-curve-easy-ease');
+    expect(new Set(TOKENS_CSS_VALUES.map(([group]) => group))).toEqual(
+      new Set([':root', ...THEMES]),
+    );
+  });
+
+  it.each(TOKENS_CSS_VALUES)('applies the value of tokens.css (%s %s) as it is', (_, __, value) => {
+    expect(collectTokenStyle({ primary: value })).toEqual({
+      style: { '--wave-primary': value },
       invalid: [],
     });
   });
@@ -261,6 +352,23 @@ describe('getTokenStyle', () => {
     expect(getTokenStyle(overrides)).toEqual({ '--wave-primary': '#c43e00' });
     expect(getTokenStyle({ ring: 'red }' })).toBeUndefined();
     expect(warn.mock.calls).toEqual([[VALUE_WARNING('brand80')], [VALUE_WARNING('ring')]]);
+  });
+
+  it('warns once per key for an unbalanced string, and skips it', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const overrides: WaveTokenOverrides = {
+      fontFamily: "'Segoe UI, sans-serif",
+      shadow2: 'rgba(0, 0, 0, 0.12',
+      primary: '#c43e00',
+    };
+    expect(getTokenStyle(overrides)).toEqual({ '--wave-primary': '#c43e00' });
+    expect(getTokenStyle(overrides)).toEqual({ '--wave-primary': '#c43e00' });
+    expect(getTokenStyle({ ring: '#ffff00\\' })).toBeUndefined();
+    expect(warn.mock.calls).toEqual([
+      [VALUE_WARNING('fontFamily')],
+      [VALUE_WARNING('shadow2')],
+      [VALUE_WARNING('ring')],
+    ]);
   });
 
   it('gives no style for a map whose only value carries a declaration', () => {

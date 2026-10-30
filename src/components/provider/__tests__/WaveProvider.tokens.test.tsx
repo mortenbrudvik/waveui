@@ -15,6 +15,7 @@ import { renderWithProviders } from '../../../test-utils';
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 function root(container: HTMLElement): HTMLElement {
@@ -56,8 +57,8 @@ const NAME_WARNING = (key: string) =>
   `[WaveUI] WaveProvider: \`tokens\` skips \`${key}\`: not a token name (the CSS variable in ` +
   'camelCase without `--wave-`, such as `primaryForeground`).';
 const VALUE_WARNING = (key: string) =>
-  `[WaveUI] WaveProvider: \`tokens\` skips \`${key}\`: its value must be a finite number or a ` +
-  'string without `;`, `{` or `}`.';
+  `[WaveUI] WaveProvider: \`tokens\` skips \`${key}\`: its value must be a finite number, or CSS ` +
+  'text without `;`, `{`, `}` and with balanced quotes, brackets and comments.';
 
 /** The markup of a provider without overrides (0.16's), which a skipped override leaves as it is. */
 const PLAIN_MARKUP =
@@ -115,6 +116,37 @@ describe('WaveProvider tokens: the root style', () => {
     ).toContain('style="--wave-primary:#115ea3"');
     expect(warn).not.toHaveBeenCalled();
   });
+
+  // An open string, comment or parenthesis would run on to the end of the server-rendered
+  // attribute, and a trailing backslash would escape the semicolon after it, so the declarations
+  // after the value (a later token, the consumer's `style`) would be lost on the server only.
+  it.each([
+    ['an unclosed single quote', "'abc"],
+    ['an unclosed double quote', '"abc'],
+    ['an unterminated comment', '#c43e00 /* brand'],
+    ['an unclosed parenthesis', 'rgba(0, 0, 0, 0.5'],
+    ['a trailing backslash', '#c43e00\\'],
+    ['a stray closing parenthesis', '#c43e00)'],
+    ['an unclosed square bracket', '[content-start'],
+  ])(
+    'renders no declaration of a value with %s on the server, and keeps the ones after it',
+    (_label, value) => {
+      const warn = vi.spyOn(console, 'warn');
+      const html = renderToString(
+        <WaveProvider tokens={{ brand80: value, primary: '#c43e00' }}>Content</WaveProvider>,
+      );
+      expect(html).toContain('style="--wave-primary:#c43e00"');
+      expect(html).not.toContain('--wave-brand-80');
+      expect(
+        renderToString(
+          <WaveProvider tokens={{ brand80: value }} style={{ padding: 4 }}>
+            Content
+          </WaveProvider>,
+        ),
+      ).toContain('style="padding:4px"');
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
 
   it("merges the consumer's style, which wins a conflicting property", () => {
     const style = { '--wave-brand-80': '#0f6cbd', padding: 4 } as React.CSSProperties;
@@ -622,6 +654,61 @@ describe('WaveProvider tokens: development warnings', () => {
     });
     expect(value?.tokens).toEqual(tokens);
     expect(value?.tokenStyle).toEqual({ '--wave-primary': '#115ea3' });
+  });
+
+  it('warns once from an effect for an unbalanced string, and skips it on the root and the portals', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let warningsDuringRender = -1;
+    function Probe() {
+      warningsDuringRender = warn.mock.calls.length;
+      return null;
+    }
+    const tokens = {
+      fontFamily: "'Segoe UI, sans-serif",
+      shadow2: '0 0 2px rgba(0, 0, 0, 0.12',
+      primary: '#115ea3',
+    } satisfies WaveTokenOverrides;
+    const { container, rerender } = render(
+      <React.StrictMode>
+        <WaveProvider tokens={tokens}>
+          <Probe />
+          <Portal>
+            <span>Overlay</span>
+          </Portal>
+        </WaveProvider>
+      </React.StrictMode>,
+    );
+    expect(warningsDuringRender).toBe(0);
+    expect(customProperties(wrapperOf(screen.getByText('Overlay')))).toEqual({
+      '--wave-primary': '#115ea3',
+    });
+    rerender(
+      <React.StrictMode>
+        <WaveProvider tokens={{ ...tokens }}>Again</WaveProvider>
+      </React.StrictMode>,
+    );
+    expect(warn.mock.calls).toEqual([[VALUE_WARNING('fontFamily')], [VALUE_WARNING('shadow2')]]);
+    expect(customProperties(root(container))).toEqual({ '--wave-primary': '#115ea3' });
+  });
+
+  // The effect reads `process.env.NODE_ENV` written out, so a production bundle drops it.
+  it('logs nothing in production, and still skips the invalid entries', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { container } = render(
+      <WaveProvider
+        tokens={untyped({ 'brand-80': '#c43e00', fontFamily: "'Segoe UI", primary: '#115ea3' })}
+      >
+        <Portal>
+          <span>Overlay</span>
+        </Portal>
+      </WaveProvider>,
+    );
+    expect(warn).not.toHaveBeenCalled();
+    expect(customProperties(root(container))).toEqual({ '--wave-primary': '#115ea3' });
+    expect(customProperties(wrapperOf(screen.getByText('Overlay')))).toEqual({
+      '--wave-primary': '#115ea3',
+    });
   });
 
   it('logs nothing while rendering on the server', () => {

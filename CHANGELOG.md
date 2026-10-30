@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1] - Unreleased
+
+### Fixed
+
+- Token values with an unclosed quote, comment, parenthesis or square bracket, a stray `)` or `]`, or a trailing backslash are now skipped with a warning, like values with `;`, `{` or `}`, by `WaveProvider tokens` and `getTokenStyle`; before, in a server-rendered `style` attribute such a value swallowed the declarations after it (the later overrides and your `style`), so the server and the client could render different overrides (the 0.17.0 note that both render the same overrides held for well-formed values only). The value is scanned once, as the CSS tokenizer reads it: parentheses and brackets inside a string or a comment, the other quote inside a string and escaped characters do not count, a string must close on its own line, and a closer must match the innermost open parenthesis or bracket. Every token of `tokens.css`, font stacks with quoted names such as `'Segoe UI Web (West European)'`, shadows, curves, `var()` with a fallback and `color-mix()` still pass. Both warnings now say that a value must be "a finite number, or CSS text without `;`, `{`, `}` and with balanced quotes, brackets and comments".
+
+### Changed
+
+- `WaveProvider`'s `tokens` warnings (`WaveProvider:tokens:name:<key>` and `WaveProvider:tokens:value:<key>`) read `process.env.NODE_ENV` written out, as the full-ramp check of `createBrandTokens` does, so a production bundle drops them and their text, which keeps `WaveProvider` with `Dialog` within its budget with the new check. Development builds warn as before; imported without a bundler (no `process`), the provider skips them. `getTokenStyle`'s warnings are unchanged.
+
+### Size
+
+Against 0.17.0, measured as its Size table was (`verify-dist`'s `measureImport`). Sizes are in bytes:
+
+| Import | 0.17.0 | 0.17.1 |
+|---|---|---|
+| An import of only `getTokenStyle` | 1,350 (772 gzip) | 1,743 (986 gzip) |
+| An import of only `WaveProvider` | 3,902 (1,844 gzip) | 3,957 (1,884 gzip) |
+| An import of `WaveProvider` and `Dialog` | 73,335 (24,747 gzip) | 73,393 (24,768 gzip) |
+
+- `getTokenStyle` grows by 393 bytes (214 gzip), the check and its longer warning. In the provider the warnings that a production bundle now drops pay for most of the check: `WaveProvider` alone grows by 55 bytes (40 gzip) and with `Dialog` by 58 (21 gzip), within its budget of 73,420 and 24,843. Every other import of the 0.17.0 table, and `dist/styles.css`, is unchanged.
+
 ## [0.17.0] - 2026-10-30
 
 The twelfth Fluent UI v9 parity release: Phase 12 of the [roadmap](docs/ROADMAP.md), the theming API and a charts strategy. An app can now look like its own brand without forking WaveUI or fighting it. `WaveProvider tokens` overrides any design token by its camelCase name, as inline custom properties on the provider's root and on every portal of its subtree, so a nested panel's dialogs, menus, popovers, tooltips and toasts match the panel (`applyStylesToPortals={false}` keeps the overrides off the portals). `createBrandTokens('#c43e00')` builds the 16-stop brand ramp from one color, each stop at the default ramp's luminance, so the light and dark themes keep their contrast whatever the seed; a full ramp of your own is checked in development. `waveTokens` gives every token a typed JavaScript value (`waveTokens.primary` is `'var(--wave-primary)'`), `getTokenStyle` the provider's inline style for an element no provider renders (a Server Component's `<html>`), and `chartPalette` the 12 palette fills in an order for chart series. Shadows become per-theme tokens with Fluent's stronger dark values, each persona palette hue gains a tint, a tint foreground and a border, and two font families (monospace and numeric) come with `Text font` and a `medium` weight. Charts are a documented strategy, not components: the guide's new "Charts with WaveUI" chapter and Storybook stories for Recharts and Chart.js, which stay out of the package. It closes the eleven gaps of P12-01 to P12-04 (`foundation-1`, `foundation-3`, `foundation-5`, `foundation-6`, `foundation-7`, `foundation-8`, `foundation-11`, `foundation-12`, `foundation-46`, `text-3`, `text-4`): `foundation-46` by the strategy, and `foundation-6` by the palette, with the spacing, radius and stroke scales documented rather than made tokens. Nothing public was removed, and the markup of 0.16 is unchanged without `tokens`; `WaveContextValue` gains three members and `TextWeight` a fourth value, and **the dark and high-contrast shadows are stronger**: read "Upgrading from 0.16" before upgrading.
