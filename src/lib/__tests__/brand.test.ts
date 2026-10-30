@@ -242,6 +242,31 @@ describe('createBrandTokens with an invalid seed', () => {
     ]);
   });
 
+  /** The seed warning for the text `shown` (quoted by the caller). */
+  const seedWarning = (shown: string) =>
+    `[WaveUI] createBrandTokens: the seed ${shown} is not a #rgb or #rrggbb colour, so the ` +
+    'default brand ramp is used.';
+
+  it('shows a seed of up to 32 characters whole', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const seed = 'a colour name of 32 characters..';
+    expect(seed).toHaveLength(32);
+    expect(createBrandTokens(seed)).toEqual(DEFAULT_TOKENS);
+    expect(warn.mock.calls).toEqual([[seedWarning(`"${seed}"`)]]);
+  });
+
+  it.each([
+    ['33 characters', 'a colour name of 33 characters...'],
+    ['a few megabytes', 'not a colour '.repeat(250_000)],
+  ])('shows the first 32 characters and an ellipsis of a seed of %s', (_label, seed) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(createBrandTokens(seed)).toEqual(DEFAULT_TOKENS);
+    const message = seedWarning(`"${seed.slice(0, 32)}…"`);
+    expect(warn.mock.calls).toEqual([[message]]);
+    // As long as the warning of a 32-character seed plus the ellipsis, whatever the seed's length.
+    expect(message).toHaveLength(seedWarning(`"${'x'.repeat(32)}"`).length + 1);
+  });
+
   it('returns the default ramp without a warning in production', () => {
     vi.stubEnv('NODE_ENV', 'production');
     const warn = vi.spyOn(console, 'warn');

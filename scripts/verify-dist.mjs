@@ -595,8 +595,9 @@ export const DATA_GRID_BUDGET = {
  * Imports whose size verify-dist measures and prints against their size in the published 0.15.0
  * package (minified and gzip bytes, bare imports external; spec §11, recorded in §16). The
  * DataGrid-only import also has a `budget` ({@link DATA_GRID_BUDGET}); the others are printed for
- * drift only: a Tree-only import changes only by the moved cascade (R20), and Button-only and
- * MessageBar-only imports are as they were in 0.15.0.
+ * drift only: in 0.16 a Tree-only import changed only by the moved cascade (R20), and Button-only
+ * and MessageBar-only imports were as in 0.15.0 (0.17 budgets all three against 0.16.0 in
+ * {@link RECORDED_IMPORTS_0_17}).
  */
 export const RECORDED_IMPORTS = [
   {

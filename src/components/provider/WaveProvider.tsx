@@ -92,7 +92,9 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
    *
    * The overrides are rendered on the server too. Under a Content Security Policy that blocks
    * inline style attributes (`style-src` without `'unsafe-inline'`), the server-rendered overrides
-   * do not apply and hydration does not apply them again: ship them in a stylesheet there.
+   * do not apply and hydration does not apply them again: ship them in a stylesheet there, and pass
+   * no `tokens` (nor `getTokenStyle`), since the overlays and the subtrees rendered in the client
+   * would still take them and leave the page half branded.
    *
    * @example
    * <WaveProvider tokens={{ fontFamily: 'Inter, sans-serif', zOverlay: 2000 }}>

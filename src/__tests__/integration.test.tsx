@@ -11104,6 +11104,7 @@ describe('Phase 12 theming across components (0.17)', () => {
     // ramp's luminance (not the seed itself).
     expect(Object.keys(ORANGE_BRAND)).toHaveLength(16);
     expect(Object.values(ORANGE_BRAND).every((value) => /^#[0-9a-f]{6}$/.test(value))).toBe(true);
+    expect(ORANGE_BRAND.brand80).not.toBe('#c43e00');
   });
 
   it('a provider with tokens renders its style, and a monospace Text its family class, on the server', () => {

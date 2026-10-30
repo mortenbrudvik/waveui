@@ -431,9 +431,10 @@ export function createBrandTokens(seed: string | BrandRamp): BrandTokens {
   if (typeof seed === 'object' && seed !== null) return rampFromStops(seed);
   const rgb = parseHex(seed);
   if (rgb) return rampFromSeed(rgb);
+  // A long string is cut, so the console never holds a whole document passed by mistake.
   const shown =
     typeof seed === 'string'
-      ? `"${seed}"`
+      ? `"${seed.length > 32 ? `${seed.slice(0, 32)}…` : seed}"`
       : seed === null || seed === undefined
         ? String(seed)
         : `a ${typeof seed}`;

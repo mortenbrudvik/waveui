@@ -153,26 +153,28 @@ export const InputDefaults: Story = {
 };
 
 /**
- * A violet ramp written as literal fixtures. The light theme draws its accent from stops 40 to 80
- * and 140 to 160, the dark theme from 10 to 20 and 90 to 120, so a whole ramp re-brands both.
+ * A violet ramp written as literal fixtures: the output of `createBrandTokens('#7c4dc2')`, so every
+ * pair the themes read from it passes the contrast check a full ramp gets in development. The
+ * light theme draws its accent from stops 40, 60 to 80 and 140 to 160, the dark theme from 10, 20,
+ * 40 and 90 to 120, so a whole ramp re-brands both.
  */
 const violetRamp = {
-  brand10: '#150a22', // wave-allow-color: fixture
-  brand20: '#1f0f33', // wave-allow-color: fixture
-  brand30: '#2b1647', // wave-allow-color: fixture
-  brand40: '#391d5e', // wave-allow-color: fixture
-  brand50: '#482675', // wave-allow-color: fixture
-  brand60: '#57308c', // wave-allow-color: fixture
-  brand70: '#6a3da6', // wave-allow-color: fixture
-  brand80: '#7c4dc2', // wave-allow-color: fixture
-  brand90: '#8f60d6', // wave-allow-color: fixture
-  brand100: '#a47be3', // wave-allow-color: fixture
-  brand110: '#b494ec', // wave-allow-color: fixture
-  brand120: '#c1a5f1', // wave-allow-color: fixture
-  brand130: '#cfb9f5', // wave-allow-color: fixture
-  brand140: '#ddcdf8', // wave-allow-color: fixture
-  brand150: '#ebe1fb', // wave-allow-color: fixture
-  brand160: '#f6f1fd', // wave-allow-color: fixture
+  brand10: '#151328', // wave-allow-color: fixture
+  brand20: '#231c3e', // wave-allow-color: fixture
+  brand30: '#312451', // wave-allow-color: fixture
+  brand40: '#3d2f67', // wave-allow-color: fixture
+  brand50: '#4f377d', // wave-allow-color: fixture
+  brand60: '#5e4195', // wave-allow-color: fixture
+  brand70: '#6e47ab', // wave-allow-color: fixture
+  brand80: '#8150c6', // wave-allow-color: fixture
+  brand90: '#9a69e8', // wave-allow-color: fixture
+  brand100: '#ae83fe', // wave-allow-color: fixture
+  brand110: '#b694ff', // wave-allow-color: fixture
+  brand120: '#bda4fe', // wave-allow-color: fixture
+  brand130: '#ceb6ff', // wave-allow-color: fixture
+  brand140: '#d9cbff', // wave-allow-color: fixture
+  brand150: '#e6ddfe', // wave-allow-color: fixture
+  brand160: '#f5f0fd', // wave-allow-color: fixture
 } satisfies WaveTokenOverrides;
 
 /** A crimson accent for the nested provider: the semantic `primary` colours of the light theme. */
@@ -214,8 +216,8 @@ function BrandSample() {
 /**
  * `tokens` replaces design tokens in the subtree. Here the brand ramp is a violet one (literal
  * fixtures): Button, Link, Switch, ProgressBar and the selected row all follow it, in the light
- * theme and in the dark one (switch the toolbar), because the semantic colours are built on the
- * ramp. Every key is the token's camelCase name without `--wave-`.
+ * theme and in the dark one (switch the story's theme control), because the semantic colours are
+ * built on the ramp. Every key is the token's camelCase name without `--wave-`.
  */
 export const BrandColour: Story = {
   name: 'Brand colour',
@@ -249,7 +251,11 @@ function AccentDialogs() {
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog>
-        <WaveProvider tokens={crimsonAccent} className="rounded-md border border-border p-4">
+        <WaveProvider
+          theme="light"
+          tokens={crimsonAccent}
+          className="rounded-md border border-border p-4"
+        >
           <Dialog defaultOpen modalType="non-modal" onOpenChange={onOpenChange}>
             <Dialog.Trigger>
               <Button appearance="primary">Nested dialog</Button>
@@ -275,9 +281,11 @@ const accentStoryParameters = {
 
 /**
  * Two dialogs, one in the outer provider and one in a nested provider with a crimson `primary`.
- * The nested provider's overrides also reach its portal: the dialog opened from it (open by
- * default) shows the crimson accent, while the dialog of the outer provider shows the page's own.
- * Both are non-modal so that they can be open side by side and the page stays usable.
+ * The nested provider also sets `theme="light"`, the theme its crimson was chosen for, so the
+ * accent keeps its contrast whatever the story's theme. Its overrides also reach its portal: the
+ * dialog opened from it (open by default) shows the crimson accent, while the dialog of the outer
+ * provider shows the page's own. Both are non-modal so that they can be open side by side and the
+ * page stays usable.
  */
 export const NestedAccentWithADialog: Story = {
   name: 'Nested accent with a dialog',
@@ -291,8 +299,9 @@ export const NestedAccentWithADialog: Story = {
 
 /**
  * The same layout with `applyStylesToPortals={false}` on the outer provider (the nested one
- * inherits it). The buttons in the page keep the crimson accent, but the portaled dialogs keep only
- * the theme: the nested provider's dialog is back to the theme's own blue.
+ * inherits it). The nested provider's trigger button, in the page, keeps the crimson accent, but
+ * the portaled dialogs keep only the theme: the nested provider's dialog is back to the light
+ * theme's own blue.
  */
 export const PortalsWithoutStyles: Story = {
   name: 'Portals without styles',
