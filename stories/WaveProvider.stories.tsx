@@ -217,7 +217,8 @@ function BrandSample() {
  * `tokens` replaces design tokens in the subtree. Here the brand ramp is a violet one (literal
  * fixtures): Button, Link, Switch and ProgressBar follow it, and the selected row through its 2px
  * indicator only (its fill stays the neutral selection grey), in the light theme and in the dark
- * one (switch the story's theme control), because the semantic colours are built on the ramp. Every key is the token's camelCase name without `--wave-`.
+ * one (switch the story's theme control), because the semantic colours are built on the ramp.
+ * Every key is the token's camelCase name without `--wave-`.
  */
 export const BrandColour: Story = {
   name: 'Brand colour',
