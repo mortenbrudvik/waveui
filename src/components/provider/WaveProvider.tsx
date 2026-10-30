@@ -85,9 +85,10 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
    * overrides too, so set an override of a semantic colour (`primary`) in the provider that sets
    * the theme it was chosen for. A whole brand ramp is better made with `createBrandTokens` than
    * written by hand.
-   * A key that is not a camelCase identifier, or a value that is neither a string nor a finite
-   * number, is skipped with a development warning; a well-formed name is not checked against the
-   * list of tokens (TypeScript refuses a misspelled one).
+   * A key that is not a camelCase identifier, or a value that is neither a finite number nor a
+   * string without `;`, `{` or `}` (such a value could add a declaration of its own to the
+   * server-rendered `style` attribute), is skipped with a development warning; a well-formed name
+   * is not checked against the list of tokens (TypeScript refuses a misspelled one).
    *
    * The overrides are rendered on the server too. Under a Content Security Policy that blocks
    * inline style attributes (`style-src` without `'unsafe-inline'`), the server-rendered overrides
@@ -212,8 +213,10 @@ export function useWaveTheme(): WaveContextValue {
  *   `applyStylesToPortals` is `false`. A nested provider merges its overrides over the enclosing
  *   provider's key by key, also when it sets another `theme`; `tokens={null}` clears them for the
  *   tokens the theme declares and for the overlays, while the theme-independent ones of an
- *   enclosing provider still reach the subtree through the CSS cascade. Without overrides the root
- *   renders no `style` attribute unless you pass `style`.
+ *   enclosing provider still reach the subtree through the CSS cascade. An override whose key is
+ *   not a camelCase identifier, or whose value is neither a finite number nor a string without
+ *   `;`, `{` or `}`, is skipped with a development warning. Without overrides the root renders no
+ *   `style` attribute unless you pass `style`.
  */
 export const WaveProvider = ({
   theme: themeProp,
@@ -256,7 +259,7 @@ export const WaveProvider = ({
         `WaveProvider: \`tokens\` skips \`${key}\`: ` +
           (reason === 'name'
             ? 'not a token name (the CSS variable in camelCase without `--wave-`, such as `primaryForeground`).'
-            : 'its value is not a string or a finite number.'),
+            : 'its value must be a finite number or a string without `;`, `{` or `}`.'),
       );
     }
   }, [invalid]);

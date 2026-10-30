@@ -66,13 +66,22 @@ export function tokenVariable(name: string): string {
 const TOKEN_NAME = /^[a-z][A-Za-z0-9]*$/;
 
 /**
+ * The characters no token value may hold. React writes a custom property's value into the
+ * server-rendered `style` attribute as text, where a semicolon would end the declaration and let
+ * the rest of the value declare a property of its own (and a brace could close the rule around
+ * it); in the client the CSSOM refuses a value with a semicolon, so the two renders would also
+ * differ.
+ */
+const DECLARATION_BREAK = /[;{}]/;
+
+/**
  * The custom properties of `overrides`, and the entries it skipped. Pure: it never warns, so the
  * provider can call it during render; {@link getTokenStyle} reports the skipped entries.
  *
  * `undefined` values are skipped first (they set nothing); a key that is not a camelCase
- * identifier is skipped with the reason `'name'`, and a value that is neither a string nor a finite
- * number with the reason `'value'`. Numbers are written as strings, and the style keeps the order
- * of the input. `style` is `undefined` when nothing is left.
+ * identifier is skipped with the reason `'name'`, and a value that is neither a finite number nor a
+ * string without `;`, `{` or `}` with the reason `'value'`. Numbers are written as strings, and the
+ * style keeps the order of the input. `style` is `undefined` when nothing is left.
  */
 export function collectTokenStyle(overrides: WaveTokenOverrides | null | undefined): {
   style: TokenStyle | undefined;
@@ -86,7 +95,10 @@ export function collectTokenStyle(overrides: WaveTokenOverrides | null | undefin
     if (value === undefined) continue;
     if (!TOKEN_NAME.test(key)) {
       invalid.push({ key, reason: 'name' });
-    } else if (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) {
+    } else if (
+      (typeof value === 'string' && !DECLARATION_BREAK.test(value)) ||
+      (typeof value === 'number' && Number.isFinite(value))
+    ) {
       style[tokenVariable(key)] = String(value);
       empty = false;
     } else {
@@ -103,9 +115,11 @@ export function collectTokenStyle(overrides: WaveTokenOverrides | null | undefin
  *
  * Returns `undefined` for `null`, `undefined` or a map with nothing to set. An `undefined` value is
  * skipped, a number is written as its string, and the properties keep the order of the input. A
- * key that is not a camelCase identifier, or a value that is neither a string nor a finite number,
- * is skipped with a development warning (once per key). Names are not checked against the list of
- * tokens: TypeScript refuses a misspelled one, and in JavaScript it sets a property nothing reads.
+ * key that is not a camelCase identifier, or a value that is neither a finite number nor a string
+ * without `;`, `{` or `}` (which could add a declaration of its own to a server-rendered `style`
+ * attribute), is skipped with a development warning (once per key). Names are not checked against
+ * the list of tokens: TypeScript refuses a misspelled one, and in JavaScript it sets a property
+ * nothing reads.
  *
  * @example
  * // app/layout.tsx (a Server Component)
@@ -129,7 +143,8 @@ export function getTokenStyle(
     } else {
       warnOnce(
         `tokens:value:${key}`,
-        `getTokenStyle: the value of \`${key}\` is not a string or a finite number, so it is skipped.`,
+        `getTokenStyle: the value of \`${key}\` is skipped: it must be a finite number or a string ` +
+          'without `;`, `{` or `}`.',
       );
     }
   }

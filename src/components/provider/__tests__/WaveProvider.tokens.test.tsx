@@ -56,7 +56,16 @@ const NAME_WARNING = (key: string) =>
   `[WaveUI] WaveProvider: \`tokens\` skips \`${key}\`: not a token name (the CSS variable in ` +
   'camelCase without `--wave-`, such as `primaryForeground`).';
 const VALUE_WARNING = (key: string) =>
-  `[WaveUI] WaveProvider: \`tokens\` skips \`${key}\`: its value is not a string or a finite number.`;
+  `[WaveUI] WaveProvider: \`tokens\` skips \`${key}\`: its value must be a finite number or a ` +
+  'string without `;`, `{` or `}`.';
+
+/** The markup of a provider without overrides (0.16's), which a skipped override leaves as it is. */
+const PLAIN_MARKUP =
+  '<div dir="ltr" data-wave-theme="light" class="wave-root wave-light bg-background ' +
+  'text-foreground font-wave text-body-1">Content</div>';
+
+/** A value that would write a second declaration into a server-rendered style attribute. */
+const INJECTION = 'red;background:url(x)';
 
 describe('WaveProvider tokens: the root style', () => {
   it('puts each override on the root as a custom property', () => {
@@ -80,12 +89,31 @@ describe('WaveProvider tokens: the root style', () => {
   });
 
   it('keeps the 0.16 server markup without tokens (byte for byte)', () => {
-    const markup =
-      '<div dir="ltr" data-wave-theme="light" class="wave-root wave-light bg-background ' +
-      'text-foreground font-wave text-body-1">Content</div>';
-    expect(renderToString(<WaveProvider>Content</WaveProvider>)).toBe(markup);
-    expect(renderToString(<WaveProvider tokens={null}>Content</WaveProvider>)).toBe(markup);
-    expect(renderToString(<WaveProvider tokens={{}}>Content</WaveProvider>)).toBe(markup);
+    expect(renderToString(<WaveProvider>Content</WaveProvider>)).toBe(PLAIN_MARKUP);
+    expect(renderToString(<WaveProvider tokens={null}>Content</WaveProvider>)).toBe(PLAIN_MARKUP);
+    expect(renderToString(<WaveProvider tokens={{}}>Content</WaveProvider>)).toBe(PLAIN_MARKUP);
+  });
+
+  // React writes a custom property's value into the server-rendered `style` attribute as text, so
+  // a semicolon in it would add a declaration of the caller's to the root (the class list holds
+  // the word "background" too, hence the checks on the declaration and the property).
+  it('renders no declaration of a value with a semicolon or a brace on the server', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const html = renderToString(
+      <WaveProvider tokens={{ brand80: INJECTION }}>Content</WaveProvider>,
+    );
+    expect(html).not.toContain('--wave-brand-80');
+    expect(html).not.toMatch(/background\s*:/);
+    expect(html).not.toContain('url(');
+    expect(html).toBe(PLAIN_MARKUP);
+    expect(
+      renderToString(
+        <WaveProvider tokens={{ brand80: INJECTION, primary: '#115ea3', ring: 'red }' }}>
+          Content
+        </WaveProvider>,
+      ),
+    ).toContain('style="--wave-primary:#115ea3"');
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("merges the consumer's style, which wins a conflicting property", () => {
@@ -547,7 +575,7 @@ describe('WaveProvider tokens: development warnings', () => {
     expect(customProperties(root(container))).toEqual({ '--wave-primary': '#115ea3' });
   });
 
-  it('warns once from an effect for a value that is not a string or a finite number', () => {
+  it('warns once from an effect for a value that is not a finite number or a string', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     let warningsDuringRender = -1;
     function Probe() {
@@ -564,6 +592,36 @@ describe('WaveProvider tokens: development warnings', () => {
     expect(warningsDuringRender).toBe(0);
     expect(warn.mock.calls).toEqual([[VALUE_WARNING('zOverlay')]]);
     expect(customProperties(root(container))).toEqual({ '--wave-brand-80': '#c43e00' });
+  });
+
+  it('warns once from an effect for a string with a semicolon, skips it on the root and the portals, and keeps it in the context', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let warningsDuringRender = -1;
+    let value: WaveContextValue | undefined;
+    function Probe() {
+      warningsDuringRender = warn.mock.calls.length;
+      return null;
+    }
+    const tokens = { brand80: INJECTION, primary: '#115ea3' } satisfies WaveTokenOverrides;
+    const { container } = render(
+      <React.StrictMode>
+        <WaveProvider tokens={tokens}>
+          <Probe />
+          <Capture onValue={(next) => (value = next)} />
+          <Portal>
+            <span>Overlay</span>
+          </Portal>
+        </WaveProvider>
+      </React.StrictMode>,
+    );
+    expect(warningsDuringRender).toBe(0);
+    expect(warn.mock.calls).toEqual([[VALUE_WARNING('brand80')]]);
+    expect(customProperties(root(container))).toEqual({ '--wave-primary': '#115ea3' });
+    expect(customProperties(wrapperOf(screen.getByText('Overlay')))).toEqual({
+      '--wave-primary': '#115ea3',
+    });
+    expect(value?.tokens).toEqual(tokens);
+    expect(value?.tokenStyle).toEqual({ '--wave-primary': '#115ea3' });
   });
 
   it('logs nothing while rendering on the server', () => {

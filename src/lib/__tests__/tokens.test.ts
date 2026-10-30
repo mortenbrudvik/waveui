@@ -22,6 +22,11 @@ afterEach(() => {
 /** Overrides as a JavaScript caller may pass them (keys and values TypeScript would refuse). */
 const loose = (overrides: Record<string, unknown>) => overrides as WaveTokenOverrides;
 
+/** The warning of `getTokenStyle` for a value it skips. */
+const VALUE_WARNING = (key: string) =>
+  `[WaveUI] getTokenStyle: the value of \`${key}\` is skipped: it must be a finite number or a ` +
+  'string without `;`, `{` or `}`.';
+
 describe('tokenVariable', () => {
   it.each([
     ['primary', '--wave-primary'],
@@ -140,6 +145,46 @@ describe('collectTokenStyle', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  // A server render writes a custom property's value into the `style` attribute as text, so a
+  // semicolon would end the declaration and start one of the caller's (and a brace would end the
+  // block); no token value needs either.
+  it.each([
+    ['a semicolon', 'red;background:url(x)'],
+    ['a trailing semicolon', '#c43e00;'],
+    ['an opening brace', '{ color: red'],
+    ['a closing brace', 'red } body { color: red'],
+    ['a semicolon inside parentheses', 'rgba(0, 0, 0; 0.5)'],
+  ])('skips a string with %s and lists it, without a warning', (_label, value) => {
+    const warn = vi.spyOn(console, 'warn');
+    expect(collectTokenStyle({ brand80: value, ring: '#ffff00' })).toEqual({
+      style: { '--wave-ring': '#ffff00' },
+      invalid: [{ key: 'brand80', reason: 'value' }],
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'a font stack with quoted names',
+      'fontFamily',
+      '\'Segoe UI\', "Helvetica Neue", -apple-system, sans-serif',
+    ],
+    [
+      'a shadow with colour functions and commas',
+      'shadow8',
+      '0 0 2px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.14)',
+    ],
+    ['a timing curve', 'curveEasyEase', 'cubic-bezier(0.33, 0, 0.67, 1)'],
+    ['a duration', 'durationFast', '150ms'],
+    ['a reference to another token', 'primary', 'var(--wave-brand-70)'],
+    ['a colour mix', 'primaryHover', 'color-mix(in srgb, #c43e00 80%, #000000)'],
+  ] as const)('applies %s as it is', (_label, key, value) => {
+    expect(collectTokenStyle({ [key]: value } as WaveTokenOverrides)).toEqual({
+      style: { [tokenVariable(key)]: value },
+      invalid: [],
+    });
+  });
+
   it('gives no style when every entry is invalid, and lists each one', () => {
     expect(collectTokenStyle(loose({ 'brand-80': '#c43e00', primary: Number.NaN }))).toEqual({
       style: undefined,
@@ -201,17 +246,27 @@ describe('getTokenStyle', () => {
     ]);
   });
 
-  it('warns once for a value that is not a string or a finite number', () => {
+  it('warns once for a value that is not a finite number or a string', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const overrides = loose({ zOverlay: Number.NaN, primary: '#c43e00' });
     expect(getTokenStyle(overrides)).toEqual({ '--wave-primary': '#c43e00' });
     expect(getTokenStyle(overrides)).toEqual({ '--wave-primary': '#c43e00' });
-    expect(warn.mock.calls).toEqual([
-      [
-        '[WaveUI] getTokenStyle: the value of `zOverlay` is not a string or a finite number, ' +
-          'so it is skipped.',
-      ],
-    ]);
+    expect(warn.mock.calls).toEqual([[VALUE_WARNING('zOverlay')]]);
+  });
+
+  it('warns once for a string with a semicolon or a brace, and skips it', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const overrides: WaveTokenOverrides = { brand80: 'red;background:url(x)', primary: '#c43e00' };
+    expect(getTokenStyle(overrides)).toEqual({ '--wave-primary': '#c43e00' });
+    expect(getTokenStyle(overrides)).toEqual({ '--wave-primary': '#c43e00' });
+    expect(getTokenStyle({ ring: 'red }' })).toBeUndefined();
+    expect(warn.mock.calls).toEqual([[VALUE_WARNING('brand80')], [VALUE_WARNING('ring')]]);
+  });
+
+  it('gives no style for a map whose only value carries a declaration', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(getTokenStyle({ brand80: 'red;background:url(x)' })).toBeUndefined();
+    expect(warn.mock.calls).toEqual([[VALUE_WARNING('brand80')]]);
   });
 
   it('warns for each invalid entry, a bad key and a bad value, once each', () => {
@@ -221,7 +276,7 @@ describe('getTokenStyle', () => {
     expect(getTokenStyle(overrides)).toBeUndefined();
     expect(warn.mock.calls).toEqual([
       [expect.stringMatching(/^\[WaveUI\] getTokenStyle: `Primary` is not a token name, /)],
-      [expect.stringMatching(/^\[WaveUI\] getTokenStyle: the value of `ring` is not a string /)],
+      [VALUE_WARNING('ring')],
     ]);
   });
 });
