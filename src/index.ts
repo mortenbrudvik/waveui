@@ -11,6 +11,8 @@ export { cn } from './lib/cn';
 export type * from './lib/types';
 export { resolveSlot, renderSlot } from './lib/slot';
 export type { Slot, SlotObject, ResolvedSlot } from './lib/slot';
+export { mergeSlotProps } from './lib/slotProps';
+export type { SlotPart, SlotPartOwn } from './lib/slotProps';
 export { composeEventHandlers } from './lib/composeEventHandlers';
 export { mergeRefs } from './lib/mergeRefs';
 export type { DismissReason, LayerKind } from './lib/layers';

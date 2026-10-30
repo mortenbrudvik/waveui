@@ -15,8 +15,10 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
   ComponentProps,
+  CSSProperties,
   Dispatch,
   HTMLAttributes,
+  JSX,
   KeyboardEvent as ReactKeyboardEvent,
   KeyboardEventHandler,
   MouseEvent as ReactMouseEvent,
@@ -267,6 +269,8 @@ import type {
   SliderProps,
   SliderSize,
   Slot,
+  SlotPart,
+  SlotPartOwn,
   SortDirection,
   SpinButton,
   SpinButtonAllowEmptyProps,
@@ -2198,5 +2202,32 @@ describe('0.17 theming from the package entry', () => {
     // @ts-expect-error a ramp has no stop 170
     const ramp: Partial<BrandRamp> = { 170: '#000000' };
     expect(ramp).toBeDefined();
+  });
+});
+
+// The 0.18 additions (Phase 13), imported from the package entry (compile-time, `tsconfig.dev.json`).
+describe('0.18 customization surface from the package entry', () => {
+  it('mergeSlotProps, the parts it merges and what the component puts on them', () => {
+    expectTypeOf<Entry['mergeSlotProps']>().toEqualTypeOf<
+      <E extends keyof JSX.IntrinsicElements = 'span'>(
+        part: SlotPart<E> | undefined,
+        own: SlotPartOwn,
+      ) => Record<string, unknown>
+    >();
+    expectTypeOf<SlotPart<'input'>>().toHaveProperty('placeholder');
+    expectTypeOf<SlotPart<'span'>>().not.toHaveProperty('placeholder');
+    expectTypeOf<SlotPart<'span'>>().not.toHaveProperty('children');
+    expectTypeOf<SlotPart<'input'>['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<SlotPartOwn>().toEqualTypeOf<{
+      className?: string;
+      style?: CSSProperties;
+      ref?: Ref<unknown>;
+      defaults?: Record<string, unknown>;
+      locked?: Record<string, unknown>;
+    }>();
+
+    // @ts-expect-error a part never takes children
+    const part: SlotPart<'span'> = { children: 'x' };
+    expect(part).toBeDefined();
   });
 });
