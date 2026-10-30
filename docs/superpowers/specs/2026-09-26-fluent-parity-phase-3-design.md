@@ -1029,6 +1029,8 @@ Three reviews of the first draft (API conventions against CLAUDE.md and the earl
 
 ## Appendix A — Class-name registry
 
+**Superseded** (Phase 13, R4): as the list of parts, this appendix is superseded by the registry (`src/lib/classNames.ts`) and `src/__tests__/slotParts.test.ts`, whose data (`src/lib/slotParts.ts`) classifies every part key for `slotProps`.
+
 The contract of `src/lib/classNames.ts` (D1–D5): every constant, where its root class goes, its parts and the classes an element also carries. Built from a read of every component module at bcbdb51 plus the approved Phase 3 design; **0.8** marks elements of this phase that do not exist yet (they are on `PENDING_CLASS_NAMES` until their package lands). In the Parts column the suffix is appended to the row's root class (`wave-tag` + `__dismiss-icon`); "Also carries" lists classes added next to the element's own (variants, D5; nested public components).
 
 **How the part keys were chosen**, in order: the element's own WaveUI prop or slot (including slots the roadmap already plans); the key such a prop gives the same kind of element elsewhere (one vocabulary); Fluent UI v9's slot name; a plain noun. A button or control named by a `labels` key or a `*Label` prop takes that key plus the element (`clearButton`, `selectAllCheckbox`); noun keys stay bare (`star`, `slide`). A part keeps its class when it renders outside the `className` target; a part that is the root in one layout carries both classes there. A glyph is a part when a prop or planned slot controls it, when it is an indicator beside other content, or when it is the component's only visual; the class then goes on its `<svg>`, with no wrapper added.
