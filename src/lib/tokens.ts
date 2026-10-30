@@ -85,7 +85,7 @@ const REFUSED_TEXT = /[;{}]|url\(/i;
  * there, while the client sets each property on its own. Refused as well, outside strings and
  * comments: a stray closer, which the client refuses in a custom property; a `!`, since the server
  * would read `!important` as the declaration's priority while the client refuses a `!` at the top
- * level (one nested in a function, as in `var(--x, red !important)`, is valid there, and refusing
+ * level (one nested in a function, as in `color-mix(in srgb, red !important, blue)`, is valid there, and refusing
  * it is deliberate: no token needs it); and a backslash, which no token needs there and which
  * could spell `url(` with an escape or, at the end, escape the semicolon after the value. One pass
  * over the text, each character read once and the stack an array, so the time grows with the
