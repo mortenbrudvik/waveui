@@ -83,17 +83,17 @@ const REFUSED_TEXT = /[;{}]|url\(/i;
  * up and nest. In the server-rendered `style` attribute an open string, comment, parenthesis or
  * bracket would run on to the end of the attribute, so the declarations after it would be lost
  * there, while the client sets each property on its own. Refused as well, outside strings and
- * comments: a stray closer, which the client refuses in a custom property; a `!`, which the client
- * refuses too, while the server would read `!important` as the declaration's priority; and a
- * backslash, which no token needs there and which could spell `url(` with an escape or, at the
- * end, escape the semicolon after the value. One pass over the text, without backtracking, so a
- * long crafted value cannot stall a server render.
+ * comments: a stray closer, which the client refuses in a custom property; a `!`, since the server
+ * would read `!important` as the declaration's priority while the client refuses a `!` at the top
+ * level (one nested in a function, as in `var(--x, red !important)`, is valid there, and refusing
+ * it is deliberate: no token needs it); and a backslash, which no token needs there and which
+ * could spell `url(` with an escape or, at the end, escape the semicolon after the value. One pass
+ * over the text, each character read once and the stack an array, so the time grows with the
+ * length alone and a long crafted value cannot stall a server render.
  */
 function isBalancedCssText(text: string): boolean {
-  // The closers of the open parentheses and brackets, the innermost last. A closer that is not the
-  // innermost one, or a `!` or a backslash, which no opener expects, adds a mark no closer
-  // matches, so the stack never empties again.
-  let closers = '';
+  // The closers of the open parentheses and brackets, the innermost last.
+  const closers: string[] = [];
   // The quote of the open string, '' outside one.
   let quote = '';
   let index = 0;
@@ -111,12 +111,14 @@ function isBalancedCssText(text: string): boolean {
       // past the end.
       index = text.indexOf('*/', index + 2) + 1 || Infinity;
     } else if ('(['.includes(char)) {
-      closers += char === '(' ? ')' : ']';
-    } else if (')]!\\'.includes(char)) {
-      closers = closers.endsWith(char) ? closers.slice(0, -1) : `${closers}.`;
+      closers.push(char === '(' ? ')' : ']');
+    } else if (')]!\\'.includes(char) && closers.pop() !== char) {
+      // A closer that is not the innermost one's, or a `!` or a backslash, which no opener
+      // expects: the index moves past the end, which fails below.
+      index = Infinity;
     }
   }
-  return index === text.length && !quote && !closers;
+  return index === text.length && !quote && !closers.length;
 }
 
 /**
@@ -127,8 +129,11 @@ function isBalancedCssText(text: string): boolean {
  * identifier is skipped with the reason `'name'`, and a value with the reason `'value'` unless it
  * is a finite number or a string without `;`, `{`, `}` or `url(` that closes every string,
  * comment, parenthesis and square bracket it opens and has no stray closer, `!` or backslash
- * outside strings and comments. Numbers are written as strings, and the style keeps the order of
- * the input. `style` is `undefined` when nothing is left.
+ * outside strings and comments. Numbers are written as strings, and every value is trimmed with
+ * JavaScript's `trim`, as React's server renderer trims a custom property's value (the client sets
+ * the value as given), so both write the same text; a value that is empty after it is written as
+ * `''`, for which React renders no declaration on either side. The style keeps the order of the
+ * input. `style` is `undefined` when nothing is left.
  */
 export function collectTokenStyle(overrides: WaveTokenOverrides | null | undefined): {
   style: TokenStyle | undefined;
@@ -146,7 +151,7 @@ export function collectTokenStyle(overrides: WaveTokenOverrides | null | undefin
       (typeof value === 'string' && !REFUSED_TEXT.test(value) && isBalancedCssText(value)) ||
       (typeof value === 'number' && Number.isFinite(value))
     ) {
-      style[tokenVariable(key)] = String(value);
+      style[tokenVariable(key)] = String(value).trim();
       empty = false;
     } else {
       invalid.push({ key, reason: 'value' });
@@ -161,16 +166,17 @@ export function collectTokenStyle(overrides: WaveTokenOverrides | null | undefin
  * as a Server Component's document element. Server-safe.
  *
  * Returns `undefined` for `null`, `undefined` or a map with nothing to set. An `undefined` value is
- * skipped, a number is written as its string, and the properties keep the order of the input. A
- * key that is not a camelCase identifier is skipped with a development warning (once per key), and
- * so is a value unless it is a finite number or CSS text without `;`, `{`, `}` or `url(` whose
- * quotes, parentheses, square brackets and comments are balanced, with no `!` or backslash outside
- * strings and comments. In a server-rendered `style` attribute such a character could add a
- * declaration of its own, an open string, comment or bracket (or an escape that spells `url(` or
- * takes the semicolon after the value) would swallow the declarations after it, and `!important`
- * would set a priority the client refuses; the values that pass are read alike by the attribute
- * and by the client. Names are not checked against the list of tokens: TypeScript refuses a
- * misspelled one, and in JavaScript it sets a property nothing reads.
+ * skipped, a number is written as its string, a string is trimmed as React's server renderer trims
+ * it, and the properties keep the order of the input. A key that is not a camelCase identifier is
+ * skipped with a development warning (once per key), and so is a value unless it is a finite
+ * number or CSS text without `;`, `{`, `}` or `url(` whose quotes, parentheses, square brackets and
+ * comments are balanced, with no `!` or backslash outside strings and comments. In a
+ * server-rendered `style` attribute such a character could add a declaration of its own, an open
+ * string, comment or bracket (or an escape that spells `url(` or takes the semicolon after the
+ * value) would swallow the declarations after it, and `!important` would set a priority the client
+ * refuses; the trimmed values that pass are read alike by the attribute and by the client. Names
+ * are not checked against the list of tokens: TypeScript refuses a misspelled one, and in
+ * JavaScript it sets a property nothing reads.
  *
  * @example
  * // app/layout.tsx (a Server Component)
@@ -196,7 +202,7 @@ export function getTokenStyle(
         `tokens:value:${key}`,
         `getTokenStyle: the value of \`${key}\` is skipped: it must be a finite number, or CSS ` +
           'text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and ' +
-          'without `!` or a backslash outside quotes.',
+          'without `!` or a backslash outside strings and comments.',
       );
     }
   }

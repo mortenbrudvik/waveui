@@ -59,7 +59,7 @@ const NAME_WARNING = (key: string) =>
 const VALUE_WARNING = (key: string) =>
   `[WaveUI] WaveProvider: \`tokens\` skips \`${key}\`: its value must be a finite number, or CSS ` +
   'text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and without ' +
-  '`!` or a backslash outside quotes.';
+  '`!` or a backslash outside strings and comments.';
 
 /** The markup of a provider without overrides (0.16's), which a skipped override leaves as it is. */
 const PLAIN_MARKUP =
@@ -150,6 +150,31 @@ describe('WaveProvider tokens: the root style', () => {
         ),
       ).toContain('style="padding:4px"');
       expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  // React's server renderer trims a custom property's value (JavaScript's trim), the client passes
+  // the value of the style object as it is: the provider trims it, so both write the same text.
+  it.each([
+    ['a no-break space', ' '],
+    ['a byte order mark', '﻿'],
+    ['a vertical tab', '\v'],
+    ['a line separator', ' '],
+  ])(
+    'writes the same text on the server and in the client for a value with %s at its edges',
+    (_, space) => {
+      const tokens = { brand80: `${space}#c43e00${space}` } satisfies WaveTokenOverrides;
+      expect(renderToString(<WaveProvider tokens={tokens}>Content</WaveProvider>)).toContain(
+        'style="--wave-brand-80:#c43e00"',
+      );
+      let value: WaveContextValue | undefined;
+      const { container } = render(
+        <WaveProvider tokens={tokens}>
+          <Capture onValue={(next) => (value = next)} />
+        </WaveProvider>,
+      );
+      expect(value?.tokenStyle).toEqual({ '--wave-brand-80': '#c43e00' });
+      expect(customProperties(root(container))).toEqual({ '--wave-brand-80': '#c43e00' });
     },
   );
 

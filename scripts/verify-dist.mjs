@@ -85,15 +85,17 @@
  *   - 0.17 (spec §10): an import of only `createBrandTokens` holds the brand generator and no
  *     names tuple, component or React module, and none of the development contrast check of a
  *     full ramp; one of only `waveTokens` the tuple and the token core, and no brand generator,
- *     component or React module ({@link HOOK_PROBES_0_17}); one of only `Dialog` or only `Tree`
- *     holds neither the tuple nor the brand generator (for the Dialog also no fragment of their
- *     code: no token name, no brand warning key), one of only `Button` or only `MessageBar` none of
- *     {@link TOKEN_MODULES} and not the provider ({@link EXCLUSION_PROBES_0_17}, with the positive
- *     controls of {@link INCLUSION_PROBES_0_17}); the imports of {@link RECORDED_IMPORTS_0_17} stay
- *     within their budgets (createBrandTokens-only and waveTokens-only 3 KiB gzip; Button-only,
- *     MessageBar-only, Tree-only, Dialog-only and WaveProvider + Dialog within their allowances over
- *     0.16.0), which the CLI prints with the 0.16.0 sizes; no JavaScript, CSS or declaration file
- *     of dist names a chart library of the stories ({@link DEV_ONLY_LIBRARIES}, R14).
+ *     component or React module; one of only `WaveProvider` none of the provider's `tokens`
+ *     warnings, which 0.17.1 gates on the mode ({@link HOOK_PROBES_0_17}); one of only `Dialog`
+ *     or only `Tree` holds neither the tuple nor the brand generator (for the Dialog also no
+ *     fragment of their code: no token name, no brand warning key), one of only `Button` or only
+ *     `MessageBar` none of {@link TOKEN_MODULES} and not the provider
+ *     ({@link EXCLUSION_PROBES_0_17}, with the positive controls of {@link INCLUSION_PROBES_0_17});
+ *     the imports of {@link RECORDED_IMPORTS_0_17} stay within their budgets
+ *     (createBrandTokens-only and waveTokens-only 3 KiB gzip; Button-only, MessageBar-only,
+ *     Tree-only, Dialog-only and WaveProvider + Dialog within their allowances over 0.16.0), which
+ *     the CLI prints with the 0.16.0 sizes; no JavaScript, CSS or declaration file of dist names a
+ *     chart library of the stories ({@link DEV_ONLY_LIBRARIES}, R14).
  *
  * Every probe and size bundles as a consumer's production build: `process.env.NODE_ENV` is defined
  * as `"production"` whatever this process has (Vitest runs with `test`), so development-only code
@@ -638,6 +640,13 @@ const BRAND_MARKER = 'createBrandTokens:';
  */
 const BRAND_CHECK_MARKER = 'createBrandTokens:contrast';
 
+/**
+ * The key prefix of the provider's `tokens` warnings: since 0.17.1 their effect reads
+ * `process.env.NODE_ENV`, so a production bundle drops them and their text, which holds the
+ * `WaveProvider` + `Dialog` budget of {@link RECORDED_IMPORTS_0_17}.
+ */
+const PROVIDER_WARNING_MARKER = 'WaveProvider:tokens:';
+
 /** The React packages, which no server-safe helper imports. */
 const REACT_PACKAGES = ['react', 'react-dom', 'react/jsx-runtime'];
 
@@ -646,7 +655,9 @@ const REACT_PACKAGES = ['react', 'react-dom', 'react/jsx-runtime'];
  * generator and neither the names tuple nor any component or React module, and, as every probe
  * bundles for production, none of the development contrast check of a full ramp (spec §6.3, R8:
  * {@link BRAND_CHECK_MARKER}); an import of only `waveTokens` holds the tuple and the token core,
- * and neither the brand generator nor any component or React module.
+ * and neither the brand generator nor any component or React module; an import of only
+ * `WaveProvider`, built for production, none of the provider's `tokens` warnings
+ * ({@link PROVIDER_WARNING_MARKER}).
  */
 export const HOOK_PROBES_0_17 = [
   {
@@ -664,6 +675,7 @@ export const HOOK_PROBES_0_17 = [
     dropPrefixes: ['components/'],
     dropExternals: REACT_PACKAGES,
   },
+  { keep: 'WaveProvider', dropSubstrings: [PROVIDER_WARNING_MARKER] },
 ];
 
 /**

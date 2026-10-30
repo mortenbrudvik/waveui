@@ -1159,8 +1159,8 @@ function withPhase11Modules(files) {
  * that reads the token core. The tuple is one string split at run time, as the build writes it, so
  * a token name is a fragment of code and no string literal of its own; the brand generator's
  * contrast check runs only outside production (`process.env.NODE_ENV`), as the real one does, and
- * its seed warning in every build. Each `lib` module works on the server, where the react-server
- * check calls it.
+ * its seed warning in every build; the provider's `tokens` warnings run only outside production too
+ * (since 0.17.1). Each `lib` module works on the server, where the react-server check calls it.
  */
 const PHASE12_MODULES = {
   'lib/tokens': {
@@ -1211,7 +1211,8 @@ const PHASE12_MODULES = {
     body:
       "const WaveContext = createContext({ dir: 'ltr', tokens: {} });\n" +
       'function useWaveTheme() { return useContext(WaveContext); }\n' +
-      'function WaveProvider(props) { const parent = useWaveTheme(); const tokens = mergeTokenOverrides(parent.tokens, props.tokens); ' +
+      "function reportTokens(tokens) { try { if (process.env.NODE_ENV !== 'production') for (const key of Object.keys(tokens)) console.warn('WaveProvider:tokens:value:' + key); } catch {} }\n" +
+      'function WaveProvider(props) { const parent = useWaveTheme(); const tokens = mergeTokenOverrides(parent.tokens, props.tokens); reportTokens(tokens); ' +
       "return createElement(WaveContext.Provider, { value: { dir: props.dir ?? parent.dir, tokens } }, createElement('div', { className: cn('wave-root', props.className), style: getTokenStyle(tokens) }, props.children)); }\n" +
       "WaveProvider.displayName = 'WaveProvider';\n",
     exports: ['WaveProvider', 'useWaveTheme'],
@@ -4090,6 +4091,7 @@ describe('the 0.17 probes (INTEGRATION)', () => {
         dropPrefixes: ['components/'],
         dropExternals: react,
       },
+      { keep: 'WaveProvider', dropSubstrings: ['WaveProvider:tokens:'] },
     ]);
     expect(TOKEN_MODULES).toEqual(['lib/brand.mjs', 'lib/tokens.mjs', 'lib/waveTokens.mjs']);
     expect(EXCLUSION_PROBES_0_17).toEqual([
@@ -4243,6 +4245,34 @@ describe('the 0.17 probes (INTEGRATION)', () => {
     );
     expect(await probeHook(tokensWithButton.dist, tokensProbe)).toEqual([
       'components/button/Button.mjs is in the bundle of an import of only waveTokens (no module under components/ may be)',
+    ]);
+  }, 60_000);
+
+  it("the WaveProvider probe reports the provider's tokens warnings in a production bundle", async () => {
+    const providerProbe = HOOK_PROBES_0_17.find((probe) => probe.keep === 'WaveProvider');
+    expect(await probeHook(fixture().dist, providerProbe)).toEqual([]);
+    // Warnings without the mode test stay in a production bundle.
+    const unguarded = fixture(
+      changed('components/provider/WaveProvider', (spec) => ({
+        ...spec,
+        body: spec.body.replace(
+          "try { if (process.env.NODE_ENV !== 'production') for (const key of Object.keys(tokens)) console.warn('WaveProvider:tokens:value:' + key); } catch {}",
+          "for (const key of Object.keys(tokens)) console.warn('WaveProvider:tokens:value:' + key);",
+        ),
+      })),
+    );
+    expect(await probeHook(unguarded.dist, providerProbe)).toEqual([
+      'the bundle of an import of only WaveProvider contains "WaveProvider:tokens:" outside comments (its minified code)',
+    ]);
+    // A fragment that no module of dist holds would let the probe pass vacuously.
+    const renamed = fixture(
+      changed('components/provider/WaveProvider', (spec) => ({
+        ...spec,
+        body: spec.body.replace("'WaveProvider:tokens:value:'", "'tokens:value:'"),
+      })),
+    );
+    expect(await probeHook(renamed.dist, providerProbe)).toEqual([
+      '"WaveProvider:tokens:", listed for the hook WaveProvider, occurs in no module of dist (the probe would pass vacuously)',
     ]);
   }, 60_000);
 

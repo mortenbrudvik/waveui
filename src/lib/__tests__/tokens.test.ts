@@ -27,7 +27,7 @@ const loose = (overrides: Record<string, unknown>) => overrides as WaveTokenOver
 const VALUE_WARNING = (key: string) =>
   `[WaveUI] getTokenStyle: the value of \`${key}\` is skipped: it must be a finite number, or CSS ` +
   'text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and without ' +
-  '`!` or a backslash outside quotes.';
+  '`!` or a backslash outside strings and comments.';
 
 /**
  * Strings that end a server-rendered `style` attribute's text in the middle of a construct: an
@@ -296,6 +296,44 @@ describe('collectTokenStyle', () => {
       style: { '--wave-primary': value },
       invalid: [],
     });
+  });
+
+  // React's server renderer trims a custom property's value with JavaScript's trim, which also
+  // removes characters CSS does not take for white space; the client sets the value as given.
+  it.each([
+    ['a space', ' '],
+    ['a no-break space', ' '],
+    ['a byte order mark', '﻿'],
+    ['a vertical tab', '\v'],
+    ['a line separator', ' '],
+    ['a paragraph separator', ' '],
+  ])('trims %s at both edges, as the server does', (_label, space) => {
+    expect(collectTokenStyle({ primary: `${space}#c43e00${space}` })).toEqual({
+      style: { '--wave-primary': '#c43e00' },
+      invalid: [],
+    });
+  });
+
+  it('writes an empty or white-space value as an empty string, which React renders as nothing', () => {
+    expect(collectTokenStyle({ primary: '', ring: '   ' })).toEqual({
+      style: { '--wave-primary': '', '--wave-ring': '' },
+      invalid: [],
+    });
+  });
+
+  // Runs of closers or refused characters, and a deep stack opened and closed again, are scanned in
+  // one pass whatever their length (a long value read from a tenant's settings must not stall a
+  // server render).
+  it('scans a long value in linear time', () => {
+    const start = performance.now();
+    for (const value of [')'.repeat(2 ** 18), '!'.repeat(2 ** 18), '\\'.repeat(2 ** 18)]) {
+      expect(collectTokenStyle({ primary: value }).invalid).toEqual([
+        { key: 'primary', reason: 'value' },
+      ]);
+    }
+    const deep = '('.repeat(2 ** 17) + '()'.repeat(2 ** 16) + ')'.repeat(2 ** 17);
+    expect(collectTokenStyle({ primary: deep }).invalid).toEqual([]);
+    expect(performance.now() - start).toBeLessThan(1000);
   });
 
   it('gives no style when every entry is invalid, and lists each one', () => {
