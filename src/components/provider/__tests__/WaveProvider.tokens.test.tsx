@@ -58,8 +58,8 @@ const NAME_WARNING = (key: string) =>
   'camelCase without `--wave-`, such as `primaryForeground`).';
 const VALUE_WARNING = (key: string) =>
   `[WaveUI] WaveProvider: \`tokens\` skips \`${key}\`: its value must be a finite number, or CSS ` +
-  'text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(` and without ' +
-  '`!` outside a string.';
+  'text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and without ' +
+  '`!` or a backslash outside quotes.';
 
 /** The markup of a provider without overrides (0.16's), which a skipped override leaves as it is. */
 const PLAIN_MARKUP =
@@ -131,6 +131,7 @@ describe('WaveProvider tokens: the root style', () => {
     ['a stray closing parenthesis', '#c43e00)'],
     ['an unclosed square bracket', '[content-start'],
     ['a quote inside an unquoted url(', 'url(a"b)c")'],
+    ['a quote inside a url( spelt with an escape', 'u\\72l(a"b)c")'],
     ['an important flag', '#c43e00 !important'],
   ])(
     'renders no declaration of a value with %s on the server, and keeps the ones after it',

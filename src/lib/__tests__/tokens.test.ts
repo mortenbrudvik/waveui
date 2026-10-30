@@ -26,16 +26,17 @@ const loose = (overrides: Record<string, unknown>) => overrides as WaveTokenOver
 /** The warning of `getTokenStyle` for a value it skips. */
 const VALUE_WARNING = (key: string) =>
   `[WaveUI] getTokenStyle: the value of \`${key}\` is skipped: it must be a finite number, or CSS ` +
-  'text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(` and without ' +
-  '`!` outside a string.';
+  'text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and without ' +
+  '`!` or a backslash outside quotes.';
 
 /**
  * Strings that end a server-rendered `style` attribute's text in the middle of a construct: an
  * open string, comment, parenthesis or square bracket runs on to the end of the attribute, and a
  * trailing backslash escapes the semicolon after it, so the declarations after it (later tokens,
  * the consumer's `style`) are swallowed, while the client sets each property on its own. A stray
- * closer, which the client refuses in a custom property, is skipped too, and so are `url(` and a
- * `!` outside a string, which the two read differently.
+ * closer, which the client refuses in a custom property, is skipped too, and so are `url(`, a `!`
+ * outside a string, which the two read differently, and a backslash outside a string, which could
+ * spell `url(` with an escape.
  */
 const MALFORMED_VALUES = [
   ['an unclosed single quote', "'Segoe UI, sans-serif"],
@@ -69,6 +70,13 @@ const MALFORMED_VALUES = [
   // The server reads `!important` as the declaration's priority, the client refuses the value.
   ['an important flag', '#c43e00 !important'],
   ['an exclamation mark inside a function', 'var(--wave-brand-80, red !important)'],
+  // An escape outside a string can spell `url(` past the test above, so none is taken there.
+  ['a url( spelt with a hexadecimal escape', 'u\\72l(x)'],
+  ['a url( spelt with a hexadecimal escape and its space', '\\75 rl(x)'],
+  ['a url( spelt with an escaped letter, holding a quote', 'u\\rl(a"b)c")'],
+  ['an escaped space in an unquoted name', 'Segoe\\ UI, sans-serif'],
+  ['an escaped parenthesis outside a string', 'Wave\\)Sans'],
+  ['an escaped backslash outside a string', 'Wave\\\\'],
 ] as const;
 
 /** Every `--wave-*` declaration of tokens.css: the constants and ramps, then each theme group. */
@@ -241,8 +249,9 @@ describe('collectTokenStyle', () => {
     ['a comment opener inside a string', 'fontFamily', "'/* Wave', sans-serif"],
     ['a balanced comment', 'primary', "#c43e00 /* brand (it's orange) */"],
     ['a backslash before the end of a comment', 'primary', '#c43e00 /* a \\*/'],
-    ['an escaped backslash at the end', 'fontFamily', 'Wave\\\\'],
-    ['an escaped parenthesis', 'fontFamily', 'Wave\\)Sans'],
+    ['an escaped backslash inside a string', 'fontFamily', "'Wave\\\\', serif"],
+    ['an escaped parenthesis inside a string', 'fontFamily', "'Wave\\)Sans', serif"],
+    ['an escaped url( inside a string', 'fontFamily', "'u\\72l(x)', serif"],
     ['a fallback in a reference', 'primary', 'var(--x, #fff)'],
     ['balanced square brackets', 'fontFamily', '[content-start] repeat(2, [col] 1fr) [end]'],
     ['brackets inside a string and a comment', 'fontFamily', "'[(' /* ]) */, sans-serif"],

@@ -87,12 +87,13 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
    * written by hand.
    * A key that is not a camelCase identifier is skipped with a development warning, and so is a
    * value unless it is a finite number or CSS text without `;`, `{`, `}` or `url(` whose quotes,
-   * parentheses, square brackets and comments are balanced, with no `!` outside strings and
-   * comments and no unpaired backslash at the end (in the server-rendered `style` attribute such a
-   * character could add a declaration of its own, an open string, comment or bracket, or a trailing
-   * backslash, would swallow the declarations after it there, though not in the client, and
-   * `!important` would be a priority the client refuses); a well-formed name is not checked
-   * against the list of tokens (TypeScript refuses a misspelled one).
+   * parentheses, square brackets and comments are balanced, with no `!` or backslash outside
+   * strings and comments (in the server-rendered `style` attribute such a character could add a
+   * declaration of its own, an open string, comment or bracket, or an escape that spells `url(` or
+   * takes the semicolon after the value, would swallow the declarations after it there, though not
+   * in the client, and `!important` would be a priority the client refuses; the values that pass
+   * are read alike by both); a well-formed name is not checked against the list of tokens
+   * (TypeScript refuses a misspelled one).
    *
    * The overrides are rendered on the server too. Under a Content Security Policy that blocks
    * inline style attributes (`style-src` without `'unsafe-inline'`), the server-rendered overrides
@@ -222,9 +223,8 @@ export function useWaveTheme(): WaveContextValue {
  *   enclosing provider still reach the subtree through the CSS cascade. An override whose key is
  *   not a camelCase identifier is skipped with a development warning, and so is a value unless it
  *   is a finite number or CSS text without `;`, `{`, `}` or `url(` with balanced quotes,
- *   parentheses, square brackets and comments, no `!` outside strings and comments and no
- *   trailing unpaired backslash. Without overrides the root renders no `style` attribute unless you
- *   pass `style`.
+ *   parentheses, square brackets and comments and no `!` or backslash outside strings and
+ *   comments. Without overrides the root renders no `style` attribute unless you pass `style`.
  */
 export const WaveProvider = ({
   theme: themeProp,
@@ -272,7 +272,7 @@ export const WaveProvider = ({
             `WaveProvider: \`tokens\` skips \`${key}\`: ` +
               (reason === 'name'
                 ? 'not a token name (the CSS variable in camelCase without `--wave-`, such as `primaryForeground`).'
-                : 'its value must be a finite number, or CSS text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(` and without `!` outside a string.'),
+                : 'its value must be a finite number, or CSS text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and without `!` or a backslash outside quotes.'),
           );
         }
       }
