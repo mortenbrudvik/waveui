@@ -346,6 +346,67 @@ describe('Tag', () => {
       expect(onDismiss).toHaveBeenCalledTimes(1);
     });
 
+    it('a render function renders the content element inside the wired button, given the default glyph (P13-01)', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      const renderContent = vi.fn((Component: React.ElementType, props: object) => (
+        <Component {...props} data-testid="content" />
+      ));
+      render(
+        <Tag
+          dismissible
+          onDismiss={onDismiss}
+          dismissIcon={{ className: 'text-error', children: renderContent }}
+        >
+          Cherry
+        </Tag>,
+      );
+      const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+      const content = screen.getByTestId('content');
+      expect(button).toContainElement(content);
+      expect(content.tagName).toBe('SPAN');
+      expect(content.classList[0]).toBe(tagClassNames.dismissIcon);
+      expect(content).toHaveClass('text-error');
+      expect(content).toHaveAttribute('aria-hidden', 'true');
+      // The default glyph arrives as the `children` prop; rendering the props keeps it.
+      expect(renderContent).toHaveBeenCalledWith(
+        'span',
+        expect.objectContaining({ 'aria-hidden': true, children: expect.anything() }),
+      );
+      expect(content.querySelector('svg')).not.toBeNull();
+      await user.click(content);
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it('merges the button-object form with a render function as before; the function renders the content (P13-01)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const calls: string[] = [];
+      render(
+        <Tag
+          dismissible
+          onDismiss={() => calls.push('onDismiss')}
+          dismissIcon={{
+            as: 'button',
+            onClick: () => calls.push('slot'),
+            children: (Component, props) => <Component {...props} data-testid="content" />,
+          }}
+        >
+          Cherry
+        </Tag>,
+      );
+      const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+      const content = screen.getByTestId('content');
+      expect(button.querySelector('button')).toBeNull();
+      expect(button).toContainElement(content);
+      expect(content.tagName).toBe('SPAN');
+      expect(content).toHaveAttribute('aria-hidden', 'true');
+      expect(content.querySelector('svg')).not.toBeNull();
+      await user.click(content);
+      expect(calls).toEqual(['slot', 'onDismiss']);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+    });
+
     it('merges a <button> slot into the wired button instead of nesting it', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();

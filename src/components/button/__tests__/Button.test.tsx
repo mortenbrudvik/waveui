@@ -12,6 +12,7 @@ import {
   renderWithProviders,
 } from '../../../test-utils';
 import type { Appearance, IconPosition, Size, Slot } from '../../../lib/types';
+import { buttonClassNames } from '../../../lib/classNames';
 
 const HOVER_GATE = 'not-disabled:not-aria-disabled:hover:';
 const ACTIVE_GATE = 'not-disabled:not-aria-disabled:active:';
@@ -780,6 +781,34 @@ describe('Button', () => {
       expect(screen.getByRole('button', { name: 'Attach' })).toHaveClass('gap-1.5');
       rerender(<Button>Attach</Button>);
       expect(screen.getByRole('button', { name: 'Attach' })).not.toHaveClass('gap-1.5');
+    });
+
+    it('renders the icon element through a slot object’s render function (P13-01)', () => {
+      const renderIcon = vi.fn((Component: React.ElementType, props: object) => (
+        <Component {...props} data-testid="icon">
+          <PaperclipIcon />
+        </Component>
+      ));
+      render(<Button icon={{ className: 'mine', children: renderIcon }}>Attach</Button>);
+      const button = screen.getByRole('button', { name: 'Attach' });
+      const icon = screen.getByTestId('icon');
+      expect(renderIcon).toHaveBeenCalledWith('span', {
+        'aria-hidden': true,
+        className: icon.className,
+      });
+      expect(icon.tagName).toBe('SPAN');
+      expect(icon.classList[0]).toBe(buttonClassNames.icon);
+      expect(icon).toHaveClass('inline-flex', 'shrink-0', 'items-center', 'mine');
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+      expect(button).toContainElement(icon);
+      expect(button).toHaveClass('gap-1.5');
+    });
+
+    it('a render function that renders nothing is no icon: no span, no gap (P13-01)', () => {
+      render(<Button icon={{ children: () => null }}>Attach</Button>);
+      const button = screen.getByRole('button', { name: 'Attach' });
+      expect(button.querySelector('[aria-hidden]')).toBeNull();
+      expect(button).not.toHaveClass('gap-1.5');
     });
 
     it('an icon-only button is square and has no minimum width', () => {

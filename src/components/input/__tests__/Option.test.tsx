@@ -20,7 +20,7 @@ import { Dropdown } from '../Dropdown';
 import { collectOptionLabels, useListbox } from '../../../hooks/useListbox';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { useMergedRefs } from '../../../hooks/useMergedRefs';
-import { listboxSurfaceClassNames } from '../../../lib/classNames';
+import { listboxSurfaceClassNames, optionClassNames } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/slot';
 import {
   asClientReference,
@@ -607,6 +607,39 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
         { selected: ['a'] },
       );
       expect(option('Apple').querySelector('svg')).not.toBeNull();
+      expect(warn.mock.calls).toEqual([[CHECK_ICON_EMPTY]]);
+    });
+
+    it('renders the glyph through a render function; one that renders nothing keeps the default and warns once (P13-01)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderInListbox(
+        <>
+          <Option
+            value="a"
+            checkIcon={{
+              children: (Component, props) => (
+                <Component {...props} data-testid="glyph">
+                  ★
+                </Component>
+              ),
+            }}
+          >
+            Apple
+          </Option>
+          <Option value="b" checkIcon={{ children: () => null }}>
+            Banana
+          </Option>
+        </>,
+        { selected: ['a', 'b'] },
+      );
+      const glyph = within(option('Apple')).getByTestId('glyph');
+      expect(glyph.tagName).toBe('SPAN');
+      expect(glyph).toHaveClass(optionClassNames.checkIcon, 'inline-flex', 'shrink-0');
+      expect(glyph).toHaveAttribute('aria-hidden', 'true');
+      expect(option('Apple').querySelector('svg')).toBeNull();
+      expect(option('Apple')).toHaveAccessibleName('Apple');
+      // A required indicator: a selected option shows its state.
+      expect(option('Banana').querySelector('svg')).toHaveAttribute('data-wave-icon', 'check');
       expect(warn.mock.calls).toEqual([[CHECK_ICON_EMPTY]]);
     });
 

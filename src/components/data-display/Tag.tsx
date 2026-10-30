@@ -15,7 +15,7 @@ import {
 import { focusRing, forcedColors } from '../../lib/styles';
 import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
-import type { Slot, SlotObject } from '../../lib/slot';
+import type { Slot, SlotObject, SlotRenderFunction } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TagAppearance, TagShape, TagSize } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -418,6 +418,10 @@ function resolveDismissSlot(
     // `iconPosition="after"`).
     // The dismiss icon part is the merged Button's icon element when there is one, else the
     // element this slot object renders (a default glyph inside it stays without the part class).
+    // A render function is no content of its own: it stays, and receives the default glyph as its
+    // `children` prop (C-SLOTS).
+    const render = contentProps.children;
+    const isRender = typeof render === 'function';
     const hasButtonIcon = slotRendersContent(ownProps.icon);
     if (hasButtonIcon) {
       contentProps.children = placeButtonIcon(
@@ -429,8 +433,17 @@ function resolveDismissSlot(
         materialiseSlotContent(contentProps.children),
         ownProps.iconPosition,
       );
-    } else if (slotWrapsDefaultContent(contentProps.as ?? 'span', contentProps)) {
-      contentProps.children = defaultDismissContent(glyphSize);
+    } else if (
+      slotWrapsDefaultContent(
+        contentProps.as ?? 'span',
+        isRender ? { ...contentProps, children: undefined } : contentProps,
+      )
+    ) {
+      const glyph = defaultDismissContent(glyphSize);
+      contentProps.children = isRender
+        ? (Component: React.ElementType, props: object) =>
+            (render as SlotRenderFunction<object>)(Component, { ...props, children: glyph })
+        : glyph;
     }
     return {
       buttonProps: isButtonObject || Object.keys(buttonProps).length > 0 ? buttonProps : null,

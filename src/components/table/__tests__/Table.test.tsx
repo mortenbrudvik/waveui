@@ -1456,6 +1456,43 @@ describe('Table.CellLayout', () => {
     expect(part('description')).toHaveClass('my-description');
   });
 
+  it('renders media through a slot object’s render function; one that renders nothing is no media (P13-01)', () => {
+    const { rerender } = render(
+      <InCell>
+        <Table.CellLayout
+          data-testid="layout"
+          media={{
+            className: 'my-media',
+            children: (Component, props) => (
+              <Component {...props} data-own="">
+                <svg data-testid="icon" />
+              </Component>
+            ),
+          }}
+        >
+          Alpha
+        </Table.CellLayout>
+      </InCell>,
+    );
+    const media = part('media')!;
+    expect(media.localName).toBe('span');
+    expect(media.classList[0]).toBe(tableCellLayoutClassNames.media);
+    expect(media).toHaveClass('flex', 'shrink-0', 'items-center', 'my-media');
+    expect(media).toHaveAttribute('data-own', '');
+    expect(media).toContainElement(screen.getByTestId('icon'));
+    expect(media.nextElementSibling).toBe(part('content'));
+
+    rerender(
+      <InCell>
+        <Table.CellLayout data-testid="layout" media={{ children: () => null }}>
+          Alpha
+        </Table.CellLayout>
+      </InCell>,
+    );
+    expect(part('media')).toBeNull();
+    expect(part('main')).toHaveTextContent('Alpha');
+  });
+
   it('gives an Avatar in media the fixed 32px box; an Avatar of its own size keeps it', () => {
     render(
       <InCell>

@@ -17,6 +17,7 @@ import type {
   ComponentProps,
   CSSProperties,
   Dispatch,
+  ElementType,
   HTMLAttributes,
   JSX,
   KeyboardEvent as ReactKeyboardEvent,
@@ -269,8 +270,10 @@ import type {
   SliderProps,
   SliderSize,
   Slot,
+  SlotObject,
   SlotPart,
   SlotPartOwn,
+  SlotRenderFunction,
   SortDirection,
   SpinButton,
   SpinButtonAllowEmptyProps,
@@ -2230,5 +2233,25 @@ describe('0.18 customization surface from the package entry', () => {
     // @ts-expect-error a part never takes children
     const part: SlotPart<'span'> = { children: 'x' };
     expect(part).toBeDefined();
+  });
+
+  it('SlotRenderFunction, the children of a slot object that renders the slot itself', () => {
+    expectTypeOf<SlotRenderFunction<{ as?: string; id?: string }>>().toEqualTypeOf<
+      (Component: ElementType<{ as?: string; id?: string }>, props: { id?: string }) => ReactNode
+    >();
+    expectTypeOf<SlotObject<'span'>['children']>().toEqualTypeOf<
+      | ReactNode
+      | SlotRenderFunction<
+          HTMLAttributes<HTMLElement> & { [dataAttribute: `data-${string}`]: unknown }
+        >
+      | undefined
+    >();
+    const icon: Slot<'span'> = {
+      children: (Component, props) => {
+        expectTypeOf(props.className).toEqualTypeOf<string | undefined>();
+        return null;
+      },
+    };
+    expect(icon).toBeDefined();
   });
 });

@@ -162,6 +162,39 @@ describe('Dialog.Content backdrop (P6-06 D93)', () => {
     expect(seen).toEqual([false]);
   });
 
+  it('renders the backdrop element a slot object’s render function returns, with its wiring (P13-01)', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const renderBackdrop = vi.fn((Component: React.ElementType, props: object) => (
+      <Component {...props} data-testid="backdrop" />
+    ));
+    render(
+      <Open
+        dialogProps={{ onOpenChange }}
+        contentProps={{ backdrop: { className: 'opacity-50', children: renderBackdrop } }}
+      />,
+    );
+    const backdrop = screen.getByTestId('backdrop');
+    expect(dialogBackdrops()).toEqual([backdrop]);
+    expect(backdrop.tagName).toBe('DIV');
+    expect(backdrop.classList[0]).toBe(dialogContentClassNames.backdrop);
+    expect(backdrop).toHaveClass('fixed', 'inset-0', 'bg-backdrop', 'opacity-50');
+    expect(backdrop).toHaveAttribute('aria-hidden', 'true');
+    expect(backdrop).toHaveAttribute('data-appearance', 'dimmed');
+    expect(backdrop).toHaveAttribute('data-presence');
+    expect(renderBackdrop).toHaveBeenCalledWith(
+      'div',
+      expect.objectContaining({ 'aria-hidden': 'true', onMouseDown: expect.any(Function) }),
+    );
+    // The press handling came with the props: a press on the backdrop closes the dialog.
+    await user.click(backdrop);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onOpenChange).toHaveBeenCalledWith(
+      false,
+      expect.objectContaining({ reason: 'outside-press' }),
+    );
+  });
+
   it('keeps aria-hidden="true" over a slot object’s own aria-hidden', () => {
     render(<Open contentProps={{ backdrop: { 'aria-hidden': false } }} />);
     expect(dialogBackdrops()[0]).toHaveAttribute('aria-hidden', 'true');
@@ -476,6 +509,38 @@ describe('Dialog.Content closeButton (P6-06 D95)', () => {
     expect(content).toHaveClass('text-error');
     expect(content.querySelector('svg')).not.toBeNull();
     expect(button('Close')).toContainElement(content);
+  });
+
+  it('a render function renders the content inside the wired Close button, given the default glyph (P13-01)', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const renderContent = vi.fn((Component: React.ElementType, props: object) => (
+      <Component {...props} data-testid="g" />
+    ));
+    render(
+      <Open
+        dialogProps={{ onOpenChange }}
+        contentProps={{ closeButton: { className: 'text-error', children: renderContent } }}
+      />,
+    );
+    const content = screen.getByTestId('g');
+    // The wiring stays on the built-in Button: its name and its click.
+    expect(button('Close')).toContainElement(content);
+    expect(content.tagName).toBe('SPAN');
+    expect(content.classList[0]).toBe(buttonClassNames.icon);
+    expect(content).toHaveClass('text-error');
+    expect(content).toHaveAttribute('aria-hidden', 'true');
+    expect(renderContent).toHaveBeenCalledWith(
+      'span',
+      expect.objectContaining({ children: expect.anything() }),
+    );
+    expect(content.querySelector('svg')).not.toBeNull();
+    await user.click(content);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onOpenChange).toHaveBeenCalledWith(
+      false,
+      expect.objectContaining({ reason: 'close-button' }),
+    );
   });
 
   it('a slot object’s aria-label names the button', () => {

@@ -201,6 +201,42 @@ describe('MessageBar', () => {
       expect(icon).not.toHaveClass('mt-0.5');
     });
 
+    it('renders the icon element through a render function; one that renders nothing shows no icon (P13-01)', () => {
+      const { rerender } = render(
+        <MessageBar
+          status="warning"
+          icon={{
+            className: 'mt-1',
+            children: (Component, props) => (
+              <Component {...props} data-testid="icon">
+                <svg />
+              </Component>
+            ),
+          }}
+          data-testid="bar"
+        >
+          Msg
+        </MessageBar>,
+      );
+      const icon = screen.getByTestId('icon');
+      expect(icon.tagName).toBe('SPAN');
+      expect(icon.classList[0]).toBe(messageBarClassNames.icon);
+      expect(icon).toHaveClass('inline-flex', 'shrink-0', 'mt-1');
+      expect(icon).not.toHaveClass('mt-0.5');
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getByTestId('bar').querySelector('[data-wave-icon]')).toBeNull();
+
+      // The status-icon rule: a slot that renders nothing shows none (no default icon).
+      rerender(
+        <MessageBar status="warning" icon={{ children: () => null }} data-testid="bar">
+          Msg
+        </MessageBar>,
+      );
+      const bar = screen.getByTestId('bar');
+      expect(bar.getElementsByClassName(messageBarClassNames.icon)).toHaveLength(0);
+      expect(bar.querySelector('[aria-hidden="true"]')).toBeNull();
+    });
+
     it('icon={null} renders no icon', () => {
       render(
         <MessageBar icon={null} data-testid="bar">
