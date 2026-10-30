@@ -173,6 +173,10 @@ export * from './components/overlays';
 export * from './components/table';
 export * from './components/motion';
 
+// Native props of a custom slot component (Fluent UI's `getIntrinsicElementProps`).
+export { getNativeElementProps } from './lib/nativeProps';
+export type { NativeElementProps } from './lib/nativeProps';
+
 // Structural parts (`slotProps`): last, so the modules it imports keep their order in a bundle.
 export { mergeSlotProps } from './lib/slotProps';
 export type { SlotPart, SlotPartOwn } from './lib/slotProps';

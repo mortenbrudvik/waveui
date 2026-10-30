@@ -273,6 +273,7 @@ import type {
   SlotObject,
   SlotPart,
   SlotPartOwn,
+  NativeElementProps,
   SlotRenderFunction,
   SlotRenderProps,
   SortDirection,
@@ -2267,5 +2268,19 @@ describe('0.18 customization surface from the package entry', () => {
       },
     };
     expect(icon).toBeDefined();
+  });
+
+  it('getNativeElementProps and the props it returns for an element', () => {
+    expectTypeOf<NativeElementProps<'input'>>().toEqualTypeOf<
+      Partial<JSX.IntrinsicElements['input']> & { [K in `data-${string}`]?: unknown }
+    >();
+    expectTypeOf<Entry['getNativeElementProps']>().toEqualTypeOf<
+      <P extends object, E extends keyof JSX.IntrinsicElements>(
+        tag: E,
+        props: P,
+        excludedNames?: readonly (keyof P & string)[],
+      ) => NativeElementProps<E>
+    >();
+    expectTypeOf<NativeElementProps<'span'>>().not.toHaveProperty('href');
   });
 });
