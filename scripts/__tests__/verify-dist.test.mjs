@@ -41,6 +41,7 @@ import {
   checkServerImport,
   clientReferenceStub,
   createWorkDir,
+  BASELINES_0_17_1,
   DATA_GRID_BUDGET,
   DATA_SCALE_MODULES,
   DEV_ONLY_LIBRARIES,
@@ -58,6 +59,7 @@ import {
   INCLUSION_PROBES_0_16,
   INCLUSION_PROBES_0_17,
   isMainModule,
+  PHASE_13_INTERIM_ALLOWANCE,
   main,
   measureImport,
   missingDeclarations,
@@ -4134,31 +4136,50 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       maxGzipBytes: 3072,
       allowedExternals: [],
     });
-    // The published 0.16.0 package, measured with this release's tools; the allowances of spec
-    // §10 as the build's rulings corrected them (bytes minified, bytes gzip).
+    // The published 0.16.0 package, measured with this release's tools (the printed comparison).
+    // Interim, re-set from measurements in Task 19 (spec R23): each budget is the published 0.17.1
+    // size plus 4 KiB minified and 1.5 KiB gzip.
     const components = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
     const portal = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
-    const allowances = [
-      [['Button'], { minified: 11195, gzip: 3855 }, [64, 32], components],
-      [['MessageBar'], { minified: 26831, gzip: 9312 }, [64, 32], components],
-      [['Tree'], { minified: 47248, gzip: 16196 }, [128, 64], components],
-      [['Dialog'], { minified: 70721, gzip: 23723 }, [1024, 409], portal],
-      [['WaveProvider', 'Dialog'], { minified: 71884, gzip: 24127 }, [1536, 716], portal],
+    expect(PHASE_13_INTERIM_ALLOWANCE).toEqual({ minified: 4096, gzip: 1536 });
+    expect(BASELINES_0_17_1).toEqual({
+      Button: { minified: 11222, gzip: 3866 },
+      MessageBar: { minified: 26858, gzip: 9324 },
+      Tree: { minified: 47327, gzip: 16232 },
+      Dialog: { minified: 70850, gzip: 23786 },
+      'WaveProvider + Dialog': { minified: 73403, gzip: 24778 },
+    });
+    const records = [
+      [['Button'], { minified: 11195, gzip: 3855 }, [15318, 5402], components],
+      [['MessageBar'], { minified: 26831, gzip: 9312 }, [30954, 10860], components],
+      [['Tree'], { minified: 47248, gzip: 16196 }, [51423, 17768], components],
+      [['Dialog'], { minified: 70721, gzip: 23723 }, [74946, 25322], portal],
+      [['WaveProvider', 'Dialog'], { minified: 71884, gzip: 24127 }, [77499, 26314], portal],
     ];
     expect(RECORDED_IMPORTS_0_17).toEqual([
       { names: ['createBrandTokens'], baseline: null, budget: BRAND_TOKENS_BUDGET },
       { names: ['waveTokens'], baseline: null, budget: WAVE_TOKENS_BUDGET },
-      ...allowances.map(([names, baseline, [minified, gzip], allowedExternals]) => ({
+      ...records.map(([names, baseline, [maxMinifiedBytes, maxGzipBytes], allowedExternals]) => ({
         names,
         baseline: { version: '0.16.0', ...baseline },
-        budget: {
-          names,
-          maxMinifiedBytes: baseline.minified + minified,
-          maxGzipBytes: baseline.gzip + gzip,
-          allowedExternals,
-        },
+        budget: { names, maxMinifiedBytes, maxGzipBytes, allowedExternals },
       })),
     ]);
+    // The 0.17.1 sizes are those of the CHANGELOG's Size tables (0.17.1 changed only the
+    // provider, so the component imports keep their 0.17.0 sizes).
+    const log = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
+    const rows = log.slice(log.indexOf('## [0.17.1]'), log.indexOf('## [0.16.0]')).split('\n');
+    for (const [label, minified, gzip] of [
+      ['only `Button`', '11,222', '3,866'],
+      ['only `MessageBar`', '26,858', '9,324'],
+      ['only `Tree`', '47,327', '16,232'],
+      ['only `Dialog`', '70,850', '23,786'],
+      ['`WaveProvider` and `Dialog`', '73,403', '24,778'],
+    ]) {
+      // The newest row of the import (0.17.1's table comes first), its last column.
+      const row = rows.find((line) => line.startsWith(`| An import of ${label} |`));
+      expect(row, label).toMatch(new RegExp(` \\| ${minified} \\(${gzip} gzip\\) \\|$`));
+    }
     // 0.4 and 0.7 KiB, rounded down: a budget never above the spec's figure.
     expect(Math.floor(0.4 * 1024)).toBe(409);
     expect(Math.floor(0.7 * 1024)).toBe(716);
@@ -4525,8 +4546,8 @@ describe('the 0.17 probes (INTEGRATION)', () => {
     expect(result.errors).toEqual([
       `createBrandTokens: ${brand.minified} bytes minified, over the budget of 4495`,
       `createBrandTokens: ${brand.gzip} bytes gzip, over the budget of 3072`,
-      `Button: ${button.minified} bytes minified, over the budget of 11259`,
-      `Button: ${button.gzip} bytes gzip, over the budget of 3887`,
+      `Button: ${button.minified} bytes minified, over the budget of 15318`,
+      `Button: ${button.gzip} bytes gzip, over the budget of 5402`,
     ]);
   }, 60_000);
 
@@ -4542,11 +4563,11 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       /verify-dist: waveTokens-only import: \d+ B minified \(budget 3839\), \d+ B gzip \(budget 3072\)\n/,
     );
     for (const [label, minified, gzip, maxMinified, maxGzip] of [
-      ['Button', 11195, 3855, 11259, 3887],
-      ['MessageBar', 26831, 9312, 26895, 9344],
-      ['Tree', 47248, 16196, 47376, 16260],
-      ['Dialog', 70721, 23723, 71745, 24132],
-      ['WaveProvider \\+ Dialog', 71884, 24127, 73420, 24843],
+      ['Button', 11195, 3855, 15318, 5402],
+      ['MessageBar', 26831, 9312, 30954, 10860],
+      ['Tree', 47248, 16196, 51423, 17768],
+      ['Dialog', 70721, 23723, 74946, 25322],
+      ['WaveProvider \\+ Dialog', 71884, 24127, 77499, 26314],
     ]) {
       expect(output).toMatch(
         new RegExp(

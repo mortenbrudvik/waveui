@@ -93,8 +93,9 @@
  *     ({@link EXCLUSION_PROBES_0_17}, with the positive controls of {@link INCLUSION_PROBES_0_17});
  *     the imports of {@link RECORDED_IMPORTS_0_17} stay within their budgets
  *     (createBrandTokens-only and waveTokens-only 3 KiB gzip; Button-only, MessageBar-only,
- *     Tree-only, Dialog-only and WaveProvider + Dialog within their allowances over 0.16.0), which
- *     the CLI prints with the 0.16.0 sizes; no JavaScript, CSS or declaration file of dist names a
+ *     Tree-only, Dialog-only and WaveProvider + Dialog, during Phase 13, within the interim
+ *     allowance over 0.17.1 of {@link PHASE_13_INTERIM_ALLOWANCE}), which the CLI prints with the
+ *     0.16.0 sizes; no JavaScript, CSS or declaration file of dist names a
  *     chart library of the stories ({@link DEV_ONLY_LIBRARIES}, R14).
  *
  * Every probe and size bundles as a consumer's production build: `process.env.NODE_ENV` is defined
@@ -743,11 +744,53 @@ const COMPONENT_EXTERNALS = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-mer
 const PORTAL_EXTERNALS = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
 
 /**
- * The 0.17 budgets (spec §10, with the build's rulings, which correct it for Tree and add the
+ * Interim: re-set from measurements in Task 19 (spec R23). Phase 13 grows every component bundle
+ * (`slotProps` on the parts, render-function slot children in `lib/slot`, which nearly every
+ * component holds), so during the phase each component budget of {@link RECORDED_IMPORTS_0_17} is
+ * the import's size in the published 0.17.1 package ({@link BASELINES_0_17_1}) plus this allowance,
+ * in bytes: +4 KiB minified and +1.5 KiB gzip. The DataGrid-only budget ({@link DATA_GRID_BUDGET},
+ * 0.16.0 plus 25 %) is larger than 0.17.1 plus the allowance and stays; the budgets of
+ * `createBrandTokens`, `waveTokens`, `useVirtualWindow` and the presence core stay too, since no
+ * module of Phase 13 is in their closures.
+ */
+export const PHASE_13_INTERIM_ALLOWANCE = { minified: 4096, gzip: 1536 };
+
+/**
+ * The sizes of the component imports of {@link RECORDED_IMPORTS_0_17} in the published 0.17.1
+ * package, as its CHANGELOG's Size tables give them (0.17.1 changed only the provider, so the
+ * others keep their 0.17.0 sizes), measured as {@link measureImport} measures; the base of the
+ * interim budgets ({@link PHASE_13_INTERIM_ALLOWANCE}).
+ */
+export const BASELINES_0_17_1 = {
+  Button: { minified: 11222, gzip: 3866 },
+  MessageBar: { minified: 26858, gzip: 9324 },
+  Tree: { minified: 47327, gzip: 16232 },
+  Dialog: { minified: 70850, gzip: 23786 },
+  'WaveProvider + Dialog': { minified: 73403, gzip: 24778 },
+};
+
+/**
+ * Interim (spec R23): the budget of an import of `names`, its 0.17.1 size plus
+ * {@link PHASE_13_INTERIM_ALLOWANCE}.
+ */
+function interimBudget(names, allowedExternals) {
+  const base = BASELINES_0_17_1[names.join(' + ')];
+  return {
+    names,
+    maxMinifiedBytes: base.minified + PHASE_13_INTERIM_ALLOWANCE.minified,
+    maxGzipBytes: base.gzip + PHASE_13_INTERIM_ALLOWANCE.gzip,
+    allowedExternals,
+  };
+}
+
+/**
+ * The 0.17 records (spec §10, with the build's rulings, which correct it for Tree and add the
  * provider with a Dialog), measured as {@link measureImport} measures and printed against the size
  * in the published 0.16.0 package where the import had one (`baseline: null` for the new ones),
- * both measured with this release's build tools, as {@link RECORDED_IMPORTS} measures 0.15.0. Each
- * budget is the 0.16.0 size plus its allowance, in bytes minified and gzip:
+ * both measured with this release's build tools, as {@link RECORDED_IMPORTS} measures 0.15.0.
+ * During Phase 13 the budgets of the five component imports are interim, re-set from measurements
+ * in Task 19 (spec R23): the 0.17.1 size plus {@link PHASE_13_INTERIM_ALLOWANCE}. In 0.17 each was
+ * the 0.16.0 size plus its allowance, in bytes minified and gzip:
  *   - `Button` and `MessageBar`: +64 and +32, for `cn`, which recognises the two new font families
  *     (R13); otherwise byte for byte 0.16.0's;
  *   - `Tree`: +128 and +64, `cn`'s allowance and the provider's context, which Tree reads for its
@@ -757,7 +800,7 @@ const PORTAL_EXTERNALS = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'ta
  *   - `WaveProvider` with `Dialog`: +1.5 KiB and +0.7 KiB (1,536 and 716), the provider's token
  *     handling (`lib/tokens`) too;
  *   - `createBrandTokens` and `waveTokens`: new, 3 KiB gzip ({@link BRAND_TOKENS_BUDGET}, {@link
- *     WAVE_TOKENS_BUDGET}).
+ *     WAVE_TOKENS_BUDGET}), unchanged in Phase 13.
  * A KiB fraction is rounded down, so no budget is above the spec's figure, and each closure
  * imports only the externals it has.
  */
@@ -767,52 +810,27 @@ export const RECORDED_IMPORTS_0_17 = [
   {
     names: ['Button'],
     baseline: { version: '0.16.0', minified: 11195, gzip: 3855 },
-    budget: {
-      names: ['Button'],
-      maxMinifiedBytes: 11259,
-      maxGzipBytes: 3887,
-      allowedExternals: COMPONENT_EXTERNALS,
-    },
+    budget: interimBudget(['Button'], COMPONENT_EXTERNALS),
   },
   {
     names: ['MessageBar'],
     baseline: { version: '0.16.0', minified: 26831, gzip: 9312 },
-    budget: {
-      names: ['MessageBar'],
-      maxMinifiedBytes: 26895,
-      maxGzipBytes: 9344,
-      allowedExternals: COMPONENT_EXTERNALS,
-    },
+    budget: interimBudget(['MessageBar'], COMPONENT_EXTERNALS),
   },
   {
     names: ['Tree'],
     baseline: { version: '0.16.0', minified: 47248, gzip: 16196 },
-    budget: {
-      names: ['Tree'],
-      maxMinifiedBytes: 47376,
-      maxGzipBytes: 16260,
-      allowedExternals: COMPONENT_EXTERNALS,
-    },
+    budget: interimBudget(['Tree'], COMPONENT_EXTERNALS),
   },
   {
     names: ['Dialog'],
     baseline: { version: '0.16.0', minified: 70721, gzip: 23723 },
-    budget: {
-      names: ['Dialog'],
-      maxMinifiedBytes: 71745,
-      maxGzipBytes: 24132,
-      allowedExternals: PORTAL_EXTERNALS,
-    },
+    budget: interimBudget(['Dialog'], PORTAL_EXTERNALS),
   },
   {
     names: ['WaveProvider', 'Dialog'],
     baseline: { version: '0.16.0', minified: 71884, gzip: 24127 },
-    budget: {
-      names: ['WaveProvider', 'Dialog'],
-      maxMinifiedBytes: 73420,
-      maxGzipBytes: 24843,
-      allowedExternals: PORTAL_EXTERNALS,
-    },
+    budget: interimBudget(['WaveProvider', 'Dialog'], PORTAL_EXTERNALS),
   },
 ];
 
