@@ -7,7 +7,7 @@ A React component library inspired by the Fluent UI 2 design language: 80 access
 - [Requirements](#requirements) · [Installation](#installation) · [Quick start](#quick-start)
 - [Styles](#styles) · [Theming](#theming) · [Global effects](#global-effects) · [Styling hooks](#styling-hooks)
 - [React Server Components](#react-server-components) · [Components](#components) · [Usage notes](#usage-notes)
-- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
+- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [Upgrading from 0.16](#upgrading-from-016) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
 
 ## Requirements
 
@@ -2922,6 +2922,17 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
 | `waveTokens` | Every design token as the `var()` that reads it, typed as that literal (`waveTokens.primary` is `'var(--wave-primary)'`), for inline styles and SVG charts; with the types `WaveTokens` and `WaveTokenName`. Frozen and server-safe; no component imports it. |
 | `chartPalette` | The 12 palette fills as token names, in the order that keeps neighbouring chart series as far apart as the palette allows (read each with `waveTokens[name]`); colors still need a second encoding in every chart. Frozen and server-safe. |
 | `getTokenStyle(overrides)` | The inline style (`TokenStyle`) that applies token overrides (`WaveTokenOverrides`), the one `WaveProvider` puts on its root and portals; `undefined` when there is nothing to set. Server-safe. |
+
+## Upgrading from 0.16
+
+0.17 removes nothing public, and everything it adds is opt-in (`tokens` and `applyStylesToPortals`, `createBrandTokens`, `waveTokens`, `getTokenStyle`, `chartPalette`, `Text font`, the palette tints and the font families), but the dark and high-contrast shadows change, and so do two types:
+
+1. **Stronger shadows in the dark and high-contrast themes.** The shadow levels are tokens of each theme (`--wave-shadow-2` … `--wave-shadow-64`): the light theme keeps the shadows of 0.16, and dark and high contrast take Fluent's, twice as dark (ambient opacity 0.24, key 0.28), so screenshots of those themes change. A shadow color utility or an opacity modifier (`shadow-black`, `shadow-4/50`) no longer changes Wave's levels: set the level's token for a theme instead (`.wave-dark { --wave-shadow-8: … }`, or `tokens={{ shadow8: … }}`). An `@theme` of yours that sets `--shadow-N` keeps its value.
+2. **`WaveContextValue` has three new members**, `tokens`, `tokenStyle` and `applyStylesToPortals` (`{}`, `undefined` and `true` outside a provider): a hand-built value (a test mock of `useWaveTheme`) adds them.
+3. **`TextWeight` has a fourth value, `'medium'`:** an exhaustive `switch` over it, or a `Record<TextWeight, …>` of your own, adds a case.
+4. **With `tokens`, the provider root and the portal wrappers carry the overrides** in their `style` attribute, a nested provider's root too. Without `tokens` the markup is 0.16's; a test that compares a whole `style` attribute changes when you adopt them.
+
+On the `./tailwind` path your Tailwind theme gains the palette's new color names and the `font-wave-mono` and `font-wave-numeric` families (see [Global effects](#global-effects)). [Brand colors and token overrides](#brand-colors-and-token-overrides) shows the new API; the CHANGELOG's [0.17.0 section](CHANGELOG.md) lists the additions and the full upgrade notes.
 
 ## Upgrading from 0.15
 

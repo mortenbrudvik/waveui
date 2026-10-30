@@ -443,7 +443,7 @@ The themes differ in the layers' opacity (both are black):
 
 The light values are the shadows of 0.16 and earlier, unchanged; since 0.17 the dark and high-contrast shadows are twice as strong (Fluent's dark values), so a raised surface still separates from a dark page. Fluent's brand-colored shadows (`shadow2Brand` …) have no Wave counterpart.
 
-`cn()` merges this scale with Tailwind's: `cn('shadow-4', 'shadow-8')` gives `shadow-8`, and a consumer `shadow-lg` replaces a component's `shadow-4`. Override a level per theme like any token (`.wave-dark { --wave-shadow-8: … }`, or `tokens={{ shadow8: … }}` on a provider); an app whose own `@theme` sets `--shadow-4` keeps that value, which replaces Wave's alias.
+`cn()` merges this scale with Tailwind's: `cn('shadow-4', 'shadow-8')` gives `shadow-8`, and a consumer `shadow-lg` replaces a component's `shadow-4`. Override a level per theme like any token (`.wave-dark { --wave-shadow-8: … }`, or `tokens={{ shadow8: … }}` on a provider); an app whose own `@theme` sets `--shadow-4` keeps that value, which replaces Wave's alias. A shadow color utility or an opacity modifier (`shadow-black`, `shadow-4/50`) does not change these levels (it did through 0.16): a level's value is a token, which Tailwind cannot take apart to recolor, so override the token instead. Tailwind's own `shadow-sm` … `shadow-2xl` still take them.
 
 ### Elevation Guidelines
 
