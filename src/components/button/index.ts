@@ -1,9 +1,6 @@
 export { Button } from './Button';
 export type { ButtonProps, ButtonOwnProps } from './Button';
 
-export { CompoundButton } from './CompoundButton';
-export type { CompoundButtonProps, CompoundButtonOwnProps } from './CompoundButton';
-
 export { ToggleButton } from './ToggleButton';
 export type { ToggleButtonProps } from './ToggleButton';
 
@@ -16,6 +13,13 @@ export type {
 
 export { MenuButton } from './MenuButton';
 export type { MenuButtonProps } from './MenuButton';
+
+// After SplitButton and MenuButton on purpose: CompoundButton is the first module of the entry
+// that merges `slotProps` parts, and exported before them it moved `lib/mergeProps` ahead of
+// `Button.slots` in every bundle holding both (MessageBar, Dialog), a few bytes of gzip with no
+// change to their code.
+export { CompoundButton } from './CompoundButton';
+export type { CompoundButtonProps, CompoundButtonOwnProps } from './CompoundButton';
 
 export { Link } from './Link';
 export type { LinkProps, LinkOwnProps, LinkAppearance, LinkVariant } from './Link';

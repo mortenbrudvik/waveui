@@ -18,9 +18,15 @@ import { expectTypeOf } from 'vitest';
 import * as registry from '../lib/classNames';
 import * as entry from '../index';
 import type {
+  AlphaSliderProps,
   CalendarProps,
   CheckboxProps,
+  ColorAreaProps,
+  ColorPickerHexFieldProps,
+  ColorPickerProps,
+  ColorSliderProps,
   ComboboxProps,
+  CompoundButtonProps,
   DatePickerProps,
   DropdownProps,
   FieldProps,
@@ -371,6 +377,13 @@ type SlotPropsOwners = {
   // The calendar view draws the parts of both, each under its own constant's keys.
   datePickerClassNames: DatePickerProps;
   calendarClassNames: CalendarProps;
+  colorPickerClassNames: ColorPickerProps;
+  colorPickerHexFieldClassNames: ColorPickerHexFieldProps;
+  colorAreaClassNames: ColorAreaProps;
+  colorSliderClassNames: ColorSliderProps;
+  alphaSliderClassNames: AlphaSliderProps;
+  // The button and its `icon` are Button's; CompoundButton declares only the parts it draws.
+  compoundButtonClassNames: CompoundButtonProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

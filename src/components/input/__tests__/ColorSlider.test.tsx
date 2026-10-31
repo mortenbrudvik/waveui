@@ -7,7 +7,13 @@ import { hydrateRoot } from 'react-dom/client';
 import { ColorSlider, type ColorSliderProps } from '../ColorSlider';
 import { colorSliderClassNames } from '../../../lib/classNames';
 import type { HsvColor, Orientation } from '../../../lib/types';
-import { renderWithProviders, testSystemProps } from '../../../test-utils';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  renderWithProviders,
+  testSystemProps,
+} from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { PickerHarness } from './colorPartHarness';
 
@@ -478,5 +484,184 @@ describe('ColorSlider', () => {
     // @ts-expect-error alpha has its own component, AlphaSlider
     const alpha = <ColorSlider channel="alpha" />;
     expect(alpha).toBeTruthy();
+  });
+});
+
+describe('ColorSlider — slotProps', () => {
+  type ColorSliderSlotProps = NonNullable<ColorSliderProps['slotProps']>;
+  const EVERY_PART: ColorSliderSlotProps = { rail: {}, thumb: {} };
+  const DARK_BLUE: HsvColor = { h: 220, s: 0.72, v: 0.4 };
+  const parts = (root: ParentNode) =>
+    [`.${colorSliderClassNames.rail}`, `.${colorSliderClassNames.thumb}`].map(
+      (selector) => root.querySelector(selector) as Element,
+    );
+
+  it('renders the parts of 1f67a85 on the server and in the client (attributes sorted)', () => {
+    // Captured from the dist of 1f67a85: the merged props may put the class before the locked
+    // attributes.
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<ColorSlider defaultValue={DARK_BLUE} />);
+    expect(openingTags(...parts(template.content))).toBe(
+      [
+        '<div aria-hidden="true" class="wave-color-slider__rail rounded-full forced-colors:forced-color-adjust-none bg-(image:--wave-color-slider-gradient) mx-3 h-3 flex-1 wave-rtl:-scale-x-100">',
+        '<span class="wave-color-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] start-(--wave-color-slider-position) top-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 -translate-y-1/2 group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
+      ].join('\n'),
+    );
+    render(
+      <ColorSlider
+        defaultValue={DARK_BLUE}
+        orientation="vertical"
+        shape="square"
+        channel="value"
+      />,
+    );
+    expect(openingTags(...parts(document))).toBe(
+      [
+        '<div aria-hidden="true" class="wave-color-slider__rail forced-colors:forced-color-adjust-none bg-(image:--wave-color-slider-gradient) my-3 w-3 flex-1 rounded-none">',
+        '<span class="wave-color-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] bottom-(--wave-color-slider-position) start-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2 group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: ColorSliderProps[] = [
+      { defaultValue: DARK_BLUE },
+      { channel: 'saturation', orientation: 'vertical', shape: 'square' },
+      { channel: 'value', disabled: true, name: 'accent', required: true, 'aria-label': 'Tone' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <ColorSlider {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    render(
+      <ColorSlider
+        defaultValue={DARK_BLUE}
+        slotProps={{
+          rail: { className: 'my-rail', style: { opacity: 0.5 }, 'data-part': 'rail' },
+          thumb: { className: 'my-thumb', style: { opacity: 0.25 }, 'data-part': 'thumb' },
+        }}
+      />,
+    );
+    const input = slider();
+    for (const [element, stable, own, mine, part, opacity] of [
+      [railOf(input), colorSliderClassNames.rail, 'flex-1', 'my-rail', 'rail', '0.5'],
+      [thumbOf(input), colorSliderClassNames.thumb, 'size-6', 'my-thumb', 'thumb', '0.25'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', part);
+      expect(element).toHaveStyle({ opacity });
+    }
+  });
+
+  it('lets your class replace a conflicting class of the part', () => {
+    render(
+      <ColorSlider defaultValue={DARK_BLUE} slotProps={{ rail: { className: 'rounded-md' } }} />,
+    );
+    const rail = railOf(slider());
+    expect(rail).toHaveClass('rounded-md');
+    expect(rail).not.toHaveClass('rounded-full');
+  });
+
+  it('attaches your refs to the parts, beside controlRef and ref', () => {
+    const rail = React.createRef<HTMLDivElement>();
+    const thumb = React.createRef<HTMLSpanElement>();
+    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLDivElement>();
+    render(
+      <ColorSlider
+        ref={ref}
+        controlRef={controlRef}
+        defaultValue={DARK_BLUE}
+        slotProps={{ rail: { ref: rail }, thumb: { ref: thumb } }}
+      />,
+    );
+    const input = slider();
+    expect(rail.current).toBe(railOf(input));
+    expect(thumb.current).toBe(thumbOf(input));
+    expect(controlRef.current).toBe(input);
+    expect(ref.current).toBe(rootOf(input));
+  });
+
+  it('adds your attributes and handlers; the rail stays hidden from assistive technology', () => {
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <ColorSlider
+        defaultValue={DARK_BLUE}
+        onValueChange={onValueChange}
+        slotProps={{
+          rail: { 'aria-hidden': false, title: 'Hue rail', onClick },
+          thumb: { title: 'Thumb', onClick },
+        }}
+      />,
+    );
+    const input = slider();
+    const rail = railOf(input);
+    expect(rail).toHaveAttribute('aria-hidden', 'true');
+    expect(rail).toHaveAttribute('title', 'Hue rail');
+    expect(thumbOf(input)).toHaveAttribute('title', 'Thumb');
+    fireEvent.click(rail);
+    fireEvent.click(thumbOf(input));
+    expect(onClick).toHaveBeenCalledTimes(2);
+    // The slider is its input, which no part reaches: its keys still work.
+    fireEvent.keyDown(input, { key: 'ArrowRight' });
+    expect(onValueChange).toHaveBeenCalledWith({ ...DARK_BLUE, h: 221 });
+  });
+
+  it('reaches the parts of a slider bound to a ColorPicker', () => {
+    render(
+      <PickerHarness>
+        <ColorSlider
+          slotProps={{ rail: { className: 'my-rail' }, thumb: { className: 'my-thumb' } }}
+        />
+      </PickerHarness>,
+    );
+    expect(railOf(slider())).toHaveClass('my-rail');
+    expect(thumbOf(slider())).toHaveClass('my-thumb');
+  });
+
+  it('keeps the mirrored classes of a horizontal slider under dir="rtl" next to yours', () => {
+    renderWithProviders(
+      <ColorSlider
+        defaultValue={DARK_BLUE}
+        slotProps={{ rail: { className: 'my-rail' }, thumb: { className: 'my-thumb' } }}
+      />,
+      { dir: 'rtl' },
+    );
+    const input = slider();
+    expect(railOf(input)).toHaveClass('wave-rtl:-scale-x-100', 'my-rail');
+    expect(thumbOf(input)).toHaveClass('wave-rtl:translate-x-1/2', 'my-thumb');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <ColorSlider
+        defaultValue={DARK_BLUE}
+        slotProps={{
+          rail: { className: 'my-rail', title: 'Rail' },
+          thumb: { className: 'my-thumb' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof ColorSliderSlotProps>().toEqualTypeOf<'rail' | 'thumb'>();
+    expectTypeOf<NonNullable<ColorSliderSlotProps['rail']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ColorSliderSlotProps['thumb']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the slider draws them
+    void (<ColorSlider slotProps={{ rail: { children: 'Rail' } }} />);
   });
 });

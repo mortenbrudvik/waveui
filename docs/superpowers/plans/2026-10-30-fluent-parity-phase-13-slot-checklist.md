@@ -2,7 +2,7 @@
 
 Generated in Task 4 from the data of `src/lib/slotParts.ts` and the class-name registry (`src/lib/classNames.ts`), which `src/__tests__/slotParts.test.ts` checks. The data is the source: when the two differ, `slotParts.ts` wins and this list is stale.
 
-186 constants, 113 with parts, 365 part keys: 90 `slotProps` keys (19 in Task 12, 35 in Task 13, 36 in Task 13b), 146 pending, 100 named slots, 29 exclusions.
+186 constants, 113 with parts, 365 part keys: 104 `slotProps` keys (19 in Task 12, 35 in Task 13, 36 in Task 13b, 14 in Task 14), 132 pending, 100 named slots, 29 exclusions.
 
 **How to read it.** One row per registry constant with parts, in the group of spec §8 that rolls it out. *Pending keys* are the work: each becomes a `slotProps` key of the component, typed `SlotPart<'<element>'>` for the element named in brackets (read from the source; where a part is one of two elements, both are named), and moves from `PENDING_SLOT_PARTS` to `SLOT_PROPS_KEYS` in the same change, which also adds the declaring component's props type to `SlotPropsOwners` in `src/__tests__/slotParts.test.ts` (its type test requires the owner's `slotProps` keys to equal the listed keys, both ways). *Named slots* already reach their part (R2) and get no `slotProps` key; a prop in brackets is the slot or props object whose name differs from the key. *Exclusions* get no key; their reasons are in the table at the end. *Notes* say where a part is rendered by another component than its constant's, or what the rollout must lock.
 
@@ -57,6 +57,8 @@ Generated in Task 4 from the data of `src/lib/slotParts.ts` and the class-name r
 ## D3 other inputs and the button family (Task 14)
 
 6 components with pending keys (14 keys). Nothing pending (named slots and exclusions only): `swatchPickerClassNames`, `colorSwatchClassNames`, `emptySwatchClassNames`, `buttonClassNames`, `toggleButtonClassNames`, `splitButtonClassNames`, `menuButtonClassNames`.
+
+**Done in Task 14:** the 14 keys of the column below are `slotProps` keys now, each declared by the component named in its row (`ColorPickerHexFieldProps` for the hex field; AlphaSlider declares its own `rail` and `thumb` instead of inheriting ColorSlider's). The rail, field and thumb parts are drawings: the sliders are the range inputs, which are no parts. CompoundButton's button and `icon` stay Button's. The decisions (the area's press through its root, the hex input's locks, CompoundButton's blocked clicks while disabled, its place in the button barrel) are in the spec, section 11, "Task 14".
 
 | Component | Pending keys (element) | Named slots (prop) | Exclusions | Notes |
 |---|---|---|---|---|

@@ -6,7 +6,13 @@ import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import { AlphaSlider, type AlphaSliderProps } from '../AlphaSlider';
 import { alphaSliderClassNames } from '../../../lib/classNames';
-import { renderWithProviders, testSystemProps } from '../../../test-utils';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  renderWithProviders,
+  testSystemProps,
+} from '../../../test-utils';
 import { PickerHarness } from './colorPartHarness';
 
 const slider = (name = 'Opacity') => screen.getByRole('slider', { name });
@@ -244,5 +250,190 @@ describe('AlphaSlider', () => {
     // @ts-expect-error AlphaSlider has no channel
     const withChannel = <AlphaSlider channel="hue" />;
     expect(withChannel).toBeTruthy();
+  });
+});
+
+describe('AlphaSlider — slotProps', () => {
+  type AlphaSliderSlotProps = NonNullable<AlphaSliderProps['slotProps']>;
+  const EVERY_PART: AlphaSliderSlotProps = { rail: {}, thumb: {} };
+  const HALF_RED = { h: 0, s: 1, v: 1, a: 0.4 };
+  const thumbOf = (input: HTMLElement) =>
+    rootOf(input).querySelector<HTMLElement>(`.${alphaSliderClassNames.thumb}`) as HTMLElement;
+  const parts = (root: ParentNode) =>
+    [
+      `.${alphaSliderClassNames.rail}`,
+      `.${alphaSliderClassNames.rail} > span`,
+      `.${alphaSliderClassNames.thumb}`,
+    ].map((selector) => root.querySelector(selector) as Element);
+
+  it('renders the parts of 1f67a85 on the server and in the client (attributes sorted)', () => {
+    // Captured from the dist of 1f67a85 (the rail's gradient span with them): the merged props
+    // may put the class before the locked attributes.
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<AlphaSlider defaultValue={HALF_RED} />);
+    expect(openingTags(...parts(template.content))).toBe(
+      [
+        '<div aria-hidden="true" class="wave-alpha-slider__rail relative overflow-hidden rounded-full bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none mx-3 h-3 flex-1 wave-rtl:-scale-x-100">',
+        '<span class="absolute inset-0 bg-(image:--wave-color-slider-gradient)">',
+        '<span class="wave-alpha-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] start-(--wave-color-slider-position) top-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 -translate-y-1/2 group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
+      ].join('\n'),
+    );
+    render(
+      <AlphaSlider defaultValue={HALF_RED} orientation="vertical" shape="square" transparency />,
+    );
+    expect(openingTags(...parts(document))).toBe(
+      [
+        '<div aria-hidden="true" class="wave-alpha-slider__rail relative overflow-hidden bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none my-3 w-3 flex-1 rounded-none">',
+        '<span class="absolute inset-0 bg-(image:--wave-color-slider-gradient)">',
+        '<span class="wave-alpha-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] bottom-(--wave-color-slider-position) start-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2 group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: AlphaSliderProps[] = [
+      { defaultValue: HALF_RED },
+      { transparency: true, orientation: 'vertical', shape: 'square' },
+      { disabled: true, name: 'opacity', required: true, 'aria-label': 'Alpha' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <AlphaSlider {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    render(
+      <AlphaSlider
+        defaultValue={HALF_RED}
+        slotProps={{
+          rail: { className: 'my-rail', style: { opacity: 0.5 }, 'data-part': 'rail' },
+          thumb: { className: 'my-thumb', style: { opacity: 0.25 }, 'data-part': 'thumb' },
+        }}
+      />,
+    );
+    const input = slider();
+    for (const [element, stable, own, mine, part, opacity] of [
+      [railOf(input), alphaSliderClassNames.rail, 'overflow-hidden', 'my-rail', 'rail', '0.5'],
+      [thumbOf(input), alphaSliderClassNames.thumb, 'size-6', 'my-thumb', 'thumb', '0.25'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', part);
+      expect(element).toHaveStyle({ opacity });
+    }
+    // The gradient inside the rail is no part: it keeps its own classes only.
+    expect(railOf(input).firstElementChild).toHaveAttribute(
+      'class',
+      'absolute inset-0 bg-(image:--wave-color-slider-gradient)',
+    );
+  });
+
+  it('lets your class replace a conflicting class of the part', () => {
+    render(
+      <AlphaSlider defaultValue={HALF_RED} slotProps={{ rail: { className: 'rounded-md' } }} />,
+    );
+    const rail = railOf(slider());
+    expect(rail).toHaveClass('rounded-md');
+    expect(rail).not.toHaveClass('rounded-full');
+  });
+
+  it('attaches your refs to the parts, beside controlRef and ref', () => {
+    const rail = React.createRef<HTMLDivElement>();
+    const thumb = React.createRef<HTMLSpanElement>();
+    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLDivElement>();
+    render(
+      <AlphaSlider
+        ref={ref}
+        controlRef={controlRef}
+        defaultValue={HALF_RED}
+        slotProps={{ rail: { ref: rail }, thumb: { ref: thumb } }}
+      />,
+    );
+    const input = slider();
+    expect(rail.current).toBe(railOf(input));
+    expect(thumb.current).toBe(thumbOf(input));
+    expect(controlRef.current).toBe(input);
+    expect(ref.current).toBe(rootOf(input));
+  });
+
+  it('adds your attributes and handlers; the rail stays hidden from assistive technology', () => {
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <AlphaSlider
+        defaultValue={HALF_RED}
+        onValueChange={onValueChange}
+        slotProps={{
+          rail: { 'aria-hidden': false, title: 'Opacity rail', onClick },
+          thumb: { title: 'Thumb', onClick },
+        }}
+      />,
+    );
+    const input = slider();
+    const rail = railOf(input);
+    expect(rail).toHaveAttribute('aria-hidden', 'true');
+    expect(rail).toHaveAttribute('title', 'Opacity rail');
+    expect(thumbOf(input)).toHaveAttribute('title', 'Thumb');
+    fireEvent.click(rail);
+    fireEvent.click(thumbOf(input));
+    expect(onClick).toHaveBeenCalledTimes(2);
+    // The slider is its input, which no part reaches: its keys still work.
+    fireEvent.keyDown(input, { key: 'ArrowRight' });
+    expect(onValueChange).toHaveBeenCalledWith({ ...HALF_RED, a: 0.41 });
+  });
+
+  it('reaches the parts of a slider bound to a ColorPicker', () => {
+    render(
+      <PickerHarness>
+        <AlphaSlider
+          slotProps={{ rail: { className: 'my-rail' }, thumb: { className: 'my-thumb' } }}
+        />
+      </PickerHarness>,
+    );
+    expect(railOf(slider())).toHaveClass('my-rail');
+    expect(thumbOf(slider())).toHaveClass('my-thumb');
+  });
+
+  it('keeps the mirrored classes of a horizontal slider under dir="rtl" next to yours', () => {
+    renderWithProviders(
+      <AlphaSlider
+        defaultValue={HALF_RED}
+        slotProps={{ rail: { className: 'my-rail' }, thumb: { className: 'my-thumb' } }}
+      />,
+      { dir: 'rtl' },
+    );
+    const input = slider();
+    expect(railOf(input)).toHaveClass('wave-rtl:-scale-x-100', 'my-rail');
+    expect(thumbOf(input)).toHaveClass('wave-rtl:translate-x-1/2', 'my-thumb');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <AlphaSlider
+        defaultValue={HALF_RED}
+        slotProps={{
+          rail: { className: 'my-rail', title: 'Rail' },
+          thumb: { className: 'my-thumb' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, its own and not ColorSlider’s, and takes no children', () => {
+    expectTypeOf<keyof AlphaSliderSlotProps>().toEqualTypeOf<'rail' | 'thumb'>();
+    expectTypeOf<NonNullable<AlphaSliderSlotProps['rail']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<AlphaSliderSlotProps['thumb']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the slider draws them
+    void (<AlphaSlider slotProps={{ thumb: { children: 'Thumb' } }} />);
   });
 });

@@ -145,6 +145,12 @@ export const SLOT_PROPS_KEYS = {
     'footer',
     'todayButton',
   ],
+  colorPickerClassNames: ['opacityLabel', 'opacityValue'],
+  colorPickerHexFieldClassNames: ['label', 'input', 'errorMessage'],
+  colorAreaClassNames: ['field', 'thumb'],
+  colorSliderClassNames: ['rail', 'thumb'],
+  alphaSliderClassNames: ['rail', 'thumb'],
+  compoundButtonClassNames: ['contentContainer', 'primaryText', 'secondaryText'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -419,7 +425,6 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
 
 /** The parts no rollout task has covered yet (R7); empty once the rollout is done. */
 export const PENDING_SLOT_PARTS: SlotPartLists = {
-  compoundButtonClassNames: ['contentContainer', 'primaryText', 'secondaryText'],
   avatarClassNames: ['visual'],
   avatarGroupClassNames: ['item', 'pie', 'surface', 'list', 'listItem'],
   avatarGroupItemClassNames: ['name'],
@@ -438,11 +443,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   toastTitleClassNames: ['label'],
   toastBodyClassNames: ['subtitle'],
   toasterClassNames: ['toast'],
-  colorPickerClassNames: ['opacityLabel', 'opacityValue'],
-  colorPickerHexFieldClassNames: ['label', 'input', 'errorMessage'],
-  colorAreaClassNames: ['field', 'thumb'],
-  colorSliderClassNames: ['rail', 'thumb'],
-  alphaSliderClassNames: ['rail', 'thumb'],
   cardClassNames: ['checkmark'],
   cardHeaderClassNames: ['text', 'title', 'subtitle'],
   accordionTriggerClassNames: ['heading', 'expandIcon'],

@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getDirection } from '../../lib/direction';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { HsvColor } from '../../lib/types';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -48,7 +49,10 @@ export interface AlphaSliderLabels {
 }
 
 /** Properties for the AlphaSlider component. */
-export interface AlphaSliderProps extends Omit<ColorSliderProps, 'channel' | 'labels'> {
+export interface AlphaSliderProps extends Omit<
+  ColorSliderProps,
+  'channel' | 'labels' | 'slotProps'
+> {
   /**
    * Shows transparency (100 % is fully transparent) instead of opacity: the rail, the input's
    * value, the value text and the arrow direction all follow it, while `value.a` stays the
@@ -58,6 +62,29 @@ export interface AlphaSliderProps extends Omit<ColorSliderProps, 'channel' | 'la
   transparency?: boolean;
   /** Texts of the slider; bound to a ColorPicker, the picker's `labels` fill the keys you leave out. */
   labels?: AlphaSliderLabels;
+  /**
+   * Props for the elements the slider draws inside its root, by part, merged into each part's
+   * own (Fluent UI's `rail` and `thumb` slot props): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers and attributes added, your ref
+   * attached. Every attribute the slider sets on a part is locked. A part takes no `children`.
+   * Both parts are drawn only: the slider itself is the invisible range input over them, which
+   * takes the pointer and the keys and is reached through the slider's own props and
+   * `controlRef`, so a part receives no press of its own.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` that draws the rail: the checkerboard, with the color's gradient in a `<span>`
+     * inside it (stable class `wave-alpha-slider__rail`). Locked: `aria-hidden`, which keeps the
+     * drawing out of the accessibility tree.
+     */
+    rail?: SlotPart<'div'>;
+    /**
+     * The `<span>` of the drawn thumb, placed at the value inside a box hidden from assistive
+     * technology (stable class `wave-alpha-slider__thumb`). It sets no attribute of its own, so
+     * none is locked.
+     */
+    thumb?: SlotPart<'span'>;
+  };
 }
 
 const DEFAULT_LABELS = { opacity: 'Opacity', transparency: 'Transparency' } as const;
@@ -103,6 +130,7 @@ export const AlphaSlider = ({
   onKeyDown,
   onKeyUp,
   ref,
+  slotProps,
   ...rest
 }: AlphaSliderProps) => {
   const part = useColorPartState({ value, defaultValue, onValueChange, disabled });
@@ -198,13 +226,15 @@ export const AlphaSlider = ({
       ref={ref}
     >
       <div
-        aria-hidden="true"
-        className={cn(
-          alphaSliderClassNames.rail,
-          'relative overflow-hidden rounded-full bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none',
-          vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
-          resolvedShape === 'square' && 'rounded-none',
-        )}
+        {...mergeSlotProps(slotProps?.rail, {
+          className: cn(
+            alphaSliderClassNames.rail,
+            'relative overflow-hidden rounded-full bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none',
+            vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
+            resolvedShape === 'square' && 'rounded-none',
+          ),
+          locked: { 'aria-hidden': 'true' },
+        })}
       >
         <span className={cn('absolute inset-0', RAIL_GRADIENT)} />
       </div>
@@ -233,12 +263,14 @@ export const AlphaSlider = ({
       />
       <span aria-hidden="true" className={vertical ? THUMB_TRACK_VERTICAL : THUMB_TRACK_HORIZONTAL}>
         <span
-          className={cn(
-            alphaSliderClassNames.thumb,
-            COLOR_THUMB_CLASSES,
-            vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
-            'group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]',
-          )}
+          {...mergeSlotProps(slotProps?.thumb, {
+            className: cn(
+              alphaSliderClassNames.thumb,
+              COLOR_THUMB_CLASSES,
+              vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
+              'group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]',
+            ),
+          })}
         />
       </span>
       {!picker && (
