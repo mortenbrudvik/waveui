@@ -989,6 +989,7 @@ export const MODULE_ONLY_NAMES = [
   'SELECTION_CELL_CLASSES',
   'SELECTION_COLUMN_WIDTH',
   'ScrollOffsetInput',
+  'SelectionSnapshot',
   'SelectionStore',
   'SelectionUniverse',
   'SortArrowDownIcon',
