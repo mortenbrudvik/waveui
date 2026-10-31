@@ -79,6 +79,28 @@ export interface TreeItemContextValue {
 
 export const TreeItemContext = React.createContext<TreeItemContextValue | null>(null);
 
+/**
+ * What every `slotProps` part of a Tree.Item and a Tree.ItemPersonaLayout locks unset
+ * (module-only): a role, since the tree finds its items by role (a part with an item's role would
+ * become an item of its own); a tab index, since a tree has one tab stop, its roving item; the
+ * marker of a roving container, which would take the items inside a part out of the tree's arrow
+ * order; and the markers by which the tree reads an item (its row, label, checkbox, aside and
+ * actions, and a persona layout's name), which decide the clicks and keys an item takes, the text
+ * typeahead matches and what shows while it has focus. Spread it first in a part's `locked`
+ * object; a part that carries one of them sets it after the spread.
+ */
+export const TREE_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  'data-tree-row': undefined,
+  'data-tree-label': undefined,
+  'data-tree-checkbox': undefined,
+  'data-tree-aside': undefined,
+  'data-tree-actions': undefined,
+  'data-tree-persona-name': undefined,
+} as const;
+
 const INERT_ITEM_CONTEXT: TreeItemContextValue = { registerLayout: () => () => {} };
 
 /** C-CONTEXT: throws in development, logs once and returns an inert value in production. */

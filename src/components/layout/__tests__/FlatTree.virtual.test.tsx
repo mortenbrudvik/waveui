@@ -8,9 +8,9 @@ import { FlatTree } from '../FlatTree';
 import type { FlatTreeProps } from '../FlatTree';
 import { useFlatTree, type UseFlatTreeOptions } from '../useFlatTree';
 import type { FlatTreeItemData, VisibleFlatItem } from '../../../lib/flatTree';
-import { flatTreeClassNames } from '../../../lib/classNames';
+import { flatTreeClassNames, flatTreeItemClassNames } from '../../../lib/classNames';
 import { useVirtualWindow, type UseVirtualWindowOptions } from '../../../hooks/useVirtualWindow';
-import { expectNoA11yViolations } from '../../../test-utils';
+import { expectInertSlotProps, expectNoA11yViolations } from '../../../test-utils';
 
 /** The item height of the window, in pixels. */
 const ITEM = 28;
@@ -602,6 +602,52 @@ describe('FlatTree virtualWindow', () => {
         act(() => root?.unmount());
         container.remove();
       }
+    });
+  });
+});
+
+describe('FlatTree virtualWindow — slotProps', () => {
+  const partOf = (el: Element, name: 'row' | 'label') =>
+    el.querySelector<HTMLElement>(`.${flatTreeItemClassNames[name]}`);
+
+  it('reaches the rendered items only, keeps their place in the window, and gives the spacers none', async () => {
+    const rows = new Set<Element>();
+    render(
+      <WindowedTree
+        slotProps={{
+          row: {
+            className: 'my-row',
+            'data-index': 'mine',
+            ref: (el: HTMLDivElement | null) => void (el && rows.add(el)),
+          },
+          label: { className: 'my-label' },
+        }}
+      />,
+    );
+    expect(mountedIndexes()).toEqual(range(0, FIRST_WINDOW));
+    expect(order()).toEqual([...range(0, FIRST_WINDOW), 'spacer']);
+    for (const el of items()) {
+      expect(partOf(el, 'row')).toHaveClass('my-row');
+      expect(partOf(el, 'label')).toHaveClass('my-label');
+    }
+    for (const spacer of spacers()) expect(spacer.querySelector('.my-row, .my-label')).toBeNull();
+    expect(document.querySelectorAll('.my-row')).toHaveLength(FIRST_WINDOW);
+    // Scrolled to the middle: the parts follow the rendered items (the kept tab stop first),
+    // between the spacers.
+    await scrollTo(2000 * ITEM);
+    const mounted = mountedIndexes();
+    expect(order()).toEqual([0, 'spacer', ...mounted.slice(1), 'spacer']);
+    expect(document.querySelectorAll('.my-row')).toHaveLength(mounted.length);
+    for (const el of items()) expect(partOf(el, 'row')).toHaveClass('my-row');
+    expect(rows.size).toBeGreaterThan(FIRST_WINDOW);
+  });
+
+  it('renders the same window without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps((slotProps) => <WindowedTree slotProps={slotProps} />, {
+      row: {},
+      expandIcon: {},
+      indicator: {},
+      label: {},
     });
   });
 });

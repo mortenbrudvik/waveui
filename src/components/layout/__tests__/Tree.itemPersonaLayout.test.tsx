@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
-import { describe, it, expect, expectTypeOf } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tree, TreeItemPersonaLayout, type TreeItemPersonaLayoutProps } from '../Tree';
@@ -8,8 +8,10 @@ import { Avatar } from '../../data-display/Avatar';
 import { treeItemPersonaLayoutClassNames } from '../../../lib/classNames';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
   expectThrows,
+  openingTags,
   testSystemProps,
   type TestWrapper,
 } from '../../../test-utils';
@@ -171,5 +173,284 @@ describe('Tree.ItemPersonaLayout', () => {
     expectTypeOf<TreeItemPersonaLayoutProps['ref']>().toEqualTypeOf<
       React.Ref<HTMLSpanElement> | undefined
     >();
+  });
+});
+
+describe('Tree.ItemPersonaLayout — slotProps', () => {
+  type LayoutSlotProps = NonNullable<TreeItemPersonaLayoutProps['slotProps']>;
+  const EVERY_PART: LayoutSlotProps = { media: {}, main: {}, description: {} };
+  const NAMES = ['media', 'main', 'description'] as const;
+  const partsOf = (root: ParentNode) =>
+    NAMES.map(
+      (name) => root.querySelector(`.${treeItemPersonaLayoutClassNames[name]}`) as HTMLElement,
+    );
+
+  // Captured from ce1620c's dist (client and server agree).
+  const BASE_PINS = [
+    '<span class="wave-tree-item-persona-layout__media inline-flex shrink-0">',
+    '<span class="wave-tree-item-persona-layout__main truncate" data-tree-persona-name="" id="tree-persona-name-_id0_">',
+    '<span class="wave-tree-item-persona-layout__description truncate text-caption-1 text-muted-foreground" id="tree-persona-description-_id1_">',
+  ].join('\n');
+
+  function People({ slotProps, onClick }: { slotProps?: LayoutSlotProps; onClick?: () => void }) {
+    return (
+      <Tree aria-label="People">
+        <Tree.Item value="kat" onClick={onClick}>
+          <Tree.ItemPersonaLayout
+            media={<Avatar decorative name="Kat Sharp" size="small" />}
+            description="Designer"
+            slotProps={slotProps}
+          >
+            Kat Sharp
+          </Tree.ItemPersonaLayout>
+        </Tree.Item>
+      </Tree>
+    );
+  }
+
+  it('renders the parts of ce1620c (attributes sorted), on the client and the server', () => {
+    render(<People />);
+    expect(openingTags(...partsOf(document.body))).toBe(BASE_PINS);
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<People slotProps={EVERY_PART} />);
+    expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps((slotProps) => <People slotProps={slotProps} />, EVERY_PART);
+    expectInertSlotProps(
+      (slotProps) => (
+        <Tree aria-label="People">
+          <Tree.Item value="kat">
+            <Tree.ItemPersonaLayout slotProps={slotProps}>Kat Sharp</Tree.ItemPersonaLayout>
+          </Tree.Item>
+        </Tree>
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('puts your className, style, data-* and ref on each part, after its own classes', () => {
+    const refs = NAMES.map(() => React.createRef<HTMLSpanElement>());
+    const slotProps = Object.fromEntries(
+      NAMES.map((name, i) => [
+        name,
+        { className: `my-${name}`, style: { opacity: 0.5 }, 'data-part': name, ref: refs[i] },
+      ]),
+    ) as LayoutSlotProps;
+    render(<People slotProps={slotProps} />);
+    partsOf(document.body).forEach((element, i) => {
+      expect(element.classList[0]).toBe(treeItemPersonaLayoutClassNames[NAMES[i]]);
+      expect(element.classList[element.classList.length - 1]).toBe(`my-${NAMES[i]}`);
+      expect(element).toHaveAttribute('data-part', NAMES[i]);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(refs[i].current).toBe(element);
+    });
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <People
+        slotProps={{
+          media: { className: 'inline-block' },
+          main: { className: 'text-clip' },
+          description: { className: 'text-caption-2' },
+        }}
+      />,
+    );
+    const [media, main, description] = partsOf(document.body);
+    expect(media).toHaveClass('inline-block');
+    expect(media).not.toHaveClass('inline-flex');
+    expect(main).toHaveClass('text-clip');
+    expect(main).not.toHaveClass('truncate');
+    expect(description).toHaveClass('text-caption-2');
+    expect(description).not.toHaveClass('text-caption-1');
+  });
+
+  it('keeps the item’s name and description: the ids, names and hidden state of the parts are locked', () => {
+    const attempt = (id: string) => ({
+      id,
+      role: 'treeitem',
+      tabIndex: 0,
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+      'aria-label': 'Mine',
+      'data-tree-persona-name': 'x',
+      'data-tree-row': '',
+      'data-tree-checkbox': '',
+      'data-tree-actions': '',
+      'data-roving-container': '',
+    });
+    render(
+      <People
+        slotProps={{
+          media: attempt('my-media'),
+          main: attempt('my-main'),
+          description: attempt('my-description'),
+        }}
+      />,
+    );
+    const kat = screen.getByRole('treeitem');
+    expect(kat).toHaveAccessibleName('Kat Sharp');
+    expect(kat).toHaveAccessibleDescription('Designer');
+    expect(screen.getAllByRole('treeitem')).toHaveLength(1);
+    const [media, main, description] = partsOf(document.body);
+    expect(main.id).toMatch(/^tree-persona-name-/);
+    expect(description.id).toMatch(/^tree-persona-description-/);
+    expect(main).toHaveAttribute('data-tree-persona-name', '');
+    for (const element of [media, description]) {
+      expect(element).not.toHaveAttribute('data-tree-persona-name');
+    }
+    for (const element of [media, main, description]) {
+      expect(element).not.toHaveAttribute('role');
+      expect(element).not.toHaveAttribute('tabindex');
+      for (const marker of [
+        'data-tree-row',
+        'data-tree-checkbox',
+        'data-tree-actions',
+        'data-roving-container',
+      ]) {
+        expect(element).not.toHaveAttribute(marker);
+      }
+    }
+    for (const element of [main, description]) {
+      expect(element).not.toHaveAttribute('aria-label');
+      for (const hiding of ['hidden', 'inert', 'aria-hidden']) {
+        expect(element).not.toHaveAttribute(hiding);
+      }
+    }
+    // The media takes your id and hidden state: it is not part of the name.
+    expect(media).toHaveAttribute('id', 'my-media');
+    expect(media).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('keeps typeahead on the name: the media cannot mark itself as the name', async () => {
+    // Every key in one task: the typeahead buffer is a real 500 ms timer.
+    const user = userEvent.setup({ delay: null });
+    const marked: LayoutSlotProps = { media: { 'data-tree-persona-name': '' } };
+    const row = (name: string) => (
+      <Tree.ItemPersonaLayout
+        media={<Avatar decorative name={name} size="small" />}
+        slotProps={marked}
+      >
+        {name}
+      </Tree.ItemPersonaLayout>
+    );
+    render(
+      <Tree aria-label="People">
+        <Tree.Item value="kat">{row('Kat Sharp')}</Tree.Item>
+        <Tree.Item value="sam">{row('Sam Kerr')}</Tree.Item>
+        <Tree.Item value="sue">{row('Sue Adams')}</Tree.Item>
+      </Tree>,
+    );
+    act(() => item('Kat Sharp').focus());
+    // "sa" starts the name Sam Kerr; it would start Sue Adams' initials (SA) if the media's text
+    // were the item's.
+    await user.keyboard('sa');
+    expect(item('Sam Kerr')).toHaveFocus();
+  });
+
+  it('runs a part’s click first: preventDefault() keeps the item from activating, its onClick still runs', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onClick = vi.fn(() => void order.push('item'));
+    render(
+      <People
+        onClick={onClick}
+        slotProps={{
+          main: {
+            onClick: (event) => {
+              order.push('main');
+              event.preventDefault();
+            },
+          },
+          description: { onClick: () => void order.push('description') },
+        }}
+      />,
+    );
+    const [, main, description] = partsOf(document.body);
+    await user.click(main);
+    await user.click(description);
+    expect(order).toEqual(['main', 'item', 'description', 'item']);
+  });
+
+  it('calls your part handlers once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const handlers = { media: vi.fn(), main: vi.fn(), description: vi.fn() };
+    render(
+      <React.StrictMode>
+        <People
+          slotProps={{
+            media: { onClick: handlers.media },
+            main: { onClick: handlers.main },
+            description: { onClick: handlers.description },
+          }}
+        />
+      </React.StrictMode>,
+    );
+    for (const element of partsOf(document.body)) await user.click(element);
+    for (const handler of Object.values(handlers)) expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the parts the layout does not draw: no media, no description', () => {
+    render(
+      <Tree aria-label="People">
+        <Tree.Item value="kat">
+          <Tree.ItemPersonaLayout
+            slotProps={{
+              media: { className: 'my-media' },
+              description: { className: 'my-description' },
+              main: { className: 'my-main' },
+            }}
+          >
+            Kat Sharp
+          </Tree.ItemPersonaLayout>
+        </Tree.Item>
+      </Tree>,
+    );
+    expect(document.querySelector('.my-media, .my-description')).toBeNull();
+    expect(screen.getByText('Kat Sharp')).toHaveClass('my-main');
+  });
+
+  it('keeps the layout element its own: slotProps never reaches it', () => {
+    render(<People slotProps={{ root: { className: 'my-root' } } as unknown as LayoutSlotProps} />);
+    const root = document.querySelector(`.${treeItemPersonaLayoutClassNames.root}`)!;
+    expect(root).not.toHaveAttribute('slotprops');
+    expect(document.querySelector('.my-root')).toBeNull();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <People
+        slotProps={{
+          media: { className: 'my-media', title: 'Photo' },
+          main: { className: 'my-main' },
+          description: { className: 'my-description' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof LayoutSlotProps>().toEqualTypeOf<'media' | 'main' | 'description'>();
+    expectTypeOf<NonNullable<LayoutSlotProps['media']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<LayoutSlotProps['main']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<LayoutSlotProps['description']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the layout draws them
+        <Tree.ItemPersonaLayout slotProps={{ main: { children: 'Name' } }}>
+          Kat
+        </Tree.ItemPersonaLayout>
+      )
+    );
   });
 });

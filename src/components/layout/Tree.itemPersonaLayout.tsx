@@ -2,8 +2,9 @@ import * as React from 'react';
 import { treeItemPersonaLayoutClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useId } from '../../hooks/useId';
-import { useTreeItemContext } from './Tree.context';
+import { TREE_PART_LOCKS, useTreeItemContext } from './Tree.context';
 
 /** Properties for the TreeItemPersonaLayout sub-component (Fluent's `TreeItemPersonaLayout`). */
 export interface TreeItemPersonaLayoutProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -15,6 +16,41 @@ export interface TreeItemPersonaLayoutProps extends React.HTMLAttributes<HTMLSpa
   /** A second line under the name; it describes the item. */
   description?: React.ReactNode;
   ref?: React.Ref<HTMLSpanElement>;
+  /**
+   * Props for the elements the layout draws, by part, merged into each part's own: your classes
+   * after the part's (yours win a conflict), your styles over its styles, your attributes and
+   * handlers added, your ref attached. Every attribute the layout sets on a part is locked and
+   * keeps the layout's value, and no part takes a role, a tab index or the markers by which the
+   * tree reads an item, so a part changes neither the item's name, its description, its
+   * typeahead text nor the tree's items and tab stop. A part takes no `children` (the layout draws
+   * their content); the layout's own element takes its own props. No part carries a handler: an
+   * event on a part reaches the item and its tree after your handler, as one on the label does,
+   * and `preventDefault()` in yours skips their handling of it there too. Fluent UI's
+   * TreeItemPersonaLayout gives these parts slots of their own (`media`, `main`, `description`).
+   */
+  slotProps?: {
+    /**
+     * The `<span>` of `media`, rendered while `media` renders content (stable class
+     * `wave-tree-item-persona-layout__media`). Locked: no role or tab index, and none of the
+     * tree's markers (typeahead would read the media's text as the item's).
+     */
+    media?: SlotPart<'span'>;
+    /**
+     * The `<span>` of the name (`children`), which names the item (stable class
+     * `wave-tree-item-persona-layout__main`). Locked: its `id` (the item's `aria-labelledby`),
+     * its marker (typeahead reads the item's text from it), no `aria-label` (it would replace the
+     * name's text), no role or tab index, the tree's other markers, and no `hidden`, `inert` or
+     * `aria-hidden`.
+     */
+    main?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `description`, rendered while `description` renders content, which
+     * describes the item (stable class `wave-tree-item-persona-layout__description`). Locked: its
+     * `id` (the item's `aria-describedby`), no `aria-label`, no role or tab index, none of the
+     * tree's markers, and no `hidden`, `inert` or `aria-hidden`.
+     */
+    description?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -29,6 +65,7 @@ export const TreeItemPersonaLayout = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: TreeItemPersonaLayoutProps) => {
   const { registerLayout } = useTreeItemContext('Tree.ItemPersonaLayout');
@@ -42,6 +79,18 @@ export const TreeItemPersonaLayout = ({
     [registerLayout, nameId, descriptionId, hasDescription],
   );
 
+  // The parts are merged only when given: a tree renders many items.
+  const mediaClasses = hasMedia
+    ? cn(treeItemPersonaLayoutClassNames.media, 'inline-flex shrink-0')
+    : undefined;
+  const mainClasses = cn(treeItemPersonaLayoutClassNames.main, 'truncate');
+  const descriptionClasses = hasDescription
+    ? cn(
+        treeItemPersonaLayoutClassNames.description,
+        'truncate text-caption-1 text-muted-foreground',
+      )
+    : undefined;
+
   return (
     <span
       ref={ref}
@@ -53,7 +102,11 @@ export const TreeItemPersonaLayout = ({
       {...rest}
     >
       {hasMedia && (
-        <span className={cn(treeItemPersonaLayoutClassNames.media, 'inline-flex shrink-0')}>
+        <span
+          className={mediaClasses}
+          {...(slotProps?.media &&
+            mergeSlotProps(slotProps.media, { className: mediaClasses, locked: TREE_PART_LOCKS }))}
+        >
           {materialiseSlotContent(media)}
         </span>
       )}
@@ -61,17 +114,35 @@ export const TreeItemPersonaLayout = ({
         <span
           id={nameId}
           data-tree-persona-name=""
-          className={cn(treeItemPersonaLayoutClassNames.main, 'truncate')}
+          className={mainClasses}
+          {...(slotProps?.main &&
+            mergeSlotProps(slotProps.main, {
+              className: mainClasses,
+              locked: {
+                ...TREE_PART_LOCKS,
+                ...HIDDEN_PART_LOCKS,
+                id: nameId,
+                'aria-label': undefined,
+                'data-tree-persona-name': '',
+              },
+            }))}
         >
           {children}
         </span>
         {hasDescription && (
           <span
             id={descriptionId}
-            className={cn(
-              treeItemPersonaLayoutClassNames.description,
-              'truncate text-caption-1 text-muted-foreground',
-            )}
+            className={descriptionClasses}
+            {...(slotProps?.description &&
+              mergeSlotProps(slotProps.description, {
+                className: descriptionClasses,
+                locked: {
+                  ...TREE_PART_LOCKS,
+                  ...HIDDEN_PART_LOCKS,
+                  id: descriptionId,
+                  'aria-label': undefined,
+                },
+              }))}
           >
             {materialiseSlotContent(description)}
           </span>

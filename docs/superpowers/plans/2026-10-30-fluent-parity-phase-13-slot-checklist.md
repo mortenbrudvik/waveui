@@ -2,7 +2,7 @@
 
 Generated in Task 4 from the data of `src/lib/slotParts.ts` and the class-name registry (`src/lib/classNames.ts`), which `src/__tests__/slotParts.test.ts` checks. The data is the source: when the two differ, `slotParts.ts` wins and this list is stale.
 
-186 constants, 113 with parts, 365 part keys: 144 `slotProps` keys (19 in Task 12, 35 in Task 13, 36 in Task 13b, 14 in Task 14, 9 in Task 15a, 13 in Task 15b, 13 in Task 15c, 5 in Task 15d), 92 pending, 100 named slots, 29 exclusions.
+186 constants, 113 with parts, 365 part keys: 157 `slotProps` keys (19 in Task 12, 35 in Task 13, 36 in Task 13b, 14 in Task 14, 9 in Task 15a, 13 in Task 15b, 13 in Task 15c, 5 in Task 15d, 13 in Task 16a), 79 pending, 100 named slots, 29 exclusions.
 
 **How to read it.** One row per registry constant with parts, in the group of spec §8 that rolls it out. *Pending keys* are the work: each becomes a `slotProps` key of the component, typed `SlotPart<'<element>'>` for the element named in brackets (read from the source; where a part is one of two elements, both are named), and moves from `PENDING_SLOT_PARTS` to `SLOT_PROPS_KEYS` in the same change, which also adds the declaring component's props type to `SlotPropsOwners` in `src/__tests__/slotParts.test.ts` (its type test requires the owner's `slotProps` keys to equal the listed keys, both ways). *Named slots* already reach their part (R2) and get no `slotProps` key; a prop in brackets is the slot or props object whose name differs from the key. *Exclusions* get no key; their reasons are in the table at the end. *Notes* say where a part is rendered by another component than its constant's, or what the rollout must lock.
 
@@ -119,13 +119,15 @@ Generated in Task 4 from the data of `src/lib/slotParts.ts` and the class-name r
 
 16 components with pending keys (48 keys): **longer than 8, split into consecutive tasks.** Nothing pending (named slots and exclusions only): `tabListTabClassNames`, `flatTreeClassNames`, `hamburgerClassNames`, `breadcrumbItemClassNames`, `accordionPanelClassNames`, `toolbarButtonClassNames`, `toolbarToggleButtonClassNames`, `toolbarRadioButtonClassNames`.
 
+**Done in Task 16a (the trees, ruling AJ's first part):** the 13 keys of TreeItem, TreeItemPersonaLayout and FlatTreeItem are `slotProps` keys now (no classification change). Tree.Item and Tree.ItemPersonaLayout declare their own constants' keys; FlatTree.Item is the tree's own row, never written by hand, so FlatTree declares `flatTreeItemClassNames`' four keys and hands them to every item through its context (ruling AK; `SlotPropsOwners` maps the constant to `FlatTreeProps`). Every part merges only when given, so an item without `slotProps` allocates nothing more. The locks (a role, a tab index and the tree's markers on every part; the label's and aside's ids, the checkbox's wiring, the toolbar's), the must-run focus bookkeeping of the actions and the blocked clicks of a disabled flat item are in the spec, section 11, "Task 16a".
+
 | Component | Pending keys (element) | Named slots (prop) | Exclusions | Notes |
 |---|---|---|---|---|
 | TabListTab (`tabListTabClassNames`) | — | `icon` | — |  |
 | TreeItem (`treeItemClassNames`) | `row` (div), `indicator` (span), `label` (span), `aside` (span), `actions` (span), `group` (div) | `expandIcon`, `icon`, `iconAfter` | `collapse` | `actions` is the row's toolbar of actions; `group` the nested items' `role="group"`. |
 | TreeItemPersonaLayout (`treeItemPersonaLayoutClassNames`) | `media` (span), `main` (span), `description` (span) | — | — |  |
 | FlatTree (`flatTreeClassNames`) | — | — | `spacer` |  |
-| FlatTreeItem (`flatTreeItemClassNames`) | `row` (div), `expandIcon` (svg), `indicator` (span), `label` (span) | — | — |  |
+| FlatTreeItem (`flatTreeItemClassNames`) | `row` (div), `expandIcon` (svg), `indicator` (span), `label` (span) | — | — | FlatTree.Item is never written by hand: FlatTree declares these keys and hands them to every item (ruling AK). |
 | Nav (`navClassNames`) | `list` (ul) | — | — | NavDrawer, NavDrawer.Body and NavDrawer.Footer are in D4, so the Nav list wiring is touched in two tasks. |
 | NavCategory (`navCategoryClassNames`) | `button` (button), `label` (span), `list` (ul) | `icon`, `expandIcon` | `collapse` |  |
 | NavItem (`navItemClassNames`) | `listItem` (li), `content` (span), `actions` (span) | `icon` | — |  |

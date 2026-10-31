@@ -172,6 +172,9 @@ export const SLOT_PROPS_KEYS = {
   toastTitleClassNames: ['label'],
   toastBodyClassNames: ['subtitle'],
   toasterClassNames: ['toast'],
+  treeItemClassNames: ['row', 'indicator', 'label', 'aside', 'actions', 'group'],
+  treeItemPersonaLayoutClassNames: ['media', 'main', 'description'],
+  flatTreeItemClassNames: ['row', 'expandIcon', 'indicator', 'label'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -461,9 +464,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   cardClassNames: ['checkmark'],
   cardHeaderClassNames: ['text', 'title', 'subtitle'],
   accordionTriggerClassNames: ['heading', 'expandIcon'],
-  treeItemClassNames: ['row', 'indicator', 'label', 'aside', 'actions', 'group'],
-  treeItemPersonaLayoutClassNames: ['media', 'main', 'description'],
-  flatTreeItemClassNames: ['row', 'expandIcon', 'indicator', 'label'],
   carouselClassNames: [
     'autoPlayButton',
     'track',

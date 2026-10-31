@@ -9,7 +9,9 @@ import { treeItemClassNames } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/types';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
+  openingTags,
   renderWithProviders,
   testSystemProps,
   testCompoundExposure,
@@ -1230,5 +1232,849 @@ describe('Tree - RTL (layout#32)', () => {
     expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
     await user.keyboard('{ArrowRight}');
     expect(item('Work')).toHaveFocus();
+  });
+});
+
+describe('Tree.Item — slotProps', () => {
+  type ItemSlotProps = NonNullable<TreeItemProps['slotProps']>;
+  const EVERY_PART: ItemSlotProps = {
+    row: {},
+    indicator: {},
+    label: {},
+    aside: {},
+    actions: {},
+    group: {},
+  };
+  const NAMES = ['row', 'indicator', 'label', 'aside', 'actions', 'group'] as const;
+  const STABLE = NAMES.map((name) => treeItemClassNames[name]);
+
+  /** The item's own row, never a nested item's. */
+  const rowOf = (el: Element) =>
+    el.querySelector<HTMLElement>(`:scope > .${treeItemClassNames.row}`) as HTMLElement;
+  const inRow = (el: Element, className: string) =>
+    rowOf(el).querySelector<HTMLElement>(`.${className}`) as HTMLElement;
+  const indicator = (el: Element) => inRow(el, treeItemClassNames.indicator);
+  const label = (el: Element) => inRow(el, treeItemClassNames.label);
+  const aside = (el: Element) => inRow(el, treeItemClassNames.aside);
+  const actions = (el: Element) => inRow(el, treeItemClassNames.actions);
+  /** The item's own group (inside its collapse element), never a nested item's. */
+  const groupOf = (el: Element) =>
+    el.querySelector<HTMLElement>(`:scope > * > .${treeItemClassNames.group}`) as HTMLElement;
+  /** Every part of an item, in the order of {@link NAMES}. */
+  const partsOf = (el: Element) => [
+    rowOf(el),
+    indicator(el),
+    label(el),
+    aside(el),
+    actions(el),
+    groupOf(el),
+  ];
+
+  // Captured from ce1620c's dist (client and server agree).
+  const BASE_PINS = [
+    '<div class="wave-tree-item__row flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-subtle-hover group/row" data-tree-row="">',
+    '<span aria-checked="true" aria-labelledby="tree-item-label-_id0_" class="wave-tree-item__indicator relative inline-flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none before:absolute before:-inset-1 border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" data-tree-checkbox="" role="checkbox" tabindex="-1">',
+    '<span class="wave-tree-item__label truncate min-w-0" data-tree-label="" id="tree-item-label-_id0_">',
+    '<span class="wave-tree-item__aside inline-flex items-center text-caption-1 text-muted-foreground not-forced-colors:group-hover/row:invisible [@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible [@media(hover:hover)]:not-forced-colors:group-has-[[aria-expanded=true]]/end:invisible [@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible" data-tree-aside="" id="tree-item-aside-_id1_">',
+    '<span aria-labelledby="tree-item-label-_id0_" aria-orientation="horizontal" class="wave-tree-item__actions inline-flex items-center gap-1 invisible group-hover/row:visible focus-within:visible forced-colors:visible [@media(hover:none)]:visible has-[[aria-expanded=true]]:visible data-[focus-in-popup]:visible" data-roving-container="" data-tree-actions="" role="toolbar">',
+    '<div class="wave-tree-item__group ps-4" role="group">',
+  ].join('\n');
+  const RADIO_PIN =
+    '<span aria-hidden="true" class="wave-tree-item__indicator inline-flex size-4 shrink-0 items-center justify-center rounded-full transition-colors motion-reduce:transition-none border-2 border-primary forced-colors:border-[Highlight]">';
+
+  /** Documents (expanded, with an aside and an action) › Report; checkboxes or radios. */
+  function Pinned({
+    mode = 'multiple',
+    slotProps,
+    ...props
+  }: Partial<TreeProps> & { mode?: 'multiple' | 'single'; slotProps?: ItemSlotProps }) {
+    return (
+      <Tree
+        aria-label="Files"
+        selectionMode={mode}
+        defaultExpandedItems={['docs']}
+        {...(mode === 'multiple' ? { defaultCheckedItems: ['report'] } : { selected: 'docs' })}
+        {...props}
+      >
+        <Tree.Item
+          value="docs"
+          aside="2"
+          actions={<button type="button">Rename</button>}
+          slotProps={slotProps}
+        >
+          Documents
+          <Tree.Item value="report">Report</Tree.Item>
+        </Tree.Item>
+      </Tree>
+    );
+  }
+
+  /** Documents › Work, and Readme, every row with two actions. */
+  function Rows({ slotProps, ...props }: Partial<TreeProps> & { slotProps?: ItemSlotProps }) {
+    return (
+      <>
+        <Tree aria-label="Files" defaultExpandedItems={['docs']} {...props}>
+          <Tree.Item
+            value="docs"
+            slotProps={slotProps}
+            actions={
+              <>
+                <button type="button">Rename Documents</button>
+                <button type="button">Delete Documents</button>
+              </>
+            }
+          >
+            Documents
+            <Tree.Item value="work">Work</Tree.Item>
+          </Tree.Item>
+          <Tree.Item value="readme">Readme</Tree.Item>
+        </Tree>
+        <button type="button">After</button>
+      </>
+    );
+  }
+
+  it('renders the parts of ce1620c (attributes sorted), on the client and the server', () => {
+    const { unmount } = render(<Pinned />);
+    expect(openingTags(...partsOf(item('Documents')))).toBe(BASE_PINS);
+    unmount();
+    render(<Pinned mode="single" />);
+    expect(openingTags(indicator(item('Documents')))).toBe(RADIO_PIN);
+    for (const [mode, pins] of [
+      ['multiple', BASE_PINS],
+      ['single', RADIO_PIN],
+    ] as const) {
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Pinned mode={mode} slotProps={EVERY_PART} />);
+      const docs = template.content.querySelector('[role="treeitem"]') as Element;
+      expect(openingTags(...(mode === 'single' ? [indicator(docs)] : partsOf(docs)))).toBe(pins);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: Partial<TreeProps>[] = [
+      { selectionMode: 'multiple', defaultCheckedItems: ['report'] },
+      { selectionMode: 'single', selected: 'docs' },
+      { selected: 'report', current: 'docs', navigationMode: 'treegrid' },
+      { defaultExpandedItems: [] },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <Tree aria-label="Files" defaultExpandedItems={['docs']} {...props}>
+            <Tree.Item
+              value="docs"
+              aside="2"
+              actions={<button type="button">Rename</button>}
+              data-roving-text="Docs"
+              slotProps={slotProps}
+            >
+              Documents
+              <Tree.Item value="report" slotProps={slotProps}>
+                Report
+              </Tree.Item>
+            </Tree.Item>
+            <Tree.Item value="readme" slotProps={slotProps}>
+              Readme
+            </Tree.Item>
+          </Tree>
+        ),
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its own classes', () => {
+    const mine = (name: string) => ({
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    const slotProps = Object.fromEntries(NAMES.map((name) => [name, mine(name)])) as ItemSlotProps;
+    for (const mode of ['multiple', 'single'] as const) {
+      const { unmount } = render(<Pinned mode={mode} slotProps={slotProps} />);
+      partsOf(item('Documents')).forEach((element, i) => {
+        expect(element.classList[0]).toBe(STABLE[i]);
+        expect(element.classList[element.classList.length - 1]).toBe(`my-${NAMES[i]}`);
+        expect(element).toHaveAttribute('data-part', NAMES[i]);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+      });
+      unmount();
+    }
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Pinned
+        slotProps={{
+          row: { className: 'px-4' },
+          indicator: { className: 'size-5' },
+          label: { className: 'min-w-8' },
+          aside: { className: 'text-body-1' },
+          actions: { className: 'gap-2' },
+          group: { className: 'ps-8' },
+        }}
+      />,
+    );
+    const [row, box, text, end, toolbar, group] = partsOf(item('Documents'));
+    expect(row).toHaveClass('px-4');
+    expect(row).not.toHaveClass('px-2');
+    expect(box).toHaveClass('size-5');
+    expect(box).not.toHaveClass('size-4');
+    expect(text).toHaveClass('min-w-8');
+    expect(text).not.toHaveClass('min-w-0');
+    expect(end).toHaveClass('text-body-1');
+    expect(end).not.toHaveClass('text-caption-1');
+    expect(toolbar).toHaveClass('gap-2');
+    expect(toolbar).not.toHaveClass('gap-1');
+    expect(group).toHaveClass('ps-8');
+    expect(group).not.toHaveClass('ps-4');
+  });
+
+  it('attaches your refs to the parts', () => {
+    const refs = NAMES.map(() => React.createRef<HTMLElement>());
+    const slotProps = Object.fromEntries(
+      NAMES.map((name, i) => [name, { ref: refs[i] }]),
+    ) as ItemSlotProps;
+    render(<Pinned slotProps={slotProps} />);
+    partsOf(item('Documents')).forEach((element, i) => expect(refs[i].current).toBe(element));
+  });
+
+  it('keeps the actions’ tab stops through renders with a new inline ref (the roving container stays attached)', async () => {
+    const user = userEvent.setup();
+    const seen: Element[] = [];
+    function Inline({ tick }: { tick: number }) {
+      return (
+        <Rows
+          data-tick={tick}
+          slotProps={{
+            actions: { ref: (el: HTMLSpanElement | null) => void (el && seen.push(el)) },
+          }}
+        />
+      );
+    }
+    const { rerender } = render(<Inline tick={0} />);
+    await user.tab();
+    expect(item('Documents')).toHaveFocus();
+    const rename = screen.getByRole('button', { name: 'Rename Documents' });
+    expect(rename).toHaveAttribute('tabindex', '0');
+    const mutations: string[] = [];
+    const observer = new MutationObserver((records) => {
+      for (const record of records) mutations.push(String(record.attributeName));
+    });
+    observer.observe(actions(item('Documents')), { attributes: true, subtree: true });
+    rerender(<Inline tick={1} />);
+    rerender(<Inline tick={2} />);
+    await act(async () => {});
+    observer.disconnect();
+    // A detached container hands its stamps back and stamps again: the buttons would change.
+    expect(mutations).toEqual([]);
+    expect(rename).toHaveAttribute('tabindex', '0');
+    expect(seen.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(seen)).toEqual(new Set([actions(item('Documents'))]));
+    await user.tab();
+    expect(rename).toHaveFocus();
+  });
+
+  it('keeps moving focus out of a collapsing group with a new inline group ref on every render', async () => {
+    function Controlled({ expanded }: { expanded: string[] }) {
+      return (
+        <Tree aria-label="Files" expandedItems={expanded} motion={null}>
+          <Tree.Item value="docs" slotProps={{ group: { ref: () => {} } }}>
+            Documents
+            <Tree.Item value="report">Report</Tree.Item>
+          </Tree.Item>
+        </Tree>
+      );
+    }
+    const { rerender } = render(<Controlled expanded={['docs']} />);
+    act(() => item('Report').focus());
+    expect(item('Report')).toHaveFocus();
+    rerender(<Controlled expanded={[]} />);
+    await act(async () => {});
+    expect(item('Documents')).toHaveFocus();
+  });
+
+  it('locks each part’s role, ids, names, tab index, markers and hidden state', () => {
+    const attempt = (id: string) => ({
+      id,
+      role: 'treeitem',
+      tabIndex: 0,
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+      'aria-label': 'Mine',
+      'aria-checked': false,
+      'aria-orientation': 'vertical',
+      'data-tree-row': 'x',
+      'data-tree-label': 'x',
+      'data-tree-checkbox': 'x',
+      'data-tree-aside': 'x',
+      'data-tree-actions': 'x',
+      'data-tree-persona-name': 'x',
+      'data-roving-container': 'x',
+      'data-roving-text': 'Mine',
+      'data-focus-in-popup': '',
+    });
+    const slotProps = Object.fromEntries(
+      NAMES.map((name) => [name, attempt(`my-${name}`)]),
+    ) as ItemSlotProps;
+    // The names of the checkbox and the toolbar are id lists: yours are joined after the item's.
+    Object.assign(slotProps.indicator!, { 'aria-labelledby': 'extra' });
+    Object.assign(slotProps.actions!, { 'aria-labelledby': 'extra' });
+    render(
+      <>
+        <span id="extra">Extra</span>
+        <Pinned slotProps={slotProps} />
+      </>,
+    );
+    const docs = item('Documents');
+    const [row, box, text, end, toolbar, group] = partsOf(docs);
+    const labelId = text.id;
+    expect(labelId).toMatch(/^tree-item-label-/);
+    expect(end.id).toMatch(/^tree-item-aside-/);
+    const MARKERS = [
+      'data-tree-row',
+      'data-tree-label',
+      'data-tree-checkbox',
+      'data-tree-aside',
+      'data-tree-actions',
+      'data-tree-persona-name',
+      'data-roving-container',
+    ];
+    const own: Record<string, string> = {
+      'data-tree-row': '',
+      'data-tree-label': '',
+      'data-tree-checkbox': '',
+      'data-tree-aside': '',
+      'data-tree-actions': '',
+      'data-roving-container': '',
+    };
+    const ownMarkers = [
+      ['data-tree-row'],
+      ['data-tree-checkbox'],
+      ['data-tree-label'],
+      ['data-tree-aside'],
+      ['data-tree-actions', 'data-roving-container'],
+      [],
+    ];
+    [row, box, text, end, toolbar, group].forEach((element, i) => {
+      for (const marker of MARKERS) {
+        if (ownMarkers[i].includes(marker)) expect(element).toHaveAttribute(marker, own[marker]);
+        else expect(element).not.toHaveAttribute(marker);
+      }
+      for (const hiding of ['hidden', 'inert', 'aria-hidden']) {
+        expect(element).not.toHaveAttribute(hiding);
+      }
+    });
+    // Row and group: no role of their own but the group's, no tab index.
+    expect(row).not.toHaveAttribute('role');
+    expect(row).not.toHaveAttribute('tabindex');
+    expect(group).toHaveAttribute('role', 'group');
+    expect(group).not.toHaveAttribute('tabindex');
+    // The checkbox: its role, state, name (yours joined after it), tab index and marker.
+    expect(box).toHaveAttribute('role', 'checkbox');
+    expect(box).toHaveAttribute('aria-checked', 'true');
+    expect(box).toHaveAttribute('aria-labelledby', `${labelId} extra`);
+    expect(box).toHaveAttribute('tabindex', '-1');
+    // The label and the aside: their ids, no name of their own, no typeahead text but the item's.
+    for (const element of [text, end]) {
+      expect(element).not.toHaveAttribute('role');
+      expect(element).not.toHaveAttribute('tabindex');
+      expect(element).not.toHaveAttribute('aria-label');
+    }
+    expect(text).not.toHaveAttribute('data-roving-text');
+    // The actions: the toolbar's role, name (yours joined), orientation, no tab index, and no
+    // popup hold while focus is not in a popup.
+    expect(toolbar).toHaveAttribute('role', 'toolbar');
+    expect(toolbar).toHaveAttribute('aria-labelledby', `${labelId} extra`);
+    expect(toolbar).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(toolbar).not.toHaveAttribute('tabindex');
+    expect(toolbar).not.toHaveAttribute('data-focus-in-popup');
+    // The tree is unchanged: two items, named by their labels and described by the aside.
+    expect(screen.getAllByRole('treeitem')).toHaveLength(2);
+    expect(docs).toHaveAccessibleName('Documents');
+    expect(docs).toHaveAccessibleDescription('2');
+    expect(docs).toHaveAttribute('aria-labelledby', labelId);
+  });
+
+  it('locks the radio: hidden from assistive technology, with no role or tab index', () => {
+    render(
+      <Pinned
+        mode="single"
+        slotProps={{
+          indicator: { 'aria-hidden': false, role: 'radio', tabIndex: 0, 'data-tree-checkbox': '' },
+        }}
+      />,
+    );
+    const radio = indicator(item('Documents'));
+    expect(radio).toHaveAttribute('aria-hidden', 'true');
+    expect(radio).not.toHaveAttribute('role');
+    expect(radio).not.toHaveAttribute('tabindex');
+    expect(radio).not.toHaveAttribute('data-tree-checkbox');
+    expect(screen.queryByRole('radio')).toBeNull();
+  });
+
+  it('keeps the item’s own typeahead text on the label, and none that a part gives', () => {
+    const { rerender } = render(
+      <Tree aria-label="Files">
+        <Tree.Item value="a" slotProps={{ label: { 'data-roving-text': 'Mine' } }}>
+          Alpha
+        </Tree.Item>
+      </Tree>,
+    );
+    expect(label(item('Alpha'))).not.toHaveAttribute('data-roving-text');
+    rerender(
+      <Tree aria-label="Files">
+        <Tree.Item
+          value="a"
+          data-roving-text="Own"
+          slotProps={{ label: { 'data-roving-text': 'Mine' } }}
+        >
+          Alpha
+        </Tree.Item>
+      </Tree>,
+    );
+    expect(label(item('Alpha'))).toHaveAttribute('data-roving-text', 'Own');
+  });
+
+  it('keeps typeahead on the label: a part gives the item no other text', async () => {
+    const user = userEvent.setup();
+    render(
+      <Tree aria-label="Files">
+        <Tree.Item value="mango">Mango</Tree.Item>
+        {/* Typeahead searches from the focused item on: with the part's text, "z" would stop
+            here, before Zulu. */}
+        <Tree.Item value="cherry" slotProps={{ label: { 'data-roving-text': 'Zebra' } }}>
+          Cherry
+        </Tree.Item>
+        <Tree.Item value="zulu">Zulu</Tree.Item>
+      </Tree>,
+    );
+    await user.tab();
+    expect(item('Mango')).toHaveFocus();
+    await user.keyboard('z');
+    expect(item('Zulu')).toHaveFocus();
+  });
+
+  it('keeps the tree’s items and arrow order: a part takes no item role and no roving container', async () => {
+    const user = userEvent.setup();
+    render(
+      <Tree aria-label="Files" defaultExpandedItems={['docs']}>
+        <Tree.Item
+          value="docs"
+          slotProps={{
+            label: { role: 'treeitem' },
+            row: { role: 'tree' },
+            group: { role: 'tree', 'data-roving-container': '' },
+          }}
+        >
+          Documents
+          <Tree.Item value="report">Report</Tree.Item>
+        </Tree.Item>
+        <Tree.Item value="readme">Readme</Tree.Item>
+      </Tree>,
+    );
+    expect(screen.getAllByRole('treeitem')).toHaveLength(3);
+    expect(screen.getAllByRole('tree')).toHaveLength(1);
+    await user.tab();
+    expect(item('Documents')).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(item('Report')).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(item('Readme')).toHaveFocus();
+    await user.keyboard('{ArrowUp}{ArrowUp}');
+    expect(item('Documents')).toHaveFocus();
+  });
+
+  it('keeps the item’s own clicks: a part cannot pass for the checkbox, the actions or another row', async () => {
+    const user = userEvent.setup();
+    const onItemSelect = vi.fn();
+    const markers = {
+      'data-tree-checkbox': '',
+      'data-tree-actions': '',
+      'data-tree-row': '',
+    };
+    render(
+      <Tree aria-label="Files" onItemSelect={onItemSelect}>
+        <Tree.Item value="docs" aside="2" slotProps={{ label: markers, aside: markers }}>
+          Documents
+          <Tree.Item value="report">Report</Tree.Item>
+        </Tree.Item>
+      </Tree>,
+    );
+    await user.click(label(item('Documents')));
+    expect(onItemSelect).toHaveBeenLastCalledWith('docs');
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+    await user.click(aside(item('Documents')));
+    expect(onItemSelect).toHaveBeenCalledTimes(2);
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('keeps the tree’s one tab stop: no part takes a tab index', async () => {
+    const user = userEvent.setup();
+    const stop = { tabIndex: 0 };
+    render(
+      <Rows
+        selectionMode="single"
+        selected="docs"
+        slotProps={{ row: stop, indicator: stop, label: stop, actions: stop, group: stop }}
+      />,
+    );
+    await user.tab();
+    expect(item('Documents')).toHaveFocus();
+    // Tab enters the item's actions (one stop), then leaves the tree.
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Rename Documents' })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+  });
+
+  it('runs a part’s click first: a prevented click on the row, label, aside or radio calls onClick but does not activate', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onItemSelect = vi.fn();
+    const onClick = vi.fn(() => void order.push('item'));
+    const prevent = (name: string) => ({
+      onClick: (event: React.MouseEvent) => {
+        order.push(name);
+        event.preventDefault();
+      },
+    });
+    const { rerender } = render(
+      <Tree aria-label="Files" selectionMode="single" selected={null} onItemSelect={onItemSelect}>
+        <Tree.Item
+          value="docs"
+          aside="2"
+          onClick={onClick}
+          slotProps={{
+            row: prevent('row'),
+            indicator: prevent('indicator'),
+            label: prevent('label'),
+            aside: prevent('aside'),
+          }}
+        >
+          Documents
+          <Tree.Item value="report">Report</Tree.Item>
+        </Tree.Item>
+      </Tree>,
+    );
+    const docs = item('Documents');
+    for (const element of [rowOf(docs), indicator(docs), label(docs), aside(docs)]) {
+      await user.click(element);
+    }
+    // Each click reaches the row's part after the inner part's, then the item.
+    expect(order).toEqual([
+      'row',
+      'item',
+      'indicator',
+      'row',
+      'item',
+      'label',
+      'row',
+      'item',
+      'aside',
+      'row',
+      'item',
+    ]);
+    expect(onItemSelect).not.toHaveBeenCalled();
+    expect(docs).toHaveAttribute('aria-expanded', 'false');
+    // Without preventDefault the click activates and expands the item as before.
+    rerender(
+      <Tree aria-label="Files" onItemSelect={onItemSelect}>
+        <Tree.Item value="docs" slotProps={{ label: { onClick: () => void order.push('mine') } }}>
+          Documents
+          <Tree.Item value="report">Report</Tree.Item>
+        </Tree.Item>
+      </Tree>,
+    );
+    await user.click(label(item('Documents')));
+    expect(onItemSelect).toHaveBeenCalledWith('docs');
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('runs the checkbox’s handlers after yours: preventDefault() skips the toggle and the focus move', async () => {
+    const user = userEvent.setup();
+    const onCheckedItemsChange = vi.fn();
+    const onBox = vi.fn();
+    function Checks({ prevent }: { prevent: boolean }) {
+      const handle = (event: React.MouseEvent) => {
+        onBox(event.type);
+        if (prevent) event.preventDefault();
+      };
+      return (
+        <Tree
+          aria-label="Files"
+          selectionMode="multiple"
+          onCheckedItemsChange={onCheckedItemsChange}
+        >
+          <Tree.Item value="a" slotProps={{ indicator: { onClick: handle, onMouseDown: handle } }}>
+            Alpha
+          </Tree.Item>
+          <Tree.Item value="b">Beta</Tree.Item>
+        </Tree>
+      );
+    }
+    const { rerender } = render(<Checks prevent />);
+    await user.click(indicator(item('Alpha')));
+    expect(onBox.mock.calls).toEqual([['mousedown'], ['click']]);
+    expect(onCheckedItemsChange).not.toHaveBeenCalled();
+    expect(item('Alpha')).not.toHaveFocus();
+    expect(item('Alpha')).toHaveAttribute('aria-checked', 'false');
+    rerender(<Checks prevent={false} />);
+    await user.click(indicator(item('Alpha')));
+    expect(onCheckedItemsChange).toHaveBeenCalledWith(
+      ['a'],
+      expect.objectContaining({ value: 'a', checked: true }),
+    );
+    expect(item('Alpha')).toHaveFocus();
+    expect(item('Alpha')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('runs the actions’ keys after yours: preventDefault() skips them', async () => {
+    const user = userEvent.setup();
+    function Keys({ prevent }: { prevent: boolean }) {
+      return (
+        <Rows
+          slotProps={{
+            actions: {
+              onKeyDown: (event: React.KeyboardEvent) => {
+                if (prevent) event.preventDefault();
+              },
+            },
+          }}
+        />
+      );
+    }
+    const { rerender } = render(<Keys prevent />);
+    const rename = screen.getByRole('button', { name: 'Rename Documents' });
+    act(() => rename.focus());
+    await user.keyboard('{ArrowRight}');
+    expect(rename).toHaveFocus();
+    rerender(<Keys prevent={false} />);
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('button', { name: 'Delete Documents' })).toHaveFocus();
+  });
+
+  it('always runs the actions’ focus bookkeeping after yours, even when you prevent it', async () => {
+    const order: string[] = [];
+    const prevent = (name: string) => (event: React.FocusEvent) => {
+      order.push(name);
+      event.preventDefault();
+    };
+    function PortalAction() {
+      return (
+        <>
+          <button type="button">Open</button>
+          {createPortal(<button type="button">In popup</button>, document.body)}
+        </>
+      );
+    }
+    render(
+      <>
+        <Tree aria-label="Files">
+          <Tree.Item
+            value="docs"
+            actions={
+              <>
+                <button type="button">Rename</button>
+                <PortalAction />
+              </>
+            }
+            slotProps={{ actions: { onFocus: prevent('focus'), onBlur: prevent('blur') } }}
+          >
+            Documents
+          </Tree.Item>
+        </Tree>
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    const toolbar = actions(item('Documents'));
+    const button = (name: string) => screen.getByRole('button', { name });
+    // The tab stop follows the focused action.
+    act(() => button('Open').focus());
+    expect(button('Open')).toHaveAttribute('tabindex', '0');
+    expect(button('Rename')).toHaveAttribute('tabindex', '-1');
+    // Focus in a surface an action opened holds the actions shown, and leaving it releases them.
+    act(() => button('In popup').focus());
+    expect(toolbar).toHaveAttribute('data-focus-in-popup', '');
+    act(() => button('Elsewhere').focus());
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    expect(toolbar).not.toHaveAttribute('data-focus-in-popup');
+    expect(order).toEqual(['focus', 'blur', 'focus', 'blur']);
+  });
+
+  it('runs a group part’s keys after the nested item’s and before the tree’s: preventDefault() skips the tree’s', async () => {
+    const user = userEvent.setup();
+    function Keys({ prevent }: { prevent: boolean }) {
+      return (
+        <Tree aria-label="Files" defaultExpandedItems={['docs']}>
+          <Tree.Item
+            value="docs"
+            slotProps={{
+              group: {
+                onKeyDown: (event: React.KeyboardEvent) => {
+                  if (prevent && event.key === 'ArrowDown') event.preventDefault();
+                },
+              },
+            }}
+          >
+            Documents
+            <Tree.Item value="report">Report</Tree.Item>
+          </Tree.Item>
+          <Tree.Item value="readme">Readme</Tree.Item>
+        </Tree>
+      );
+    }
+    const { rerender } = render(<Keys prevent />);
+    act(() => item('Report').focus());
+    await user.keyboard('{ArrowDown}');
+    expect(item('Report')).toHaveFocus();
+    rerender(<Keys prevent={false} />);
+    await user.keyboard('{ArrowDown}');
+    expect(item('Readme')).toHaveFocus();
+  });
+
+  it('calls your part handlers once per event in StrictMode', async () => {
+    const user = userEvent.setup();
+    const handlers = { row: vi.fn(), indicator: vi.fn(), label: vi.fn(), aside: vi.fn() };
+    render(
+      <React.StrictMode>
+        <Pinned
+          slotProps={{
+            row: { onClick: handlers.row },
+            indicator: { onClick: handlers.indicator },
+            label: { onClick: handlers.label },
+            aside: { onClick: handlers.aside },
+          }}
+        />
+      </React.StrictMode>,
+    );
+    const docs = item('Documents');
+    await user.click(indicator(docs));
+    await user.click(label(docs));
+    await user.click(aside(docs));
+    expect(handlers.indicator).toHaveBeenCalledTimes(1);
+    expect(handlers.label).toHaveBeenCalledTimes(1);
+    expect(handlers.aside).toHaveBeenCalledTimes(1);
+    expect(handlers.row).toHaveBeenCalledTimes(3);
+  });
+
+  it('ignores the parts an item does not draw, and never reaches a nested item’s parts', () => {
+    const mine = Object.fromEntries(
+      NAMES.map((name) => [name, { className: `my-${name}` }]),
+    ) as ItemSlotProps;
+    render(
+      <Tree aria-label="Files" defaultExpandedItems={['docs']}>
+        <Tree.Item value="docs" slotProps={mine}>
+          Documents
+          <Tree.Item value="report" aside="1" actions={<button type="button">Open</button>}>
+            Report
+          </Tree.Item>
+        </Tree.Item>
+        <Tree.Item value="leafy" leaf slotProps={mine}>
+          Leafy
+          <Tree.Item value="hidden">Hidden</Tree.Item>
+        </Tree.Item>
+        <Tree.Item value="closed" slotProps={mine}>
+          Closed
+          <Tree.Item value="inside">Inside</Tree.Item>
+        </Tree.Item>
+      </Tree>,
+    );
+    // No indicator (selectionMode="none"), no aside, no actions on Documents; no group on a leaf
+    // or a collapsed item; the nested Report's parts carry none of Documents' classes.
+    for (const name of ['indicator', 'aside', 'actions'] as const) {
+      expect(document.querySelector(`.my-${name}`)).toBeNull();
+    }
+    expect(document.querySelectorAll('.my-group')).toHaveLength(1);
+    expect(groupOf(item('Documents'))).toHaveClass('my-group');
+    expect(document.querySelectorAll('.my-row')).toHaveLength(3);
+    expect(document.querySelectorAll('.my-label')).toHaveLength(3);
+    const report = item('Report');
+    for (const element of [rowOf(report), label(report), aside(report), actions(report)]) {
+      expect(element.className).not.toMatch(/\bmy-/);
+    }
+  });
+
+  it('keeps the treeitem element its own: slotProps never reaches it', () => {
+    render(
+      <Tree aria-label="Files">
+        <Tree.Item value="a" slotProps={{ root: { className: 'my-root' } } as never}>
+          Alpha
+        </Tree.Item>
+      </Tree>,
+    );
+    expect(item('Alpha')).not.toHaveAttribute('slotprops');
+    expect(document.querySelector('.my-root')).toBeNull();
+  });
+
+  it('RTL: the treegrid arrows still enter and leave the actions with parts customised', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <Rows
+        navigationMode="treegrid"
+        slotProps={{ row: { className: 'my-row' }, actions: { className: 'my-actions' } }}
+      />,
+      { dir: 'rtl' },
+    );
+    act(() => item('Documents').focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('button', { name: 'Rename Documents' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(item('Documents')).toHaveFocus();
+    expect(rowOf(item('Documents'))).toHaveClass('my-row');
+    expect(actions(item('Documents'))).toHaveClass('my-actions');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    const custom = (name: string) => ({ className: `my-${name}`, title: name });
+    render(
+      <Pinned
+        slotProps={{
+          row: custom('row'),
+          indicator: custom('indicator'),
+          label: custom('label'),
+          aside: custom('aside'),
+          actions: custom('actions'),
+          group: { ...custom('group'), 'aria-label': 'Documents contents' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<
+      'row' | 'indicator' | 'label' | 'aside' | 'actions' | 'group'
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['row']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['indicator']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['aside']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['actions']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['group']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the item draws them
+        <Tree.Item value="a" slotProps={{ label: { children: 'Label' } }}>
+          Alpha
+        </Tree.Item>
+      )
+    );
+    // @ts-expect-error -- the treeitem element takes the item's own props, never a part's
+    void (<Tree.Item value="a" slotProps={{ root: {} }} />);
   });
 });

@@ -33,6 +33,7 @@ import type {
   DrawerProps,
   DropdownProps,
   FieldProps,
+  FlatTreeProps,
   InfoButtonProps,
   InfoLabelProps,
   InputProps,
@@ -62,6 +63,8 @@ import type {
   ToastProps,
   ToastTitleProps,
   TooltipProps,
+  TreeItemPersonaLayoutProps,
+  TreeItemProps,
 } from '../index';
 import * as slotParts from '../lib/slotParts';
 import {
@@ -432,6 +435,11 @@ type SlotPropsOwners = {
   toastBodyClassNames: ToastBodyProps;
   // The container of each toast is drawn by the Toaster.
   toasterClassNames: ToasterProps;
+  treeItemClassNames: TreeItemProps;
+  treeItemPersonaLayoutClassNames: TreeItemPersonaLayoutProps;
+  // FlatTree.Item is the tree's own row, never written by hand: FlatTree declares its parts and
+  // hands them to every item.
+  flatTreeItemClassNames: FlatTreeProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

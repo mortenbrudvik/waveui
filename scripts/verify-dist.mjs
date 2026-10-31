@@ -1008,6 +1008,7 @@ export const MODULE_ONLY_NAMES = [
   'TAG_GROUP_SELECTOR',
   'TAG_ITEM_SELECTOR',
   'TOOLBAR_ITEM_SELECTOR',
+  'TREE_PART_LOCKS',
   'TableFeaturePluginImplementation',
   'TablePartKind',
   'TableSelectionControl',
