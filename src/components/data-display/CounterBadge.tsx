@@ -23,8 +23,9 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
   /**
    * Semantic color, from Badge's palette: `brand`, `danger`, `important`, `informative`, `severe`,
    * `subtle`, `success`, `warning`. `important` follows Badge (see `BadgeProps.color`): it renders
-   * the severe (orange) colors in 0.x and becomes a neutral high-emphasis color in 1.0. A value
-   * outside the palette (from untyped code) renders as `brand`.
+   * the severe (orange) colors in 0.x and becomes a neutral high-emphasis color in 1.0; development
+   * builds log a warning once (pass `brand` or `informative` for a colored badge that stays as it
+   * is). A value outside the palette (from untyped code) renders as `brand`.
    * @default 'brand'
    */
   color?: BadgeColor;

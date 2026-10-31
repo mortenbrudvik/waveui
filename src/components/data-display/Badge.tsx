@@ -15,7 +15,8 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
    * `warning`. `severe` is dark orange. `subtle` is the page background with foreground text, for
    * colored surfaces. `important` renders the severe (orange) colors in 0.x, as in 0.5; in 1.0 it
    * becomes Fluent's neutral high-emphasis color (near black in the light theme) — use `severe` to
-   * keep the orange look.
+   * keep the orange look. Its meaning changes (it is not removed), so development builds log a
+   * warning once; pass `brand` or `informative` for a colored badge that stays as it is.
    * @default 'brand'
    */
   color?: BadgeColor;

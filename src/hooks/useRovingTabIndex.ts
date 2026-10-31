@@ -985,13 +985,21 @@ export function useRovingTabIndex(
   // C-DEV: the 0.4 call shape is removed in 1.0.
   const positional = legacyRef !== undefined;
   React.useEffect(() => {
-    if (positional) {
-      warnDeprecated(
-        'useRovingTabIndex',
-        'useRovingTabIndex(containerRef, options)',
-        'useRovingTabIndex(options)',
-        'Attach the returned `containerProps` to the container.',
-      );
+    if (!positional) return;
+    // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
+    // production bundle then drops the warning and its text. Without a bundler and without
+    // `process` (an unbundled import in a browser), the read throws and it is skipped.
+    try {
+      if (process.env.NODE_ENV !== 'production') {
+        warnDeprecated(
+          'useRovingTabIndex',
+          'useRovingTabIndex(containerRef, options)',
+          'useRovingTabIndex(options)',
+          'Attach the returned `containerProps` to the container.',
+        );
+      }
+    } catch {
+      // No `process`: see above.
     }
   }, [positional]);
 

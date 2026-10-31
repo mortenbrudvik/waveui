@@ -44,11 +44,20 @@ export function useLegacyMotionWarning(
 ): void {
   const legacy = usesLegacyMotion(slot, className);
   React.useEffect(() => {
-    if (legacy) {
-      warnOnce(
-        `${part}:legacy-motion`,
-        `${part}: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.`,
-      );
+    if (!legacy) return;
+    // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
+    // production bundle then drops the warning, its text and the `lib/dev` import. Without a
+    // bundler and without `process` (an unbundled import in a browser), the read throws and it is
+    // skipped.
+    try {
+      if (process.env.NODE_ENV !== 'production') {
+        warnOnce(
+          `${part}:legacy-motion`,
+          `${part}: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.`,
+        );
+      }
+    } catch {
+      // No `process`: see above.
     }
   }, [legacy, part]);
 }

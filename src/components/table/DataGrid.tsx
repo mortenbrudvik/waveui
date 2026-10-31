@@ -837,13 +837,21 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   // C-DEV: the positional callback of the 0.4 sort API is removed in 1.0.
   const positionalSortCallback = !objectCallbacks && onSortChange !== undefined;
   React.useEffect(() => {
-    if (positionalSortCallback) {
-      warnDeprecated(
-        'DataGrid',
-        'onSortChange(columnId, direction)',
-        'onSortChange(sort, details?)',
-        'Pass `items`, `sort` or `defaultSort` to receive the sort object.',
-      );
+    if (!positionalSortCallback) return;
+    // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
+    // production bundle then drops the warning and its text. Without a bundler and without
+    // `process` (an unbundled import in a browser), the read throws and it is skipped.
+    try {
+      if (process.env.NODE_ENV !== 'production') {
+        warnDeprecated(
+          'DataGrid',
+          'onSortChange(columnId, direction)',
+          'onSortChange(sort, details?)',
+          'Pass `items`, `sort` or `defaultSort` to receive the sort object.',
+        );
+      }
+    } catch {
+      // No `process`: see above.
     }
   }, [positionalSortCallback]);
 
