@@ -1000,7 +1000,7 @@ Goal: a clean, stable 1.0 API.
   - **Size:** L. **Depends on:** P3-00, P12-03.
 - **P14-02 Remove the deprecated aliases.**
   - **Closes:** none (no gap; flagged in the 0.5 CHANGELOG "Deprecated" section).
-  - **Scope:** every old name of the 0.5 migration table, `legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, the button-object form of the dismiss and clear slots, `animations.css`, the numeric `size` of Input and Select (P4-01), Tooltip `delay` (P2-05), PresenceBadge `dnd`/`oof` (P8-04), and every other alias added in 0.6–0.18; the optional `details` parameter of `onOpenChange` becomes required wherever it exists (Dialog, Drawer, and the surfaces that adopted `OpenChangeDetails` later), and so do the `details` parameters of `onCheckedValuesChange` (Menu, Toolbar; announced in the 0.7 CHANGELOG) and `onCheckedItemsChange` (Tree; announced in the 0.8 CHANGELOG).
+  - **Scope:** every old name of the 0.5 migration table, `legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, the button-object form of the dismiss and clear slots, `animations.css`, the numeric `size` of Input, Select and Slider (P4-01), InfoLabel `label`, Tooltip `delay` (P2-05), the `wave-tag-picker__control` and `wave-tag-picker__group` classes (0.11), PresenceBadge `dnd`/`oof` (P8-04), `DataGridColumn.id` and Done calling `onDismiss` (0.14), the 0.4 call forms `useRovingTabIndex(containerRef, options)` and DataGrid's positional `onSortChange(columnId, direction)`, the rule by which a `className` with presence variants turns the default motion off on `Menu.Popover`, `Dialog.Content`, Drawer and NavDrawer (0.15), and every other alias added in 0.6–0.18; the optional `details` parameter of `onOpenChange` becomes required wherever it exists (Dialog, Drawer, NavDrawer, AvatarGroup, `useListbox`), and so do the `details` parameters of `onCheckedValuesChange` (Menu, Toolbar; announced in the 0.7 CHANGELOG), `onCheckedItemsChange` (Tree, announced in the 0.8 CHANGELOG; `useFlatTree`) and every other callback that has one (Calendar `onValueChange`, `useListbox` `onSelect`, Overflow, DataGrid sort, selection and column widths, `Table.SelectionCell`, `Table.ResizeHandle`, `useTableSort`, `useSelection`, `useTableColumnSizing`). The list is complete since 0.18 (Phase 13 spec, R21): the inventory `src/lib/deprecations.ts`, which `src/__tests__/deprecations.test.tsx` keeps in step with the code and the CHANGELOG, and [Upgrading to 1.0](UPGRADING-TO-1.0.md) name every item with the release that announced it.
   - **Acceptance:** `warnDeprecated` has no callers; the migration table moves to "Upgrading to 1.0".
   - **Size:** M. **Depends on:** P13-03 (and so on all earlier phases).
 - **P14-03 `Image.alt` required.**
@@ -1009,15 +1009,15 @@ Goal: a clean, stable 1.0 API.
   - **Size:** S. **Depends on:** P13-03.
 - **P14-04 Ref placement on composite controls.**
   - **Closes:** none (deferred by the 0.5 maintainer decisions).
-  - **API sketch:** decide whether `ref` moves from the wrapper to the focusable element (with `rootRef` for the wrapper) or stays (with `controlRef`), for every composite control at once; the decision is recorded in the 1.0 spec and announced by P13-03.
-  - **Size:** M. **Depends on:** none.
+  - **Decided: keep, announced in 0.18** (Phase 13 spec, R19). The question was whether `ref` moves from the wrapper to the focusable element (with `rootRef` for the wrapper) or stays (with `controlRef`), for every composite control at once. It stays: `ref` on the root element (the one that receives `className`), `controlRef` on the focusable element and `slotProps.<part>.ref` on parts. 1.0 moves no `ref`, so the item has nothing left to build.
+  - **Size:** none (decided). **Depends on:** none.
 - **P14-05 Badge `important` means neutral high emphasis.**
   - **Closes:** `badge-1` (M).
   - **API sketch:** `color="important"` renders Fluent's near-black neutral in light (inverted in dark); `severe` keeps the orange look announced in 0.6 (P1-13).
   - **Size:** S. **Depends on:** P1-13, P13-03.
 - **P14-06 Defaults that change.**
   - **Closes:** `timepicker-3` (L).
-  - **API sketch:** TimePicker `hourCycle` follows the locale by default (`format` stays as an explicit override); announced in 0.18 (P13-03).
+  - **API sketch:** TimePicker `format` follows the locale's hour cycle when it is not given (it defaults to `'12h'` through 0.x, and an explicit `format` still wins); TimePicker has no `hourCycle` prop (Phase 13 spec, R20). Announced in 0.18 (P13-03).
   - **Size:** S. **Depends on:** P13-03.
 
 ---

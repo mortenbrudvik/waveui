@@ -7,7 +7,7 @@ A React component library inspired by the Fluent UI 2 design language: 80 access
 - [Requirements](#requirements) · [Installation](#installation) · [Quick start](#quick-start)
 - [Styles](#styles) · [Theming](#theming) · [Global effects](#global-effects) · [Styling hooks](#styling-hooks)
 - [React Server Components](#react-server-components) · [Components](#components) · [Usage notes](#usage-notes)
-- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [Upgrading from 0.16](#upgrading-from-016) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
+- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [1.0 notices](#10-notices) · [Upgrading from 0.16](#upgrading-from-016) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
 
 ## Requirements
 
@@ -2922,6 +2922,10 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
 | `waveTokens` | Every design token as the `var()` that reads it, typed as that literal (`waveTokens.primary` is `'var(--wave-primary)'`), for inline styles and SVG charts; with the types `WaveTokens` and `WaveTokenName`. Frozen and server-safe; no component imports it. |
 | `chartPalette` | The 12 palette fills as token names, in the order that keeps neighbouring chart series as far apart as the palette allows (read each with `waveTokens[name]`); colors still need a second encoding in every chart. Frozen and server-safe. |
 | `getTokenStyle(overrides)` | The inline style (`TokenStyle`) that applies token overrides (`WaveTokenOverrides`), the one `WaveProvider` puts on its root and portals; `undefined` when there is nothing to set. Server-safe. |
+
+## 1.0 notices
+
+1.0 removes what 0.x deprecated, changes a few defaults and meanings, and makes the optional `details` arguments required; 0.18 announces all of it, and nothing changes before 1.0. [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) lists every item with its replacement and the release that announced it, and how to find the uses in your app: a development build warns once about each one that code can detect.
 
 ## Upgrading from 0.16
 

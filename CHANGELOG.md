@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - Unreleased
+
+The thirteenth Fluent UI v9 parity release: Phase 13 of the [roadmap](docs/ROADMAP.md), the customization surface and the 1.0 notices. Nothing public is removed and no default changes in 0.18; the [Deprecated](#deprecated) list names everything 1.0 will change, and [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) how to prepare for it. (This introduction is completed with the rest of the release notes.)
+
+### Deprecated
+
+1.0 removes or changes everything below, and none of it changes before 1.0. Each line names the release that announced it. [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) lists every item with its replacement, and `src/lib/deprecations.ts` is the inventory that a test keeps in step with the code, this list and that guide. A development build warns once about each use that code can detect.
+
+- **The 0.4 names renamed in 0.5** (announced in 0.5): every old name of the [migration table](#migration-table) is removed: Checkbox and Switch `onChange`, the `onChange` value callbacks of the other value controls, `onOptionSelect`, `selectedValue` and `defaultSelectedValue`, `onTabSelect`, `onNavItemSelect`, TabList `vertical`, `currentStep` and `defaultCurrentStep`, `selectionMode="multi"`, DataGrid's `selectedKeys`, `defaultSelectedKeys`, `onSelectionChange` and 0.4 sort props, `Table.Head` and `Table.HeadCell`, Stack `direction`, the `variant` of Skeleton, Link and Tooltip, a numeric Text `weight`, a `Nav.Category` label taken from its text and Accordion's single-mode `openItems`, `defaultOpenItems` and `onOpenItemsChange`. Use the 0.5 names of the table; each old name warns once in development.
+- **The button-object form of the dismiss and clear slots** (announced in 0.5): `MessageBar.dismiss`, `SearchBox.dismiss` and `Tag.dismissIcon` with button props (`{ as: 'button', onClick, … }`) are removed; pass icon content, and handle the press in `onDismiss` or `onClear`. Each warns once in development. A `<button>` or `Button` element passed there stays: it is merged into the built-in button.
+- **`legacy-tokens.css`** (announced in 0.5): `@mortenbrudvik/waveui/legacy-tokens.css`, the 0.4 variable names, is removed; read and override the `--wave-*` variables.
+- **The `dark` and `high-contrast` theme classes** (announced in 0.5): `WaveProvider` stops adding them and Wave's styles stop selecting them. Target `wave-dark` and `wave-high-contrast` in your CSS, and key a class-based `dark:` variant on `.wave-dark`.
+- **`animations.css`** (announced in 0.18): `src/styles/animations.css`, empty since 0.5 and outside the package's exports, is removed; drop an import of it by path.
+- **Badge and CounterBadge `color="important"`** (announced in 0.6): it keeps its orange look through 0.x and becomes Fluent's neutral high-emphasis color in 1.0. Use `color="severe"` to keep the orange look. From 0.18 it warns once in development.
+- **Tooltip `delay`** (announced in 0.7): use `openDelay`.
+- **A numeric `size` on Input, Select and Slider** (announced in 0.9): a type error from 1.0. Use `htmlSize` on Input and Select; on Slider it has no effect, so remove it.
+- **InfoLabel `label`** (announced in 0.9): use `children`.
+- **`wave-tag-picker__control` and `wave-tag-picker__group`** (announced in 0.11): removed; target `wave-tag-picker-control` and `wave-tag-picker-group`.
+- **PresenceBadge `'dnd'` and `'oof'`** (announced in 0.13): use `'do-not-disturb'` and `'out-of-office'`.
+- **`DataGridColumn.id`** (announced in 0.14): use `columnId`.
+- **Done calling `onDismiss`** (announced in 0.14): in 1.0 TeachingPopover's Done calls `onFinish` only; handle Done in `onFinish`.
+- **`useRovingTabIndex(containerRef, options)`** (announced in 0.18): the 0.4 call shape of `useRovingTabIndex` is removed. Call `useRovingTabIndex(options)` and spread the returned `containerProps` on the container. It warns once in development.
+- **DataGrid's positional `onSortChange`** (announced in 0.18): `onSortChange(columnId, direction)`, the 0.4 callback form of a grid without `items`, `sort` or `defaultSort`, is removed. Give the grid one of them and read `onSortChange(sort, details)`. It warns once in development.
+- **A `className` with presence variants in place of `motion`** (announced in 0.18): through 0.x a `className` that holds presence variants keeps turning the default motion off on `Menu.Popover`, `Dialog.Content`, Drawer and NavDrawer (the compatibility rule of 0.15); in 1.0 it no longer does, so pass those classes through `motion`. It warns once in development.
+- **The `details` arguments announced before** (announced in 0.6, 0.7, 0.8, 0.10, 0.11 and 0.14): the `details` parameter becomes required in Dialog, Drawer and NavDrawer `onOpenChange`, Menu and Toolbar `onCheckedValuesChange`, Tree `onCheckedItemsChange`, Calendar `onValueChange`, `useListbox`'s `onOpenChange` and `onSelect`, Overflow `onOverflowChange`, DataGrid `onSortChange` and `onSelectedItemsChange`, and `Table.SelectionCell` `onCheckedChange`. WaveUI always passes it.
+- **The `details` arguments announced now** (announced in 0.18): AvatarGroup `onOpenChange`, `onColumnWidthsChange` (DataGrid and `useTableColumnSizing`), `Table.ResizeHandle` `onResize`, `useTableSort`'s `onSortChange`, `useSelection`'s `onSelectedItemsChange` and `useFlatTree`'s `onCheckedItemsChange` (FlatTree's checked state) will require the `details` argument in 1.0, unchanged. WaveUI always passes it.
+- **`Image.alt`** (announced in 0.18): required in 1.0 (`alt=""` for a decorative image), and `StrictImageProps` becomes an alias of `ImageProps`. A missing `alt` already warns once in development.
+- **TimePicker `format`** (announced in 0.18): without `format` a TimePicker shows 12-hour times through 0.x; in 1.0 it follows the locale's hour cycle. Pass `format="12h"` to keep 12-hour times. TimePicker has no `hourCycle` prop.
+- **Ref placement: no change** (decided in 0.18): `ref` stays on the root element (the one that receives `className`), `controlRef` on the focusable element of the controls that have one, and parts take `slotProps.<part>.ref`. 1.0 moves no `ref`.
+
 ## [0.17.1] - 2026-10-30
 
 ### Fixed
