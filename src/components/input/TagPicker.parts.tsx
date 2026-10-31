@@ -23,6 +23,7 @@ import {
   inputFocusWithin,
   inputInvalidWithin,
 } from '../../lib/styles';
+import { OPTION_STATE_LOCKS, preventMouseDown } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { MERGED_DISABLED_FOCUSABLE_PROPS } from '../button/Button.slots';
@@ -133,22 +134,6 @@ function useClearButtonHold(disabled: boolean): ClearButtonHold {
 }
 
 const NATIVELY_DISABLED = { disabled: true } as const;
-
-function preventMouseDown(event: React.MouseEvent) {
-  event.preventDefault();
-}
-
-/**
- * What a generated option's part cannot set: its `hidden` (an Option prop that takes it out of
- * the keys) and the state attributes the option renders only while set.
- */
-const GENERATED_OPTION_LOCKS = {
-  hidden: undefined,
-  'data-active': undefined,
-  'data-selected': undefined,
-  'aria-disabled': undefined,
-  'data-disabled': undefined,
-};
 
 /* ------------------------------------------------------------------ */
 /*  The end buttons                                                    */
@@ -964,7 +949,7 @@ function TagPickerListImpl({
         mergeSlotProps([optionPart, createPart], {
           className: createClasses,
           locked: {
-            ...GENERATED_OPTION_LOCKS,
+            ...OPTION_STATE_LOCKS,
             value: ctx.createValue,
             label: createLabel,
             'data-value': ctx.createValue,
@@ -997,7 +982,7 @@ function TagPickerListImpl({
               mergeSlotProps(optionPart, {
                 className: tagPickerClassNames.option,
                 locked: {
-                  ...GENERATED_OPTION_LOCKS,
+                  ...OPTION_STATE_LOCKS,
                   value: item.value,
                   label: item.label,
                   'data-value': item.value,

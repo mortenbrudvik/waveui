@@ -107,6 +107,20 @@ function mergeRefPair(ours: object, theirs: object): React.RefCallback<unknown> 
 }
 
 /**
+ * A positioned surface's style with its part's (module-only): `partStyle` is the `style` of the
+ * part's merged props, `positionStyle` the surface's position (`usePopupPosition`'s
+ * `floatingProps.style`). The part's keys first, then every key the positioning sets (the
+ * position, the size limits, the visibility), which a part cannot change; `positionStyle` itself
+ * without a part style.
+ */
+export function lockPositionStyle(
+  partStyle: unknown,
+  positionStyle: React.CSSProperties,
+): React.CSSProperties {
+  return partStyle ? { ...(partStyle as React.CSSProperties), ...positionStyle } : positionStyle;
+}
+
+/**
  * Merges the consumer props of a structural part (`slotProps.<part>`) with the props the
  * component puts on it, and returns the props to spread on the part's element (C-COMPOSE for
  * parts). Pure and server-safe: no hook, no DOM; a new object on every call.

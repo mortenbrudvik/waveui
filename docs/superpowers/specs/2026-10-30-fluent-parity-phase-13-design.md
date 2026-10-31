@@ -262,6 +262,33 @@ Order A, B, C, D1 to D7, E. **Cut line:** if the schedule forces one, D5 to D7 s
     - A throwaway, git-ignored comparison (`coverage/t13`) renders 23 configurations with `undefined`, `{}` and every part `{}`, server renders included. Compared with the base dist (attributes sorted, ids normalised), nothing differs.
   - **Existing assertions edited:** none (import lines only).
   - **Measured** (`measureImport`, before at `b8941ef`, min/gzip B): Combobox-only 69,581/24,308 → 72,338/25,317 (+2,757/+1,009); Dropdown-only 65,422/22,804 → 67,987/23,711 (+2,565/+907); Option-only 16,691/6,296 → 18,403/6,990 (+1,712/+694); OptionGroup-only 18,979/7,082 → 20,790/7,817 (+1,811/+735); TagPicker-only 115,840/38,616 → 119,148/39,656 (+3,308/+1,040); SearchBox-only 26,382/9,459 → 28,217/10,078 (+1,835/+619); TimePicker-only 57,671/20,595 → 60,353/21,560 (+2,682/+965); the five pickers together 148,292/49,050 → 154,092/50,759 (+5,800/+1,709). Also changed: Listbox-only 41,837/15,083 → 43,509/15,745 (+1,672/+662, through Option); ListboxSurface-only 20,631/7,740 → 22,678/8,551 (+2,047/+811); Tag-only 33,103/11,329 → 34,584/11,843 (+1,481/+514, through the host part). Own code over the import with `mergeSlotProps`: Combobox +1,322/+415, Dropdown +1,139/+319, Option +142/+42, OptionGroup +241/+84, TagPicker +2,121/+583, SearchBox +649/+172, TimePicker +1,243/+360, Listbox +244/+70, Tag +296/+66. TagGroup-only is byte-identical, as is every budgeted import (Button, MessageBar, Tree, Dialog, `WaveProvider` with `Dialog`, DataGrid, Table). `dist/styles.css` and `dist/preflight.css` are byte-identical.
+  - **Fix round 1 (review):**
+    - **(I1) A key that a spread adds only while it is set was not locked while it was unset.** `getComboboxProps()` adds `aria-activedescendant` only while an option is active, and `aria-autocomplete` only in the editable mode. The locked pass overwrites only the keys present, so a part could set them on a closed trigger.
+      - The trigger parts (Combobox's and TimePicker's input, Dropdown's button) now lock both as `undefined` before that spread.
+      - TimePicker's list locks `aria-activedescendant` and `aria-multiselectable` the same way, as ListboxSurface already did.
+      - The option-state locks also cover the position attributes `aria-posinset` and `aria-setsize`.
+      - I checked every part of the seven components for this class of hole and found no other key the JSDoc calls locked that a spread adds only conditionally.
+      - New closed-list tests (Combobox, Dropdown, TimePicker, and TagPicker's generated options) fail on `c50e442` and pass now.
+    - **(M2)** The `slotProps` JSDoc of Option (a memoised component) and of TagPicker (the object feeds its parts' context) asks for an object that keeps its identity across renders.
+    - **(M3) Shared helpers.**
+      - `preventMouseDown` and `OPTION_STATE_LOCKS` are module-only exports of `hooks/useListbox.ts`, which every picker already imports.
+      - `lockPositionStyle` is a module-only export of `lib/slotProps.ts`, with tests there. In `hooks/usePopupPosition.ts` it would keep that module's `@floating-ui/react-dom` import in the Option-only and Listbox-only bundles (+31 B).
+      - All three are in `MODULE_ONLY_NAMES`.
+      - SpinButton's identical `keepFocus` (D1) is left alone.
+    - **(M4)** The Option test "reaches the options of a Combobox and a Dropdown too" now renders both.
+    - **Ruling AC:** the `tag` part's `data-*` stays unlocked; its JSDoc says the Tag's look does not follow it.
+    - **Measured against `c50e442`** (`measureImport`, min/gzip B):
+
+      | Import | After | Delta | Shared helpers alone |
+      |---|---|---|---|
+      | Combobox-only | 72,299/25,301 | −39/−16 | |
+      | Dropdown-only | 67,977/23,704 | −10/−7 | |
+      | TagPicker-only | 119,091/39,643 | −57/−13 | |
+      | SearchBox-only | 28,217/10,078 | 0 | |
+      | TimePicker-only | 60,477/21,578 | +124/+18 | −40/−20 |
+      | the five pickers together | 154,039/50,741 | −53/−18 | −217/−64 |
+
+      In the last column the lock keys of I1 were taken out (a probe build); those keys cost +164 B minified. Option, OptionGroup, Listbox, ListboxSurface and Tag are unchanged, and so is every budgeted import and the CSS.
 
 ## 12. Risks
 

@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { joinIds } from '../aria';
-import { mergeSlotProps, type SlotPart, type SlotPartOwn } from '../slotProps';
+import { lockPositionStyle, mergeSlotProps, type SlotPart, type SlotPartOwn } from '../slotProps';
 import slotPropsSource from '../slotProps.ts?raw';
 
 afterEach(() => {
@@ -1322,3 +1322,22 @@ function importStatements(
     text: text.trim().replace(/\s+/g, ' '),
   }));
 }
+
+describe('lockPositionStyle', () => {
+  const position: React.CSSProperties = { position: 'fixed', top: 0, left: 8, maxHeight: '50vh' };
+
+  it('keeps the position style itself without a part style', () => {
+    expect(lockPositionStyle(undefined, position)).toBe(position);
+  });
+
+  it("puts the part's keys first and every key the positioning sets over them", () => {
+    expect(lockPositionStyle({ top: 99, minWidth: 120, zIndex: 3 }, position)).toEqual({
+      top: 0,
+      minWidth: 120,
+      zIndex: 3,
+      position: 'fixed',
+      left: 8,
+      maxHeight: '50vh',
+    });
+  });
+});

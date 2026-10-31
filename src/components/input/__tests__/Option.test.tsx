@@ -1500,16 +1500,25 @@ describe('Option — slotProps', () => {
 
   it('reaches the options of a Combobox and a Dropdown too', async () => {
     const user = userEvent.setup();
-    render(
-      <Dropdown aria-label="Fruit">
-        <Option value="a" slotProps={{ content: { className: 'my-content' } }}>
-          Apple
-        </Option>
-      </Dropdown>,
+    const apple = (
+      <Option value="a" slotProps={{ content: { className: 'my-content' } }}>
+        Apple
+      </Option>
     );
-    await user.click(screen.getByRole('combobox', { name: 'Fruit' }));
-    const option = screen.getByRole('option', { name: 'Apple' });
-    expect(within(option).getByText('Apple')).toHaveClass(optionClassNames.content, 'my-content');
+    for (const picker of [
+      <Combobox key="combobox" aria-label="Fruit">
+        {apple}
+      </Combobox>,
+      <Dropdown key="dropdown" aria-label="Fruit">
+        {apple}
+      </Dropdown>,
+    ]) {
+      const { unmount } = render(picker);
+      await user.click(screen.getByRole('combobox', { name: 'Fruit' }));
+      const option = screen.getByRole('option', { name: 'Apple' });
+      expect(within(option).getByText('Apple')).toHaveClass(optionClassNames.content, 'my-content');
+      unmount();
+    }
   });
 
   it('has no accessibility violations with every part customised', async () => {

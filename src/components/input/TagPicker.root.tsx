@@ -315,16 +315,18 @@ export interface TagPickerProps extends Omit<
    * `children`. The parts reach only what TagPicker draws itself: the tags of a `TagPicker.Group`
    * without children, the end buttons of `TagPicker.Control`, the "+N" chip, the options of a
    * `TagPicker.List` without children and the create option; a Tag or an option you write takes
-   * its own props.
+   * its own props. TagPicker puts `slotProps` in the context its parts read, so keep the
+   * object's identity across renders (a constant, or `useMemo`): a new object each render
+   * re-renders every part that reads it.
    */
   slotProps?: {
     /**
      * Every default tag, the `Tag` root `<span>` that TagPicker renders per selected value in a
      * `TagPicker.Group` without children (stable class `wave-tag-picker__tag`): your props are
      * the Tag's props, so the Tag's own rules apply, as on a Tag you write (its handlers run
-     * after yours; a `data-*` attribute of yours replaces the Tag's of that name). Locked:
-     * `value`, `media`, `role` (a list item) and `hidden` (the single-line layout hides the tags
-     * it counts).
+     * after yours). A `data-*` attribute you set replaces the Tag's own attribute of that name
+     * (`data-size`, …), and the Tag's look does not follow it. Locked: `value`, `media`, `role`
+     * (a list item) and `hidden` (the single-line layout hides the tags it counts).
      */
     tag?: SlotPart<'span'>;
     /**
@@ -358,9 +360,9 @@ export interface TagPickerProps extends Omit<
      * `wave-tag-picker__option`): your props are the option's props, so the option's own rules
      * apply (its `id`, `role` and `aria-selected` win; your handlers run before its own, and
      * `preventDefault()` in your `onClick` skips the addition). Locked: `value`, `label`,
-     * `data-value`, `media`, `secondaryContent`, `hidden` and the state attributes
-     * (`data-active`, `data-selected`, `aria-disabled`, `data-disabled`), also while the option
-     * is not in that state.
+     * `data-value`, `media`, `secondaryContent`, `hidden`, the state attributes (`data-active`,
+     * `data-selected`, `aria-disabled`, `data-disabled`) and the position attributes
+     * (`aria-posinset`, `aria-setsize`), also while the option has none.
      */
     option?: SlotPart<'li'>;
     /**

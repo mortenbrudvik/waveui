@@ -2472,6 +2472,27 @@ describe('Dropdown — slotProps', () => {
     expect(document.querySelector('.my-part')).toBeNull();
   });
 
+  it('keeps the active descendant its own while closed, and adds no autocomplete to the button', () => {
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        slotProps={{
+          button: { 'aria-activedescendant': 'bogus', 'aria-autocomplete': 'list' },
+          listbox: { 'aria-activedescendant': 'bogus', 'aria-multiselectable': true },
+        }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    const button = screen.getByRole('combobox', { name: 'Fruit' });
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).not.toHaveAttribute('aria-activedescendant');
+    expect(button).not.toHaveAttribute('aria-autocomplete');
+    const list = screen.getByRole('listbox', { hidden: true });
+    expect(list).not.toHaveAttribute('aria-activedescendant');
+    expect(list).not.toHaveAttribute('aria-multiselectable');
+  });
+
   it('has no accessibility violations with every part customised', async () => {
     render(
       <Dropdown

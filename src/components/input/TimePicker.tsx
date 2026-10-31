@@ -7,7 +7,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import {
   disabledStyles,
   focusRing,
@@ -27,7 +27,13 @@ import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFie
 import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
-import { ListboxContext, useListbox, useListboxOption } from '../../hooks/useListbox';
+import {
+  ListboxContext,
+  OPTION_STATE_LOCKS,
+  preventMouseDown,
+  useListbox,
+  useListboxOption,
+} from '../../hooks/useListbox';
 import type { ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
@@ -58,15 +64,6 @@ import type { RoutedHandlers } from './routedHandlers';
 
 const OPTION_CLASSES =
   'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold';
-
-/** The state attributes an option renders only while set, locked against a part when unset. */
-const OPTION_STATE_LOCKS = {
-  hidden: undefined,
-  'data-active': undefined,
-  'data-selected': undefined,
-  'aria-disabled': undefined,
-  'data-disabled': undefined,
-};
 
 const CHECK_ICON_CLASSES = cn(
   timePickerClassNames.checkIcon,
@@ -375,15 +372,16 @@ export interface TimePickerProps extends Omit<
     /**
      * The `<ul role="listbox">` of times, in the popup while it shows and hidden in place
      * otherwise (stable class `wave-time-picker__listbox`). Locked: `id`, `role`, `tabIndex`,
-     * `hidden`, `inert`, `aria-hidden` and `aria-label`; your `aria-labelledby` ids join the
-     * list's name.
+     * `hidden`, `inert`, `aria-hidden`, `aria-multiselectable`, `aria-activedescendant` and
+     * `aria-label`; your `aria-labelledby` ids join the list's name.
      */
     listbox?: SlotPart<'ul'>;
     /**
      * Every `<li role="option">` of a time (stable class `wave-time-picker__option`). Locked:
-     * `id`, `role`, `aria-selected`, `hidden` and the state attributes (`data-active`,
-     * `data-selected`, `aria-disabled`, `data-disabled`), also while the option is not in that
-     * state. Your `onClick` runs before the selection (`preventDefault()` skips it).
+     * `id`, `role`, `aria-selected`, `hidden`, the state attributes (`data-active`,
+     * `data-selected`, `aria-disabled`, `data-disabled`) and the position attributes
+     * (`aria-posinset`, `aria-setsize`), also while the option has none. Your `onClick` runs
+     * before the selection (`preventDefault()` skips it).
      * Keep the object's identity across renders (a constant, or `useMemo`): the options skip
      * re-rendering only while it stays the same.
      */
@@ -407,10 +405,6 @@ export interface TimePickerProps extends Omit<
      */
     emptyMessage?: SlotPart<'div'>;
   };
-}
-
-function preventMouseDown(event: React.MouseEvent) {
-  event.preventDefault();
 }
 
 function displayTime(value: string, format: '12h' | '24h'): string {
@@ -915,6 +909,9 @@ export const TimePicker = (props: TimePickerProps) => {
         locked: {
           inert: undefined,
           'aria-hidden': undefined,
+          // The list props carry these only while set: a part sets neither.
+          'aria-activedescendant': undefined,
+          'aria-multiselectable': undefined,
           ...lb.getListboxProps(),
           'aria-labelledby': listboxLabelledBy,
           'aria-label': listboxLabelledBy ? undefined : (ariaLabel ?? labels?.list ?? 'Times'),
@@ -970,9 +967,7 @@ export const TimePicker = (props: TimePickerProps) => {
   });
   // A part's style merges, but the position, the size limits and the visibility the positioning
   // sets win.
-  const surfaceStyle = surfaceProps.style
-    ? { ...(surfaceProps.style as React.CSSProperties), ...positionStyle }
-    : positionStyle;
+  const surfaceStyle = lockPositionStyle(surfaceProps.style, positionStyle);
 
   return (
     <ListboxContext.Provider value={lb.context}>
@@ -1001,6 +996,10 @@ export const TimePicker = (props: TimePickerProps) => {
               ),
               locked: {
                 type: 'text',
+                // The combobox props carry these only while set (an active option): a part sets
+                // neither.
+                'aria-activedescendant': undefined,
+                'aria-autocomplete': undefined,
                 ...lb.getComboboxProps(),
                 'aria-controls': listboxMounted ? lb.listboxId : undefined,
                 ...fieldProps,

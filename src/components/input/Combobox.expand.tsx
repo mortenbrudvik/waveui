@@ -7,6 +7,7 @@ import type { Slot } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRing } from '../../lib/styles';
 import type { CoreSize, InputAppearance } from '../../lib/types';
+import { preventMouseDown } from '../../hooks/useListbox';
 import { unwrapButtonGlyph } from '../button/Button.slots';
 import { pickerButtonOffset, pickerGlyphSize, pickerIconButtonClasses } from './pickerStyles';
 
@@ -65,10 +66,6 @@ export interface PickerExpandButtonProps {
    * its handlers first, every attribute the button sets locked.
    */
   part?: SlotPart<'button'>;
-}
-
-function keepFocus(event: React.MouseEvent) {
-  event.preventDefault();
 }
 
 /**
@@ -140,7 +137,7 @@ export const PickerExpandButton = ({
           'data-disabled': undefined,
           'data-disabled-focusable': undefined,
           // Keeps focus in the input: a press must not blur it (a blur commits typed text).
-          onMouseDown: keepFocus,
+          onMouseDown: preventMouseDown,
           onClick: onToggle,
         },
       })}

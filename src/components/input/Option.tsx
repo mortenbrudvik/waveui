@@ -9,7 +9,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { CheckIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { PopupPositioningOptions } from '../../lib/types';
 import { useId } from '../../hooks/useId';
@@ -20,6 +20,7 @@ import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPositi
 import {
   ListboxContext,
   markListboxElement,
+  preventMouseDown,
   useListboxOption,
   type ListboxContextValue,
   type ListboxStore,
@@ -81,7 +82,9 @@ export interface OptionProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>,
    * own (Fluent UI's Option has only its `checkIcon` slot, which `checkIcon` fills here): your
    * classes after the part's (yours win a conflict), your styles over its styles, your handlers
    * and attributes added, your ref attached. Every attribute the Option sets on a part is locked.
-   * A part takes no `children` (the Option draws their content).
+   * A part takes no `children` (the Option draws their content). The Option is memoised: keep
+   * the object's identity across renders (a constant, or `useMemo`), since a new object each
+   * render re-renders every option that takes it.
    */
   slotProps?: {
     /**
@@ -831,18 +834,6 @@ export interface ListboxSurfaceParts {
   surface?: SlotPart<'div'>;
 }
 
-function preventMouseDown(event: React.MouseEvent) {
-  event.preventDefault();
-}
-
-/**
- * A positioned surface's style with a part's style: the part's keys first, then the position,
- * the size limits and the visibility the positioning sets, which a part cannot change.
- */
-function lockPosition(partStyle: unknown, positionStyle: React.CSSProperties): React.CSSProperties {
-  return partStyle ? { ...(partStyle as React.CSSProperties), ...positionStyle } : positionStyle;
-}
-
 /**
  * The option list of a custom picker and the popup it opens in: a `<ul role="listbox">` with the
  * options (spread from `listbox.getListboxProps()`), rendered `hidden` in place inside your
@@ -963,7 +954,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
       <Portal layerId={layerId}>
         <div
           {...surfaceProps}
-          style={lockPosition(surfaceProps.style, positionStyle)}
+          style={lockPositionStyle(surfaceProps.style, positionStyle)}
           ref={surfaceMergedRef}
         >
           {expanded ? list : emptyContent}

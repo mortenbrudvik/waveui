@@ -22,7 +22,12 @@ import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
-import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
+import {
+  collectOptionLabels,
+  preventMouseDown,
+  useListbox,
+  type ListboxItem,
+} from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { unwrapButtonGlyph } from '../button/Button.slots';
@@ -296,7 +301,8 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
      * `wave-dropdown__button`; `controlRef` reaches it as well). Locked: `type`, `role`, `id`,
      * the naming, Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`,
      * `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`,
-     * `aria-errormessage`, `aria-details`), `disabled`, `tabIndex`, `autoFocus`, `name`, `form`
+     * `aria-autocomplete`, `aria-errormessage`, `aria-details`), `disabled`, `tabIndex`,
+     * `autoFocus`, `name`, `form`
      * and `required` (the value is submitted by the Dropdown's hidden input), `hidden` and
      * `aria-hidden` (a focusable control is never hidden). Your handlers run before the
      * Dropdown's: `preventDefault()` in your `onClick` keeps the list as it is, in your
@@ -330,10 +336,6 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
      */
     surface?: SlotPart<'div'>;
   };
-}
-
-function preventMouseDown(event: React.MouseEvent) {
-  event.preventDefault();
 }
 
 /** The Dropdown component's type: a multi-select signature, then the single-select one. */
@@ -644,6 +646,10 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
               ...fieldProps,
               // The routed naming and Field attributes, set only through the Dropdown's own props.
               ...fieldLocks(fieldProps),
+              // The combobox props carry these only while set (an active option, an editable
+              // combobox): a part sets neither.
+              'aria-activedescendant': undefined,
+              'aria-autocomplete': undefined,
               ...listbox.getComboboxProps(),
               'aria-expanded': expanded,
               'aria-errormessage': ariaErrorMessage,

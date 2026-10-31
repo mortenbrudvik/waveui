@@ -981,9 +981,29 @@ function editsText(event: React.KeyboardEvent): boolean {
   return !shortcut || TEXT_SHORTCUTS.has(key.toLowerCase());
 }
 
-function preventMouseDown(event: React.MouseEvent): void {
+/**
+ * Internal. Prevents a press's default, so it keeps focus where it is: the list of the combobox
+ * modes, and the picker buttons and popups that keep focus in their combobox.
+ */
+export function preventMouseDown(event: React.MouseEvent): void {
   event.preventDefault();
 }
+
+/**
+ * Internal. The attributes an option's {@link UseListboxOptionResult.optionProps} carry only while
+ * set (its state and its position in a data-mode list), each `undefined`: spread before those
+ * props in the locked props of an option's `slotProps` part, so a part can never set one the
+ * option leaves out.
+ */
+export const OPTION_STATE_LOCKS = {
+  hidden: undefined,
+  'data-active': undefined,
+  'data-selected': undefined,
+  'aria-disabled': undefined,
+  'data-disabled': undefined,
+  'aria-posinset': undefined,
+  'aria-setsize': undefined,
+} as const;
 
 /**
  * The listbox behaviour of Listbox, Combobox, Dropdown, TagPicker and TimePicker, and the base of a

@@ -2821,6 +2821,44 @@ describe('TagPicker — slotProps', () => {
     expect(remove).toHaveClass(tagPickerClassNames.removeButton, 'my-remove');
   });
 
+  it('keeps the attributes a generated option renders only while set: a part sets none of them', async () => {
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultOpen
+        allowCreate
+        defaultQuery="kiwi"
+        slotProps={{
+          option: {
+            'aria-posinset': 9,
+            'aria-setsize': 9,
+            'aria-disabled': true,
+            'data-disabled': 'yes',
+            'data-selected': 'yes',
+          },
+        }}
+      />,
+    );
+    await act(async () => {});
+    // The create option, and with no text the data-mode options.
+    const check = () => {
+      for (const option of screen.getAllByRole('option')) {
+        expect(option).not.toHaveAttribute('aria-posinset');
+        expect(option).not.toHaveAttribute('aria-setsize');
+        expect(option).not.toHaveAttribute('aria-disabled');
+        expect(option).not.toHaveAttribute('data-disabled');
+        expect(option).not.toHaveAttribute('data-selected');
+      }
+    };
+    expect(screen.getByRole('option', { name: 'Create "kiwi"' })).toBeInTheDocument();
+    check();
+    fireEvent.change(combobox('Fruit'), { target: { value: '' } });
+    await act(async () => {});
+    expect(screen.getAllByRole('option')).toHaveLength(2);
+    check();
+  });
+
   it('has no accessibility violations with every part customised', async () => {
     render(
       <TagPicker

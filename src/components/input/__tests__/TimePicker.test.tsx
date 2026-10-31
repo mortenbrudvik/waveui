@@ -2714,6 +2714,46 @@ describe('TimePicker — slotProps', () => {
     expect(document.querySelector('.my-part')).toBeNull();
   });
 
+  it('keeps the attributes its wiring renders only while set: closed, a part sets none of them', () => {
+    render(
+      <TimePicker
+        aria-label="Time"
+        defaultValue="09:30"
+        {...BOUNDS}
+        slotProps={{
+          input: { 'aria-activedescendant': 'bogus' },
+          listbox: { 'aria-activedescendant': 'bogus', 'aria-multiselectable': true },
+          option: {
+            'aria-posinset': 9,
+            'aria-setsize': 9,
+            'aria-disabled': true,
+            'data-disabled': 'yes',
+            'data-selected': 'yes',
+          },
+        }}
+      />,
+    );
+    const input = combobox('Time');
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(input).not.toHaveAttribute('aria-activedescendant');
+    const list = screen.getByRole('listbox', { hidden: true });
+    expect(list).toHaveAttribute('hidden');
+    expect(list).not.toHaveAttribute('aria-activedescendant');
+    expect(list).not.toHaveAttribute('aria-multiselectable');
+    const options = within(list).getAllByRole('option', { hidden: true });
+    expect(options).toHaveLength(3);
+    for (const option of options) {
+      expect(option).not.toHaveAttribute('aria-posinset');
+      expect(option).not.toHaveAttribute('aria-setsize');
+      expect(option).not.toHaveAttribute('aria-disabled');
+      expect(option).not.toHaveAttribute('data-disabled');
+    }
+    // Only the selected option is marked selected.
+    expect(options.filter((option) => option.hasAttribute('data-selected'))).toEqual([
+      within(list).getByRole('option', { name: '9:30 AM', hidden: true }),
+    ]);
+  });
+
   it('has no accessibility violations with every part customised', async () => {
     render(
       <TimePicker

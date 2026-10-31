@@ -4506,6 +4506,37 @@ describe('Combobox — slotProps', () => {
     }
   });
 
+  it('keeps the active descendant its own: a closed list and an open one with nothing active take none from a part', async () => {
+    const user = userEvent.setup();
+    render(
+      <Combobox
+        aria-label="Fruit"
+        slotProps={{
+          input: { 'aria-activedescendant': 'bogus', 'aria-autocomplete': 'none' },
+          listbox: { 'aria-activedescendant': 'bogus', 'aria-multiselectable': true },
+        }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    const input = screen.getByRole('combobox', { name: 'Fruit' });
+    const list = screen.getByRole('listbox', { hidden: true });
+    // Closed.
+    expect(input).not.toHaveAttribute('aria-activedescendant');
+    expect(input).toHaveAttribute('aria-autocomplete', 'list');
+    expect(list).not.toHaveAttribute('aria-activedescendant');
+    expect(list).not.toHaveAttribute('aria-multiselectable');
+    // Open, nothing active yet; then the arrow key makes the first option active.
+    await user.click(input);
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    expect(input).not.toHaveAttribute('aria-activedescendant');
+    await user.keyboard('{ArrowDown}');
+    expect(input).toHaveAttribute(
+      'aria-activedescendant',
+      screen.getByRole('option', { name: 'Apple' }).id,
+    );
+  });
+
   it('has no accessibility violations with every part customised', async () => {
     render(
       <Combobox

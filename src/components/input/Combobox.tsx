@@ -22,7 +22,12 @@ import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
-import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
+import {
+  collectOptionLabels,
+  preventMouseDown,
+  useListbox,
+  type ListboxItem,
+} from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { HiddenInput } from '../internal/HiddenInput';
@@ -450,10 +455,6 @@ type LockState = 'unlocked' | 'locked' | 'mounted-locked';
 
 /** The labels read from the children in data mode, where none are read. */
 const NO_LABELS: ReadonlyMap<string, string> = new Map<string, string>();
-
-function preventMouseDown(event: React.MouseEvent) {
-  event.preventDefault();
-}
 
 /** The default `filter` (0.7's match): a case-insensitive substring of `textValue ?? label`. */
 function matchesText(item: ListboxItem, text: string): boolean {
@@ -1010,6 +1011,9 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       ...fieldProps,
       // The routed naming and Field attributes, set only through the Combobox's own props.
       ...fieldLocks(fieldProps),
+      // The combobox props carry these only while set (an active option): a part sets neither.
+      'aria-activedescendant': undefined,
+      'aria-autocomplete': undefined,
       ...listbox.getComboboxProps(),
       'aria-expanded': expanded,
       'aria-errormessage': ariaErrorMessage,
