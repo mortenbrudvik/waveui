@@ -1,12 +1,28 @@
 import * as React from 'react';
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
-import { Calendar, type CalendarValueChangeDetails } from '../Calendar';
+import { Calendar, type CalendarProps, type CalendarValueChangeDetails } from '../Calendar';
 import { calendarClassNames } from '../../../lib/classNames';
-import { axe, renderWithProviders, testSystemProps } from '../../../test-utils';
+import {
+  axe,
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  renderWithProviders,
+  testSystemProps,
+} from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 
 /** The clock in every test: Wednesday 18 June 2025, 14:30 local time. */
@@ -2139,5 +2155,605 @@ describe('Calendar', () => {
         ],
       ]);
     });
+  });
+});
+
+describe('Calendar — slotProps', () => {
+  type CalendarSlotProps = NonNullable<CalendarProps['slotProps']>;
+  const EVERY_PART: CalendarSlotProps = {
+    header: {},
+    previousButton: {},
+    heading: {},
+    headingButton: {},
+    nextButton: {},
+    grid: {},
+    weekday: {},
+    weekNumberHeader: {},
+    weekNumber: {},
+    day: {},
+    markedDot: {},
+    month: {},
+    year: {},
+    footer: {},
+    todayButton: {},
+  };
+  const k = calendarClassNames;
+  /** Every part of the day view: week numbers, a marked day (the 20th), a bound and the footer. */
+  const FULL = {
+    'aria-label': 'Due date',
+    locale: 'en-US',
+    today: TODAY,
+    defaultValue: JUNE_15,
+    minDate: new Date(2025, 5, 3),
+    showWeekNumbers: true,
+    showGoToToday: true,
+    markedDates: (date: Date) => date.getDate() === 20,
+  } satisfies CalendarProps;
+  const all = (name: string, root: ParentNode = document) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${name}`));
+  const part = (name: string) => document.querySelector<HTMLElement>(`.${name}`);
+  /** The pinned days: unavailable, today, selected, marked, plain and outside the month. */
+  const DAYS = ['2025-06-01', '2025-06-12', '2025-06-15', '2025-06-20', '2025-06-21', '2025-07-01'];
+
+  /** The day view's parts, one of each, the cells by their state. */
+  function dayViewParts(root: ParentNode = document) {
+    return [
+      `.${k.header}`,
+      `.${k.previousButton}`,
+      `.${k.heading}`,
+      `.${k.headingButton}`,
+      `.${k.nextButton}`,
+      `.${k.grid}`,
+      `.${k.weekday}[abbr="Sunday"]`,
+      `.${k.weekday}[abbr="Saturday"]`,
+      `.${k.weekNumberHeader}`,
+      `.${k.weekNumber}[aria-label="Week 23"]`,
+      ...DAYS.map((iso) => `.${k.day}[data-date="${iso}"]`),
+      `.${k.markedDot}`,
+      `.${k.footer}`,
+      `.${k.todayButton}`,
+    ].flatMap((selector) => Array.from(root.querySelectorAll(selector)));
+  }
+
+  // Captured from dbf64ac (client and server render the same tags): the merged props may put the
+  // class before the locked attributes.
+  const DAY_VIEW = [
+    '<div class="wave-calendar__header mb-2 flex items-center justify-between gap-2">',
+    '<button aria-controls="calendar-grid-_id0_" aria-disabled="true" aria-label="Previous month" class="wave-calendar__previous-button flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-disabled="" type="button">',
+    '<div aria-live="polite" class="wave-calendar__heading text-body-1 font-semibold" id="calendar-heading-_id1_">',
+    '<button aria-describedby="calendar-heading-hint-_id2_" class="wave-calendar__heading-button flex h-8 items-center justify-center rounded bg-transparent p-0 px-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
+    '<button aria-controls="calendar-grid-_id0_" aria-label="Next month" class="wave-calendar__next-button flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+    '<table aria-labelledby="calendar-heading-_id1_" class="wave-calendar__grid border-collapse" data-wave-calendar-grid="" id="calendar-grid-_id0_" role="grid">',
+    '<th abbr="Sunday" aria-label="Sunday" class="wave-calendar__weekday h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground" scope="col">',
+    '<th abbr="Saturday" aria-label="Saturday" class="wave-calendar__weekday h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground" scope="col">',
+    '<th class="wave-calendar__week-number-header h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground" scope="col">',
+    '<th aria-label="Week 23" class="wave-calendar__week-number h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground" scope="row">',
+    '<button aria-disabled="true" aria-label="Sunday, June 1, 2025" class="wave-calendar__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-06-01" data-disabled="" tabindex="-1" type="button">',
+    '<button aria-current="date" aria-label="Thursday, June 12, 2025" class="wave-calendar__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-06-12" data-today="" tabindex="-1" type="button">',
+    '<button aria-label="Sunday, June 15, 2025" aria-pressed="true" class="wave-calendar__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-date="2025-06-15" data-selected="" tabindex="0" type="button">',
+    '<button aria-label="Friday, June 20, 2025, marked" class="wave-calendar__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-06-20" data-marked="" tabindex="-1" type="button">',
+    '<button aria-label="Saturday, June 21, 2025" class="wave-calendar__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-06-21" tabindex="-1" type="button">',
+    '<button aria-label="Tuesday, July 1, 2025" class="wave-calendar__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-07-01" data-outside="" tabindex="-1" type="button">',
+    '<span aria-hidden="true" class="wave-calendar__marked-dot pointer-events-none absolute inset-x-0 bottom-0.5 mx-auto h-1 w-1 rounded-full bg-current forced-colors:forced-color-adjust-none">',
+    '<div class="wave-calendar__footer mt-2 flex items-center justify-end gap-2">',
+    '<button class="wave-calendar__today-button flex h-8 items-center justify-center rounded bg-transparent p-0 px-3 text-body-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+  ].join('\n');
+
+  it('renders the 0.17.1 parts without slotProps (opening tags, attributes sorted)', () => {
+    render(<Calendar {...FULL} />);
+    expect(openingTags(...dayViewParts())).toBe(DAY_VIEW);
+    fireEvent.click(screen.getByRole('button', { name: 'June 2025' }));
+    const months = ['January 2025', 'June 2025', 'July 2025'].map((name) =>
+      within(grid()).getByRole('button', { name }),
+    );
+    expect(
+      openingTags(
+        ...[k.previousButton, k.heading, k.headingButton, k.nextButton, k.grid].flatMap((name) =>
+          all(name),
+        ),
+        ...months,
+      ),
+    ).toBe(
+      [
+        '<button aria-controls="calendar-grid-_id0_" aria-disabled="true" aria-label="Previous year" class="wave-calendar__previous-button flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-disabled="" type="button">',
+        '<div aria-live="polite" class="wave-calendar__heading text-body-1 font-semibold" id="calendar-heading-_id1_">',
+        '<button aria-describedby="calendar-heading-hint-_id2_" class="wave-calendar__heading-button flex h-8 items-center justify-center rounded bg-transparent p-0 px-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
+        '<button aria-controls="calendar-grid-_id0_" aria-label="Next year" class="wave-calendar__next-button flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+        '<table aria-labelledby="calendar-heading-_id1_" class="wave-calendar__grid border-collapse" data-wave-calendar-grid="" id="calendar-grid-_id0_" role="grid">',
+        '<button aria-disabled="true" aria-label="January 2025" class="wave-calendar__month flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-disabled="" tabindex="-1" type="button">',
+        '<button aria-current="date" aria-label="June 2025" aria-pressed="true" class="wave-calendar__month flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-selected="" data-today="" tabindex="0" type="button">',
+        '<button aria-label="July 2025" class="wave-calendar__month flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+      ].join('\n'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '2025' }));
+    // 2019 (outside the decade and before minDate), 2025 (selected and current), 2026, 2030.
+    const years = all(k.year).filter((_, index) => [0, 6, 7, 11].includes(index));
+    expect(
+      openingTags(...[k.previousButton, k.heading, k.grid].flatMap((name) => all(name)), ...years),
+    ).toBe(
+      [
+        '<button aria-controls="calendar-grid-_id0_" aria-disabled="true" aria-label="Previous decade" class="wave-calendar__previous-button flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-disabled="" type="button">',
+        '<div aria-live="polite" class="wave-calendar__heading text-body-1 font-semibold" id="calendar-heading-_id1_">',
+        '<table aria-labelledby="calendar-heading-_id1_" class="wave-calendar__grid border-collapse" data-wave-calendar-grid="" id="calendar-grid-_id0_" role="grid">',
+        '<button aria-disabled="true" class="wave-calendar__year flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-disabled="" data-outside="" tabindex="-1" type="button">',
+        '<button aria-current="date" aria-pressed="true" class="wave-calendar__year flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-selected="" data-today="" tabindex="0" type="button">',
+        '<button class="wave-calendar__year flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+        '<button class="wave-calendar__year flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-outside="" tabindex="-1" type="button">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the 0.17.1 parts on the server', () => {
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<Calendar {...FULL} />);
+    expect(openingTags(...dayViewParts(template.content))).toBe(DAY_VIEW);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: CalendarProps[] = [
+      FULL,
+      { 'aria-label': 'Due date', locale: 'en-US', today: TODAY },
+      { ...FULL, showMonthPicker: false, selectionRange: 'week', firstDayOfWeek: 1 },
+      { ...FULL, today: new Date(2030, 0, 1), required: true, name: 'due' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <Calendar {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('renders the same markup in the month and year views, with and without slotProps', () => {
+    for (const steps of [['June 2025'], ['June 2025', '2025']]) {
+      const { baseElement, rerender, unmount } = render(<Calendar {...FULL} />);
+      for (const name of steps) fireEvent.click(screen.getByRole('button', { name }));
+      const markup = baseElement.innerHTML;
+      for (const slotProps of [{}, EVERY_PART, undefined]) {
+        rerender(<Calendar {...FULL} slotProps={slotProps} />);
+        expect(baseElement.innerHTML).toBe(markup);
+      }
+      unmount();
+    }
+  });
+
+  it('puts your className, style, data-* and ref on each part, after its stable class and own classes', () => {
+    const mine = <E extends HTMLElement>(name: string, ref: React.Ref<E>) => ({
+      ref,
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    const refs = {
+      header: React.createRef<HTMLDivElement>(),
+      previousButton: React.createRef<HTMLButtonElement>(),
+      heading: React.createRef<HTMLDivElement>(),
+      headingButton: React.createRef<HTMLButtonElement>(),
+      nextButton: React.createRef<HTMLButtonElement>(),
+      grid: React.createRef<HTMLTableElement>(),
+      weekday: React.createRef<HTMLTableCellElement>(),
+      weekNumberHeader: React.createRef<HTMLTableCellElement>(),
+      weekNumber: React.createRef<HTMLTableCellElement>(),
+      day: React.createRef<HTMLButtonElement>(),
+      markedDot: React.createRef<HTMLSpanElement>(),
+      month: React.createRef<HTMLButtonElement>(),
+      year: React.createRef<HTMLButtonElement>(),
+      footer: React.createRef<HTMLDivElement>(),
+      todayButton: React.createRef<HTMLButtonElement>(),
+    };
+    render(
+      <Calendar
+        {...FULL}
+        slotProps={{
+          header: mine('header', refs.header),
+          previousButton: mine('previousButton', refs.previousButton),
+          heading: mine('heading', refs.heading),
+          headingButton: mine('headingButton', refs.headingButton),
+          nextButton: mine('nextButton', refs.nextButton),
+          grid: mine('grid', refs.grid),
+          weekday: mine('weekday', refs.weekday),
+          weekNumberHeader: mine('weekNumberHeader', refs.weekNumberHeader),
+          weekNumber: mine('weekNumber', refs.weekNumber),
+          day: mine('day', refs.day),
+          markedDot: mine('markedDot', refs.markedDot),
+          month: mine('month', refs.month),
+          year: mine('year', refs.year),
+          footer: mine('footer', refs.footer),
+          todayButton: mine('todayButton', refs.todayButton),
+        }}
+      />,
+    );
+    const check = (names: (keyof typeof refs)[]) => {
+      for (const name of names) {
+        const elements = all(k[name]);
+        expect(elements.length, name).toBeGreaterThan(0);
+        for (const element of elements) {
+          expect(element.classList[0]).toBe(k[name]);
+          expect(element.classList[element.classList.length - 1]).toBe(`my-${name}`);
+          expect(element).toHaveStyle({ opacity: '0.5' });
+          expect(element).toHaveAttribute('data-part', name);
+        }
+        // One ref, several cells: it holds the last one attached.
+        expect(elements).toContain(refs[name].current);
+      }
+    };
+    check([
+      'header',
+      'previousButton',
+      'heading',
+      'headingButton',
+      'nextButton',
+      'grid',
+      'weekday',
+      'weekNumberHeader',
+      'weekNumber',
+      'day',
+      'markedDot',
+      'footer',
+      'todayButton',
+    ]);
+    expect(all(k.day)).toHaveLength(42);
+    expect(all(k.weekday)).toHaveLength(7);
+    fireEvent.click(screen.getByRole('button', { name: 'June 2025' }));
+    check(['month', 'grid', 'heading', 'headingButton']);
+    expect(all(k.month)).toHaveLength(12);
+    fireEvent.click(screen.getByRole('button', { name: '2025' }));
+    check(['year', 'grid']);
+    // The view's own refs still hold the elements: the heading button that became text moved
+    // focus into the new grid.
+    expect(refs.grid.current).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it('runs your day onClick before the pick, once per click in StrictMode; preventDefault() skips it', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    const { rerender } = render(
+      <React.StrictMode>
+        <Calendar
+          {...FULL}
+          onValueChange={onValueChange}
+          slotProps={{ day: { onClick: (event) => event.preventDefault() } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(dayButton('Wednesday, June 18, 2025'));
+    expect(onValueChange).not.toHaveBeenCalled();
+    rerender(
+      <React.StrictMode>
+        <Calendar {...FULL} onValueChange={onValueChange} slotProps={{ day: { onClick } }} />
+      </React.StrictMode>,
+    );
+    await user.click(dayButton('Wednesday, June 18, 2025'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(fields(onValueChange.mock.calls[0][0] as Date)).toEqual([2025, 6, 18]);
+  });
+
+  it('runs your grid onKeyDown before the keys, mirrored in RTL; preventDefault() skips them', async () => {
+    const user = userEvent.setup();
+    const seen: string[] = [];
+    renderWithProviders(
+      <Calendar
+        {...FULL}
+        slotProps={{
+          grid: {
+            onKeyDown: (event) => {
+              seen.push(event.key);
+              if (event.key === 'ArrowDown') event.preventDefault();
+            },
+          },
+        }}
+      />,
+      { dir: 'rtl' },
+    );
+    act(() => tabStops()[0].focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(focusedLabel()).toBe('Monday, June 16, 2025');
+    await user.keyboard('{ArrowDown}');
+    expect(focusedLabel()).toBe('Monday, June 16, 2025');
+    expect(seen).toEqual(['ArrowLeft', 'ArrowDown']);
+  });
+
+  it("runs your header, footer, navigation and cell handlers first; preventDefault() skips the Calendar's", async () => {
+    const user = userEvent.setup();
+    const prevent = (event: { preventDefault(): void }) => event.preventDefault();
+    const preventEscape = (event: React.KeyboardEvent) => {
+      if (event.key === 'Escape') event.preventDefault();
+    };
+    const order: string[] = [];
+    render(
+      <Calendar
+        {...FULL}
+        slotProps={{
+          header: { onKeyDown: preventEscape },
+          footer: { onKeyDown: preventEscape },
+          previousButton: { onClick: () => order.push('previous') },
+          nextButton: { onClick: prevent },
+          todayButton: { onClick: prevent },
+          month: { onClick: prevent },
+          year: {
+            onClick: (event) => {
+              order.push('year');
+              event.preventDefault();
+            },
+          },
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(grid()).toHaveAccessibleName('June 2025');
+    // At the bound: yours runs, the disabled button moves nothing.
+    await user.click(screen.getByRole('button', { name: 'Previous month' }));
+    expect(order).toEqual(['previous']);
+    expect(grid()).toHaveAccessibleName('June 2025');
+    await user.click(screen.getByRole('button', { name: 'June 2025' }));
+    expect(grid()).toHaveAccessibleName('2025');
+    await user.click(within(grid()).getByRole('button', { name: 'July 2025' }));
+    expect(grid()).toHaveAccessibleName('2025');
+    // Escape in the header and the footer stays in the month view; in the grid it goes back.
+    act(() => screen.getByRole('button', { name: '2025' }).focus());
+    await user.keyboard('{Escape}');
+    expect(grid()).toHaveAccessibleName('2025');
+    act(() => screen.getByRole('button', { name: 'Go to today' }).focus());
+    await user.keyboard('{Escape}');
+    expect(grid()).toHaveAccessibleName('2025');
+    await user.click(screen.getByRole('button', { name: 'Go to today' }));
+    expect(grid()).toHaveAccessibleName('2025');
+    await user.click(screen.getByRole('button', { name: '2025' }));
+    await user.click(within(grid()).getByRole('button', { name: '2026' }));
+    expect(order).toEqual(['previous', 'year']);
+    expect(grid()).toHaveAccessibleName(/^2020\s*–\s*2029$/);
+  });
+
+  it('runs your heading button onClick before the view changes; preventDefault() skips it', async () => {
+    const user = userEvent.setup();
+    render(
+      <Calendar
+        {...FULL}
+        slotProps={{ headingButton: { onClick: (event) => event.preventDefault() } }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'June 2025' }));
+    expect(grid()).toHaveAccessibleName('June 2025');
+    expect(dayButton('Sunday, June 15, 2025')).toBeInTheDocument();
+  });
+
+  it('keeps the locked attributes of every part', () => {
+    render(
+      <>
+        <span id="extra">Extra</span>
+        <Calendar
+          {...FULL}
+          slotProps={{
+            header: { hidden: true, inert: true, 'aria-hidden': true },
+            previousButton: {
+              type: 'submit',
+              'aria-label': 'Back',
+              'aria-controls': 'nowhere',
+              tabIndex: -1,
+              disabled: true,
+              hidden: true,
+            },
+            heading: { id: 'mine', 'aria-live': 'off', hidden: true },
+            headingButton: { 'aria-describedby': 'extra', disabled: true, tabIndex: -1 },
+            grid: { id: 'mine-grid', role: 'table', 'aria-labelledby': 'extra', inert: true },
+            weekday: { scope: 'row', abbr: 'Day', 'aria-label': 'Day' },
+            weekNumberHeader: { scope: 'row' },
+            weekNumber: { scope: 'col', 'aria-label': 'Number' },
+            day: {
+              type: 'submit',
+              tabIndex: 0,
+              'aria-label': 'A day',
+              'data-date': 'never',
+              disabled: true,
+              hidden: true,
+            },
+            markedDot: { 'aria-hidden': false },
+            footer: { hidden: true, 'aria-hidden': true },
+            todayButton: { type: 'reset', disabled: true },
+          }}
+        />
+      </>,
+    );
+    for (const name of [k.header, k.heading, k.grid, k.footer]) {
+      const element = part(name)!;
+      expect(element).not.toHaveAttribute('hidden');
+      expect(element).not.toHaveAttribute('inert');
+      expect(element).not.toHaveAttribute('aria-hidden');
+    }
+    const table = grid();
+    expect(table.id).toMatch(/^calendar-grid-/);
+    const heading = part(k.heading)!;
+    expect(heading.id).toMatch(/^calendar-heading-/);
+    expect(heading).toHaveAttribute('aria-live', 'polite');
+    expect(table).toHaveAttribute('aria-labelledby', `${heading.id} extra`);
+    const previous = screen.getByRole('button', { name: 'Previous month' });
+    expect(previous).toHaveAttribute('type', 'button');
+    expect(previous).toHaveAttribute('aria-controls', table.id);
+    expect(previous).toHaveAttribute('aria-disabled', 'true');
+    expect(previous).not.toHaveAttribute('tabindex');
+    expect(previous).not.toBeDisabled();
+    expect(previous).not.toHaveAttribute('hidden');
+    const headingButton = screen.getByRole('button', { name: 'June 2025' });
+    expect(headingButton).not.toBeDisabled();
+    expect(headingButton).not.toHaveAttribute('tabindex');
+    expect(headingButton.getAttribute('aria-describedby')).toMatch(
+      /^calendar-heading-hint-\S+ extra$/,
+    );
+    expect(headingButton).toHaveAccessibleDescription('Choose a month Extra');
+    const sunday = all(k.weekday)[0];
+    expect(sunday).toHaveAttribute('scope', 'col');
+    expect(sunday).toHaveAttribute('abbr', 'Sunday');
+    expect(sunday).toHaveAttribute('aria-label', 'Sunday');
+    expect(part(k.weekNumberHeader)).toHaveAttribute('scope', 'col');
+    expect(all(k.weekNumber)[0]).toHaveAttribute('scope', 'row');
+    expect(all(k.weekNumber)[0]).toHaveAttribute('aria-label', 'Week 23');
+    expect(tabStops()).toEqual([dayButton('Sunday, June 15, 2025')]);
+    for (const day of all(k.day)) {
+      expect(day).toHaveAttribute('type', 'button');
+      expect(day.getAttribute('aria-label')).toMatch(/2025/);
+      expect(day.getAttribute('data-date')).toMatch(/^2025-0[67]-\d\d$/);
+      expect(day).not.toBeDisabled();
+      expect(day).not.toHaveAttribute('hidden');
+    }
+    expect(part(k.markedDot)).toHaveAttribute('aria-hidden', 'true');
+    const today = screen.getByRole('button', { name: 'Go to today' });
+    expect(today).toHaveAttribute('type', 'button');
+    expect(today).not.toBeDisabled();
+  });
+
+  it('keeps the state its buttons render only while set: a part sets none of it', () => {
+    const state = {
+      'aria-pressed': true,
+      'aria-current': 'date',
+      'aria-disabled': true,
+      'data-disabled': '',
+      'data-disabled-focusable': '',
+      'data-selected': '',
+      'data-today': '',
+      'data-marked': '',
+      'data-outside': '',
+    } as const;
+    const ATTRIBUTES = Object.keys(state);
+    render(
+      <Calendar
+        {...FULL}
+        slotProps={{
+          day: state,
+          month: { ...state, 'aria-label': 'A month' },
+          year: { ...state, 'aria-label': 'A year' },
+          previousButton: state,
+          nextButton: state,
+          headingButton: state,
+          todayButton: state,
+        }}
+      />,
+    );
+    const plain = dayButton('Saturday, June 21, 2025');
+    for (const attribute of ATTRIBUTES) expect(plain).not.toHaveAttribute(attribute);
+    // The days in a state keep theirs, and only theirs.
+    const selected = dayButton('Sunday, June 15, 2025');
+    expect(selected).toHaveAttribute('aria-pressed', 'true');
+    expect(selected).toHaveAttribute('data-selected', '');
+    expect(selected).not.toHaveAttribute('data-today');
+    expect(dayButton('Thursday, June 12, 2025')).toHaveAttribute('aria-current', 'date');
+    expect(dayButton('Sunday, June 1, 2025')).toHaveAttribute('aria-disabled', 'true');
+    expect(dayButton('Sunday, June 1, 2025')).not.toHaveAttribute('data-disabled-focusable');
+    expect(dayButton('Tuesday, July 1, 2025')).toHaveAttribute('data-outside', '');
+    expect(dayButton('Friday, June 20, 2025, marked')).toHaveAttribute('data-marked', '');
+    // The other buttons render no such state but the disabled one, which stays theirs.
+    for (const name of ['Next month', 'June 2025', 'Go to today']) {
+      const button = screen.getByRole('button', { name });
+      for (const attribute of ['aria-disabled', 'data-disabled', 'data-disabled-focusable']) {
+        expect(button).not.toHaveAttribute(attribute);
+      }
+    }
+    // A month or year cell renders the day's state but `data-marked` (and `data-date`).
+    const CELL_ATTRIBUTES = ATTRIBUTES.filter((attribute) => attribute !== 'data-marked');
+    fireEvent.click(screen.getByRole('button', { name: 'June 2025' }));
+    const july = within(grid()).getByRole('button', { name: 'July 2025' });
+    for (const attribute of CELL_ATTRIBUTES) expect(july).not.toHaveAttribute(attribute);
+    fireEvent.click(screen.getByRole('button', { name: '2025' }));
+    const year = within(grid()).getByRole('button', { name: '2026' });
+    for (const attribute of [...CELL_ATTRIBUTES, 'aria-label']) {
+      expect(year).not.toHaveAttribute(attribute);
+    }
+  });
+
+  it('ignores the parts the Calendar does not render', () => {
+    const refs = [
+      React.createRef<HTMLButtonElement>(),
+      React.createRef<HTMLTableCellElement>(),
+      React.createRef<HTMLTableCellElement>(),
+      React.createRef<HTMLSpanElement>(),
+      React.createRef<HTMLButtonElement>(),
+      React.createRef<HTMLButtonElement>(),
+      React.createRef<HTMLDivElement>(),
+      React.createRef<HTMLButtonElement>(),
+    ] as const;
+    render(
+      <Calendar
+        aria-label="Due date"
+        locale="en-US"
+        today={TODAY}
+        showMonthPicker={false}
+        slotProps={{
+          headingButton: { ref: refs[0], className: 'my-part' },
+          weekNumberHeader: { ref: refs[1], className: 'my-part' },
+          weekNumber: { ref: refs[2], className: 'my-part' },
+          markedDot: { ref: refs[3], className: 'my-part' },
+          month: { ref: refs[4], className: 'my-part' },
+          year: { ref: refs[5], className: 'my-part' },
+          footer: { ref: refs[6], className: 'my-part' },
+          todayButton: { ref: refs[7], className: 'my-part' },
+        }}
+      />,
+    );
+    expect(grid()).toHaveAccessibleName('June 2025');
+    for (const ref of refs) expect(ref.current).toBeNull();
+    expect(document.querySelector('.my-part')).toBeNull();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    const custom = (name: string) => ({ className: `my-${name}`, 'data-part': name });
+    render(
+      <Calendar
+        {...FULL}
+        slotProps={{
+          header: custom('header'),
+          previousButton: custom('previous'),
+          heading: custom('heading'),
+          headingButton: custom('heading-button'),
+          nextButton: custom('next'),
+          grid: custom('grid'),
+          weekday: custom('weekday'),
+          weekNumberHeader: custom('week-number-header'),
+          weekNumber: custom('week-number'),
+          day: { ...custom('day'), title: 'A day' },
+          markedDot: custom('dot'),
+          footer: custom('footer'),
+          todayButton: custom('today'),
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof CalendarSlotProps>().toEqualTypeOf<
+      | 'header'
+      | 'previousButton'
+      | 'heading'
+      | 'headingButton'
+      | 'nextButton'
+      | 'grid'
+      | 'weekday'
+      | 'weekNumberHeader'
+      | 'weekNumber'
+      | 'day'
+      | 'markedDot'
+      | 'month'
+      | 'year'
+      | 'footer'
+      | 'todayButton'
+    >();
+    expectTypeOf<NonNullable<CalendarSlotProps['heading']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<CalendarSlotProps['grid']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLTableElement> | undefined
+    >();
+    expectTypeOf<NonNullable<CalendarSlotProps['weekday']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLTableHeaderCellElement> | undefined
+    >();
+    expectTypeOf<NonNullable<CalendarSlotProps['day']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<CalendarSlotProps['markedDot']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the Calendar draws its content
+    void (<Calendar aria-label="Due date" slotProps={{ day: { children: 'Today' } }} />);
   });
 });

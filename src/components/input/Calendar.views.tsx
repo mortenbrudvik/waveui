@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusableDisabledProps } from '../../lib/aria';
 import { getArrowIntent, getDirection } from '../../lib/direction';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRing, forcedColors } from '../../lib/styles';
 import { getWeekNumber } from '../../lib/date';
 import type { CalendarLabels } from './Calendar';
@@ -22,6 +23,53 @@ import {
 // `disabledStyles`, whose dimmed look lifts while the focus ring shows (opacity would dim the ring).
 const DAY_CLASSES =
   'relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through';
+
+// The header cells: the weekdays, the week-number column's header and each week's number.
+const HEADER_CELL_CLASSES = 'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground';
+
+/**
+ * Internal: what a part that holds focusable buttons (the header, the heading, the grid, the
+ * footer, DatePicker's dialog) locks unset, so a part cannot hide them or take them out of reach.
+ */
+export const HIDDEN_PART_LOCKS = {
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/**
+ * Internal: what every button part of a calendar and of DatePicker locks, set or not: the type,
+ * the tab stop, the native and the focusable disabled state, and the hidden state (a focusable
+ * button is never hidden). The button's own attributes are spread after it.
+ */
+export const BUTTON_PART_LOCKS = {
+  type: 'button',
+  tabIndex: undefined,
+  disabled: undefined,
+  'aria-disabled': undefined,
+  'data-disabled': undefined,
+  'data-disabled-focusable': undefined,
+  ...HIDDEN_PART_LOCKS,
+} as const;
+
+/**
+ * Internal: the consumer props of the day view's parts (the `slotProps` of the component that
+ * renders the view, under the view's names).
+ */
+export interface CalendarDayGridParts {
+  /** The `role="grid"` table of every view. */
+  grid?: SlotPart<'table'>;
+  /** Each weekday header cell. */
+  weekday?: SlotPart<'th'>;
+  /** The header cell of the week-number column. */
+  weekNumberHeader?: SlotPart<'th'>;
+  /** Each week's row header (its number). */
+  weekNumber?: SlotPart<'th'>;
+  /** Each day button. */
+  day?: SlotPart<'button'>;
+  /** The dot inside the button of a marked day. */
+  markedDot?: SlotPart<'span'>;
+}
 
 /** Internal: the stable classes of the day view's parts (see `CalendarDayGridProps.partClassNames`). */
 export interface CalendarDayGridPartClassNames {
@@ -84,6 +132,11 @@ export interface CalendarDayGridProps {
   onPick: (date: Date) => void;
   /** Stable classes of the grid's parts, from the component that renders the view. */
   partClassNames?: CalendarDayGridPartClassNames;
+  /**
+   * Consumer props of the grid's parts. The cells repeat, so each is merged only when given; the
+   * grid's ref is merged by the view (`ref`).
+   */
+  parts?: CalendarDayGridParts;
   /** Ref to the table. */
   ref?: React.Ref<HTMLTableElement>;
 }
@@ -116,8 +169,13 @@ export const CalendarDayGrid = ({
   onDayFocus,
   onPick,
   partClassNames,
+  parts,
   ref,
 }: CalendarDayGridProps) => {
+  const weekdayPart = parts?.weekday;
+  const weekNumberPart = parts?.weekNumber;
+  const dayPart = parts?.day;
+  const markedDotPart = parts?.markedDot;
   const weekdays = React.useMemo(
     () => getWeekdayNames(locale, firstDayOfWeek),
     [locale, firstDayOfWeek],
@@ -164,15 +222,50 @@ export const CalendarDayGrid = ({
     onMoveFocus(next);
   };
 
+  const weekdayClassName = cn(partClassNames?.weekday, HEADER_CELL_CLASSES);
+  const weekNumberClassName = cn(partClassNames?.weekNumber, HEADER_CELL_CLASSES);
+  const markedDotClassName = cn(
+    partClassNames?.markedDot,
+    'pointer-events-none absolute inset-x-0 bottom-0.5 mx-auto h-1 w-1 rounded-full bg-current forced-colors:forced-color-adjust-none',
+  );
+
+  /** The row header of the week that starts on `first`: its number. */
+  const renderWeekNumber = (first: Date) => {
+    const weekNumber = getWeekNumber(first, { firstDayOfWeek, firstWeekOfYear });
+    const weekNumberProps = {
+      scope: 'row',
+      'aria-label': (labels?.weekNumber ?? defaultWeekNumber)(weekNumber),
+    };
+    return (
+      <th
+        {...weekNumberProps}
+        className={weekNumberClassName}
+        // Six per view: merged only when given.
+        {...(weekNumberPart &&
+          mergeSlotProps(weekNumberPart, {
+            className: weekNumberClassName,
+            locked: weekNumberProps,
+          }))}
+      >
+        {weekNumber}
+      </th>
+    );
+  };
+
   return (
     <table
+      {...mergeSlotProps(parts?.grid, {
+        className: cn(partClassNames?.grid, 'border-collapse'),
+        locked: {
+          ...HIDDEN_PART_LOCKS,
+          id,
+          role: 'grid',
+          'aria-labelledby': headingId,
+          'data-wave-calendar-grid': '',
+          onKeyDown: handleKeyDown,
+        },
+      })}
       ref={ref}
-      id={id}
-      role="grid"
-      aria-labelledby={headingId}
-      data-wave-calendar-grid=""
-      onKeyDown={handleKeyDown}
-      className={cn(partClassNames?.grid, 'border-collapse')}
     >
       <thead>
         <tr>
@@ -180,31 +273,34 @@ export const CalendarDayGrid = ({
             // The weekday headers' pattern: a visible symbol hidden from assistive technology and
             // a visually hidden name (an aria-label alone on an empty header fails axe).
             <th
-              scope="col"
-              className={cn(
-                partClassNames?.weekNumberHeader,
-                'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground',
-              )}
+              {...mergeSlotProps(parts?.weekNumberHeader, {
+                className: cn(partClassNames?.weekNumberHeader, HEADER_CELL_CLASSES),
+                locked: { scope: 'col' },
+              })}
             >
               <span aria-hidden="true">#</span>
               <span className="sr-only">{labels?.week ?? 'Week'}</span>
             </th>
           )}
-          {weekdays.map((weekday) => (
-            <th
-              key={weekday.long}
-              scope="col"
-              abbr={weekday.long}
-              aria-label={weekday.long}
-              className={cn(
-                partClassNames?.weekday,
-                'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground',
-              )}
-            >
-              <span aria-hidden="true">{weekday.short}</span>
-              <span className="sr-only">{weekday.long}</span>
-            </th>
-          ))}
+          {weekdays.map((weekday) => {
+            const weekdayProps = { scope: 'col', abbr: weekday.long, 'aria-label': weekday.long };
+            return (
+              <th
+                key={weekday.long}
+                {...weekdayProps}
+                className={weekdayClassName}
+                // Seven per view: merged only when given.
+                {...(weekdayPart &&
+                  mergeSlotProps(weekdayPart, {
+                    className: weekdayClassName,
+                    locked: weekdayProps,
+                  }))}
+              >
+                <span aria-hidden="true">{weekday.short}</span>
+                <span className="sr-only">{weekday.long}</span>
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>
@@ -212,20 +308,7 @@ export const CalendarDayGrid = ({
           // Rows and cells are keyed by position, so the focused button survives a month change
           // and focus stays in the grid while it moves to the new day.
           <tr key={row}>
-            {showWeekNumbers && (
-              <th
-                scope="row"
-                aria-label={(labels?.weekNumber ?? defaultWeekNumber)(
-                  getWeekNumber(week[0], { firstDayOfWeek, firstWeekOfYear }),
-                )}
-                className={cn(
-                  partClassNames?.weekNumber,
-                  'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground',
-                )}
-              >
-                {getWeekNumber(week[0], { firstDayOfWeek, firstWeekOfYear })}
-              </th>
-            )}
+            {showWeekNumbers && renderWeekNumber(week[0])}
             {week.map((day, column) => {
               const iso = formatISODate(day);
               const isSelected = selectedDays.has(iso);
@@ -238,45 +321,58 @@ export const CalendarDayGrid = ({
               const isToday = isSameDay(day, today);
               const isFocused = iso === focusIso;
               const unavailable = isUnavailable(day);
+              const dayProps = {
+                tabIndex: isFocused ? 0 : -1,
+                'aria-label': dayLabel ? dayLabel(day, defaultLabel) : defaultLabel,
+                'aria-pressed': isSelected || undefined,
+                'aria-current': isToday ? ('date' as const) : undefined,
+                ...focusableDisabledProps(unavailable),
+                'data-date': iso,
+                'data-selected': isSelected ? '' : undefined,
+                'data-today': isToday ? '' : undefined,
+                'data-marked': isMarked ? '' : undefined,
+                'data-outside': isSameMonth(day, viewMonth) ? undefined : '',
+                onFocus: () => onDayFocus(day),
+                onClick: () => {
+                  if (!unavailable) onPick(day);
+                },
+              };
+              const dayClassName = cn(
+                partClassNames?.day,
+                DAY_CLASSES,
+                focusRing,
+                disabledStyles,
+                isSelected && forcedColors.selectedLeaf,
+              );
               return (
                 <td key={column} role="gridcell" aria-selected={isSelected} className="p-0">
                   {/* Focus rests on the button, and screen readers do not reliably announce the
-                      gridcell's aria-selected from inside it: the selected day's button is also
-                      pressed. */}
+                        gridcell's aria-selected from inside it: the selected day's button is also
+                        pressed. */}
                   <button
                     type="button"
-                    tabIndex={isFocused ? 0 : -1}
-                    aria-label={dayLabel ? dayLabel(day, defaultLabel) : defaultLabel}
-                    aria-pressed={isSelected || undefined}
-                    aria-current={isToday ? 'date' : undefined}
-                    {...focusableDisabledProps(unavailable)}
-                    data-date={iso}
-                    data-selected={isSelected ? '' : undefined}
-                    data-today={isToday ? '' : undefined}
-                    data-marked={isMarked ? '' : undefined}
-                    data-outside={isSameMonth(day, viewMonth) ? undefined : ''}
-                    onFocus={() => onDayFocus(day)}
-                    onClick={() => {
-                      if (!unavailable) onPick(day);
-                    }}
-                    className={cn(
-                      partClassNames?.day,
-                      DAY_CLASSES,
-                      focusRing,
-                      disabledStyles,
-                      isSelected && forcedColors.selectedLeaf,
-                    )}
+                    {...dayProps}
+                    className={dayClassName}
+                    // 42 per month: merged only when given. The day's state is locked also
+                    // while the day has none of it.
+                    {...(dayPart &&
+                      mergeSlotProps(dayPart, {
+                        className: dayClassName,
+                        locked: { ...BUTTON_PART_LOCKS, ...dayProps },
+                      }))}
                   >
                     {renderDay ? renderDay(day, number) : number}
                     {isMarked && (
-                      // Decorative: the day's name says "marked". It is drawn in the text colour
-                      // of the day, so it follows the selected and forced-colors looks.
+                      // Decorative: the day's name says "marked". It is drawn in the text
+                      // colour of the day, so it follows the selected and forced-colors looks.
                       <span
                         aria-hidden="true"
-                        className={cn(
-                          partClassNames?.markedDot,
-                          'pointer-events-none absolute inset-x-0 bottom-0.5 mx-auto h-1 w-1 rounded-full bg-current forced-colors:forced-color-adjust-none',
-                        )}
+                        className={markedDotClassName}
+                        {...(markedDotPart &&
+                          mergeSlotProps(markedDotPart, {
+                            className: markedDotClassName,
+                            locked: { 'aria-hidden': 'true' },
+                          }))}
                       />
                     )}
                   </button>
@@ -352,6 +448,11 @@ export interface CalendarPickerGridProps {
   onKeyDown?: React.KeyboardEventHandler<HTMLTableElement>;
   /** Stable classes of the grid's parts. */
   partClassNames?: CalendarPickerGridPartClassNames;
+  /**
+   * Consumer props of the grid and its cells (each cell's merged only when given); the grid's ref
+   * is merged by the view (`ref`).
+   */
+  parts?: { grid?: SlotPart<'table'>; cell?: SlotPart<'button'> };
   /** Ref to the table. */
   ref?: React.Ref<HTMLTableElement>;
 }
@@ -374,8 +475,10 @@ export const CalendarPickerGrid = ({
   onPick,
   onKeyDown,
   partClassNames,
+  parts,
   ref,
 }: CalendarPickerGridProps) => {
+  const cellPart = parts?.cell;
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTableElement>) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const column = focusIndex % PICKER_COLUMNS;
@@ -423,13 +526,18 @@ export const CalendarPickerGrid = ({
 
   return (
     <table
+      {...mergeSlotProps(parts?.grid, {
+        className: cn(partClassNames?.grid, 'border-collapse'),
+        locked: {
+          ...HIDDEN_PART_LOCKS,
+          id,
+          role: 'grid',
+          'aria-labelledby': headingId,
+          'data-wave-calendar-grid': '',
+          onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
+        },
+      })}
       ref={ref}
-      id={id}
-      role="grid"
-      aria-labelledby={headingId}
-      data-wave-calendar-grid=""
-      onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
-      className={cn(partClassNames?.grid, 'border-collapse')}
     >
       <tbody>
         {rows.map((row, rowIndex) => (
@@ -437,29 +545,40 @@ export const CalendarPickerGrid = ({
           <tr key={rowIndex}>
             {row.map((cell, column) => {
               const index = rowIndex * PICKER_COLUMNS + column;
+              const cellProps = {
+                tabIndex: index === focusIndex ? 0 : -1,
+                'aria-label': cell.label,
+                'aria-pressed': cell.selected || undefined,
+                'aria-current': cell.current ? ('date' as const) : undefined,
+                ...focusableDisabledProps(cell.unavailable),
+                'data-selected': cell.selected ? '' : undefined,
+                'data-today': cell.current ? '' : undefined,
+                'data-outside': cell.outside ? '' : undefined,
+                onFocus: () => onCellFocus(cell.date),
+                onClick: () => {
+                  if (!cell.unavailable) onPick(cell.date);
+                },
+              };
+              const cellClassName = cn(
+                partClassNames?.cell,
+                PICKER_CELL_CLASSES,
+                focusRing,
+                disabledStyles,
+                cell.selected && forcedColors.selectedLeaf,
+              );
               return (
                 <td key={column} role="gridcell" aria-selected={cell.selected} className="p-0">
                   <button
                     type="button"
-                    tabIndex={index === focusIndex ? 0 : -1}
-                    aria-label={cell.label}
-                    aria-pressed={cell.selected || undefined}
-                    aria-current={cell.current ? 'date' : undefined}
-                    {...focusableDisabledProps(cell.unavailable)}
-                    data-selected={cell.selected ? '' : undefined}
-                    data-today={cell.current ? '' : undefined}
-                    data-outside={cell.outside ? '' : undefined}
-                    onFocus={() => onCellFocus(cell.date)}
-                    onClick={() => {
-                      if (!cell.unavailable) onPick(cell.date);
-                    }}
-                    className={cn(
-                      partClassNames?.cell,
-                      PICKER_CELL_CLASSES,
-                      focusRing,
-                      disabledStyles,
-                      cell.selected && forcedColors.selectedLeaf,
-                    )}
+                    {...cellProps}
+                    className={cellClassName}
+                    // Twelve per view: merged only when given. The cell's state is locked also
+                    // while the cell has none of it.
+                    {...(cellPart &&
+                      mergeSlotProps(cellPart, {
+                        className: cellClassName,
+                        locked: { ...BUTTON_PART_LOCKS, ...cellProps },
+                      }))}
                   >
                     {cell.text}
                   </button>

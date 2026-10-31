@@ -6,8 +6,10 @@ import { calendarClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { isOwnEvent } from '../../lib/events';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../lib/icons';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRing } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
+import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
@@ -16,9 +18,12 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { makeDate } from '../../lib/date';
 import {
+  BUTTON_PART_LOCKS,
   CalendarDayGrid,
   CalendarPickerGrid,
+  HIDDEN_PART_LOCKS,
   type CalendarDayGridPartClassNames,
+  type CalendarDayGridParts,
 } from './Calendar.views';
 import {
   addDays,
@@ -247,6 +252,150 @@ export interface CalendarProps extends Omit<
   required?: boolean;
   /** Ref to the root element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the Calendar draws, by part, merged into each part's own: your classes
+   * after the part's (yours win a conflict), your styles over its styles, your handlers before
+   * its handlers (`preventDefault()` in yours skips the Calendar's handling of the event), your
+   * ref beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every
+   * attribute the Calendar sets on a part is locked and keeps the Calendar's value (set it
+   * through its own props); you add the attributes it does not set. A part takes no `children`.
+   * A part of a repeated element (`weekday`, `weekNumber`, `day`, `markedDot`, `month`, `year`)
+   * reaches each of them, and one ref holds the last one attached. A part of an element the
+   * shown view does not draw is ignored.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` row of the previous button, the heading and the next button (stable class
+     * `wave-calendar__header`). Locked: `hidden`, `inert` and `aria-hidden` (it holds focusable
+     * buttons) and its key handler: your `onKeyDown` runs first, and `preventDefault()` in it
+     * keeps Escape from going back a view.
+     */
+    header?: SlotPart<'div'>;
+    /**
+     * The previous `<button>`: a month back in the day view, a year in the month view, a decade
+     * in the year view (stable class `wave-calendar__previous-button`). Locked: `type`, the name
+     * (`aria-label`: `labels.previousMonth`, `previousYear` or `previousDecade`),
+     * `aria-controls` (the grid), `tabIndex`, the disabled state (`disabled`, and the
+     * `aria-disabled`, `data-disabled` and `data-disabled-focusable` it renders at a bound, where
+     * it stays focusable), `hidden`, `inert` and `aria-hidden`. Your `onClick` runs before the
+     * move (`preventDefault()` skips it).
+     */
+    previousButton?: SlotPart<'button'>;
+    /**
+     * The `<div>` of the month, year or decade text, a polite live region that names the grid
+     * (stable class `wave-calendar__heading`). Locked: `id` (the grid's `aria-labelledby` names
+     * it), `aria-live`, `hidden`, `inert` and `aria-hidden`.
+     */
+    heading?: SlotPart<'div'>;
+    /**
+     * The `<button>` in the heading that shows the month view (from the day view) or the year view
+     * (from the month view), rendered with `showMonthPicker` (stable class
+     * `wave-calendar__heading-button`). Its text names it, and through the heading the grid.
+     * Locked: `type`, `tabIndex`, the disabled state (`disabled`, `aria-disabled`,
+     * `data-disabled`, `data-disabled-focusable`), `hidden`, `inert` and `aria-hidden`; your
+     * `aria-describedby` ids join its hint (`labels.chooseMonth`, `labels.chooseYear`). Your
+     * `onClick` runs before the view changes (`preventDefault()` skips it).
+     */
+    headingButton?: SlotPart<'button'>;
+    /**
+     * The next `<button>`: a month on in the day view, a year in the month view, a decade in the
+     * year view (stable class `wave-calendar__next-button`). Locked as `previousButton`, with the
+     * names `labels.nextMonth`, `nextYear` and `nextDecade`.
+     */
+    nextButton?: SlotPart<'button'>;
+    /**
+     * The `<table role="grid">` of the shown view: the days, the months or the years (stable
+     * class `wave-calendar__grid`). Locked: `id` (the header's buttons control it), `role`,
+     * `data-wave-calendar-grid`, `hidden`, `inert` and `aria-hidden`; your `aria-labelledby`
+     * ids join the heading's. Your `onKeyDown` runs before the grid's keys (`preventDefault()`
+     * skips them: the arrows, Home, End, PageUp and PageDown, and Escape in the month and year
+     * views).
+     */
+    grid?: SlotPart<'table'>;
+    /**
+     * Each weekday `<th>` of the day view (stable class `wave-calendar__weekday`). Locked:
+     * `scope`, `abbr` and `aria-label` (the weekday's full name).
+     */
+    weekday?: SlotPart<'th'>;
+    /**
+     * The `<th>` over the week-number column, rendered with `showWeekNumbers` (stable class
+     * `wave-calendar__week-number-header`). Locked: `scope`.
+     */
+    weekNumberHeader?: SlotPart<'th'>;
+    /**
+     * Each week's row header `<th>`, its number, rendered with `showWeekNumbers` (stable class
+     * `wave-calendar__week-number`). Locked: `scope` and `aria-label` (`labels.weekNumber`).
+     */
+    weekNumber?: SlotPart<'th'>;
+    /**
+     * Every day `<button>` of the day view, 42 a month (stable class `wave-calendar__day`).
+     * Locked, also while the day has none of it: `type`, the roving tab stop (`tabIndex`), the
+     * name (`aria-label`, from `dayLabel`), `aria-pressed`, `aria-current`, the unavailable state
+     * (`disabled`, `aria-disabled`, `data-disabled`, `data-disabled-focusable`), `data-date`,
+     * `data-selected`, `data-today`, `data-marked`, `data-outside`, `hidden`, `inert` and
+     * `aria-hidden`. Your `onClick` runs before the pick and your `onFocus` before the tab stop
+     * follows the focused day (`preventDefault()` skips each).
+     */
+    day?: SlotPart<'button'>;
+    /**
+     * The dot `<span>` inside a marked day's button (`markedDates`; stable class
+     * `wave-calendar__marked-dot`). Locked: `aria-hidden` (the day's name says "marked").
+     */
+    markedDot?: SlotPart<'span'>;
+    /**
+     * Every month `<button>` of the month view (stable class `wave-calendar__month`). Locked as
+     * `day`'s attributes, those it renders: `type`, `tabIndex`, `aria-label` (the month and
+     * year), `aria-pressed`, `aria-current`, the unavailable state, `data-selected`,
+     * `data-today`, `data-outside`, `hidden`, `inert` and `aria-hidden`. Your `onClick` runs
+     * before the month view shows its days (`preventDefault()` skips it).
+     */
+    month?: SlotPart<'button'>;
+    /**
+     * Every year `<button>` of the year view (stable class `wave-calendar__year`). Locked as
+     * `month` (named by its text: `aria-label` stays unset). Your `onClick` runs before the year
+     * view shows its months (`preventDefault()` skips it).
+     */
+    year?: SlotPart<'button'>;
+    /**
+     * The `<div>` row of the footer buttons, rendered with `showGoToToday` (stable class
+     * `wave-calendar__footer`). Locked as `header`.
+     */
+    footer?: SlotPart<'div'>;
+    /**
+     * The "Go to today" `<button>` (`showGoToToday`; stable class `wave-calendar__today-button`).
+     * Locked: `type`, `tabIndex`, `disabled` (while today is outside `minDate`/`maxDate`), the
+     * focusable disabled state, `hidden`, `inert` and `aria-hidden`. Your `onClick` runs before
+     * today's month shows (`preventDefault()` skips it).
+     */
+    todayButton?: SlotPart<'button'>;
+  };
+}
+
+/**
+ * Internal: the consumer props of a calendar view's parts, under the view's names (Calendar
+ * passes its `previousButton` and `nextButton` as `previousMonthButton` and `nextMonthButton`).
+ */
+export interface CalendarViewParts extends CalendarDayGridParts {
+  /** The row of the navigation buttons and the heading. */
+  header?: SlotPart<'div'>;
+  /** The previous button. */
+  previousMonthButton?: SlotPart<'button'>;
+  /** The heading: an `h2` in DatePicker's dialog, else a `div`. */
+  heading?: SlotPart<'h2' | 'div'>;
+  /** The heading's button. */
+  headingButton?: SlotPart<'button'>;
+  /** The next button. */
+  nextMonthButton?: SlotPart<'button'>;
+  /** Each month button of the month view. */
+  month?: SlotPart<'button'>;
+  /** Each year button of the year view. */
+  year?: SlotPart<'button'>;
+  /** The row of the footer buttons. */
+  footer?: SlotPart<'div'>;
+  /** The "Go to today" button. */
+  todayButton?: SlotPart<'button'>;
+  /** The "Close" button. */
+  closeButton?: SlotPart<'button'>;
 }
 
 /**
@@ -337,6 +486,8 @@ export interface CalendarViewProps {
   headingId: string;
   /** Stable classes of the view's parts. */
   partClassNames?: CalendarViewPartClassNames;
+  /** Consumer props of the view's parts (the `slotProps` of the component that renders it). */
+  parts?: CalendarViewParts;
 }
 
 // Every button sets its own padding and background (C-NATIVE): an app-wide `button` rule would
@@ -418,6 +569,7 @@ export const CalendarView = ({
   headingAs: Heading,
   headingId,
   partClassNames,
+  parts,
 }: CalendarViewProps) => {
   const today =
     todayProp === undefined ? startOfDay(new Date()) : todayProp && startOfDay(todayProp);
@@ -440,6 +592,7 @@ export const CalendarView = ({
   const [decade, setDecade] = React.useState(() => getDecadeStart(viewMonth.getFullYear()));
   const [focusedYear, setFocusedYear] = React.useState<number | null>(null);
   const gridRef = React.useRef<HTMLTableElement | null>(null);
+  const gridRefs = useMergedRefs<HTMLTableElement>(gridRef, parts?.grid?.ref);
   /** Set by a view change: the next layout effect moves focus into the new grid. */
   const focusGridRef = React.useRef(false);
   /** Bumped by "Go to today": the next layout effect moves focus to the focused day. */
@@ -593,10 +746,12 @@ export const CalendarView = ({
 
   /* ---- view changes ------------------------------------------------- */
 
-  const changeView = (next: CalendarViewKind) => {
+  // An event callback, so the handlers that call it hold no function that writes a ref when the
+  // part props merge them during render.
+  const changeView = useEventCallback((next: CalendarViewKind) => {
     focusGridRef.current = true;
     setView(next);
-  };
+  });
 
   /** "Go to today": today's month in the day view, today focused; nothing is selected. */
   const goToToday = () => {
@@ -664,6 +819,7 @@ export const CalendarView = ({
   // cell). A view change moves focus into the new grid in the same commit, since the element that
   // had it (the heading button that becomes text, a picked cell) may be gone.
   const headerRef = React.useRef<HTMLDivElement | null>(null);
+  const headerRefs = useMergedRefs<HTMLDivElement>(headerRef, parts?.header?.ref);
   /** Whether focus last rested in the header or the grid (a removed element fires no event). */
   const viewHadFocusRef = React.useRef(false);
   React.useEffect(() => {
@@ -743,7 +899,7 @@ export const CalendarView = ({
   if (view === 'day') {
     grid = (
       <CalendarDayGrid
-        ref={gridRef}
+        ref={gridRefs}
         id={gridId}
         headingId={headingId}
         viewMonth={viewMonth}
@@ -764,13 +920,14 @@ export const CalendarView = ({
         onDayFocus={handleDayFocus}
         onPick={onPick}
         partClassNames={partClassNames}
+        parts={parts}
       />
     );
   } else if (view === 'month') {
     const months = getYearMonths(monthViewYear);
     grid = (
       <CalendarPickerGrid
-        ref={gridRef}
+        ref={gridRefs}
         id={gridId}
         headingId={headingId}
         cells={months.map((month) => ({
@@ -791,13 +948,14 @@ export const CalendarView = ({
         onPick={pickMonth}
         onKeyDown={handleEscape}
         partClassNames={{ grid: partClassNames?.grid, cell: partClassNames?.month }}
+        parts={parts && { grid: parts.grid, cell: parts.month }}
       />
     );
   } else {
     const years = getDecadeYears(decade);
     grid = (
       <CalendarPickerGrid
-        ref={gridRef}
+        ref={gridRefs}
         id={gridId}
         headingId={headingId}
         cells={years.map((yearDate) => {
@@ -820,6 +978,7 @@ export const CalendarView = ({
         onPick={pickYear}
         onKeyDown={handleEscape}
         partClassNames={{ grid: partClassNames?.grid, cell: partClassNames?.year }}
+        parts={parts && { grid: parts.grid, cell: parts.year }}
       />
     );
   }
@@ -827,38 +986,53 @@ export const CalendarView = ({
   return (
     <>
       <div
-        ref={headerRef}
-        className={cn(partClassNames?.header, 'mb-2 flex items-center justify-between gap-2')}
-        onKeyDown={handleEscape}
+        {...mergeSlotProps(parts?.header, {
+          className: cn(partClassNames?.header, 'mb-2 flex items-center justify-between gap-2'),
+          locked: { ...HIDDEN_PART_LOCKS, onKeyDown: handleEscape },
+        })}
+        ref={headerRefs}
       >
         <button
+          // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change
+          // it).
           type="button"
-          aria-label={previousLabel}
-          aria-controls={gridId}
-          {...focusableDisabledProps(previousDisabled)}
-          onClick={preventIfDisabled(previousDisabled, () => navigate(-1))}
-          className={cn(
-            partClassNames?.previousMonthButton,
-            NAV_BUTTON_CLASSES,
-            focusRing,
-            disabledStyles,
-          )}
+          {...mergeSlotProps(parts?.previousMonthButton, {
+            className: cn(
+              partClassNames?.previousMonthButton,
+              NAV_BUTTON_CLASSES,
+              focusRing,
+              disabledStyles,
+            ),
+            locked: {
+              ...BUTTON_PART_LOCKS,
+              'aria-label': previousLabel,
+              'aria-controls': gridId,
+              ...focusableDisabledProps(previousDisabled),
+              onClick: preventIfDisabled(previousDisabled, () => navigate(-1)),
+            },
+          })}
         >
           <ChevronLeftIcon className="wave-rtl:-scale-x-100" />
         </button>
         <Heading
-          id={headingId}
-          aria-live="polite"
-          className={cn(partClassNames?.heading, 'text-body-1 font-semibold')}
+          {...mergeSlotProps(parts?.heading, {
+            className: cn(partClassNames?.heading, 'text-body-1 font-semibold'),
+            locked: { ...HIDDEN_PART_LOCKS, id: headingId, 'aria-live': 'polite' },
+          })}
         >
           {headingButtonTarget ? (
             // Named by its text, so the grid and a DatePicker's dialog keep their names; the hint
             // is outside the heading, which names them.
             <button
               type="button"
-              aria-describedby={hintId}
-              onClick={headingButtonTarget === 'day' ? showMonths : showYears}
-              className={cn(partClassNames?.headingButton, HEADING_BUTTON_CLASSES, focusRing)}
+              {...mergeSlotProps(parts?.headingButton, {
+                className: cn(partClassNames?.headingButton, HEADING_BUTTON_CLASSES, focusRing),
+                locked: {
+                  ...BUTTON_PART_LOCKS,
+                  'aria-describedby': hintId,
+                  onClick: headingButtonTarget === 'day' ? showMonths : showYears,
+                },
+              })}
             >
               {headingText}
             </button>
@@ -873,16 +1047,21 @@ export const CalendarView = ({
         )}
         <button
           type="button"
-          aria-label={nextLabel}
-          aria-controls={gridId}
-          {...focusableDisabledProps(nextDisabled)}
-          onClick={preventIfDisabled(nextDisabled, () => navigate(1))}
-          className={cn(
-            partClassNames?.nextMonthButton,
-            NAV_BUTTON_CLASSES,
-            focusRing,
-            disabledStyles,
-          )}
+          {...mergeSlotProps(parts?.nextMonthButton, {
+            className: cn(
+              partClassNames?.nextMonthButton,
+              NAV_BUTTON_CLASSES,
+              focusRing,
+              disabledStyles,
+            ),
+            locked: {
+              ...BUTTON_PART_LOCKS,
+              'aria-label': nextLabel,
+              'aria-controls': gridId,
+              ...focusableDisabledProps(nextDisabled),
+              onClick: preventIfDisabled(nextDisabled, () => navigate(1)),
+            },
+          })}
         >
           <ChevronRightIcon className="wave-rtl:-scale-x-100" />
         </button>
@@ -890,21 +1069,28 @@ export const CalendarView = ({
       {grid}
       {(showGoToToday || onClose) && (
         <div
-          className={cn(partClassNames?.footer, 'mt-2 flex items-center justify-end gap-2')}
-          onKeyDown={handleEscape}
+          {...mergeSlotProps(parts?.footer, {
+            className: cn(partClassNames?.footer, 'mt-2 flex items-center justify-end gap-2'),
+            locked: { ...HIDDEN_PART_LOCKS, onKeyDown: handleEscape },
+          })}
         >
           {showGoToToday && (
             <button
               type="button"
-              // Natively disabled, since it never disables itself by its own activation.
-              disabled={todayOutOfRange}
-              onClick={goToToday}
-              className={cn(
-                partClassNames?.todayButton,
-                FOOTER_BUTTON_CLASSES,
-                focusRing,
-                disabledStyles,
-              )}
+              {...mergeSlotProps(parts?.todayButton, {
+                className: cn(
+                  partClassNames?.todayButton,
+                  FOOTER_BUTTON_CLASSES,
+                  focusRing,
+                  disabledStyles,
+                ),
+                locked: {
+                  ...BUTTON_PART_LOCKS,
+                  // Natively disabled, since it never disables itself by its own activation.
+                  disabled: todayOutOfRange,
+                  onClick: goToToday,
+                },
+              })}
             >
               {labels?.goToToday ?? 'Go to today'}
             </button>
@@ -912,13 +1098,15 @@ export const CalendarView = ({
           {onClose && (
             <button
               type="button"
-              onClick={onClose}
-              className={cn(
-                partClassNames?.closeButton,
-                FOOTER_BUTTON_CLASSES,
-                focusRing,
-                disabledStyles,
-              )}
+              {...mergeSlotProps(parts?.closeButton, {
+                className: cn(
+                  partClassNames?.closeButton,
+                  FOOTER_BUTTON_CLASSES,
+                  focusRing,
+                  disabledStyles,
+                ),
+                locked: { ...BUTTON_PART_LOCKS, onClick: onClose },
+              })}
             >
               {closeLabel ?? 'Close'}
             </button>
@@ -1030,6 +1218,7 @@ export const Calendar = ({
   'aria-required': ariaRequired,
   className,
   ref,
+  slotProps,
   ...rest
 }: CalendarProps) => {
   const isUnavailable = (date: Date) => isDayUnavailable(date, minDate, maxDate, disabledDates);
@@ -1153,6 +1342,14 @@ export const Calendar = ({
         headingAs="div"
         headingId={headingId}
         partClassNames={CALENDAR_PART_CLASS_NAMES}
+        // The view names the navigation buttons as DatePicker does.
+        parts={
+          slotProps && {
+            ...slotProps,
+            previousMonthButton: slotProps.previousButton,
+            nextMonthButton: slotProps.nextButton,
+          }
+        }
       />
       {showRequiredHint && (
         <span id={requiredHintId} hidden>

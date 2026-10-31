@@ -18,8 +18,10 @@ import { expectTypeOf } from 'vitest';
 import * as registry from '../lib/classNames';
 import * as entry from '../index';
 import type {
+  CalendarProps,
   CheckboxProps,
   ComboboxProps,
+  DatePickerProps,
   DropdownProps,
   FieldProps,
   InputProps,
@@ -366,6 +368,9 @@ type SlotPropsOwners = {
   // Every TagPicker key is declared on the root and read by the parts through its context.
   tagPickerClassNames: TagPickerProps;
   timePickerClassNames: TimePickerProps;
+  // The calendar view draws the parts of both, each under its own constant's keys.
+  datePickerClassNames: DatePickerProps;
+  calendarClassNames: CalendarProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

@@ -2,7 +2,7 @@
 
 Generated in Task 4 from the data of `src/lib/slotParts.ts` and the class-name registry (`src/lib/classNames.ts`), which `src/__tests__/slotParts.test.ts` checks. The data is the source: when the two differ, `slotParts.ts` wins and this list is stale.
 
-186 constants, 113 with parts, 365 part keys: 54 `slotProps` keys (19 in Task 12, 35 in Task 13), 182 pending, 100 named slots, 29 exclusions.
+186 constants, 113 with parts, 365 part keys: 90 `slotProps` keys (19 in Task 12, 35 in Task 13, 36 in Task 13b), 146 pending, 100 named slots, 29 exclusions.
 
 **How to read it.** One row per registry constant with parts, in the group of spec §8 that rolls it out. *Pending keys* are the work: each becomes a `slotProps` key of the component, typed `SlotPart<'<element>'>` for the element named in brackets (read from the source; where a part is one of two elements, both are named), and moves from `PENDING_SLOT_PARTS` to `SLOT_PROPS_KEYS` in the same change, which also adds the declaring component's props type to `SlotPropsOwners` in `src/__tests__/slotParts.test.ts` (its type test requires the owner's `slotProps` keys to equal the listed keys, both ways). *Named slots* already reach their part (R2) and get no `slotProps` key; a prop in brackets is the slot or props object whose name differs from the key. *Exclusions* get no key; their reasons are in the table at the end. *Notes* say where a part is rendered by another component than its constant's, or what the rollout must lock.
 
@@ -36,6 +36,8 @@ Generated in Task 4 from the data of `src/lib/slotParts.ts` and the class-name r
 9 components with pending keys (71 keys): **longer than 8, split into consecutive tasks.** Nothing pending (named slots and exclusions only): `listboxClassNames`, `listboxSurfaceClassNames`, `tagPickerOptionClassNames`.
 
 **Done in Task 13 (ruling AB, the first half):** the 35 keys of Combobox, Dropdown, Option, OptionGroup, TagPicker, SearchBox and TimePicker are `slotProps` keys now, each declared by the component named in its row; TagPicker's root declares all nine and its parts read them from its context. DatePicker and Calendar are the second half. The mechanisms (ListboxSurface's internal `parts`, the per-option merge, TagPicker's host part for `removeButton`, SearchBox's `dismiss` against `dismissButton`) are in the spec, section 11, "Task 13". Note: the "+N" chip (`overflowCount`) is rendered by TagPicker.Group, inside TagPicker.Control.
+
+**Done in Task 13b (the second half):** the 36 keys of DatePicker (21) and Calendar (15) are `slotProps` keys now, each declared by the component whose constant names it, under that constant's key names (DatePicker's `previousMonthButton`, `nextMonthButton` and `h2` heading; Calendar's `previousButton`, `nextButton` and `div` heading). Both hand their parts to the calendar view they share, which merges them on the elements that carry their part classes. The mechanism (the view's internal `parts`, the per-cell merge, the shared button and container locks) is in the spec, section 11, "Task 13b".
 
 | Component | Pending keys (element) | Named slots (prop) | Exclusions | Notes |
 |---|---|---|---|---|

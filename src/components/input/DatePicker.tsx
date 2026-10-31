@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { datePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type {
   CoreSize,
   DayOfWeek,
@@ -26,7 +27,8 @@ import {
 } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
-import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { useEventCallback } from '../../hooks/useEventCallback';
+import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
@@ -37,6 +39,7 @@ import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
 import { CalendarView, type CalendarLabels, type CalendarViewPartClassNames } from './Calendar';
+import { BUTTON_PART_LOCKS, HIDDEN_PART_LOCKS } from './Calendar.views';
 import {
   formatDate as formatLocaleDate,
   formatISODate,
@@ -309,6 +312,178 @@ export interface DatePickerProps extends Omit<
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the root element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the DatePicker draws, by part, merged into each part's own: your
+   * classes after the part's (yours win a conflict), your styles over its styles, your handlers
+   * before its handlers (`preventDefault()` in yours skips the DatePicker's handling of the event,
+   * its own `on…` prop included), your ref beside its ref, and your ids added to its
+   * `aria-labelledby` and `aria-describedby`. Every attribute the DatePicker sets on a part is
+   * locked and keeps the DatePicker's value (set it through its own props); you add the
+   * attributes it does not set. A part takes no `children`. The calendar's parts render while it
+   * is open; a part of a repeated element (`weekday`, `weekNumber`, `day`, `markedDot`, `month`,
+   * `year`) reaches each of them, and one ref holds the last one attached. A part of an element
+   * the DatePicker does not draw is ignored.
+   */
+  slotProps?: {
+    /**
+     * The text `<input>`, the focusable control (stable class `wave-date-picker__input`;
+     * `controlRef` reaches it as well). Locked: `type`, `value`, `id`, the naming and Field
+     * wiring (`aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`,
+     * `aria-details`), `disabled`, `readOnly`, `placeholder`, every text input prop routed to it
+     * (`autoComplete`, `inputMode`, `tabIndex`, …), `name`, `form` and `required` (the value is
+     * submitted by the DatePicker's hidden input), `hidden` and `aria-hidden` (a focusable
+     * control is never hidden). Your handlers run before the DatePicker's: `preventDefault()` in
+     * your `onChange` ignores the typed text, in your `onKeyDown` skips the picker's keys (Enter,
+     * Alt+ArrowDown), in your `onBlur` keeps the typed text uncommitted.
+     */
+    input?: SlotPart<'input'>;
+    /**
+     * The clear `<button>`, rendered with `clearable` while a date is selected (stable class
+     * `wave-date-picker__clear-button`). Locked: `type`, `aria-label` (`labels.clear`),
+     * `disabled`, `tabIndex`, the focusable disabled state (`aria-disabled`, `data-disabled`,
+     * `data-disabled-focusable`), `hidden`, `inert` and `aria-hidden`. Your `onClick` runs before
+     * the clear and your `onMouseDown` before it keeps focus on the input (`preventDefault()`
+     * skips each).
+     */
+    clearButton?: SlotPart<'button'>;
+    /**
+     * The `<button>` that opens and closes the calendar (stable class
+     * `wave-date-picker__open-calendar-button`). Locked: `type`, `aria-label`
+     * (`labels.openCalendar`), `aria-haspopup`, `aria-expanded`, `aria-controls` (the dialog,
+     * while open), `disabled` (also while read-only), `tabIndex`, the focusable disabled state,
+     * `hidden`, `inert` and `aria-hidden`. Your `onClick` runs before the toggle
+     * (`preventDefault()` skips it).
+     */
+    openCalendarButton?: SlotPart<'button'>;
+    /**
+     * The `<p role="alert">` that describes rejected text, rendered while the DatePicker shows its
+     * own error (stable class `wave-date-picker__error-message`). Locked: `id`, which describes
+     * the input, and `role`.
+     */
+    errorMessage?: SlotPart<'p'>;
+    /**
+     * The `role="dialog"` `<div>` of the calendar, rendered in a portal while it is open (stable
+     * class `wave-date-picker__surface`). Locked: `id` (the toggle controls it), `role`,
+     * `aria-modal`, `data-state`, `data-presence`, `data-side`, `data-align`, `hidden`, `inert`
+     * and `aria-hidden`; your `aria-labelledby` ids join the heading's. Your `style` merges, but
+     * the position the positioning sets wins. Your `onKeyDown` runs before Escape closes the
+     * calendar (`preventDefault()` keeps it open).
+     */
+    surface?: SlotPart<'div'>;
+    /**
+     * The calendar's `<div>` row of the previous button, the heading and the next button (stable
+     * class `wave-date-picker__header`). Locked: `hidden`, `inert` and `aria-hidden` (it holds
+     * focusable buttons) and its key handler: your `onKeyDown` runs first, and
+     * `preventDefault()` in it keeps Escape from going back a view.
+     */
+    header?: SlotPart<'div'>;
+    /**
+     * The previous `<button>`: a month back in the day view, a year in the month view, a decade
+     * in the year view (stable class `wave-date-picker__previous-month-button`). Locked: `type`,
+     * the name (`aria-label`: `labels.previousMonth`, `previousYear` or `previousDecade`),
+     * `aria-controls` (the grid), `tabIndex`, the disabled state (`disabled`, and the
+     * `aria-disabled`, `data-disabled` and `data-disabled-focusable` it renders at a bound, where
+     * it stays focusable), `hidden`, `inert` and `aria-hidden`. Your `onClick` runs before the
+     * move (`preventDefault()` skips it).
+     */
+    previousMonthButton?: SlotPart<'button'>;
+    /**
+     * The `<h2>` of the month, year or decade text, the dialog's title and a polite live region
+     * that names the grid (stable class `wave-date-picker__heading`). Locked: `id` (the dialog's
+     * and the grid's `aria-labelledby` name it), `aria-live`, `hidden`, `inert` and
+     * `aria-hidden`.
+     */
+    heading?: SlotPart<'h2'>;
+    /**
+     * The `<button>` in the heading that shows the month view (from the day view) or the year view
+     * (from the month view), rendered unless `showMonthPicker` is off (stable class
+     * `wave-date-picker__heading-button`). Its text names it, and through the heading the dialog
+     * and the grid. Locked: `type`, `tabIndex`, the disabled state (`disabled`, `aria-disabled`,
+     * `data-disabled`, `data-disabled-focusable`), `hidden`, `inert` and `aria-hidden`; your
+     * `aria-describedby` ids join its hint (`labels.chooseMonth`, `labels.chooseYear`). Your
+     * `onClick` runs before the view changes (`preventDefault()` skips it).
+     */
+    headingButton?: SlotPart<'button'>;
+    /**
+     * The next `<button>`: a month on in the day view, a year in the month view, a decade in the
+     * year view (stable class `wave-date-picker__next-month-button`). Locked as
+     * `previousMonthButton`, with the names `labels.nextMonth`, `nextYear` and `nextDecade`.
+     */
+    nextMonthButton?: SlotPart<'button'>;
+    /**
+     * The `<table role="grid">` of the shown view: the days, the months or the years (stable
+     * class `wave-date-picker__grid`). Locked: `id` (the header's buttons control it), `role`,
+     * `data-wave-calendar-grid` (the dialog's first focus looks for it), `hidden`, `inert` and
+     * `aria-hidden`; your `aria-labelledby` ids join the heading's. Your `onKeyDown` runs before
+     * the grid's keys (`preventDefault()` skips them: the arrows, Home, End, PageUp and PageDown,
+     * and Escape in the month and year views).
+     */
+    grid?: SlotPart<'table'>;
+    /**
+     * Each weekday `<th>` of the day view (stable class `wave-date-picker__weekday`). Locked:
+     * `scope`, `abbr` and `aria-label` (the weekday's full name).
+     */
+    weekday?: SlotPart<'th'>;
+    /**
+     * The `<th>` over the week-number column, rendered with `showWeekNumbers` (stable class
+     * `wave-date-picker__week-number-header`). Locked: `scope`.
+     */
+    weekNumberHeader?: SlotPart<'th'>;
+    /**
+     * Each week's row header `<th>`, its number, rendered with `showWeekNumbers` (stable class
+     * `wave-date-picker__week-number`). Locked: `scope` and `aria-label` (`labels.weekNumber`).
+     */
+    weekNumber?: SlotPart<'th'>;
+    /**
+     * Every day `<button>` of the day view, 42 a month (stable class `wave-date-picker__day`).
+     * Locked, also while the day has none of it: `type`, the roving tab stop (`tabIndex`), the
+     * name (`aria-label`, from `dayLabel`), `aria-pressed`, `aria-current`, the unavailable state
+     * (`disabled`, `aria-disabled`, `data-disabled`, `data-disabled-focusable`), `data-date`,
+     * `data-selected`, `data-today`, `data-marked`, `data-outside`, `hidden`, `inert` and
+     * `aria-hidden`. Your `onClick` runs before the pick and your `onFocus` before the tab stop
+     * follows the focused day (`preventDefault()` skips each).
+     */
+    day?: SlotPart<'button'>;
+    /**
+     * The dot `<span>` inside a marked day's button (`markedDates`; stable class
+     * `wave-date-picker__marked-dot`). Locked: `aria-hidden` (the day's name says "marked").
+     */
+    markedDot?: SlotPart<'span'>;
+    /**
+     * Every month `<button>` of the month view (stable class `wave-date-picker__month`). Locked as
+     * `day`'s attributes, those it renders: `type`, `tabIndex`, `aria-label` (the month and
+     * year), `aria-pressed`, `aria-current`, the unavailable state, `data-selected`,
+     * `data-today`, `data-outside`, `hidden`, `inert` and `aria-hidden`. Your `onClick` runs
+     * before the month view shows its days (`preventDefault()` skips it).
+     */
+    month?: SlotPart<'button'>;
+    /**
+     * Every year `<button>` of the year view (stable class `wave-date-picker__year`). Locked as
+     * `month` (named by its text: `aria-label` stays unset). Your `onClick` runs before the year
+     * view shows its months (`preventDefault()` skips it).
+     */
+    year?: SlotPart<'button'>;
+    /**
+     * The `<div>` row of the footer buttons, rendered with `showGoToToday` or `showCloseButton`
+     * (stable class `wave-date-picker__footer`). Locked as `header`.
+     */
+    footer?: SlotPart<'div'>;
+    /**
+     * The "Go to today" `<button>` (`showGoToToday`; stable class
+     * `wave-date-picker__today-button`). Locked: `type`, `tabIndex`, `disabled` (while today is
+     * outside `minDate`/`maxDate`), the focusable disabled state, `hidden`, `inert` and
+     * `aria-hidden`. Your `onClick` runs before today's month shows (`preventDefault()` skips
+     * it).
+     */
+    todayButton?: SlotPart<'button'>;
+    /**
+     * The "Close" `<button>` (`showCloseButton`; stable class `wave-date-picker__close-button`).
+     * Locked: `type`, `tabIndex`, the disabled state (`disabled`, `aria-disabled`,
+     * `data-disabled`, `data-disabled-focusable`), `hidden`, `inert` and `aria-hidden`. Your
+     * `onClick` runs before the calendar closes (`preventDefault()` keeps it open).
+     */
+    closeButton?: SlotPart<'button'>;
+  };
 }
 
 // The calendar's parts keep DatePicker's stable classes (0.8), on the same elements.
@@ -441,6 +616,7 @@ export const DatePicker = (props: DatePickerProps) => {
     controlRef,
     className,
     ref,
+    slotProps,
     ...rest
   } = props;
 
@@ -581,7 +757,11 @@ export const DatePicker = (props: DatePickerProps) => {
   /** Where focus goes when the calendar closes (`null`: back to the toggle). */
   const restoreTargetRef = React.useRef<HTMLElement | null>(null);
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
-  const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef);
+  const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef, slotProps?.input?.ref);
+  const toggleRefs = useMergedRefs<HTMLButtonElement>(
+    toggleRef,
+    slotProps?.openCalendarButton?.ref,
+  );
 
   const dialogId = useId('datepicker-dialog');
   const headingId = useId('datepicker-heading');
@@ -614,7 +794,12 @@ export const DatePicker = (props: DatePickerProps) => {
     align: 'start',
     ...resolvePositioning(positioning, {}),
   });
-  const surfaceRefs = useMergedRefs<HTMLDivElement>(surfaceRef, setSurface, setFloating);
+  const surfaceRefs = useMergedRefs<HTMLDivElement>(
+    surfaceRef,
+    setSurface,
+    setFloating,
+    slotProps?.surface?.ref,
+  );
 
   useFocusTrap(surface, {
     enabled: isOpen,
@@ -712,18 +897,20 @@ export const DatePicker = (props: DatePickerProps) => {
     if (interactive && draft !== null && invalid === null) commitDraft(draft);
   });
 
-  const handleToggle = () => {
+  // Event callbacks, so the part props merged during render hold no function that reads or
+  // writes a ref.
+  const handleToggle = useEventCallback(() => {
     if (!interactive) return;
     restoreTargetRef.current = null;
     setOpenedFromInput(false);
     setOpen(!isOpen);
-  };
+  });
 
-  const handleClear = () => {
+  const handleClear = useEventCallback(() => {
     if (!interactive) return;
     commitDate(null);
     inputRef.current?.focus();
-  };
+  });
 
   // The clear button keeps focus on the input: its blur would otherwise commit (or reject) the
   // edited text just before the clear, emitting twice for one click.
@@ -739,7 +926,7 @@ export const DatePicker = (props: DatePickerProps) => {
   };
 
   /** Closes the calendar, as Escape does: focus returns to where it was opened from. */
-  const requestClose = () => close(openedFromInput ? inputRef.current : null);
+  const requestClose = useEventCallback(() => close(openedFromInput ? inputRef.current : null));
 
   const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
@@ -751,6 +938,28 @@ export const DatePicker = (props: DatePickerProps) => {
   /* ---- render ------------------------------------------------------ */
 
   const inputText = draft ?? (selectedDate ? format(selectedDate) : '');
+
+  const { style: positionStyle, ...placement } = floatingProps;
+  const surfaceProps = mergeSlotProps(slotProps?.surface, {
+    className: cn(
+      datePickerClassNames.surface,
+      'rounded-md border border-border bg-background p-3 text-foreground shadow-16',
+    ),
+    locked: {
+      ...HIDDEN_PART_LOCKS,
+      // No presence phase: the calendar mounts open (a part cannot pretend otherwise).
+      'data-presence': undefined,
+      id: dialogId,
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-labelledby': headingId,
+      ...placement,
+      'data-state': 'open',
+      onKeyDown: handleDialogKeyDown,
+    },
+  });
+  // A part's style merges, but the position the positioning sets wins.
+  const surfaceStyle = lockPositionStyle(surfaceProps.style, positionStyle);
 
   let errorMessage = '';
   if (invalid === 'unparseable') {
@@ -776,85 +985,111 @@ export const DatePicker = (props: DatePickerProps) => {
     >
       <div ref={setReference} className="relative flex items-center">
         <input
+          {...mergeSlotProps(slotProps?.input, {
+            className: cn(
+              datePickerClassNames.input,
+              inputHeightClasses[size],
+              'w-full',
+              inputPaddingClasses[size],
+              inputTextClasses[size],
+              inputAppearanceClasses[appearance],
+              'text-foreground placeholder:text-muted-foreground',
+              inputFocus,
+              disabledStyles,
+              invalidLook && inputInvalid,
+              pickerEndPadding(showClear ? 2 : 1, size),
+            ),
+            locked: {
+              type: 'text',
+              ...fieldProps,
+              // The routed naming and Field attributes, set only through the DatePicker's own
+              // props.
+              ...fieldLocks(fieldProps),
+              'aria-errormessage': ariaErrorMessage,
+              'aria-details': ariaDetails,
+              value: inputText,
+              onChange: handleInputChange,
+              onFocus,
+              onBlur: handleInputBlur,
+              onKeyDown: handleInputKeyDown,
+              onKeyUp,
+              placeholder,
+              disabled,
+              readOnly,
+              autoComplete,
+              autoCapitalize,
+              autoCorrect,
+              enterKeyHint,
+              inputMode,
+              spellCheck,
+              autoFocus,
+              tabIndex,
+              // The control's own: the hidden input submits the value, and a focusable control
+              // is never hidden.
+              name: undefined,
+              form: undefined,
+              hidden: undefined,
+              'aria-hidden': undefined,
+            },
+          })}
           ref={inputRefs}
-          type="text"
-          {...fieldProps}
-          aria-errormessage={ariaErrorMessage}
-          aria-details={ariaDetails}
-          value={inputText}
-          onChange={handleInputChange}
-          onFocus={onFocus}
-          onBlur={handleInputBlur}
-          onKeyDown={handleInputKeyDown}
-          onKeyUp={onKeyUp}
-          placeholder={placeholder}
-          disabled={disabled}
-          readOnly={readOnly}
-          autoComplete={autoComplete}
-          autoCapitalize={autoCapitalize}
-          autoCorrect={autoCorrect}
-          enterKeyHint={enterKeyHint}
-          inputMode={inputMode}
-          spellCheck={spellCheck}
-          autoFocus={autoFocus}
-          tabIndex={tabIndex}
-          className={cn(
-            datePickerClassNames.input,
-            inputHeightClasses[size],
-            'w-full',
-            inputPaddingClasses[size],
-            inputTextClasses[size],
-            inputAppearanceClasses[appearance],
-            'text-foreground placeholder:text-muted-foreground',
-            inputFocus,
-            disabledStyles,
-            invalidLook && inputInvalid,
-            pickerEndPadding(showClear ? 2 : 1, size),
-          )}
         />
         {showClear && (
           <button
+            // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot
+            // change it).
             type="button"
-            aria-label={labels?.clear ?? 'Clear date'}
-            disabled={disabled}
-            onMouseDown={handleClearMouseDown}
-            onClick={handleClear}
-            className={cn(
-              datePickerClassNames.clearButton,
-              pickerIconButtonClasses(size, appearance),
-              pickerButtonOffset(size, 2),
-              focusRing,
-              disabledStyles,
-            )}
+            {...mergeSlotProps(slotProps?.clearButton, {
+              className: cn(
+                datePickerClassNames.clearButton,
+                pickerIconButtonClasses(size, appearance),
+                pickerButtonOffset(size, 2),
+                focusRing,
+                disabledStyles,
+              ),
+              locked: {
+                ...BUTTON_PART_LOCKS,
+                'aria-label': labels?.clear ?? 'Clear date',
+                disabled,
+                onMouseDown: handleClearMouseDown,
+                onClick: handleClear,
+              },
+            })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
           </button>
         )}
         <button
-          ref={toggleRef}
           type="button"
-          aria-label={labels?.openCalendar ?? 'Open calendar'}
-          aria-haspopup="dialog"
-          aria-expanded={isOpen}
-          aria-controls={isOpen ? dialogId : undefined}
-          disabled={disabled || readOnly}
-          onClick={handleToggle}
-          className={cn(
-            datePickerClassNames.openCalendarButton,
-            pickerIconButtonClasses(size, appearance),
-            pickerButtonOffset(size, 1),
-            focusRing,
-            disabledStyles,
-          )}
+          {...mergeSlotProps(slotProps?.openCalendarButton, {
+            className: cn(
+              datePickerClassNames.openCalendarButton,
+              pickerIconButtonClasses(size, appearance),
+              pickerButtonOffset(size, 1),
+              focusRing,
+              disabledStyles,
+            ),
+            locked: {
+              ...BUTTON_PART_LOCKS,
+              'aria-label': labels?.openCalendar ?? 'Open calendar',
+              'aria-haspopup': 'dialog',
+              'aria-expanded': isOpen,
+              'aria-controls': isOpen ? dialogId : undefined,
+              disabled: disabled || readOnly,
+              onClick: handleToggle,
+            },
+          })}
+          ref={toggleRefs}
         >
           <CalendarIcon size={pickerGlyphSize(size, 'icon')} />
         </button>
       </div>
       {showOwnError && (
         <p
-          id={errorId}
-          role="alert"
-          className={cn(datePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error')}
+          {...mergeSlotProps(slotProps?.errorMessage, {
+            className: cn(datePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error'),
+            locked: { id: errorId, role: 'alert' },
+          })}
         >
           {errorMessage}
         </p>
@@ -870,20 +1105,7 @@ export const DatePicker = (props: DatePickerProps) => {
       />
       {isOpen && (
         <Portal layerId={layerId}>
-          <div
-            ref={surfaceRefs}
-            id={dialogId}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={headingId}
-            {...floatingProps}
-            data-state="open"
-            onKeyDown={handleDialogKeyDown}
-            className={cn(
-              datePickerClassNames.surface,
-              'rounded-md border border-border bg-background p-3 text-foreground shadow-16',
-            )}
-          >
+          <div {...surfaceProps} style={surfaceStyle} ref={surfaceRefs}>
             <CalendarView
               value={selectedDate}
               onPick={selectDate}
@@ -907,6 +1129,7 @@ export const DatePicker = (props: DatePickerProps) => {
               headingAs="h2"
               headingId={headingId}
               partClassNames={CALENDAR_PART_CLASS_NAMES}
+              parts={slotProps}
             />
           </div>
         </Portal>
