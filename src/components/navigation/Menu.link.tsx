@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { menuItemClassNames, menuItemLinkClassNames } from '../../lib/classNames';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import type { SlotPart } from '../../lib/slotProps';
 import type { Slot } from '../../lib/types';
 import { MenuItemRow, useMenuItemActivation, useMenuItemPlacementWarning } from './Menu.items';
 import { menuItemClasses } from './Menu.shared';
@@ -23,6 +24,36 @@ export interface MenuItemLinkOwnProps {
   disabled?: boolean;
   /** Label of the link. */
   children: React.ReactNode;
+  /**
+   * Props for the elements the item draws in its row, inside the link, by part, merged into each
+   * part's own: your classes after the part's (yours win a conflict), your styles over its styles,
+   * your attributes and handlers added, your ref attached. Every attribute the item sets on a part
+   * is locked and keeps the item's value, and no part takes a role or the markers by which the
+   * menu reads an item's row (the text typeahead matches, the check and icon columns its labels
+   * line up by), so a part changes neither the menu's keyboard navigation nor its columns. A part
+   * takes no `children` (the item draws their content); the link element itself takes the item's
+   * own props, and the icon is `icon`. No part carries a handler of the item: an event on a part
+   * reaches the link and its menu as one on the label does, after your handler, and
+   * `preventDefault()` in yours skips their handling of it there too. A click you prevent neither
+   * follows the link nor closes its menu, while the item's `onClick` is still called, as for a
+   * prevented click on the label. Fluent UI's MenuItemLink gives these parts slots of their own
+   * (`content`, `secondaryContent` for the shortcut).
+   */
+  slotProps?: {
+    /**
+     * The `<span>` of the label (`children`), which fills the row (stable classes
+     * `wave-menu-item__content` and `wave-menu-item-link__content`). Locked: no role, and the
+     * menu's markers (typeahead reads a label that is no string through this element).
+     */
+    content?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `shortcut`, rendered while `shortcut` is set (stable classes
+     * `wave-menu-item__shortcut` and `wave-menu-item-link__shortcut`). Locked: `dir` (`auto`, so
+     * the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no role,
+     * and the menu's markers.
+     */
+    shortcut?: SlotPart<'span'>;
+  };
 }
 
 /** Props of {@link MenuItemLink} rendered as `C` (default `'a'`, or a router link component). */
@@ -69,6 +100,7 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
     onClick,
     onKeyDown,
     ref,
+    slotProps,
     ...rest
   } = props as MenuItemLinkImplProps;
   const Component: React.ElementType = as ?? 'a';
@@ -120,6 +152,7 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
           content: cn(menuItemClassNames.content, menuItemLinkClassNames.content),
           shortcut: cn(menuItemClassNames.shortcut, menuItemLinkClassNames.shortcut),
         }}
+        parts={slotProps}
       />
     </Component>
   );

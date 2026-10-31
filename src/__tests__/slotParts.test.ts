@@ -35,6 +35,11 @@ import type {
   FieldProps,
   InputProps,
   LabelProps,
+  MenuItemCheckboxProps,
+  MenuItemLinkProps,
+  MenuItemProps,
+  MenuItemRadioProps,
+  MenuItemSwitchProps,
   NavDrawerBodyProps,
   NavDrawerFooterProps,
   NavDrawerProps,
@@ -400,6 +405,12 @@ type SlotPropsOwners = {
   navDrawerBodyClassNames: NavDrawerBodyProps;
   navDrawerFooterClassNames: NavDrawerFooterProps;
   popoverContentClassNames: PopoverContentProps;
+  // The item kinds share the item row: each declares the parts it draws, under its own constant.
+  menuItemClassNames: MenuItemProps;
+  menuItemCheckboxClassNames: MenuItemCheckboxProps;
+  menuItemRadioClassNames: MenuItemRadioProps;
+  menuItemSwitchClassNames: MenuItemSwitchProps;
+  menuItemLinkClassNames: MenuItemLinkProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

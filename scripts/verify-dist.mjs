@@ -967,6 +967,7 @@ export const MODULE_ONLY_NAMES = [
   'ListboxOptionPosition',
   'ListboxOptionPositionContext',
   'ListboxSurfaceParts',
+  'MENU_PART_LOCKS',
   'ModalBackdrop',
   'ModalBackdropProps',
   'ModalBackdropSlot',

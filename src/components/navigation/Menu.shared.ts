@@ -34,6 +34,20 @@ export function withTypeaheadText(
 }
 
 /**
+ * What every `slotProps` part of a menu item locks unset: a role, since the menu finds its items
+ * by role (a part with an item's role would become an item of its own), and the markers the menu
+ * reads from an item's row (the element whose text typeahead matches, and the check and icon
+ * columns the list lines its labels up by), so a part can change neither. Spread it first in a
+ * part's `locked` object; a part that carries one of the markers sets it after the spread.
+ */
+export const MENU_PART_LOCKS = {
+  role: undefined,
+  'data-menu-label': undefined,
+  'data-menu-icon': undefined,
+  'data-menu-checkmark': undefined,
+} as const;
+
+/**
  * C-DEV: `Menu.Trigger`/`Menu.Popover` rendered by a static menu — the root only detects popup
  * mode from its direct children (Fragments included), so wrapped parts leave it static.
  */

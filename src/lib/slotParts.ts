@@ -158,6 +158,11 @@ export const SLOT_PROPS_KEYS = {
   navDrawerBodyClassNames: ['list'],
   navDrawerFooterClassNames: ['list'],
   popoverContentClassNames: ['beak', 'title'],
+  menuItemClassNames: ['content', 'shortcut', 'submenuIndicator'],
+  menuItemCheckboxClassNames: ['content', 'shortcut'],
+  menuItemRadioClassNames: ['content', 'shortcut'],
+  menuItemSwitchClassNames: ['content', 'shortcut', 'track', 'thumb'],
+  menuItemLinkClassNames: ['content', 'shortcut'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -468,11 +473,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   ],
   overflowClassNames: ['overflowButton'],
   breadcrumbClassNames: ['list', 'listItem', 'overflowButton'],
-  menuItemClassNames: ['content', 'shortcut', 'submenuIndicator'],
-  menuItemCheckboxClassNames: ['content', 'shortcut'],
-  menuItemRadioClassNames: ['content', 'shortcut'],
-  menuItemSwitchClassNames: ['content', 'shortcut', 'track', 'thumb'],
-  menuItemLinkClassNames: ['content', 'shortcut'],
   navClassNames: ['list'],
   navCategoryClassNames: ['button', 'label', 'list'],
   navItemClassNames: ['listItem', 'content', 'actions'],

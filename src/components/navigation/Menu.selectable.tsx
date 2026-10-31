@@ -9,10 +9,11 @@ import {
 import { warnOnce } from '../../lib/dev';
 import { CheckIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { Slot } from '../../lib/types';
 import { useMenuContext, useMenuListContext } from './Menu.context';
-import { menuItemClasses } from './Menu.shared';
+import { MENU_PART_LOCKS, menuItemClasses } from './Menu.shared';
 import { MenuItemRow, useMenuItemActivation, useMenuItemPlacementWarning } from './Menu.items';
 import type { MenuItemProps, MenuItemRowPartClassNames } from './Menu.items';
 
@@ -25,27 +26,136 @@ export interface MenuItemSelectableProps {
 }
 
 /** Properties for the MenuItemCheckbox sub-component. */
-export interface MenuItemCheckboxProps extends MenuItemProps, MenuItemSelectableProps {
+export interface MenuItemCheckboxProps
+  extends Omit<MenuItemProps, 'slotProps'>, MenuItemSelectableProps {
   /**
    * Replaces the check glyph shown while the item is checked (decorative, `aria-hidden`). A
    * checked item always shows an indicator: `null`, `undefined` and a value that renders nothing
    * keep the default glyph (a value that renders nothing also warns in development).
    */
   checkmark?: Slot<'span'>;
+  /**
+   * Props for the elements the item draws in its row, by part, merged into each part's own: your
+   * classes after the part's (yours win a conflict), your styles over its styles, your attributes
+   * and handlers added, your ref attached. Every attribute the item sets on a part is locked and
+   * keeps the item's value, and no part takes a role or the markers by which the menu reads an
+   * item's row (the text typeahead matches, the check and icon columns its labels line up by), so
+   * a part changes neither the menu's keyboard navigation nor its columns. A part takes no
+   * `children` (the item draws their content); the item element itself takes the item's own props,
+   * the check glyph is `checkmark` and the icon `icon`. No part carries a handler of the item: an
+   * event on a part reaches the item and its menu as one on the label does, after your handler,
+   * and `preventDefault()` in yours skips their handling of it there too. A click you prevent
+   * leaves the item checked or unchecked as it was (and its menu open), while the item's `onClick`
+   * is still called, as for a prevented click on the label. Fluent UI's MenuItemCheckbox gives
+   * these parts slots of their own (`content`, `secondaryContent` for the shortcut).
+   */
+  slotProps?: {
+    /**
+     * The `<span>` of the label (`children`), which fills the row (stable classes
+     * `wave-menu-item__content` and `wave-menu-item-checkbox__content`). Locked: no role, and the
+     * menu's markers (typeahead reads a label that is no string through this element).
+     */
+    content?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `shortcut`, rendered while `shortcut` is set (stable classes
+     * `wave-menu-item__shortcut` and `wave-menu-item-checkbox__shortcut`). Locked: `dir` (`auto`,
+     * so the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no
+     * role, and the menu's markers.
+     */
+    shortcut?: SlotPart<'span'>;
+  };
 }
 
 /** Properties for the MenuItemRadio sub-component. */
-export interface MenuItemRadioProps extends MenuItemProps, MenuItemSelectableProps {
+export interface MenuItemRadioProps
+  extends Omit<MenuItemProps, 'slotProps'>, MenuItemSelectableProps {
   /** As `MenuItemCheckbox.checkmark`. */
   checkmark?: Slot<'span'>;
+  /**
+   * Props for the elements the item draws in its row, by part, merged into each part's own: your
+   * classes after the part's (yours win a conflict), your styles over its styles, your attributes
+   * and handlers added, your ref attached. Every attribute the item sets on a part is locked and
+   * keeps the item's value, and no part takes a role or the markers by which the menu reads an
+   * item's row (the text typeahead matches, the check and icon columns its labels line up by), so
+   * a part changes neither the menu's keyboard navigation nor its columns. A part takes no
+   * `children` (the item draws their content); the item element itself takes the item's own props,
+   * the check glyph is `checkmark` and the icon `icon`. No part carries a handler of the item: an
+   * event on a part reaches the item and its menu as one on the label does, after your handler,
+   * and `preventDefault()` in yours skips their handling of it there too. A click you prevent
+   * checks nothing (and leaves its menu open), while the item's `onClick` is still called, as for
+   * a prevented click on the label. Fluent UI's MenuItemRadio gives these parts slots of their own
+   * (`content`, `secondaryContent` for the shortcut).
+   */
+  slotProps?: {
+    /**
+     * The `<span>` of the label (`children`), which fills the row (stable classes
+     * `wave-menu-item__content` and `wave-menu-item-radio__content`). Locked: no role, and the
+     * menu's markers (typeahead reads a label that is no string through this element).
+     */
+    content?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `shortcut`, rendered while `shortcut` is set (stable classes
+     * `wave-menu-item__shortcut` and `wave-menu-item-radio__shortcut`). Locked: `dir` (`auto`, so
+     * the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no role,
+     * and the menu's markers.
+     */
+    shortcut?: SlotPart<'span'>;
+  };
 }
 
 /** Properties for the MenuItemSwitch sub-component. */
-export interface MenuItemSwitchProps extends MenuItemProps, MenuItemSelectableProps {}
+export interface MenuItemSwitchProps
+  extends Omit<MenuItemProps, 'slotProps'>, MenuItemSelectableProps {
+  /**
+   * Props for the elements the item draws in its row, by part, merged into each part's own: your
+   * classes after the part's (yours win a conflict), your styles over its styles, your attributes
+   * and handlers added, your ref attached. Every attribute the item sets on a part is locked and
+   * keeps the item's value, and no part takes a role or the markers by which the menu reads an
+   * item's row (the text typeahead matches, the check and icon columns its labels line up by), so
+   * a part changes neither the menu's keyboard navigation nor its columns. A part takes no
+   * `children` (the item draws their content); the item element itself takes the item's own props,
+   * and the icon is `icon`. No part carries a handler of the item: an event on a part reaches the
+   * item and its menu as one on the label does, after your handler, and `preventDefault()` in
+   * yours skips their handling of it there too. A click you prevent leaves the switch on or off as
+   * it was (and its menu open), while the item's `onClick` is still called, as for a prevented
+   * click on the label. Fluent UI's MenuItemSwitch gives these parts slots of their own (`content`,
+   * `secondaryContent` for the shortcut, `switchIndicator` for the switch).
+   */
+  slotProps?: {
+    /**
+     * The `<span>` of the label (`children`), which fills the row (stable classes
+     * `wave-menu-item__content` and `wave-menu-item-switch__content`). Locked: no role, and the
+     * menu's markers (typeahead reads a label that is no string through this element).
+     */
+    content?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `shortcut`, rendered while `shortcut` is set (stable classes
+     * `wave-menu-item__shortcut` and `wave-menu-item-switch__shortcut`). Locked: `dir` (`auto`, so
+     * the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no role,
+     * and the menu's markers.
+     */
+    shortcut?: SlotPart<'span'>;
+    /**
+     * The `<span>` of the switch at the row's end, its track, which follows the item's checked and
+     * disabled state through its classes (stable class `wave-menu-item-switch__track`). Locked:
+     * `aria-hidden` (the switch is a drawing: the item carries the state) and the switch's
+     * internal marker, no role, and the menu's markers.
+     */
+    track?: SlotPart<'span'>;
+    /**
+     * The `<span>` of the switch's thumb, inside the track, at the track's far end while the item
+     * is checked (stable class `wave-menu-item-switch__thumb`). Locked: no role, and the menu's
+     * markers.
+     */
+    thumb?: SlotPart<'span'>;
+  };
+}
 
 type SelectableKind = 'checkbox' | 'radio' | 'switch';
 
-interface SelectableMenuItemProps extends MenuItemCheckboxProps {
+interface SelectableMenuItemProps extends Omit<MenuItemCheckboxProps, 'slotProps'> {
+  /** The parts of every kind (the switch's two only drawn by a switch item). */
+  slotProps?: MenuItemSwitchProps['slotProps'];
   /** Which item: the role, the state change (toggle or select) and the indicator. */
   kind: SelectableKind;
   /** The part's name in diagnostics (`Menu.ItemCheckbox`). */
@@ -65,35 +175,49 @@ interface SelectableMenuItemProps extends MenuItemCheckboxProps {
 const switchOnTrack = 'forced-colors:border-[Highlight] forced-colors:bg-[Highlight]';
 const switchDisabledOnTrack = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
 
-function renderSwitchIndicator(checked: boolean, disabled: boolean): React.ReactElement {
+function renderSwitchIndicator(
+  checked: boolean,
+  disabled: boolean,
+  parts: MenuItemSwitchProps['slotProps'],
+): React.ReactElement {
+  const trackClasses = cn(
+    menuItemSwitchClassNames.track,
+    'relative inline-flex h-[16px] w-[32px] shrink-0 items-center rounded-full border transition-colors duration-200 motion-reduce:transition-none',
+    checked
+      ? cn('border-primary bg-primary', disabled ? switchDisabledOnTrack : switchOnTrack)
+      : cn(
+          'border-stroke-accessible bg-transparent',
+          disabled ? forcedColors.disabled : forcedColors.control,
+        ),
+  );
+  const thumbClasses = cn(
+    menuItemSwitchClassNames.thumb,
+    'block h-[10px] w-[10px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
+    checked
+      ? 'translate-x-[18px] wave-rtl:-translate-x-[18px] bg-primary-foreground'
+      : 'translate-x-[2px] wave-rtl:-translate-x-[2px] bg-stroke-accessible',
+    disabled
+      ? 'forced-colors:bg-[GrayText]'
+      : checked
+        ? 'forced-colors:bg-[HighlightText]'
+        : 'forced-colors:bg-[ButtonText]',
+  );
+  // The parts are merged only when given: a menu renders many items.
   return (
     <span
       aria-hidden="true"
       data-menu-switch=""
-      className={cn(
-        menuItemSwitchClassNames.track,
-        'relative inline-flex h-[16px] w-[32px] shrink-0 items-center rounded-full border transition-colors duration-200 motion-reduce:transition-none',
-        checked
-          ? cn('border-primary bg-primary', disabled ? switchDisabledOnTrack : switchOnTrack)
-          : cn(
-              'border-stroke-accessible bg-transparent',
-              disabled ? forcedColors.disabled : forcedColors.control,
-            ),
-      )}
+      className={trackClasses}
+      {...(parts?.track &&
+        mergeSlotProps(parts.track, {
+          className: trackClasses,
+          locked: { ...MENU_PART_LOCKS, 'aria-hidden': 'true', 'data-menu-switch': '' },
+        }))}
     >
       <span
-        className={cn(
-          menuItemSwitchClassNames.thumb,
-          'block h-[10px] w-[10px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
-          checked
-            ? 'translate-x-[18px] wave-rtl:-translate-x-[18px] bg-primary-foreground'
-            : 'translate-x-[2px] wave-rtl:-translate-x-[2px] bg-stroke-accessible',
-          disabled
-            ? 'forced-colors:bg-[GrayText]'
-            : checked
-              ? 'forced-colors:bg-[HighlightText]'
-              : 'forced-colors:bg-[ButtonText]',
-        )}
+        className={thumbClasses}
+        {...(parts?.thumb &&
+          mergeSlotProps(parts.thumb, { className: thumbClasses, locked: MENU_PART_LOCKS }))}
       />
     </span>
   );
@@ -121,6 +245,7 @@ function SelectableMenuItem({
   children,
   className,
   ref,
+  slotProps,
   ...rest
 }: SelectableMenuItemProps) {
   const menu = useMenuContext(componentName);
@@ -195,7 +320,8 @@ function SelectableMenuItem({
         shortcut={shortcut}
         markLabel={!ownRovingText}
         partClassNames={partClassNames}
-        end={kind === 'switch' ? renderSwitchIndicator(checked, disabled) : undefined}
+        parts={slotProps}
+        end={kind === 'switch' ? renderSwitchIndicator(checked, disabled, slotProps) : undefined}
       />
     </div>
   );

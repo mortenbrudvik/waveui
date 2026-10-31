@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createPortal } from 'react-dom';
@@ -12,9 +12,13 @@ import {
   useMenuItemActivation,
   useMenuItemPlacementWarning,
 } from '../Menu.items';
-import type { MenuItemActivationOptions } from '../Menu.items';
+import type { MenuItemActivationOptions, MenuItemProps } from '../Menu.items';
 import { INERT_MENU_CONTEXT, MenuContext, useMenuListContext } from '../Menu.context';
-import { expectNoA11yViolations } from '../../../test-utils';
+import { Menu } from '../Menu';
+import { useMenuListContext as usePublicMenuListContext } from '../Menu.hooks';
+import type { MenuListContextValue } from '../Menu.hooks';
+import { menuItemClassNames } from '../../../lib/classNames';
+import { expectInertSlotProps, expectNoA11yViolations, openingTags } from '../../../test-utils';
 import { MenuListHarness, renderInMenuList } from './menuHarness';
 
 afterEach(() => {
@@ -726,5 +730,483 @@ describe('the menu list harness', () => {
       { submenuTrigger: true },
     );
     await expectNoA11yViolations();
+  });
+});
+
+describe('Menu.Item — slotProps', () => {
+  type ItemSlotProps = NonNullable<MenuItemProps['slotProps']>;
+  const EVERY_PART: ItemSlotProps = { content: {}, shortcut: {}, submenuIndicator: {} };
+  const part = (row: Element, className: string) =>
+    row.querySelector<HTMLElement>('.' + className) as HTMLElement;
+  const content = (row: Element) => part(row, menuItemClassNames.content);
+  const shortcut = (row: Element) => part(row, menuItemClassNames.shortcut);
+  const chevron = (row: Element) => part(row, menuItemClassNames.submenuIndicator);
+  /** The item whose name starts with `label` (a shortcut's text follows the label in the name). */
+  const named = (label: string) => screen.getByRole('menuitem', { name: new RegExp(`^${label}`) });
+
+  // Captured from 4a08890 (client and server agree): the merged props may put the class before the
+  // locked attributes.
+  const BASE_PINS = [
+    '<span class="wave-menu-item__content flex-1">',
+    '<span class="wave-menu-item__shortcut ms-4 text-caption-1 text-muted-foreground" dir="auto">',
+    '<svg aria-hidden="true" class="wave-menu-item__submenu-indicator ms-auto shrink-0 wave-rtl:-scale-x-100" data-wave-icon="chevron-right" fill="currentColor" focusable="false" height="16" viewBox="0 0 12 12" width="16" xmlns="http://www.w3.org/2000/svg">',
+    '<span class="wave-menu-item__content flex-1" data-menu-label="">',
+  ].join('\n');
+
+  function PinnedItems({ slotProps }: { slotProps?: ItemSlotProps }) {
+    return (
+      <MenuListHarness isStatic submenuTrigger>
+        <MenuItem icon={{ children: 'S' }} shortcut="Ctrl+S" slotProps={slotProps}>
+          Save
+        </MenuItem>
+        <MenuItem slotProps={slotProps}>
+          <b>Bold</b>
+        </MenuItem>
+      </MenuListHarness>
+    );
+  }
+
+  /** The parts of the two pinned items, in the order of {@link BASE_PINS}. */
+  const pinnedParts = (root: ParentNode) => {
+    const [save, bold] = Array.from(root.querySelectorAll('[role="menuitem"]'));
+    return [content(save), shortcut(save), chevron(save), content(bold)];
+  };
+
+  it('renders the parts of 4a08890 (attributes sorted), on the client and the server', () => {
+    render(<PinnedItems />);
+    expect(openingTags(...pinnedParts(document.body))).toBe(BASE_PINS);
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<PinnedItems slotProps={EVERY_PART} />);
+    expect(openingTags(...pinnedParts(template.content))).toBe(BASE_PINS);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: Array<Partial<MenuItemProps> & { submenuTrigger?: boolean }> = [
+      { icon: { children: 'S' }, shortcut: 'Ctrl+S', children: 'Save', submenuTrigger: true },
+      { children: <b>Bold</b>, shortcut: 'Ctrl+B' },
+      { children: <i>Slanted</i>, 'data-roving-text': 'Italic' } as Partial<MenuItemProps>,
+      { children: 'Delete', disabled: true, shortcut: 'Del' },
+      { 'aria-label': 'More options', submenuTrigger: true },
+    ];
+    for (const { submenuTrigger, ...props } of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <MenuListHarness submenuTrigger={submenuTrigger}>
+            <MenuItem {...props} slotProps={slotProps} />
+          </MenuListHarness>
+        ),
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its own classes', () => {
+    renderInMenuList(
+      <MenuItem
+        shortcut="Ctrl+S"
+        slotProps={{
+          content: { className: 'my-content', style: { opacity: 0.5 }, 'data-part': 'content' },
+          shortcut: { className: 'my-shortcut', style: { opacity: 0.25 }, 'data-part': 'shortcut' },
+          submenuIndicator: {
+            className: 'my-chevron',
+            style: { opacity: 0.75 },
+            'data-part': 'chevron',
+          },
+        }}
+      >
+        Save
+      </MenuItem>,
+      { submenuTrigger: true },
+    );
+    const row = named('Save');
+    for (const [element, stable, own, mine, data, opacity] of [
+      [content(row), menuItemClassNames.content, 'flex-1', 'my-content', 'content', '0.5'],
+      [shortcut(row), menuItemClassNames.shortcut, 'ms-4', 'my-shortcut', 'shortcut', '0.25'],
+      [
+        chevron(row),
+        menuItemClassNames.submenuIndicator,
+        'ms-auto',
+        'my-chevron',
+        'chevron',
+        '0.75',
+      ],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', data);
+      expect(element).toHaveStyle({ opacity });
+    }
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    renderInMenuList(
+      <MenuItem
+        shortcut="Ctrl+S"
+        slotProps={{
+          content: { className: 'flex-none' },
+          shortcut: { className: 'ms-2' },
+          submenuIndicator: { className: 'ms-1' },
+        }}
+      >
+        Save
+      </MenuItem>,
+      { submenuTrigger: true },
+    );
+    const row = named('Save');
+    expect(content(row)).toHaveClass('flex-none');
+    expect(content(row)).not.toHaveClass('flex-1');
+    expect(shortcut(row)).toHaveClass('ms-2');
+    expect(shortcut(row)).not.toHaveClass('ms-4');
+    expect(chevron(row)).toHaveClass('ms-1');
+    expect(chevron(row)).not.toHaveClass('ms-auto');
+  });
+
+  it('attaches your refs to the parts', () => {
+    const contentRef = React.createRef<HTMLSpanElement>();
+    const shortcutRef = React.createRef<HTMLSpanElement>();
+    const chevronRef = React.createRef<SVGSVGElement>();
+    renderInMenuList(
+      <MenuItem
+        shortcut="Ctrl+S"
+        slotProps={{
+          content: { ref: contentRef },
+          shortcut: { ref: shortcutRef },
+          submenuIndicator: { ref: chevronRef },
+        }}
+      >
+        Save
+      </MenuItem>,
+      { submenuTrigger: true },
+    );
+    const row = named('Save');
+    expect(contentRef.current).toBe(content(row));
+    expect(shortcutRef.current).toBe(shortcut(row));
+    expect(chevronRef.current).toBe(chevron(row));
+  });
+
+  it('locks the shortcut’s direction and the chevron’s hidden state, and gives no part a role', () => {
+    renderInMenuList(
+      <MenuItem
+        shortcut="Ctrl+,"
+        slotProps={{
+          content: { role: 'menuitem', title: 'Label' },
+          shortcut: { dir: 'ltr', role: 'note', title: 'Shortcut' },
+          submenuIndicator: {
+            'aria-hidden': false,
+            focusable: 'true',
+            role: 'img',
+            'aria-label': 'More',
+          },
+        }}
+      >
+        Settings
+      </MenuItem>,
+      { submenuTrigger: true, dir: 'rtl' },
+    );
+    const row = named('Settings');
+    expect(content(row)).not.toHaveAttribute('role');
+    expect(content(row)).toHaveAttribute('title', 'Label');
+    expect(shortcut(row)).toHaveAttribute('dir', 'auto');
+    expect(shortcut(row)).not.toHaveAttribute('role');
+    expect(shortcut(row)).toHaveAttribute('title', 'Shortcut');
+    expect(chevron(row)).toHaveAttribute('aria-hidden', 'true');
+    expect(chevron(row)).toHaveAttribute('focusable', 'false');
+    expect(chevron(row)).not.toHaveAttribute('role');
+    expect(chevron(row)).toHaveAttribute('aria-label', 'More');
+    // The item's name is still its label alone, and the menu has one item.
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+  });
+
+  it('keeps a part with an item role out of the arrow keys', async () => {
+    const user = userEvent.setup();
+    renderInMenuList(
+      <>
+        <MenuItem slotProps={{ content: { role: 'menuitem' } }}>One</MenuItem>
+        <MenuItem>Two</MenuItem>
+      </>,
+    );
+    await user.tab();
+    expect(item('One')).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(item('Two')).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(item('One')).toHaveFocus();
+  });
+
+  it('keeps typeahead on the label: the shortcut cannot mark itself as the text typeahead reads', async () => {
+    const user = userEvent.setup();
+    renderInMenuList(
+      <>
+        <MenuItem shortcut="Ctrl+A" slotProps={{ shortcut: { 'data-menu-label': '' } }}>
+          Apple
+        </MenuItem>
+        <MenuItem>Cherry</MenuItem>
+      </>,
+    );
+    expect(shortcut(named('Apple'))).not.toHaveAttribute('data-menu-label');
+    await user.tab();
+    await user.keyboard('{End}');
+    expect(item('Cherry')).toHaveFocus();
+    await user.keyboard('a');
+    expect(named('Apple')).toHaveFocus();
+  });
+
+  it('keeps your data-roving-text: the label part cannot mark itself, or take children', async () => {
+    const user = userEvent.setup();
+    renderInMenuList(
+      <>
+        <MenuItem
+          data-roving-text="Paste"
+          slotProps={{ content: { 'data-menu-label': '', children: 'Pear' } as never }}
+        >
+          <b>Insert</b>
+        </MenuItem>
+        <MenuItem>Cherry</MenuItem>
+      </>,
+    );
+    // A part takes no children: the label keeps the item's own content.
+    expect(content(named('Insert'))).toHaveTextContent('Insert');
+    expect(content(named('Insert'))).not.toHaveAttribute('data-menu-label');
+    await user.tab();
+    await user.keyboard('{End}');
+    expect(item('Cherry')).toHaveFocus();
+    await user.keyboard('p');
+    expect(named('Insert')).toHaveFocus();
+  });
+
+  it('keeps the non-string label marked for typeahead whatever a part sets', async () => {
+    const user = userEvent.setup();
+    renderInMenuList(
+      <>
+        <MenuItem>Cherry</MenuItem>
+        <MenuItem slotProps={{ content: { 'data-menu-label': 'mine' } }}>
+          <b>Bold</b>
+        </MenuItem>
+      </>,
+    );
+    const bold = screen.getAllByRole('menuitem')[1];
+    expect(content(bold)).toHaveAttribute('data-menu-label', '');
+    await user.tab();
+    await user.keyboard('b');
+    expect(bold).toHaveFocus();
+  });
+
+  it('leaves the menu’s columns to its icons and checks: a part cannot add a column marker', async () => {
+    const values: MenuListContextValue[] = [];
+    function Probe() {
+      values.push(usePublicMenuListContext());
+      return null;
+    }
+    const markers = {
+      className: 'my-part',
+      style: { opacity: 0.5 },
+      'data-part': 'x',
+      'data-menu-icon': '',
+      'data-menu-checkmark': '',
+    } as const;
+    function Edit({ slotProps }: { slotProps?: ItemSlotProps }) {
+      return (
+        <Menu aria-label="Edit">
+          <Menu.Item shortcut="Ctrl+X" slotProps={slotProps}>
+            Cut
+          </Menu.Item>
+          <Menu>
+            <Menu.Trigger>
+              <Menu.Item slotProps={slotProps}>Share</Menu.Item>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Email</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+          <Probe />
+        </Menu>
+      );
+    }
+    const { rerender } = render(<Edit />);
+    await act(async () => {});
+    const without = values.at(-1);
+    rerender(
+      <Edit slotProps={{ content: markers, shortcut: markers, submenuIndicator: markers }} />,
+    );
+    await act(async () => {});
+    expect(document.querySelectorAll('.my-part')).toHaveLength(4);
+    expect(document.querySelector('[data-menu-icon], [data-menu-checkmark]')).toBeNull();
+    expect(values.at(-1)).toStrictEqual(without);
+    expect(without).toStrictEqual({ hasIcons: false, hasCheckmarks: false });
+  });
+
+  it('runs a part’s handler before the item’s: a prevented click calls onClick but does not activate', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onClick = vi.fn(() => void order.push('item'));
+    const { closeFromItem, rerender } = renderInMenuList(
+      <MenuItem
+        shortcut="Ctrl+S"
+        onClick={onClick}
+        slotProps={{
+          content: {
+            onClick: (event) => {
+              order.push('content');
+              event.preventDefault();
+            },
+          },
+        }}
+      >
+        Save
+      </MenuItem>,
+    );
+    await user.click(content(named('Save')));
+    expect(order).toEqual(['content', 'item']);
+    expect(closeFromItem).not.toHaveBeenCalled();
+    rerender(
+      <MenuItem
+        shortcut="Ctrl+S"
+        onClick={onClick}
+        slotProps={{ shortcut: { onClick: () => void order.push('shortcut') } }}
+      >
+        Save
+      </MenuItem>,
+    );
+    await user.click(shortcut(named('Save')));
+    expect(order).toEqual(['content', 'item', 'shortcut', 'item']);
+    expect(closeFromItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens no submenu on a click the chevron’s handler prevents', () => {
+    const onChevronClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    function Share({ prevent }: { prevent: boolean }) {
+      return (
+        <Menu aria-label="File">
+          <Menu>
+            <Menu.Trigger>
+              <Menu.Item
+                slotProps={{ submenuIndicator: { onClick: prevent ? onChevronClick : () => {} } }}
+              >
+                Share
+              </Menu.Item>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Email</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        </Menu>
+      );
+    }
+    const { rerender } = render(<Share prevent />);
+    fireEvent.click(chevron(item('Share')));
+    expect(onChevronClick).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole('menu')).toHaveLength(1);
+    rerender(<Share prevent={false} />);
+    fireEvent.click(chevron(item('Share')));
+    expect(screen.getAllByRole('menu')).toHaveLength(2);
+    expect(item('Share')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('calls your part handlers once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onContent = vi.fn();
+    const onShortcut = vi.fn();
+    const onChevron = vi.fn();
+    renderInMenuList(
+      <MenuItem
+        shortcut="Ctrl+S"
+        slotProps={{
+          content: { onClick: onContent },
+          shortcut: { onClick: onShortcut },
+          submenuIndicator: { onClick: onChevron },
+        }}
+      >
+        Save
+      </MenuItem>,
+      { submenuTrigger: true, renderOptions: { wrapper: React.StrictMode } },
+    );
+    const row = named('Save');
+    await user.click(content(row));
+    await user.click(shortcut(row));
+    await user.click(chevron(row));
+    expect(onContent).toHaveBeenCalledTimes(1);
+    expect(onShortcut).toHaveBeenCalledTimes(1);
+    expect(onChevron).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the parts the item does not draw: no shortcut, no submenu', () => {
+    renderInMenuList(
+      <MenuItem
+        slotProps={{
+          shortcut: { className: 'my-shortcut' },
+          submenuIndicator: { className: 'my-chevron' },
+        }}
+      >
+        Plain
+      </MenuItem>,
+    );
+    expect(document.querySelector('.' + menuItemClassNames.shortcut)).toBeNull();
+    expect(document.querySelector('.' + menuItemClassNames.submenuIndicator)).toBeNull();
+    expect(document.querySelector('.my-shortcut, .my-chevron')).toBeNull();
+  });
+
+  it('keeps the item element its own: slotProps never reaches it', () => {
+    renderInMenuList(
+      <MenuItem slotProps={{ root: { role: 'button', className: 'my-root' } } as never}>
+        Save
+      </MenuItem>,
+    );
+    const row = named('Save');
+    expect(row).not.toHaveAttribute('slotprops');
+    expect(row).not.toHaveClass('my-root');
+    expect(document.querySelector('.my-root, [role="button"]')).toBeNull();
+  });
+
+  it('mirrors the chevron with your class in RTL', () => {
+    renderInMenuList(
+      <MenuItem slotProps={{ submenuIndicator: { className: 'my-chevron' } }}>
+        Open recent
+      </MenuItem>,
+      { submenuTrigger: true, dir: 'rtl' },
+    );
+    const row = item('Open recent');
+    expect(row.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+    expect(chevron(row)).toHaveClass('wave-rtl:-scale-x-100', 'my-chevron');
+    expect(row.lastElementChild).toBe(chevron(row));
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    renderInMenuList(
+      <>
+        <MenuItem
+          shortcut="Ctrl+S"
+          slotProps={{
+            content: { className: 'my-content', title: 'Save the file' },
+            shortcut: { className: 'my-shortcut', 'aria-label': 'Control S' },
+            submenuIndicator: { className: 'my-chevron' },
+          }}
+        >
+          Save
+        </MenuItem>
+        <MenuItem slotProps={{ content: { id: 'label-2' } }}>Close</MenuItem>
+      </>,
+      { submenuTrigger: true },
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<
+      'content' | 'shortcut' | 'submenuIndicator'
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['content']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['shortcut']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['submenuIndicator']>['ref']>().toEqualTypeOf<
+      React.Ref<SVGSVGElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the item draws them
+    void (<MenuItem slotProps={{ content: { children: 'Label' } }}>Save</MenuItem>);
+    // @ts-expect-error -- the item element takes the item's own props, never a part's
+    void (<MenuItem slotProps={{ root: {} }}>Save</MenuItem>);
   });
 });

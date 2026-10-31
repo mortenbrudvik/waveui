@@ -370,6 +370,41 @@ Order A, B, C, D1 to D7, E. **Cut line:** if the schedule forces one, D5 to D7 s
     | the four roots together | 133,688/42,623 | 135,484/43,317 | +1,796/+694 | |
 
     Against 0.17.1, Dialog-only is +1,500/+597 (70,850/23,786) and `WaveProvider` with `Dialog` +1,495/+596 (73,403/24,778), within the interim allowance of +4,096/+1,536. Button, MessageBar, Tree, DataGrid and Table are byte-identical (unminified bundles compared), as are TeachingPopover, InfoButton, Tooltip, Nav, Hamburger and Menu. InfoLabel's minified size is unchanged; its unminified bundle differs only in the names the bundler gives some functions (InfoLabel already holds `lib/slotProps`, which has one export more). `dist/styles.css` and `dist/preflight.css` are byte-identical.
+- **Task 15b, `slotProps` for D4, second part: the menu item kinds (Menu.Item, Menu.ItemCheckbox, Menu.ItemRadio, Menu.ItemSwitch and Menu.ItemLink).** The Task 12 conventions and the Task 13 to 15a lessons apply. 13 keys moved to `SLOT_PROPS_KEYS`, each element as the checklist says (no classification change).
+  - **Owners:** each item kind declares its own constant's keys: Menu.Item `content`, `shortcut` and `submenuIndicator`; Menu.ItemCheckbox and Menu.ItemRadio `content` and `shortcut`; Menu.ItemSwitch `content`, `shortcut`, `track` and `thumb`; Menu.ItemLink `content` and `shortcut`, in `MenuItemLinkOwnProps` (the polymorphic rule). The three checkable kinds' props now extend `Omit<MenuItemProps, 'slotProps'>` and declare their own `slotProps`, as AlphaSlider omits ColorSlider's: no kind declares a part it does not draw (only Menu.Item reads the submenu trigger context and draws the chevron; only Menu.ItemSwitch draws the switch). `SlotPropsOwners` names the five props types.
+  - **The shared row (mechanism):** `MenuItemRow` (module-only, `Menu.items.tsx`) takes an internal `parts` prop (`content`, `shortcut`) next to its `partClassNames`; each kind passes its `slotProps` as it is, and the row merges the two parts on the label and shortcut spans, written once for all five kinds. Menu.Item merges `submenuIndicator` on the chevron (now drawn by a module function, `renderSubmenuIndicator`, the same element), and Menu.ItemSwitch `track` and `thumb` on the switch drawing (`renderSwitchIndicator` takes the parts).
+  - **Per-item cost:** every part is merged only when given (`{...(part && mergeSlotProps(part, own))}` after the plain attributes), so an item without `slotProps` allocates no merge and no lock object, and no hook was added; the class strings are computed exactly where 0.17.1 computed them (the shortcut's only while there is a shortcut). No item kind is memoised, so the parts need no stable identity and the JSDoc asks for none.
+  - **Locks.** `MENU_PART_LOCKS` (a module-only export of `Menu.shared.ts`, which every item module already imports; in `MODULE_ONLY_NAMES`) locks four keys unset on every part:
+    - `role`: the list's roving hook and its pointer focus find items by role (`MENU_ITEM_SELECTOR`), so a part with an item's role became a second item of the list;
+    - `data-menu-label`: typeahead copies the text of every marked element onto the item it sits in, so a marked shortcut or switch replaced the item's typeahead text with the shortcut's, or with nothing;
+    - `data-menu-icon` and `data-menu-checkmark`: the list's column classes and `useMenuListContext` read them, so a part carrying one showed that column for the whole menu.
+    - Per part, after them: the label locks `data-menu-label` to its own value (the marker of a label that is no string stays, and a part cannot add one beside a `data-roving-text`); the shortcut locks `dir` (`auto`); the chevron `aria-hidden` and `focusable` (the icon spreads a part's other attributes after its own, so its size, view box, paint and marker stay replaceable, as the JSDoc says); the track `aria-hidden` and its marker `data-menu-switch`. The track and the thumb show the checked and disabled state through classes only, and no spread adds an attribute to any part, so there is no conditional attribute to lock (lesson I1). Each lock, the shared object included, has a test that fails without it (checked by mutation).
+  - **Handlers:** no part carries a handler of its item: activation is on the item element, typeahead and hover focus on the list. An event on a part bubbles to them after the part's handler, so `preventDefault()` in it acts as in the label content: a prevented click activates nothing (no check change, no navigation, no close, no submenu opens), while the item's own `onClick` is still called, since the activation calls it before it reads `defaultPrevented`. The JSDoc says so instead of the standard handler sentence (the Task 15a precedent). A part never receives keys, since the item holds focus.
+  - **Refs:** no part element holds a ref of its component, so the consumer's ref passes through the helper.
+  - **The item element is no part:** every kind destructures `slotProps`, so it never reaches the item's rest props; a `root` key is a type error and is ignored at run time (tested).
+  - **Tests:** one `describe('… — slotProps')` in each of `Menu.items.test.tsx` (Menu.Item), `Menu.selectable.test.tsx` (the three checkable kinds, `it.each` over them, and the switch's own parts) and `Menu.link.test.tsx` (Menu.ItemLink). They cover:
+    - pins of every part's opening tag against `4a08890`, captured once from its dist (client and server agree);
+    - `expectInertSlotProps` on several configurations of each kind;
+    - class, style, `data-*`, refs and a conflicting class replaced, on every part;
+    - the locks: the roles, the markers, `dir`, the chevron's and the track's hidden state;
+    - typeahead (a marked shortcut, a marked label beside `data-roving-text`, a label that is no string), the arrow keys past a part with an item's role, and the columns: `useMenuListContext` of a real static Menu is unchanged by parts that add a class, a style, `data-*` or a column marker;
+    - handler order and prevented clicks (no close, no check change, no navigation, no submenu), StrictMode once-only, absent parts (no shortcut, no submenu, a switch part on a checkbox or radio), RTL, axe and types.
+  - A throwaway, git-ignored comparison (`coverage/t15b`) renders 6 configurations with `slotProps` absent, `undefined`, `{}` and every part `{}`, server and client. They include static menus of every kind (icons, shortcuts, labels that are no string, `data-roving-text`, disabled, checked and unchecked items, router links, submenu triggers), RTL, an open popup, a popup and a submenu opened by click, a split group and a group. Compared with the base dist (attributes sorted, ids normalised), nothing differs.
+  - **Existing assertions edited:** none (import lines only). Menu.ItemLink is polymorphic, but no suite pins the key set of `MenuItemLinkOwnProps`, so ruling AE is not needed; `MenuItemCheckboxProps` still extends `MenuItemProps` (its parts are a subset), as an existing type test asserts.
+  - **Measured** (`measureImport`, before at `4a08890`, min/gzip B):
+
+    | Import | Before | After | Delta | Own code (over the import with `mergeSlotProps`) |
+    |---|---|---|---|---|
+    | Menu.Item | 9,430/3,886 | 11,600/4,736 | +2,170/+850 | +396/+97 |
+    | Menu.ItemCheckbox | 13,941/5,153 | 16,151/6,013 | +2,210/+860 | +426/+117 |
+    | Menu.ItemRadio | 13,914/5,152 | 16,124/6,013 | +2,210/+861 | +426/+117 |
+    | Menu.ItemSwitch | 13,687/5,114 | 15,897/5,973 | +2,210/+859 | +426/+115 |
+    | Menu.ItemLink | 8,779/3,552 | 10,819/4,371 | +2,040/+819 | +268/+76 |
+    | the five together | 16,645/5,789 | 19,032/6,697 | +2,387/+908 | +597/+158 |
+    | Menu | 87,558/29,473 | 89,345/30,091 | +1,787/+618 | +600/+157 |
+    | Breadcrumb (imports Menu) | 107,810/36,047 | 109,599/36,704 | +1,789/+657 | +602/+166 |
+
+    MenuButton, SplitButton, Overflow, Toolbar and Nav, which import no Menu module, are byte-identical, as is every budgeted import (Button, MessageBar, Tree, Dialog, `WaveProvider` with `Dialog`, DataGrid, Table; unminified bundles compared). `dist/styles.css` and `dist/preflight.css` are byte-identical.
 
 ## 12. Risks
 
