@@ -53,6 +53,15 @@ export const BUTTON_PART_LOCKS = {
 } as const;
 
 /**
+ * The focus handler of a roving cell: `focus` (the tab stop follows the focused cell) runs after
+ * the part's `onFocus`, whatever that does, since it only mirrors where focus is.
+ */
+const followFocus = (part: SlotPart<'button'> | undefined, focus: () => void) =>
+  part?.onFocus
+    ? composeEventHandlers(part.onFocus, focus, { checkDefaultPrevented: false })
+    : focus;
+
+/**
  * Internal: the consumer props of the day view's parts (the `slotProps` of the component that
  * renders the view, under the view's names).
  */
@@ -332,7 +341,6 @@ export const CalendarDayGrid = ({
                 'data-today': isToday ? '' : undefined,
                 'data-marked': isMarked ? '' : undefined,
                 'data-outside': isSameMonth(day, viewMonth) ? undefined : '',
-                onFocus: () => onDayFocus(day),
                 onClick: () => {
                   if (!unavailable) onPick(day);
                 },
@@ -354,12 +362,15 @@ export const CalendarDayGrid = ({
                     {...dayProps}
                     className={dayClassName}
                     // 42 per month: merged only when given. The day's state is locked also
-                    // while the day has none of it.
+                    // while the day has none of it, and an unavailable day gets no click of
+                    // yours.
                     {...(dayPart &&
                       mergeSlotProps(dayPart, {
                         className: dayClassName,
                         locked: { ...BUTTON_PART_LOCKS, ...dayProps },
+                        blockHandlers: unavailable ? ['onClick'] : undefined,
                       }))}
+                    onFocus={followFocus(dayPart, () => onDayFocus(day))}
                   >
                     {renderDay ? renderDay(day, number) : number}
                     {isMarked && (
@@ -554,7 +565,6 @@ export const CalendarPickerGrid = ({
                 'data-selected': cell.selected ? '' : undefined,
                 'data-today': cell.current ? '' : undefined,
                 'data-outside': cell.outside ? '' : undefined,
-                onFocus: () => onCellFocus(cell.date),
                 onClick: () => {
                   if (!cell.unavailable) onPick(cell.date);
                 },
@@ -573,12 +583,15 @@ export const CalendarPickerGrid = ({
                     {...cellProps}
                     className={cellClassName}
                     // Twelve per view: merged only when given. The cell's state is locked also
-                    // while the cell has none of it.
+                    // while the cell has none of it, and an unavailable cell gets no click of
+                    // yours.
                     {...(cellPart &&
                       mergeSlotProps(cellPart, {
                         className: cellClassName,
                         locked: { ...BUTTON_PART_LOCKS, ...cellProps },
+                        blockHandlers: cell.unavailable ? ['onClick'] : undefined,
                       }))}
+                    onFocus={followFocus(cellPart, () => onCellFocus(cell.date))}
                   >
                     {cell.text}
                   </button>

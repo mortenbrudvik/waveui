@@ -2468,7 +2468,6 @@ describe('Calendar — slotProps', () => {
         slotProps={{
           header: { onKeyDown: preventEscape },
           footer: { onKeyDown: preventEscape },
-          previousButton: { onClick: () => order.push('previous') },
           nextButton: { onClick: prevent },
           todayButton: { onClick: prevent },
           month: { onClick: prevent },
@@ -2482,10 +2481,6 @@ describe('Calendar — slotProps', () => {
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Next month' }));
-    expect(grid()).toHaveAccessibleName('June 2025');
-    // At the bound: yours runs, the disabled button moves nothing.
-    await user.click(screen.getByRole('button', { name: 'Previous month' }));
-    expect(order).toEqual(['previous']);
     expect(grid()).toHaveAccessibleName('June 2025');
     await user.click(screen.getByRole('button', { name: 'June 2025' }));
     expect(grid()).toHaveAccessibleName('2025');
@@ -2502,8 +2497,92 @@ describe('Calendar — slotProps', () => {
     expect(grid()).toHaveAccessibleName('2025');
     await user.click(screen.getByRole('button', { name: '2025' }));
     await user.click(within(grid()).getByRole('button', { name: '2026' }));
-    expect(order).toEqual(['previous', 'year']);
+    expect(order).toEqual(['year']);
     expect(grid()).toHaveAccessibleName(/^2020\s*–\s*2029$/);
+  });
+
+  it('does not call your onClick on a button disabled at a bound or an unavailable cell, and calls it otherwise', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    const named = {
+      onClick: (event: React.MouseEvent<HTMLButtonElement>) =>
+        onClick(event.currentTarget.getAttribute('aria-label') ?? event.currentTarget.textContent),
+    };
+    render(
+      <Calendar
+        {...FULL}
+        onValueChange={onValueChange}
+        slotProps={{
+          previousButton: named,
+          nextButton: named,
+          day: named,
+          month: named,
+          year: named,
+        }}
+      />,
+    );
+    // June 2025 starts the range (minDate June 3): the previous button is disabled, focusable.
+    const previous = screen.getByRole('button', { name: 'Previous month' });
+    expect(previous).toHaveAttribute('aria-disabled', 'true');
+    await user.click(previous);
+    await user.click(dayButton('Sunday, June 1, 2025'));
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onValueChange).not.toHaveBeenCalled();
+    await user.click(dayButton('Wednesday, June 18, 2025'));
+    await user.click(screen.getByRole('button', { name: 'Next month' }));
+    await user.click(screen.getByRole('button', { name: 'Previous month' }));
+    expect(onClick.mock.calls).toEqual([
+      ['Wednesday, June 18, 2025'],
+      ['Next month'],
+      ['Previous month'],
+    ]);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    // The month and year views: January 2025 and 2019 lie wholly before minDate.
+    onClick.mockClear();
+    await user.click(screen.getByRole('button', { name: 'June 2025' }));
+    await user.click(within(grid()).getByRole('button', { name: 'January 2025' }));
+    await user.click(screen.getByRole('button', { name: '2025' }));
+    await user.click(within(grid()).getByRole('button', { name: '2019' }));
+    expect(onClick).not.toHaveBeenCalled();
+    await user.click(within(grid()).getByRole('button', { name: '2026' }));
+    await user.click(within(grid()).getByRole('button', { name: 'July 2026' }));
+    expect(onClick.mock.calls).toEqual([['2026'], ['July 2026']]);
+    expect(grid()).toHaveAccessibleName('July 2026');
+  });
+
+  it('moves the tab stop to a focused cell after your onFocus, also when it prevents the default', async () => {
+    const user = userEvent.setup();
+    const onFocus = vi.fn((event: React.FocusEvent) => event.preventDefault());
+    render(
+      <Calendar
+        {...FULL}
+        slotProps={{ day: { onFocus }, month: { onFocus }, year: { onFocus } }}
+      />,
+    );
+    /** The cell buttons of the grid in the tab order. */
+    const cellTabStops = () =>
+      within(grid())
+        .getAllByRole('button')
+        .filter((button) => button.getAttribute('tabindex') === '0');
+    act(() => dayButton('Wednesday, June 18, 2025').focus());
+    expect(onFocus).toHaveBeenCalledTimes(1);
+    expect(tabStops()).toEqual([dayButton('Wednesday, June 18, 2025')]);
+    await user.keyboard('{ArrowRight}');
+    expect(focusedLabel()).toBe('Thursday, June 19, 2025');
+    expect(tabStops()).toEqual([dayButton('Thursday, June 19, 2025')]);
+    await user.click(screen.getByRole('button', { name: 'June 2025' }));
+    const september = within(grid()).getByRole('button', { name: 'September 2025' });
+    act(() => september.focus());
+    expect(cellTabStops()).toEqual([september]);
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toHaveAccessibleName('October 2025');
+    await user.click(screen.getByRole('button', { name: '2025' }));
+    const year = within(grid()).getByRole('button', { name: '2027' });
+    act(() => year.focus());
+    expect(cellTabStops()).toEqual([year]);
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toHaveAccessibleName('2028');
   });
 
   it('runs your heading button onClick before the view changes; preventDefault() skips it', async () => {

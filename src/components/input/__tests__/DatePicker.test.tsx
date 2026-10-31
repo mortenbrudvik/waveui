@@ -3049,6 +3049,33 @@ describe('DatePicker — slotProps', () => {
     expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
   });
 
+  it("moves the calendar's tab stop after your day onFocus, and calls no onClick of yours on a disabled button or an unavailable day", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onFocus = vi.fn((event: React.FocusEvent) => event.preventDefault());
+    render(
+      <DatePicker
+        {...FULL}
+        slotProps={{ previousMonthButton: { onClick }, day: { onClick, onFocus } }}
+      />,
+    );
+    await openCalendar(user);
+    // June 2025 starts the range (minDate June 3): the previous button is disabled, focusable.
+    await user.click(screen.getByRole('button', { name: 'Previous month' }));
+    await user.click(dayButton('Sunday, June 1, 2025'));
+    expect(onClick).not.toHaveBeenCalled();
+    expect(dialog()).toBeInTheDocument();
+    act(() => dayButton('Wednesday, June 18, 2025').focus());
+    expect(dayButton('Wednesday, June 18, 2025')).toHaveAttribute('tabindex', '0');
+    expect(dayButton('Sunday, June 15, 2025')).toHaveAttribute('tabindex', '-1');
+    await user.keyboard('{ArrowRight}');
+    expect(dayButton('Thursday, June 19, 2025')).toHaveFocus();
+    await user.click(dayButton('Thursday, June 19, 2025'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(textbox()).toHaveValue('06/19/2025');
+  });
+
   it('keeps the locked attributes of the input, the buttons, the surface and the heading', async () => {
     render(
       <>

@@ -322,7 +322,10 @@ export interface DatePickerProps extends Omit<
    * attributes it does not set. A part takes no `children`. The calendar's parts render while it
    * is open; a part of a repeated element (`weekday`, `weekNumber`, `day`, `markedDot`, `month`,
    * `year`) reaches each of them, and one ref holds the last one attached. A part of an element
-   * the DatePicker does not draw is ignored.
+   * the DatePicker does not draw is ignored. Two exceptions to the handler rule: the calendar's
+   * tab stop always follows a focused cell after your `onFocus`, and a button that is disabled
+   * but stays focusable (a navigation button at a bound, an unavailable day, month or year) does
+   * not call your `onClick`.
    */
   slotProps?: {
     /**
@@ -332,9 +335,11 @@ export interface DatePickerProps extends Omit<
      * `aria-details`), `disabled`, `readOnly`, `placeholder`, every text input prop routed to it
      * (`autoComplete`, `inputMode`, `tabIndex`, …), `name`, `form` and `required` (the value is
      * submitted by the DatePicker's hidden input), `hidden` and `aria-hidden` (a focusable
-     * control is never hidden). Your handlers run before the DatePicker's: `preventDefault()` in
-     * your `onChange` ignores the typed text, in your `onKeyDown` skips the picker's keys (Enter,
-     * Alt+ArrowDown), in your `onBlur` keeps the typed text uncommitted.
+     * control is never hidden). Your handlers run before the DatePicker's, and
+     * `preventDefault()` in yours skips the DatePicker's handling of the event, its own `on…`
+     * prop included (`onFocus`, `onBlur`, `onKeyDown`, `onKeyUp`): in your `onChange` it
+     * ignores the typed text, in your `onKeyDown` it skips the picker's keys (Enter,
+     * Alt+ArrowDown), in your `onBlur` it keeps the typed text uncommitted.
      */
     input?: SlotPart<'input'>;
     /**
@@ -384,7 +389,8 @@ export interface DatePickerProps extends Omit<
      * `aria-controls` (the grid), `tabIndex`, the disabled state (`disabled`, and the
      * `aria-disabled`, `data-disabled` and `data-disabled-focusable` it renders at a bound, where
      * it stays focusable), `hidden`, `inert` and `aria-hidden`. Your `onClick` runs before the
-     * move (`preventDefault()` skips it).
+     * move (`preventDefault()` skips it), and is not called while the button is disabled at a
+     * bound.
      */
     previousMonthButton?: SlotPart<'button'>;
     /**
@@ -440,8 +446,9 @@ export interface DatePickerProps extends Omit<
      * name (`aria-label`, from `dayLabel`), `aria-pressed`, `aria-current`, the unavailable state
      * (`disabled`, `aria-disabled`, `data-disabled`, `data-disabled-focusable`), `data-date`,
      * `data-selected`, `data-today`, `data-marked`, `data-outside`, `hidden`, `inert` and
-     * `aria-hidden`. Your `onClick` runs before the pick and your `onFocus` before the tab stop
-     * follows the focused day (`preventDefault()` skips each).
+     * `aria-hidden`. Your `onClick` runs before the pick (`preventDefault()` skips it), and is
+     * not called while the day is unavailable. Your `onFocus` runs before the tab stop follows
+     * the focused day, which it always does.
      */
     day?: SlotPart<'button'>;
     /**
@@ -454,13 +461,17 @@ export interface DatePickerProps extends Omit<
      * `day`'s attributes, those it renders: `type`, `tabIndex`, `aria-label` (the month and
      * year), `aria-pressed`, `aria-current`, the unavailable state, `data-selected`,
      * `data-today`, `data-outside`, `hidden`, `inert` and `aria-hidden`. Your `onClick` runs
-     * before the month view shows its days (`preventDefault()` skips it).
+     * before the month view shows its days (`preventDefault()` skips it), and is not called while
+     * the month is unavailable. Your `onFocus` runs before the tab stop follows the focused
+     * month, which it always does.
      */
     month?: SlotPart<'button'>;
     /**
      * Every year `<button>` of the year view (stable class `wave-date-picker__year`). Locked as
      * `month` (named by its text: `aria-label` stays unset). Your `onClick` runs before the year
-     * view shows its months (`preventDefault()` skips it).
+     * view shows its months (`preventDefault()` skips it), and is not called while the year is
+     * unavailable. Your `onFocus` runs before the tab stop follows the focused year, which it
+     * always does.
      */
     year?: SlotPart<'button'>;
     /**

@@ -261,7 +261,10 @@ export interface CalendarProps extends Omit<
    * through its own props); you add the attributes it does not set. A part takes no `children`.
    * A part of a repeated element (`weekday`, `weekNumber`, `day`, `markedDot`, `month`, `year`)
    * reaches each of them, and one ref holds the last one attached. A part of an element the
-   * shown view does not draw is ignored.
+   * shown view does not draw is ignored. Two exceptions to the handler rule: the tab stop always
+   * follows a focused cell after your `onFocus`, and a button that is disabled but stays
+   * focusable (a navigation button at a bound, an unavailable day, month or year) does not call
+   * your `onClick`.
    */
   slotProps?: {
     /**
@@ -278,7 +281,8 @@ export interface CalendarProps extends Omit<
      * `aria-controls` (the grid), `tabIndex`, the disabled state (`disabled`, and the
      * `aria-disabled`, `data-disabled` and `data-disabled-focusable` it renders at a bound, where
      * it stays focusable), `hidden`, `inert` and `aria-hidden`. Your `onClick` runs before the
-     * move (`preventDefault()` skips it).
+     * move (`preventDefault()` skips it), and is not called while the button is disabled at a
+     * bound.
      */
     previousButton?: SlotPart<'button'>;
     /**
@@ -333,8 +337,9 @@ export interface CalendarProps extends Omit<
      * name (`aria-label`, from `dayLabel`), `aria-pressed`, `aria-current`, the unavailable state
      * (`disabled`, `aria-disabled`, `data-disabled`, `data-disabled-focusable`), `data-date`,
      * `data-selected`, `data-today`, `data-marked`, `data-outside`, `hidden`, `inert` and
-     * `aria-hidden`. Your `onClick` runs before the pick and your `onFocus` before the tab stop
-     * follows the focused day (`preventDefault()` skips each).
+     * `aria-hidden`. Your `onClick` runs before the pick (`preventDefault()` skips it), and is
+     * not called while the day is unavailable. Your `onFocus` runs before the tab stop follows
+     * the focused day, which it always does.
      */
     day?: SlotPart<'button'>;
     /**
@@ -347,13 +352,17 @@ export interface CalendarProps extends Omit<
      * `day`'s attributes, those it renders: `type`, `tabIndex`, `aria-label` (the month and
      * year), `aria-pressed`, `aria-current`, the unavailable state, `data-selected`,
      * `data-today`, `data-outside`, `hidden`, `inert` and `aria-hidden`. Your `onClick` runs
-     * before the month view shows its days (`preventDefault()` skips it).
+     * before the month view shows its days (`preventDefault()` skips it), and is not called while
+     * the month is unavailable. Your `onFocus` runs before the tab stop follows the focused
+     * month, which it always does.
      */
     month?: SlotPart<'button'>;
     /**
      * Every year `<button>` of the year view (stable class `wave-calendar__year`). Locked as
      * `month` (named by its text: `aria-label` stays unset). Your `onClick` runs before the year
-     * view shows its months (`preventDefault()` skips it).
+     * view shows its months (`preventDefault()` skips it), and is not called while the year is
+     * unavailable. Your `onFocus` runs before the tab stop follows the focused year, which it
+     * always does.
      */
     year?: SlotPart<'button'>;
     /**
@@ -1010,6 +1019,8 @@ export const CalendarView = ({
               ...focusableDisabledProps(previousDisabled),
               onClick: preventIfDisabled(previousDisabled, () => navigate(-1)),
             },
+            // Disabled at a bound, where it stays focusable: no click of yours.
+            blockHandlers: previousDisabled ? ['onClick'] : undefined,
           })}
         >
           <ChevronLeftIcon className="wave-rtl:-scale-x-100" />
@@ -1061,6 +1072,7 @@ export const CalendarView = ({
               ...focusableDisabledProps(nextDisabled),
               onClick: preventIfDisabled(nextDisabled, () => navigate(1)),
             },
+            blockHandlers: nextDisabled ? ['onClick'] : undefined,
           })}
         >
           <ChevronRightIcon className="wave-rtl:-scale-x-100" />
