@@ -163,6 +163,11 @@ export const SLOT_PROPS_KEYS = {
   menuItemRadioClassNames: ['content', 'shortcut'],
   menuItemSwitchClassNames: ['content', 'shortcut', 'track', 'thumb'],
   menuItemLinkClassNames: ['content', 'shortcut'],
+  tooltipClassNames: ['content'],
+  teachingPopoverClassNames: ['beak', 'closeButton', 'dot', 'backButton', 'nextButton'],
+  teachingPopoverCarouselNavClassNames: ['button', 'indicator'],
+  infoButtonClassNames: ['info', 'beak'],
+  infoLabelClassNames: ['label', 'infoButton', 'info'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -445,8 +450,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   interactionTagPrimaryClassNames: ['primaryText', 'secondaryText'],
   interactionTagSecondaryClassNames: ['dismissIcon'],
   dividerClassNames: ['line', 'label'],
-  infoButtonClassNames: ['info', 'beak'],
-  infoLabelClassNames: ['label', 'infoButton', 'info'],
   listItemClassNames: ['content', 'action'],
   messageBarClassNames: ['body', 'dismissButton'],
   progressBarClassNames: ['bar', 'label'],
@@ -492,9 +495,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   ],
   stepperClassNames: ['list'],
   stepperStepClassNames: ['listItem', 'button', 'indicator', 'label', 'description', 'connector'],
-  tooltipClassNames: ['content'],
-  teachingPopoverClassNames: ['beak', 'closeButton', 'dot', 'backButton', 'nextButton'],
-  teachingPopoverCarouselNavClassNames: ['button', 'indicator'],
   tableHeaderCellClassNames: ['button'],
   tableSelectionCellClassNames: ['control'],
   tableCellLayoutClassNames: ['content', 'main'],

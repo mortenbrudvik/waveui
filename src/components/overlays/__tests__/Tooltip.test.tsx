@@ -9,10 +9,15 @@ import { Popover } from '../Popover';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
+import { tooltipClassNames } from '../../../lib/classNames';
 import { getTopmostLayer } from '../../../lib/layers';
 import {
+  expectInertSlotProps,
   expectNoA11yViolations,
+  mockAnimations,
+  normaliseIds,
   renderWithProviders,
+  sortAttributes,
   testComposedHandler,
   testSystemProps,
 } from '../../../test-utils';
@@ -1360,5 +1365,250 @@ describe('Tooltip', () => {
         ((open: boolean) => void) | undefined
       >();
     });
+  });
+});
+
+describe('Tooltip — slotProps', () => {
+  type TooltipSlotProps = NonNullable<TooltipProps['slotProps']>;
+  const EVERY_PART: TooltipSlotProps = { content: {} };
+  const content = () =>
+    document.querySelector<HTMLElement>('.' + tooltipClassNames.content) as HTMLElement;
+
+  /** A tooltip open from its first render, with `props`. */
+  function Open(props: Partial<TooltipProps>) {
+    return (
+      <Tooltip content="Saves the file" defaultOpen {...props}>
+        <button type="button">Save</button>
+      </Tooltip>
+    );
+  }
+
+  it('renders the open tooltip of a98c113 (attributes sorted)', async () => {
+    // Captured from a98c113: the merged props may put the class before the locked attributes.
+    render(<Open />);
+    await act(async () => {});
+    expect(normaliseIds(sortAttributes(document.body))).toBe(
+      [
+        '<div>',
+        '<span class="wave-tooltip inline-block">',
+        '<button aria-describedby="tooltip-_id0_" type="button">Save',
+        '</button>',
+        '<span hidden="" id="tooltip-_id0_" role="tooltip">Saves the file',
+        '</span>',
+        '</span>',
+        '</div>',
+        '<div class="wave-portal" data-layer="tooltip" data-wave-portal="" dir="ltr" style="position: relative; z-index: calc(var(--wave-z-tooltip, 1200) + 0);">',
+        '<span aria-hidden="true" class="wave-tooltip__content max-w-60 whitespace-normal break-words rounded px-3 py-1.5 text-caption-1 font-normal normal-case tracking-normal text-start shadow-8 before:absolute data-[side=top]:before:inset-x-0 data-[side=top]:before:top-full data-[side=top]:before:h-2 data-[side=bottom]:before:inset-x-0 data-[side=bottom]:before:bottom-full data-[side=bottom]:before:h-2 data-[side=left]:before:inset-y-0 data-[side=left]:before:left-full data-[side=left]:before:w-2 data-[side=right]:before:inset-y-0 data-[side=right]:before:right-full data-[side=right]:before:w-2 border border-inverted-border bg-inverted text-inverted-foreground transition-opacity duration-wave-faster ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0" data-align="center" data-presence="entered" data-side="top" data-state="open" data-wave-tooltip-surface="" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, -8px);">Saves the file',
+        '</span>',
+        '</div>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with the part empty', () => {
+    const cases: Array<Partial<TooltipProps>> = [
+      {},
+      { relationship: 'label', appearance: 'normal', side: 'bottom', align: 'start' },
+      { defaultOpen: false },
+      { motion: null, className: 'mine', id: 'own' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps((slotProps) => <Open {...props} slotProps={slotProps} />, EVERY_PART);
+    }
+  });
+
+  it('puts your className, style and data-* on the surface, after its own classes', () => {
+    render(
+      <Open
+        slotProps={{
+          content: { className: 'my-surface', style: { opacity: 0.5 }, 'data-part': 'content' },
+        }}
+      />,
+    );
+    expect(content().classList[0]).toBe(tooltipClassNames.content);
+    expect(content()).toHaveClass('max-w-60', 'bg-inverted', 'my-surface');
+    expect(content().classList[content().classList.length - 1]).toBe('my-surface');
+    expect(content()).toHaveAttribute('data-part', 'content');
+    expect(content()).toHaveStyle({ opacity: '0.5' });
+    // The wrapper takes none of it, and no `slotProps` attribute.
+    expect(screen.getByRole('button', { name: 'Save' }).parentElement).not.toHaveAttribute(
+      'data-part',
+    );
+    expect(document.querySelector('[slotprops]')).toBeNull();
+  });
+
+  it('lets your class replace a conflicting class of the surface', () => {
+    render(<Open slotProps={{ content: { className: 'px-4 shadow-16' } }} />);
+    expect(content()).toHaveClass('px-4', 'shadow-16');
+    expect(content()).not.toHaveClass('px-3');
+    expect(content()).not.toHaveClass('shadow-8');
+  });
+
+  it('locks the hidden state, the marker, the phase, the placement, the role, the id and the tab stop', () => {
+    render(
+      <Open
+        slotProps={{
+          content: {
+            'aria-hidden': false,
+            'data-wave-tooltip-surface': 'mine',
+            'data-state': 'closed',
+            'data-presence': 'exiting',
+            'data-side': 'left',
+            'data-align': 'end',
+            role: 'tooltip',
+            id: 'mine',
+            hidden: true,
+            inert: true,
+            tabIndex: 0,
+            title: 'Surface',
+          },
+        }}
+      />,
+    );
+    const el = content();
+    expect(el).toHaveAttribute('aria-hidden', 'true');
+    expect(el).toHaveAttribute('data-wave-tooltip-surface', '');
+    expect(el).toHaveAttribute('data-state', 'open');
+    expect(el).toHaveAttribute('data-presence', 'entered');
+    expect(el).toHaveAttribute('data-side', 'top');
+    expect(el).toHaveAttribute('data-align', 'center');
+    // Set by no state of the shown surface, so locked unset: the presence core adds `inert` and
+    // `hidden` only in some phases.
+    for (const name of ['role', 'id', 'hidden', 'inert', 'tabindex']) {
+      expect(el, name).not.toHaveAttribute(name);
+    }
+    expect(el).toHaveAttribute('title', 'Surface');
+    expect(screen.getAllByRole('tooltip', { hidden: true })).toHaveLength(1);
+  });
+
+  it('keeps the exiting phase over yours: closed and inert while the surface fades out', async () => {
+    const motion = mockAnimations({
+      animated: (el) => el.hasAttribute('data-wave-tooltip-surface'),
+    });
+    const part = { inert: false, 'data-state': 'open', 'data-presence': 'entered' } as const;
+    const { rerender } = render(
+      <Open open onOpenChange={() => {}} slotProps={{ content: part }} />,
+    );
+    await act(async () => {
+      await motion.finishAll();
+    });
+    rerender(<Open open={false} onOpenChange={() => {}} slotProps={{ content: part }} />);
+    expect(content()).toHaveAttribute('data-presence', 'exiting');
+    expect(content()).toHaveAttribute('data-state', 'closed');
+    expect(content()).toHaveAttribute('inert');
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(document.querySelector('.' + tooltipClassNames.content)).toBeNull();
+  });
+
+  it('keeps the position the positioning sets over your style', async () => {
+    render(
+      <Open
+        slotProps={{
+          content: {
+            style: { position: 'static', top: '5px', left: '6px', transform: 'none', opacity: 0.5 },
+          },
+        }}
+      />,
+    );
+    await waitFor(() => expect(content().style.transform).toBe('translate(8px, -8px)'));
+    expect(content().style.position).toBe('fixed');
+    expect(content().style.top).toBe('0px');
+    expect(content().style.left).toBe('0px');
+    expect(content()).toHaveStyle({ opacity: '0.5' });
+  });
+
+  it('attaches your ref to the surface', () => {
+    const ref = React.createRef<HTMLSpanElement>();
+    render(<Open slotProps={{ content: { ref } }} />);
+    expect(ref.current).toBe(content());
+  });
+
+  it('keeps positioning the surface while you pass a new inline ref on every render', async () => {
+    mockLayout({
+      target: { x: 400, y: 300, width: 80, height: 32 },
+      surface: { x: 0, y: 0, width: 120, height: 28 },
+    });
+    const elements: Array<HTMLSpanElement | null> = [];
+    const ui = () => (
+      <Open
+        data-testid="target"
+        slotProps={{ content: { ref: (element) => void elements.push(element) } }}
+      />
+    );
+    const { rerender } = render(ui());
+    rerender(ui());
+    rerender(ui());
+    expect(elements.at(-1)).toBe(content());
+    // x = 400 + 80 / 2 - 120 / 2 = 380, y = 300 - 28 - 8 = 264.
+    await waitFor(() => expect(content().style.transform).toBe('translate(380px, 264px)'));
+  });
+
+  it('runs your handlers as the content’s: a prevented mouseleave keeps the tooltip shown', async () => {
+    const user = setupTimers();
+    const onMouseLeave = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    const { rerender } = render(<Open slotProps={{ content: { onMouseLeave } }} />);
+    await user.hover(content());
+    await user.unhover(content());
+    expect(onMouseLeave).toHaveBeenCalledTimes(1);
+    advance(500);
+    expect(content()).not.toBeNull();
+    rerender(<Open slotProps={{ content: { onMouseLeave: () => {} } }} />);
+    await user.hover(content());
+    await user.unhover(content());
+    advance(500);
+    expect(document.querySelector('.' + tooltipClassNames.content)).toBeNull();
+  });
+
+  it('calls your part handler once per click in StrictMode', () => {
+    const onClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <Open slotProps={{ content: { onClick } }} />
+      </React.StrictMode>,
+    );
+    act(() => content().click());
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('places the surface with your class on the mirrored side in RTL', async () => {
+    mockLayout({
+      target: { x: 400, y: 300, width: 80, height: 32 },
+      surface: { x: 0, y: 0, width: 120, height: 28 },
+    });
+    renderWithProviders(
+      <Open side="end" data-testid="target" slotProps={{ content: { className: 'my-surface' } }} />,
+      { dir: 'rtl' },
+    );
+    await waitFor(() => expect(content()).toHaveAttribute('data-side', 'left'));
+    expect(content()).toHaveClass('my-surface');
+  });
+
+  it('ignores the part while the tooltip is not shown', () => {
+    render(<Open defaultOpen={false} slotProps={{ content: { className: 'my-surface' } }} />);
+    expect(document.querySelector('.' + tooltipClassNames.content)).toBeNull();
+    expect(document.querySelector('.my-surface')).toBeNull();
+    expect(screen.getByRole('tooltip', { hidden: true })).not.toHaveClass('my-surface');
+  });
+
+  it('has no accessibility violations with the part customised', async () => {
+    render(<Open slotProps={{ content: { className: 'my-surface', title: 'Surface' } }} />);
+    await expectNoA11yViolations();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof TooltipSlotProps>().toEqualTypeOf<'content'>();
+    expectTypeOf<NonNullable<TooltipSlotProps['content']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: `content` is the tooltip's text
+        <Tooltip content="Save" slotProps={{ content: { children: 'Other' } }}>
+          <button type="button">Save</button>
+        </Tooltip>
+      )
+    );
   });
 });

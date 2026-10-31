@@ -3,6 +3,7 @@ import { flattenChildren, isElementOfType } from '../../lib/children';
 import { teachingPopoverClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
 import { slotRendersContent } from '../../lib/slot';
+import type { SlotPart } from '../../lib/slotProps';
 import type {
   MotionSlot,
   PopupAlign,
@@ -195,6 +196,77 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    * (pass it to the Surface).
    */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the popover draws besides your content, by part, merged into each
+   * part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added (yours run first, and `preventDefault()` in yours
+   * skips the popover's handling of the event, its own handlers of the part included), your ref
+   * beside its ref. Every attribute the popover sets on a part is locked and keeps its value; you
+   * add the attributes it does not set. A part takes no `children`. The parts reach what the
+   * popover draws itself, in the `steps` form and in the parts form alike: the beak of the
+   * surface (its own, or a `TeachingPopover.Surface`), the Close button of
+   * `TeachingPopover.Header`, and the step dots and the Back and Next buttons of
+   * `TeachingPopover.Footer` and `TeachingPopover.CarouselFooter`. The buttons that replace Back
+   * and Next are `secondaryAction` and `primaryAction`, and `TeachingPopover.CarouselNav` takes
+   * its own `slotProps`. Kept next to a `TeachingPopover.Surface` too (the parts read it from
+   * the popover's context), so keep the object's identity across renders (a constant, or
+   * `useMemo`): a new object each render re-renders every part that reads it. Fluent UI's
+   * TeachingPopover parts take their own props instead.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` of the beak, the rotated square on the surface's edge that faces the target,
+     * rendered while the popover points at a `target` or its Trigger (stable class
+     * `wave-teaching-popover__beak`). The positioning places it, and your ref is attached beside
+     * the popover's. Locked: `aria-hidden` (it is a drawing), its marker
+     * `data-wave-teaching-popover-arrow`, `tabIndex` (unset) and the keys of its style that the
+     * positioning sets (`position`, `left`, `top` and the offset of the edge it sits on), which
+     * win over yours.
+     */
+    beak?: SlotPart<'div'>;
+    /**
+     * The Close `<button>` of `TeachingPopover.Header`, a Wave Button (stable class
+     * `wave-teaching-popover__close-button`). The header's `dismissButton` fills its content; a
+     * `<button>` or `Button` merged there gives its props first, so yours replace them, your
+     * classes come after its classes and your handlers run before its handlers. Your `onClick`
+     * runs before the dismissal (`preventDefault()` skips it) and is not called while a merged
+     * `disabledFocusable` Button keeps the button unavailable. Locked, at the values the two give
+     * together: `type`, `disabled`, `tabIndex`, `hidden`, `inert`, `aria-hidden`, the name
+     * (`aria-label`: `closeLabel`, unless the merged button names it), `aria-disabled`,
+     * `data-disabled` and `data-disabled-focusable`; your `aria-labelledby` ids are added.
+     */
+    closeButton?: SlotPart<'button'>;
+    /**
+     * Every step dot `<span>` of the footers' default indicator (stable class
+     * `wave-teaching-popover__dot`): `TeachingPopover.Footer`'s, and
+     * `TeachingPopover.CarouselFooter`'s without children. The dots sit in a row hidden from
+     * assistive technology. Locked: the marker `data-wave-teaching-popover-dot`, `aria-current`
+     * (`step` on the current step's dot, unset on the others) and, unset, `aria-hidden` and
+     * `tabIndex`.
+     */
+    dot?: SlotPart<'span'>;
+    /**
+     * The Back `<button>` of both footers, a Wave Button (stable class
+     * `wave-teaching-popover__back-button`), and the first step's button of
+     * `TeachingPopover.CarouselFooter`'s `initialStepText`, which dismisses the popover; not
+     * rendered while `secondaryAction` replaces it, nor for a single step without
+     * `initialStepText`. Your `onClick` runs before the step change or the dismissal
+     * (`preventDefault()` skips it) and is not called while Back is unavailable on the first step
+     * (focusable and `aria-disabled`). Locked: `type`, `aria-disabled` and `data-disabled` (set
+     * on the first step's Back, unset otherwise) and, unset, `disabled`, `tabIndex`, `hidden`,
+     * `inert`, `aria-hidden` and `data-disabled-focusable`.
+     */
+    backButton?: SlotPart<'button'>;
+    /**
+     * The Next `<button>` of both footers, Done on the last step (or the
+     * `TeachingPopover.CarouselFooter`'s `finalStepText`), a primary Wave Button (stable class
+     * `wave-teaching-popover__next-button`); not rendered while `primaryAction` replaces it.
+     * Your `onClick` runs before the step change or the finish (`preventDefault()` skips it).
+     * Locked: `type` and the primary look, and, unset, `disabled`, `tabIndex`, `hidden`,
+     * `inert`, `aria-hidden`, `aria-disabled`, `data-disabled` and `data-disabled-focusable`.
+     */
+    nextButton?: SlotPart<'button'>;
+  };
 }
 
 /** The action a step shows: its own when it renders anything, else the popover's. */
@@ -266,6 +338,7 @@ export const TeachingPopoverRoot = ({
   onKeyDown,
   motion,
   ref,
+  slotProps,
   ...rest
 }: TeachingPopoverProps) => {
   useTargetConflictWarning('TeachingPopover', targetProp, positioning?.target);
@@ -478,6 +551,7 @@ export const TeachingPopoverRoot = ({
       surfaceId,
       setCustomSurfaceId,
       registerSurface,
+      slotProps,
     }),
     [
       open,
@@ -512,6 +586,7 @@ export const TeachingPopoverRoot = ({
       triggerElementRef,
       surfaceId,
       registerSurface,
+      slotProps,
     ],
   );
 

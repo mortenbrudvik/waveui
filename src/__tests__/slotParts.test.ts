@@ -33,6 +33,8 @@ import type {
   DrawerProps,
   DropdownProps,
   FieldProps,
+  InfoButtonProps,
+  InfoLabelProps,
   InputProps,
   LabelProps,
   MenuItemCheckboxProps,
@@ -52,7 +54,10 @@ import type {
   SpinButtonProps,
   SwitchProps,
   TagPickerProps,
+  TeachingPopoverCarouselNavProps,
+  TeachingPopoverProps,
   TimePickerProps,
+  TooltipProps,
 } from '../index';
 import * as slotParts from '../lib/slotParts';
 import {
@@ -411,6 +416,13 @@ type SlotPropsOwners = {
   menuItemRadioClassNames: MenuItemRadioProps;
   menuItemSwitchClassNames: MenuItemSwitchProps;
   menuItemLinkClassNames: MenuItemLinkProps;
+  tooltipClassNames: TooltipProps;
+  // Every TeachingPopover key is declared on the root and read by its parts through its context.
+  teachingPopoverClassNames: TeachingPopoverProps;
+  teachingPopoverCarouselNavClassNames: TeachingPopoverCarouselNavProps;
+  infoButtonClassNames: InfoButtonProps;
+  // InfoLabel's `infoButton` and `info` are drawn by the InfoButton it renders.
+  infoLabelClassNames: InfoLabelProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

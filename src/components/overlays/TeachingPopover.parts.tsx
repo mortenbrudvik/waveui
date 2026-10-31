@@ -22,6 +22,7 @@ import {
   slotRendersContent,
   type Slot,
 } from '../../lib/slot';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { popupMotion } from '../../lib/motion';
 import { focusRing, forcedColors } from '../../lib/styles';
@@ -151,6 +152,32 @@ function resolveTarget(target: TeachingPopoverTarget | undefined): HTMLElement |
   if (!target || isVirtualTarget(target)) return null;
   return isRefObject(target) ? target.current : target;
 }
+
+/**
+ * What a button part locks before the button's own values: a button `type`, and unset the
+ * attributes that would change whether the button works or can be reached (a disabled state, a
+ * tab stop, the hidden state), so a part can set none of them. Shared by every button part.
+ */
+const BUTTON_PART_LOCKS = {
+  type: 'button',
+  disabled: undefined,
+  tabIndex: undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+  'aria-disabled': undefined,
+  'data-disabled': undefined,
+  'data-disabled-focusable': undefined,
+} as const;
+
+/** The locks of a footer button, a Wave Button: also its `disabledFocusable` prop, unset. */
+const STEP_BUTTON_LOCKS = { ...BUTTON_PART_LOCKS, disabledFocusable: undefined } as const;
+
+/** What a decorative indicator locks: hidden from assistive technology, never a tab stop. */
+const INDICATOR_LOCKS = { 'aria-hidden': 'true', tabIndex: undefined } as const;
+
+/** The handlers a part of an unavailable button does not get: its click (Back on step one). */
+const BLOCK_CLICK = ['onClick'] as const;
 
 const isButtonLikeElement = (action: unknown): action is React.ReactElement<ActionElementProps> =>
   isElementOfType<ActionElementProps>(action as React.ReactNode, Button, 'button', 'a');
@@ -331,6 +358,8 @@ export const TeachingSurface = ({
     setFloating,
     presenceRef,
   );
+  // The positioning measures the beak: a part's ref goes beside its ref, never in its place.
+  const beakRef = useMergedRefs<HTMLDivElement>(arrowRef, content.slotProps?.beak?.ref);
 
   // Point the positioning at the target after every commit. A ref is read once more when the whole
   // commit is done (the C-HOOKS deferred-update pattern): a target that comes after the popover in
@@ -424,6 +453,10 @@ export const TeachingSurface = ({
   // first TeachingPopover.Title that registers does, and no title means no `aria-labelledby`.
   const hasContent = slotRendersContent(children);
   const ownId = id || undefined;
+  const beak = mergeSlotProps(content.slotProps?.beak, {
+    className: teachingPopoverClassNames.beak,
+    locked: { 'aria-hidden': 'true', 'data-wave-teaching-popover-arrow': '', tabIndex: undefined },
+  });
 
   return (
     <Portal disabled={!hasTarget} layerId={layerId}>
@@ -459,11 +492,10 @@ export const TeachingSurface = ({
       >
         {hasTarget && (
           <PopoverBeak
-            ref={arrowRef}
+            {...beak}
+            ref={beakRef}
             side={placedSide}
-            style={arrowStyles}
-            data-wave-teaching-popover-arrow=""
-            className={teachingPopoverClassNames.beak}
+            style={lockPositionStyle(beak.style, arrowStyles)}
           />
         )}
 
@@ -641,7 +673,8 @@ export const TeachingPopoverHeader = ({
   ref,
   ...rest
 }: TeachingPopoverHeaderProps) => {
-  const { step, closeLabel, dismiss } = useTeachingPopoverContext('TeachingPopover.Header');
+  const { step, closeLabel, dismiss, slotProps } =
+    useTeachingPopoverContext('TeachingPopover.Header');
   if (!step) return null;
 
   const hasIcon = slotRendersContent(icon);
@@ -674,6 +707,7 @@ export const TeachingPopoverHeader = ({
         closeLabel={closeLabel}
         onClose={dismiss}
         className={cn(teachingPopoverClassNames.closeButton, 'absolute end-3 top-3')}
+        part={slotProps?.closeButton}
       />
     </div>
   );
@@ -882,6 +916,7 @@ function TeachingFooterContent({ context }: { context: TeachingPopoverContextVal
         count={context.count}
         index={context.index}
         className={vertical && 'justify-center'}
+        part={context.slotProps?.dot}
       />
 
       <div className={cn('flex gap-2', vertical ? 'flex-col items-stretch' : 'items-center')}>
@@ -896,33 +931,50 @@ TeachingFooterContent.displayName = 'TeachingFooterContent';
 /**
  * The decorative step dots (internal): one per step, the current one wider and marked
  * `aria-current`, all hidden from assistive technology (the heading carries the step position).
- * The default indicator of both footers.
+ * The default indicator of both footers. `part` (TeachingPopover's `slotProps.dot`) is merged
+ * into every dot, and only when given.
  */
 function TeachingStepDots({
   count,
   index,
   className,
+  part,
 }: {
   count: number;
   index: number;
   className?: string | false;
+  part?: SlotPart<'span'>;
 }) {
   return (
     <div aria-hidden="true" className={cn('flex items-center gap-1.5', className)}>
-      {Array.from({ length: count }, (_, i) => (
-        <span
-          key={i}
-          data-wave-teaching-popover-dot=""
-          aria-current={i === index ? 'step' : undefined}
-          className={cn(
-            teachingPopoverClassNames.dot,
-            'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
-            i === index
-              ? cn('w-4 bg-primary', forcedColors.fill)
-              : 'w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none',
-          )}
-        />
-      ))}
+      {Array.from({ length: count }, (_, i) => {
+        const current = i === index ? 'step' : undefined;
+        const dotClassName = cn(
+          teachingPopoverClassNames.dot,
+          'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
+          current
+            ? cn('w-4 bg-primary', forcedColors.fill)
+            : 'w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none',
+        );
+        return (
+          <span
+            key={i}
+            data-wave-teaching-popover-dot=""
+            aria-current={current}
+            className={dotClassName}
+            {...(part &&
+              mergeSlotProps(part, {
+                className: dotClassName,
+                locked: {
+                  'data-wave-teaching-popover-dot': '',
+                  'aria-current': current,
+                  'aria-hidden': undefined,
+                  tabIndex: undefined,
+                },
+              }))}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -960,8 +1012,11 @@ function renderStepButtons(
     backLabel,
     nextLabel,
     doneLabel,
+    slotProps,
   } = context;
 
+  // TeachingPopover's `backButton` and `nextButton` parts: the buttons' handlers are locked, so a
+  // part's handler runs first and its `preventDefault()` skips them.
   let secondary: React.ReactNode;
   if (secondaryAction) {
     secondary = renderAction(
@@ -972,16 +1027,28 @@ function renderStepButtons(
     );
   } else if (isFirst && initialStepText) {
     secondary = (
-      <Button className={teachingPopoverClassNames.backButton} onClick={dismiss}>
+      <Button
+        {...mergeSlotProps(slotProps?.backButton, {
+          className: teachingPopoverClassNames.backButton,
+          locked: { ...STEP_BUTTON_LOCKS, onClick: dismiss },
+        })}
+      >
         {initialStepText}
       </Button>
     );
   } else if (count > 1) {
     secondary = (
       <Button
-        {...focusableDisabledProps(isFirst)}
-        className={teachingPopoverClassNames.backButton}
-        onClick={preventIfDisabled(isFirst, goBack)}
+        {...mergeSlotProps(slotProps?.backButton, {
+          className: teachingPopoverClassNames.backButton,
+          locked: {
+            ...STEP_BUTTON_LOCKS,
+            ...focusableDisabledProps(isFirst),
+            onClick: preventIfDisabled(isFirst, goBack),
+          },
+          // Unavailable on the first step, Back calls no click handler, a part's included.
+          blockHandlers: isFirst ? BLOCK_CLICK : undefined,
+        })}
       >
         {backLabel}
       </Button>
@@ -991,7 +1058,12 @@ function renderStepButtons(
   const primary = primaryAction ? (
     renderAction(primaryAction, 'primary', teachingPopoverClassNames.primaryButton, goNext)
   ) : (
-    <Button appearance="primary" className={teachingPopoverClassNames.nextButton} onClick={goNext}>
+    <Button
+      {...mergeSlotProps(slotProps?.nextButton, {
+        className: teachingPopoverClassNames.nextButton,
+        locked: { ...STEP_BUTTON_LOCKS, appearance: 'primary', onClick: goNext },
+      })}
+    >
       {isLast ? finalStepText || doneLabel : nextLabel}
     </Button>
   );
@@ -1053,6 +1125,31 @@ export interface TeachingPopoverCarouselNavProps extends Omit<
 > {
   /** Ref to the element of the step buttons. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the nav draws for every step, by part, merged into each part's own:
+   * your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref beside its ref. Every attribute the nav sets on a
+   * part is locked and keeps its value; you add the attributes it does not set. A part takes no
+   * `children`, and reaches the element of every step. Fluent UI's `TeachingPopoverCarouselNav`
+   * takes a render function for its buttons instead.
+   */
+  slotProps?: {
+    /**
+     * Every step `<button>` (stable class `wave-teaching-popover-carousel-nav__button`). Your
+     * `onClick` runs before the step change (`preventDefault()` skips it). Locked: `type`,
+     * `aria-label` (`labels.navButton`), `aria-current` (`step` on the current step's button,
+     * unset on the others) and, unset, `disabled`, `tabIndex`, `hidden`, `inert`,
+     * `aria-hidden`, `aria-disabled`, `data-disabled` and `data-disabled-focusable`.
+     */
+    button?: SlotPart<'button'>;
+    /**
+     * The indicator `<span>` inside every step button, a drawing (stable class
+     * `wave-teaching-popover-carousel-nav__indicator`). A click on it is a click on its button,
+     * after your handler: `preventDefault()` in your `onClick` skips the step change. Locked:
+     * `aria-hidden` and, unset, `tabIndex`.
+     */
+    indicator?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -1069,6 +1166,7 @@ export interface TeachingPopoverCarouselNavProps extends Omit<
 export const TeachingPopoverCarouselNav = ({
   className,
   ref,
+  slotProps,
   ...rest
 }: TeachingPopoverCarouselNavProps) => {
   const { step, count, index, goToStep, navLabel, navButtonLabel } = useTeachingPopoverContext(
@@ -1076,6 +1174,11 @@ export const TeachingPopoverCarouselNav = ({
   );
   if (!step) return null;
 
+  const buttonClassName = cn(
+    teachingPopoverCarouselNavClassNames.button,
+    'group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0',
+    focusRing,
+  );
   return (
     <div
       ref={ref}
@@ -1085,29 +1188,48 @@ export const TeachingPopoverCarouselNav = ({
       {...rest}
     >
       {Array.from({ length: count }, (_, i) => {
-        const current = i === index;
+        const current = i === index ? 'step' : undefined;
+        const label = navButtonLabel(i, count);
+        const indicatorClassName = cn(
+          teachingPopoverCarouselNavClassNames.indicator,
+          'block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
+          current
+            ? cn('w-4 bg-primary', forcedColors.fill)
+            : 'w-1.5 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
+        );
+        // A click whose default a part prevented (the indicator's, inside the button) shows no
+        // other step.
+        const select = (event: React.MouseEvent) => {
+          if (!event.defaultPrevented) goToStep(i);
+        };
+        // The parts are merged only when given, so a step without them builds no lock object.
         return (
           <button
             key={i}
             type="button"
-            aria-label={navButtonLabel(i, count)}
-            aria-current={current ? 'step' : undefined}
-            onClick={() => goToStep(i)}
-            className={cn(
-              teachingPopoverCarouselNavClassNames.button,
-              'group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0',
-              focusRing,
-            )}
+            aria-label={label}
+            aria-current={current}
+            onClick={select}
+            className={buttonClassName}
+            {...(slotProps?.button &&
+              mergeSlotProps(slotProps.button, {
+                className: buttonClassName,
+                locked: {
+                  ...BUTTON_PART_LOCKS,
+                  'aria-label': label,
+                  'aria-current': current,
+                  onClick: select,
+                },
+              }))}
           >
             <span
               aria-hidden="true"
-              className={cn(
-                teachingPopoverCarouselNavClassNames.indicator,
-                'block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
-                current
-                  ? cn('w-4 bg-primary', forcedColors.fill)
-                  : 'w-1.5 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
-              )}
+              className={indicatorClassName}
+              {...(slotProps?.indicator &&
+                mergeSlotProps(slotProps.indicator, {
+                  className: indicatorClassName,
+                  locked: INDICATOR_LOCKS,
+                }))}
             />
           </button>
         );
@@ -1250,7 +1372,7 @@ export const TeachingPopoverCarouselFooter = ({
       {materialiseSlotContent(children)}
     </div>
   ) : (
-    <TeachingStepDots count={context.count} index={context.index} />
+    <TeachingStepDots count={context.count} index={context.index} part={context.slotProps?.dot} />
   );
 
   if (!centered) {

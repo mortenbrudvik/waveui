@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { reportMissingContext } from '../../lib/dev';
 import type { SlotObject } from '../../lib/slot';
+import type { SlotPart } from '../../lib/slotProps';
 import type { PopupAlign, PopupPositioning, PopupSide, VirtualElement } from '../../lib/types';
 
 /*
@@ -178,6 +179,20 @@ export interface TeachingPopoverContextValue {
    * the root then renders no surface of its own, and warns when more than one registers.
    */
   registerSurface: () => () => void;
+  /**
+   * The root's `slotProps` (documented there; the same keys, so this module imports nothing of
+   * the root): the parts drawn by the surface and the parts (the beak, the Close button, the step
+   * dots, Back and Next), in both forms.
+   */
+  slotProps:
+    | {
+        beak?: SlotPart<'div'>;
+        closeButton?: SlotPart<'button'>;
+        dot?: SlotPart<'span'>;
+        backButton?: SlotPart<'button'>;
+        nextButton?: SlotPart<'button'>;
+      }
+    | undefined;
 }
 
 export const TeachingPopoverContext = React.createContext<TeachingPopoverContextValue | null>(null);
@@ -219,6 +234,7 @@ const inertTeachingPopoverContext: TeachingPopoverContextValue = {
   surfaceId: '',
   setCustomSurfaceId: () => {},
   registerSurface: () => () => {},
+  slotProps: undefined,
 };
 
 /**
