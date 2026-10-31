@@ -537,7 +537,8 @@ export interface DataGridLegacySortProps {
   /** @deprecated Use `defaultSort`. */
   defaultSortDirection?: SortDirection;
   /**
-   * Called when a sortable header is activated, with the 0.4 arguments. Pass `items`, `sort` or
+   * Called when a sortable header is activated, with the 0.4 arguments (deprecated: removed in
+   * 1.0, with a development warning). Pass `items`, `sort` or
    * `defaultSort` to receive a `DataGridSort` object (and `details`) instead:
    * `defaultSort={null}` turns the object form on for an initially unsorted grid. A `sort` that is
    * still `undefined` (e.g. while data loads) does not: pass `sort={sort ?? null}`.
@@ -832,6 +833,19 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   const mixedSortApi = usesSortApi && deprecatedSortProps;
   /** A grid with `items` (and no `sort`/`defaultSort`) ignores the deprecated sort props. */
   const ignoredSortProps = !legacySort && !usesSortApi && deprecatedSortProps;
+
+  // C-DEV: the positional callback of the 0.4 sort API is removed in 1.0.
+  const positionalSortCallback = !objectCallbacks && onSortChange !== undefined;
+  React.useEffect(() => {
+    if (positionalSortCallback) {
+      warnDeprecated(
+        'DataGrid',
+        'onSortChange(columnId, direction)',
+        'onSortChange(sort, details?)',
+        'Pass `items`, `sort` or `defaultSort` to receive the sort object.',
+      );
+    }
+  }, [positionalSortCallback]);
 
   React.useEffect(() => {
     if (mixedSortApi) {

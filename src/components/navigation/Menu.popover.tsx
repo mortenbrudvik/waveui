@@ -21,7 +21,7 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { createHoverIntentGroup, type HoverIntentGroup } from '../../hooks/useHoverIntent';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { useMotionClasses } from '../../hooks/useMotion';
+import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
@@ -247,6 +247,7 @@ export const MenuPopover = ({
   const { isMounted, ref: presenceRef, presenceProps } = usePresence(open, { appear: true });
   // The motion classes (a `className` with presence variants keeps 0.14's own motion, D19).
   const motionClassName = useMotionClasses(motion, popupMotion, className);
+  useLegacyMotionWarning('Menu.Popover', motion, className);
 
   const {
     setReference,

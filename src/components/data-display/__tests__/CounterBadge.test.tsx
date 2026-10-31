@@ -1,5 +1,6 @@
 import type * as React from 'react';
-import { describe, it, expect, expectTypeOf } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CounterBadge } from '../CounterBadge';
 import type { CounterBadgeProps } from '../CounterBadge';
@@ -66,7 +67,21 @@ const DOT_FORCED_COLORS = [
   'forced-colors:bg-[CanvasText]',
 ];
 
+/** The development warning of `color="important"` (P13-03), which the color tables render on purpose. */
+const IMPORTANT_WARNING =
+  '[WaveUI] CounterBadge: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="brand" or color="informative" to keep a coloured badge.';
+
 describe('CounterBadge', () => {
+  // The tables below render `important` (0.x: the severe colors); nothing else may be logged.
+  let warn: MockInstance<typeof console.warn>;
+  beforeEach(() => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    expect(warn.mock.calls.every((call) => call[0] === IMPORTANT_WARNING)).toBe(true);
+    warn.mockRestore();
+  });
+
   testSystemProps(CounterBadge, {
     expectedTag: 'span',
     displayName: 'CounterBadge',

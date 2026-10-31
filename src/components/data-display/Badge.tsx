@@ -2,7 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { badgeClassNames } from '../../lib/classNames';
 import type { BadgeAppearance, BadgeColor, Size } from '../../lib/types';
-import { badgeColorClasses } from './Badge.colors';
+import { badgeColorClasses, warnImportantColor } from './Badge.colors';
 
 /** Properties for the Badge component. */
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -64,6 +64,11 @@ export const Badge = ({
   ...props
 }: BadgeProps) => {
   const c = badgeColorClasses[color];
+
+  // C-DEV: `important` changes meaning in 1.0 (not a removal, so not `warnDeprecated`'s wording).
+  React.useEffect(() => {
+    if (color === 'important') warnImportantColor('Badge');
+  }, [color]);
 
   const appearanceClasses =
     appearance === 'filled'

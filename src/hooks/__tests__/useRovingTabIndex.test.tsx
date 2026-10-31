@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, expectTypeOf } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi, expectTypeOf } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createPortal } from 'react-dom';
@@ -146,7 +147,22 @@ function focus(el: HTMLElement) {
   act(() => el.focus());
 }
 
+/** The warning of the 0.4 call shape `useRovingTabIndex(containerRef, options)` (P13-03). */
+const POSITIONAL_WARNING =
+  '[WaveUI] useRovingTabIndex: `useRovingTabIndex(containerRef, options)` is deprecated and will be removed in 1.0. Use `useRovingTabIndex(options)` instead. Attach the returned `containerProps` to the container.';
+
 describe('useRovingTabIndex', () => {
+  // Many cases here run the 0.4 call shape (the legacy harnesses): nothing but its warning may be
+  // logged, and a case with other messages asserts them on its own spy.
+  let positionalWarn: MockInstance<typeof console.warn>;
+  beforeEach(() => {
+    positionalWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    expect(positionalWarn.mock.calls.every((call) => call[0] === POSITIONAL_WARNING)).toBe(true);
+    positionalWarn.mockRestore();
+  });
+
   describe('legacy call shape (container ref + items)', () => {
     it('sets tabIndex 0 on active item and -1 on others', () => {
       render(<TestGroup activeValue="b" items={['a', 'b', 'c']} />);

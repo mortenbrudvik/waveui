@@ -1,3 +1,4 @@
+import { warnOnce } from '../../lib/dev';
 import type { BadgeColor } from '../../lib/types';
 
 /** Theme-token classes of one Badge color. */
@@ -83,3 +84,17 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
     dotBorder: 'border-border',
   },
 };
+
+/**
+ * The development warning for `color="important"`, whose meaning changes in 1.0 (neutral, high
+ * emphasis). It is a change of meaning, not a removal, so it has its own message instead of
+ * `warnDeprecated`'s. Call it from an effect (C-DEV); it warns once per component.
+ *
+ * @param name - The component that was given the color.
+ */
+export function warnImportantColor(name: 'Badge' | 'CounterBadge'): void {
+  warnOnce(
+    `${name}:color:important`,
+    `${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="brand" or color="informative" to keep a coloured badge.`,
+  );
+}

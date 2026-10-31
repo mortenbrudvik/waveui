@@ -16,7 +16,7 @@ import type { BackdropAppearance, ModalType, MotionSlot } from '../../lib/types'
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { useMotionClasses } from '../../hooks/useMotion';
+import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { Portal } from '../portal/Portal';
@@ -315,6 +315,7 @@ export const DrawerPanel = ({
   );
   const backdropMotionClassName = useMotionClasses(backdropMotion, drawerBackdropMotion[size]);
   const legacyMotion = usesLegacyMotion(motion, className);
+  useLegacyMotionWarning(componentName, motion, className);
 
   // The panel element of each type, held in state through its own callback ref. A change of `type`
   // remounts the panel (D105): the overlay's hooks see only the portaled element and the inline

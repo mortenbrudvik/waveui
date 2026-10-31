@@ -2,7 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { badgeClassNames, counterBadgeClassNames } from '../../lib/classNames';
 import type { BadgeColor } from '../../lib/types';
-import { badgeColorClasses } from './Badge.colors';
+import { badgeColorClasses, warnImportantColor } from './Badge.colors';
 
 /** Properties for the CounterBadge component. */
 export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -77,6 +77,13 @@ export const CounterBadge = ({
   ref,
   ...props
 }: CounterBadgeProps) => {
+  const rendersBadge = dot || (count >= 0 && (count !== 0 || showZero));
+
+  // C-DEV: `important` changes meaning in 1.0; only a badge that draws is affected.
+  React.useEffect(() => {
+    if (color === 'important' && rendersBadge) warnImportantColor('CounterBadge');
+  }, [color, rendersBadge]);
+
   if (!dot && (count < 0 || (count === 0 && !showZero))) return null;
 
   // Before 0.6 `color` was the span's HTML attribute (any string): a value outside the palette

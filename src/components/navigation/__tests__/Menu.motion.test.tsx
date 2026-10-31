@@ -35,6 +35,10 @@ afterEach(() => {
   }
 });
 
+/** The development warning of a `className` with presence variants (P13-03). */
+const LEGACY_WARNING =
+  '[WaveUI] Menu.Popover: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.';
+
 const item = (name: string) => screen.getByRole('menuitem', { name });
 const fileButton = () => screen.getByRole('button', { name: 'File' });
 /** A menu surface by its name, exiting ones included (an exiting surface is `inert`, not hidden). */
@@ -166,6 +170,9 @@ describe('a className with presence variants keeps 0.14’s own motion (D19)', (
 
   it('the ExitMotion story’s classes: no default motion, every consumer class kept', () => {
     render(<FileMenu root={{ defaultOpen: true }} popover={{ className: STORY_EXIT_MOTION }} />);
+    expect(warn.mock.calls).toEqual([[LEGACY_WARNING]]);
+    // The warning is asserted: the file's afterEach expects none further.
+    warn.mockClear();
     expect(menu('File')).toHaveClass(...legacy);
     expectNoWordOf(menu('File'), popupMotion, legacy);
   });

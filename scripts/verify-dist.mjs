@@ -1133,6 +1133,7 @@ export const MODULE_ONLY_NAMES = [
   'useFocusWithin',
   'useHeldFocus',
   'useItemsAndChildrenWarning',
+  'useLegacyMotionWarning',
   'useModalOpener',
   'useMotionClasses',
   'useMotionPreference',

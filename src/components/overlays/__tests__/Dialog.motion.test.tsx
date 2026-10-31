@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Dialog, type DialogContentProps, type DialogProps } from '../Dialog';
@@ -23,6 +23,17 @@ import {
  * and the titles keep their end padding (risk 8) while the surface exits. jsdom loads no CSS, so
  * the phases wait only where `mockAnimations` gives the surface a running animation.
  */
+
+/** The development warning of a `className` with presence variants (P13-03). */
+const LEGACY_WARNING =
+  '[WaveUI] Dialog.Content: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.';
+
+/** Spies on `console.warn`; the returned function asserts the warnings logged so far. */
+function spyOnWarnings() {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  onTestFinished(() => warn.mockRestore());
+  return (expected: readonly string[]) => expect(warn.mock.calls).toEqual(expected.map((m) => [m]));
+}
 
 const surface = () => document.querySelector<HTMLElement>('.' + dialogContentClassNames.root);
 const backdrop = () => document.querySelector<HTMLElement>('.' + dialogContentClassNames.backdrop);
@@ -147,25 +158,29 @@ describe('Dialog.Content motion slots (D5, D6)', () => {
     const legacy = ['p-8', 'data-[presence=exiting]:opacity-0'];
 
     it('leaves the default motion out and keeps both consumer classes', () => {
+      const expectWarnings = spyOnWarnings();
       render(
         <OrderDialog
           dialogProps={{ defaultOpen: true }}
           contentProps={{ className: legacy.join(' ') }}
         />,
       );
+      expectWarnings([LEGACY_WARNING]);
       expect(surface()).toHaveClass(...legacy);
       expectNoWordOf(surface(), dialogMotion, legacy);
       // The backdrop is not the className's element: it keeps its default.
       expect(backdrop()).toHaveClass(...motionClasses(dialogBackdropMotion));
     });
 
-    it('applies an explicit motion next to that className', () => {
+    it('applies an explicit motion next to that className, without the warning', () => {
+      const expectWarnings = spyOnWarnings();
       render(
         <OrderDialog
           dialogProps={{ defaultOpen: true }}
           contentProps={{ className: legacy.join(' '), motion: 'my-motion' }}
         />,
       );
+      expectWarnings([]);
       expect(surface()).toHaveClass('my-motion', ...legacy);
       expectNoWordOf(surface(), dialogMotion, legacy);
     });

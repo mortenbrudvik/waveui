@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Dialog } from '../Dialog';
@@ -22,6 +22,17 @@ import {
  * stacked drawer holds while it exits. jsdom loads no CSS, so the phases wait only where
  * `mockAnimations` gives the panel a running animation. The inline drawer's collapse is P10-DRW-I.
  */
+
+/** The development warning of a `className` with presence variants (P13-03). */
+const LEGACY_WARNING =
+  '[WaveUI] Drawer: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.';
+
+/** Spies on `console.warn`; the returned function asserts the warnings logged so far. */
+function spyOnWarnings() {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  onTestFinished(() => warn.mockRestore());
+  return (expected: readonly string[]) => expect(warn.mock.calls).toEqual(expected.map((m) => [m]));
+}
 
 const panel = () => document.querySelector<HTMLElement>('.' + drawerClassNames.root);
 const backdrop = () => document.querySelector<HTMLElement>('.' + drawerClassNames.backdrop);
@@ -159,15 +170,19 @@ describe('Drawer motion slots (D5, D6)', () => {
     const legacy = ['p-8', 'data-[presence=exiting]:opacity-0'];
 
     it('leaves the default motion out and keeps both consumer classes', () => {
+      const expectWarnings = spyOnWarnings();
       render(<FiltersDrawer defaultOpen className={legacy.join(' ')} />);
+      expectWarnings([LEGACY_WARNING]);
       expect(panel()).toHaveClass(...legacy);
       expectNoWordOf(panel(), PANEL_RECIPE, legacy);
       // The backdrop is not the className's element: it keeps its default.
       expect(backdrop()).toHaveClass(...motionClasses(drawerBackdropMotion.small));
     });
 
-    it('applies an explicit motion next to that className', () => {
+    it('applies an explicit motion next to that className, without the warning', () => {
+      const expectWarnings = spyOnWarnings();
       render(<FiltersDrawer defaultOpen className={legacy.join(' ')} motion="my-motion" />);
+      expectWarnings([]);
       expect(panel()).toHaveClass('my-motion', ...legacy);
       expectNoWordOf(panel(), PANEL_RECIPE, legacy);
     });

@@ -1,5 +1,14 @@
 import * as React from 'react';
-import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  expectTypeOf,
+  vi,
+  afterEach,
+  beforeEach,
+  onTestFinished,
+} from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { composeStories } from '@storybook/react';
@@ -173,6 +182,21 @@ const MIXED_SORT_COLUMN =
 
 const MIXED_SORT_DIRECTION =
   '[WaveUI] DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control). The column is kept internally and follows the clicked header, as in 0.4. Pass `sort` (`{ columnId, direction }`) to control both.';
+
+/** The warning of the 0.4 positional `onSortChange(columnId, direction)` (P13-03). */
+const POSITIONAL_SORT =
+  '[WaveUI] DataGrid: `onSortChange(columnId, direction)` is deprecated and will be removed in 1.0. Use `onSortChange(sort, details?)` instead. Pass `items`, `sort` or `defaultSort` to receive the sort object.';
+
+/**
+ * For a test that uses the 0.4 positional `onSortChange` only as its means: spies on `console.warn`
+ * and, when the test is over, asserts that the positional warning was the only message.
+ */
+function expectOnlyPositionalSortWarning() {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  onTestFinished(() => {
+    expect(warn.mock.calls).toEqual([[POSITIONAL_SORT]]);
+  });
+}
 
 /** The `details` argument of `onSortChange` (object form) and `onSelectedItemsChange`. */
 const DETAILS = { event: expect.any(Event) };
@@ -491,6 +515,7 @@ describe('DataGrid sorting', () => {
       [
         '[WaveUI] DataGrid.HeaderCell: `sortable` needs a `columnId`; the header is rendered as not sortable.',
       ],
+      [POSITIONAL_SORT],
     ]);
   });
 
@@ -511,6 +536,7 @@ describe('DataGrid sorting', () => {
   });
 
   it('calls onSortChange with the 0.4 arguments (columnId, direction) without sort/defaultSort', async () => {
+    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
     renderGrid({ onSortChange });
@@ -531,6 +557,7 @@ describe('DataGrid sorting', () => {
   });
 
   it('toggles the direction on repeated clicks and updates aria-sort', async () => {
+    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
     renderGrid({ onSortChange });
@@ -565,6 +592,7 @@ describe('DataGrid sorting', () => {
   });
 
   it('sorts with Enter and Space on the sort button', async () => {
+    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
     renderGrid({ onSortChange });
@@ -694,7 +722,11 @@ describe('DataGrid sorting', () => {
         ['name', 'descending'],
         ['role', 'ascending'],
       ]);
-      expect(warn.mock.calls).toEqual([[deprecated('sortColumn', 'sort')], [MIXED_SORT_COLUMN]]);
+      expect(warn.mock.calls).toEqual([
+        [deprecated('sortColumn', 'sort')],
+        [POSITIONAL_SORT],
+        [MIXED_SORT_COLUMN],
+      ]);
     });
 
     it('keeps the column internal when only sortDirection is controlled, and warns', async () => {
@@ -734,6 +766,7 @@ describe('DataGrid sorting', () => {
       ]);
       expect(warn.mock.calls).toEqual([
         [deprecated('sortDirection', 'sort')],
+        [POSITIONAL_SORT],
         [MIXED_SORT_DIRECTION],
       ]);
     });
@@ -746,6 +779,7 @@ describe('DataGrid sorting', () => {
       expect(warn.mock.calls).toEqual([
         [deprecated('sortDirection', 'sort')],
         [deprecated('defaultSortColumn', 'defaultSort')],
+        [POSITIONAL_SORT],
         [MIXED_SORT_DIRECTION],
       ]);
       expect(header('Role')).toHaveAttribute('aria-sort', 'descending');
@@ -775,7 +809,11 @@ describe('DataGrid sorting', () => {
       expect(onSortChange).toHaveBeenCalledTimes(1);
       expect(onSortChange).toHaveBeenCalledWith('name', 'descending');
       expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
-      expect(warn.mock.calls).toEqual([[deprecated('sortColumn', 'sort')], [MIXED_SORT_COLUMN]]);
+      expect(warn.mock.calls).toEqual([
+        [deprecated('sortColumn', 'sort')],
+        [POSITIONAL_SORT],
+        [MIXED_SORT_COLUMN],
+      ]);
     });
 
     it('does not warn about mixed control when both or neither are controlled', () => {
@@ -870,6 +908,7 @@ describe('DataGrid header from columns', () => {
   }
 
   it('renders the header from `columns` when no DataGrid.Header child is given', async () => {
+    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
     render(
@@ -971,7 +1010,7 @@ describe('DataGrid header from columns', () => {
         ['name', 'ascending'],
         ['name', 'descending'],
       ]);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_COLUMN_ID]]);
+      expect(warn.mock.calls).toEqual([[DEPRECATED_COLUMN_ID], [POSITIONAL_SORT]]);
     });
 
     it('loses to `columnId` when a column has both, and still warns', async () => {
@@ -2193,7 +2232,10 @@ describe('DataGrid callback details', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
     expect(onSortChange.mock.calls).toEqual([['name', 'ascending']]);
     expect(onSelectionChange.mock.calls).toEqual([[new Set(['1'])]]);
-    expect(warn.mock.calls).toEqual([[deprecated('onSelectionChange', 'onSelectedItemsChange')]]);
+    expect(warn.mock.calls).toEqual([
+      [deprecated('onSelectionChange', 'onSelectedItemsChange')],
+      [POSITIONAL_SORT],
+    ]);
   });
 });
 
@@ -4563,6 +4605,8 @@ describe('DataGrid handler composition', () => {
   SortableHeader.displayName = 'SortableHeader';
 
   describe('sortable header onClick', () => {
+    beforeEach(expectOnlyPositionalSortWarning);
+
     testComposedHandler(SortableHeader, {
       handler: 'onClick',
       act: async ({ user }) => {
@@ -4624,6 +4668,7 @@ describe('DataGrid handler composition', () => {
   });
 
   it('calls a consumer onClick on a sortable header next to sorting', async () => {
+    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onClick = vi.fn();
     const onSortChange = vi.fn();

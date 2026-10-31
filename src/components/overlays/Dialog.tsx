@@ -22,7 +22,7 @@ import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { useMotionClasses } from '../../hooks/useMotion';
+import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { Portal } from '../portal/Portal';
 import {
@@ -540,6 +540,7 @@ export const DialogContent = ({
   // The motion classes of the surface (a `className` with presence variants keeps 0.14's own
   // motion, D19) and of the backdrop.
   const surfaceMotion = useMotionClasses(motion, dialogMotion, className);
+  useLegacyMotionWarning('Dialog.Content', motion, className);
   const backdropMotionClassName = useMotionClasses(backdropMotion, dialogBackdropMotion);
   const keptMounted = !unmountOnClose;
   const generatedId = useId('wave-dialog');

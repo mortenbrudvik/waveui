@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { act, render, screen } from '@testing-library/react';
@@ -23,6 +23,17 @@ import {
  * with presence variants keeps 0.14's motion on the `<aside>`. jsdom loads no CSS, so the phases
  * wait only where `mockAnimations` gives an element a running animation.
  */
+
+/** The development warning of a `className` with presence variants (P13-03). */
+const LEGACY_WARNING =
+  '[WaveUI] Drawer: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.';
+
+/** Spies on `console.warn`; the returned function asserts the warnings logged so far. */
+function spyOnWarnings() {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  onTestFinished(() => warn.mockRestore());
+  return (expected: readonly string[]) => expect(warn.mock.calls).toEqual(expected.map((m) => [m]));
+}
 
 const collapse = () => document.querySelector<HTMLElement>('.' + drawerClassNames.collapse);
 const aside = () => document.querySelector<HTMLElement>('aside');
@@ -223,8 +234,10 @@ describe('inline Drawer with a className that holds presence variants (D19)', ()
 
   it('leaves the motion off the wrapper and keeps the classes on the <aside>, whose motion the exit waits for', async () => {
     const motion = mockAnimations({ animated: isAside });
+    const expectWarnings = spyOnWarnings();
     const user = userEvent.setup();
     render(<Page defaultOpen className={legacy.join(' ')} />);
+    expectWarnings([LEGACY_WARNING]);
     expectNoWordOf(collapse(), WRAPPER_RECIPE);
     expect(collapse()).toHaveClass(...motionClasses(inlineDrawerStructure.end));
     expect(aside()).toHaveClass(...legacy);
@@ -253,8 +266,10 @@ describe('inline Drawer with a className that holds presence variants (D19)', ()
     expect(collapse()).toBeNull();
   });
 
-  it('applies an explicit motion next to that className, on the wrapper', () => {
+  it('applies an explicit motion next to that className, on the wrapper, without the warning', () => {
+    const expectWarnings = spyOnWarnings();
     render(<Page defaultOpen className={legacy.join(' ')} motion="my-motion" />);
+    expectWarnings([]);
     expect(collapse()).toHaveClass('my-motion');
     expectNoWordOf(collapse(), WRAPPER_RECIPE);
     expect(aside()).toHaveClass(...legacy);
