@@ -9,19 +9,31 @@
  *
  * Owners: a type test (checked by `npm run typecheck`) requires `SlotPropsOwners` below to name
  * the same constants as `SLOT_PROPS_KEYS`, and each owner's `slotProps` to declare exactly the
- * keys listed for it, so a rollout task can neither move a key without declaring it nor declare
- * one without moving it. The registry and this gate supersede the part list of the Phase 3 spec's
- * Appendix A (R4).
+ * keys listed for it (and `root` exactly for the owners `SLOT_PROPS_ROOT_OWNERS` names), so a
+ * rollout task can neither move a key without declaring it nor declare one without moving it; a
+ * failure names the constant and the key. The registry and this gate supersede the part list of
+ * the Phase 3 spec's Appendix A (R4).
  */
 import { expectTypeOf } from 'vitest';
 import * as registry from '../lib/classNames';
 import * as entry from '../index';
+import type {
+  CheckboxProps,
+  FieldProps,
+  InputProps,
+  LabelProps,
+  RadioGroupItemProps,
+  RatingDisplayProps,
+  SpinButtonProps,
+  SwitchProps,
+} from '../index';
 import * as slotParts from '../lib/slotParts';
 import {
   NAMED_SLOT_PARTS,
   PENDING_SLOT_PARTS,
   SLOT_PART_EXCLUSIONS,
   SLOT_PROPS_KEYS,
+  type SLOT_PROPS_ROOT_OWNERS,
 } from '../lib/slotParts';
 
 type Registry = Readonly<Record<string, Readonly<Record<string, string>>>>;
@@ -325,59 +337,112 @@ describe('slotParts module', () => {
 
 /**
  * The props type of the component that declares each constant's `slotProps` keys, by registry
- * constant. Each rollout task adds its owners as it moves their keys to `SLOT_PROPS_KEYS`, with
- * the first entry replacing the empty record by an object type:
- * `{ switchClassNames: SwitchProps; checkboxClassNames: CheckboxProps }`. Where another component
- * draws a part (TeachingPopover's `closeButton` in TeachingPopover.Header, AvatarGroup's
- * `surface` in AvatarGroup.Popover), the owner is the component that declares the key.
+ * constant. Each rollout task adds its owners as it moves their keys to `SLOT_PROPS_KEYS`. Where
+ * another component draws a part (TeachingPopover's `closeButton` in TeachingPopover.Header,
+ * AvatarGroup's `surface` in AvatarGroup.Popover), the owner is the component that declares the
+ * key.
  */
-type SlotPropsOwners = Record<never, never>;
-
-/** The `slotProps` keys each owner's props type declares, by constant (modifiers dropped). */
-type OwnedSlotPropsKeys<Owners> = {
-  -readonly [C in keyof Owners]-?: Owners[C] extends { slotProps?: infer S }
-    ? keyof NonNullable<S>
-    : never;
+type SlotPropsOwners = {
+  inputClassNames: InputProps;
+  fieldClassNames: FieldProps;
+  labelClassNames: LabelProps;
+  checkboxClassNames: CheckboxProps;
+  radioGroupItemClassNames: RadioGroupItemProps;
+  switchClassNames: SwitchProps;
+  spinButtonClassNames: SpinButtonProps;
+  ratingDisplayClassNames: RatingDisplayProps;
 };
+
+/** The `slotProps` keys of a props type (all of them, `root` included). */
+type DeclaredSlotPropsKeys<Props> = Props extends { slotProps?: infer S }
+  ? keyof NonNullable<S> & string
+  : never;
+
+/** The keys a `SLOT_PROPS_KEYS`-shaped object lists for constant `C`. */
+type ListedSlotPropsKeys<Keys, C> = C extends keyof Keys
+  ? Keys[C] extends readonly (infer K)[]
+    ? K & string
+    : never
+  : never;
 
 /**
- * The keys a `SLOT_PROPS_KEYS`-shaped object lists, by constant, without the `readonly` that
- * `as const` adds (a homomorphic mapped type would copy it, and no owner map has it).
+ * Every disagreement between the owners and the listed keys, one message per constant and key
+ * (`never` when they agree). `Roots` are the constants whose owner declares `root` too (no part
+ * key), and must.
  */
-type ListedSlotPropsKeys<Keys> = {
-  -readonly [C in keyof Keys]-?: Keys[C] extends readonly (infer K)[] ? K : never;
-};
+type SlotPropsOwnerErrors<Owners, Keys, Roots> = {
+  [C in (keyof Owners | keyof Keys) & string]: C extends keyof Owners
+    ? | (C extends keyof Keys ? never : `${C}: an owner, but SLOT_PROPS_KEYS lists no key for it`)
+      | `${C}.${Exclude<DeclaredSlotPropsKeys<Owners[C]>, ListedSlotPropsKeys<Keys, C> | 'root'>}: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS`
+      | `${C}.${Exclude<ListedSlotPropsKeys<Keys, C>, DeclaredSlotPropsKeys<Owners[C]>>}: listed in SLOT_PROPS_KEYS, not declared by the owner's slotProps`
+      | (C extends Roots
+          ? 'root' extends DeclaredSlotPropsKeys<Owners[C]>
+            ? never
+            : `${C}.root: a root owner whose slotProps declares no root`
+          : 'root' extends DeclaredSlotPropsKeys<Owners[C]>
+            ? `${C}.root: declared, but only the owners of SLOT_PROPS_ROOT_OWNERS declare root`
+            : never)
+    : `${C}: listed in SLOT_PROPS_KEYS, but no owner in SlotPropsOwners`;
+}[(keyof Owners | keyof Keys) & string];
+
+/**
+ * `T` itself, which compiles only while `T` is `never`: a failure reads "Type '"<constant>.<key>:
+ * …"' does not satisfy the constraint 'never'", where `expectTypeOf` alone would print only
+ * "Expected 1 arguments, but got 0".
+ */
+type MustBeNever<T extends never> = T;
 
 describe('slotProps owners (type-level)', () => {
-  it('names the same constants in SLOT_PROPS_KEYS and SlotPropsOwners', () => {
-    expectTypeOf<keyof typeof SLOT_PROPS_KEYS>().toEqualTypeOf<keyof SlotPropsOwners>();
-  });
-
   it("gives each owner's slotProps exactly the keys SLOT_PROPS_KEYS lists for it", () => {
-    expectTypeOf<OwnedSlotPropsKeys<SlotPropsOwners>>().toEqualTypeOf<
-      ListedSlotPropsKeys<typeof SLOT_PROPS_KEYS>
-    >();
+    expectTypeOf<
+      MustBeNever<
+        SlotPropsOwnerErrors<
+          SlotPropsOwners,
+          typeof SLOT_PROPS_KEYS,
+          (typeof SLOT_PROPS_ROOT_OWNERS)[number]
+        >
+      >
+    >().toEqualTypeOf<never>();
   });
 
-  it('bites on fixtures: a declared key not listed, a listed key not declared, no owner', () => {
+  it('bites on fixtures, naming the constant and the key', () => {
     type Listed = { readonly switchClassNames: readonly ['track', 'thumb'] };
-    type Fewer = { readonly switchClassNames: readonly ['track'] };
     type SwitchOwner = { slotProps?: { track?: { className?: string }; thumb?: object } };
-    type NoSlotProps = { className?: string };
-    expectTypeOf<OwnedSlotPropsKeys<{ switchClassNames: SwitchOwner }>>().toEqualTypeOf<
-      ListedSlotPropsKeys<Listed>
+    type WithRoot = { slotProps?: { root?: object; track?: object; thumb?: object } };
+    expectTypeOf<
+      SlotPropsOwnerErrors<{ switchClassNames: SwitchOwner }, Listed, never>
+    >().toEqualTypeOf<never>();
+    expectTypeOf<
+      SlotPropsOwnerErrors<
+        { switchClassNames: SwitchOwner },
+        { readonly switchClassNames: readonly ['track'] },
+        never
+      >
+    >().toEqualTypeOf<"switchClassNames.thumb: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS">();
+    expectTypeOf<
+      SlotPropsOwnerErrors<{ switchClassNames: { className?: string } }, Listed, never>
+    >().toEqualTypeOf<
+      | "switchClassNames.track: listed in SLOT_PROPS_KEYS, not declared by the owner's slotProps"
+      | "switchClassNames.thumb: listed in SLOT_PROPS_KEYS, not declared by the owner's slotProps"
     >();
-    expectTypeOf<OwnedSlotPropsKeys<{ switchClassNames: SwitchOwner }>>()
-      // @ts-expect-error -- the owner declares `thumb`, which the list does not move
-      .toEqualTypeOf<ListedSlotPropsKeys<Fewer>>();
-    expectTypeOf<OwnedSlotPropsKeys<{ switchClassNames: NoSlotProps }>>()
-      // @ts-expect-error -- the list moves keys that the owner does not declare
-      .toEqualTypeOf<ListedSlotPropsKeys<Listed>>();
-    expectTypeOf<OwnedSlotPropsKeys<Record<never, never>>>()
-      // @ts-expect-error -- a listed constant without an owner
-      .toEqualTypeOf<ListedSlotPropsKeys<Listed>>();
-    expectTypeOf<keyof Listed>()
-      // @ts-expect-error -- the same, by its constant names
-      .toEqualTypeOf<keyof Record<never, never>>();
+    expectTypeOf<
+      SlotPropsOwnerErrors<Record<never, never>, Listed, never>
+    >().toEqualTypeOf<'switchClassNames: listed in SLOT_PROPS_KEYS, but no owner in SlotPropsOwners'>();
+    expectTypeOf<
+      SlotPropsOwnerErrors<{ switchClassNames: SwitchOwner }, Record<never, never>, never>
+    >().toEqualTypeOf<
+      | 'switchClassNames: an owner, but SLOT_PROPS_KEYS lists no key for it'
+      | "switchClassNames.track: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS"
+      | "switchClassNames.thumb: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS"
+    >();
+    expectTypeOf<
+      SlotPropsOwnerErrors<{ switchClassNames: WithRoot }, Listed, 'switchClassNames'>
+    >().toEqualTypeOf<never>();
+    expectTypeOf<
+      SlotPropsOwnerErrors<{ switchClassNames: WithRoot }, Listed, never>
+    >().toEqualTypeOf<'switchClassNames.root: declared, but only the owners of SLOT_PROPS_ROOT_OWNERS declare root'>();
+    expectTypeOf<
+      SlotPropsOwnerErrors<{ switchClassNames: SwitchOwner }, Listed, 'switchClassNames'>
+    >().toEqualTypeOf<'switchClassNames.root: a root owner whose slotProps declares no root'>();
   });
 });

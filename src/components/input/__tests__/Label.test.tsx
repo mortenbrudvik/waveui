@@ -1,9 +1,11 @@
 import * as React from 'react';
-import { describe, it, expect, expectTypeOf } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
+import { describe, it, expect, expectTypeOf, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { Label, type LabelProps } from '../Label';
+import { labelClassNames } from '../../../lib/classNames';
 import type { TextWeight } from '../../../lib/types';
-import { testSystemProps } from '../../../test-utils';
+import { expectInertSlotProps, sortAttributes, testSystemProps } from '../../../test-utils';
 
 describe('Label', () => {
   testSystemProps(Label, {
@@ -140,5 +142,108 @@ describe('Label', () => {
       expect(label).not.toHaveClass('font-semibold');
       expect(label).not.toHaveClass('font-bold');
     });
+  });
+});
+
+describe('Label — slotProps', () => {
+  type LabelSlotProps = NonNullable<LabelProps['slotProps']>;
+
+  it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
+    // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    expect(
+      sortAttributes(
+        renderToString(
+          <Label required htmlFor="name">
+            Name
+          </Label>,
+        ),
+      ),
+    ).toBe(
+      [
+        '<label class="wave-label text-foreground text-body-1" for="name">Name',
+        '<span aria-hidden="true" class="wave-label__required ms-1 text-error">*',
+        '</span>',
+        '</label>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: LabelProps[] = [
+      { required: true },
+      { required: <em>(required)</em>, disabled: true, size: 'large', weight: 'bold' },
+      { required: false, htmlFor: 'x' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <Label {...props} slotProps={slotProps}>
+            Name
+          </Label>
+        ),
+        { required: {} },
+      );
+    }
+  });
+
+  it('puts your className, style, data-*, handlers and ref on the required indicator', () => {
+    const ref = React.createRef<HTMLSpanElement>();
+    const onClick = vi.fn();
+    render(
+      <Label
+        required
+        slotProps={{
+          required: {
+            ref,
+            className: 'my-mark',
+            style: { color: 'red' },
+            'data-part': 'required',
+            title: 'Required',
+            onClick,
+          },
+        }}
+      >
+        Name
+      </Label>,
+    );
+    const mark = screen.getByText('*');
+    expect(ref.current).toBe(mark);
+    expect(mark).toHaveClass(labelClassNames.required, 'text-error', 'my-mark');
+    expect(mark.classList[0]).toBe(labelClassNames.required);
+    expect(mark.classList[mark.classList.length - 1]).toBe('my-mark');
+    expect(mark).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+    expect(mark).toHaveAttribute('data-part', 'required');
+    expect(mark).toHaveAttribute('title', 'Required');
+    fireEvent.click(mark);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the indicator out of the name: aria-hidden is locked', () => {
+    render(
+      <>
+        <Label htmlFor="name" required slotProps={{ required: { 'aria-hidden': false } }}>
+          Name
+        </Label>
+        <input id="name" />
+      </>,
+    );
+    expect(screen.getByText('*')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument();
+  });
+
+  it('ignores the part while no indicator is shown', () => {
+    const ref = React.createRef<HTMLSpanElement>();
+    render(<Label slotProps={{ required: { ref } }}>Name</Label>);
+    expect(screen.getByText('Name')).toBeInTheDocument();
+    expect(ref.current).toBeNull();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof LabelSlotProps>().toEqualTypeOf<'required'>();
+    expectTypeOf<NonNullable<LabelSlotProps['required']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- the part takes no children: `required` gives the indicator its content
+    void (<Label slotProps={{ required: { children: '!' } }}>Name</Label>);
   });
 });

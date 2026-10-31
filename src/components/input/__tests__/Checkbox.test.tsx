@@ -1,10 +1,14 @@
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Checkbox } from '../Checkbox';
 import type { CheckboxLabelPosition, CheckboxProps } from '../Checkbox';
+import { checkboxClassNames } from '../../../lib/classNames';
 import {
+  expectInertSlotProps,
+  sortAttributes,
   expectNoA11yViolations,
   renderWithProviders,
   testSystemProps,
@@ -1030,5 +1034,248 @@ describe('Checkbox — types', () => {
     expectTypeOf<CheckboxProps['onCheckedChange']>().toEqualTypeOf<
       ((checked: boolean) => void) | undefined
     >();
+  });
+});
+
+describe('Checkbox — slotProps', () => {
+  type CheckboxSlotProps = NonNullable<CheckboxProps['slotProps']>;
+  const EVERY_PART: CheckboxSlotProps = { indicator: {}, label: {} };
+
+  it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
+    // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    expect(sortAttributes(renderToString(<Checkbox label="Accept" indeterminate />))).toBe(
+      [
+        '<label class="wave-checkbox relative inline-flex items-start gap-2 select-none cursor-pointer" data-label-position="after" data-shape="square" data-size="medium">',
+        '<button aria-checked="mixed" aria-labelledby="checkbox-label-_R_0H1_" class="wave-checkbox__indicator flex shrink-0 items-center justify-center border p-0 transition-colors motion-reduce:transition-none h-[18px] w-[18px] rounded-xs mt-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" id="checkbox-_R_0_" role="checkbox" type="button">',
+        '<svg aria-hidden="true" class="forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-wave-icon="subtract" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+        '<path d="M2.5 6h7">',
+        '</path>',
+        '</svg>',
+        '</button>',
+        '<span class="wave-checkbox__label text-body-1 text-foreground" id="checkbox-label-_R_0H1_">Accept',
+        '</span>',
+        '</label>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: CheckboxProps[] = [
+      { label: 'Accept' },
+      { label: 'Accept', labelPosition: 'before', defaultChecked: true, size: 'large' },
+      { label: 'Accept', indeterminate: true, shape: 'circular', 'aria-describedby': 'd' },
+      { label: 'Accept', disabledFocusable: true },
+      { 'aria-label': 'Accept', disabled: true, id: 'own', tabIndex: 0 },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <Checkbox {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    render(
+      <Checkbox
+        label="Accept"
+        slotProps={{
+          indicator: { className: 'my-box', style: { width: 30 }, 'data-part': 'indicator' },
+          label: { className: 'my-label', style: { color: 'red' }, 'data-part': 'label' },
+        }}
+      />,
+    );
+    const indicator = screen.getByRole('checkbox', { name: 'Accept' });
+    const label = screen.getByText('Accept');
+    for (const [element, stable, own, mine, part] of [
+      [indicator, checkboxClassNames.indicator, 'border', 'my-box', 'indicator'],
+      [label, checkboxClassNames.label, 'text-body-1', 'my-label', 'label'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', part);
+    }
+    expect(indicator).toHaveStyle({ width: '30px' });
+    expect(label).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+  });
+
+  it('attaches your refs to the parts, beside controlRef', () => {
+    const indicator = React.createRef<HTMLButtonElement>();
+    const label = React.createRef<HTMLSpanElement>();
+    const controlRef = React.createRef<HTMLButtonElement>();
+    render(
+      <Checkbox
+        label="Accept"
+        controlRef={controlRef}
+        slotProps={{ indicator: { ref: indicator }, label: { ref: label } }}
+      />,
+    );
+    const control = screen.getByRole('checkbox', { name: 'Accept' });
+    expect(indicator.current).toBe(control);
+    expect(controlRef.current).toBe(control);
+    expect(label.current).toBe(screen.getByText('Accept'));
+  });
+
+  it("runs your indicator onClick first, then the Checkbox's onClick and the toggle", async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <Checkbox
+        label="Accept"
+        onClick={() => order.push('onClick')}
+        onCheckedChange={() => order.push('toggle')}
+        slotProps={{ indicator: { onClick: () => order.push('part') } }}
+      />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: 'Accept' }));
+    expect(order).toEqual(['part', 'onClick', 'toggle']);
+  });
+
+  it('skips the toggle when your indicator onClick prevents the default', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    render(
+      <Checkbox
+        label="Accept"
+        onCheckedChange={onCheckedChange}
+        slotProps={{ indicator: { onClick: (event) => event.preventDefault() } }}
+      />,
+    );
+    const indicator = screen.getByRole('checkbox', { name: 'Accept' });
+    await user.click(indicator);
+    expect(indicator).toHaveAttribute('aria-checked', 'false');
+    expect(onCheckedChange).not.toHaveBeenCalled();
+  });
+
+  it('calls your onClick and onCheckedChange once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onCheckedChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Checkbox
+          label="Accept"
+          onCheckedChange={onCheckedChange}
+          slotProps={{ indicator: { onClick } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('checkbox', { name: 'Accept' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onCheckedChange).toHaveBeenCalledTimes(1);
+    expect(onCheckedChange).toHaveBeenCalledWith(true);
+  });
+
+  it('does not call your indicator onClick under disabledFocusable, nor toggle', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onCheckedChange = vi.fn();
+    render(
+      <Checkbox
+        label="Accept"
+        disabledFocusable
+        onCheckedChange={onCheckedChange}
+        slotProps={{ indicator: { onClick } }}
+      />,
+    );
+    const indicator = screen.getByRole('checkbox', { name: 'Accept' });
+    await user.click(indicator);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onCheckedChange).not.toHaveBeenCalled();
+    expect(indicator).toHaveAttribute('data-disabled-focusable');
+  });
+
+  it('keeps the locked attributes of the indicator; your ids join its aria-labelledby and aria-describedby', () => {
+    render(
+      <>
+        <span id="extra-name">Extra</span>
+        <span id="extra-description">More</span>
+        <Checkbox
+          label="Accept"
+          indeterminate
+          slotProps={{
+            indicator: {
+              id: 'mine',
+              role: 'switch',
+              type: 'submit',
+              tabIndex: -1,
+              'aria-checked': false,
+              'aria-label': 'Other',
+              'aria-required': true,
+              'aria-labelledby': 'extra-name',
+              'aria-describedby': 'extra-description',
+            },
+          }}
+        />
+      </>,
+    );
+    const indicator = screen.getByRole('checkbox', { name: 'Accept Extra' });
+    const labelId = screen.getByText('Accept').id;
+    expect(indicator.id).toMatch(/^checkbox-/);
+    expect(indicator).toHaveAttribute('type', 'button');
+    expect(indicator).not.toHaveAttribute('tabindex');
+    expect(indicator).toHaveAttribute('aria-checked', 'mixed');
+    expect(indicator).not.toHaveAttribute('aria-label');
+    expect(indicator).not.toHaveAttribute('aria-required');
+    expect(indicator).toHaveAttribute('aria-labelledby', `${labelId} extra-name`);
+    expect(indicator).toHaveAttribute('aria-describedby', 'extra-description');
+  });
+
+  it('keeps the label id that names the control', () => {
+    render(<Checkbox label="Accept" slotProps={{ label: { id: 'mine' } }} />);
+    const label = screen.getByText('Accept');
+    expect(label.id).not.toBe('mine');
+    expect(screen.getByRole('checkbox', { name: 'Accept' })).toHaveAttribute(
+      'aria-labelledby',
+      label.id,
+    );
+  });
+
+  it('ignores the label part without a label', () => {
+    const label = React.createRef<HTMLSpanElement>();
+    render(<Checkbox aria-label="Accept" slotProps={{ label: { ref: label } }} />);
+    expect(screen.getByRole('checkbox', { name: 'Accept' })).toBeInTheDocument();
+    expect(label.current).toBeNull();
+  });
+
+  it('keeps its parts in place under dir="rtl" with yours added', () => {
+    renderWithProviders(
+      <Checkbox
+        label="Accept"
+        labelPosition="before"
+        slotProps={{ indicator: { className: 'my-box' } }}
+      />,
+      { dir: 'rtl' },
+    );
+    const indicator = screen.getByRole('checkbox', { name: 'Accept' });
+    expect(indicator).toHaveClass(checkboxClassNames.indicator, 'my-box');
+    expect(indicator.previousElementSibling).toBe(screen.getByText('Accept'));
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Checkbox
+        label="Accept"
+        defaultChecked
+        slotProps={{
+          indicator: { className: 'my-box', title: 'Terms' },
+          label: { className: 'my-label' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof CheckboxSlotProps>().toEqualTypeOf<'indicator' | 'label'>();
+    expectTypeOf<NonNullable<CheckboxSlotProps['indicator']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<CheckboxSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the Checkbox draws its glyph
+    void (<Checkbox slotProps={{ indicator: { children: '✓' } }} />);
   });
 });

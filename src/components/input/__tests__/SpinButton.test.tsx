@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,8 +9,16 @@ import {
   type SpinButtonProps,
   type SpinButtonAllowEmptyProps,
 } from '../SpinButton';
+import { spinButtonClassNames } from '../../../lib/classNames';
 import { inputInvalidWithin } from '../../../lib/styles';
-import { testFocusEvents, testSystemProps, renderWithProviders } from '../../../test-utils';
+import {
+  expectInertSlotProps,
+  sortAttributes,
+  expectNoA11yViolations,
+  testFocusEvents,
+  testSystemProps,
+  renderWithProviders,
+} from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
 const spin = (name = 'Quantity') => screen.getByRole('spinbutton', { name });
@@ -1624,5 +1633,320 @@ describe('press-and-hold (Phase 4 D18)', () => {
         '[-webkit-touch-callout:none]',
       );
     }
+  });
+});
+
+describe('SpinButton — slotProps', () => {
+  type SpinSlotProps = NonNullable<SpinButtonProps['slotProps']>;
+  const EVERY_PART: SpinSlotProps = { decrementButton: {}, input: {}, incrementButton: {} };
+
+  it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
+    // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    expect(
+      sortAttributes(
+        renderToString(<SpinButton aria-label="Quantity" min={0} max={5} defaultValue={5} />),
+      ),
+    ).toBe(
+      [
+        '<div class="wave-spin-button relative inline-flex items-center h-8 text-body-1 rounded border border-input border-b-stroke-accessible bg-background focus-within:border-b-2 focus-within:border-b-primary" data-appearance="outline" data-size="medium">',
+        '<button aria-label="Decrement" class="wave-spin-button__decrement-button flex h-full shrink-0 items-center justify-center bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed disabled:pointer-events-none touch-manipulation select-none [-webkit-touch-callout:none] w-8 border-e border-input disabled:opacity-50" tabindex="-1" type="button">',
+        '<svg aria-hidden="true" data-wave-icon="subtract" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+        '<path d="M2.5 6h7">',
+        '</path>',
+        '</svg>',
+        '</button>',
+        '<input aria-label="Quantity" aria-valuemax="5" aria-valuemin="0" aria-valuenow="5" autocomplete="off" class="wave-spin-button__input h-full min-w-0 flex-auto border-none bg-transparent text-center text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield] w-12 text-body-1" inputmode="numeric" role="spinbutton" type="text" value="5">',
+        '<button aria-label="Increment" class="wave-spin-button__increment-button flex h-full shrink-0 items-center justify-center bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed disabled:pointer-events-none touch-manipulation select-none [-webkit-touch-callout:none] w-8 border-s border-input disabled:opacity-50" disabled="" tabindex="-1" type="button">',
+        '<svg aria-hidden="true" data-wave-icon="add" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+        '<path d="M6 2.5v7M2.5 6h7">',
+        '</path>',
+        '</svg>',
+        '</button>',
+        '</div>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: SpinButtonProps[] = [
+      { 'aria-label': 'Quantity' },
+      { 'aria-label': 'Quantity', min: 0, max: 5, defaultValue: 5, size: 'small' },
+      { 'aria-label': 'Quantity', disabled: true, appearance: 'underline' },
+      { 'aria-label': 'Quantity', readOnly: true, placeholder: 'p', maxLength: 3, tabIndex: 0 },
+      { 'aria-label': 'Quantity', value: 3, displayValue: '$3', labels: { increment: 'Up' } },
+      { id: 'own', 'aria-label': 'Quantity', 'aria-describedby': 'd', 'aria-invalid': true },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <SpinButton {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        slotProps={{
+          decrementButton: { className: 'my-minus', style: { width: 30 }, 'data-part': 'minus' },
+          input: { className: 'my-input', style: { width: 40 }, 'data-part': 'input' },
+          incrementButton: { className: 'my-plus', style: { width: 50 }, 'data-part': 'plus' },
+        }}
+      />,
+    );
+    for (const [element, stable, own, mine, part, width] of [
+      [decrementButton(), spinButtonClassNames.decrementButton, 'p-0', 'my-minus', 'minus', 30],
+      [spin(), spinButtonClassNames.input, 'text-center', 'my-input', 'input', 40],
+      [incrementButton(), spinButtonClassNames.incrementButton, 'p-0', 'my-plus', 'plus', 50],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', part);
+      expect(element).toHaveStyle({ width: `${width}px` });
+    }
+  });
+
+  it('attaches your refs to the parts, beside controlRef', () => {
+    const minus = React.createRef<HTMLButtonElement>();
+    const input = React.createRef<HTMLInputElement>();
+    const plus = React.createRef<HTMLButtonElement>();
+    const controlRef = React.createRef<HTMLInputElement>();
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        controlRef={controlRef}
+        slotProps={{
+          decrementButton: { ref: minus },
+          input: { ref: input },
+          incrementButton: { ref: plus },
+        }}
+      />,
+    );
+    expect(minus.current).toBe(decrementButton());
+    expect(input.current).toBe(spin());
+    expect(controlRef.current).toBe(spin());
+    expect(plus.current).toBe(incrementButton());
+  });
+
+  it('runs your step button onClick first; preventDefault() skips the step', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        onValueChange={(value) => order.push(`value ${value}`)}
+        slotProps={{
+          incrementButton: { onClick: () => order.push('plus') },
+          decrementButton: { onClick: (event) => event.preventDefault() },
+        }}
+      />,
+    );
+    await user.click(incrementButton());
+    expect(order).toEqual(['plus', 'value 1']);
+    await user.click(decrementButton());
+    expect(spin()).toHaveValue('1');
+  });
+
+  it('calls your onClick and onValueChange once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <SpinButton
+          aria-label="Quantity"
+          onValueChange={onValueChange}
+          slotProps={{ incrementButton: { onClick } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(incrementButton());
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith(1);
+  });
+
+  describe('a hold', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+    const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+
+    it('still ends when your pointer handlers prevent the default', () => {
+      const prevent = (event: React.SyntheticEvent) => event.preventDefault();
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          slotProps={{
+            incrementButton: {
+              onPointerUp: prevent,
+              onPointerCancel: prevent,
+              onPointerLeave: prevent,
+            },
+          }}
+        />,
+      );
+      fireEvent.pointerDown(incrementButton(), {
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+      });
+      advance(310);
+      expect(spin()).toHaveValue('1');
+      fireEvent.pointerUp(incrementButton(), { button: 0, pointerId: 1, pointerType: 'mouse' });
+      advance(1000);
+      expect(spin()).toHaveValue('1');
+    });
+
+    it('does not start when your onPointerDown prevents the default', () => {
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          slotProps={{ incrementButton: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(incrementButton(), {
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+      });
+      advance(1000);
+      expect(spin()).toHaveValue('0');
+    });
+  });
+
+  it('runs your input key handler first; preventDefault() skips the step key', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        onKeyDown={() => order.push('onKeyDown')}
+        slotProps={{
+          input: {
+            onKeyDown: (event) => {
+              order.push('part');
+              if (event.key === 'ArrowDown') event.preventDefault();
+            },
+          },
+        }}
+      />,
+    );
+    act(() => spin().focus());
+    await user.keyboard('{ArrowUp}');
+    expect(order).toEqual(['part', 'onKeyDown']);
+    expect(spin()).toHaveValue('1');
+    await user.keyboard('{ArrowDown}');
+    expect(spin()).toHaveValue('1');
+  });
+
+  it('commits typed text on blur even when your onBlur prevents the default', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const onFocus = vi.fn();
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        onValueChange={onValueChange}
+        onFocus={onFocus}
+        slotProps={{
+          input: {
+            onFocus: (event) => event.preventDefault(),
+            onBlur: (event) => event.preventDefault(),
+          },
+        }}
+      />,
+    );
+    await user.click(spin());
+    expect(onFocus).toHaveBeenCalledTimes(1);
+    await user.clear(spin());
+    await user.type(spin(), '7');
+    await user.tab();
+    expect(onValueChange).toHaveBeenCalledWith(7);
+    expect(spin()).toHaveValue('7');
+  });
+
+  it('keeps the locked attributes of the parts, and the props you give the SpinButton win', () => {
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        defaultValue={2}
+        min={0}
+        placeholder="From the SpinButton"
+        labels={{ increment: 'More' }}
+        slotProps={{
+          decrementButton: { type: 'submit', tabIndex: 0, 'aria-label': 'Less', disabled: true },
+          input: {
+            role: 'textbox',
+            type: 'number',
+            id: 'mine',
+            value: '9',
+            'aria-valuenow': 9,
+            'aria-label': 'Other',
+            placeholder: 'From the part',
+          },
+          incrementButton: { 'aria-label': 'Plus' },
+        }}
+      />,
+    );
+    const minus = decrementButton();
+    expect(minus).toHaveAttribute('type', 'button');
+    expect(minus).toHaveAttribute('tabindex', '-1');
+    expect(minus).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument();
+    const input = spin();
+    expect(input).toHaveAttribute('type', 'text');
+    expect(input.id).not.toBe('mine');
+    expect(input).toHaveValue('2');
+    expect(input).toHaveAttribute('aria-valuenow', '2');
+    expect(input).toHaveAttribute('placeholder', 'From the SpinButton');
+  });
+
+  it('adds the attributes the SpinButton does not set', () => {
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        slotProps={{ input: { title: 'How many', name: 'shown' } }}
+      />,
+    );
+    expect(spin()).toHaveAttribute('title', 'How many');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        slotProps={{
+          decrementButton: { className: 'a' },
+          input: { className: 'b' },
+          incrementButton: { className: 'c' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof SpinSlotProps>().toEqualTypeOf<
+      'decrementButton' | 'input' | 'incrementButton'
+    >();
+    expectTypeOf<SpinButtonAllowEmptyProps['slotProps']>().toEqualTypeOf<
+      SpinButtonProps['slotProps']
+    >();
+    expectTypeOf<NonNullable<SpinSlotProps['decrementButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<SpinSlotProps['input']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the SpinButton draws its glyphs
+    void (<SpinButton aria-label="Quantity" slotProps={{ incrementButton: { children: '+' } }} />);
   });
 });

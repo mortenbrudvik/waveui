@@ -6,6 +6,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { CheckIcon, SubtractIcon } from '../../lib/icons';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { LabelPosition, Shape, Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -142,6 +143,33 @@ export interface CheckboxProps extends Omit<
   controlRef?: React.Ref<HTMLButtonElement>;
   /** Ref to the root `<label>` element. */
   ref?: React.Ref<HTMLLabelElement>;
+  /**
+   * Props for the elements the Checkbox draws inside its root, by part, merged into each part's
+   * own (Fluent UI's `indicator` and `label` slot props): your classes after the part's (yours
+   * win a conflict), your styles over its styles, your handlers before its handlers
+   * (`preventDefault()` skips the part's own), your ref beside its ref, and your ids added to
+   * its `aria-labelledby` and `aria-describedby`. Every attribute the Checkbox sets on a part is
+   * locked and keeps the Checkbox's value (set it through the Checkbox's own props); you add the
+   * attributes it does not set. A part takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The `role="checkbox"` `<button>` that draws the box, the focusable control (stable class
+     * `wave-checkbox__indicator`; `controlRef` reaches it as well). Locked: `id`, `type`,
+     * `role`, `aria-checked`, `disabled`, `tabIndex`, `autoFocus`, the attributes of
+     * `disabledFocusable` and the naming and Field attributes routed to it (`aria-label`,
+     * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `aria-disabled`).
+     * Your `onClick` runs before the Checkbox's `onClick` and its toggle (`preventDefault()`
+     * skips both) and is not called under `disabledFocusable`; your focus and key handlers run
+     * before the Checkbox's.
+     */
+    indicator?: SlotPart<'button'>;
+    /**
+     * The `<span>` around the `label` text, rendered only with a `label` (stable class
+     * `wave-checkbox__label`). Locked: `id`, which names the control.
+     */
+    label?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -201,6 +229,7 @@ export const Checkbox = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: CheckboxProps) => {
   if (onChange !== undefined) warnDeprecated('Checkbox', 'onChange', 'onCheckedChange');
@@ -250,7 +279,7 @@ export const Checkbox = ({
       : fieldProps['aria-labelledby'];
 
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const mergedControlRef = useMergedRefs(buttonRef, controlRef);
+  const mergedControlRef = useMergedRefs(buttonRef, controlRef, slotProps?.indicator?.ref);
   useFormReset(buttonRef, () => setChecked(defaultChecked), form);
 
   const on = checked || indeterminate;
@@ -264,11 +293,69 @@ export const Checkbox = ({
   const unavailable = disabled || disabledFocusable;
   // The glyph is the forced-colors leaf; the box stays on system colors (see `checkedBox`).
   const glyphClassName = unavailable ? disabledGlyph : forcedColors.selectedLeaf;
-  const labelText = hasLabel ? (
-    <span id={labelTextId} className={cn(checkboxClassNames.label, 'text-body-1 text-foreground')}>
-      {materialiseSlotContent(label)}
-    </span>
-  ) : null;
+  const labelProps = mergeSlotProps(slotProps?.label, {
+    className: cn(checkboxClassNames.label, 'text-body-1 text-foreground'),
+    locked: { id: labelTextId },
+  });
+  const labelText = hasLabel ? <span {...labelProps}>{materialiseSlotContent(label)}</span> : null;
+  const indicatorProps = mergeSlotProps(slotProps?.indicator, {
+    className: cn(
+      checkboxClassNames.indicator,
+      // p-0 and the unchecked bg-transparent are set here, not left to the native reset, which
+      // any app button style overrides (C-NATIVE).
+      cn(
+        'flex shrink-0 items-center justify-center border p-0 transition-colors motion-reduce:transition-none',
+        sizeMetrics.box,
+        shapeClass,
+      ),
+      // Centred on the label's 20px first line: nudged down at medium, up at large.
+      hasLabel && sizeMetrics.offset,
+      focusRing,
+      on
+        ? cn(
+            'border-primary bg-primary text-primary-foreground',
+            unavailable ? disabledCheckedBox : checkedBox,
+          )
+        : cn(
+            'border-stroke-accessible bg-transparent',
+            unavailable ? forcedColors.disabled : forcedColors.control,
+          ),
+    ),
+    locked: {
+      id: generatedId,
+      type: 'button',
+      ...fieldProps,
+      // Set only through the Checkbox's own props, whether or not they are given.
+      'aria-label': fieldProps['aria-label'],
+      'aria-invalid': fieldProps['aria-invalid'],
+      'aria-required': fieldProps['aria-required'],
+      'aria-labelledby': labelledBy,
+      'aria-errormessage': ariaErrorMessage,
+      'aria-details': ariaDetails,
+      'aria-disabled': ariaDisabled,
+      autoFocus,
+      tabIndex,
+      onFocus,
+      onBlur,
+      onKeyDown,
+      onKeyUp,
+      role: 'checkbox',
+      'aria-checked': indeterminate ? 'mixed' : checked,
+      disabled: disabled && !disabledFocusable,
+      ...focusableDisabledProps(disabledFocusable, { reachable: true }),
+      onClick: disabledFocusable
+        ? // Clicks, Space and Enter (which click a button) neither toggle nor reach `onClick`,
+          // and, as a natively disabled control dispatches no click, no ancestor sees them.
+          (event: React.MouseEvent<HTMLButtonElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        : composeEventHandlers(onClick, () => setChecked((prev) => !prev)),
+    },
+    // Under disabledFocusable your click handler is not called, as the Checkbox's `onClick`
+    // is not.
+    blockHandlers: disabledFocusable ? ['onClick'] : undefined,
+  });
 
   return (
     <label
@@ -292,56 +379,10 @@ export const Checkbox = ({
     >
       {labelPosition === 'before' && labelText}
       <button
-        id={generatedId}
+        // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
         type="button"
-        {...fieldProps}
-        aria-labelledby={labelledBy}
-        aria-errormessage={ariaErrorMessage}
-        aria-details={ariaDetails}
-        aria-disabled={ariaDisabled}
-        autoFocus={autoFocus}
-        tabIndex={tabIndex}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        onKeyDown={onKeyDown}
-        onKeyUp={onKeyUp}
+        {...indicatorProps}
         ref={mergedControlRef}
-        role="checkbox"
-        aria-checked={indeterminate ? 'mixed' : checked}
-        disabled={disabled && !disabledFocusable}
-        {...focusableDisabledProps(disabledFocusable, { reachable: true })}
-        onClick={
-          disabledFocusable
-            ? // Clicks, Space and Enter (which click a button) neither toggle nor reach `onClick`,
-              // and, as a natively disabled control dispatches no click, no ancestor sees them.
-              (event: React.MouseEvent<HTMLButtonElement>) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }
-            : composeEventHandlers(onClick, () => setChecked((prev) => !prev))
-        }
-        className={cn(
-          checkboxClassNames.indicator,
-          // p-0 and the unchecked bg-transparent are set here, not left to the native reset, which
-          // any app button style overrides (C-NATIVE).
-          cn(
-            'flex shrink-0 items-center justify-center border p-0 transition-colors motion-reduce:transition-none',
-            sizeMetrics.box,
-            shapeClass,
-          ),
-          // Centred on the label's 20px first line: nudged down at medium, up at large.
-          hasLabel && sizeMetrics.offset,
-          focusRing,
-          on
-            ? cn(
-                'border-primary bg-primary text-primary-foreground',
-                unavailable ? disabledCheckedBox : checkedBox,
-              )
-            : cn(
-                'border-stroke-accessible bg-transparent',
-                unavailable ? forcedColors.disabled : forcedColors.control,
-              ),
-        )}
       >
         {indeterminate ? (
           <SubtractIcon size={sizeMetrics.glyph} className={glyphClassName} />

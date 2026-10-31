@@ -5,6 +5,7 @@ import { fieldClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ErrorIcon, SuccessIcon, WarningIcon, type IconComponent } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { CoreSize, Orientation, ValidationState } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import {
@@ -135,6 +136,41 @@ export interface FieldProps extends Omit<React.HTMLAttributes<HTMLDivElement>, '
   htmlFor?: string;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the Field draws around the control, by part, merged into each part's
+   * own (Fluent UI's `label`, `validationMessage` and `hint` slot props): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers and attributes
+   * added, your ref attached. Every attribute the Field sets on a part is locked and keeps the
+   * Field's value: the ids the control's `aria-labelledby` and `aria-describedby` point at
+   * among them. A part takes no `children` (the Field's props give each its content). The
+   * control is your child: give it its props directly.
+   */
+  slotProps?: {
+    /**
+     * The Field's own `<label>` (stable class `wave-field__label`), rendered for a `label` that
+     * is not a `Label` or `InfoLabel` element. Locked: `id` and `htmlFor`, which name the
+     * control. A `Label` or `InfoLabel` element passed as `label` renders in its place and takes
+     * your props directly; this part is then ignored.
+     */
+    label?: SlotPart<'label'>;
+    /**
+     * The asterisk `<span>` inside the Field's own `<label>`, rendered while the Field is
+     * `required` (stable class `wave-field__required`). Locked: `aria-hidden`. A `Label` or
+     * `InfoLabel` element shows its own indicator instead (its `required` part).
+     */
+    required?: SlotPart<'span'>;
+    /**
+     * The `<p>` of the validation message (stable class `wave-field__validation-message`).
+     * Locked: `id`, which describes the control, `role` (`alert` for an error or a warning) and
+     * `data-validation-state`.
+     */
+    validationMessage?: SlotPart<'p'>;
+    /**
+     * The `<p>` of the hint (stable class `wave-field__hint`). Locked: `id`, which describes the
+     * control.
+     */
+    hint?: SlotPart<'p'>;
+  };
 }
 
 /** Intrinsic elements a `<label htmlFor>` can name (HTML "labelable elements"). */
@@ -624,6 +660,7 @@ export const Field = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: FieldProps) => {
   const fieldId = useId('field');
@@ -743,6 +780,35 @@ export const Field = ({
   const horizontal = orientation === 'horizontal';
   // Beside the control: a third of the width, its first line lined up with LABEL_TOP.
   const labelColumn = horizontal && cn('mb-0 shrink-0 basis-1/3', LABEL_TOP[labelSize]);
+  const labelProps = mergeSlotProps(slotProps?.label, {
+    className: cn(
+      fieldClassNames.label,
+      'mb-1 font-semibold text-foreground',
+      LABEL_TEXT[labelSize],
+      labelColumn,
+    ),
+    locked: { id: labelId, htmlFor: controlId },
+  });
+  const requiredProps = mergeSlotProps(slotProps?.required, {
+    className: cn(fieldClassNames.required, 'ms-0.5 text-error'),
+    locked: { 'aria-hidden': 'true' },
+  });
+  const messageProps = mergeSlotProps(slotProps?.validationMessage, {
+    className: cn(
+      fieldClassNames.validationMessage,
+      'mt-1 flex items-start gap-1 text-caption-1',
+      MESSAGE_COLORS[state],
+    ),
+    locked: {
+      id: messageId,
+      role: state === 'error' || state === 'warning' ? 'alert' : undefined,
+      'data-validation-state': state,
+    },
+  });
+  const hintProps = mergeSlotProps(slotProps?.hint, {
+    className: cn(fieldClassNames.hint, 'mt-1 text-caption-1 text-muted-foreground'),
+    locked: { id: hintId },
+  });
   const control = (
     <>
       <FieldContext.Provider value={context}>{content}</FieldContext.Provider>
@@ -750,27 +816,13 @@ export const Field = ({
           warning that becomes an error) is a newly inserted element, which screen readers
           announce reliably as an alert, not an existing node with a new role. */}
       {hasMessage ? (
-        <p
-          key={`message-${state}`}
-          id={messageId}
-          role={state === 'error' || state === 'warning' ? 'alert' : undefined}
-          data-validation-state={state}
-          className={cn(
-            fieldClassNames.validationMessage,
-            'mt-1 flex items-start gap-1 text-caption-1',
-            MESSAGE_COLORS[state],
-          )}
-        >
+        <p key={`message-${state}`} {...messageProps}>
           {renderMessageIcon(state, validationMessageIcon)}
           <span>{materialiseSlotContent(message)}</span>
         </p>
       ) : null}
       {hasHint ? (
-        <p
-          key="hint"
-          id={hintId}
-          className={cn(fieldClassNames.hint, 'mt-1 text-caption-1 text-muted-foreground')}
-        >
+        <p key="hint" {...hintProps}>
           {materialiseSlotContent(hint)}
         </p>
       ) : null}
@@ -800,22 +852,9 @@ export const Field = ({
           className: cn(fieldClassNames.label, 'mb-1', labelColumn),
         })
       ) : hasLabel ? (
-        <label
-          id={labelId}
-          htmlFor={controlId}
-          className={cn(
-            fieldClassNames.label,
-            'mb-1 font-semibold text-foreground',
-            LABEL_TEXT[labelSize],
-            labelColumn,
-          )}
-        >
+        <label {...labelProps}>
           {materialiseSlotContent(label)}
-          {required && (
-            <span aria-hidden="true" className={cn(fieldClassNames.required, 'ms-0.5 text-error')}>
-              *
-            </span>
-          )}
+          {required && <span {...requiredProps}>*</span>}
         </label>
       ) : null}
       {horizontal ? (

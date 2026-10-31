@@ -1,11 +1,15 @@
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RadioGroup, RadioGroupItem, RadioItem } from '../RadioGroup';
 import type { RadioGroupItemProps, RadioGroupProps, RadioItemProps } from '../RadioGroup';
+import { radioGroupItemClassNames } from '../../../lib/classNames';
 import type { Orientation } from '../../../lib/types';
 import {
+  expectInertSlotProps,
+  sortAttributes,
   expectNoA11yViolations,
   renderWithProviders,
   testComposedHandler,
@@ -1414,5 +1418,275 @@ describe('RadioGroup — types', () => {
     // @ts-expect-error -- `value` is the item's string value, not a native button value
     const props: RadioItemProps = { value: 1 };
     expect(props).toBeDefined();
+  });
+});
+
+describe('RadioGroup.Item — slotProps', () => {
+  type ItemSlotProps = NonNullable<RadioGroupItemProps['slotProps']>;
+  const EVERY_PART: ItemSlotProps = { indicator: {}, label: {} };
+
+  it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
+    // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    expect(
+      sortAttributes(
+        renderToString(
+          <RadioGroup aria-label="Choice" defaultValue="a">
+            <RadioGroup.Item
+              value="a"
+              label="One"
+              labelClassName="lc"
+              style={{ color: 'red' }}
+              title="t"
+            />
+          </RadioGroup>,
+        ),
+      ),
+    ).toBe(
+      [
+        '<div aria-label="Choice" aria-orientation="vertical" class="wave-radio-group relative flex flex-col gap-2" data-roving-container="" role="radiogroup">',
+        '<label class="wave-radio-group-item inline-flex items-start gap-2 select-none cursor-pointer">',
+        '<button aria-checked="true" aria-labelledby="radio-item-label-_R_3H1_" class="wave-radio-group-item__indicator flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-transparent p-0 transition-colors motion-reduce:transition-none mt-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-2 border-primary forced-colors:border-[Highlight]" data-roving-value="a" id="radio-item-_R_3_" role="radio" style="color:red" tabindex="0" title="t" type="button">',
+        '<span aria-hidden="true" class="block h-2 w-2 rounded-full bg-primary forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none">',
+        '</span>',
+        '</button>',
+        '<span class="wave-radio-group-item__label text-body-1 text-foreground lc" id="radio-item-label-_R_3H1_">One',
+        '</span>',
+        '</label>',
+        '</div>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: (Omit<RadioGroupItemProps, 'value'> & Record<`data-${string}`, string>)[] = [
+      { label: 'One' },
+      { label: 'One', labelClassName: 'lc', disabled: true },
+      { 'aria-label': 'One' },
+      { label: 'One', 'aria-describedby': 'd', 'data-x': '1', style: { color: 'red' }, title: 't' },
+      { label: 'One', id: 'own', role: 'radio', tabIndex: 3 },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <RadioGroup aria-label="Choice" defaultValue="b" name="choice">
+            <RadioGroup.Item value="a" {...props} slotProps={slotProps} />
+            <RadioGroup.Item value="b" label="Two" slotProps={slotProps} />
+          </RadioGroup>
+        ),
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part; the label part class comes after labelClassName', () => {
+    render(
+      <RadioGroup aria-label="Choice">
+        <RadioGroup.Item
+          value="a"
+          label="One"
+          labelClassName="item-label"
+          slotProps={{
+            indicator: { className: 'my-circle', style: { width: 20 }, 'data-part': 'indicator' },
+            label: { className: 'my-label', style: { color: 'red' }, 'data-part': 'label' },
+          }}
+        />
+      </RadioGroup>,
+    );
+    const indicator = screen.getByRole('radio', { name: 'One' });
+    const label = screen.getByText('One');
+    expect(indicator).toHaveClass(radioGroupItemClassNames.indicator, 'rounded-full', 'my-circle');
+    expect(indicator.classList[0]).toBe(radioGroupItemClassNames.indicator);
+    expect(indicator.classList[indicator.classList.length - 1]).toBe('my-circle');
+    expect(indicator).toHaveStyle({ width: '20px' });
+    expect(indicator).toHaveAttribute('data-part', 'indicator');
+    expect(label.className).toMatch(/^wave-radio-group-item__label .* item-label my-label$/);
+    expect(label).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+    expect(label).toHaveAttribute('data-part', 'label');
+  });
+
+  it("merges your indicator style over the item's own style", () => {
+    render(
+      <RadioGroup aria-label="Choice">
+        <RadioGroup.Item
+          value="a"
+          label="One"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{ indicator: { style: { width: 20 } } }}
+        />
+      </RadioGroup>,
+    );
+    expect(screen.getByRole('radio', { name: 'One' })).toHaveStyle({
+      color: 'rgb(255, 0, 0)',
+      width: '20px',
+    });
+  });
+
+  it('attaches your refs to the parts, beside the item ref', () => {
+    const indicator = React.createRef<HTMLButtonElement>();
+    const label = React.createRef<HTMLSpanElement>();
+    const ref = React.createRef<HTMLButtonElement>();
+    render(
+      <RadioGroup aria-label="Choice">
+        <RadioGroup.Item
+          ref={ref}
+          value="a"
+          label="One"
+          slotProps={{ indicator: { ref: indicator }, label: { ref: label } }}
+        />
+      </RadioGroup>,
+    );
+    const radio = screen.getByRole('radio', { name: 'One' });
+    expect(indicator.current).toBe(radio);
+    expect(ref.current).toBe(radio);
+    expect(label.current).toBe(screen.getByText('One'));
+  });
+
+  it("runs your indicator onClick first, then the item's onClick and the selection", async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <RadioGroup aria-label="Choice" onValueChange={() => order.push('select')}>
+        <RadioGroup.Item
+          value="a"
+          label="One"
+          onClick={() => order.push('onClick')}
+          slotProps={{ indicator: { onClick: () => order.push('part') } }}
+        />
+      </RadioGroup>,
+    );
+    await user.click(screen.getByRole('radio', { name: 'One' }));
+    expect(order).toEqual(['part', 'onClick', 'select']);
+  });
+
+  it('skips the selection when your indicator onClick prevents the default', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <RadioGroup aria-label="Choice" onValueChange={onValueChange}>
+        <RadioGroup.Item
+          value="a"
+          label="One"
+          slotProps={{ indicator: { onClick: (event) => event.preventDefault() } }}
+        />
+      </RadioGroup>,
+    );
+    await user.click(screen.getByRole('radio', { name: 'One' }));
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('radio', { name: 'One' })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('calls your onClick and onValueChange once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <RadioGroup aria-label="Choice" onValueChange={onValueChange}>
+          <RadioGroup.Item value="a" label="One" slotProps={{ indicator: { onClick } }} />
+        </RadioGroup>
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('radio', { name: 'One' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith('a');
+  });
+
+  it('keeps the locked attributes of the indicator, and the props you give the item win', () => {
+    render(
+      <>
+        <span id="extra-name">Extra</span>
+        <RadioGroup aria-label="Choice" defaultValue="b">
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            title="From the item"
+            disabled
+            slotProps={{
+              indicator: {
+                id: 'mine',
+                role: 'checkbox',
+                type: 'submit',
+                tabIndex: 0,
+                disabled: false,
+                title: 'From the part',
+                'aria-label': 'Other',
+                'aria-checked': true,
+                'data-roving-value': 'z',
+                'aria-labelledby': 'extra-name',
+              },
+            }}
+          />
+          <RadioGroup.Item value="b" label="Two" />
+        </RadioGroup>
+      </>,
+    );
+    const radio = screen.getByRole('radio', { name: 'One Extra' });
+    expect(radio.id).toMatch(/^radio-item-/);
+    expect(radio).toHaveAttribute('type', 'button');
+    expect(radio).toHaveAttribute('tabindex', '-1');
+    expect(radio).toBeDisabled();
+    expect(radio).toHaveAttribute('aria-checked', 'false');
+    expect(radio).toHaveAttribute('data-roving-value', 'a');
+    expect(radio).toHaveAttribute('title', 'From the item');
+    expect(radio).not.toHaveAttribute('aria-label');
+    expect(radio).toHaveAttribute('aria-labelledby', `${screen.getByText('One').id} extra-name`);
+  });
+
+  it('keeps the label id that names the radio, and ignores the label part without a label', () => {
+    const label = React.createRef<HTMLSpanElement>();
+    render(
+      <RadioGroup aria-label="Choice">
+        <RadioGroup.Item value="a" label="One" slotProps={{ label: { id: 'mine' } }} />
+        <RadioGroup.Item value="b" aria-label="Two" slotProps={{ label: { ref: label } }} />
+      </RadioGroup>,
+    );
+    const text = screen.getByText('One');
+    expect(text.id).not.toBe('mine');
+    expect(screen.getByRole('radio', { name: 'One' })).toHaveAttribute('aria-labelledby', text.id);
+    expect(screen.getByRole('radio', { name: 'Two' })).toBeInTheDocument();
+    expect(label.current).toBeNull();
+  });
+
+  it('keeps the arrow keys mirrored under dir="rtl" with customised parts', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <RadioGroup aria-label="Choice" orientation="horizontal" defaultValue="a">
+        <RadioGroup.Item value="a" label="One" slotProps={{ indicator: { className: 'mine' } }} />
+        <RadioGroup.Item value="b" label="Two" slotProps={{ indicator: { className: 'mine' } }} />
+      </RadioGroup>,
+      { dir: 'rtl' },
+    );
+    await user.tab();
+    await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('radio', { name: 'Two' })).toHaveFocus();
+    expect(screen.getByRole('radio', { name: 'Two' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <RadioGroup aria-label="Choice" defaultValue="a">
+        <RadioGroup.Item
+          value="a"
+          label="One"
+          slotProps={{ indicator: { className: 'mine' }, label: { className: 'mine' } }}
+        />
+        <RadioGroup.Item value="b" label="Two" />
+      </RadioGroup>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<'indicator' | 'label'>();
+    expectTypeOf<RadioItemProps['slotProps']>().toEqualTypeOf<RadioGroupItemProps['slotProps']>();
+    expectTypeOf<NonNullable<ItemSlotProps['indicator']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the item draws the dot
+    void (<RadioGroup.Item value="a" slotProps={{ indicator: { children: '•' } }} />);
   });
 });

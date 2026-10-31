@@ -5,6 +5,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -227,10 +228,39 @@ export interface RadioItemProps extends Omit<
   disabled?: boolean;
   /** Class name of the item's root `<label>` element. */
   className?: string;
-  /** Class name of the element that renders the `label` text. */
+  /**
+   * Class name of the element that renders the `label` text: after the element's own classes,
+   * before a `slotProps.label` class.
+   */
   labelClassName?: string;
   /** Ref to the `role="radio"` button. */
   ref?: React.Ref<HTMLButtonElement>;
+  /**
+   * Props for the elements the item draws, by part, merged into each part's own (Fluent UI's
+   * `indicator` and `label` slot props): your classes after the part's (yours win a conflict),
+   * your styles over its styles, your handlers before its handlers (`preventDefault()` skips the
+   * part's own), your ref beside its ref, and your ids added to its `aria-labelledby` and
+   * `aria-describedby`. Every attribute the item sets on a part is locked and keeps the item's
+   * value (set it through the item's own props); you add the attributes it does not set. A part
+   * takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The `role="radio"` `<button>` that draws the circle: the element the item's own props
+     * and `ref` reach, but for `className` (stable class `wave-radio-group-item__indicator`).
+     * Locked: `id`, `type`, `role`, `aria-checked`, `disabled`, `tabIndex` (the group's roving
+     * tab stop), the roving value the group finds its radios by, `aria-label` and every prop
+     * you give the item itself. Your `onClick` runs before the item's `onClick` and its
+     * selection (`preventDefault()` skips both); your other handlers run before the item's.
+     */
+    indicator?: SlotPart<'button'>;
+    /**
+     * The `<span>` around the `label` text, rendered only with a `label` (stable class
+     * `wave-radio-group-item__label`). Its classes come in the order: the element's own, then
+     * `labelClassName`, then this part's `className`. Locked: `id`, which names the radio.
+     */
+    label?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -253,6 +283,7 @@ export function RadioItem({
   'aria-labelledby': ariaLabelledBy,
   children,
   ref,
+  slotProps,
   ...rest
 }: RadioItemProps) {
   const {
@@ -283,6 +314,47 @@ export function RadioItem({
     hasLabel && rest['aria-label'] === undefined
       ? joinIds(ariaLabelledBy, labelTextId)
       : ariaLabelledBy;
+  const indicatorRef = useMergedRefs(ref, slotProps?.indicator?.ref);
+  // The item's `style` is the part's own style, which a part style is merged over.
+  const { style, ...restWithoutStyle } = rest;
+  const indicatorProps = mergeSlotProps(slotProps?.indicator, {
+    className: cn(
+      radioGroupItemClassNames.indicator,
+      // p-0 and bg-transparent are set here, not left to the native reset, which any app button
+      // style overrides (C-NATIVE).
+      'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border bg-transparent p-0 transition-colors motion-reduce:transition-none',
+      // Centred on the 20px first line of the label text.
+      hasLabel && 'mt-px',
+      focusRing,
+      selected ? 'border-2 border-primary' : 'border-stroke-accessible',
+      // Forced colors: the focusable circle keeps system colors (its focus outline stays
+      // forced); only the dot opts out. A disabled radio draws GrayText, never Highlight.
+      isDisabled
+        ? forcedColors.disabled
+        : selected
+          ? 'forced-colors:border-[Highlight]'
+          : forcedColors.control,
+    ),
+    style,
+    locked: {
+      id: generatedId,
+      type: 'button',
+      role: 'radio',
+      ...restWithoutStyle,
+      // Set only through the item's own props, whether or not it is given.
+      'aria-label': rest['aria-label'],
+      'aria-labelledby': labelledBy,
+      'aria-checked': selected,
+      disabled: isDisabled,
+      tabIndex,
+      'data-roving-value': value,
+      onClick: composeEventHandlers(onClick, () => select(value)),
+    },
+  });
+  const labelProps = mergeSlotProps(slotProps?.label, {
+    className: cn(radioGroupItemClassNames.label, 'text-body-1 text-foreground', labelClassName),
+    locked: { id: labelTextId },
+  });
 
   return (
     <label
@@ -300,34 +372,11 @@ export function RadioItem({
       )}
     >
       <button
-        id={generatedId}
+        // The literal marks C-BUTTON-TYPE; the merged props hold the type (the item's props may
+        // replace it, a part cannot).
         type="button"
-        role="radio"
-        {...rest}
-        ref={ref}
-        aria-labelledby={labelledBy}
-        aria-checked={selected}
-        disabled={isDisabled}
-        tabIndex={tabIndex}
-        data-roving-value={value}
-        onClick={composeEventHandlers(onClick, () => select(value))}
-        className={cn(
-          radioGroupItemClassNames.indicator,
-          // p-0 and bg-transparent are set here, not left to the native reset, which any app button
-          // style overrides (C-NATIVE).
-          'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border bg-transparent p-0 transition-colors motion-reduce:transition-none',
-          // Centred on the 20px first line of the label text.
-          hasLabel && 'mt-px',
-          focusRing,
-          selected ? 'border-2 border-primary' : 'border-stroke-accessible',
-          // Forced colors: the focusable circle keeps system colors (its focus outline stays
-          // forced); only the dot opts out. A disabled radio draws GrayText, never Highlight.
-          isDisabled
-            ? forcedColors.disabled
-            : selected
-              ? 'forced-colors:border-[Highlight]'
-              : forcedColors.control,
-        )}
+        {...indicatorProps}
+        ref={indicatorRef}
       >
         {selected && (
           <span
@@ -339,18 +388,7 @@ export function RadioItem({
           />
         )}
       </button>
-      {hasLabel && (
-        <span
-          id={labelTextId}
-          className={cn(
-            radioGroupItemClassNames.label,
-            'text-body-1 text-foreground',
-            labelClassName,
-          )}
-        >
-          {materialiseSlotContent(label)}
-        </span>
-      )}
+      {hasLabel && <span {...labelProps}>{materialiseSlotContent(label)}</span>}
     </label>
   );
 }

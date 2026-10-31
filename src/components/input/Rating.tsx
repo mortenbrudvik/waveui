@@ -6,6 +6,7 @@ import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { isOwnEvent } from '../../lib/events';
 import { slotRendersContent, type Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -232,6 +233,31 @@ export interface RatingDisplayProps extends Omit<React.HTMLAttributes<HTMLDivEle
   children?: React.ReactNode;
   /** Ref to the root element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the display draws inside its root, by part, merged into each part's
+   * own (Fluent UI's `valueText` and `countText` slot props): your classes after the part's
+   * (yours win a conflict), your styles over its styles, your handlers and attributes added,
+   * your ref attached. A part takes no `children`. The parts carry no attribute of their own, so
+   * none is locked.
+   */
+  slotProps?: {
+    /**
+     * The one star `<span>` of a `compact` display (stable class `wave-rating-display__star`).
+     * It reaches only that star: the stars of a full display are `RatingDisplay.Item`s, generated
+     * from `max` or written as children, and an item you write takes its props directly.
+     */
+    star?: SlotPart<'span'>;
+    /**
+     * The `<span>` of the value text, rendered with `showValue`, `count` or `compact` (stable
+     * class `wave-rating-display__value`).
+     */
+    value?: SlotPart<'span'>;
+    /**
+     * The `<span>` of the count text, rendered with `count` (stable class
+     * `wave-rating-display__count`).
+     */
+    count?: SlotPart<'span'>;
+  };
 }
 
 const RatingRoot = ({
@@ -482,6 +508,7 @@ const RatingDisplayRoot = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: RatingDisplayProps) => {
   const formatLocale = supportedLocale(locale);
@@ -545,6 +572,8 @@ const RatingDisplayRoot = ({
     >
       {compact ? (
         <StarGlyph
+          // The star part's props: the star puts your class after its own.
+          {...mergeSlotProps(slotProps?.star, {})}
           starClassName={ratingDisplayClassNames.star}
           iconClassName={ratingDisplayClassNames.icon}
           fraction={1}
@@ -559,17 +588,23 @@ const RatingDisplayRoot = ({
       )}
       {showText && (
         <span
-          className={cn(
-            ratingDisplayClassNames.value,
-            'ms-1 font-semibold text-foreground',
-            textSize,
-          )}
+          {...mergeSlotProps(slotProps?.value, {
+            className: cn(
+              ratingDisplayClassNames.value,
+              'ms-1 font-semibold text-foreground',
+              textSize,
+            ),
+          })}
         >
           {formattedValue}
         </span>
       )}
       {formattedCount !== undefined && (
-        <span className={cn(ratingDisplayClassNames.count, 'ms-1 text-muted-foreground', textSize)}>
+        <span
+          {...mergeSlotProps(slotProps?.count, {
+            className: cn(ratingDisplayClassNames.count, 'ms-1 text-muted-foreground', textSize),
+          })}
+        >
           ({formattedCount})
         </span>
       )}

@@ -4,6 +4,7 @@ import { joinIds } from '../../lib/aria';
 import { inputClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import {
   inputAppearanceClasses,
   inputFocus,
@@ -17,6 +18,7 @@ import {
 import type { CoreSize, InputAppearance, Slot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { legacyNativeSize, useInputLook } from './inputLook';
 
 /**
@@ -172,6 +174,38 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   onValueChange?: (value: string) => void;
   /** Ref to the `<input>` element (also with `contentBefore`/`contentAfter`). */
   ref?: React.Ref<HTMLInputElement>;
+  /**
+   * Props for the elements the Input draws, by part, merged into each part's own (Fluent UI's
+   * `root` and `input` slot props): your classes after the part's (yours win a conflict), your
+   * styles over its styles, your handlers before its handlers (`preventDefault()` skips the
+   * part's own), your ref beside its ref, and your ids added to its `aria-labelledby` and
+   * `aria-describedby`. Every attribute the Input sets on a part is locked and keeps the Input's
+   * value (set it through the Input's own props, which win over these); you add the attributes
+   * it does not set. A part takes no `children`.
+   *
+   * Without `contentBefore` and `contentAfter` the field is one `<input>`, the root and the input
+   * at once: `root` and `input` both apply to it, `input` after `root`, so a prop set in both
+   * takes the value of `input`.
+   */
+  slotProps?: {
+    /**
+     * The element that draws the field (stable class `wave-input`): the bordered `<span>` around
+     * the input with `contentBefore` or `contentAfter`, else the `<input>` itself, where `input`
+     * applies after it. On the `<span>`, locked: `hidden`, `data-size` and `data-appearance`.
+     * On the `<input>`, the locked attributes of `input`.
+     */
+    root?: Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
+    /**
+     * The `<input>` (stable class `wave-input__input`), which the Input's own props, `ref`
+     * included, reach as well. Locked: every prop you give the Input itself, its id and naming
+     * (`id`, `aria-label`), its Field and error wiring (`aria-invalid`, `aria-required`,
+     * `aria-errormessage`), the state its look follows (`disabled`, `readOnly`, `required`), the
+     * native `size` and, without content slots, `data-size` and `data-appearance`. Your
+     * `onChange` runs before the Input's `onChange` and `onValueChange` (`preventDefault()`
+     * skips both).
+     */
+    input?: SlotPart<'input'>;
+  };
 }
 
 /**
@@ -206,6 +240,7 @@ export const Input = ({
   onValueChange,
   className,
   ref,
+  slotProps,
   id,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
@@ -262,36 +297,58 @@ export const Input = ({
     'aria-errormessage': joinIds(ariaErrorMessage, messageId),
     onChange: handleChange,
   };
+  // Set on the input only through the Input's own props (locked against `slotProps`): its id and
+  // naming, the Field and error wiring, and the state its look follows, whether or not they are
+  // given (an unset one renders nothing).
+  const inputWiring = {
+    id: fieldProps.id,
+    'aria-label': fieldProps['aria-label'],
+    'aria-invalid': fieldProps['aria-invalid'],
+    'aria-required': fieldProps['aria-required'],
+    required: fieldProps.required,
+    disabled: props.disabled,
+    readOnly: props.readOnly,
+    size: nativeSize,
+  };
+  const look = { 'data-size': size, 'data-appearance': appearance };
 
   const hasBefore = slotRendersContent(contentBefore);
   const hasAfter = slotRendersContent(contentAfter);
+  const hasContent = hasBefore || hasAfter;
+  // Without content slots the root part is the input too, its ref merged before the input part's.
+  const inputRef = useMergedRefs<HTMLElement>(
+    ref,
+    hasContent ? undefined : slotProps?.root?.ref,
+    slotProps?.input?.ref,
+  );
+  // The Input's `style` is the root part's own style, which a part style is merged over.
+  const { style, ...controlPropsWithoutStyle } = controlProps;
 
   let control: React.ReactElement;
-  if (hasBefore || hasAfter) {
+  if (hasContent) {
     // The bordered wrapper is the visible field: `className`, `style` and `hidden` size, style and
     // hide it; `ref`, `id`, `aria-*`, `data-*`, handlers and native attributes go to the input.
-    const { style, hidden, ...inputProps } = controlProps;
+    const { hidden, ...inputProps } = controlPropsWithoutStyle;
+    const rootProps = mergeSlotProps(slotProps?.root, {
+      className: cn(
+        inputClassNames.root,
+        'inline-flex w-full items-center',
+        inputHeightClasses[size],
+        inputTextClasses[size],
+        inputAppearanceClasses[appearance],
+        'text-foreground',
+        inputFocusWithin,
+        invalidLook && inputInvalidWithin,
+        // The dimmed look lifts while a focus ring shows inside the wrapper (focusable slot
+        // content; the disabled input never takes focus): opacity would dim the ring below 3:1.
+        props.disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
+        className,
+      ),
+      style,
+      locked: { hidden, ...look },
+    });
     control = (
-      <span
-        hidden={hidden}
-        style={style}
-        data-size={size}
-        data-appearance={appearance}
-        className={cn(
-          inputClassNames.root,
-          'inline-flex w-full items-center',
-          inputHeightClasses[size],
-          inputTextClasses[size],
-          inputAppearanceClasses[appearance],
-          'text-foreground',
-          inputFocusWithin,
-          invalidLook && inputInvalidWithin,
-          // The dimmed look lifts while a focus ring shows inside the wrapper (focusable slot
-          // content; the disabled input never takes focus): opacity would dim the ring below 3:1.
-          props.disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
-          className,
-        )}
-      >
+      <span {...rootProps}>
         {hasBefore &&
           renderSlot(
             contentBefore,
@@ -299,19 +356,20 @@ export const Input = ({
             cn(inputClassNames.contentBefore, 'shrink-0', SLOT_PADDING[size].before),
           )}
         <input
-          ref={ref}
-          className={cn(
-            inputClassNames.input,
-            'h-full w-full min-w-0 bg-transparent',
-            SLOT_PADDING[size].input,
-            inputTextClasses[size],
-            'text-foreground',
-            'placeholder:text-muted-foreground',
-            'focus:outline-hidden',
-            'disabled:cursor-not-allowed',
-          )}
-          {...inputProps}
-          size={nativeSize}
+          {...mergeSlotProps(slotProps?.input, {
+            className: cn(
+              inputClassNames.input,
+              'h-full w-full min-w-0 bg-transparent',
+              SLOT_PADDING[size].input,
+              inputTextClasses[size],
+              'text-foreground',
+              'placeholder:text-muted-foreground',
+              'focus:outline-hidden',
+              'disabled:cursor-not-allowed',
+            ),
+            locked: { ...inputProps, ...inputWiring },
+          })}
+          ref={inputRef}
         />
         {hasAfter &&
           renderSlot(
@@ -322,27 +380,28 @@ export const Input = ({
       </span>
     );
   } else {
+    // One element: the root part, then the input part, which wins a prop both set.
     control = (
       <input
-        ref={ref}
-        data-size={size}
-        data-appearance={appearance}
-        className={cn(
-          inputClassNames.root,
-          inputClassNames.input,
-          inputHeightClasses[size],
-          'w-full',
-          inputPaddingClasses[size],
-          inputTextClasses[size],
-          inputAppearanceClasses[appearance],
-          'text-foreground placeholder:text-muted-foreground',
-          inputFocus,
-          'disabled:cursor-not-allowed disabled:opacity-50',
-          invalidLook && inputInvalid,
-          className,
-        )}
-        {...controlProps}
-        size={nativeSize}
+        {...mergeSlotProps([slotProps?.root, slotProps?.input], {
+          className: cn(
+            inputClassNames.root,
+            inputClassNames.input,
+            inputHeightClasses[size],
+            'w-full',
+            inputPaddingClasses[size],
+            inputTextClasses[size],
+            inputAppearanceClasses[appearance],
+            'text-foreground placeholder:text-muted-foreground',
+            inputFocus,
+            'disabled:cursor-not-allowed disabled:opacity-50',
+            invalidLook && inputInvalid,
+            className,
+          ),
+          style,
+          locked: { ...look, ...controlPropsWithoutStyle, ...inputWiring },
+        })}
+        ref={inputRef}
       />
     );
   }

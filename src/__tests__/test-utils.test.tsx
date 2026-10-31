@@ -30,6 +30,7 @@ import {
   axe,
   createOverlayTestWrapper,
   DISPLAY_NAME_ALIASES,
+  expectInertSlotProps,
   expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
@@ -43,6 +44,7 @@ import {
   motionClasses,
   renderWithProviders,
   resetMatchMediaMock,
+  sortAttributes,
   testA11y,
   testClassName,
   testComposedHandler,
@@ -1865,6 +1867,76 @@ describe('expectThrows', () => {
     expect(console.error).toBe(original);
     expect(() => expectThrows(<Throws message="[WaveUI] Other" />, MESSAGE)).toThrow();
     expect(console.error).toBe(original);
+  });
+});
+
+describe('sortAttributes', () => {
+  it('puts the attributes of every element in alphabetical order, keeping their values', () => {
+    expect(
+      sortAttributes(
+        '<label id="l" class="a b"><span data-x="1" aria-hidden="true">*</span></label>',
+      ),
+    ).toBe('<label class="a b" id="l"><span aria-hidden="true" data-x="1">*</span></label>');
+  });
+
+  it('gives the same string for the same attributes written in another order', () => {
+    const one = renderToString(<input type="text" className="c" id="i" readOnly />);
+    const other = renderToString(<input readOnly id="i" className="c" type="text" />);
+    expect(one).not.toBe(other);
+    expect(sortAttributes(one)).toBe(sortAttributes(other));
+  });
+
+  it('keeps a difference in an attribute set or value', () => {
+    expect(sortAttributes('<p id="a" class="x"></p>')).not.toBe(
+      sortAttributes('<p class="x" id="b"></p>'),
+    );
+    expect(sortAttributes('<p class="x"></p>')).not.toBe(
+      sortAttributes('<p class="x" hidden></p>'),
+    );
+  });
+
+  it('keeps text, comments and element order, and reads the content of an element', () => {
+    const container = document.createElement('div');
+    container.innerHTML = '<b z="1" a="2">one<!-- --></b><i>two</i>';
+    expect(sortAttributes(container)).toBe('<b a="2" z="1">one<!-- --></b><i>two</i>');
+    // The element itself is not changed.
+    expect(container.innerHTML).toBe('<b z="1" a="2">one<!-- --></b><i>two</i>');
+  });
+});
+
+describe('expectInertSlotProps', () => {
+  type Parts = { inner?: { className?: string } };
+  /** Draws its part with the part's class; `leaky` also marks the root while `slotProps` is set. */
+  function Probe({ slotProps, leaky = false }: { slotProps?: Parts; leaky?: boolean }) {
+    return (
+      <div data-parts={leaky && slotProps ? Object.keys(slotProps).length : undefined}>
+        <span className={['inner', slotProps?.inner?.className].filter(Boolean).join(' ')}>
+          {React.useId()}
+        </span>
+      </div>
+    );
+  }
+
+  it('passes for a part that changes nothing while it is empty, keeping the generated ids', () => {
+    expectInertSlotProps((slotProps) => <Probe slotProps={slotProps} />, { inner: {} });
+    // The root is unmounted at the end.
+    expect(document.querySelector('.inner')).toBeNull();
+  });
+
+  it('fails when an empty slotProps changes the markup', () => {
+    expect(() =>
+      expectInertSlotProps((slotProps) => <Probe slotProps={slotProps} leaky />, { inner: {} }),
+    ).toThrow(/expected '.*' to be '.*'/);
+    cleanup();
+  });
+
+  it('fails when everyPart is not empty', () => {
+    expect(() =>
+      expectInertSlotProps((slotProps) => <Probe slotProps={slotProps} />, {
+        inner: { className: 'mine' },
+      }),
+    ).toThrow(/mine/);
+    cleanup();
   });
 });
 

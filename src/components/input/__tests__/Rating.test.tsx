@@ -15,9 +15,12 @@ import type {
   RatingLabels,
   RatingProps,
 } from '../Rating';
+import { ratingDisplayClassNames } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/slot';
 import {
   asClientReference,
+  expectInertSlotProps,
+  sortAttributes,
   expectNoA11yViolations,
   expectThrows,
   renderWithProviders,
@@ -1515,5 +1518,132 @@ describe('color and icons (Phase 4 D24, D25)', () => {
     expectTypeOf<RatingItemProps['iconOutline']>().toEqualTypeOf<Slot<'span'> | undefined>();
     // @ts-expect-error not a rating color
     render(<RatingDisplay value={3} color="red" />);
+  });
+});
+
+describe('RatingDisplay — slotProps', () => {
+  type DisplaySlotProps = NonNullable<RatingDisplayProps['slotProps']>;
+  const EVERY_PART: DisplaySlotProps = { star: {}, value: {}, count: {} };
+
+  it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
+    // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    expect(
+      sortAttributes(
+        renderToString(<RatingDisplay value={4.5} count={12} compact locale="en-US" />),
+      ),
+    ).toBe(
+      [
+        '<div aria-label="Rating: 4.5 out of 5, 12 ratings" class="wave-rating-display inline-flex items-center gap-0.5" data-color="marigold" data-compact="" role="img">',
+        '<span class="wave-rating-display__star inline-flex text-rating">',
+        '<svg aria-hidden="true" class="wave-rating-display__icon h-5 w-5" data-wave-icon="star" fill="currentColor" focusable="false" height="16" viewBox="0 0 20 20" width="16" xmlns="http://www.w3.org/2000/svg">',
+        '<path d="M10 1.5l2.47 5.01 5.53.8-4 3.9.94 5.49L10 13.88l-4.94 2.82.94-5.49-4-3.9 5.53-.8L10 1.5Z">',
+        '</path>',
+        '</svg>',
+        '</span>',
+        '<span class="wave-rating-display__value ms-1 font-semibold text-foreground text-body-1">4.5',
+        '</span>',
+        '<span class="wave-rating-display__count ms-1 text-muted-foreground text-body-1">(',
+        '<!-- -->12',
+        '<!-- -->)',
+        '</span>',
+        '</div>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: RatingDisplayProps[] = [
+      { value: 3.5 },
+      { value: 3.5, compact: true, locale: 'en-US' },
+      { value: 4, showValue: true, count: 1160, locale: 'en-US', size: 'large', color: 'brand' },
+      { value: 2, compact: true, count: 3, locale: 'en-US' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <RatingDisplay {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it("puts your className, style, data-*, handlers and ref on a compact display's parts", () => {
+    const star = React.createRef<HTMLSpanElement>();
+    const value = React.createRef<HTMLSpanElement>();
+    const count = React.createRef<HTMLSpanElement>();
+    const onClick = vi.fn();
+    render(
+      <RatingDisplay
+        value={4.5}
+        count={12}
+        compact
+        locale="en-US"
+        slotProps={{
+          star: { ref: star, className: 'my-star', style: { color: 'red' }, 'data-part': 'star' },
+          value: { ref: value, className: 'my-value', title: 'Average', onClick },
+          count: { ref: count, className: 'my-count', 'data-part': 'count' },
+        }}
+      />,
+    );
+    const root = screen.getByRole('img', { name: 'Rating: 4.5 out of 5, 12 ratings' });
+    const starElement = root.querySelector(`.${ratingDisplayClassNames.star}`);
+    expect(star.current).toBe(starElement);
+    expect(starElement).toHaveClass(ratingDisplayClassNames.star, 'inline-flex', 'my-star');
+    expect(starElement?.classList[0]).toBe(ratingDisplayClassNames.star);
+    expect(starElement?.classList[starElement.classList.length - 1]).toBe('my-star');
+    expect(starElement).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+    expect(starElement).toHaveAttribute('data-part', 'star');
+    expect(value.current).toBe(screen.getByText('4.5'));
+    expect(value.current).toHaveClass(ratingDisplayClassNames.value, 'font-semibold', 'my-value');
+    expect(value.current).toHaveAttribute('title', 'Average');
+    fireEvent.click(screen.getByText('4.5'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(count.current).toBe(screen.getByText('(12)'));
+    expect(count.current?.classList[count.current.classList.length - 1]).toBe('my-count');
+    expect(count.current).toHaveAttribute('data-part', 'count');
+  });
+
+  it('reaches no star of a full display: its stars are items, which take their own props', () => {
+    const star = React.createRef<HTMLSpanElement>();
+    render(<RatingDisplay value={3} slotProps={{ star: { ref: star, className: 'my-star' } }} />);
+    expect(star.current).toBeNull();
+    expect(document.querySelector('.my-star')).toBeNull();
+    expect(document.querySelectorAll(`.${ratingDisplayClassNames.star}`)).toHaveLength(5);
+  });
+
+  it('ignores the value and count parts while they are not rendered', () => {
+    const value = React.createRef<HTMLSpanElement>();
+    const count = React.createRef<HTMLSpanElement>();
+    render(
+      <RatingDisplay value={3} slotProps={{ value: { ref: value }, count: { ref: count } }} />,
+    );
+    expect(screen.getByRole('img', { name: 'Rating: 3 out of 5' })).toBeInTheDocument();
+    expect(value.current).toBeNull();
+    expect(count.current).toBeNull();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <RatingDisplay
+        value={4}
+        count={3}
+        compact
+        locale="en-US"
+        slotProps={{
+          star: { className: 'a' },
+          value: { className: 'b' },
+          count: { className: 'c' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof DisplaySlotProps>().toEqualTypeOf<'star' | 'value' | 'count'>();
+    expectTypeOf<NonNullable<DisplaySlotProps['star']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the display draws the value text
+    void (<RatingDisplay value={3} slotProps={{ value: { children: '3' } }} />);
   });
 });

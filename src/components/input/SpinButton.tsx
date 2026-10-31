@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { AddIcon, SubtractIcon } from '../../lib/icons';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import {
   inputAppearanceClasses,
   inputFocusWithin,
@@ -139,6 +140,41 @@ export interface SpinButtonBaseProps
   ref?: React.Ref<HTMLDivElement>;
   /** Ref to the `<input role="spinbutton">` (the focusable control). */
   controlRef?: React.Ref<HTMLInputElement>;
+  /**
+   * Props for the elements the SpinButton draws inside its root, by part, merged into each
+   * part's own (Fluent UI's `decrementButton`, `input` and `incrementButton` slot props): your
+   * classes after the part's (yours win a conflict), your styles over its styles, your handlers
+   * before its handlers (`preventDefault()` skips the part's own, except the ones that end a
+   * hold and track focus), your ref beside its ref, and your ids added to its `aria-labelledby`
+   * and `aria-describedby`. Every attribute the SpinButton sets on a part is locked and keeps
+   * the SpinButton's value (set it through its own props); you add the attributes it does not
+   * set. A part takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The − `<button>` (stable class `wave-spin-button__decrement-button`). Locked: `type`,
+     * `tabIndex` (never a tab stop), `disabled` and `aria-label` (`labels.decrement`). Your
+     * `onClick` and `onPointerDown` run before the step and the hold (`preventDefault()` skips
+     * them); the hold still ends on your `onPointerUp`, `onPointerCancel` and `onPointerLeave`
+     * whatever they do.
+     */
+    decrementButton?: SlotPart<'button'>;
+    /**
+     * The `<input role="spinbutton">`, the focusable control (stable class
+     * `wave-spin-button__input`; `controlRef` reaches it as well). Locked: `type`, `role`,
+     * `value`, `disabled`, `readOnly`, `form`, the `aria-value*` attributes, `id`, the naming and
+     * Field attributes and every other input prop routed to it (`placeholder`, `tabIndex`,
+     * `inputMode`, …). Your `onChange` and `onKeyDown` run before the SpinButton's
+     * (`preventDefault()` skips them: a typed character or a step key is ignored); its focus
+     * and blur work (committing typed text) runs after yours whatever they do.
+     */
+    input?: SlotPart<'input'>;
+    /**
+     * The + `<button>` (stable class `wave-spin-button__increment-button`). Locked as
+     * `decrementButton`, with `labels.increment` as its `aria-label`.
+     */
+    incrementButton?: SlotPart<'button'>;
+  };
 }
 
 /** SpinButton props with a number value (the 0.7 shape). */
@@ -343,6 +379,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     hidden,
     ref,
     controlRef,
+    slotProps,
     // Routed to the input (C-ROUTING)
     id,
     'aria-label': ariaLabel,
@@ -457,10 +494,12 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     holdRef.current = null;
   }, []);
 
+  // The step buttons' handlers are event callbacks (stable, reading the latest render), so the
+  // part props merged during render hold no function that reads a ref.
   /** Ends the hold on a pointerup, pointercancel or pointerleave of the pointer holding it. */
-  const endHold = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const endHold = useEventCallback((event: React.PointerEvent<HTMLButtonElement>) => {
     if (event.pointerId === holdRef.current?.pointerId) stopHold();
-  };
+  });
 
   /** Whether the value the user sees is at the bound a step in `direction` moves towards. */
   const atBound = (direction: 1 | -1) =>
@@ -491,43 +530,47 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     return true;
   });
 
-  const startHold = (event: React.PointerEvent<HTMLButtonElement>, direction: 1 | -1) => {
-    // Only a primary pointer presses a step button: a second finger (which gets no click) neither
-    // starts a hold nor resets the flag of the press that holds one.
-    if (!event.isPrimary) return;
-    // Every press resets the flag, so a hold that ended without a click (at a bound, or a touch
-    // long press) cannot swallow the click of a later press.
-    repeatedRef.current = false;
-    // A hold needs the primary button: not a secondary one, nor a Ctrl+press with a mouse (the
-    // secondary click on macOS).
-    if (event.button !== 0 || (event.pointerType === 'mouse' && event.ctrlKey) || !interactive) {
-      return;
-    }
-    // Touch and pen capture the pointer implicitly on the element the press landed on (the glyph
-    // when the finger lands on it); release it there, so pointerleave fires when the finger slides
-    // off the button.
-    const holder = event.target instanceof Element ? event.target : event.currentTarget;
-    if (event.pointerType !== 'mouse' && holder.hasPointerCapture?.(event.pointerId)) {
-      holder.releasePointerCapture(event.pointerId);
-    }
-    stopHold();
-    holdRef.current = {
-      pointerId: event.pointerId,
-      direction,
-      stepped: false,
-      stop: startSpin(holdStep),
-    };
-  };
-
-  const clickStep = (event: React.MouseEvent<HTMLButtonElement>, direction: 1 | -1) => {
-    // A click without a press (detail 0: a screen reader, element.click()) steps once; a pointer
-    // click steps unless its press already repeated.
-    if (event.detail !== 0 && repeatedRef.current) {
+  const startHold = useEventCallback(
+    (event: React.PointerEvent<HTMLButtonElement>, direction: 1 | -1) => {
+      // Only a primary pointer presses a step button: a second finger (which gets no click) neither
+      // starts a hold nor resets the flag of the press that holds one.
+      if (!event.isPrimary) return;
+      // Every press resets the flag, so a hold that ended without a click (at a bound, or a touch
+      // long press) cannot swallow the click of a later press.
       repeatedRef.current = false;
-      return;
-    }
-    stepBy(direction * step);
-  };
+      // A hold needs the primary button: not a secondary one, nor a Ctrl+press with a mouse (the
+      // secondary click on macOS).
+      if (event.button !== 0 || (event.pointerType === 'mouse' && event.ctrlKey) || !interactive) {
+        return;
+      }
+      // Touch and pen capture the pointer implicitly on the element the press landed on (the glyph
+      // when the finger lands on it); release it there, so pointerleave fires when the finger slides
+      // off the button.
+      const holder = event.target instanceof Element ? event.target : event.currentTarget;
+      if (event.pointerType !== 'mouse' && holder.hasPointerCapture?.(event.pointerId)) {
+        holder.releasePointerCapture(event.pointerId);
+      }
+      stopHold();
+      holdRef.current = {
+        pointerId: event.pointerId,
+        direction,
+        stepped: false,
+        stop: startSpin(holdStep),
+      };
+    },
+  );
+
+  const clickStep = useEventCallback(
+    (event: React.MouseEvent<HTMLButtonElement>, direction: 1 | -1) => {
+      // A click without a press (detail 0: a screen reader, element.click()) steps once; a pointer
+      // click steps unless its press already repeated.
+      if (event.detail !== 0 && repeatedRef.current) {
+        repeatedRef.current = false;
+        return;
+      }
+      stepBy(direction * step);
+    },
+  );
 
   // A hold stops once the control cannot step its way any more: disabled, read-only, or at the
   // bound it steps towards (where its button is disabled).
@@ -557,7 +600,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   };
 
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const mergedInputRef = useMergedRefs(inputRef, controlRef);
+  const mergedInputRef = useMergedRefs(inputRef, controlRef, slotProps?.input?.ref);
 
   const field = useFieldContext();
   const isRequired = required ?? field?.required ?? false;
@@ -688,6 +731,89 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   // editing), so a button that becomes disabled at a bound cannot drop focus to <body>.
   const keepFocus = (e: React.MouseEvent) => e.preventDefault();
 
+  /**
+   * A step button's props: its part merged with its own. The hold ends after a part's pointer
+   * handlers whatever they do, so a prevented release cannot leave the value spinning.
+   */
+  const stepButtonProps = (
+    part: SlotPart<'button'> | undefined,
+    direction: 1 | -1,
+    disabledHere: boolean,
+    label: string,
+    className: string,
+  ) => {
+    const props = mergeSlotProps(part, {
+      className,
+      locked: {
+        type: 'button',
+        tabIndex: -1,
+        onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) =>
+          startHold(event, direction),
+        onClick: (event: React.MouseEvent<HTMLButtonElement>) => clickStep(event, direction),
+        onMouseDown: keepFocus,
+        onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
+        disabled: disabledHere,
+        'aria-label': label,
+      },
+    });
+    const ending = (handler: unknown) => (event: React.PointerEvent<HTMLButtonElement>) => {
+      (handler as React.PointerEventHandler<HTMLButtonElement> | undefined)?.(event);
+      endHold(event);
+    };
+    return {
+      ...props,
+      onPointerUp: ending(props.onPointerUp),
+      onPointerCancel: ending(props.onPointerCancel),
+      onPointerLeave: ending(props.onPointerLeave),
+    };
+  };
+  const inputProps = mergeSlotProps(slotProps?.input, {
+    className: cn(
+      spinButtonClassNames.input,
+      'h-full min-w-0 flex-auto border-none bg-transparent text-center text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]',
+      SPIN_SIZE[size].input,
+      inputTextClasses[size],
+    ),
+    locked: {
+      type: 'text',
+      role: 'spinbutton',
+      inputMode: inputMode ?? defaultInputMode,
+      autoComplete,
+      autoFocus,
+      enterKeyHint,
+      placeholder,
+      maxLength,
+      spellCheck,
+      tabIndex,
+      readOnly,
+      form,
+      ...fieldProps,
+      // Set only through the SpinButton's own props, whether or not they are given.
+      id: fieldProps.id,
+      'aria-label': fieldProps['aria-label'],
+      'aria-required': fieldProps['aria-required'],
+      required: fieldProps.required,
+      'aria-invalid': ariaInvalidValue,
+      'aria-errormessage': ariaErrorMessage,
+      'aria-details': ariaDetails,
+      'aria-valuenow': value ?? undefined,
+      'aria-valuemin': Number.isFinite(min) ? min : undefined,
+      'aria-valuemax': Number.isFinite(max) ? max : undefined,
+      'aria-valuetext': ariaValueText ?? (showsDisplay ? displayValue : undefined),
+      value:
+        draft ??
+        (showsDisplay && !(focused && interactive)
+          ? displayValue
+          : value === null
+            ? ''
+            : String(value)),
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
+      onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
+      onKeyUp,
+      disabled,
+    },
+  });
+
   return (
     <div
       ref={ref}
@@ -708,94 +834,60 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       {...rest}
     >
       <button
+        // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
         type="button"
-        tabIndex={-1}
-        onPointerDown={(event) => startHold(event, -1)}
-        onPointerUp={endHold}
-        onPointerCancel={endHold}
-        onPointerLeave={endHold}
-        onClick={(event) => clickStep(event, -1)}
-        onMouseDown={keepFocus}
-        onContextMenu={(event) => event.preventDefault()}
-        disabled={!interactive || (current !== null && current <= min)}
-        aria-label={labels?.decrement ?? 'Decrement'}
-        className={cn(
-          spinButtonClassNames.decrementButton,
-          stepButtonClass,
-          SPIN_SIZE[size].button,
-          appearance === 'outline' && 'border-e border-input',
-          appearance === 'filled-darker' &&
-            'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
-          !disabled && 'disabled:opacity-50',
+        {...stepButtonProps(
+          slotProps?.decrementButton,
+          -1,
+          !interactive || (current !== null && current <= min),
+          labels?.decrement ?? 'Decrement',
+          cn(
+            spinButtonClassNames.decrementButton,
+            stepButtonClass,
+            SPIN_SIZE[size].button,
+            appearance === 'outline' && 'border-e border-input',
+            appearance === 'filled-darker' &&
+              'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+            !disabled && 'disabled:opacity-50',
+          ),
         )}
       >
         <SubtractIcon size={SPIN_SIZE[size].glyph} />
       </button>
 
       <input
+        {...inputProps}
         ref={mergedInputRef}
-        type="text"
-        role="spinbutton"
-        inputMode={inputMode ?? defaultInputMode}
-        autoComplete={autoComplete}
-        autoFocus={autoFocus}
-        enterKeyHint={enterKeyHint}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        spellCheck={spellCheck}
-        tabIndex={tabIndex}
-        readOnly={readOnly}
-        form={form}
-        {...fieldProps}
-        aria-invalid={ariaInvalidValue}
-        aria-errormessage={ariaErrorMessage}
-        aria-details={ariaDetails}
-        aria-valuenow={value ?? undefined}
-        aria-valuemin={Number.isFinite(min) ? min : undefined}
-        aria-valuemax={Number.isFinite(max) ? max : undefined}
-        aria-valuetext={ariaValueText ?? (showsDisplay ? displayValue : undefined)}
-        value={
-          draft ??
-          (showsDisplay && !(focused && interactive)
-            ? displayValue
-            : value === null
-              ? ''
-              : String(value))
-        }
-        onChange={(e) => setDraft(e.target.value)}
-        onFocus={composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false })}
-        onBlur={composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false })}
-        onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
-        onKeyUp={onKeyUp}
-        disabled={disabled}
-        className={cn(
-          spinButtonClassNames.input,
-          'h-full min-w-0 flex-auto border-none bg-transparent text-center text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]',
-          SPIN_SIZE[size].input,
-          inputTextClasses[size],
+        // The focus and blur work (the shown text, committing a draft) runs after the part's and
+        // the SpinButton's own handlers whatever they do.
+        onFocus={composeEventHandlers(
+          inputProps.onFocus as React.FocusEventHandler<HTMLInputElement> | undefined,
+          composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false }),
+          { checkDefaultPrevented: false },
+        )}
+        onBlur={composeEventHandlers(
+          inputProps.onBlur as React.FocusEventHandler<HTMLInputElement> | undefined,
+          composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false }),
+          { checkDefaultPrevented: false },
         )}
       />
 
       <button
         type="button"
-        tabIndex={-1}
-        onPointerDown={(event) => startHold(event, 1)}
-        onPointerUp={endHold}
-        onPointerCancel={endHold}
-        onPointerLeave={endHold}
-        onClick={(event) => clickStep(event, 1)}
-        onMouseDown={keepFocus}
-        onContextMenu={(event) => event.preventDefault()}
-        disabled={!interactive || (current !== null && current >= max)}
-        aria-label={labels?.increment ?? 'Increment'}
-        className={cn(
-          spinButtonClassNames.incrementButton,
-          stepButtonClass,
-          SPIN_SIZE[size].button,
-          appearance === 'outline' && 'border-s border-input',
-          appearance === 'filled-darker' &&
-            'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
-          !disabled && 'disabled:opacity-50',
+        {...stepButtonProps(
+          slotProps?.incrementButton,
+          1,
+          !interactive || (current !== null && current >= max),
+          labels?.increment ?? 'Increment',
+          cn(
+            spinButtonClassNames.incrementButton,
+            stepButtonClass,
+            SPIN_SIZE[size].button,
+            appearance === 'outline' && 'border-s border-input',
+            appearance === 'filled-darker' &&
+              'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+            !disabled && 'disabled:opacity-50',
+          ),
         )}
       >
         <AddIcon size={SPIN_SIZE[size].glyph} />

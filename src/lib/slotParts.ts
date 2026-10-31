@@ -9,7 +9,9 @@ import type * as ClassNames from './classNames';
  * - `SLOT_PROPS_KEYS`: a `slotProps` key of the component that declares it. Empty before the
  *   rollout; each rollout task moves its components' keys here from `PENDING_SLOT_PARTS` and adds
  *   each declaring component's props type to `SlotPropsOwners` in the gate's test file, whose
- *   type test requires the owner's `slotProps` keys to equal the keys listed here, both ways.
+ *   type test requires the owner's `slotProps` keys to equal the keys listed here, both ways
+ *   (`root` aside, which is no part key: only the owners `SLOT_PROPS_ROOT_OWNERS` names declare
+ *   it, and they must).
  * - `NAMED_SLOT_PARTS`: the part already has a named slot prop, so it gets no `slotProps` key
  *   (R2). The rule: a `Slot` or `SlotObject` prop that fills the part's element, named as the key
  *   (`icon` fills `icon`) or, where the name differs, noted above the entry (`dismiss` fills
@@ -60,7 +62,25 @@ export type SlotPartExclusion = {
  * The `slotProps` keys of each component (R1), filled by the rollout tasks. `as const` keeps each
  * key a literal, for the type test of its owner; `satisfies` still checks every constant and key.
  */
-export const SLOT_PROPS_KEYS = {} as const satisfies SlotPartLists;
+export const SLOT_PROPS_KEYS = {
+  inputClassNames: ['input'],
+  fieldClassNames: ['label', 'required', 'validationMessage', 'hint'],
+  labelClassNames: ['required'],
+  checkboxClassNames: ['indicator', 'label'],
+  radioGroupItemClassNames: ['indicator', 'label'],
+  switchClassNames: ['track', 'thumb', 'label'],
+  spinButtonClassNames: ['decrementButton', 'input', 'incrementButton'],
+  ratingDisplayClassNames: ['star', 'value', 'count'],
+} as const satisfies SlotPartLists;
+
+/**
+ * The constants whose component's `slotProps` also declares `root`, which is no part key: Input
+ * alone (R6), whose `root` and `input` are one `<input>` without content slots and the wrapper
+ * and the input with them. The owners' type test allows `root` exactly for these.
+ */
+export const SLOT_PROPS_ROOT_OWNERS = [
+  'inputClassNames',
+] as const satisfies readonly ClassNameConstant[];
 
 /** The parts that a named slot prop already fills (R2); see the module's JSDoc for the rule. */
 export const NAMED_SLOT_PARTS: SlotPartLists = {
@@ -344,14 +364,7 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   toastTitleClassNames: ['label'],
   toastBodyClassNames: ['subtitle'],
   toasterClassNames: ['toast'],
-  inputClassNames: ['input'],
-  fieldClassNames: ['label', 'required', 'validationMessage', 'hint'],
-  labelClassNames: ['required'],
-  checkboxClassNames: ['indicator', 'label'],
-  radioGroupItemClassNames: ['indicator', 'label'],
-  switchClassNames: ['track', 'thumb', 'label'],
   searchBoxClassNames: ['input', 'dismissButton'],
-  spinButtonClassNames: ['decrementButton', 'input', 'incrementButton'],
   optionClassNames: ['indicator', 'content'],
   optionGroupClassNames: ['label', 'list'],
   comboboxClassNames: [
@@ -430,7 +443,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   colorAreaClassNames: ['field', 'thumb'],
   colorSliderClassNames: ['rail', 'thumb'],
   alphaSliderClassNames: ['rail', 'thumb'],
-  ratingDisplayClassNames: ['star', 'value', 'count'],
   cardClassNames: ['checkmark'],
   cardHeaderClassNames: ['text', 'title', 'subtitle'],
   accordionTriggerClassNames: ['heading', 'expandIcon'],
