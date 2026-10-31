@@ -1269,6 +1269,32 @@ describe('Switch — slotProps', () => {
     );
   });
 
+  it('keeps its form and visibility: a part sets no form, hidden or aria-hidden on the switch', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <form aria-label="Settings">
+          <Switch
+            label="Dark mode"
+            name="dark"
+            slotProps={{ track: { form: 'elsewhere', hidden: true, 'aria-hidden': true } }}
+          />
+        </form>
+        <form id="elsewhere" aria-label="Elsewhere" />
+      </>,
+    );
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(control).not.toHaveAttribute('form');
+    expect(control).not.toHaveAttribute('hidden');
+    expect(control).not.toHaveAttribute('aria-hidden');
+    // It resets with the form it is in, the one its hidden input submits with.
+    await user.click(control);
+    const form = screen.getByRole('form', { name: 'Settings' }) as HTMLFormElement;
+    expect([...new FormData(form).keys()]).toEqual(['dark']);
+    act(() => form.reset());
+    expect(control).toHaveAttribute('aria-checked', 'false');
+  });
+
   it('has no accessibility violations with every part customised', async () => {
     render(
       <Switch

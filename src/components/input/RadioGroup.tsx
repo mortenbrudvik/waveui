@@ -238,18 +238,19 @@ export interface RadioItemProps extends Omit<
   /**
    * Props for the elements the item draws, by part, merged into each part's own (Fluent UI's
    * `indicator` and `label` slot props): your classes after the part's (yours win a conflict),
-   * your styles over its styles, your handlers before its handlers (`preventDefault()` skips the
-   * part's own), your ref beside its ref, and your ids added to its `aria-labelledby` and
-   * `aria-describedby`. Every attribute the item sets on a part is locked and keeps the item's
-   * value (set it through the item's own props); you add the attributes it does not set. A part
-   * takes no `children`.
+   * your styles over its styles, your handlers before its handlers (`preventDefault()` in yours
+   * skips the item's handling of the event, its own `on…` prop included), your ref beside its
+   * ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every attribute the
+   * item sets on a part is locked and keeps the item's value (set it through the item's own
+   * props); you add the attributes it does not set. A part takes no `children`.
    */
   slotProps?: {
     /**
      * The `role="radio"` `<button>` that draws the circle: the element the item's own props
      * and `ref` reach, but for `className` (stable class `wave-radio-group-item__indicator`).
      * Locked: `id`, `type`, `role`, `aria-checked`, `disabled`, `tabIndex` (the group's roving
-     * tab stop), the roving value the group finds its radios by, `aria-label` and every prop
+     * tab stop), the roving value the group finds its radios by, `aria-label`, `hidden` and
+     * `aria-hidden` (a focusable radio is hidden only by the item's own props) and every prop
      * you give the item itself. Your `onClick` runs before the item's `onClick` and its
      * selection (`preventDefault()` skips both); your other handlers run before the item's.
      */
@@ -341,8 +342,11 @@ export function RadioItem({
       type: 'button',
       role: 'radio',
       ...restWithoutStyle,
-      // Set only through the item's own props, whether or not it is given.
+      // Set only through the item's own props, whether or not they are given (a focusable
+      // radio is hidden only by the item's own props).
       'aria-label': rest['aria-label'],
+      hidden: rest.hidden,
+      'aria-hidden': rest['aria-hidden'],
       'aria-labelledby': labelledBy,
       'aria-checked': selected,
       disabled: isDisabled,

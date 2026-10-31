@@ -7,6 +7,7 @@ import {
   FieldContext,
   FieldContextProvider,
   createFieldControlIdClaim,
+  fieldLocks,
   useFieldContext,
   useFieldControl,
   type FieldContextValue,
@@ -898,5 +899,43 @@ describe('FieldContextProvider (P13-02, R12)', () => {
     expect(plain).toContain('id="own-control"');
     expect(plain).toContain('aria-describedby="own-error own-hint"');
     expect(renderToString(tree(Reference))).toBe(plain);
+  });
+});
+
+describe('fieldLocks (the slotProps locks of a control part)', () => {
+  it('holds the five routed keys with their values, unset ones as undefined', () => {
+    expect(
+      fieldLocks({
+        id: 'c',
+        'aria-label': 'Name',
+        'aria-labelledby': 'l',
+        'aria-describedby': 'd',
+        'aria-invalid': true,
+        'aria-required': true,
+        required: true,
+      }),
+    ).toStrictEqual({
+      id: 'c',
+      'aria-label': 'Name',
+      'aria-invalid': true,
+      'aria-required': true,
+      required: true,
+    });
+    const unset = fieldLocks({});
+    expect(Object.keys(unset)).toEqual([
+      'id',
+      'aria-label',
+      'aria-invalid',
+      'aria-required',
+      'required',
+    ]);
+    expect(Object.values(unset)).toEqual([undefined, undefined, undefined, undefined, undefined]);
+  });
+
+  it('leaves the id lists out, which a part joins instead', () => {
+    expect(fieldLocks({ 'aria-labelledby': 'l', 'aria-describedby': 'd' })).not.toHaveProperty(
+      'aria-labelledby',
+    );
+    expect(fieldLocks({ 'aria-describedby': 'd' })).not.toHaveProperty('aria-describedby');
   });
 });

@@ -15,7 +15,7 @@ import {
 import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
-import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
@@ -144,11 +144,12 @@ export interface SpinButtonBaseProps
    * Props for the elements the SpinButton draws inside its root, by part, merged into each
    * part's own (Fluent UI's `decrementButton`, `input` and `incrementButton` slot props): your
    * classes after the part's (yours win a conflict), your styles over its styles, your handlers
-   * before its handlers (`preventDefault()` skips the part's own, except the ones that end a
-   * hold and track focus), your ref beside its ref, and your ids added to its `aria-labelledby`
-   * and `aria-describedby`. Every attribute the SpinButton sets on a part is locked and keeps
-   * the SpinButton's value (set it through its own props); you add the attributes it does not
-   * set. A part takes no `children`.
+   * before its handlers (`preventDefault()` in yours skips the SpinButton's handling of the
+   * event, its own `on…` prop included, but never the work that ends a hold or tracks focus),
+   * your ref beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`.
+   * Every attribute the SpinButton sets on a part is locked and keeps the SpinButton's value
+   * (set it through its own props); you add the attributes it does not set. A part takes no
+   * `children`.
    */
   slotProps?: {
     /**
@@ -164,9 +165,12 @@ export interface SpinButtonBaseProps
      * `wave-spin-button__input`; `controlRef` reaches it as well). Locked: `type`, `role`,
      * `value`, `disabled`, `readOnly`, `form`, the `aria-value*` attributes, `id`, the naming and
      * Field attributes and every other input prop routed to it (`placeholder`, `tabIndex`,
-     * `inputMode`, …). Your `onChange` and `onKeyDown` run before the SpinButton's
-     * (`preventDefault()` skips them: a typed character or a step key is ignored); its focus
-     * and blur work (committing typed text) runs after yours whatever they do.
+     * `inputMode`, …), `name` (the form submits the committed value under the SpinButton's own
+     * `name`, on its hidden input, never the shown text), `hidden` and `aria-hidden` (a
+     * focusable control is never hidden). Your handlers run before the SpinButton's and
+     * `preventDefault()` in them skips its handling, its own `onChange`, `onKeyDown`, `onFocus`
+     * and `onBlur` props included (a typed character or a step key is ignored); its focus and
+     * blur work (the shown text, committing typed text) runs after them whatever they do.
      */
     input?: SlotPart<'input'>;
     /**
@@ -788,11 +792,8 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       readOnly,
       form,
       ...fieldProps,
-      // Set only through the SpinButton's own props, whether or not they are given.
-      id: fieldProps.id,
-      'aria-label': fieldProps['aria-label'],
-      'aria-required': fieldProps['aria-required'],
-      required: fieldProps.required,
+      // The routed naming and Field attributes, set only through the SpinButton's own props.
+      ...fieldLocks(fieldProps),
       'aria-invalid': ariaInvalidValue,
       'aria-errormessage': ariaErrorMessage,
       'aria-details': ariaDetails,
@@ -810,7 +811,14 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
       onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
       onKeyUp,
+      onFocus,
+      onBlur,
       disabled,
+      // The control's own: the form submits the committed value under the SpinButton's `name`
+      // (its hidden input), never the shown text, and a focusable control is never hidden.
+      name: undefined,
+      hidden: undefined,
+      'aria-hidden': undefined,
     },
   });
 
@@ -862,12 +870,12 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
         // the SpinButton's own handlers whatever they do.
         onFocus={composeEventHandlers(
           inputProps.onFocus as React.FocusEventHandler<HTMLInputElement> | undefined,
-          composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false }),
+          handleFocus,
           { checkDefaultPrevented: false },
         )}
         onBlur={composeEventHandlers(
           inputProps.onBlur as React.FocusEventHandler<HTMLInputElement> | undefined,
-          composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false }),
+          handleBlur,
           { checkDefaultPrevented: false },
         )}
       />

@@ -1865,12 +1865,46 @@ describe('SpinButton — slotProps', () => {
       />,
     );
     await user.click(spin());
-    expect(onFocus).toHaveBeenCalledTimes(1);
+    // The part's preventDefault() skips the SpinButton's own onFocus prop.
+    expect(onFocus).not.toHaveBeenCalled();
     await user.clear(spin());
     await user.type(spin(), '7');
     await user.tab();
     expect(onValueChange).toHaveBeenCalledWith(7);
     expect(spin()).toHaveValue('7');
+  });
+
+  it('runs its focus work even when your onFocus prevents the default, though not its onFocus prop', async () => {
+    const user = userEvent.setup();
+    const onFocus = vi.fn();
+    const order: string[] = [];
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        value={3}
+        displayValue="$3.00"
+        onFocus={() => order.push('onFocus')}
+        slotProps={{ input: { onFocus: () => order.push('part') } }}
+      />,
+    );
+    await user.click(spin());
+    expect(order).toEqual(['part', 'onFocus']);
+    // The focus work shows the plain number while the field has focus.
+    expect(spin()).toHaveValue('3');
+    await user.tab();
+    expect(spin()).toHaveValue('$3.00');
+    render(
+      <SpinButton
+        aria-label="Count"
+        value={4}
+        displayValue="$4.00"
+        onFocus={onFocus}
+        slotProps={{ input: { onFocus: (event) => event.preventDefault() } }}
+      />,
+    );
+    await user.click(spin('Count'));
+    expect(onFocus).not.toHaveBeenCalled();
+    expect(spin('Count')).toHaveValue('4');
   });
 
   it('keeps the locked attributes of the parts, and the props you give the SpinButton win', () => {
@@ -1909,14 +1943,26 @@ describe('SpinButton — slotProps', () => {
     expect(input).toHaveAttribute('placeholder', 'From the SpinButton');
   });
 
-  it('adds the attributes the SpinButton does not set', () => {
+  it('adds the attributes the SpinButton does not set, but no name, hidden or aria-hidden', () => {
     render(
-      <SpinButton
-        aria-label="Quantity"
-        slotProps={{ input: { title: 'How many', name: 'shown' } }}
-      />,
+      <form aria-label="Order">
+        <SpinButton
+          aria-label="Quantity"
+          name="qty"
+          defaultValue={2}
+          slotProps={{
+            input: { title: 'How many', name: 'shown', hidden: true, 'aria-hidden': true },
+          }}
+        />
+      </form>,
     );
     expect(spin()).toHaveAttribute('title', 'How many');
+    expect(spin()).not.toHaveAttribute('name');
+    expect(spin()).not.toHaveAttribute('hidden');
+    expect(spin()).not.toHaveAttribute('aria-hidden');
+    // The form gets the committed value under the SpinButton's own name only.
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    expect([...new FormData(form).entries()]).toEqual([['qty', '2']]);
   });
 
   it('has no accessibility violations with every part customised', async () => {

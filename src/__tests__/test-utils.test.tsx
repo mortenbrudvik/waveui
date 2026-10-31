@@ -1930,6 +1930,29 @@ describe('expectInertSlotProps', () => {
     cleanup();
   });
 
+  it('fails when an empty slotProps changes a part rendered in a portal (outside the container)', () => {
+    function Popup({ slotProps }: { slotProps?: Parts }) {
+      return (
+        <div>
+          {createPortal(
+            <span className="popup-part" data-parts={slotProps ? 'given' : undefined} />,
+            document.body,
+          )}
+        </div>
+      );
+    }
+    // The container alone does not change: a comparison of it would pass.
+    const { container, rerender } = render(<Popup />);
+    const inside = container.innerHTML;
+    rerender(<Popup slotProps={{}} />);
+    expect(container.innerHTML).toBe(inside);
+    cleanup();
+    expect(() =>
+      expectInertSlotProps((slotProps) => <Popup slotProps={slotProps} />, { inner: {} }),
+    ).toThrow(/Object.is equality/);
+    cleanup();
+  });
+
   it('fails when everyPart is not empty', () => {
     expect(() =>
       expectInertSlotProps((slotProps) => <Probe slotProps={slotProps} />, {

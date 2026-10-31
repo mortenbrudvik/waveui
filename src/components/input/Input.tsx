@@ -17,7 +17,7 @@ import {
 } from '../../lib/styles';
 import type { CoreSize, InputAppearance, Slot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
-import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { legacyNativeSize, useInputLook } from './inputLook';
 
@@ -177,11 +177,12 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   /**
    * Props for the elements the Input draws, by part, merged into each part's own (Fluent UI's
    * `root` and `input` slot props): your classes after the part's (yours win a conflict), your
-   * styles over its styles, your handlers before its handlers (`preventDefault()` skips the
-   * part's own), your ref beside its ref, and your ids added to its `aria-labelledby` and
-   * `aria-describedby`. Every attribute the Input sets on a part is locked and keeps the Input's
-   * value (set it through the Input's own props, which win over these); you add the attributes
-   * it does not set. A part takes no `children`.
+   * styles over its styles, your handlers before its handlers (`preventDefault()` in yours
+   * skips the Input's handling of the event, its own `on…` prop included), your ref beside its
+   * ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every attribute the
+   * Input sets on a part is locked and keeps the Input's value (set it through the Input's own
+   * props, which win over these); you add the attributes it does not set. A part takes no
+   * `children`.
    *
    * Without `contentBefore` and `contentAfter` the field is one `<input>`, the root and the input
    * at once: `root` and `input` both apply to it, `input` after `root`, so a prop set in both
@@ -191,18 +192,20 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
     /**
      * The element that draws the field (stable class `wave-input`): the bordered `<span>` around
      * the input with `contentBefore` or `contentAfter`, else the `<input>` itself, where `input`
-     * applies after it. On the `<span>`, locked: `hidden`, `data-size` and `data-appearance`.
-     * On the `<input>`, the locked attributes of `input`.
+     * applies after it. Locked in both shapes: `hidden`, the Input's own. On the `<span>`, also
+     * `data-size` and `data-appearance`; on the `<input>`, the locked attributes of `input`.
      */
     root?: Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
     /**
      * The `<input>` (stable class `wave-input__input`), which the Input's own props, `ref`
      * included, reach as well. Locked: every prop you give the Input itself, its id and naming
      * (`id`, `aria-label`), its Field and error wiring (`aria-invalid`, `aria-required`,
-     * `aria-errormessage`), the state its look follows (`disabled`, `readOnly`, `required`), the
-     * native `size` and, without content slots, `data-size` and `data-appearance`. Your
-     * `onChange` runs before the Input's `onChange` and `onValueChange` (`preventDefault()`
-     * skips both).
+     * `aria-errormessage`), the state its look follows (`disabled`, `readOnly`, `required`),
+     * `hidden` and `aria-hidden` (the Input's own: a focusable control is hidden only by them),
+     * the native `size` and, without content slots, `data-size` and `data-appearance`. Your
+     * `onChange` runs before the Input's `onChange` and `onValueChange`, and `preventDefault()`
+     * in it skips both: on an uncontrolled Input the text still changes, only `onChange` and
+     * `onValueChange` are skipped.
      */
     input?: SlotPart<'input'>;
   };
@@ -298,14 +301,12 @@ export const Input = ({
     onChange: handleChange,
   };
   // Set on the input only through the Input's own props (locked against `slotProps`): its id and
-  // naming, the Field and error wiring, and the state its look follows, whether or not they are
-  // given (an unset one renders nothing).
+  // naming, the Field and error wiring, the state its look follows and whether the focusable
+  // input is hidden from assistive technology, whether or not they are given (an unset one
+  // renders nothing).
   const inputWiring = {
-    id: fieldProps.id,
-    'aria-label': fieldProps['aria-label'],
-    'aria-invalid': fieldProps['aria-invalid'],
-    'aria-required': fieldProps['aria-required'],
-    required: fieldProps.required,
+    ...fieldLocks(fieldProps),
+    'aria-hidden': props['aria-hidden'],
     disabled: props.disabled,
     readOnly: props.readOnly,
     size: nativeSize,
@@ -367,7 +368,8 @@ export const Input = ({
               'focus:outline-hidden',
               'disabled:cursor-not-allowed',
             ),
-            locked: { ...inputProps, ...inputWiring },
+            // The wrapper takes the Input's `hidden`; the input inside never is.
+            locked: { ...inputProps, ...inputWiring, hidden: undefined },
           })}
           ref={inputRef}
         />
@@ -399,7 +401,8 @@ export const Input = ({
             className,
           ),
           style,
-          locked: { ...look, ...controlPropsWithoutStyle, ...inputWiring },
+          // `hidden` is the Input's own here too, as on the wrapper with content slots.
+          locked: { ...look, ...controlPropsWithoutStyle, ...inputWiring, hidden: props.hidden },
         })}
         ref={inputRef}
       />

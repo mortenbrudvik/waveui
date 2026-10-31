@@ -1067,6 +1067,7 @@ export const MODULE_ONLY_NAMES = [
   'drawerMotion',
   'endsTextSelection',
   'expandIconMotion',
+  'fieldLocks',
   'findCategoriesContaining',
   'findExactMatch',
   'flatTreeForest',

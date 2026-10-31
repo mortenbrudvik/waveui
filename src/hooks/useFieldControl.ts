@@ -341,3 +341,30 @@ export function useFieldControl(
   if (required !== undefined) result.required = required;
   return result;
 }
+
+/** The keys {@link fieldLocks} locks, each present, with the value the control renders. */
+type FieldLocks = {
+  [K in 'id' | 'aria-label' | 'aria-invalid' | 'aria-required' | 'required']: FieldControlProps[K];
+};
+
+/**
+ * The routed naming and Field attributes of a control part, for the `locked` props of its
+ * `slotProps` part (module-only): `id`, `aria-label`, `aria-invalid`, `aria-required` and
+ * `required` from a {@link useFieldControl} result, each key present also while its value is
+ * `undefined`, so a part can neither set nor change them; the control's own props stay the only
+ * way to. `aria-labelledby` and `aria-describedby` are not here: a part's ids join those lists.
+ * Spread it after the result itself, and before any key the control resolves on its own (a
+ * generated `id` goes before both, so a defined `id` replaces it).
+ *
+ * @example
+ * locked: { ...fieldLocks(fieldProps), id: fieldProps.id ?? generatedId, ...fieldProps }
+ */
+export function fieldLocks(fieldProps: FieldControlProps): FieldLocks {
+  return {
+    id: fieldProps.id,
+    'aria-label': fieldProps['aria-label'],
+    'aria-invalid': fieldProps['aria-invalid'],
+    'aria-required': fieldProps['aria-required'],
+    required: fieldProps.required,
+  };
+}

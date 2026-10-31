@@ -9,7 +9,7 @@ import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { LabelPosition, Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
-import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -137,18 +137,21 @@ export interface SwitchProps extends Omit<
    * Props for the elements the Switch draws inside its root, by part, merged into each part's
    * own (Fluent UI's `indicator` and `label` slot props): your classes after the part's (yours
    * win a conflict), your styles over its styles, your handlers before its handlers
-   * (`preventDefault()` skips the part's own), your ref beside its ref, and your ids added to
-   * its `aria-labelledby` and `aria-describedby`. Every attribute the Switch sets on a part is
-   * locked and keeps the Switch's value (set it through the Switch's own props); you add the
-   * attributes it does not set. A part takes no `children`.
+   * (`preventDefault()` in yours skips the Switch's handling of the event, its own `on…` prop
+   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
+   * `aria-describedby`. Every attribute the Switch sets on a part is locked and keeps the
+   * Switch's value (set it through the Switch's own props); you add the attributes it does not
+   * set. A part takes no `children`.
    */
   slotProps?: {
     /**
      * The `role="switch"` `<button>`, the focusable control (stable class `wave-switch__track`;
      * `controlRef` reaches it as well). Locked: `id`, `type`, `role`, `aria-checked`,
-     * `disabled`, `tabIndex`, `autoFocus`, the attributes of `disabledFocusable` and the naming
-     * and Field attributes routed to it (`aria-label`, `aria-invalid`, `aria-required`,
-     * `aria-errormessage`, `aria-details`, `aria-disabled`). Your `onClick` runs before the
+     * `disabled`, `tabIndex`, `autoFocus`, the attributes of `disabledFocusable`, the naming and
+     * Field attributes routed to it (`aria-label`, `aria-invalid`, `aria-required`,
+     * `aria-errormessage`, `aria-details`, `aria-disabled`), `form` (the switch belongs to the
+     * form of its own `form` prop, as its hidden input does), `hidden` and `aria-hidden` (a
+     * focusable control is never hidden). Your `onClick` runs before the
      * Switch's `onClick` and its toggle (`preventDefault()` skips both) and is not called under
      * `disabledFocusable`; your focus and key handlers run before the Switch's.
      */
@@ -304,13 +307,11 @@ export const Switch = ({
           ),
     ),
     locked: {
+      // The routed naming and Field attributes, set only through the Switch's own props.
+      ...fieldLocks(fieldProps),
       id: generatedId,
       type: 'button',
       ...fieldProps,
-      // Set only through the Switch's own props, whether or not they are given.
-      'aria-label': fieldProps['aria-label'],
-      'aria-invalid': fieldProps['aria-invalid'],
-      'aria-required': fieldProps['aria-required'],
       'aria-labelledby': labelledBy,
       'aria-errormessage': ariaErrorMessage,
       'aria-details': ariaDetails,
@@ -323,6 +324,11 @@ export const Switch = ({
       onKeyUp,
       role: 'switch',
       'aria-checked': checked,
+      // The control's own: a part's `form` would reset it with another form than its hidden input
+      // submits with, and a focusable control is never hidden.
+      form: undefined,
+      hidden: undefined,
+      'aria-hidden': undefined,
       disabled: disabled && !disabledFocusable,
       ...focusableDisabledProps(disabledFocusable, { reachable: true }),
       onClick: disabledFocusable

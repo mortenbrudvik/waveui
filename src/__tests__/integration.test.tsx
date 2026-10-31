@@ -380,6 +380,10 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     expect('createFieldControlIdClaim' in barrel).toBe(false);
   });
 
+  it('never exports fieldLocks, the slotProps locks of a control part (module-only)', () => {
+    expect('fieldLocks' in barrel).toBe(false);
+  });
+
   it('exports the RadioGroup hooks, never the context object or the item state (P13-02, R11, R13)', () => {
     expect(barrel.useRadioGroupContext).toBeTypeOf('function');
     expect(barrel.useRadioGroupItem).toBeTypeOf('function');

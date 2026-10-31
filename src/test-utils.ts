@@ -1169,9 +1169,12 @@ export function sortAttributes(markup: string | Element): string {
 /**
  * Asserts that a component's `slotProps` changes no markup while it carries nothing: renders
  * `ui(undefined)`, then re-renders the same root with `{}`, with `everyPart` (each part `{}`) and
- * with `undefined` again, comparing `container.innerHTML` with the first render each time. One
- * root keeps the generated ids, so the strings compare as they are. Pass a `ui` that renders every
- * part (a label, a message, …); the root is unmounted at the end.
+ * with `undefined` again, comparing the whole document body (`baseElement.innerHTML`, so a part
+ * rendered in a portal counts) with the first render each time. One root keeps the generated ids,
+ * so the strings compare as they are. Pass a `ui` that renders every part (a label, a message, an
+ * open popup, …); the root is unmounted at the end. An overlay's parts are pinned against 0.17.1
+ * with `sortAttributes(document.body)` after an open client render, since `renderToString` holds
+ * no portal.
  *
  * @example
  * expectInertSlotProps((slotProps) => <Switch label="On" slotProps={slotProps} />, {
@@ -1184,11 +1187,11 @@ export function expectInertSlotProps<S extends object>(
   ui: (slotProps: S | undefined) => React.ReactElement,
   everyPart: S,
 ): void {
-  const { container, rerender, unmount } = render(ui(undefined));
-  const markup = container.innerHTML;
+  const { baseElement, rerender, unmount } = render(ui(undefined));
+  const markup = baseElement.innerHTML;
   for (const slotProps of [{} as S, everyPart, undefined]) {
     rerender(ui(slotProps));
-    expect(container.innerHTML).toBe(markup);
+    expect(baseElement.innerHTML).toBe(markup);
   }
   unmount();
 }

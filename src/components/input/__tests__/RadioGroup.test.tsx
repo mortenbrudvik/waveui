@@ -1663,6 +1663,21 @@ describe('RadioGroup.Item — slotProps', () => {
     expect(screen.getByRole('radio', { name: 'Two' })).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('is hidden only by the item itself: a part sets no hidden or aria-hidden on the radio', () => {
+    render(
+      <RadioGroup aria-label="Choice">
+        <RadioGroup.Item
+          value="a"
+          label="One"
+          slotProps={{ indicator: { hidden: true, 'aria-hidden': true } }}
+        />
+      </RadioGroup>,
+    );
+    const radio = screen.getByRole('radio', { name: 'One' });
+    expect(radio).not.toHaveAttribute('hidden');
+    expect(radio).not.toHaveAttribute('aria-hidden');
+  });
+
   it('has no accessibility violations with every part customised', async () => {
     render(
       <RadioGroup aria-label="Choice" defaultValue="a">

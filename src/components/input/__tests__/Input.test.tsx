@@ -826,6 +826,26 @@ describe('Input — slotProps', () => {
     expect(input).toHaveAttribute('aria-describedby', `${screen.getByRole('alert').id} extra`);
   });
 
+  it.each([
+    ['one <input>', {}],
+    ['a wrapper', { contentBefore: '@' }],
+  ] as const)('takes hidden from the Input itself in %s, never from a part', (_, shape) => {
+    const { rerender } = render(
+      <Input
+        aria-label="Name"
+        {...shape}
+        slotProps={{ root: { hidden: true }, input: { hidden: true, 'aria-hidden': true } }}
+      />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    const field = input.closest(`.${inputClassNames.root}`) as HTMLElement;
+    expect(field).not.toHaveAttribute('hidden');
+    expect(input).not.toHaveAttribute('hidden');
+    expect(input).not.toHaveAttribute('aria-hidden');
+    rerender(<Input aria-label="Name" {...shape} hidden slotProps={{ root: { hidden: false } }} />);
+    expect(field).toHaveAttribute('hidden');
+  });
+
   it('has no accessibility violations with both shapes customised', async () => {
     render(
       <>
