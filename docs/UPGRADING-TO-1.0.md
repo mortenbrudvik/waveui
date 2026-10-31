@@ -1,10 +1,10 @@
 # Upgrading to 1.0
 
-> **Draft.** 0.18 announces everything that 1.0 changes, and this guide lists it. Phase 14 of the [roadmap](ROADMAP.md) makes the changes and completes the guide; until 1.0 is released, nothing below changes.
+> **Draft.** 0.18 announces every change decided for 1.0, and this guide lists it. Phase 14 of the [roadmap](ROADMAP.md) makes the changes and completes the guide; until 1.0 is released, nothing below changes.
 
-1.0 is the API freeze of `@mortenbrudvik/waveui`: it removes what 0.x deprecated, changes a few defaults and meanings, makes the optional `details` arguments required and records the choices 0.x deferred. Semantic versioning applies from then on. Every item was announced in a 0.x release, named in the "Announced in" column, and the [CHANGELOG](../CHANGELOG.md) restates them all under 0.18.0, "Deprecated".
+1.0 is the API freeze of `@mortenbrudvik/waveui`: it removes what 0.x deprecated, changes a few defaults and meanings, makes the optional `details` arguments required and records the choices that 0.x deferred and that are now decided. Semantic versioning applies from then on. Every decided change was announced in a 0.x release, named in the "Announced in" column, and the [CHANGELOG](../CHANGELOG.md) restates them all under 0.18.0, "Deprecated". One choice is still open: see [Not decided yet](#not-decided-yet).
 
-Each replacement in the tables already works in 0.x, next to the old form. You can move to it at your own pace, and an app that uses no old form upgrades to 1.0 without code changes.
+Each replacement of a removal already works in 0.x, next to the old form, so you can move to it at your own pace, and an app that uses none of the removed forms needs no change for them. The [defaults and meanings that change](#defaults-and-meanings-that-change) are different: the same code renders or behaves differently in 1.0 unless you pass the value that keeps the 0.x result.
 
 ## Before you upgrade
 
@@ -23,9 +23,9 @@ The warnings added in 0.18 (Badge and CounterBadge `important`, the positional `
 
 **What no code can detect.** Search your code for the rows marked "Warns: no":
 
-- CSS: imports of `legacy-tokens.css` or `animations.css`, the selectors `.dark` and `.high-contrast` (and a class-based `dark:` variant keyed on `.dark`), and the classes `wave-tag-picker__control` and `wave-tag-picker__group`.
+- CSS: imports of `legacy-tokens.css` or `animations.css`, the selectors `.dark` and `.high-contrast` (and a class-based `dark:` variant keyed on `.dark`), and the classes `wave-tag-picker__control` and `wave-tag-picker__group` (in code, `tagPickerClassNames.control` and `tagPickerClassNames.group`).
 - Behaviour: a TeachingPopover whose `onDismiss` must also run when Done is pressed, and a TimePicker without `format` whose users need 12-hour times.
-- Types: code that calls a callback prop listed under [Arguments and props that become required](#arguments-and-props-that-become-required) itself (a wrapper that forwards it, a test that invokes it). WaveUI always passes `details`; code that calls the prop passes it too in 1.0.
+- Types: code that calls a callback prop listed under [Arguments and props that become required](#arguments-and-props-that-become-required) itself (a wrapper that forwards it, a test that invokes it). WaveUI passes `details` on every change it makes from an event, and in 1.0 also on the three paths that pass none in 0.x (listed in that section); code that calls the prop passes it too in 1.0.
 
 ## Removed in 1.0
 
@@ -85,11 +85,11 @@ Each item is removed without an alias. Its replacement works in 0.x, so you can 
 | Select numeric `size` (or a string of digits) | `htmlSize` | 0.9 | yes |
 | Slider numeric `size` | nothing: it has no effect, remove it | 0.9 | yes |
 | InfoLabel `label` | `children` | 0.9 | yes |
-| The classes `wave-tag-picker__control` and `wave-tag-picker__group` | `wave-tag-picker-control` and `wave-tag-picker-group` | 0.11 | no |
-| PresenceBadge `status` `'dnd'` and `'oof'` | `'do-not-disturb'` and `'out-of-office'` | 0.13 | yes |
+| The classes `wave-tag-picker__control` and `wave-tag-picker__group` (`tagPickerClassNames.control` and `tagPickerClassNames.group`) | `wave-tag-picker-control` and `wave-tag-picker-group` (`tagPickerControlClassNames.root` and `tagPickerGroupClassNames.root`) | 0.11 | no |
+| PresenceBadge `status` `'dnd'` and `'oof'` (type `DeprecatedPresenceStatus`) | `'do-not-disturb'` and `'out-of-office'` | 0.13 | yes |
 | `DataGridColumn.id` | `columnId` | 0.14 | yes |
 | `useRovingTabIndex(containerRef, options)` | `useRovingTabIndex(options)` and its `containerProps` | 0.18 | yes |
-| DataGrid `onSortChange(columnId, direction)` (no `items`, `sort` or `defaultSort`) | `onSortChange(sort, details)`, with `items`, `sort` or `defaultSort` | 0.18 | yes |
+| DataGrid `onSortChange(columnId, direction)` without `items`, `sort` or `defaultSort` (type `DataGridLegacySortProps`) | `onSortChange(sort, details)`, with `items`, `sort` or `defaultSort` | 0.18 | yes |
 | `Menu.Popover` `className` with presence variants, without `motion` | the classes in `motion` | 0.18 | yes |
 | `Dialog.Content` `className` with presence variants, without `motion` | the classes in `motion` | 0.18 | yes |
 | Drawer `className` with presence variants, without `motion` | the classes in `motion` | 0.18 | yes |
@@ -118,7 +118,13 @@ Nothing is removed here, but the same code looks or behaves differently in 1.0.
 
 ## Arguments and props that become required
 
-WaveUI always passes `details`, so a handler you give receives it today; only code that calls one of these props itself must pass it in 1.0. Read it as `details?.reason` (or the field you need) until then, and drop the `?` after upgrading.
+WaveUI passes `details` on every change it makes from an event, so a handler you give receives it there today. Three paths pass none in 0.x and pass it in 1.0, with an event of their own where none is given (as `useTableColumnSizing` already does with `new Event('resize')`):
+
+- `useTableSort`: `setColumnSort` and `toggleColumnSort` called without an event.
+- `useFlatTree`: `setChecked` called without an event.
+- `Table.SelectionCell`: a form reset that restores its `defaultChecked`.
+
+Code that calls one of these props itself must pass `details` in 1.0. Read it as `details?.reason` (or the field you need) until then, and drop the `?` after upgrading.
 
 | Before | After | Announced in | Warns |
 |---|---|---|---|
@@ -132,13 +138,13 @@ WaveUI always passes `details`, so a handler you give receives it today; only co
 | Overflow `onOverflowChange(hiddenItems, details?)` | `onOverflowChange(hiddenItems, details)` | 0.14 | no |
 | DataGrid `onSortChange(sort, details?)` | `onSortChange(sort, details)` | 0.14 | no |
 | DataGrid `onSelectedItemsChange(selectedItems, details?)` | `onSelectedItemsChange(selectedItems, details)` | 0.14 | no |
-| `Table.SelectionCell` `onCheckedChange(checked, details?)` | `onCheckedChange(checked, details)` | 0.14 | no |
+| `Table.SelectionCell` `onCheckedChange(checked, details?)` (no `details` on a form reset) | `onCheckedChange(checked, details)`, a form reset included | 0.14 | no |
 | AvatarGroup `onOpenChange(open, details?)` | `onOpenChange(open, details)` | 0.18 | no |
 | DataGrid and `useTableColumnSizing` `onColumnWidthsChange(widths, details?)` | `onColumnWidthsChange(widths, details)` | 0.18 | no |
 | `Table.ResizeHandle` `onResize(width, details?)` | `onResize(width, details)` | 0.18 | no |
-| `useTableSort` `onSortChange(sort, details?)` | `onSortChange(sort, details)` | 0.18 | no |
+| `useTableSort` `onSortChange(sort, details?)` (no `details` when `setColumnSort` or `toggleColumnSort` gets no event) | `onSortChange(sort, details)`, also without an event | 0.18 | no |
 | `useSelection` `onSelectedItemsChange(selectedItems, details?)` | `onSelectedItemsChange(selectedItems, details)` | 0.18 | no |
-| `useFlatTree` (FlatTree) `onCheckedItemsChange(checkedItems, details?)` | `onCheckedItemsChange(checkedItems, details)` | 0.18 | no |
+| `useFlatTree` (FlatTree) `onCheckedItemsChange(checkedItems, details?)` (no `details` when `setChecked` gets no event) | `onCheckedItemsChange(checkedItems, details)`, also without an event | 0.18 | no |
 | Image without `alt` (`ImageProps.alt` optional) | `alt` required (`alt=""` for a decorative image); `StrictImageProps` an alias | 0.18 | yes |
 
 `StrictImageProps`, the `ImageProps` with a required `alt`, gives you the 1.0 check at compile time now.
@@ -152,6 +158,10 @@ WaveUI always passes `details`, so a handler you give receives it today; only co
 | `ref` on the root, `controlRef` on the focusable element, `slotProps.<part>.ref` on parts | no change: 1.0 moves no `ref` | 0.18 | no |
 
 **Ref placement.** `ref` stays on a component's root element, the one that receives `className`, also on composite controls whose focusable element sits inside a wrapper (Checkbox, Switch, SearchBox, SpinButton and the pickers). `controlRef` reaches that focusable element, and every part reaches its own element through `slotProps.<part>.ref`. Fluent puts `ref` on the primary element instead; code ported from Fluent passes `controlRef` where it passed `ref` to such a control.
+
+## Not decided yet
+
+**Namespaced utilities** ([roadmap](ROADMAP.md), P14-01). Wave's color and type utilities (`bg-primary`, `text-foreground`, …) are unprefixed and can collide with an app's own Tailwind build or shadcn/ui (the README's [Global effects](../README.md#global-effects)). A namespace for them is being considered for 1.0 and is not decided, so nothing above covers it. If 1.0 ships it, a 0.x release announces it first, with a migration table, and this guide gains its rows.
 
 ## Where the list comes from
 

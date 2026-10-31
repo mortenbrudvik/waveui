@@ -761,8 +761,9 @@ export const DEPRECATIONS: readonly Deprecation[] = [
   {
     id: 'tagpicker-legacy-classes',
     group: '`wave-tag-picker__control` and `wave-tag-picker__group`',
-    item: 'The classes `wave-tag-picker__control` and `wave-tag-picker__group`',
-    replacement: '`wave-tag-picker-control` and `wave-tag-picker-group`',
+    item: 'The classes `wave-tag-picker__control` and `wave-tag-picker__group` (`tagPickerClassNames.control` and `tagPickerClassNames.group`)',
+    replacement:
+      '`wave-tag-picker-control` and `wave-tag-picker-group` (`tagPickerControlClassNames.root` and `tagPickerGroupClassNames.root`)',
     sinceVersion: '0.11',
     kind: 'removed',
     warns: false,
@@ -773,7 +774,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
   {
     id: 'presencebadge-dnd-oof',
     group: "PresenceBadge `'dnd'` and `'oof'`",
-    item: "PresenceBadge `status` `'dnd'` and `'oof'`",
+    item: "PresenceBadge `status` `'dnd'` and `'oof'` (type `DeprecatedPresenceStatus`)",
     replacement: "`'do-not-disturb'` and `'out-of-office'`",
     sinceVersion: '0.13',
     kind: 'removed',
@@ -823,7 +824,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
   {
     id: 'datagrid-positional-onsortchange',
     group: "DataGrid's positional `onSortChange`",
-    item: 'DataGrid `onSortChange(columnId, direction)` (no `items`, `sort` or `defaultSort`)',
+    item: 'DataGrid `onSortChange(columnId, direction)` without `items`, `sort` or `defaultSort` (type `DataGridLegacySortProps`)',
     replacement: '`onSortChange(sort, details)`, with `items`, `sort` or `defaultSort`',
     sinceVersion: '0.18',
     kind: 'removed',
@@ -881,7 +882,10 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     file: 'src/components/navigation/NavDrawer.tsx',
   },
 
-  // Optional `details` arguments that become required (types only: WaveUI always passes them).
+  // Optional `details` arguments that become required (types only). WaveUI passes `details` on
+  // every change it makes from an event; three paths pass none in 0.x and pass it in 1.0, with an
+  // event of their own where none is given: `useTableSort` and `useFlatTree` called without an
+  // event, and a form reset of `Table.SelectionCell`.
   {
     id: 'details-dialog-onopenchange',
     group: DETAILS_BEFORE,
@@ -997,8 +1001,8 @@ export const DEPRECATIONS: readonly Deprecation[] = [
   {
     id: 'details-selectioncell-oncheckedchange',
     group: DETAILS_BEFORE,
-    item: '`Table.SelectionCell` `onCheckedChange(checked, details?)`',
-    replacement: '`onCheckedChange(checked, details)`',
+    item: '`Table.SelectionCell` `onCheckedChange(checked, details?)` (no `details` on a form reset)',
+    replacement: '`onCheckedChange(checked, details)`, a form reset included',
     sinceVersion: '0.14',
     kind: 'required',
     warns: false,
@@ -1041,8 +1045,8 @@ export const DEPRECATIONS: readonly Deprecation[] = [
   {
     id: 'details-usetablesort-onsortchange',
     group: DETAILS_NOW,
-    item: '`useTableSort` `onSortChange(sort, details?)`',
-    replacement: '`onSortChange(sort, details)`',
+    item: '`useTableSort` `onSortChange(sort, details?)` (no `details` when `setColumnSort` or `toggleColumnSort` gets no event)',
+    replacement: '`onSortChange(sort, details)`, also without an event',
     sinceVersion: '0.18',
     kind: 'required',
     warns: false,
@@ -1063,8 +1067,8 @@ export const DEPRECATIONS: readonly Deprecation[] = [
   {
     id: 'details-useflattree-oncheckeditemschange',
     group: DETAILS_NOW,
-    item: '`useFlatTree` (FlatTree) `onCheckedItemsChange(checkedItems, details?)`',
-    replacement: '`onCheckedItemsChange(checkedItems, details)`',
+    item: '`useFlatTree` (FlatTree) `onCheckedItemsChange(checkedItems, details?)` (no `details` when `setChecked` gets no event)',
+    replacement: '`onCheckedItemsChange(checkedItems, details)`, also without an event',
     sinceVersion: '0.18',
     kind: 'required',
     warns: false,

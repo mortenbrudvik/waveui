@@ -2925,7 +2925,7 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
 
 ## 1.0 notices
 
-1.0 removes what 0.x deprecated, changes a few defaults and meanings, and makes the optional `details` arguments required; 0.18 announces all of it, and nothing changes before 1.0. [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) lists every item with its replacement and the release that announced it, and how to find the uses in your app: a development build warns once about each one that code can detect.
+1.0 removes what 0.x deprecated, changes a few defaults and meanings, and makes the optional `details` arguments required. Every change decided for 1.0 was announced in a 0.x release, 0.18 restates them all, and none of them happens before 1.0. [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) lists every item with its replacement and the release that announced it, and how to find the uses in your app: a development build warns once about each use that the guide marks "Warns: yes". Namespaced utilities (see [Global effects](#global-effects)) are not decided yet; if 1.0 ships them, a 0.x release announces them first.
 
 ## Upgrading from 0.16
 

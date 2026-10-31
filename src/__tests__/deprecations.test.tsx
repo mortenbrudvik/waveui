@@ -31,6 +31,12 @@
  *   own: Badge and CounterBadge `important`, the presence className rule, the button-object
  *   dismiss slots of MessageBar and SearchBox, a numeric Slider `size`, a missing `Image.alt`) are
  *   outside the count; their cases prove them.
+ * - **1.0 warnings of their own.** A `warnOnce` call of the same modules whose message says
+ *   "in 1.0" announces a change of 1.0, so its key needs a row that warns under it (a template
+ *   key matches a row's key with any text in place of each interpolation). The message is read
+ *   when it is a string or template literal, a `+` concatenation of them or a `const` of the
+ *   module that holds one; a message built by a call is not read. An aliased import of `warnOnce`,
+ *   or a reference that is not a call, fails as for the two helpers above.
  */
 import * as React from 'react';
 import { existsSync } from 'node:fs';
@@ -110,20 +116,74 @@ const INVENTORY_MODULE = 'src/lib/deprecations.ts';
 /** The prefix of the warn-once keys that `warnDeprecated` builds. */
 const DEPRECATED_KEY = 'deprecated:';
 
+/** The helpers whose calls are counted. */
 const CALLEES = new Set(['warnDeprecated', 'resolveDeprecatedProp']);
 
-// ---------------------------------------------------------------------------
-// Call sites
-// ---------------------------------------------------------------------------
+/** The helper whose calls announcing a 1.0 change need a row of their own. */
+const WARN_ONCE = 'warnOnce';
+
+/** What a `warnOnce` message says when it announces a change of 1.0. */
+const ANNOUNCES_1_0 = 'in 1.0';
+
+/** Stands for an interpolation (`${…}`) in the text of a template literal. */
+const PLACEHOLDER = '\u0000';
 
 interface CallScan {
   /** The calls of `warnDeprecated` and `resolveDeprecatedProp`. */
   readonly calls: number;
-  /** References that are neither such a call nor a plain import (an alias, a value passed on). */
+  /**
+   * The `warnOnce` calls whose message says "in 1.0": where, and the key (a template's
+   * interpolations as {@link PLACEHOLDER}; `null` when the key is no literal, template or
+   * concatenation of them).
+   */
+  readonly announcements: readonly { readonly where: string; readonly key: string | null }[];
+  /**
+   * References to the three helpers that are neither a call nor a plain import (an alias, a value
+   * passed on).
+   */
   readonly evasions: readonly string[];
 }
 
-/** Counts a module's calls of the two helpers by the rule of the file header. */
+/**
+ * The text of a string expression: a string or template literal (interpolations as
+ * {@link PLACEHOLDER}), a `+` concatenation of them, or the name of a `const` of the module that
+ * holds one; `null` for anything else (a call that builds the text).
+ */
+function staticText(node: ts.Node | undefined, file: ts.SourceFile): string | null {
+  if (node === undefined) return null;
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  if (ts.isTemplateExpression(node)) {
+    return (
+      node.head.text + node.templateSpans.map((span) => PLACEHOLDER + span.literal.text).join('')
+    );
+  }
+  if (ts.isParenthesizedExpression(node)) return staticText(node.expression, file);
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const left = staticText(node.left, file);
+    const right = staticText(node.right, file);
+    return left === null || right === null ? null : left + right;
+  }
+  if (ts.isIdentifier(node)) {
+    let text: string | null = null;
+    const find = (child: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(child) &&
+        ts.isIdentifier(child.name) &&
+        child.name.text === node.text &&
+        child.initializer
+      ) {
+        text = staticText(child.initializer, file);
+      } else {
+        ts.forEachChild(child, find);
+      }
+    };
+    find(file);
+    return text;
+  }
+  return null;
+}
+
+/** Scans a module by the rule of the file header. */
 function scanCalls(path: string, source: string): CallScan {
   const file = ts.createSourceFile(
     path,
@@ -133,39 +193,67 @@ function scanCalls(path: string, source: string): CallScan {
     path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   let calls = 0;
+  const announcements: { where: string; key: string | null }[] = [];
   const evasions: string[] = [];
+  const watched = (name: string) => CALLEES.has(name) || name === WARN_ONCE;
   const where = (node: ts.Node) =>
     `${path}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1}`;
   const visit = (node: ts.Node): void => {
     if (ts.isImportSpecifier(node)) {
       const imported = (node.propertyName ?? node.name).text;
-      if (CALLEES.has(imported) && node.name.text !== imported) {
+      if (watched(imported) && node.name.text !== imported) {
         evasions.push(`${where(node)}: ${imported} imported as ${node.name.text}`);
       }
       return;
     }
-    if (ts.isIdentifier(node) && CALLEES.has(node.text)) {
+    if (ts.isIdentifier(node) && watched(node.text)) {
       const { parent } = node;
       const isCallee = ts.isCallExpression(parent) && parent.expression === node;
       const isDeclaration = ts.isFunctionDeclaration(parent) && parent.name === node;
-      if (isCallee) calls++;
-      else if (!isDeclaration) evasions.push(`${where(node)}: ${node.text} used as a value`);
+      if (isCallee && CALLEES.has(node.text)) calls++;
+      if (isCallee && node.text === WARN_ONCE) {
+        const [key, message] = parent.arguments;
+        if (staticText(message, file)?.includes(ANNOUNCES_1_0)) {
+          announcements.push({ where: where(parent), key: staticText(key, file) });
+        }
+      }
+      if (!isCallee && !isDeclaration) {
+        evasions.push(`${where(node)}: ${node.text} used as a value`);
+      }
     }
     ts.forEachChild(node, visit);
   };
   visit(file);
-  return { calls, evasions };
+  return { calls, announcements, evasions };
+}
+
+/** The scan of every module of {@link SOURCES} but `src/lib/dev.ts`, made once. */
+let libraryScans: Readonly<Record<string, CallScan>> | undefined;
+function scanLibrary(): Readonly<Record<string, CallScan>> {
+  libraryScans ??= Object.fromEntries(
+    Object.entries(SOURCES)
+      .filter(([path]) => path !== DEV_MODULE)
+      .map(([path, source]) => [path, scanCalls(path, source)]),
+  );
+  return libraryScans;
 }
 
 /** The call sites per module (modules without any are left out), `src/lib/dev.ts` excluded. */
-function callSitesByModule(sources: Readonly<Record<string, string>>): Record<string, number> {
+function callSitesByModule(): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (const [path, source] of Object.entries(sources)) {
-    if (path === DEV_MODULE) continue;
-    const { calls } = scanCalls(path, source);
+  for (const [path, { calls }] of Object.entries(scanLibrary())) {
     if (calls > 0) counts[path] = calls;
   }
   return counts;
+}
+
+/** Whether a `warnOnce` key (interpolations as {@link PLACEHOLDER}) can be `warningKey`. */
+function keyMatches(key: string, warningKey: string): boolean {
+  const pattern = key
+    .split(PLACEHOLDER)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.+');
+  return new RegExp(`^${pattern}$`).test(warningKey);
 }
 
 /** The rows a call site announces, counted per module (`file`). */
@@ -201,9 +289,14 @@ function subsection(section: string, name: string): string[] {
   return lines.slice(start + 1, end < 0 ? undefined : end);
 }
 
-/** `'0.6'` as a whole version in `text` (not `0.16` or `0.6.1`). */
-function namesVersion(text: string, version: string): boolean {
-  return new RegExp(`(?<![\\d.])${version.replace('.', '\\.')}(?![\\d]|\\.\\d)`).test(text);
+/**
+ * Whether a 0.18.0 "Deprecated" line names `version` (`'0.6'`) as one that announced it: a whole
+ * version (not `0.16` or `0.6.1`) in its `(announced in …)` or `(decided in …)`, never elsewhere
+ * in the line.
+ */
+function namesVersion(line: string, version: string): boolean {
+  const announced = /\((?:announced|decided) in ([^)]*)\)/.exec(line)?.[1] ?? '';
+  return new RegExp(`(?<![\\d.])${version.replace('.', '\\.')}(?![\\d]|\\.\\d)`).test(announced);
 }
 
 /** The groups of the 0.18.0 "Deprecated" list: the bold title of each line, with the line. */
@@ -881,21 +974,31 @@ describe('the 1.0 inventory: the call sites of warnDeprecated and resolveDepreca
   });
 
   it('has one deprecated: row per call site, in the module of the call', () => {
-    expect(deprecatedKeyRowsByModule(DEPRECATIONS)).toEqual(callSitesByModule(SOURCES));
+    expect(deprecatedKeyRowsByModule(DEPRECATIONS)).toEqual(callSitesByModule());
   });
 
   it('counts as many call sites as removals that warn through warnDeprecated', () => {
-    const calls = Object.values(callSitesByModule(SOURCES)).reduce((sum, n) => sum + n, 0);
+    const calls = Object.values(callSitesByModule()).reduce((sum, n) => sum + n, 0);
     const rows = DEPRECATIONS.filter(
       (row) => row.warns && row.kind === 'removed' && row.warningKey.startsWith(DEPRECATED_KEY),
     ).length;
     expect(calls).toBe(rows);
   });
 
+  it('has a row for every warnOnce whose message announces a change of 1.0', () => {
+    const announcements = Object.values(scanLibrary()).flatMap((scan) => scan.announcements);
+    expect(announcements.length).toBeGreaterThan(0);
+    const ownKeys = WARNING_ROWS.map((row) => row.warningKey).filter(
+      (key) => !key.startsWith(DEPRECATED_KEY),
+    );
+    const withoutRow = announcements
+      .filter(({ key }) => key === null || !ownKeys.some((own) => keyMatches(key, own)))
+      .map(({ where, key }) => `${where}: ${key ?? 'a key that is no literal or template'}`);
+    expect(withoutRow).toEqual([]);
+  });
+
   it('finds no aliased import and no reference that is not a call', () => {
-    const evasions = Object.entries(SOURCES)
-      .filter(([path]) => path !== DEV_MODULE)
-      .flatMap(([path, source]) => scanCalls(path, source).evasions);
+    const evasions = Object.values(scanLibrary()).flatMap((scan) => scan.evasions);
     expect(evasions).toEqual([]);
   });
 
@@ -908,16 +1011,43 @@ describe('the 1.0 inventory: the call sites of warnDeprecated and resolveDepreca
       "warnDeprecated('X', 'a', 'b');",
       "const v = resolveDeprecatedProp<number>('X', 1, undefined, 'a', 'b');",
     ].join('\n');
-    expect(scanCalls('src/components/x/X.tsx', source)).toEqual({ calls: 2, evasions: [] });
+    expect(scanCalls('src/components/x/X.tsx', source)).toEqual({
+      calls: 2,
+      announcements: [],
+      evasions: [],
+    });
     const evasive = [
-      "import { warnDeprecated as announce } from '../../lib/dev';",
+      "import { warnDeprecated as announce, warnOnce as once } from '../../lib/dev';",
       "import { resolveDeprecatedProp } from '../../lib/dev';",
       'const resolve = resolveDeprecatedProp;',
     ].join('\n');
     expect(scanCalls('src/components/x/X.ts', evasive).evasions).toEqual([
       'src/components/x/X.ts:1: warnDeprecated imported as announce',
+      'src/components/x/X.ts:1: warnOnce imported as once',
       'src/components/x/X.ts:3: resolveDeprecatedProp used as a value',
     ]);
+  });
+
+  it('reads the warnOnce calls that announce 1.0: literals, templates, concatenations, consts', () => {
+    const source = [
+      "import { warnOnce } from '../../lib/dev';",
+      "const MESSAGE = 'X: `c` is removed in 1.0.';",
+      "warnOnce('X:a', 'X: `a` is removed in 1.0.');",
+      'warnOnce(`${name}:b`, `${name}: \\`b\\` changes in ` + "1.0.");',
+      "warnOnce('X:c', MESSAGE);",
+      "warnOnce(key, 'X: `d` is removed in 1.0.');",
+      "warnOnce('X:e', 'X: `e` has no name.');",
+      "warnOnce('X:f', describe('f'));",
+    ].join('\n');
+    expect(scanCalls('src/components/x/X.ts', source).announcements).toEqual([
+      { where: 'src/components/x/X.ts:3', key: 'X:a' },
+      { where: 'src/components/x/X.ts:4', key: `${PLACEHOLDER}:b` },
+      { where: 'src/components/x/X.ts:5', key: 'X:c' },
+      { where: 'src/components/x/X.ts:6', key: null },
+    ]);
+    expect(keyMatches(`${PLACEHOLDER}:color:important`, 'CounterBadge:color:important')).toBe(true);
+    expect(keyMatches(`${PLACEHOLDER}:legacy-motion`, 'Dialog.Content:legacy-motion')).toBe(true);
+    expect(keyMatches('Slider:size-number', 'Slider:size-numbers')).toBe(false);
   });
 });
 
