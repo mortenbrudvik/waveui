@@ -254,6 +254,7 @@ import type {
   PresenceProps,
   ProgressBarColor,
   ProgressBarProps,
+  RadioGroupContextValue,
   RadioItemProps,
   Rating,
   RatingColor,
@@ -389,6 +390,8 @@ import type {
   UseListboxResult,
   UsePresenceOptions,
   UsePresenceResult,
+  UseRadioGroupItemOptions,
+  UseRadioGroupItemResult,
   UseRovingTabIndexOptions,
   UseSelectionChangeDetails,
   UseSelectionOptions,
@@ -2298,5 +2301,21 @@ describe('0.18 customization surface from the package entry', () => {
       value: FieldContextValue;
       children?: ReactNode;
     }>();
+  });
+
+  it('useRadioGroupContext and useRadioGroupItem, narrow views of a RadioGroup', () => {
+    expectTypeOf<Entry['useRadioGroupContext']>().toEqualTypeOf<() => RadioGroupContextValue>();
+    expectTypeOf<RadioGroupContextValue>().toEqualTypeOf<{
+      value: string | undefined;
+      disabled: boolean;
+      select: (value: string) => void;
+    }>();
+    expectTypeOf<Entry['useRadioGroupItem']>().toEqualTypeOf<
+      (value: string, options?: UseRadioGroupItemOptions) => UseRadioGroupItemResult
+    >();
+    expectTypeOf<UseRadioGroupItemOptions>().toEqualTypeOf<{ disabled?: boolean }>();
+    expectTypeOf<UseRadioGroupItemResult['props']['role']>().toEqualTypeOf<'radio'>();
+    expectTypeOf<UseRadioGroupItemResult['props']['tabIndex']>().toEqualTypeOf<0 | -1>();
+    expectTypeOf<UseRadioGroupItemResult['checked']>().toEqualTypeOf<boolean>();
   });
 });

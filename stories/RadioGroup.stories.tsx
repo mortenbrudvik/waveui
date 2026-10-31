@@ -1,7 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
-import { Button, RadioGroup, RadioItem } from '../src';
+import {
+  Button,
+  RadioGroup,
+  RadioItem,
+  cn,
+  focusRing,
+  useId,
+  useRadioGroupContext,
+  useRadioGroupItem,
+} from '../src';
 import { orientationArgType } from './_helpers';
 
 const meta = {
@@ -164,4 +173,86 @@ export const LabelWithSubtext: Story = {
       </RadioGroup>
     );
   },
+};
+
+interface PlanCardProps {
+  value: string;
+  title: string;
+  description: string;
+  disabled?: boolean;
+}
+
+/** A radio card of your own: `useRadioGroupItem` gives the props that make it a radio of the group. */
+function PlanCard({ value, title, description, disabled: disabledProp }: PlanCardProps) {
+  const id = useId('plan');
+  const { props, checked, disabled } = useRadioGroupItem(value, { disabled: disabledProp });
+  return (
+    <div
+      {...props}
+      aria-labelledby={`${id}-title`}
+      aria-describedby={`${id}-description`}
+      className={cn(
+        'flex w-72 items-start gap-3 rounded-md border-2 bg-background p-3',
+        focusRing,
+        checked ? 'border-primary' : 'border-stroke-accessible',
+        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border',
+          checked ? 'border-primary' : 'border-stroke-accessible',
+        )}
+      >
+        {checked && (
+          <span className="size-2 rounded-full bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none" />
+        )}
+      </span>
+      <span className="flex flex-col gap-0.5">
+        <span id={`${id}-title`} className="text-body-1 font-semibold text-foreground">
+          {title}
+        </span>
+        <span id={`${id}-description`} className="text-caption-1 text-muted-foreground">
+          {description}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Reads the group's choice with `useRadioGroupContext`. */
+function PlanSummary() {
+  const { value } = useRadioGroupContext();
+  return (
+    <div className="text-body-1 text-foreground">
+      {value === undefined ? 'No plan chosen' : `Chosen plan: ${value}`}
+    </div>
+  );
+}
+
+/**
+ * Cards of your own as the radios of a group, built on `useRadioGroupItem`: each card spreads the
+ * returned props and is named by its title and described by its text. The arrow keys move between
+ * the cards and select (the disabled Team card is skipped), Space selects, and Tab leaves the
+ * group. The line below the cards reads the choice with `useRadioGroupContext`.
+ */
+export const CustomRadioCard: Story = {
+  args: {
+    'aria-label': 'Plan',
+    defaultValue: 'pro',
+  },
+  render: (args) => (
+    <RadioGroup {...args}>
+      <PlanCard value="free" title="Free" description="One project and community support." />
+      <PlanCard value="pro" title="Pro" description="Unlimited projects and email support." />
+      <PlanCard
+        value="team"
+        title="Team"
+        description="Shared workspaces. Ask your administrator to enable it."
+        disabled
+      />
+      <PlanSummary />
+    </RadioGroup>
+  ),
 };

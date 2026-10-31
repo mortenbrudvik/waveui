@@ -380,6 +380,13 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     expect('createFieldControlIdClaim' in barrel).toBe(false);
   });
 
+  it('exports the RadioGroup hooks, never the context object or the item state (P13-02, R11, R13)', () => {
+    expect(barrel.useRadioGroupContext).toBeTypeOf('function');
+    expect(barrel.useRadioGroupItem).toBeTypeOf('function');
+    expect('RadioGroupContext' in barrel).toBe(false);
+    expect('useRadioItemState' in barrel).toBe(false);
+  });
+
   it('exports the 0.8 compound parts, the color parts and helpers, and createToaster', () => {
     const members: Array<[string, string]> = [
       ['Toast', 'Title'],

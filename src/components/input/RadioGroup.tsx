@@ -3,7 +3,7 @@ import { joinIds } from '../../lib/aria';
 import { radioGroupClassNames, radioGroupItemClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
+import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
@@ -14,44 +14,11 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { HiddenInput } from '../internal/HiddenInput';
-
-/* ---- Context ---- */
-interface RadioGroupContextValue {
-  /** The selected value (`''` when nothing is selected). */
-  value: string;
-  /** Group-level disabled state. */
-  disabled: boolean;
-  /**
-   * Selects a value when an item is activated (click, Space, Enter). Arrow keys select through
-   * the roving hook's `onFocusMove` instead. Both paths use the same `setValue`, so
-   * `onValueChange` and the deprecated `onChange` alias fire only when the value changes
-   * (C-NAMING).
-   */
-  select: (value: string) => void;
-  /** Roving tab index of an item. */
-  getTabIndex: (value: string) => 0 | -1;
-}
-
-const RadioGroupContext = React.createContext<RadioGroupContextValue | null>(null);
-RadioGroupContext.displayName = 'RadioGroupContext';
-
-const INERT_CONTEXT: RadioGroupContextValue = {
-  value: '',
-  disabled: false,
-  select: () => {},
-  getTabIndex: () => -1,
-};
-
-/**
- * The surrounding RadioGroup's context; throws in development outside one, logs once and returns
- * an inert value in production (C-CONTEXT).
- */
-function useRadioGroupContext(componentName: string): RadioGroupContextValue {
-  const context = React.useContext(RadioGroupContext);
-  if (context) return context;
-  reportMissingContext(componentName, 'a RadioGroup');
-  return INERT_CONTEXT;
-}
+import {
+  RadioGroupContext,
+  useRadioItemState,
+  type RadioGroupItemsContextValue,
+} from './RadioGroup.context';
 
 function warnDuplicateValue(value: string): void {
   warnOnce(
@@ -193,7 +160,7 @@ const RadioGroupRoot = ({
     if (target === event.currentTarget || fromOwnItem) containerProps.onKeyDown(event);
   };
 
-  const contextValue = React.useMemo<RadioGroupContextValue>(
+  const contextValue = React.useMemo<RadioGroupItemsContextValue>(
     () => ({ value, disabled, select: setValue, getTabIndex }),
     [value, disabled, setValue, getTabIndex],
   );
@@ -288,7 +255,12 @@ export function RadioItem({
   ref,
   ...rest
 }: RadioItemProps) {
-  const ctx = useRadioGroupContext('RadioItem');
+  const {
+    checked: selected,
+    disabled: isDisabled,
+    tabIndex,
+    select,
+  } = useRadioItemState('RadioItem', value, disabled);
   const hasChildren = slotRendersContent(children);
   React.useEffect(() => {
     if (hasChildren) {
@@ -301,8 +273,6 @@ export function RadioItem({
   const generatedId = useId('radio-item');
   const labelTextId = useId('radio-item-label');
 
-  const isDisabled = Boolean(disabled || ctx.disabled);
-  const selected = ctx.value === value;
   // `0` is a label; `null`, `false`, `''` and empty collections are not (C-SLOTS).
   const hasLabel = slotRendersContent(label);
   // The label text names the radio through aria-labelledby, disabled or not: axe exempts the dimmed
@@ -338,9 +308,9 @@ export function RadioItem({
         aria-labelledby={labelledBy}
         aria-checked={selected}
         disabled={isDisabled}
-        tabIndex={isDisabled ? -1 : ctx.getTabIndex(value)}
+        tabIndex={tabIndex}
         data-roving-value={value}
-        onClick={composeEventHandlers(onClick, () => ctx.select(value))}
+        onClick={composeEventHandlers(onClick, () => select(value))}
         className={cn(
           radioGroupItemClassNames.indicator,
           // p-0 and bg-transparent are set here, not left to the native reset, which any app button
@@ -411,6 +381,8 @@ export type RadioGroupItemProps = RadioItemProps;
  *
  * Use `RadioGroup.Item` (or the flat `RadioGroupItem`/`RadioItem` names) for the items. React
  * Server Components cannot access the dotted form, so they import the flat names; dotted access
- * needs a client file.
+ * needs a client file. An element of your own (a card with a title and a description) becomes one
+ * of the group's radios through `useRadioGroupItem`, and `useRadioGroupContext` reads the group's
+ * value from content inside it.
  */
 export const RadioGroup = /* @__PURE__ */ Object.assign(RadioGroupRoot, { Item: RadioItem });
