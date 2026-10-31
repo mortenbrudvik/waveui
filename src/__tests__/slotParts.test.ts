@@ -28,12 +28,19 @@ import type {
   ComboboxProps,
   CompoundButtonProps,
   DatePickerProps,
+  DialogContentProps,
+  DrawerHeaderTitleProps,
+  DrawerProps,
   DropdownProps,
   FieldProps,
   InputProps,
   LabelProps,
+  NavDrawerBodyProps,
+  NavDrawerFooterProps,
+  NavDrawerProps,
   OptionGroupProps,
   OptionProps,
+  PopoverContentProps,
   RadioGroupItemProps,
   RatingDisplayProps,
   SearchBoxProps,
@@ -384,6 +391,15 @@ type SlotPropsOwners = {
   alphaSliderClassNames: AlphaSliderProps;
   // The button and its `icon` are Button's; CompoundButton declares only the parts it draws.
   compoundButtonClassNames: CompoundButtonProps;
+  dialogContentClassNames: DialogContentProps;
+  // Drawer and NavDrawer share the panel, which draws neither part: the header row is Drawer's,
+  // the landmark NavDrawer's.
+  drawerClassNames: DrawerProps;
+  drawerHeaderTitleClassNames: DrawerHeaderTitleProps;
+  navDrawerClassNames: NavDrawerProps;
+  navDrawerBodyClassNames: NavDrawerBodyProps;
+  navDrawerFooterClassNames: NavDrawerFooterProps;
+  popoverContentClassNames: PopoverContentProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

@@ -3,7 +3,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { joinIds } from '../aria';
-import { lockPositionStyle, mergeSlotProps, type SlotPart, type SlotPartOwn } from '../slotProps';
+import {
+  HIDDEN_PART_LOCKS,
+  lockPositionStyle,
+  mergeSlotProps,
+  type SlotPart,
+  type SlotPartOwn,
+} from '../slotProps';
 import slotPropsSource from '../slotProps.ts?raw';
 
 afterEach(() => {
@@ -1322,6 +1328,28 @@ function importStatements(
     text: text.trim().replace(/\s+/g, ' '),
   }));
 }
+
+describe('HIDDEN_PART_LOCKS', () => {
+  it('locks the hidden state of a part unset, so a part cannot hide what it holds', () => {
+    expect(HIDDEN_PART_LOCKS).toEqual({
+      hidden: undefined,
+      inert: undefined,
+      'aria-hidden': undefined,
+    });
+    expect(Object.keys(HIDDEN_PART_LOCKS)).toEqual(['hidden', 'inert', 'aria-hidden']);
+    const merged = mergeSlotProps<'div'>(
+      { hidden: true, inert: true, 'aria-hidden': true, title: 'Mine' },
+      { className: 'part', locked: HIDDEN_PART_LOCKS },
+    );
+    expect(merged).toEqual({
+      className: 'part',
+      title: 'Mine',
+      hidden: undefined,
+      inert: undefined,
+      'aria-hidden': undefined,
+    });
+  });
+});
 
 describe('lockPositionStyle', () => {
   const position: React.CSSProperties = { position: 'fixed', top: 0, left: 8, maxHeight: '50vh' };

@@ -18,12 +18,15 @@ import { Tooltip } from '../Tooltip';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
+import { popoverContentClassNames } from '../../../lib/classNames';
 import type { PopupTargetInput } from '../../../lib/types';
 import {
   createOverlayTestWrapper,
+  expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
   mockRect,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testDisplayName,
@@ -3644,5 +3647,225 @@ describe('Popover', () => {
         );
       },
     );
+  });
+});
+
+describe('Popover.Content — slotProps', () => {
+  type ContentSlotProps = NonNullable<PopoverContentProps['slotProps']>;
+  const EVERY_PART: ContentSlotProps = { beak: {}, title: {} };
+  const beak = () =>
+    document.querySelector<HTMLElement>('.' + popoverContentClassNames.beak) as HTMLElement;
+  const title = () =>
+    document.querySelector<HTMLElement>('.' + popoverContentClassNames.title) as HTMLElement;
+
+  /** An open popover with a trigger, `rootProps` and `Popover.Content` of `contentProps`. */
+  function Open({
+    rootProps,
+    ...contentProps
+  }: Partial<PopoverContentProps> & { rootProps?: Partial<PopoverProps> }) {
+    return (
+      <Popover open onOpenChange={() => {}} {...rootProps}>
+        <Popover.Trigger>
+          <button type="button" data-testid="trigger">
+            Toggle
+          </button>
+        </Popover.Trigger>
+        <Popover.Content title="Details" data-testid="content" {...contentProps}>
+          Body <button type="button">Go</button>
+        </Popover.Content>
+      </Popover>
+    );
+  }
+
+  it('renders the parts of 234b990 in an open popover (attributes sorted)', () => {
+    // Captured from 234b990: the merged props may put the class before the locked attributes.
+    render(<Open data-testid={undefined} />);
+    expect(openingTags(beak(), title())).toBe(
+      [
+        '<div aria-hidden="true" class="size-2 rotate-45 border-inherit bg-inherit border-t border-l wave-popover-content__beak" data-wave-popover-arrow="" style="position: absolute; top: calc(var(--wave-popup-arrow-size, 8px) / -2);">',
+        '<h2 class="wave-popover-content__title mb-2 text-subtitle-2 font-semibold" id="popover-title-_id0_">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: Array<Partial<PopoverContentProps> & { rootProps?: Partial<PopoverProps> }> = [
+      {},
+      { title: undefined, 'aria-label': 'Plain', id: 'content', style: { zIndex: 3 } },
+      { rootProps: { side: 'top', align: 'center', positioning: { fitViewport: true } } },
+      { 'aria-labelledby': 'trigger-label', rootProps: { side: 'end' } },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps((slotProps) => <Open {...props} slotProps={slotProps} />, EVERY_PART);
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its own classes', () => {
+    render(
+      <Open
+        slotProps={{
+          beak: { className: 'my-beak', style: { opacity: 0.5 }, 'data-part': 'beak' },
+          title: { className: 'my-title', style: { opacity: 0.25 }, 'data-part': 'title' },
+        }}
+      />,
+    );
+    for (const [element, stable, own, mine, data, opacity] of [
+      [beak(), popoverContentClassNames.beak, 'rotate-45', 'my-beak', 'beak', '0.5'],
+      [title(), popoverContentClassNames.title, 'mb-2', 'my-title', 'title', '0.25'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', data);
+      expect(element).toHaveStyle({ opacity });
+    }
+    expect(title().classList[0]).toBe(popoverContentClassNames.title);
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(<Open slotProps={{ beak: { className: 'size-3' }, title: { className: 'mb-4' } }} />);
+    expect(beak()).toHaveClass('size-3');
+    expect(beak()).not.toHaveClass('size-2');
+    expect(title()).toHaveClass('mb-4');
+    expect(title()).not.toHaveClass('mb-2');
+  });
+
+  it('locks the beak’s hidden state, its marker and the position keys of its style', () => {
+    render(
+      <Open
+        slotProps={{
+          beak: {
+            'aria-hidden': false,
+            'data-wave-popover-arrow': 'mine',
+            style: { position: 'static', top: '1px', left: '2px', opacity: 0.5 },
+            title: 'Beak',
+          },
+        }}
+      />,
+    );
+    expect(beak()).toHaveAttribute('aria-hidden', 'true');
+    expect(beak()).toHaveAttribute('data-wave-popover-arrow', '');
+    expect(beak()).toHaveAttribute('title', 'Beak');
+    expect(beak().style.position).toBe('absolute');
+    expect(beak().style.top).toBe('calc(var(--wave-popup-arrow-size, 8px) / -2)');
+    expect(beak().style.left).toBe('');
+    expect(beak()).toHaveStyle({ opacity: '0.5' });
+  });
+
+  it('locks the title’s id, which names the popover', () => {
+    render(<Open slotProps={{ title: { id: 'mine', title: 'Heading' } }} />);
+    expect(title().id).not.toBe('mine');
+    expect(title()).toHaveAttribute('title', 'Heading');
+    expect(screen.getByRole('dialog', { name: 'Details' })).toHaveAttribute(
+      'aria-labelledby',
+      title().id,
+    );
+  });
+
+  it('attaches your refs to the parts', () => {
+    const beakRef = React.createRef<HTMLDivElement>();
+    const titleRef = React.createRef<HTMLHeadingElement>();
+    render(<Open slotProps={{ beak: { ref: beakRef }, title: { ref: titleRef } }} />);
+    expect(beakRef.current).toBe(beak());
+    expect(titleRef.current).toBe(title());
+  });
+
+  it('keeps placing the beak while you pass a new inline ref on every render', async () => {
+    mockLayout({
+      trigger: { x: 400, y: 300, width: 80, height: 32 },
+      content: { x: 0, y: 0, width: 256, height: 120 },
+      beak: { x: 0, y: 0, width: 8, height: 8 },
+    });
+    const elements: Array<HTMLDivElement | null> = [];
+    const ui = () => (
+      <Open
+        slotProps={{
+          beak: { 'data-testid': 'beak', ref: (element) => void elements.push(element) },
+        }}
+      />
+    );
+    const { rerender } = render(ui());
+    rerender(ui());
+    rerender(ui());
+    expect(elements.at(-1)).toBe(beak());
+    // Centred on the trigger: (400 + 80 / 2) - 400 - 8 / 2 = 36.
+    await waitFor(() => expect(beak().style.left).toBe('36px'));
+  });
+
+  it('runs your part handlers as the content’s: a prevented Escape keeps the popover open', () => {
+    const onOpenChange = vi.fn();
+    const preventEscape = (event: React.KeyboardEvent) => {
+      if (event.key === 'Escape') event.preventDefault();
+    };
+    const { rerender } = render(
+      <Open rootProps={{ onOpenChange }} slotProps={{ title: { onKeyDown: preventEscape } }} />,
+    );
+    fireEvent.keyDown(title(), { key: 'Escape' });
+    expect(onOpenChange).not.toHaveBeenCalled();
+    rerender(<Open rootProps={{ onOpenChange }} slotProps={{ title: { onKeyDown: () => {} } }} />);
+    fireEvent.keyDown(title(), { key: 'Escape' });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('calls your part handlers once per click in StrictMode', () => {
+    const onBeakClick = vi.fn();
+    const onTitleClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <Open slotProps={{ beak: { onClick: onBeakClick }, title: { onClick: onTitleClick } }} />
+      </React.StrictMode>,
+    );
+    fireEvent.click(beak());
+    fireEvent.click(title());
+    expect(onBeakClick).toHaveBeenCalledTimes(1);
+    expect(onTitleClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('mirrors the beak with your class in RTL', async () => {
+    mockLayout({
+      trigger: { x: 400, y: 300, width: 80, height: 32 },
+      content: { x: 0, y: 0, width: 256, height: 120 },
+    });
+    renderWithProviders(
+      <Open rootProps={{ side: 'start' }} slotProps={{ beak: { className: 'my-beak' } }} />,
+      { dir: 'rtl' },
+    );
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveAttribute('data-side', 'right'));
+    expect(beak()).toHaveClass('border-b', 'border-l', 'my-beak');
+  });
+
+  it('ignores the title part without a title', () => {
+    render(
+      <Open
+        title={undefined}
+        aria-label="Plain"
+        slotProps={{ title: { className: 'my-title' } }}
+      />,
+    );
+    expect(document.querySelector('.' + popoverContentClassNames.title)).toBeNull();
+    expect(document.querySelector('.my-title')).toBeNull();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Open
+        slotProps={{
+          beak: { className: 'my-beak' },
+          title: { className: 'my-title', title: 'Details' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof ContentSlotProps>().toEqualTypeOf<'beak' | 'title'>();
+    expectTypeOf<NonNullable<ContentSlotProps['beak']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ContentSlotProps['title']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLHeadingElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the popover renders them
+    void (<Popover.Content slotProps={{ title: { children: 'Title' } }}>Body</Popover.Content>);
   });
 });

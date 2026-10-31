@@ -8,6 +8,7 @@ import {
 } from '../../lib/classNames';
 import { isDev, warnOnce } from '../../lib/dev';
 import { renderSlot, slotRendersContent, type Slot, type SlotObject } from '../../lib/slot';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRingInset } from '../../lib/styles';
 import type { BackdropAppearance, MotionSlot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
@@ -275,6 +276,30 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * `modalType="alert"`), the `<aside>` of an inline one. A ref to a `div` still type-checks.
    */
   ref?: React.Ref<HTMLElement>;
+  /**
+   * Props for the elements the drawer draws around your content, by part, merged into each
+   * part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref attached. Every attribute the drawer
+   * sets on a part is locked and keeps the drawer's value; you add the attributes it does not
+   * set. A part takes no `children`. No part carries a handler of the drawer: yours run as those
+   * of the content do, before the drawer's own handling of the event, which `preventDefault()` in
+   * yours skips as it does in the content (an Escape you prevent keeps an overlay open). The
+   * panel takes the Drawer's own props, the scrolling body the props of a `Drawer.Body`, and the
+   * backdrop, the title action and the Close button are the `backdrop`, `titleAction` and
+   * `closeButton` slots. Fluent UI's `DrawerHeader` is a component you write, as
+   * `Drawer.Header` is here.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` of the built-in header row: the `title` heading, the `titleAction` content and
+     * the Close button (stable class `wave-drawer__header`). Drawn only while it holds something,
+     * and never with a `Drawer.Header` among the children, which replaces it (this part is then
+     * ignored). Locked: `data-scroll-state`, which draws its line while the body is scrolled
+     * away from its top, and `hidden`, `inert` and `aria-hidden`, unset (it holds the Close
+     * button).
+     */
+    header?: SlotPart<'div'>;
+  };
 }
 
 const UNREACHABLE_WARNING_KEY = 'Drawer:unreachable';
@@ -392,6 +417,8 @@ interface DrawerBuiltInHeaderProps {
   closeLabel: string;
   /** The `closeButton` slot (`null`: no Close button). */
   closeButton: Slot<'span'> | undefined;
+  /** The Drawer's `slotProps.header`, merged into the row. */
+  part: SlotPart<'div'> | undefined;
 }
 
 /**
@@ -409,18 +436,21 @@ function DrawerBuiltInHeader({
   requestOpen,
   closeLabel,
   closeButton,
+  part,
 }: DrawerBuiltInHeaderProps) {
   const scrollState = React.useContext(DrawerScrollStateContext) ?? 'none';
   const hasTitleAction = slotRendersContent(titleAction);
   if (!hasTitle && !hasTitleAction && closeButton === null) return null;
   return (
     <div
-      data-scroll-state={scrollState}
-      className={cn(
-        drawerClassNames.header,
-        'flex shrink-0 items-center justify-between gap-2 p-4',
-        scrollSeparatorClasses.header,
-      )}
+      {...mergeSlotProps(part, {
+        className: cn(
+          drawerClassNames.header,
+          'flex shrink-0 items-center justify-between gap-2 p-4',
+          scrollSeparatorClasses.header,
+        ),
+        locked: { ...HIDDEN_PART_LOCKS, 'data-scroll-state': scrollState },
+      })}
     >
       {hasTitle && (
         <h2
@@ -518,6 +548,7 @@ export const DrawerRoot = ({
   children,
   id,
   ref,
+  slotProps,
   ...rest
 }: DrawerProps) => {
   const [openState, requestOpen] = useModalOpenState(openProp, defaultOpen, onOpenChange);
@@ -612,6 +643,7 @@ export const DrawerRoot = ({
                 requestOpen={requestOpen}
                 closeLabel={closeLabel}
                 closeButton={closeButton}
+                part={slotProps?.header}
               />
             )
           }

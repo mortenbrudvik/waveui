@@ -107,6 +107,18 @@ function mergeRefPair(ours: object, theirs: object): React.RefCallback<unknown> 
 }
 
 /**
+ * What a part that holds focusable content locks unset (module-only): `hidden`, `inert` and
+ * `aria-hidden`, so a part can neither hide the controls inside it nor take them out of reach of
+ * the keyboard and assistive technology (Dialog's title actions and body, a drawer's header row,
+ * a navigation drawer's landmark and lists). Spread it into the part's `locked` object.
+ */
+export const HIDDEN_PART_LOCKS = {
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/**
  * A positioned surface's style with its part's (module-only): `partStyle` is the `style` of the
  * part's merged props, `positionStyle` the surface's position (`usePopupPosition`'s
  * `floatingProps.style`). The part's keys first, then every key the positioning sets (the

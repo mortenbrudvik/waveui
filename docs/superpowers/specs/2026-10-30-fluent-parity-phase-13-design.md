@@ -334,6 +334,42 @@ Order A, B, C, D1 to D7, E. **Cut line:** if the schedule forces one, D5 to D7 s
   - A throwaway, git-ignored comparison (`coverage/t14`) renders 34 configurations of the six components with `undefined`, `{}` and every part `{}`, server and client, with keys, drafts, a Field and bound parts. Compared with the base dist (attributes sorted, ids normalised), nothing differs.
   - **Existing assertion edited (controller ruling AE):** `slotProps` belongs in `CompoundButtonOwnProps`, since the polymorphic convention wins, so the key set of `CompoundButtonOwnProps` in `CompoundButton.test.tsx` gains `'slotProps'`. That is the only edit of an existing assertion. CompoundButton is the only polymorphic component of D3, and no other D3 suite pins a props key set. Otherwise only import lines changed.
   - **Measured** (`measureImport`, before at `1f67a85`, min/gzip B): ColorPicker-only 68,109/22,731 → 69,967/23,428 (+1,858/+697); ColorPickerHexField-only 15,863/5,755 → 17,457/6,401 (+1,594/+646); ColorArea-only 26,426/9,527 → 27,930/10,157 (+1,504/+630); ColorSlider-only 25,413/9,165 → 26,884/9,776 (+1,471/+611); AlphaSlider-only 24,686/8,819 → 26,156/9,441 (+1,470/+622); CompoundButton-only 12,702/4,353 → 14,555/5,078 (+1,853/+725); the six together 69,699/23,192 → 71,764/24,000 (+2,065/+808). Own code over the import with `mergeSlotProps`: ColorPicker +434/+144 (it renders the other four), the hex field +161/+46, ColorArea +72/+32, ColorSlider +37/+17, AlphaSlider +35/+25, CompoundButton +178/+44. Every budgeted import (Button, MessageBar, Tree, Dialog, `WaveProvider` with `Dialog`, DataGrid, Table) is byte-identical, as are ToggleButton, SplitButton, MenuButton, SwatchPicker, Switch, Combobox and DatePicker, `dist/styles.css` and `dist/preflight.css`.
+- **Task 15a, `slotProps` for D4, first part: Dialog.Content, Drawer, Drawer.HeaderTitle, NavDrawer, NavDrawer.Body, NavDrawer.Footer and Popover.Content.** The Task 12 conventions and the Task 13 to 14 lessons apply. 9 keys moved to `SLOT_PROPS_KEYS`, each element as the checklist says (no classification change).
+  - **Owners:** each component declares its own constant's keys: Dialog.Content `titleActions` and `body`, Drawer `header`, Drawer.HeaderTitle `heading` (typed `h2`, rendered at `headingLevel`), NavDrawer `nav`, NavDrawer.Body and NavDrawer.Footer `list`, Popover.Content `beak` and `title`. `SlotPropsOwners` names the seven props types. **The drawer panel shell draws neither shared part:** the Drawer root's built-in header row receives `slotProps.header`, and NavDrawer's root draws the `<nav>` inside the panel. So `DrawerPanel` is unchanged, and both roots destructure `slotProps`, which never reaches the panel's rest props.
+  - **No part carries a handler of its component.** A part's handler runs as one of the content does, since an event bubbles from the part to the surface. So `preventDefault()` in it skips the component's handling, as in the content: Escape keeps a Dialog, an overlay Drawer or a Popover open (the dismiss layers ignore a prevented Escape), and the `onKeyDown` of NavDrawer.Body's list skips the arrow keys of `focusMode="arrow"`. The JSDoc says so instead of the standard handler sentence.
+  - **Locks.**
+    - `HIDDEN_PART_LOCKS` locks `hidden`, `inert` and `aria-hidden` unset on the parts that hold focusable content: Dialog's title actions (the first focus of an open dialog) and body, Drawer's header row, and NavDrawer's landmark and both lists. It is a module-only export of `lib/slotProps.ts`, which every user already imports, with the name and value of the one in `Calendar.views.tsx` (already in `MODULE_ONLY_NAMES`). The calendar module keeps its own; pointing it at the shared one is left to a later task.
+    - The header row also locks `data-scroll-state`: its line follows the body's scroll.
+    - The landmark locks the NavDrawer's name: `aria-label`, unset while `aria-labelledby` names it. Its `aria-labelledby` and `aria-describedby` are joined, the drawer's ids first (ruling F). A part's `aria-labelledby` then names the landmark, which the JSDoc says.
+    - The headings lock their `id`: Drawer.HeaderTitle's, which the drawer's `aria-labelledby` names (its own `id` prop sets it), and Popover.Content's title, which the surface's `aria-labelledby` names.
+    - The beak locks `aria-hidden` and its marker `data-wave-popover-arrow`. Through `lockPositionStyle` it also locks every key of the arrow style the positioning sets: `position`, `left`, `top` and the offset of the edge it sits on.
+  - **Refs:** every part element that holds a ref of its component adds the part's ref beside it, after the spread, through `useMergedRefs`, so an inline ref never detaches the component's. These are Dialog's title actions (measured for the titles' end padding), the beak (the positioning's `arrowRef`), and the landmark and the lists (development checks). Drawer.HeaderTitle's heading passes the part's ref to `useModalTitle`, which merges it with the title registration. The body, the header row and Popover's title pass the consumer's ref through the helper.
+  - **Tests:** one `describe('… — slotProps')` per component file: Dialog in `Dialog.test.tsx`, Drawer in `Drawer.test.tsx`, Drawer.HeaderTitle in `Drawer.parts.test.tsx`, NavDrawer and its two parts in `NavDrawer.test.tsx`, Popover in `Popover.test.tsx`. They cover:
+    - pins of the parts' opening tags against `234b990`: open client renders, and server renders of the inline Drawer and NavDrawer;
+    - `expectInertSlotProps` on several configurations each, kept-mounted closed surfaces included;
+    - class, style, `data-*`, refs and a conflicting class replaced;
+    - the locks; each lock test fails without its lock (checked by mutation);
+    - the component's own refs with a new inline ref on every render: the title actions' padding, the beak's `left`, the drawer's name, the development checks of the landmark and the lists (the ref tests fail without the merge: checked);
+    - a prevented Escape, the body's arrow keys, StrictMode once-only, RTL, absent parts, axe and types.
+  - A throwaway, git-ignored comparison (`coverage/t15a`) renders 30 configurations of the seven components with `slotProps` absent, `undefined`, `{}` and every part `{}`, server and client, some opened by their trigger. Compared with the base dist (attributes sorted, ids normalised), nothing differs.
+  - **Existing assertions edited:** none (import lines only). None of the seven components is polymorphic.
+  - **Measured** (`measureImport`, before at `234b990`, min/gzip B):
+
+    | Import | Before | After | Delta | Own code (over the import with `mergeSlotProps`) |
+    |---|---|---|---|---|
+    | Dialog | 71,021/23,901 | 72,350/24,383 | +1,329/+482 | +142/+46 |
+    | `WaveProvider` with `Dialog` | 73,577/24,885 | 74,898/25,374 | +1,321/+489 | +138/+59 |
+    | Drawer | 82,997/26,544 | 84,330/27,053 | +1,333/+509 | +146/+66 |
+    | NavDrawer | 75,850/24,580 | 77,641/25,317 | +1,791/+737 | +214/+87 |
+    | Popover | 58,152/19,955 | 59,485/20,504 | +1,333/+549 | +152/+59 |
+    | Dialog.Content | 61,460/20,621 | 63,178/21,254 | +1,718/+633 | +144/+43 |
+    | Drawer.HeaderTitle | 19,726/7,135 | 21,327/7,753 | +1,601/+618 | +29/+15 |
+    | NavDrawer.Body | 22,548/8,163 | 24,214/8,843 | +1,666/+680 | +96/+42 |
+    | NavDrawer.Footer | 5,876/2,266 | 8,608/3,447 | +2,732/+1,181 | +76/+33 (with `useMergedRefs`, new there) |
+    | Popover.Content | 20,423/7,654 | 22,142/8,341 | +1,719/+687 | +148/+58 |
+    | the four roots together | 133,688/42,623 | 135,484/43,317 | +1,796/+694 | |
+
+    Against 0.17.1, Dialog-only is +1,500/+597 (70,850/23,786) and `WaveProvider` with `Dialog` +1,495/+596 (73,403/24,778), within the interim allowance of +4,096/+1,536. Button, MessageBar, Tree, DataGrid and Table are byte-identical (unminified bundles compared), as are TeachingPopover, InfoButton, Tooltip, Nav, Hamburger and Menu. InfoLabel's minified size is unchanged; its unminified bundle differs only in the names the bundler gives some functions (InfoLabel already holds `lib/slotProps`, which has one export more). `dist/styles.css` and `dist/preflight.css` are byte-identical.
 
 ## 12. Risks
 

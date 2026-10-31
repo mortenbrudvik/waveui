@@ -151,6 +151,13 @@ export const SLOT_PROPS_KEYS = {
   colorSliderClassNames: ['rail', 'thumb'],
   alphaSliderClassNames: ['rail', 'thumb'],
   compoundButtonClassNames: ['contentContainer', 'primaryText', 'secondaryText'],
+  dialogContentClassNames: ['titleActions', 'body'],
+  drawerClassNames: ['header'],
+  drawerHeaderTitleClassNames: ['heading'],
+  navDrawerClassNames: ['nav'],
+  navDrawerBodyClassNames: ['list'],
+  navDrawerFooterClassNames: ['list'],
+  popoverContentClassNames: ['beak', 'title'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -473,9 +480,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   navSectionHeaderClassNames: ['listItem'],
   navAppItemClassNames: ['listItem', 'content'],
   navAppItemStaticClassNames: ['listItem', 'content'],
-  navDrawerClassNames: ['nav'],
-  navDrawerBodyClassNames: ['list'],
-  navDrawerFooterClassNames: ['list'],
   paginationClassNames: [
     'list',
     'listItem',
@@ -488,11 +492,7 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   ],
   stepperClassNames: ['list'],
   stepperStepClassNames: ['listItem', 'button', 'indicator', 'label', 'description', 'connector'],
-  dialogContentClassNames: ['titleActions', 'body'],
-  popoverContentClassNames: ['beak', 'title'],
   tooltipClassNames: ['content'],
-  drawerClassNames: ['header'],
-  drawerHeaderTitleClassNames: ['heading'],
   teachingPopoverClassNames: ['beak', 'closeButton', 'dot', 'backButton', 'nextButton'],
   teachingPopoverCarouselNavClassNames: ['button', 'indicator'],
   tableHeaderCellClassNames: ['button'],

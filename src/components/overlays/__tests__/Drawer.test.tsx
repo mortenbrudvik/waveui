@@ -37,10 +37,12 @@ import { getTopmostLayer } from '../../../lib/layers';
 import type { ModalOpenChangeReason, OpenChangeDetails } from '../../../lib/types';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
   installResizeObserverMock,
   mockRect,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testDisplayName,
@@ -1947,5 +1949,209 @@ describe('Drawer', () => {
         error.mockRestore();
       }
     });
+  });
+});
+
+describe('Drawer — slotProps', () => {
+  type DrawerSlotProps = NonNullable<DrawerProps['slotProps']>;
+  const EVERY_PART: DrawerSlotProps = { header: {} };
+  const header = () => document.querySelector<HTMLElement>('.' + drawerClassNames.header);
+  const headerOf = (root: ParentNode) =>
+    root.querySelector<HTMLElement>('.' + drawerClassNames.header) as HTMLElement;
+  /** The opening tag of the built-in header row at 234b990 (the same in both types). */
+  const HEADER_0_17 =
+    '<div class="wave-drawer__header flex shrink-0 items-center justify-between gap-2 p-4 border-b border-transparent data-[scroll-state=middle]:border-border data-[scroll-state=bottom]:border-border forced-colors:border-[CanvasText]" data-scroll-state="none">';
+
+  /** An open drawer titled "Filters" with a body button and `props`. */
+  function Open(props: Partial<DrawerProps>) {
+    return (
+      <Drawer open onOpenChange={() => {}} title="Filters" {...props}>
+        Body <button type="button">Go</button>
+      </Drawer>
+    );
+  }
+
+  it('renders the header row of 234b990, overlay and inline, server and client (attributes sorted)', () => {
+    // Captured from 234b990: the merged props may put the class before the locked attributes.
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<Open type="inline" />);
+    expect(openingTags(headerOf(template.content))).toBe(HEADER_0_17);
+    const { unmount } = render(<Open type="inline" />);
+    expect(openingTags(headerOf(document))).toBe(HEADER_0_17);
+    unmount();
+    render(<Open />);
+    expect(openingTags(headerOf(document))).toBe(HEADER_0_17);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: Array<Partial<DrawerProps>> = [
+      {},
+      { type: 'inline' },
+      { titleAction: <button type="button">Pin</button>, position: 'bottom', size: 'full' },
+      { title: undefined, 'aria-label': 'Plain', modalType: 'non-modal' },
+      { type: 'inline', open: false, unmountOnClose: false },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps((slotProps) => <Open {...props} slotProps={slotProps} />, EVERY_PART);
+    }
+  });
+
+  it('puts your className, style and data-* on the header row, after its classes', () => {
+    render(
+      <Open
+        slotProps={{
+          header: { className: 'my-header', style: { opacity: 0.5 }, 'data-part': 'header' },
+        }}
+      />,
+    );
+    const row = header();
+    expect(row).toHaveClass(drawerClassNames.header, 'justify-between', 'my-header');
+    expect(row?.classList[0]).toBe(drawerClassNames.header);
+    expect(row?.classList[row.classList.length - 1]).toBe('my-header');
+    expect(row).toHaveAttribute('data-part', 'header');
+    expect(row).toHaveStyle({ opacity: '0.5' });
+    expect(row).toContainElement(screen.getByRole('heading', { name: 'Filters' }));
+    expect(row).toContainElement(button('Close'));
+  });
+
+  it('lets your class replace a conflicting class of the header row', () => {
+    render(<Open slotProps={{ header: { className: 'p-2' } }} />);
+    expect(header()).toHaveClass('p-2');
+    expect(header()).not.toHaveClass('p-4');
+  });
+
+  it('locks the scroll state and keeps the row visible and reachable', () => {
+    render(
+      <Open
+        slotProps={{
+          header: {
+            'data-scroll-state': 'bottom',
+            hidden: true,
+            inert: true,
+            'aria-hidden': true,
+            title: 'Header',
+          },
+        }}
+      />,
+    );
+    const row = header();
+    expect(row).toHaveAttribute('data-scroll-state', 'none');
+    expect(row).not.toHaveAttribute('hidden');
+    expect(row).not.toHaveAttribute('inert');
+    expect(row).not.toHaveAttribute('aria-hidden');
+    expect(row).toHaveAttribute('title', 'Header');
+    expect(button('Close')).toBeVisible();
+  });
+
+  it('keeps following the body’s scroll state with your part', () => {
+    const resizeObserver = installResizeObserverMock();
+    try {
+      render(<Open slotProps={{ header: { className: 'my-header' } }} />);
+      const body = document.querySelector<HTMLElement>('.' + drawerClassNames.body) as HTMLElement;
+      for (const [key, value] of Object.entries({
+        scrollHeight: 400,
+        clientHeight: 100,
+        scrollTop: 150,
+      })) {
+        Object.defineProperty(body, key, { configurable: true, value });
+      }
+      act(() => {
+        fireEvent.scroll(body);
+      });
+      expect(header()).toHaveAttribute('data-scroll-state', 'middle');
+    } finally {
+      resizeObserver.restore();
+    }
+  });
+
+  it('attaches your ref to the header row', () => {
+    const ref = React.createRef<HTMLDivElement>();
+    render(<Open slotProps={{ header: { ref } }} />);
+    expect(ref.current).toBe(header());
+  });
+
+  it('runs your handlers as the content’s: a prevented Escape keeps an overlay open', () => {
+    const onOpenChange = vi.fn();
+    const preventEscape = (event: React.KeyboardEvent) => {
+      if (event.key === 'Escape') event.preventDefault();
+    };
+    const { rerender } = render(
+      <Open onOpenChange={onOpenChange} slotProps={{ header: { onKeyDown: preventEscape } }} />,
+    );
+    fireEvent.keyDown(button('Close'), { key: 'Escape' });
+    expect(onOpenChange).not.toHaveBeenCalled();
+    rerender(<Open onOpenChange={onOpenChange} slotProps={{ header: { onKeyDown: () => {} } }} />);
+    fireEvent.keyDown(button('Close'), { key: 'Escape' });
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+
+  it('calls your header handler once per click in StrictMode, and the Close button still closes', () => {
+    const onClick = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Open onOpenChange={onOpenChange} slotProps={{ header: { onClick } }} />
+      </React.StrictMode>,
+    );
+    fireEvent.click(button('Close'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(
+      false,
+      expect.objectContaining({ reason: 'close-button' }),
+    );
+  });
+
+  it('ignores the part where no built-in header row renders', () => {
+    const { unmount } = render(
+      <Drawer open onOpenChange={() => {}} slotProps={{ header: { className: 'my-header' } }}>
+        <Drawer.Header>
+          <Drawer.HeaderTitle>Composed</Drawer.HeaderTitle>
+        </Drawer.Header>
+        Body
+      </Drawer>,
+    );
+    expect(header()).toBeNull();
+    expect(document.querySelector('.my-header')).toBeNull();
+    unmount();
+    render(
+      <Open
+        title={undefined}
+        aria-label="Plain"
+        closeButton={null}
+        slotProps={{ header: { className: 'my-header' } }}
+      />,
+    );
+    expect(header()).toBeNull();
+    expect(document.querySelector('.my-header')).toBeNull();
+  });
+
+  it('keeps the header row of a start drawer customised in RTL', () => {
+    renderWithProviders(
+      <Open position="start" slotProps={{ header: { className: 'my-header' } }} />,
+      { dir: 'rtl' },
+    );
+    expect(header()?.closest('[data-wave-portal]')).toHaveAttribute('dir', 'rtl');
+    expect(header()).toHaveClass(drawerClassNames.header, 'my-header');
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-position', 'start');
+  });
+
+  it('has no accessibility violations with the header row customised, both types', async () => {
+    const { unmount } = render(
+      <Open slotProps={{ header: { className: 'my-header', title: 'Header' } }} />,
+    );
+    await expectNoA11yViolations();
+    unmount();
+    render(<Open type="inline" slotProps={{ header: { className: 'my-header' } }} />);
+    await expectNoA11yViolations();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof DrawerSlotProps>().toEqualTypeOf<'header'>();
+    expectTypeOf<NonNullable<DrawerSlotProps['header']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the drawer renders them
+    void (<Drawer slotProps={{ header: { children: 'Header' } }}>Body</Drawer>);
   });
 });

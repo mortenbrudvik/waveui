@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import * as React from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
@@ -10,19 +10,28 @@ import {
   NavDrawerBody,
   NavDrawerFooter,
   NavDrawerHeader,
+  type NavDrawerBodyProps,
+  type NavDrawerFooterProps,
   type NavDrawerProps,
 } from '../NavDrawer';
 import { Hamburger } from '../Hamburger';
 import { Toaster } from '../../feedback/Toaster';
-import { drawerClassNames, navDrawerClassNames } from '../../../lib/classNames';
+import {
+  drawerClassNames,
+  navDrawerBodyClassNames,
+  navDrawerClassNames,
+  navDrawerFooterClassNames,
+} from '../../../lib/classNames';
 import { getTopmostLayer } from '../../../lib/layers';
 import type { ModalType } from '../../../lib/types';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
   findDanglingIdRefsInHtml,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
@@ -1352,5 +1361,315 @@ describe('NavDrawer', () => {
       );
       expect(offset()).toBe('');
     });
+  });
+});
+
+describe('NavDrawer, NavDrawer.Body and NavDrawer.Footer — slotProps', () => {
+  type NavSlotProps = NonNullable<NavDrawerProps['slotProps']>;
+  type BodySlotProps = NonNullable<NavDrawerBodyProps['slotProps']>;
+  type FooterSlotProps = NonNullable<NavDrawerFooterProps['slotProps']>;
+  const nav = () =>
+    document.querySelector<HTMLElement>('.' + navDrawerClassNames.nav) as HTMLElement;
+  const bodyList = () =>
+    document.querySelector<HTMLElement>('.' + navDrawerBodyClassNames.list) as HTMLElement;
+  const footerList = () =>
+    document.querySelector<HTMLElement>('.' + navDrawerFooterClassNames.list) as HTMLElement;
+  const partsOf = (root: ParentNode) =>
+    [navDrawerClassNames.nav, navDrawerBodyClassNames.list, navDrawerFooterClassNames.list].map(
+      (name) => root.querySelector(`.${name}`) as Element,
+    );
+  /** The opening tags of the three parts at 234b990, named by the default label. */
+  const PARTS_0_17 = [
+    '<nav aria-label="Navigation" class="wave-nav-drawer__nav flex min-h-0 flex-1 flex-col">',
+    '<ul class="wave-nav-drawer-body__list m-0 list-none p-0">',
+    '<ul class="wave-nav-drawer-footer__list m-0 list-none p-0">',
+  ].join('\n');
+
+  /** An open drawer with a body of two items and a footer of one, each with its props. */
+  function Open({
+    bodyProps,
+    footerProps,
+    ...props
+  }: Partial<NavDrawerProps> & {
+    bodyProps?: Partial<NavDrawerBodyProps>;
+    footerProps?: Partial<NavDrawerFooterProps>;
+  }) {
+    return (
+      <NavDrawer open onOpenChange={() => {}} {...props}>
+        <NavDrawer.Body {...bodyProps}>
+          <Nav.Item value="home">Home</Nav.Item>
+          <Nav.Item value="reports">Reports</Nav.Item>
+        </NavDrawer.Body>
+        <NavDrawer.Footer {...footerProps}>
+          <Nav.Item value="settings">Settings</Nav.Item>
+        </NavDrawer.Footer>
+      </NavDrawer>
+    );
+  }
+
+  it('renders the parts of 234b990, overlay and inline, server and client (attributes sorted)', () => {
+    // Captured from 234b990: the merged props may put the class before the locked attributes.
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<Open type="inline" />);
+    expect(openingTags(...partsOf(template.content))).toBe(PARTS_0_17);
+    let view = render(<Open type="inline" />);
+    expect(openingTags(...partsOf(document))).toBe(PARTS_0_17);
+    view.unmount();
+    view = render(<Open />);
+    expect(openingTags(...partsOf(document))).toBe(PARTS_0_17);
+    view.unmount();
+    render(<Open type="inline" aria-labelledby="x" aria-describedby="y" />);
+    expect(openingTags(...partsOf(document))).toBe(
+      PARTS_0_17.replace('aria-label="Navigation"', 'aria-describedby="y" aria-labelledby="x"'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: Array<Partial<NavDrawerProps>> = [
+      {},
+      { type: 'inline' },
+      { type: 'inline', 'aria-labelledby': 'x', 'aria-describedby': 'y' },
+      { 'aria-label': 'Main', modalType: 'non-modal' },
+      { type: 'inline', open: false, unmountOnClose: false },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps: NavSlotProps | undefined) => <Open {...props} slotProps={slotProps} />,
+        { nav: {} },
+      );
+      expectInertSlotProps(
+        (slotProps: BodySlotProps | undefined) => (
+          <Open {...props} bodyProps={{ focusMode: 'arrow', slotProps }} />
+        ),
+        { list: {} },
+      );
+      expectInertSlotProps(
+        (slotProps: FooterSlotProps | undefined) => <Open {...props} footerProps={{ slotProps }} />,
+        { list: {} },
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    render(
+      <Open
+        slotProps={{ nav: { className: 'my-nav', style: { opacity: 0.5 }, 'data-part': 'nav' } }}
+        bodyProps={{
+          slotProps: { list: { className: 'my-body', style: { opacity: 0.25 }, 'data-part': 'b' } },
+        }}
+        footerProps={{
+          slotProps: { list: { className: 'my-foot', style: { opacity: 0.75 }, 'data-part': 'f' } },
+        }}
+      />,
+    );
+    for (const [element, stable, own, mine, data, opacity] of [
+      [nav(), navDrawerClassNames.nav, 'flex-col', 'my-nav', 'nav', '0.5'],
+      [bodyList(), navDrawerBodyClassNames.list, 'list-none', 'my-body', 'b', '0.25'],
+      [footerList(), navDrawerFooterClassNames.list, 'list-none', 'my-foot', 'f', '0.75'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', data);
+      expect(element).toHaveStyle({ opacity });
+    }
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Open
+        slotProps={{ nav: { className: 'flex-row' } }}
+        bodyProps={{ slotProps: { list: { className: 'p-2' } } }}
+        footerProps={{ slotProps: { list: { className: 'p-3' } } }}
+      />,
+    );
+    expect(nav()).toHaveClass('flex-row');
+    expect(nav()).not.toHaveClass('flex-col');
+    expect(bodyList()).toHaveClass('p-2');
+    expect(bodyList()).not.toHaveClass('p-0');
+    expect(footerList()).toHaveClass('p-3');
+    expect(footerList()).not.toHaveClass('p-0');
+  });
+
+  it('locks the landmark’s name to the drawer’s own and adds your ids after its own', () => {
+    const { unmount } = render(
+      <Open
+        type="inline"
+        slotProps={{ nav: { 'aria-label': 'Mine', 'aria-describedby': 'note', title: 'Nav' } }}
+      />,
+    );
+    expect(navigation()).toBe(nav());
+    expect(nav()).toHaveAttribute('aria-label', 'Navigation');
+    expect(nav()).toHaveAttribute('aria-describedby', 'note');
+    expect(nav()).toHaveAttribute('title', 'Nav');
+    unmount();
+    render(
+      <Open
+        type="inline"
+        aria-labelledby="own-label"
+        aria-describedby="own-note"
+        slotProps={{
+          nav: { 'aria-label': 'Mine', 'aria-labelledby': 'mine', 'aria-describedby': 'note' },
+        }}
+      />,
+    );
+    // The drawer's aria-label is unset while aria-labelledby names it: yours stays unset too.
+    expect(nav()).not.toHaveAttribute('aria-label');
+    expect(nav()).toHaveAttribute('aria-labelledby', 'own-label mine');
+    expect(nav()).toHaveAttribute('aria-describedby', 'own-note note');
+  });
+
+  it('keeps the landmark and the lists visible and reachable: hidden, inert and aria-hidden stay unset', () => {
+    const locked = { hidden: true, inert: true, 'aria-hidden': true } as const;
+    render(
+      <Open
+        type="inline"
+        slotProps={{ nav: locked }}
+        bodyProps={{ slotProps: { list: locked } }}
+        footerProps={{ slotProps: { list: locked } }}
+      />,
+    );
+    for (const element of [nav(), bodyList(), footerList()]) {
+      expect(element).not.toHaveAttribute('hidden');
+      expect(element).not.toHaveAttribute('inert');
+      expect(element).not.toHaveAttribute('aria-hidden');
+    }
+    expect(button('Home')).toBeVisible();
+    expect(button('Settings')).toBeVisible();
+  });
+
+  it('attaches your refs to the parts', () => {
+    const navRef = React.createRef<HTMLElement>();
+    const bodyRef = React.createRef<HTMLUListElement>();
+    const footerRef = React.createRef<HTMLUListElement>();
+    render(
+      <Open
+        slotProps={{ nav: { ref: navRef } }}
+        bodyProps={{ slotProps: { list: { ref: bodyRef } } }}
+        footerProps={{ slotProps: { list: { ref: footerRef } } }}
+      />,
+    );
+    expect(navRef.current).toBe(nav());
+    expect(bodyRef.current).toBe(bodyList());
+    expect(footerRef.current).toBe(footerList());
+  });
+
+  it('keeps its development checks of the landmark and the lists while you pass inline refs', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const inline = () => () => {};
+      const tree = () => (
+        <NavDrawer type="inline" defaultOpen slotProps={{ nav: { ref: inline() } }}>
+          <Nav.Item value="loose">Loose</Nav.Item>
+          <NavDrawer.Body slotProps={{ list: { ref: inline() } }}>
+            <div>Stray</div>
+          </NavDrawer.Body>
+          <NavDrawer.Footer slotProps={{ list: { ref: inline() } }}>
+            <div>Stray</div>
+          </NavDrawer.Footer>
+        </NavDrawer>
+      );
+      const { rerender } = render(tree());
+      rerender(tree());
+      const listChild = (part: string) =>
+        `[WaveUI] NavDrawer.${part}: its list holds a <div> element, but a list can hold only <li> elements. Use the Nav parts (Nav.Item, Nav.Category, Nav.SectionHeader, Nav.Divider, Nav.AppItem, Nav.AppItemStatic) as its children, or wrap your own content in an <li>.`;
+      expect(warn.mock.calls.map(([message]) => message).sort()).toEqual(
+        [
+          '[WaveUI] NavDrawer: a list item sits outside NavDrawer.Body and NavDrawer.Footer, the parts that render a list. Move Nav.Item, Nav.Category and the other Nav parts into NavDrawer.Body or NavDrawer.Footer.',
+          listChild('Body'),
+          listChild('Footer'),
+        ].sort(),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('runs your list handler before the body’s arrow keys; preventDefault() skips them', async () => {
+    const user = userEvent.setup();
+    const onKeyDown = vi.fn((event: React.KeyboardEvent) => {
+      if (event.key === 'End') event.preventDefault();
+    });
+    render(
+      <Open type="inline" bodyProps={{ focusMode: 'arrow', slotProps: { list: { onKeyDown } } }} />,
+    );
+    act(() => button('Home').focus());
+    await user.keyboard('{ArrowDown}');
+    expect(button('Reports')).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(button('Home')).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(button('Home')).toHaveFocus();
+    expect(onKeyDown).toHaveBeenCalledTimes(3);
+  });
+
+  it('swaps Left and Right in RTL with your list part, which sees each key once', async () => {
+    const user = userEvent.setup();
+    const onKeyDown = vi.fn();
+    renderWithProviders(
+      <Open type="inline" bodyProps={{ focusMode: 'arrow', slotProps: { list: { onKeyDown } } }} />,
+      { dir: 'rtl' },
+    );
+    act(() => button('Home').focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(button('Reports')).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(button('Home')).toHaveFocus();
+    expect(onKeyDown).toHaveBeenCalledTimes(2);
+  });
+
+  it('calls your part handlers once per click in StrictMode; an item still selects', () => {
+    const onNavClick = vi.fn();
+    const onListClick = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Open
+          type="inline"
+          onValueChange={onValueChange}
+          slotProps={{ nav: { onClick: onNavClick } }}
+          bodyProps={{ slotProps: { list: { onClick: onListClick } } }}
+        />
+      </React.StrictMode>,
+    );
+    fireEvent.click(button('Reports'));
+    expect(onListClick).toHaveBeenCalledTimes(1);
+    expect(onNavClick).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith('reports');
+  });
+
+  it('has no accessibility violations with every part customised, both types', async () => {
+    const custom = {
+      slotProps: { nav: { className: 'my-nav', title: 'Main navigation' } },
+      bodyProps: { slotProps: { list: { className: 'my-body' } } },
+      footerProps: { slotProps: { list: { className: 'my-foot' } } },
+    };
+    const { unmount } = render(<Open {...custom} />);
+    await expectNoA11yViolations();
+    unmount();
+    render(<Open type="inline" {...custom} />);
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof NavSlotProps>().toEqualTypeOf<'nav'>();
+    expectTypeOf<keyof BodySlotProps>().toEqualTypeOf<'list'>();
+    expectTypeOf<keyof FooterSlotProps>().toEqualTypeOf<'list'>();
+    expectTypeOf<NonNullable<NavSlotProps['nav']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLElement> | undefined
+    >();
+    expectTypeOf<NonNullable<BodySlotProps['list']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLUListElement> | undefined
+    >();
+    expectTypeOf<NonNullable<FooterSlotProps['list']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLUListElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the drawer renders them
+    void (<NavDrawer slotProps={{ nav: { children: 'Nav' } }} />);
+    // @ts-expect-error -- a part takes no children: the body renders them
+    void (<NavDrawer.Body slotProps={{ list: { children: 'List' } }} />);
+    // @ts-expect-error -- a part takes no children: the footer renders them
+    void (<NavDrawer.Footer slotProps={{ list: { children: 'List' } }} />);
   });
 });

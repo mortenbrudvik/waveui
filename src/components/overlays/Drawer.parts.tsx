@@ -11,6 +11,7 @@ import {
 } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRingInset } from '../../lib/styles';
 import type { HeadingLevel } from '../../lib/types';
 import {
@@ -129,6 +130,22 @@ export interface DrawerHeaderTitleProps extends React.HTMLAttributes<HTMLDivElem
   headingLevel?: HeadingLevel;
   /** Ref to the title row (the heading's parent). */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the heading inside the title row, merged into its own: your classes after its
+   * classes (yours win a conflict), your styles, attributes and handlers added, your ref beside
+   * its ref. Every attribute it sets is locked and keeps its value; it takes no `children` (they
+   * are this component's). The row takes the component's own props, the `action` slot its
+   * content, and the Close button is the Drawer's `closeButton` slot. Fluent's `heading` slot of
+   * `DrawerHeaderTitle`, which also takes another element (`headingLevel` picks the level here).
+   */
+  slotProps?: {
+    /**
+     * The heading that names the drawer, an `<h2>` or the level `headingLevel` picks (stable
+     * class `wave-drawer-header-title__heading`). Locked: `id`, which the drawer's
+     * `aria-labelledby` names (set it with this component's own `id`).
+     */
+    heading?: SlotPart<'h2'>;
+  };
 }
 
 /** Properties for the DrawerHeaderNavigation sub-component. */
@@ -385,15 +402,17 @@ export const DrawerHeaderTitle = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: DrawerHeaderTitleProps) => {
   const { requestOpen, closeLabel, closeButton } = useDrawerContext('Drawer.HeaderTitle');
   const inHeader = React.useContext(DrawerHeaderContext);
+  // The heading's ref registers it as the drawer's title: a part's ref goes beside it.
   const { id: headingId, ref: headingRef } = useModalTitle(
     'Drawer.HeaderTitle',
     'Drawer',
     id,
-    undefined,
+    slotProps?.heading?.ref,
   );
   useWarnWhen(!inHeader, HEADER_TITLE_OUTSIDE_WARNING_KEY, HEADER_TITLE_OUTSIDE_WARNING);
   const Heading: `h${HeadingLevel}` = `h${headingLevel}`;
@@ -405,12 +424,14 @@ export const DrawerHeaderTitle = ({
     >
       <DrawerPartContext.Provider value="content">
         <Heading
-          id={headingId}
+          {...mergeSlotProps(slotProps?.heading, {
+            className: cn(
+              drawerHeaderTitleClassNames.heading,
+              'min-w-0 flex-1 text-subtitle-1 font-semibold text-foreground',
+            ),
+            locked: { id: headingId },
+          })}
           ref={headingRef}
-          className={cn(
-            drawerHeaderTitleClassNames.heading,
-            'min-w-0 flex-1 text-subtitle-1 font-semibold text-foreground',
-          )}
         >
           {children}
         </Heading>

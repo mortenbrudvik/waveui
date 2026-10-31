@@ -30,10 +30,12 @@ import { getTopmostLayer } from '../../../lib/layers';
 import type { ModalOpenChangeReason, ModalType, OpenChangeDetails } from '../../../lib/types';
 import {
   createOverlayTestWrapper,
+  expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
   installResizeObserverMock,
   mockRect,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testComposedHandler,
@@ -2554,5 +2556,317 @@ describe('Dialog', () => {
       );
       await expectNoA11yViolations();
     });
+  });
+});
+
+describe('Dialog.Content — slotProps', () => {
+  type DialogContentSlotProps = NonNullable<DialogContentProps['slotProps']>;
+  const EVERY_PART: DialogContentSlotProps = { titleActions: {}, body: {} };
+  const part = (key: 'titleActions' | 'body') => {
+    const element = document.querySelector<HTMLElement>('.' + dialogContentClassNames[key]);
+    if (!element) throw new Error(`the dialog has no ${key}`);
+    return element;
+  };
+
+  /** An open dialog with a title, a body button and `contentProps`. */
+  function Open({
+    dialogProps,
+    contentProps,
+  }: {
+    dialogProps?: Partial<DialogProps>;
+    contentProps?: Partial<DialogContentProps>;
+  }) {
+    return (
+      <Dialog open onOpenChange={() => {}} {...dialogProps}>
+        <Dialog.Content title="Title" {...contentProps}>
+          Body <button type="button">Go</button>
+        </Dialog.Content>
+      </Dialog>
+    );
+  }
+
+  it('renders the parts of 234b990 in an open dialog (attributes sorted)', () => {
+    // Captured from 234b990: the merged props may put the class before the locked attributes.
+    const { unmount } = render(<Open />);
+    expect(openingTags(part('titleActions'), part('body'))).toBe(
+      [
+        '<div class="wave-dialog-content__title-actions absolute end-4 top-4 flex items-start gap-1">',
+        '<div class="wave-dialog-content__body -mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1">',
+      ].join('\n'),
+    );
+    unmount();
+    render(
+      <Open
+        dialogProps={{ modalType: 'alert' }}
+        contentProps={{ title: undefined, size: 'full', 'aria-label': 'Full' }}
+      />,
+    );
+    expect(openingTags(part('titleActions'), part('body'))).toBe(
+      [
+        '<div class="wave-dialog-content__title-actions absolute flex items-start gap-1 top-[max(1rem,env(safe-area-inset-top))] end-[max(1rem,env(safe-area-inset-right))] wave-rtl:end-[max(1rem,env(safe-area-inset-left))]">',
+        '<div class="wave-dialog-content__body -mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: Array<{
+      dialogProps?: Partial<DialogProps>;
+      contentProps?: Partial<DialogContentProps>;
+    }> = [
+      {},
+      { dialogProps: { modalType: 'alert' }, contentProps: { size: 'full', closeButton: null } },
+      {
+        dialogProps: { modalType: 'non-modal' },
+        contentProps: {
+          titleAction: <button type="button">Expand</button>,
+          style: { minHeight: 10 },
+        },
+      },
+      { dialogProps: { open: false, unmountOnClose: false } },
+    ];
+    for (const { dialogProps, contentProps } of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <Open dialogProps={dialogProps} contentProps={{ ...contentProps, slotProps }} />
+        ),
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    render(
+      <Open
+        contentProps={{
+          slotProps: {
+            titleActions: { className: 'my-actions', style: { opacity: 0.5 }, 'data-part': 'a' },
+            body: { className: 'my-body', style: { opacity: 0.25 }, 'data-part': 'b' },
+          },
+        }}
+      />,
+    );
+    for (const [element, stable, own, mine, data, opacity] of [
+      [
+        part('titleActions'),
+        dialogContentClassNames.titleActions,
+        'end-4',
+        'my-actions',
+        'a',
+        '0.5',
+      ],
+      [part('body'), dialogContentClassNames.body, 'overflow-y-auto', 'my-body', 'b', '0.25'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', data);
+      expect(element).toHaveStyle({ opacity });
+    }
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Open
+        contentProps={{
+          slotProps: { titleActions: { className: 'end-2' }, body: { className: 'p-4' } },
+        }}
+      />,
+    );
+    expect(part('titleActions')).toHaveClass('end-2');
+    expect(part('titleActions')).not.toHaveClass('end-4');
+    expect(part('body')).toHaveClass('p-4');
+    expect(part('body')).not.toHaveClass('p-1');
+  });
+
+  it('keeps both parts visible and reachable: hidden, inert and aria-hidden stay unset', () => {
+    const locked = { hidden: true, inert: true, 'aria-hidden': true } as const;
+    render(
+      <Open
+        contentProps={{
+          slotProps: {
+            titleActions: { ...locked, title: 'Actions' },
+            body: { ...locked, title: 'Body' },
+          },
+        }}
+      />,
+    );
+    for (const [element, title] of [
+      [part('titleActions'), 'Actions'],
+      [part('body'), 'Body'],
+    ] as const) {
+      expect(element).not.toHaveAttribute('hidden');
+      expect(element).not.toHaveAttribute('inert');
+      expect(element).not.toHaveAttribute('aria-hidden');
+      expect(element).toHaveAttribute('title', title);
+    }
+    expect(button('Close')).toBeVisible();
+    expect(button('Go')).toBeVisible();
+  });
+
+  it('merges your body style with the measured footer height, your keys winning', () => {
+    const resizeObserver = installResizeObserverMock();
+    try {
+      const ui = (style: React.CSSProperties) => (
+        <Dialog open onOpenChange={() => {}}>
+          <Dialog.Content title="Title" slotProps={{ body: { style } }}>
+            Body
+            <Dialog.Footer data-testid="footer">
+              <button type="button">OK</button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog>
+      );
+      const { rerender } = render(ui({ opacity: 0.5 }));
+      mockRect(screen.getByTestId('footer'), { height: 64 });
+      resizeObserver.trigger(screen.getByTestId('footer'));
+      expect(part('body').style.getPropertyValue('--wave-dialog-footer-height')).toBe('64px');
+      expect(part('body')).toHaveStyle({ opacity: '0.5' });
+      rerender(ui({ '--wave-dialog-footer-height': '0px' } as React.CSSProperties));
+      expect(part('body').style.getPropertyValue('--wave-dialog-footer-height')).toBe('0px');
+    } finally {
+      resizeObserver.restore();
+    }
+  });
+
+  it('attaches your refs to the parts; the dialog still measures its title actions', () => {
+    const resizeObserver = installResizeObserverMock();
+    try {
+      const titleActions = React.createRef<HTMLDivElement>();
+      const body = React.createRef<HTMLDivElement>();
+      render(
+        <Open
+          contentProps={{ slotProps: { titleActions: { ref: titleActions }, body: { ref: body } } }}
+        />,
+      );
+      expect(titleActions.current).toBe(part('titleActions'));
+      expect(body.current).toBe(part('body'));
+      mockRect(part('titleActions'), { width: 64 });
+      resizeObserver.trigger(part('titleActions'));
+      expect(
+        screen.getByRole('dialog').style.getPropertyValue('--wave-dialog-title-end-padding'),
+      ).toBe('72px');
+    } finally {
+      resizeObserver.restore();
+    }
+  });
+
+  it('keeps measuring the title actions while you pass a new inline ref on every render', () => {
+    const resizeObserver = installResizeObserverMock();
+    try {
+      const elements: Array<HTMLDivElement | null> = [];
+      const ui = () => (
+        <Open
+          contentProps={{
+            slotProps: { titleActions: { ref: (element) => void elements.push(element) } },
+          }}
+        />
+      );
+      const { rerender } = render(ui());
+      rerender(ui());
+      rerender(ui());
+      expect(elements.at(-1)).toBe(part('titleActions'));
+      mockRect(part('titleActions'), { width: 100 });
+      resizeObserver.trigger(part('titleActions'));
+      expect(
+        screen.getByRole('dialog').style.getPropertyValue('--wave-dialog-title-end-padding'),
+      ).toBe('108px');
+    } finally {
+      resizeObserver.restore();
+    }
+  });
+
+  it('runs your part handlers as the content’s: a prevented Escape keeps the dialog open', () => {
+    const onOpenChange = vi.fn();
+    const onKeyDown = vi.fn();
+    const preventEscape = (event: React.KeyboardEvent) => {
+      if (event.key === 'Escape') event.preventDefault();
+    };
+    const { rerender } = render(
+      <Open
+        dialogProps={{ onOpenChange }}
+        contentProps={{ onKeyDown, slotProps: { body: { onKeyDown: preventEscape } } }}
+      />,
+    );
+    fireEvent.keyDown(button('Go'), { key: 'Escape' });
+    expect(onOpenChange).not.toHaveBeenCalled();
+    // The Content's own onKeyDown, a prop of the surface, still runs.
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    rerender(
+      <Open
+        dialogProps={{ onOpenChange }}
+        contentProps={{ slotProps: { body: { onKeyDown: () => {} } } }}
+      />,
+    );
+    fireEvent.keyDown(button('Go'), { key: 'Escape' });
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+
+  it('calls your part handlers once per event in StrictMode', () => {
+    const onTitleActionsClick = vi.fn();
+    const onBodyClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <Open
+          contentProps={{
+            slotProps: {
+              titleActions: { onClick: onTitleActionsClick },
+              body: { onClick: onBodyClick },
+            },
+          }}
+        />
+      </React.StrictMode>,
+    );
+    fireEvent.click(button('Go'));
+    expect(onBodyClick).toHaveBeenCalledTimes(1);
+    expect(onTitleActionsClick).not.toHaveBeenCalled();
+    fireEvent.click(part('titleActions'));
+    expect(onTitleActionsClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the mirrored placement of a full dialog’s title actions next to your class in RTL', () => {
+    renderWithProviders(
+      <Open
+        contentProps={{ size: 'full', slotProps: { titleActions: { className: 'my-actions' } } }}
+      />,
+      { dir: 'rtl' },
+    );
+    expect(part('titleActions').closest('[data-wave-portal]')).toHaveAttribute('dir', 'rtl');
+    expect(part('titleActions')).toHaveClass(
+      'wave-rtl:end-[max(1rem,env(safe-area-inset-left))]',
+      'my-actions',
+    );
+  });
+
+  it('renders nothing for a closed dialog that unmounts its content', () => {
+    render(<Open dialogProps={{ open: false }} contentProps={{ slotProps: EVERY_PART }} />);
+    expect(document.querySelector('.' + dialogContentClassNames.titleActions)).toBeNull();
+    expect(document.querySelector('.' + dialogContentClassNames.body)).toBeNull();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Open
+        contentProps={{
+          slotProps: {
+            titleActions: { className: 'my-actions', role: 'group', 'aria-label': 'Actions' },
+            body: { className: 'my-body', title: 'Body' },
+          },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof DialogContentSlotProps>().toEqualTypeOf<'titleActions' | 'body'>();
+    expectTypeOf<NonNullable<DialogContentSlotProps['titleActions']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<DialogContentSlotProps['body']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the dialog renders them
+    void (<Dialog.Content slotProps={{ body: { children: 'Body' } }}>Body</Dialog.Content>);
   });
 });
