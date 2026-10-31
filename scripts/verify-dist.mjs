@@ -896,6 +896,7 @@ export const INCLUSION_PROBES_0_11 = [
 export const MODULE_ONLY_NAMES = [
   'AvatarSizeContext',
   'AvatarSizeContextValue',
+  'BLOCK_CLICK',
   'BRAND_CONTRAST_PAIRS',
   'BUTTON_PART_LOCKS',
   'CalendarDayGridParts',

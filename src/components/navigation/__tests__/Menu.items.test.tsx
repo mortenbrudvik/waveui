@@ -980,16 +980,101 @@ describe('Menu.Item — slotProps', () => {
     renderInMenuList(
       <>
         <MenuItem>Cherry</MenuItem>
-        <MenuItem slotProps={{ content: { 'data-menu-label': 'mine' } }}>
+        {/* The icon's text starts the item's whole text: typeahead finds "Bold" only through the
+            label's marker, which the part may neither drop nor replace. */}
+        <MenuItem icon={{ children: 'X' }} slotProps={{ content: { 'data-menu-label': 'mine' } }}>
           <b>Bold</b>
         </MenuItem>
       </>,
     );
     const bold = screen.getAllByRole('menuitem')[1];
-    expect(content(bold)).toHaveAttribute('data-menu-label', '');
+    expect(bold).toHaveTextContent(/^XBold$/);
     await user.tab();
     await user.keyboard('b');
     expect(bold).toHaveFocus();
+    expect(content(bold)).toHaveAttribute('data-menu-label', '');
+  });
+
+  it('keeps the item the menu’s one tab stop: a part takes no tab index', async () => {
+    const user = userEvent.setup();
+    renderInMenuList(
+      <MenuItem
+        shortcut="Ctrl+S"
+        slotProps={{
+          content: { tabIndex: 0 },
+          shortcut: { tabIndex: 0 },
+          submenuIndicator: { tabIndex: 0 },
+        }}
+      >
+        Save
+      </MenuItem>,
+      { submenuTrigger: true },
+    );
+    const row = named('Save');
+    for (const element of [content(row), shortcut(row), chevron(row)]) {
+      expect(element).not.toHaveAttribute('tabindex');
+    }
+    await user.tab();
+    expect(row).toHaveFocus();
+    await user.tab();
+    expect(row.contains(document.activeElement)).toBe(false);
+  });
+
+  it('calls no click handler of a part while the item is disabled, as it calls no onClick', async () => {
+    const parts = { content: vi.fn(), shortcut: vi.fn(), chevron: vi.fn() };
+    const onClick = vi.fn();
+    const ui = (props: Partial<MenuItemProps>) => (
+      <MenuItem
+        shortcut="Ctrl+S"
+        onClick={onClick}
+        {...props}
+        slotProps={{
+          content: { onClick: parts.content },
+          shortcut: { onClick: parts.shortcut },
+          submenuIndicator: { onClick: parts.chevron },
+        }}
+      >
+        Save
+      </MenuItem>
+    );
+    const clickEveryPart = () => {
+      const row = named('Save');
+      for (const element of [content(row), shortcut(row), chevron(row)]) fireEvent.click(element);
+    };
+    const { closeFromItem, rerender } = renderInMenuList(ui({}), { submenuTrigger: true });
+    clickEveryPart();
+    for (const handler of Object.values(parts)) expect(handler).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledTimes(3);
+    rerender(ui({ disabled: true }));
+    await act(async () => {});
+    clickEveryPart();
+    for (const handler of Object.values(parts)) expect(handler).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledTimes(3);
+    // A consumer aria-disabled alone only changes the look: the item and its parts still run.
+    rerender(ui({ 'aria-disabled': true }));
+    await act(async () => {});
+    clickEveryPart();
+    for (const handler of Object.values(parts)) expect(handler).toHaveBeenCalledTimes(2);
+    expect(onClick).toHaveBeenCalledTimes(6);
+    expect(closeFromItem).not.toHaveBeenCalled();
+  });
+
+  it('calls no click handler of a part of a disabled item that closes its menu when enabled', async () => {
+    const onContent = vi.fn();
+    const ui = (disabled: boolean) => (
+      <MenuItem disabled={disabled} slotProps={{ content: { onClick: onContent } }}>
+        Save
+      </MenuItem>
+    );
+    const { closeFromItem, rerender } = renderInMenuList(ui(true));
+    fireEvent.click(content(item('Save')));
+    expect(onContent).not.toHaveBeenCalled();
+    expect(closeFromItem).not.toHaveBeenCalled();
+    rerender(ui(false));
+    await act(async () => {});
+    fireEvent.click(content(item('Save')));
+    expect(onContent).toHaveBeenCalledTimes(1);
+    expect(closeFromItem).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the menu’s columns to its icons and checks: a part cannot add a column marker', async () => {

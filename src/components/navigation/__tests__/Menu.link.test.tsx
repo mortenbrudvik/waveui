@@ -592,8 +592,8 @@ describe('Menu.ItemLink — slotProps', () => {
           href="#about"
           shortcut="Ctrl+,"
           slotProps={{
-            content: { role: 'menuitem', 'data-menu-label': 'x' },
-            shortcut: { dir: 'ltr', role: 'note', 'data-menu-label': '' },
+            content: { role: 'menuitem', 'data-menu-label': 'x', tabIndex: 0 },
+            shortcut: { dir: 'ltr', role: 'note', 'data-menu-label': '', tabIndex: 0 },
           }}
         >
           About
@@ -607,6 +607,8 @@ describe('Menu.ItemLink — slotProps', () => {
     expect(shortcut(about)).toHaveAttribute('dir', 'auto');
     expect(shortcut(about)).not.toHaveAttribute('role');
     expect(shortcut(about)).not.toHaveAttribute('data-menu-label');
+    expect(content(about)).not.toHaveAttribute('tabindex');
+    expect(shortcut(about)).not.toHaveAttribute('tabindex');
     expect(screen.getAllByRole('menuitem')).toHaveLength(2);
     await user.tab();
     await user.keyboard('{End}');
@@ -655,6 +657,47 @@ describe('Menu.ItemLink — slotProps', () => {
     expect(order).toEqual(['content', 'link', 'shortcut', 'link']);
     expect(prevented).toEqual([true, false]);
     expect(closeFromItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls no click handler of a part while the link is disabled, as it calls no onClick', async () => {
+    const prevented = recordClicks();
+    const onContent = vi.fn();
+    const onShortcut = vi.fn();
+    const onClick = vi.fn();
+    const ui = (props: { disabled?: boolean; 'aria-disabled'?: boolean }) => (
+      <MenuItemLink
+        href="#help"
+        shortcut="F1"
+        onClick={onClick}
+        {...props}
+        slotProps={{ content: { onClick: onContent }, shortcut: { onClick: onShortcut } }}
+      >
+        Help
+      </MenuItemLink>
+    );
+    const { closeFromItem, rerender } = renderInMenuList(ui({ disabled: true }));
+    fireEvent.click(content(named('Help')));
+    fireEvent.click(shortcut(named('Help')));
+    expect(onContent).not.toHaveBeenCalled();
+    expect(onShortcut).not.toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
+    expect(closeFromItem).not.toHaveBeenCalled();
+    // The disabled link cancels its own click.
+    expect(prevented).toEqual([true, true]);
+    // Enabled, and with a consumer aria-disabled alone, the link and its parts run.
+    for (const [props, calls] of [
+      [{}, 1],
+      [{ 'aria-disabled': true }, 2],
+    ] as const) {
+      rerender(ui(props));
+      await act(async () => {});
+      fireEvent.click(content(named('Help')));
+      fireEvent.click(shortcut(named('Help')));
+      expect(onContent).toHaveBeenCalledTimes(calls);
+      expect(onShortcut).toHaveBeenCalledTimes(calls);
+    }
+    expect(onClick).toHaveBeenCalledTimes(4);
+    expect(closeFromItem).toHaveBeenCalledTimes(4);
   });
 
   it('calls your part handlers once per click in StrictMode', async () => {

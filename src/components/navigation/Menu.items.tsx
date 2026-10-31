@@ -12,7 +12,7 @@ import {
   useMenuListContext,
   useOptionalMenuContext,
 } from './Menu.context';
-import { MENU_PART_LOCKS, menuItemClasses } from './Menu.shared';
+import { BLOCK_CLICK, MENU_PART_LOCKS, menuItemClasses } from './Menu.shared';
 
 /** Properties for the MenuItem sub-component. */
 export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -48,35 +48,37 @@ export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
    * Props for the elements the item draws in its row, by part, merged into each part's own: your
    * classes after the part's (yours win a conflict), your styles over its styles, your attributes
    * and handlers added, your ref attached. Every attribute the item sets on a part is locked and
-   * keeps the item's value, and no part takes a role or the markers by which the menu reads an
-   * item's row (the text typeahead matches, the check and icon columns its labels line up by), so
-   * a part changes neither the menu's keyboard navigation nor its columns. A part takes no
-   * `children` (the item draws their content); the item element itself takes the item's own props.
-   * No part carries a handler of the item: an event on a part reaches the item and its menu as one
-   * on the label does, after your handler, and `preventDefault()` in yours skips their handling of
-   * it there too. A click you prevent neither activates the item (nor closes its menu) nor opens a
-   * submenu, while the item's `onClick` is still called, as for a prevented click on the label.
-   * Fluent UI's MenuItem gives these parts slots of their own (`content`, `secondaryContent` for
-   * the shortcut, `submenuIndicator`).
+   * keeps the item's value, and no part takes a role, a tab index or the markers by which the menu
+   * reads an item's row (the text typeahead matches, the check and icon columns its labels line up
+   * by), so a part changes neither the menu's items, its one tab stop, its typeahead nor its
+   * columns. A part takes no `children` (the item draws their content); the item element itself
+   * takes the item's own props. No part carries a handler of the item: an event on a part reaches
+   * the item and its menu as one on the label does, after your handler, and `preventDefault()` in
+   * yours skips their handling of it there too. A click you prevent neither activates the item
+   * (nor closes its menu) nor opens a submenu, while the item's `onClick` is still called, as for a
+   * prevented click on the label. While the item is `disabled`, your `onClick` on a part is not
+   * called, as the item's own is not (an `aria-disabled` alone leaves both called). Fluent UI's
+   * MenuItem gives these parts slots of their own (`content`, `secondaryContent` for the shortcut,
+   * `submenuIndicator`).
    */
   slotProps?: {
     /**
      * The `<span>` of the label (`children`), which fills the row (stable class
-     * `wave-menu-item__content`). Locked: no role, and the menu's markers (typeahead reads a label
-     * that is no string through this element).
+     * `wave-menu-item__content`). Locked: no role or tab index, and the menu's markers (typeahead
+     * reads a label that is no string through this element).
      */
     content?: SlotPart<'span'>;
     /**
      * The `<span>` of `shortcut`, rendered while `shortcut` is set (stable class
      * `wave-menu-item__shortcut`). Locked: `dir` (`auto`, so the text keeps its own direction and
-     * "Ctrl+," its order in a right-to-left menu), no role, and the menu's markers.
+     * "Ctrl+," its order in a right-to-left menu), no role or tab index, and the menu's markers.
      */
     shortcut?: SlotPart<'span'>;
     /**
      * The chevron `<svg>` at the end of a submenu's trigger item, rendered only there and mirrored
      * in a right-to-left menu (stable class `wave-menu-item__submenu-indicator`). Locked:
-     * `aria-hidden` and `focusable` (it is a drawing), no role, and the menu's markers; its size,
-     * view box and paint are the glyph's, which your attributes replace.
+     * `aria-hidden` and `focusable` (it is a drawing), no role or tab index, and the menu's
+     * markers; its size, view box and paint are the glyph's, which your attributes replace.
      */
     submenuIndicator?: SlotPart<'svg'>;
   };
@@ -121,6 +123,8 @@ export interface MenuItemRowProps {
   partClassNames?: MenuItemRowPartClassNames;
   /** The item's `slotProps` parts of the label and the shortcut, merged only when given. */
   parts?: { content?: SlotPart<'span'>; shortcut?: SlotPart<'span'> };
+  /** The item's own `disabled`: the parts' click handlers are not called while it is set. */
+  disabled?: boolean;
 }
 
 /** Internal: the stable classes of an item row's parts (see `MenuItemRowProps.partClassNames`). */
@@ -167,6 +171,7 @@ export function MenuItemRow({
   markLabel = true,
   partClassNames,
   parts,
+  disabled = false,
 }: MenuItemRowProps): React.ReactElement {
   // The check does not consume a one-shot iterable label: it is rendered materialised.
   const hasLabel = slotRendersContent(label);
@@ -212,6 +217,7 @@ export function MenuItemRow({
           mergeSlotProps(parts.content, {
             className: contentClasses,
             locked: { ...MENU_PART_LOCKS, 'data-menu-label': labelMarker },
+            blockHandlers: disabled ? BLOCK_CLICK : undefined,
           }))}
       >
         {materialiseSlotContent(label)}
@@ -226,6 +232,7 @@ export function MenuItemRow({
             mergeSlotProps(parts.shortcut, {
               className: shortcutClasses,
               locked: { ...MENU_PART_LOCKS, dir: 'auto' },
+              blockHandlers: disabled ? BLOCK_CLICK : undefined,
             }))}
         >
           {shortcut}
@@ -454,15 +461,26 @@ export const MenuItem = ({
           shortcut: menuItemClassNames.shortcut,
         }}
         parts={slotProps}
-        end={isSubmenuTrigger ? renderSubmenuIndicator(slotProps?.submenuIndicator) : undefined}
+        disabled={disabled}
+        end={
+          isSubmenuTrigger
+            ? renderSubmenuIndicator(slotProps?.submenuIndicator, disabled)
+            : undefined
+        }
       />
     </div>
   );
 };
 MenuItem.displayName = 'MenuItem';
 
-/** The chevron of a submenu's trigger item, with its `slotProps` part merged only when given. */
-function renderSubmenuIndicator(part: SlotPart<'svg'> | undefined): React.ReactElement {
+/**
+ * The chevron of a submenu's trigger item, with its `slotProps` part merged only when given (its
+ * click handler not called while the item is `disabled`).
+ */
+function renderSubmenuIndicator(
+  part: SlotPart<'svg'> | undefined,
+  disabled: boolean,
+): React.ReactElement {
   const className = cn(
     menuItemClassNames.submenuIndicator,
     'ms-auto shrink-0 wave-rtl:-scale-x-100',
@@ -475,6 +493,7 @@ function renderSubmenuIndicator(part: SlotPart<'svg'> | undefined): React.ReactE
         mergeSlotProps(part, {
           className,
           locked: { ...MENU_PART_LOCKS, 'aria-hidden': true, focusable: 'false' },
+          blockHandlers: disabled ? BLOCK_CLICK : undefined,
         }))}
     />
   );

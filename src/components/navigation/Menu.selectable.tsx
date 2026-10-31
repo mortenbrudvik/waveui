@@ -13,7 +13,7 @@ import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { Slot } from '../../lib/types';
 import { useMenuContext, useMenuListContext } from './Menu.context';
-import { MENU_PART_LOCKS, menuItemClasses } from './Menu.shared';
+import { BLOCK_CLICK, MENU_PART_LOCKS, menuItemClasses } from './Menu.shared';
 import { MenuItemRow, useMenuItemActivation, useMenuItemPlacementWarning } from './Menu.items';
 import type { MenuItemProps, MenuItemRowPartClassNames } from './Menu.items';
 
@@ -38,29 +38,32 @@ export interface MenuItemCheckboxProps
    * Props for the elements the item draws in its row, by part, merged into each part's own: your
    * classes after the part's (yours win a conflict), your styles over its styles, your attributes
    * and handlers added, your ref attached. Every attribute the item sets on a part is locked and
-   * keeps the item's value, and no part takes a role or the markers by which the menu reads an
-   * item's row (the text typeahead matches, the check and icon columns its labels line up by), so
-   * a part changes neither the menu's keyboard navigation nor its columns. A part takes no
-   * `children` (the item draws their content); the item element itself takes the item's own props,
-   * the check glyph is `checkmark` and the icon `icon`. No part carries a handler of the item: an
-   * event on a part reaches the item and its menu as one on the label does, after your handler,
-   * and `preventDefault()` in yours skips their handling of it there too. A click you prevent
-   * leaves the item checked or unchecked as it was (and its menu open), while the item's `onClick`
-   * is still called, as for a prevented click on the label. Fluent UI's MenuItemCheckbox gives
-   * these parts slots of their own (`content`, `secondaryContent` for the shortcut).
+   * keeps the item's value, and no part takes a role, a tab index or the markers by which the menu
+   * reads an item's row (the text typeahead matches, the check and icon columns its labels line up
+   * by), so a part changes neither the menu's items, its one tab stop, its typeahead nor its
+   * columns. A part takes no `children` (the item draws their content); the item element itself
+   * takes the item's own props, the check glyph is `checkmark` and the icon `icon`. No part
+   * carries a handler of the item: an event on a part reaches the item and its menu as one on the
+   * label does, after your handler, and `preventDefault()` in yours skips their handling of it
+   * there too. A click you prevent leaves the item checked or unchecked as it was (and its menu
+   * open), while the item's `onClick` is still called, as for a prevented click on the label.
+   * While the item is `disabled`, your `onClick` on a part is not called, as the item's own is not
+   * (an `aria-disabled` alone leaves both called). Fluent UI's MenuItemCheckbox gives these parts
+   * slots of their own (`content`, `secondaryContent` for the shortcut).
    */
   slotProps?: {
     /**
      * The `<span>` of the label (`children`), which fills the row (stable classes
-     * `wave-menu-item__content` and `wave-menu-item-checkbox__content`). Locked: no role, and the
-     * menu's markers (typeahead reads a label that is no string through this element).
+     * `wave-menu-item__content` and `wave-menu-item-checkbox__content`). Locked: no role or tab
+     * index, and the menu's markers (typeahead reads a label that is no string through this
+     * element).
      */
     content?: SlotPart<'span'>;
     /**
      * The `<span>` of `shortcut`, rendered while `shortcut` is set (stable classes
      * `wave-menu-item__shortcut` and `wave-menu-item-checkbox__shortcut`). Locked: `dir` (`auto`,
-     * so the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no
-     * role, and the menu's markers.
+     * so the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no role
+     * or tab index, and the menu's markers.
      */
     shortcut?: SlotPart<'span'>;
   };
@@ -75,29 +78,32 @@ export interface MenuItemRadioProps
    * Props for the elements the item draws in its row, by part, merged into each part's own: your
    * classes after the part's (yours win a conflict), your styles over its styles, your attributes
    * and handlers added, your ref attached. Every attribute the item sets on a part is locked and
-   * keeps the item's value, and no part takes a role or the markers by which the menu reads an
-   * item's row (the text typeahead matches, the check and icon columns its labels line up by), so
-   * a part changes neither the menu's keyboard navigation nor its columns. A part takes no
-   * `children` (the item draws their content); the item element itself takes the item's own props,
-   * the check glyph is `checkmark` and the icon `icon`. No part carries a handler of the item: an
-   * event on a part reaches the item and its menu as one on the label does, after your handler,
-   * and `preventDefault()` in yours skips their handling of it there too. A click you prevent
-   * checks nothing (and leaves its menu open), while the item's `onClick` is still called, as for
-   * a prevented click on the label. Fluent UI's MenuItemRadio gives these parts slots of their own
-   * (`content`, `secondaryContent` for the shortcut).
+   * keeps the item's value, and no part takes a role, a tab index or the markers by which the menu
+   * reads an item's row (the text typeahead matches, the check and icon columns its labels line up
+   * by), so a part changes neither the menu's items, its one tab stop, its typeahead nor its
+   * columns. A part takes no `children` (the item draws their content); the item element itself
+   * takes the item's own props, the check glyph is `checkmark` and the icon `icon`. No part
+   * carries a handler of the item: an event on a part reaches the item and its menu as one on the
+   * label does, after your handler, and `preventDefault()` in yours skips their handling of it
+   * there too. A click you prevent checks nothing (and leaves its menu open), while the item's
+   * `onClick` is still called, as for a prevented click on the label. While the item is
+   * `disabled`, your `onClick` on a part is not called, as the item's own is not (an
+   * `aria-disabled` alone leaves both called). Fluent UI's MenuItemRadio gives these parts slots of
+   * their own (`content`, `secondaryContent` for the shortcut).
    */
   slotProps?: {
     /**
      * The `<span>` of the label (`children`), which fills the row (stable classes
-     * `wave-menu-item__content` and `wave-menu-item-radio__content`). Locked: no role, and the
-     * menu's markers (typeahead reads a label that is no string through this element).
+     * `wave-menu-item__content` and `wave-menu-item-radio__content`). Locked: no role or tab
+     * index, and the menu's markers (typeahead reads a label that is no string through this
+     * element).
      */
     content?: SlotPart<'span'>;
     /**
      * The `<span>` of `shortcut`, rendered while `shortcut` is set (stable classes
      * `wave-menu-item__shortcut` and `wave-menu-item-radio__shortcut`). Locked: `dir` (`auto`, so
-     * the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no role,
-     * and the menu's markers.
+     * the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no role or
+     * tab index, and the menu's markers.
      */
     shortcut?: SlotPart<'span'>;
   };
@@ -110,42 +116,45 @@ export interface MenuItemSwitchProps
    * Props for the elements the item draws in its row, by part, merged into each part's own: your
    * classes after the part's (yours win a conflict), your styles over its styles, your attributes
    * and handlers added, your ref attached. Every attribute the item sets on a part is locked and
-   * keeps the item's value, and no part takes a role or the markers by which the menu reads an
-   * item's row (the text typeahead matches, the check and icon columns its labels line up by), so
-   * a part changes neither the menu's keyboard navigation nor its columns. A part takes no
-   * `children` (the item draws their content); the item element itself takes the item's own props,
-   * and the icon is `icon`. No part carries a handler of the item: an event on a part reaches the
-   * item and its menu as one on the label does, after your handler, and `preventDefault()` in
-   * yours skips their handling of it there too. A click you prevent leaves the switch on or off as
-   * it was (and its menu open), while the item's `onClick` is still called, as for a prevented
-   * click on the label. Fluent UI's MenuItemSwitch gives these parts slots of their own (`content`,
-   * `secondaryContent` for the shortcut, `switchIndicator` for the switch).
+   * keeps the item's value, and no part takes a role, a tab index or the markers by which the menu
+   * reads an item's row (the text typeahead matches, the check and icon columns its labels line up
+   * by), so a part changes neither the menu's items, its one tab stop, its typeahead nor its
+   * columns. A part takes no `children` (the item draws their content); the item element itself
+   * takes the item's own props, and the icon is `icon`. No part carries a handler of the item: an
+   * event on a part reaches the item and its menu as one on the label does, after your handler,
+   * and `preventDefault()` in yours skips their handling of it there too. A click you prevent
+   * leaves the switch on or off as it was (and its menu open), while the item's `onClick` is still
+   * called, as for a prevented click on the label. While the item is `disabled`, your `onClick` on
+   * a part is not called, as the item's own is not (an `aria-disabled` alone leaves both called).
+   * Fluent UI's MenuItemSwitch gives these parts slots of their own (`content`, `secondaryContent`
+   * for the shortcut, `switchIndicator` for the switch).
    */
   slotProps?: {
     /**
      * The `<span>` of the label (`children`), which fills the row (stable classes
-     * `wave-menu-item__content` and `wave-menu-item-switch__content`). Locked: no role, and the
-     * menu's markers (typeahead reads a label that is no string through this element).
+     * `wave-menu-item__content` and `wave-menu-item-switch__content`). Locked: no role or tab
+     * index, and the menu's markers (typeahead reads a label that is no string through this
+     * element).
      */
     content?: SlotPart<'span'>;
     /**
      * The `<span>` of `shortcut`, rendered while `shortcut` is set (stable classes
      * `wave-menu-item__shortcut` and `wave-menu-item-switch__shortcut`). Locked: `dir` (`auto`, so
-     * the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no role,
-     * and the menu's markers.
+     * the text keeps its own direction and "Ctrl+," its order in a right-to-left menu), no role or
+     * tab index, and the menu's markers.
      */
     shortcut?: SlotPart<'span'>;
     /**
      * The `<span>` of the switch at the row's end, its track, which follows the item's checked and
      * disabled state through its classes (stable class `wave-menu-item-switch__track`). Locked:
      * `aria-hidden` (the switch is a drawing: the item carries the state) and the switch's
-     * internal marker, no role, and the menu's markers.
+     * internal marker, no role or tab index, and the menu's markers.
      */
     track?: SlotPart<'span'>;
     /**
      * The `<span>` of the switch's thumb, inside the track, at the track's far end while the item
-     * is checked (stable class `wave-menu-item-switch__thumb`). Locked: no role, and the menu's
-     * markers.
+     * is checked (stable class `wave-menu-item-switch__thumb`). Locked: no role or tab index, and
+     * the menu's markers.
      */
     thumb?: SlotPart<'span'>;
   };
@@ -202,7 +211,9 @@ function renderSwitchIndicator(
         ? 'forced-colors:bg-[HighlightText]'
         : 'forced-colors:bg-[ButtonText]',
   );
-  // The parts are merged only when given: a menu renders many items.
+  // The parts are merged only when given: a menu renders many items. A disabled item calls no
+  // click handler of a part.
+  const blockHandlers = disabled ? BLOCK_CLICK : undefined;
   return (
     <span
       aria-hidden="true"
@@ -212,12 +223,17 @@ function renderSwitchIndicator(
         mergeSlotProps(parts.track, {
           className: trackClasses,
           locked: { ...MENU_PART_LOCKS, 'aria-hidden': 'true', 'data-menu-switch': '' },
+          blockHandlers,
         }))}
     >
       <span
         className={thumbClasses}
         {...(parts?.thumb &&
-          mergeSlotProps(parts.thumb, { className: thumbClasses, locked: MENU_PART_LOCKS }))}
+          mergeSlotProps(parts.thumb, {
+            className: thumbClasses,
+            locked: MENU_PART_LOCKS,
+            blockHandlers,
+          }))}
       />
     </span>
   );
@@ -321,6 +337,7 @@ function SelectableMenuItem({
         markLabel={!ownRovingText}
         partClassNames={partClassNames}
         parts={slotProps}
+        disabled={disabled}
         end={kind === 'switch' ? renderSwitchIndicator(checked, disabled, slotProps) : undefined}
       />
     </div>

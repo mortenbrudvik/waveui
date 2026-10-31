@@ -35,17 +35,26 @@ export function withTypeaheadText(
 
 /**
  * What every `slotProps` part of a menu item locks unset: a role, since the menu finds its items
- * by role (a part with an item's role would become an item of its own), and the markers the menu
- * reads from an item's row (the element whose text typeahead matches, and the check and icon
- * columns the list lines its labels up by), so a part can change neither. Spread it first in a
- * part's `locked` object; a part that carries one of the markers sets it after the spread.
+ * by role (a part with an item's role would become an item of its own); a tab index, since a menu
+ * has one tab stop, its roving item (a part would add a stop inside an item, and a focusable
+ * drawing that is `aria-hidden`); and the markers the menu reads from an item's row (the element
+ * whose text typeahead matches, and the check and icon columns the list lines its labels up by),
+ * so a part can change none of them. Spread it first in a part's `locked` object; a part that
+ * carries one of the markers sets it after the spread.
  */
 export const MENU_PART_LOCKS = {
   role: undefined,
+  tabIndex: undefined,
   'data-menu-label': undefined,
   'data-menu-icon': undefined,
   'data-menu-checkmark': undefined,
 } as const;
+
+/**
+ * The `blockHandlers` of a menu item's parts while the item's own `disabled` is set: a disabled
+ * item calls no click handler, its own `onClick` included, and neither does a part of it.
+ */
+export const BLOCK_CLICK = ['onClick'] as const;
 
 /**
  * C-DEV: `Menu.Trigger`/`Menu.Popover` rendered by a static menu — the root only detects popup

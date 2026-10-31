@@ -1329,8 +1329,8 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
             value="grid"
             shortcut="Ctrl+,"
             slotProps={{
-              content: { role: role, 'data-menu-label': 'x' },
-              shortcut: { dir: 'ltr', role: 'note', 'data-menu-label': '' },
+              content: { role: role, 'data-menu-label': 'x', tabIndex: 0 },
+              shortcut: { dir: 'ltr', role: 'note', 'data-menu-label': '', tabIndex: 0 },
             }}
           >
             Apple
@@ -1345,6 +1345,8 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
       expect(get(row, classes.shortcut)).toHaveAttribute('dir', 'auto');
       expect(get(row, classes.shortcut)).not.toHaveAttribute('role');
       expect(get(row, classes.shortcut)).not.toHaveAttribute('data-menu-label');
+      expect(get(row, classes.content)).not.toHaveAttribute('tabindex');
+      expect(get(row, classes.shortcut)).not.toHaveAttribute('tabindex');
       expect(screen.getAllByRole(role)).toHaveLength(1);
       await user.tab();
       await user.keyboard('{End}');
@@ -1399,6 +1401,63 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
       expect(row).toHaveAttribute('aria-checked', 'true');
       expect(onCheckedValuesChange).toHaveBeenCalledTimes(1);
       expect(closeFromItem).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(KINDS)(
+    '%s: calls no click handler of a part while the item is disabled, as it calls no onClick',
+    async (kind, role, Item) => {
+      const handlers = { content: vi.fn(), shortcut: vi.fn(), track: vi.fn(), thumb: vi.fn() };
+      const onClick = vi.fn();
+      const onCheckedValuesChange = vi.fn();
+      const ui = (props: Partial<MenuItemSwitchProps>) => (
+        <Item
+          name="view"
+          value="grid"
+          shortcut="Ctrl+G"
+          onClick={onClick}
+          persistOnClick
+          {...props}
+          slotProps={{
+            content: { onClick: handlers.content },
+            shortcut: { onClick: handlers.shortcut },
+            track: { onClick: handlers.track },
+            thumb: { onClick: handlers.thumb },
+          }}
+        >
+          Grid
+        </Item>
+      );
+      const { rerender } = renderInMenuList(ui({ disabled: true }), {
+        defaultCheckedValues: { view: [] },
+        onCheckedValuesChange,
+      });
+      const row = named(role, 'Grid');
+      // The switch's two parts are clicked through the thumb, inside the track.
+      const clickEveryPart = () => {
+        fireEvent.click(get(row, menuItemClassNames.content));
+        fireEvent.click(get(row, menuItemClassNames.shortcut));
+        if (kind === 'switch') fireEvent.click(thumb(row));
+      };
+      clickEveryPart();
+      for (const handler of Object.values(handlers)) expect(handler).not.toHaveBeenCalled();
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onCheckedValuesChange).not.toHaveBeenCalled();
+      expect(row).toHaveAttribute('aria-checked', 'false');
+      // Enabled, and with a consumer aria-disabled alone, the item and its parts run.
+      for (const [props, calls] of [
+        [{}, 1],
+        [{ 'aria-disabled': true }, 2],
+      ] as const) {
+        rerender(ui(props));
+        await act(async () => {});
+        clickEveryPart();
+        expect(handlers.content).toHaveBeenCalledTimes(calls);
+        expect(handlers.shortcut).toHaveBeenCalledTimes(calls);
+        expect(handlers.thumb).toHaveBeenCalledTimes(kind === 'switch' ? calls : 0);
+        expect(handlers.track).toHaveBeenCalledTimes(kind === 'switch' ? calls : 0);
+      }
+      expect(onClick).toHaveBeenCalledTimes(kind === 'switch' ? 6 : 4);
     },
   );
 
@@ -1488,8 +1547,14 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
         name="view"
         value="grid"
         slotProps={{
-          track: { 'aria-hidden': false, 'data-menu-switch': 'mine', role: 'switch', title: 'T' },
-          thumb: { role: 'img', 'aria-label': 'Thumb', title: 'Thumb' },
+          track: {
+            'aria-hidden': false,
+            'data-menu-switch': 'mine',
+            role: 'switch',
+            tabIndex: 0,
+            title: 'T',
+          },
+          thumb: { role: 'img', 'aria-label': 'Thumb', tabIndex: 0, title: 'Thumb' },
         }}
       >
         Grid
@@ -1502,6 +1567,8 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
     expect(track(row)).toHaveAttribute('title', 'T');
     expect(thumb(row)).not.toHaveAttribute('role');
     expect(thumb(row)).toHaveAttribute('title', 'Thumb');
+    expect(track(row)).not.toHaveAttribute('tabindex');
+    expect(thumb(row)).not.toHaveAttribute('tabindex');
     expect(screen.queryByRole('switch')).toBeNull();
     expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(1);
   });
