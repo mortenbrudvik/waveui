@@ -216,8 +216,8 @@ export const RegionNotice: Story = {
   },
 };
 
-/** What the action of the story below says in a bar of each intent. */
-const INTENT_ACTION_LABELS: Record<MessageBarContextValue['intent'], string> = {
+/** What the action of the story below says in a bar of each status. */
+const STATUS_ACTION_LABELS: Record<MessageBarContextValue['status'], string> = {
   info: 'Learn more',
   success: 'View details',
   warning: 'Review',
@@ -226,30 +226,30 @@ const INTENT_ACTION_LABELS: Record<MessageBarContextValue['intent'], string> = {
 
 /**
  * An action of your own that follows its bar through `useMessageBarContext`: its label and
- * appearance by the bar's intent, its size by the layout the bar renders.
+ * appearance by the bar's status, its size by the layout the bar renders.
  */
-function IntentAction({ onAction }: { onAction?: () => void }) {
-  const { intent, layout } = useMessageBarContext();
+function StatusAction({ onAction }: { onAction?: () => void }) {
+  const { status, layout } = useMessageBarContext();
   return (
     <Button
       size={layout === 'multiline' ? 'medium' : 'small'}
-      appearance={intent === 'error' || intent === 'warning' ? 'primary' : 'outline'}
+      appearance={status === 'error' || status === 'warning' ? 'primary' : 'outline'}
       onClick={onAction}
     >
-      {INTENT_ACTION_LABELS[intent]}
+      {STATUS_ACTION_LABELS[status]}
     </Button>
   );
 }
 
 /**
- * An action of your own built on `useMessageBarContext`. It reads the bar's intent (its `status`:
- * "Try again" in an error bar, "Review" in a warning bar, both primary; "Learn more" and "View
- * details" outlined) and the layout the bar renders (a small button on the text's row, a medium one
- * on a row of its own). Change `status`, or narrow the container (drag its lower corner) until the
- * actions move under the text.
+ * An action of your own built on `useMessageBarContext`. It reads the bar's `status` ("Try again"
+ * in an error bar, "Review" in a warning bar, both primary; "Learn more" and "View details"
+ * outlined) and the layout the bar renders (a small button on the text's row, a medium one on a row
+ * of its own). Change `status`, or narrow the container (drag its lower corner) until the actions
+ * move under the text.
  */
-export const IntentAwareAction: Story = {
-  name: 'Intent-aware action',
+export const StatusAwareAction: Story = {
+  name: 'Status-aware action',
   args: {
     status: 'error',
     children: (
@@ -257,7 +257,7 @@ export const IntentAwareAction: Story = {
         <MessageBar.Title>Sync failed</MessageBar.Title>Your last three changes were not saved to
         the server.
         <MessageBar.Actions>
-          <IntentAction onAction={fn()} />
+          <StatusAction onAction={fn()} />
         </MessageBar.Actions>
       </>
     ),

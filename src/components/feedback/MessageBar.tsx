@@ -535,7 +535,7 @@ const MessageBarRoot = ({
   const unwrapped = measuring && resolvedLayout === 'singleline';
   // What `useMessageBarContext` reads anywhere in the bar (C-MEMO).
   const contextValue = React.useMemo<MessageBarContextValue>(
-    () => ({ intent: status, layout: resolvedLayout }),
+    () => ({ status, layout: resolvedLayout }),
     [status, resolvedLayout],
   );
 

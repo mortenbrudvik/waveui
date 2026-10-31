@@ -2339,7 +2339,7 @@ describe('0.18 customization surface from the package entry', () => {
   it('useMessageBarContext, a narrow view of a MessageBar', () => {
     expectTypeOf<Entry['useMessageBarContext']>().toEqualTypeOf<() => MessageBarContextValue>();
     expectTypeOf<MessageBarContextValue>().toEqualTypeOf<{
-      intent: Status;
+      status: Status;
       layout: 'singleline' | 'multiline';
     }>();
   });

@@ -59,7 +59,7 @@ function recorder() {
   };
 }
 
-/** What the action of your own says for each intent. */
+/** What the action of your own says for each status. */
 const ACTION_LABELS: Record<Status, string> = {
   info: 'Learn more',
   success: 'View details',
@@ -69,28 +69,28 @@ const ACTION_LABELS: Record<Status, string> = {
 
 /**
  * An action of your own that follows its bar (as the story's): its label and appearance by the
- * intent, its size by the layout (small on the text's row, medium on a row of its own). The two
+ * status, its size by the layout (small on the text's row, medium on a row of its own). The two
  * values are also rendered as attributes for the assertions.
  */
-function IntentAction({ onAction }: { onAction?: () => void }) {
-  const { intent, layout } = useMessageBarContext();
+function StatusAction({ onAction }: { onAction?: () => void }) {
+  const { status, layout } = useMessageBarContext();
   return (
     <Button
       size={layout === 'multiline' ? 'medium' : 'small'}
-      appearance={intent === 'error' || intent === 'warning' ? 'primary' : 'outline'}
-      data-bar-intent={intent}
+      appearance={status === 'error' || status === 'warning' ? 'primary' : 'outline'}
+      data-bar-status={status}
       data-bar-layout={layout}
       onClick={onAction}
     >
-      {ACTION_LABELS[intent]}
+      {ACTION_LABELS[status]}
     </Button>
   );
 }
-IntentAction.displayName = 'IntentAction';
+StatusAction.displayName = 'StatusAction';
 
 /** A bar with the action of your own in its actions. */
 function ActionBar({
-  Action = IntentAction,
+  Action = StatusAction,
   onAction,
   ...props
 }: Omit<MessageBarProps, 'children'> & {
@@ -113,7 +113,7 @@ function ActionBar({
 // ---------------------------------------------------------------------------
 
 describe('useMessageBarContext (P13-02, R15)', () => {
-  it('returns exactly intent and layout, nothing else', () => {
+  it('returns exactly status and layout, nothing else', () => {
     const probes = recorder();
     render(
       <MessageBar status="warning" layout="singleline">
@@ -121,29 +121,29 @@ describe('useMessageBarContext (P13-02, R15)', () => {
       </MessageBar>,
     );
     const value = probes.last('body');
-    expect(value).toStrictEqual({ intent: 'warning', layout: 'singleline' });
+    expect(value).toStrictEqual({ status: 'warning', layout: 'singleline' });
     // No placement or other member is frozen into the public contract (R11).
-    expect(Object.keys(value!).sort()).toEqual(['intent', 'layout']);
+    expect(Object.keys(value!).sort()).toEqual(['layout', 'status']);
   });
 
-  it.each(statuses)('intent is the bar’s status: %s', (status) => {
+  it.each(statuses)('status is the one the bar was given: %s', (status) => {
     const probes = recorder();
     render(
       <MessageBar status={status}>
         <Probe id="body" record={probes.record} />
       </MessageBar>,
     );
-    expect(probes.last('body')?.intent).toBe(status);
+    expect(probes.last('body')?.status).toBe(status);
   });
 
-  it('intent is info when the bar has no status (its default)', () => {
+  it('status is info when the bar is given none (its default)', () => {
     const probes = recorder();
     render(
       <MessageBar>
         <Probe id="body" record={probes.record} />
       </MessageBar>,
     );
-    expect(probes.last('body')?.intent).toBe('info');
+    expect(probes.last('body')?.status).toBe('info');
   });
 
   it.each(['singleline', 'multiline'] as const)(
@@ -206,7 +206,7 @@ describe('useMessageBarContext (P13-02, R15)', () => {
       </MessageBar>,
     );
     const body = probes.last('body');
-    expect(body).toStrictEqual({ intent: 'error', layout: 'multiline' });
+    expect(body).toStrictEqual({ status: 'error', layout: 'multiline' });
     for (const id of ['icon', 'title', 'actions', 'dismiss'])
       expect(probes.last(id), id).toBe(body);
   });
@@ -221,8 +221,8 @@ describe('useMessageBarContext (P13-02, R15)', () => {
         <Probe id="outer" record={probes.record} />
       </MessageBar>,
     );
-    expect(probes.last('inner')).toStrictEqual({ intent: 'success', layout: 'singleline' });
-    expect(probes.last('outer')).toStrictEqual({ intent: 'warning', layout: 'multiline' });
+    expect(probes.last('inner')).toStrictEqual({ status: 'success', layout: 'singleline' });
+    expect(probes.last('outer')).toStrictEqual({ status: 'warning', layout: 'multiline' });
   });
 
   it('each bar of a MessageBarGroup gives its own values', () => {
@@ -237,11 +237,11 @@ describe('useMessageBarContext (P13-02, R15)', () => {
         </MessageBar>
       </MessageBarGroup>,
     );
-    expect(probes.last('a')).toStrictEqual({ intent: 'error', layout: 'singleline' });
-    expect(probes.last('b')).toStrictEqual({ intent: 'success', layout: 'multiline' });
+    expect(probes.last('a')).toStrictEqual({ status: 'error', layout: 'singleline' });
+    expect(probes.last('b')).toStrictEqual({ status: 'success', layout: 'multiline' });
   });
 
-  it('the same object while intent and layout stay the same; a new one when either changes', () => {
+  it('the same object while status and layout stay the same; a new one when either changes', () => {
     const probes = recorder();
     function Parent({ tick, status, layout }: { tick: number } & Partial<MessageBarProps>) {
       return (
@@ -259,16 +259,16 @@ describe('useMessageBarContext (P13-02, R15)', () => {
     rerender(<Parent tick={2} status="error" />);
     const error = probes.last('body')!;
     expect(error).not.toBe(first);
-    expect(error).toStrictEqual({ intent: 'error', layout: 'multiline' });
+    expect(error).toStrictEqual({ status: 'error', layout: 'multiline' });
     rerender(<Parent tick={3} status="error" />);
     expect(probes.last('body')).toBe(error);
 
     rerender(<Parent tick={4} status="error" layout="singleline" />);
     expect(probes.last('body')).not.toBe(error);
-    expect(probes.last('body')).toStrictEqual({ intent: 'error', layout: 'singleline' });
+    expect(probes.last('body')).toStrictEqual({ status: 'error', layout: 'singleline' });
   });
 
-  it('a memoised consumer re-renders only when intent or layout changes', () => {
+  it('a memoised consumer re-renders only when status or layout changes', () => {
     const probes = recorder();
     const MemoProbe = React.memo(Probe);
     function Parent({ tick, status }: { tick: number; status?: Status }) {
@@ -287,7 +287,7 @@ describe('useMessageBarContext (P13-02, R15)', () => {
     expect(probes.count('memo')).toBe(1);
     rerender(<Parent tick={3} status="success" />);
     expect(probes.count('memo')).toBe(2);
-    expect(probes.last('memo')?.intent).toBe('success');
+    expect(probes.last('memo')?.status).toBe('success');
   });
 
   it('throws outside a MessageBar in development (C-CONTEXT)', () => {
@@ -317,7 +317,7 @@ describe('useMessageBarContext (P13-02, R15)', () => {
         const { rerender } = render(<Probe id="orphan" record={probes.record} />);
         rerender(<Probe id="orphan" record={probes.record} />);
         expect(error.mock.calls).toEqual([[CONTEXT_ERROR]]);
-        expect(probes.last('orphan')).toStrictEqual({ intent: 'info', layout: 'singleline' });
+        expect(probes.last('orphan')).toStrictEqual({ status: 'info', layout: 'singleline' });
       } finally {
         error.mockRestore();
       }
@@ -378,27 +378,27 @@ describe('useMessageBarContext: the layout after a reflow (D17)', () => {
         Your session expires in five minutes.
         <Probe id="body" record={probes.record} />
         <MessageBar.Actions>
-          <IntentAction />
+          <StatusAction />
         </MessageBar.Actions>
       </MessageBar>,
     );
     const bar = screen.getByRole('alert');
     const action = screen.getByRole('button', { name: 'Review' });
-    expect(probes.last('body')).toStrictEqual({ intent: 'warning', layout: 'singleline' });
+    expect(probes.last('body')).toStrictEqual({ status: 'warning', layout: 'singleline' });
     expect(action).toHaveAttribute('data-bar-layout', 'singleline');
 
     // The text needs 150 px more than its column, so the bar needs 400 + 150 = 550 px.
     setWidths(bar, { root: 400, text: 200, content: 350 });
     await resize(bar);
     expect(bar).toHaveAttribute('data-layout', 'multiline');
-    expect(probes.last('body')).toStrictEqual({ intent: 'warning', layout: 'multiline' });
+    expect(probes.last('body')).toStrictEqual({ status: 'warning', layout: 'multiline' });
     expect(screen.getByRole('button', { name: 'Review' })).toBe(action);
     expect(action).toHaveAttribute('data-bar-layout', 'multiline');
 
     setWidths(bar, { root: 550, text: 550, content: 350 });
     await resize(bar);
     expect(bar).toHaveAttribute('data-layout', 'singleline');
-    expect(probes.last('body')).toStrictEqual({ intent: 'warning', layout: 'singleline' });
+    expect(probes.last('body')).toStrictEqual({ status: 'warning', layout: 'singleline' });
     expect(action).toHaveAttribute('data-bar-layout', 'singleline');
   });
 
@@ -491,20 +491,20 @@ describe('useMessageBarContext: the layout after a reflow (D17)', () => {
 // ---------------------------------------------------------------------------
 
 describe('an action of your own (useMessageBarContext)', () => {
-  it.each(statuses)('renders by the intent of a %s bar', (status) => {
+  it.each(statuses)('renders by the status of a %s bar', (status) => {
     render(<ActionBar status={status} layout="singleline" />);
     const action = screen.getByRole('button', { name: ACTION_LABELS[status] });
-    expect(action).toHaveAttribute('data-bar-intent', status);
+    expect(action).toHaveAttribute('data-bar-status', status);
     expect(action).toHaveAttribute('data-bar-layout', 'singleline');
   });
 
-  it('renders by the layout, and follows the bar when its intent changes', () => {
+  it('renders by the layout, and follows the bar when its status changes', () => {
     const { rerender } = render(<ActionBar status="error" layout="multiline" />);
     const action = screen.getByRole('button', { name: 'Try again' });
     expect(action).toHaveAttribute('data-bar-layout', 'multiline');
     rerender(<ActionBar status="success" layout="multiline" />);
     expect(screen.getByRole('button', { name: 'View details' })).toBe(action);
-    expect(action).toHaveAttribute('data-bar-intent', 'success');
+    expect(action).toHaveAttribute('data-bar-status', 'success');
   });
 
   it('is an action of the bar, with no axe violation', async () => {
@@ -517,14 +517,14 @@ describe('an action of your own (useMessageBarContext)', () => {
   it('the example of the hook’s documentation works as written', async () => {
     /** The `@example` of `useMessageBarContext`, verbatim. */
     function RetryAction({ onRetry }: { onRetry: () => void }) {
-      const { intent, layout } = useMessageBarContext();
+      const { status, layout } = useMessageBarContext();
       return (
         <Button
-          appearance={intent === 'error' ? 'primary' : 'outline'}
+          appearance={status === 'error' ? 'primary' : 'outline'}
           size={layout === 'multiline' ? 'medium' : 'small'}
           onClick={onRetry}
         >
-          {intent === 'error' ? 'Try again' : 'Refresh'}
+          {status === 'error' ? 'Try again' : 'Refresh'}
         </Button>
       );
     }
@@ -556,7 +556,7 @@ describe('an action of your own (useMessageBarContext)', () => {
     await user.click(screen.getByRole('button', { name: 'Review' }));
     expect(onAction).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Review' })).toHaveAttribute(
-      'data-bar-intent',
+      'data-bar-status',
       'warning',
     );
   });
@@ -564,7 +564,7 @@ describe('an action of your own (useMessageBarContext)', () => {
   describe('server rendering', () => {
     it('renders the layout of the server HTML (one row for an auto bar with actions) and hydrates without a warning', async () => {
       const html = renderToString(<ActionBar status="error" />);
-      expect(html).toContain('data-bar-intent="error"');
+      expect(html).toContain('data-bar-status="error"');
       expect(html).toContain('data-bar-layout="singleline"');
       expect(html).toContain('Try again');
 
@@ -589,7 +589,7 @@ describe('an action of your own (useMessageBarContext)', () => {
     });
 
     it('an action imported by a Server Component (a client reference) renders the same and works the same', async () => {
-      const ReferenceAction = asClientReference(IntentAction);
+      const ReferenceAction = asClientReference(StatusAction);
       expect(renderToString(<ActionBar status="warning" Action={ReferenceAction} />)).toBe(
         renderToString(<ActionBar status="warning" />),
       );
@@ -624,10 +624,10 @@ describe('useMessageBarContext — exports and types', () => {
   it('returns the narrow value', () => {
     expectTypeOf(useMessageBarContext).toEqualTypeOf<() => MessageBarContextValue>();
     expectTypeOf<MessageBarContextValue>().toEqualTypeOf<{
-      intent: Status;
+      status: Status;
       layout: 'singleline' | 'multiline';
     }>();
-    expectTypeOf<MessageBarContextValue['intent']>().toEqualTypeOf<
+    expectTypeOf<MessageBarContextValue['status']>().toEqualTypeOf<
       'info' | 'success' | 'warning' | 'error'
     >();
   });
