@@ -71,10 +71,13 @@ export interface FlatTreeProps extends Omit<
   /** Ref to the `role="tree"` element. */
   ref?: React.Ref<HTMLDivElement>;
   /**
-   * Props for the elements every item draws, by part (the items are the tree's own, never written
-   * by hand, so their parts are given here once for all of them), merged into each part's own:
-   * your classes after the part's (yours win a conflict), your styles over its styles, your
-   * attributes and handlers added, your ref attached (to the part of every rendered item). Every
+   * Props for the elements every item draws, by part: each `FlatTree.Item` is rendered by the
+   * tree, never written by hand, so the parts of all of them are given here once. Pass an object
+   * that keeps its identity across renders (defined outside the component, or memoised): the
+   * items read it from a context the tree rebuilds when it changes. Each part is merged into the
+   * part's own props: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref attached (to the part of every rendered
+   * item). Every
    * attribute an item sets on a part is locked and keeps the item's value, and no part takes a
    * role, a tab index or the markers by which the tree reads an item (its row and its checkbox),
    * so a part changes neither the tree's items, its one tab stop nor which clicks an item takes. A
