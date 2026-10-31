@@ -12,11 +12,17 @@ import {
   type TagPickerSize,
 } from '../TagPicker';
 import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  installResizeObserverMock,
+  mockRect,
+  openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
 } from '../../../test-utils';
+import { Tag } from '../../data-display/Tag';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
@@ -2254,5 +2260,614 @@ describe('TagPicker', () => {
       );
       expect(screen.getByRole('listitem')).toHaveClass('rounded', 'min-h-5', 'bg-muted');
     });
+  });
+});
+
+describe('TagPicker — slotProps', () => {
+  type TagPickerSlotProps = NonNullable<TagPickerProps['slotProps']>;
+  const EVERY_PART: TagPickerSlotProps = {
+    tag: {},
+    removeButton: {},
+    expandButton: {},
+    clearButton: {},
+    option: {},
+    createOption: {},
+    overflowCount: {},
+    surface: {},
+    emptyMessage: {},
+  };
+  const part = (name: string) => document.querySelector<HTMLElement>(`.${name}`);
+  const all = (name: string) => Array.from(document.querySelectorAll<HTMLElement>(`.${name}`));
+  const TWO = [
+    { value: 'apple', label: 'Apple' },
+    { value: 'banana', label: 'Banana' },
+  ];
+
+  it('renders the 0.17.1 parts without slotProps (opening tags, attributes sorted)', async () => {
+    // Captured from b8941ef, open client renders: the merged props may put the class before the
+    // locked attributes.
+    const first = render(
+      <TagPicker aria-label="Fruit" options={TWO} defaultValue={['apple']} defaultOpen clearable />,
+    );
+    await act(async () => {});
+    const { tag, removeButton, clearButton, expandButton, surface, option, emptyMessage } =
+      tagPickerClassNames;
+    expect(
+      openingTags(...[tag, removeButton, clearButton, expandButton, surface, option].flatMap(all)),
+    ).toBe(
+      [
+        '<span class="wave-tag inline-flex items-center border min-h-5 gap-0.5 text-caption-1 ps-1.75 pe-px border-transparent bg-muted text-foreground rounded wave-tag-picker__tag" data-appearance="filled" data-shape="rounded" data-size="extra-small" data-wave-tag-item="" role="listitem">',
+        '<button aria-label="Remove Apple" class="wave-tag__dismiss-button relative inline-flex shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-inherit before:absolute disabled:cursor-not-allowed forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] size-4 before:-inset-1 disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:active:bg-muted-pressed focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-0 wave-tag-picker__remove-button" data-wave-tag-dismiss="" type="button">',
+        '<button aria-label="Clear selection" class="wave-tag-picker__clear-button top-1.5 absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed aria-disabled:cursor-not-allowed" type="button">',
+        '<button aria-controls="tagpicker-listbox-_id0_" aria-expanded="true" aria-label="Show options" class="wave-tag-picker__expand-button top-1.5 absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-tag-picker__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<li aria-selected="false" class="wave-option flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground bg-(--option-bg) [--option-bg:transparent] not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)] data-[selected]:[--option-bg:var(--wave-subtle-selected)] data-[active]:[--option-bg:var(--wave-subtle-hover)] data-[active]:outline-2 data-[active]:-outline-offset-2 data-[active]:outline-ring aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground wave-tag-picker-option wave-tag-picker__option" data-value="banana" id="tagpicker-listbox-_id0_-opt-0" role="option">',
+      ].join('\n'),
+    );
+    first.unmount();
+
+    const second = render(
+      <TagPicker
+        aria-label="Fruit"
+        options={[{ value: 'apple', label: 'Apple' }]}
+        defaultOpen
+        defaultQuery="kiwi"
+        allowCreate
+      />,
+    );
+    await act(async () => {});
+    expect(openingTags(...all(option))).toBe(
+      [
+        '<li aria-selected="false" class="wave-option flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground bg-(--option-bg) [--option-bg:transparent] not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)] data-[selected]:[--option-bg:var(--wave-subtle-selected)] data-[active]:[--option-bg:var(--wave-subtle-hover)] data-[active]:outline-2 data-[active]:-outline-offset-2 data-[active]:outline-ring aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground wave-tag-picker__option wave-tag-picker__create-option" data-active="" data-create="" data-value="tagpicker-create-_id0_" id="tagpicker-listbox-_id1_-opt-0" role="option">',
+      ].join('\n'),
+    );
+    second.unmount();
+
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        options={[{ value: 'apple', label: 'Apple' }]}
+        defaultOpen
+        defaultQuery="zzz"
+      />,
+    );
+    await act(async () => {});
+    expect(openingTags(...[surface, emptyMessage].flatMap(all))).toBe(
+      [
+        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-tag-picker__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<div aria-hidden="true" class="wave-tag-picker__empty-message px-3 py-1.5 text-body-1 text-muted-foreground">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: TagPickerProps[] = [
+      { defaultValue: ['apple'], defaultOpen: true, clearable: true },
+      { defaultValue: ['apple'], defaultOpen: true, defaultQuery: 'kiwi', allowCreate: true },
+      { defaultOpen: true, defaultQuery: 'zzz' },
+      { defaultValue: ['apple', 'banana'], clearable: true, disabled: true },
+      { defaultValue: ['apple'], clearable: true, readOnly: true },
+      { defaultValue: ['apple'], expandIcon: false, size: 'large' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <TagPicker aria-label="Fruit" options={options} {...props} slotProps={slotProps} />
+        ),
+        EVERY_PART,
+      );
+    }
+    expectInertSlotProps(
+      (slotProps) => (
+        <TagPicker
+          aria-label="Fruit"
+          defaultValue={['a']}
+          defaultOpen
+          defaultQuery="kiwi"
+          allowCreate
+          slotProps={slotProps}
+        >
+          <TagPicker.Control>
+            <TagPicker.Group />
+            <TagPicker.Input />
+          </TagPicker.Control>
+          <TagPicker.List>
+            <TagPicker.Option value="a">Apple</TagPicker.Option>
+            <TagPicker.Option value="k">Kale</TagPicker.Option>
+          </TagPicker.List>
+        </TagPicker>
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('puts your className, style, data-* and ref on each part, after its stable class and own classes', async () => {
+    const mine = <E extends HTMLElement>(name: string, ref: React.Ref<E>) => ({
+      ref,
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    const refs = {
+      tag: React.createRef<HTMLSpanElement>(),
+      removeButton: React.createRef<HTMLButtonElement>(),
+      expandButton: React.createRef<HTMLButtonElement>(),
+      clearButton: React.createRef<HTMLButtonElement>(),
+      option: React.createRef<HTMLLIElement>(),
+      surface: React.createRef<HTMLDivElement>(),
+    };
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        defaultOpen
+        clearable
+        slotProps={{
+          tag: mine('tag', refs.tag),
+          removeButton: mine('removeButton', refs.removeButton),
+          expandButton: mine('expandButton', refs.expandButton),
+          clearButton: mine('clearButton', refs.clearButton),
+          option: mine('option', refs.option),
+          surface: mine('surface', refs.surface),
+        }}
+      />,
+    );
+    await act(async () => {});
+    const firstClass: Record<keyof typeof refs, string> = {
+      tag: tagClassNames.root,
+      removeButton: tagClassNames.dismissButton,
+      expandButton: tagPickerClassNames.expandButton,
+      clearButton: tagPickerClassNames.clearButton,
+      option: 'wave-option',
+      surface: 'wave-listbox-surface',
+    };
+    for (const name of Object.keys(refs) as (keyof typeof refs)[]) {
+      const element = part(tagPickerClassNames[name])!;
+      expect(refs[name].current).toBe(element);
+      expect(element.classList[0]).toBe(firstClass[name]);
+      expect(element).toHaveClass(tagPickerClassNames[name]);
+      expect(element.classList[element.classList.length - 1]).toBe(`my-${name}`);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(element).toHaveAttribute('data-part', name);
+    }
+    expect(refs.tag.current).toHaveTextContent('Apple');
+    expect(refs.removeButton.current).toBe(screen.getByRole('button', { name: 'Remove Apple' }));
+    expect(refs.option.current).toBe(screen.getByRole('option', { name: 'Banana' }));
+    expect(refs.surface.current).toHaveStyle({ position: 'fixed' });
+  });
+
+  it('puts your props on the create option after the option part, and on the empty row', async () => {
+    const createOption = React.createRef<HTMLLIElement>();
+    const { unmount } = render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultOpen
+        defaultQuery="kiwi"
+        allowCreate
+        slotProps={{
+          option: { className: 'my-option', title: 'From option', 'data-from': 'option' },
+          createOption: { ref: createOption, className: 'my-create', title: 'From create' },
+        }}
+      />,
+    );
+    await act(async () => {});
+    const create = screen.getByRole('option', { name: 'Create "kiwi"' });
+    expect(createOption.current).toBe(create);
+    expect(Array.from(create.classList).slice(-2)).toEqual(['my-option', 'my-create']);
+    expect(create).toHaveAttribute('title', 'From create');
+    expect(create).toHaveAttribute('data-from', 'option');
+    expect(create).toHaveAttribute('data-create', '');
+    unmount();
+
+    const emptyMessage = React.createRef<HTMLDivElement>();
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultOpen
+        defaultQuery="zzz"
+        slotProps={{ emptyMessage: { ref: emptyMessage, className: 'my-empty' } }}
+      />,
+    );
+    await act(async () => {});
+    expect(emptyMessage.current).toBe(part(tagPickerClassNames.emptyMessage));
+    expect(emptyMessage.current).toHaveClass('my-empty');
+    expect(emptyMessage.current).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('runs your removeButton onClick before the removal, once per click in StrictMode; preventDefault() skips it', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const onClick = vi.fn();
+    const { rerender } = render(
+      <React.StrictMode>
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          defaultValue={['apple', 'banana']}
+          onValueChange={onValueChange}
+          slotProps={{ removeButton: { onClick: (event) => event.preventDefault() } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Remove Apple' }));
+    expect(onValueChange).not.toHaveBeenCalled();
+    rerender(
+      <React.StrictMode>
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          defaultValue={['apple', 'banana']}
+          onValueChange={onValueChange}
+          slotProps={{ removeButton: { onClick } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Remove Apple' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith(['banana']);
+  });
+
+  it('keeps the locked attributes of the default tags and their remove buttons', () => {
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        disabled
+        slotProps={{
+          tag: { role: 'button', hidden: true, title: 'A fruit' },
+          removeButton: {
+            type: 'submit',
+            disabled: false,
+            tabIndex: 0,
+            hidden: true,
+            'aria-hidden': true,
+            'aria-label': 'Other',
+            'aria-disabled': true,
+          },
+        }}
+      />,
+    );
+    const tag = within(screen.getByRole('list', { name: 'Selected' })).getByRole('listitem');
+    expect(tag).not.toHaveAttribute('hidden');
+    expect(tag).toHaveAttribute('title', 'A fruit');
+    const remove = screen.getByRole('button', { name: 'Remove Apple' });
+    expect(remove).toHaveAttribute('type', 'button');
+    expect(remove).toBeDisabled();
+    expect(remove).not.toHaveAttribute('tabindex');
+    expect(remove).not.toHaveAttribute('hidden');
+    expect(remove).not.toHaveAttribute('aria-hidden');
+    expect(remove).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('does not call your removeButton or clearButton onClick while they are held focusable after disabling', async () => {
+    const user = userEvent.setup();
+    const removeClick = vi.fn();
+    const clearClick = vi.fn();
+    const slotProps: TagPickerSlotProps = {
+      removeButton: { onClick: removeClick },
+      clearButton: { onClick: clearClick },
+    };
+    const { rerender } = render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        clearable
+        slotProps={slotProps}
+      />,
+    );
+    const remove = screen.getByRole('button', { name: 'Remove Apple' });
+    act(() => remove.focus());
+    rerender(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        clearable
+        disabled
+        slotProps={slotProps}
+      />,
+    );
+    expect(remove).toHaveFocus();
+    expect(remove).toHaveAttribute('aria-disabled', 'true');
+    await user.click(remove);
+    expect(removeClick).not.toHaveBeenCalled();
+
+    const clear = screen.getByRole('button', { name: 'Clear selection' });
+    rerender(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        clearable
+        slotProps={slotProps}
+      />,
+    );
+    act(() => clear.focus());
+    rerender(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        clearable
+        disabled
+        slotProps={slotProps}
+      />,
+    );
+    expect(clear).toHaveFocus();
+    expect(clear).toHaveAttribute('aria-disabled', 'true');
+    await user.click(clear);
+    expect(clearClick).not.toHaveBeenCalled();
+    expect(
+      within(screen.getByRole('list', { name: 'Selected' })).getAllByRole('listitem'),
+    ).toHaveLength(1);
+  });
+
+  it('tracks the clear button focus whatever your onFocus and onBlur do', () => {
+    const slotProps: TagPickerSlotProps = {
+      clearButton: {
+        onFocus: (event) => event.preventDefault(),
+        onBlur: (event) => event.preventDefault(),
+      },
+    };
+    const { rerender } = render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        clearable
+        slotProps={slotProps}
+      />,
+    );
+    const clear = screen.getByRole('button', { name: 'Clear selection' });
+    act(() => clear.focus());
+    rerender(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        clearable
+        disabled
+        slotProps={slotProps}
+      />,
+    );
+    // Held: the focus was tracked, so the disabled button keeps it.
+    expect(clear).toHaveAttribute('aria-disabled', 'true');
+    expect(clear).not.toBeDisabled();
+  });
+
+  it('runs your clearButton, expandButton and option onClick first; preventDefault() skips their action', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        clearable
+        onValueChange={onValueChange}
+        onOpenChange={onOpenChange}
+        slotProps={{
+          clearButton: { onClick: (event) => event.preventDefault() },
+          expandButton: { onClick: (event) => event.preventDefault() },
+          option: { onClick: (event) => event.preventDefault() },
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+    await user.click(part(tagPickerClassNames.expandButton)!);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    await user.click(combobox('Fruit'));
+    await user.click(screen.getByRole('option', { name: 'Banana' }));
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the locked attributes of the generated options and the surface', async () => {
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        options={options}
+        defaultOpen
+        slotProps={{
+          option: {
+            id: 'mine',
+            role: 'menuitem',
+            hidden: true,
+            value: 'other',
+            'data-value': 'other',
+            'data-active': 'yes',
+            'aria-selected': true,
+          },
+          surface: { role: 'dialog', hidden: true, 'aria-hidden': true, style: { top: 50 } },
+        }}
+      />,
+    );
+    await act(async () => {});
+    const listed = screen.getAllByRole('option');
+    expect(listed).toHaveLength(4);
+    for (const [index, element] of listed.entries()) {
+      expect(element.id).toMatch(/^tagpicker-listbox-.*-opt-\d+$/);
+      expect(element).not.toHaveAttribute('hidden');
+      expect(element).not.toHaveAttribute('data-active');
+      expect(element).toHaveAttribute('aria-selected', 'false');
+      expect(element).toHaveAttribute('data-value', options[index].value);
+    }
+    const surface = part(tagPickerClassNames.surface)!;
+    expect(surface).not.toHaveAttribute('role');
+    expect(surface).not.toHaveAttribute('hidden');
+    expect(surface).not.toHaveAttribute('aria-hidden');
+    expect(surface).toHaveStyle({ top: '0px' });
+  });
+
+  it('puts the overflowCount part on the +N chip, which keeps its aria-hidden and its press', () => {
+    const ro = installResizeObserverMock();
+    try {
+      const chip = React.createRef<HTMLSpanElement>();
+      const onMouseDown = vi.fn();
+      render(
+        <TagPicker
+          aria-label="Fruit"
+          options={options}
+          defaultValue={['apple', 'banana', 'cherry']}
+          overflow="count"
+          slotProps={{
+            overflowCount: {
+              ref: chip,
+              className: 'my-chip',
+              onMouseDown,
+              'aria-hidden': false,
+            },
+          }}
+        />,
+      );
+      const control = combobox('Fruit').closest<HTMLElement>('[data-wave-tagpicker-control]')!;
+      mockRect(control, { width: 130 });
+      for (const tag of Array.from(control.querySelectorAll('[data-wave-tag-item]'))) {
+        mockRect(tag, { width: 60 });
+      }
+      ro.trigger(control);
+      const element = part(tagPickerClassNames.overflowCount)!;
+      expect(chip.current).toBe(element);
+      expect(element).toHaveTextContent('+1');
+      expect(element.classList[0]).toBe(tagPickerClassNames.overflowCount);
+      expect(element).toHaveClass('my-chip');
+      expect(element).toHaveAttribute('aria-hidden', 'true');
+      fireEvent.mouseDown(element);
+      expect(onMouseDown).toHaveBeenCalledTimes(1);
+      expect(combobox('Fruit')).toHaveFocus();
+    } finally {
+      ro.restore();
+    }
+  });
+
+  it('renders the same +N chip without slotProps, with {} and with every part empty', () => {
+    const ro = installResizeObserverMock();
+    try {
+      const ui = (slotProps: TagPickerSlotProps | undefined) => (
+        <TagPicker
+          aria-label="Fruit"
+          options={options}
+          defaultValue={['apple', 'banana', 'cherry']}
+          overflow="count"
+          slotProps={slotProps}
+        />
+      );
+      const { baseElement, rerender } = render(ui(undefined));
+      const control = combobox('Fruit').closest<HTMLElement>('[data-wave-tagpicker-control]')!;
+      mockRect(control, { width: 130 });
+      for (const tag of Array.from(control.querySelectorAll('[data-wave-tag-item]'))) {
+        mockRect(tag, { width: 60 });
+      }
+      ro.trigger(control);
+      expect(part(tagPickerClassNames.overflowCount)).toHaveTextContent('+1');
+      const markup = baseElement.innerHTML;
+      for (const slotProps of [{}, EVERY_PART, undefined]) {
+        rerender(ui(slotProps));
+        expect(baseElement.innerHTML).toBe(markup);
+      }
+    } finally {
+      ro.restore();
+    }
+  });
+
+  it('reaches only the members TagPicker generates: not your own Tags and options', async () => {
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        defaultValue={['a']}
+        defaultOpen
+        slotProps={{ tag: { className: 'my-tag' }, option: { className: 'my-option' } }}
+      >
+        <TagPicker.Control>
+          <TagPicker.Group>
+            <Tag value="a">Apple</Tag>
+          </TagPicker.Group>
+          <TagPicker.Input />
+        </TagPicker.Control>
+        <TagPicker.List>
+          <TagPicker.Option value="a">Apple</TagPicker.Option>
+          <TagPicker.Option value="k">Kale</TagPicker.Option>
+        </TagPicker.List>
+      </TagPicker>,
+    );
+    await act(async () => {});
+    expect(screen.getByRole('option', { name: 'Kale' })).not.toHaveClass('my-option');
+    expect(document.querySelector('.my-tag')).toBeNull();
+    expect(document.querySelector('.my-option')).toBeNull();
+  });
+
+  it('moves to the last tag with the mirrored arrow in RTL, its remove button carrying your class', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple', 'banana']}
+        slotProps={{ removeButton: { className: 'my-remove' } }}
+      />,
+      { dir: 'rtl' },
+    );
+    await user.click(combobox('Fruit'));
+    await user.keyboard('{ArrowRight}');
+    const remove = screen.getByRole('button', { name: 'Remove Banana' });
+    expect(remove).toHaveFocus();
+    expect(remove).toHaveClass(tagPickerClassNames.removeButton, 'my-remove');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        defaultOpen
+        clearable
+        slotProps={{
+          tag: { className: 'my-tag' },
+          removeButton: { className: 'my-remove' },
+          expandButton: { className: 'my-expand' },
+          clearButton: { className: 'my-clear' },
+          option: { className: 'my-option' },
+          surface: { className: 'my-surface' },
+        }}
+      />,
+    );
+    await act(async () => {});
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof TagPickerSlotProps>().toEqualTypeOf<
+      | 'tag'
+      | 'removeButton'
+      | 'expandButton'
+      | 'clearButton'
+      | 'option'
+      | 'createOption'
+      | 'overflowCount'
+      | 'surface'
+      | 'emptyMessage'
+    >();
+    expectTypeOf<NonNullable<TagPickerSlotProps['tag']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TagPickerSlotProps['removeButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TagPickerSlotProps['option']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLIElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TagPickerSlotProps['surface']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: TagPicker draws its content
+    void (<TagPicker slotProps={{ tag: { children: 'Other' } }} />);
   });
 });

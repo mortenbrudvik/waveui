@@ -15,8 +15,10 @@ import {
 } from '../Combobox';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
@@ -26,8 +28,11 @@ import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../.
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { __getAnnouncerText, __resetAnnouncer } from '../../../hooks/useAnnounce';
 import type { ListboxItem } from '../../../hooks/useListbox';
+import { useVirtualWindow } from '../../../hooks/useVirtualWindow';
+import { comboboxClassNames } from '../../../lib/classNames';
 import { Button } from '../../button/Button';
 import { WaveProvider } from '../../provider/WaveProvider';
+import { installWindowStubs, ITEM_SIZE, MANY_ITEMS, runFrames } from './windowHarness';
 
 const FRUITS = [
   <Option key="a" value="a">
@@ -3958,5 +3963,588 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     expect(clear()).toHaveClass('size-8', 'end-9');
     expect(root()).toHaveAttribute('data-size', 'large');
     expect(root()).toHaveAttribute('data-appearance', 'filled-darker');
+  });
+});
+
+describe('Combobox — slotProps', () => {
+  type ComboboxSlotProps = NonNullable<ComboboxProps['slotProps']>;
+  const EVERY_PART: ComboboxSlotProps = {
+    input: {},
+    clearButton: {},
+    expandButton: {},
+    listbox: {},
+    surface: {},
+    emptyMessage: {},
+  };
+  const part = (name: string) => document.querySelector<HTMLElement>(`.${name}`);
+  const parts = (...names: string[]) => names.map((name) => part(name)!);
+  const TWO = [
+    <Option key="a" value="a">
+      Apple
+    </Option>,
+    <Option key="b" value="b">
+      Banana
+    </Option>,
+  ];
+
+  it('renders the 0.17.1 parts without slotProps (opening tags, attributes sorted)', async () => {
+    // Captured from b8941ef, an open client render: the merged props may put the class before
+    // the locked attributes.
+    const { unmount } = render(
+      <Combobox aria-label="Fruit" defaultOpen defaultValue="a" clearable>
+        {TWO}
+      </Combobox>,
+    );
+    await act(async () => {});
+    const { input, clearButton, expandButton, listbox, surface } = comboboxClassNames;
+    expect(openingTags(...parts(input, clearButton, expandButton, listbox, surface))).toBe(
+      [
+        '<input aria-autocomplete="list" aria-controls="combobox-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Fruit" autocomplete="off" class="wave-combobox__input h-8 w-full px-3 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 pe-14" role="combobox" type="text" value="Apple">',
+        '<button aria-label="Clear selection" class="wave-combobox__clear-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+        '<button aria-controls="combobox-listbox-_id0_" aria-expanded="true" aria-label="Show options" class="wave-combobox__expand-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+        '<ul aria-label="Fruit" class="wave-listbox-surface__list min-h-0 max-h-60 overflow-auto wave-combobox__listbox" id="combobox-listbox-_id0_" role="listbox" tabindex="-1">',
+        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-combobox__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+      ].join('\n'),
+    );
+    unmount();
+
+    render(
+      <Combobox aria-label="Fruit" defaultOpen defaultValue="a" defaultQuery="zzz" clearable>
+        {TWO}
+      </Combobox>,
+    );
+    await act(async () => {});
+    expect(openingTags(...parts(listbox, surface, comboboxClassNames.emptyMessage))).toBe(
+      [
+        '<ul aria-label="Fruit" class="wave-listbox-surface__list min-h-0 max-h-60 overflow-auto wave-combobox__listbox" hidden="" id="combobox-listbox-_id0_" role="listbox" tabindex="-1">',
+        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-combobox__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<div aria-hidden="true" class="wave-combobox__empty-message px-3 py-1.5 text-body-1 text-muted-foreground">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: ComboboxProps[] = [
+      { 'aria-label': 'Fruit', defaultOpen: true, defaultValue: 'a', clearable: true },
+      { 'aria-label': 'Fruit', defaultOpen: true, defaultQuery: 'zzz', clearable: true },
+      {
+        id: 'own',
+        'aria-describedby': 'hint',
+        'aria-invalid': true,
+        required: true,
+        name: 'fruit',
+        disabled: true,
+        clearable: true,
+        defaultValue: 'a',
+      },
+      { 'aria-label': 'Fruit', readOnly: true, expandIcon: false, defaultValue: 'b' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <Combobox {...props} slotProps={slotProps}>
+            {TWO}
+          </Combobox>
+        ),
+        EVERY_PART,
+      );
+    }
+    expectInertSlotProps(
+      (slotProps) => (
+        <Combobox
+          aria-label="Fruit"
+          multiselect
+          defaultOpen
+          defaultValue={['a']}
+          clearable
+          slotProps={slotProps}
+        >
+          {TWO}
+        </Combobox>
+      ),
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps) => (
+        <Combobox
+          aria-label="Fruit"
+          defaultOpen
+          items={[
+            { value: 'a', label: 'Apple' },
+            { value: 'b', label: 'Banana' },
+          ]}
+          slotProps={slotProps}
+        />
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', async () => {
+    const mine = (name: string) => ({
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    const { unmount } = render(
+      <Combobox
+        aria-label="Fruit"
+        defaultOpen
+        defaultValue="a"
+        clearable
+        slotProps={{
+          input: mine('input'),
+          clearButton: mine('clearButton'),
+          expandButton: mine('expandButton'),
+          listbox: mine('listbox'),
+          surface: mine('surface'),
+        }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    await act(async () => {});
+    const { input, clearButton, expandButton, listbox, surface } = comboboxClassNames;
+    for (const [element, first, own, name] of [
+      [part(input), input, input, 'input'],
+      [part(clearButton), clearButton, clearButton, 'clearButton'],
+      [part(expandButton), expandButton, expandButton, 'expandButton'],
+      [part(listbox), 'wave-listbox-surface__list', listbox, 'listbox'],
+      [part(surface), 'wave-listbox-surface', surface, 'surface'],
+    ] as const) {
+      expect(element).toHaveClass(first, own, `my-${name}`);
+      expect(element!.classList[0]).toBe(first);
+      expect(element!.classList[element!.classList.length - 1]).toBe(`my-${name}`);
+      expect(element).toHaveAttribute('data-part', name);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+    }
+    unmount();
+
+    render(
+      <Combobox
+        aria-label="Fruit"
+        defaultOpen
+        defaultQuery="zzz"
+        slotProps={{ emptyMessage: mine('emptyMessage') }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    await act(async () => {});
+    const empty = part(comboboxClassNames.emptyMessage);
+    expect(empty!.classList[0]).toBe(comboboxClassNames.emptyMessage);
+    expect(empty).toHaveClass('my-emptyMessage');
+    expect(empty).toHaveAttribute('data-part', 'emptyMessage');
+    expect(empty).toHaveAttribute('aria-hidden', 'true');
+    expect(empty).toHaveStyle({ opacity: '0.5' });
+  });
+
+  it('lets your class replace a conflicting class of the part', async () => {
+    render(
+      <Combobox aria-label="Fruit" defaultOpen slotProps={{ listbox: { className: 'max-h-96' } }}>
+        {TWO}
+      </Combobox>,
+    );
+    await act(async () => {});
+    const list = screen.getByRole('listbox', { name: 'Fruit' });
+    expect(list).toHaveClass('max-h-96');
+    expect(list).not.toHaveClass('max-h-60');
+  });
+
+  it('attaches your refs to the parts, beside controlRef and the positioning', async () => {
+    const refs = {
+      input: React.createRef<HTMLInputElement>(),
+      clearButton: React.createRef<HTMLButtonElement>(),
+      expandButton: React.createRef<HTMLButtonElement>(),
+      listbox: React.createRef<HTMLUListElement>(),
+      surface: React.createRef<HTMLDivElement>(),
+    };
+    const controlRef = React.createRef<HTMLInputElement>();
+    render(
+      <Combobox
+        aria-label="Fruit"
+        defaultOpen
+        defaultValue="a"
+        clearable
+        controlRef={controlRef}
+        slotProps={{
+          input: { ref: refs.input },
+          clearButton: { ref: refs.clearButton },
+          expandButton: { ref: refs.expandButton },
+          listbox: { ref: refs.listbox },
+          surface: { ref: refs.surface },
+        }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    await act(async () => {});
+    const input = screen.getByRole('combobox', { name: 'Fruit' });
+    expect(refs.input.current).toBe(input);
+    expect(controlRef.current).toBe(input);
+    expect(refs.clearButton.current).toBe(screen.getByRole('button', { name: 'Clear selection' }));
+    expect(refs.expandButton.current).toBe(part(comboboxClassNames.expandButton));
+    expect(refs.listbox.current).toBe(screen.getByRole('listbox', { name: 'Fruit' }));
+    expect(refs.surface.current).toBe(part(comboboxClassNames.surface));
+    // The surface is still placed: the positioning holds the same element.
+    expect(refs.surface.current).toHaveStyle({ position: 'fixed' });
+  });
+
+  it('runs your input handlers first; preventDefault() in onKeyDown skips the listbox keys', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <Combobox
+        aria-label="Fruit"
+        onKeyDown={() => order.push('onKeyDown')}
+        onFocus={() => order.push('onFocus')}
+        slotProps={{
+          input: {
+            onFocus: () => order.push('part focus'),
+            onKeyDown: (event) => {
+              order.push('part key');
+              if (event.key === 'ArrowDown' && !event.altKey) event.preventDefault();
+            },
+          },
+        }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    await user.tab();
+    await user.keyboard('{ArrowDown}');
+    expect(order).toEqual(['part focus', 'onFocus', 'part key']);
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'false');
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    // Alt, then ArrowDown.
+    expect(order.slice(3)).toEqual(['part key', 'onKeyDown', 'part key', 'onKeyDown']);
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('ignores the typed text when your onChange prevents the default', async () => {
+    const user = userEvent.setup();
+    const onQueryChange = vi.fn();
+    render(
+      <Combobox
+        aria-label="Fruit"
+        onQueryChange={onQueryChange}
+        slotProps={{ input: { onChange: (event) => event.preventDefault() } }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    await user.type(screen.getByRole('combobox'), 'ap');
+    expect(screen.getByRole('combobox')).toHaveValue('');
+    expect(onQueryChange).not.toHaveBeenCalled();
+  });
+
+  it('drops the typed text on blur whatever your onBlur does', async () => {
+    const user = userEvent.setup();
+    const onBlur = vi.fn();
+    render(
+      <>
+        <Combobox
+          aria-label="Fruit"
+          defaultValue="a"
+          onBlur={onBlur}
+          slotProps={{ input: { onBlur: (event) => event.preventDefault() } }}
+        >
+          {TWO}
+        </Combobox>
+        <button type="button">After</button>
+      </>,
+    );
+    const input = screen.getByRole('combobox');
+    await user.click(input);
+    await user.clear(input);
+    await user.type(input, 'ba');
+    await user.click(screen.getByRole('button', { name: 'After' }));
+    // The Combobox's own onBlur is part of its handling, which your preventDefault() skips; the
+    // typed text is still dropped, so the input shows the selected label again.
+    expect(onBlur).not.toHaveBeenCalled();
+    expect(input).toHaveValue('Apple');
+  });
+
+  it('runs your clearButton onClick before the clear, once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Combobox
+          aria-label="Fruit"
+          defaultValue="a"
+          clearable
+          onValueChange={onValueChange}
+          slotProps={{ clearButton: { onClick } }}
+        >
+          {TWO}
+        </Combobox>
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith('');
+    expect(screen.getByRole('combobox')).toHaveFocus();
+  });
+
+  it('skips the clear and the toggle when your clearButton or expandButton onClick prevents the default', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <Combobox
+        aria-label="Fruit"
+        defaultValue="a"
+        clearable
+        onValueChange={onValueChange}
+        onOpenChange={onOpenChange}
+        slotProps={{
+          clearButton: { onClick: (event) => event.preventDefault() },
+          expandButton: { onClick: (event) => event.preventDefault() },
+        }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+    await user.click(part(comboboxClassNames.expandButton)!);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('combobox')).toHaveValue('Apple');
+  });
+
+  it('keeps the locked attributes of the input; your ids join its aria-describedby', () => {
+    render(
+      <>
+        <span id="extra">Extra</span>
+        <Combobox
+          id="own"
+          aria-label="Fruit"
+          aria-describedby="own-hint"
+          disabled
+          slotProps={{
+            input: {
+              id: 'mine',
+              type: 'search',
+              role: 'textbox',
+              value: 'Other',
+              disabled: false,
+              readOnly: true,
+              tabIndex: 3,
+              name: 'mine',
+              form: 'elsewhere',
+              hidden: true,
+              'aria-hidden': true,
+              'aria-label': 'Other',
+              'aria-expanded': true,
+              'aria-controls': 'nowhere',
+              'aria-describedby': 'extra',
+            },
+          }}
+        >
+          {TWO}
+        </Combobox>
+        <span id="own-hint">Hint</span>
+      </>,
+    );
+    const input = screen.getByRole('combobox', { name: 'Fruit' });
+    expect(input).toHaveAttribute('id', 'own');
+    expect(input).toHaveAttribute('type', 'text');
+    expect(input).toHaveValue('');
+    expect(input).toBeDisabled();
+    expect(input).not.toHaveAttribute('readonly');
+    expect(input).not.toHaveAttribute('tabindex');
+    expect(input).not.toHaveAttribute('name');
+    expect(input).not.toHaveAttribute('form');
+    expect(input).not.toHaveAttribute('hidden');
+    expect(input).not.toHaveAttribute('aria-hidden');
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(input.getAttribute('aria-controls')).toMatch(/^combobox-listbox-/);
+    expect(input).toHaveAttribute('aria-describedby', 'own-hint extra');
+  });
+
+  it('submits only the hidden input: the input part takes no name or form', () => {
+    render(
+      <form aria-label="Order">
+        <Combobox
+          aria-label="Fruit"
+          name="fruit"
+          defaultValue="a"
+          slotProps={{ input: { name: 'typed' } }}
+        >
+          {TWO}
+        </Combobox>
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    expect([...new FormData(form).entries()]).toEqual([['fruit', 'a']]);
+  });
+
+  it('keeps the locked attributes of the listbox and the surface; the position wins your style', async () => {
+    render(
+      <>
+        <span id="extra">More fruit</span>
+        <Combobox
+          aria-label="Fruit"
+          defaultOpen
+          slotProps={{
+            listbox: {
+              id: 'mine',
+              role: 'menu',
+              tabIndex: 0,
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+              'aria-label': 'Other',
+              'aria-labelledby': 'extra',
+            },
+            surface: {
+              id: 'mine-surface',
+              role: 'dialog',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+              'data-side': 'top',
+              style: { top: 99, minWidth: 120 },
+            },
+          }}
+        >
+          {TWO}
+        </Combobox>
+      </>,
+    );
+    await act(async () => {});
+    const list = screen.getByRole('listbox');
+    expect(list.id).toMatch(/^combobox-listbox-/);
+    expect(list).toHaveAttribute('tabindex', '-1');
+    expect(list).not.toHaveAttribute('hidden');
+    expect(list).not.toHaveAttribute('inert');
+    expect(list).not.toHaveAttribute('aria-hidden');
+    expect(list).toHaveAttribute('aria-label', 'Fruit');
+    expect(list).toHaveAttribute('aria-labelledby', 'extra');
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-controls', list.id);
+    const surface = part(comboboxClassNames.surface)!;
+    expect(surface).not.toHaveAttribute('id');
+    expect(surface).not.toHaveAttribute('role');
+    expect(surface).not.toHaveAttribute('hidden');
+    expect(surface).not.toHaveAttribute('inert');
+    expect(surface).not.toHaveAttribute('aria-hidden');
+    expect(surface).toHaveAttribute('data-side', 'bottom');
+    expect(surface).toHaveStyle({ top: '0px', minWidth: '120px', position: 'fixed' });
+  });
+
+  it('runs your listbox onMouseDown first and keeps focus on the input', async () => {
+    const user = userEvent.setup();
+    const onMouseDown = vi.fn();
+    render(
+      <Combobox aria-label="Fruit" slotProps={{ listbox: { onMouseDown } }}>
+        {TWO}
+      </Combobox>,
+    );
+    const input = screen.getByRole('combobox');
+    await user.click(input);
+    await user.click(screen.getByRole('option', { name: 'Banana' }));
+    expect(onMouseDown).toHaveBeenCalledTimes(1);
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue('Banana');
+  });
+
+  it('ignores the parts the Combobox does not render', () => {
+    const clearButton = React.createRef<HTMLButtonElement>();
+    const expandButton = React.createRef<HTMLButtonElement>();
+    const surface = React.createRef<HTMLDivElement>();
+    const emptyMessage = React.createRef<HTMLDivElement>();
+    render(
+      <Combobox
+        aria-label="Fruit"
+        expandIcon={false}
+        slotProps={{
+          clearButton: { ref: clearButton, className: 'my-part' },
+          expandButton: { ref: expandButton, className: 'my-part' },
+          surface: { ref: surface, className: 'my-part' },
+          emptyMessage: { ref: emptyMessage, className: 'my-part' },
+        }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
+    for (const ref of [clearButton, expandButton, surface, emptyMessage]) {
+      expect(ref.current).toBeNull();
+    }
+    expect(document.querySelector('.my-part')).toBeNull();
+  });
+
+  it('merges your listbox ref and class with a windowed list', () => {
+    installWindowStubs();
+    try {
+      const listRef = React.createRef<HTMLUListElement>();
+      function Windowed() {
+        const virtualWindow = useVirtualWindow({ itemSize: ITEM_SIZE });
+        return (
+          <Combobox
+            aria-label="Item"
+            defaultOpen
+            items={MANY_ITEMS}
+            virtualWindow={virtualWindow}
+            slotProps={{ listbox: { ref: listRef, className: 'my-list' } }}
+          />
+        );
+      }
+      render(<Windowed />);
+      runFrames();
+      const list = screen.getByRole('listbox', { name: 'Item' });
+      expect(listRef.current).toBe(list);
+      expect(list).toHaveClass('my-list', '[overflow-anchor:none]');
+      const shown = within(list).getAllByRole('option').length;
+      expect(shown).toBeGreaterThan(0);
+      expect(shown).toBeLessThanOrEqual(30);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Combobox
+        aria-label="Fruit"
+        defaultOpen
+        defaultValue="a"
+        clearable
+        slotProps={{
+          input: { className: 'my-input', title: 'Pick a fruit' },
+          clearButton: { className: 'my-clear' },
+          expandButton: { className: 'my-expand' },
+          listbox: { className: 'my-list' },
+          surface: { className: 'my-surface' },
+        }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    await act(async () => {});
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof ComboboxSlotProps>().toEqualTypeOf<
+      'input' | 'clearButton' | 'expandButton' | 'listbox' | 'surface' | 'emptyMessage'
+    >();
+    expectTypeOf<NonNullable<ComboboxSlotProps['input']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ComboboxSlotProps['clearButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ComboboxSlotProps['listbox']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLUListElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ComboboxSlotProps['surface']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the Combobox draws its content
+    void (<Combobox slotProps={{ emptyMessage: { children: 'None' } }} />);
   });
 });

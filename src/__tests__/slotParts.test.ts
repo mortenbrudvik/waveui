@@ -19,13 +19,20 @@ import * as registry from '../lib/classNames';
 import * as entry from '../index';
 import type {
   CheckboxProps,
+  ComboboxProps,
+  DropdownProps,
   FieldProps,
   InputProps,
   LabelProps,
+  OptionGroupProps,
+  OptionProps,
   RadioGroupItemProps,
   RatingDisplayProps,
+  SearchBoxProps,
   SpinButtonProps,
   SwitchProps,
+  TagPickerProps,
+  TimePickerProps,
 } from '../index';
 import * as slotParts from '../lib/slotParts';
 import {
@@ -351,6 +358,14 @@ type SlotPropsOwners = {
   switchClassNames: SwitchProps;
   spinButtonClassNames: SpinButtonProps;
   ratingDisplayClassNames: RatingDisplayProps;
+  searchBoxClassNames: SearchBoxProps;
+  optionClassNames: OptionProps;
+  optionGroupClassNames: OptionGroupProps;
+  comboboxClassNames: ComboboxProps;
+  dropdownClassNames: DropdownProps;
+  // Every TagPicker key is declared on the root and read by the parts through its context.
+  tagPickerClassNames: TagPickerProps;
+  timePickerClassNames: TimePickerProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

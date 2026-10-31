@@ -4,6 +4,7 @@ import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRing } from '../../lib/styles';
 import type { CoreSize, InputAppearance } from '../../lib/types';
 import { unwrapButtonGlyph } from '../button/Button.slots';
@@ -59,6 +60,15 @@ export interface PickerExpandButtonProps {
   className?: string;
   /** The host's stable class for the glyph `<span>` (its `expandIcon` part). */
   iconClassName?: string;
+  /**
+   * The host's `slotProps.expandButton`, merged into the button's own props: its classes last,
+   * its handlers first, every attribute the button sets locked.
+   */
+  part?: SlotPart<'button'>;
+}
+
+function keepFocus(event: React.MouseEvent) {
+  event.preventDefault();
 }
 
 /**
@@ -84,6 +94,7 @@ export const PickerExpandButton = ({
   dimDisabled = true,
   className,
   iconClassName,
+  part,
 }: PickerExpandButtonProps) => {
   // The glyph slot rule shared with SplitButton and MenuButton `menuIcon` (C-SLOTS).
   const { glyph: content, button } = unwrapButtonGlyph(expandIcon);
@@ -107,23 +118,32 @@ export const PickerExpandButton = ({
 
   return (
     <button
+      // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
       type="button"
-      tabIndex={-1}
-      aria-label={label}
-      aria-expanded={expanded}
-      aria-controls={expanded ? listboxId : undefined}
-      disabled={disabled}
-      // Keeps focus in the input: a press must not blur it (a blur commits typed text).
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={onToggle}
-      className={cn(
-        className,
-        pickerIconButtonClasses(size, appearance),
-        pickerButtonOffset(size, 1),
-        focusRing,
-        // Inside a field that dims as a whole, a second dimming would multiply the opacity.
-        dimDisabled ? disabledStyles : 'disabled:cursor-not-allowed',
-      )}
+      {...mergeSlotProps(part, {
+        className: cn(
+          className,
+          pickerIconButtonClasses(size, appearance),
+          pickerButtonOffset(size, 1),
+          focusRing,
+          // Inside a field that dims as a whole, a second dimming would multiply the opacity.
+          dimDisabled ? disabledStyles : 'disabled:cursor-not-allowed',
+        ),
+        locked: {
+          type: 'button',
+          tabIndex: -1,
+          'aria-label': label,
+          'aria-expanded': expanded,
+          'aria-controls': expanded ? listboxId : undefined,
+          disabled,
+          'aria-disabled': undefined,
+          'data-disabled': undefined,
+          'data-disabled-focusable': undefined,
+          // Keeps focus in the input: a press must not blur it (a blur commits typed text).
+          onMouseDown: keepFocus,
+          onClick: onToggle,
+        },
+      })}
     >
       {renderSlot(
         glyph,

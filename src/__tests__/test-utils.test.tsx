@@ -42,6 +42,8 @@ import {
   mockMatchMedia,
   mockRect,
   motionClasses,
+  normaliseIds,
+  openingTags,
   renderWithProviders,
   resetMatchMediaMock,
   sortAttributes,
@@ -1901,6 +1903,71 @@ describe('sortAttributes', () => {
     expect(sortAttributes(container)).toBe('<b a="2" z="1">one<!-- --></b><i>two</i>');
     // The element itself is not changed.
     expect(container.innerHTML).toBe('<b z="1" a="2">one<!-- --></b><i>two</i>');
+  });
+});
+
+describe('normaliseIds', () => {
+  function Labelled() {
+    const id = React.useId();
+    const other = React.useId();
+    return (
+      <p aria-labelledby={id} aria-describedby={other}>
+        <span id={id}>Name</span>
+        <span id={`prefix-${other}`}>Other</span>
+      </p>
+    );
+  }
+
+  it('names each generated id by its first appearance, the same id the same way', () => {
+    expect(
+      normaliseIds('<p aria-labelledby="_r_7_"><b id="_r_7_"></b><i id="x-_r_1a_"></i></p>'),
+    ).toBe('<p aria-labelledby="_id0_"><b id="_id0_"></b><i id="x-_id1_"></i></p>');
+    expect(normaliseIds('<p id="_R_0H1_"></p><p id="_R_0_"></p>')).toBe(
+      '<p id="_id0_"></p><p id="_id1_"></p>',
+    );
+  });
+
+  it('gives the same string for two client renders, whatever ids came before', () => {
+    const first = render(<Labelled />);
+    const markup = first.container.innerHTML;
+    first.unmount();
+    const second = render(<Labelled />);
+    expect(second.container.innerHTML).not.toBe(markup);
+    expect(normaliseIds(second.container.innerHTML)).toBe(normaliseIds(markup));
+  });
+
+  it('keeps every other text', () => {
+    expect(normaliseIds('<p id="r_1" class="_r_ x">_r_</p>')).toBe(
+      '<p id="r_1" class="_r_ x">_r_</p>',
+    );
+  });
+});
+
+describe('openingTags', () => {
+  it('gives each element its opening tag, attributes sorted, one per line', () => {
+    const container = document.createElement('div');
+    container.innerHTML =
+      '<label id="l" class="a"><input type="text" class="i"><b z="1" a="2">text</b></label>';
+    const [label, input, bold] = Array.from(container.querySelectorAll('*'));
+    expect(openingTags(label, input, bold)).toBe(
+      ['<label class="a" id="l">', '<input class="i" type="text">', '<b a="2" z="1">'].join('\n'),
+    );
+  });
+
+  it('normalises the generated ids across the elements', () => {
+    function Wired() {
+      const id = React.useId();
+      return (
+        <>
+          <input aria-controls={`list-${id}`} />
+          <ul id={`list-${id}`} />
+        </>
+      );
+    }
+    const { container } = render(<Wired />);
+    expect(openingTags(...Array.from(container.children))).toBe(
+      ['<input aria-controls="list-_id0_">', '<ul id="list-_id0_">'].join('\n'),
+    );
   });
 });
 

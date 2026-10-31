@@ -12,11 +12,15 @@ import {
 } from '../TimePicker';
 import {
   axe,
+  expectInertSlotProps,
+  expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
 } from '../../../test-utils';
+import { timePickerClassNames } from '../../../lib/classNames';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss, type DismissReason } from '../../../hooks/useDismiss';
 import { useListboxOption } from '../../../hooks/useListbox';
@@ -2291,5 +2295,473 @@ describe('TimePicker', () => {
       expect(screen.getByRole('button', { name: 'Show times' })).toHaveClass('end-1');
       expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass('end-9');
     });
+  });
+});
+
+describe('TimePicker — slotProps', () => {
+  type TimePickerSlotProps = NonNullable<TimePickerProps['slotProps']>;
+  const EVERY_PART: TimePickerSlotProps = {
+    input: {},
+    clearButton: {},
+    expandButton: {},
+    errorMessage: {},
+    listbox: {},
+    option: {},
+    checkIcon: {},
+    surface: {},
+    emptyMessage: {},
+  };
+  const part = (name: string) => document.querySelector<HTMLElement>(`.${name}`);
+  const all = (name: string) => Array.from(document.querySelectorAll<HTMLElement>(`.${name}`));
+  /** Three times, 9:00 AM to 10:00 AM. */
+  const BOUNDS = { minTime: '09:00', maxTime: '10:00' } as const;
+
+  /** Types text no time matches; Enter then rejects it, which shows the error message. */
+  async function typeRejected(reject: boolean) {
+    const input = combobox();
+    fireEvent.change(input, { target: { value: 'zz' } });
+    if (reject) fireEvent.keyDown(input, { key: 'Enter' });
+    await act(async () => {});
+  }
+
+  it('renders the 0.17.1 parts without slotProps (opening tags, attributes sorted)', async () => {
+    // Captured from b8941ef, open client renders: the merged props may put the class before the
+    // locked attributes.
+    const { unmount } = render(
+      <TimePicker aria-label="Time" defaultOpen defaultValue="09:30" clearable {...BOUNDS} />,
+    );
+    await act(async () => {});
+    const { input, clearButton, expandButton, surface, listbox, option, checkIcon } =
+      timePickerClassNames;
+    expect(
+      openingTags(
+        ...[input, clearButton, expandButton, surface, listbox, option, checkIcon].flatMap(all),
+      ),
+    ).toBe(
+      [
+        '<input aria-activedescendant="timepicker-listbox-_id0_-opt-0" aria-autocomplete="list" aria-controls="timepicker-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Time" autocomplete="off" class="wave-time-picker__input h-8 w-full px-3 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 pe-14" placeholder="Select a time" role="combobox" type="text" value="9:30 AM">',
+        '<button aria-label="Clear time" class="wave-time-picker__clear-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+        '<button aria-controls="timepicker-listbox-_id0_" aria-expanded="true" aria-label="Show times" class="wave-time-picker__expand-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+        '<div class="wave-time-picker__surface flex flex-col overflow-hidden rounded border border-border bg-background shadow-8" data-align="start" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<ul aria-label="Time" class="wave-time-picker__listbox max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden" id="timepicker-listbox-_id0_" role="listbox" tabindex="-1">',
+        '<li aria-selected="false" class="wave-time-picker__option flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold" id="timepicker-listbox-_id0_-opt-1" role="option">',
+        '<li aria-selected="true" class="wave-time-picker__option flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold forced-colors:outline-2 forced-colors:outline-[Highlight] forced-colors:-outline-offset-2" data-active="" data-selected="" id="timepicker-listbox-_id0_-opt-0" role="option">',
+        '<li aria-selected="false" class="wave-time-picker__option flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold" id="timepicker-listbox-_id0_-opt-2" role="option">',
+        '<span class="wave-time-picker__check-icon flex h-4 w-4 shrink-0 items-center justify-center">',
+        '<span class="wave-time-picker__check-icon flex h-4 w-4 shrink-0 items-center justify-center">',
+        '<span class="wave-time-picker__check-icon flex h-4 w-4 shrink-0 items-center justify-center">',
+      ].join('\n'),
+    );
+    unmount();
+
+    const second = render(<TimePicker aria-label="Time" {...BOUNDS} />);
+    await typeRejected(false);
+    expect(openingTags(...[surface, timePickerClassNames.emptyMessage].flatMap(all))).toBe(
+      [
+        '<div class="wave-time-picker__surface flex flex-col overflow-hidden rounded border border-border bg-background shadow-8" data-align="start" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<div aria-hidden="true" class="wave-time-picker__empty-message px-3 py-1.5 text-body-1 text-muted-foreground">',
+      ].join('\n'),
+    );
+    second.unmount();
+
+    render(<TimePicker aria-label="Time" {...BOUNDS} />);
+    await typeRejected(true);
+    expect(openingTags(...[input, timePickerClassNames.errorMessage, listbox].flatMap(all))).toBe(
+      [
+        '<input aria-autocomplete="list" aria-controls="timepicker-listbox-_id0_" aria-describedby="timepicker-error-_id1_" aria-expanded="false" aria-haspopup="listbox" aria-invalid="true" aria-label="Time" autocomplete="off" class="wave-time-picker__input h-8 w-full px-3 text-body-1 rounded border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 border-destructive pe-8" placeholder="Select a time" role="combobox" type="text" value="zz">',
+        '<p class="wave-time-picker__error-message mt-1 text-caption-1 text-error" id="timepicker-error-_id1_" role="alert">',
+        '<ul aria-label="Time" class="wave-time-picker__listbox max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden" hidden="" id="timepicker-listbox-_id0_" role="listbox" tabindex="-1">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: TimePickerProps[] = [
+      { 'aria-label': 'Time', defaultOpen: true, defaultValue: '09:30', clearable: true },
+      { 'aria-label': 'Time', defaultValue: '09:30', clearable: true },
+      {
+        id: 'own',
+        'aria-label': 'Time',
+        'aria-describedby': 'hint',
+        required: true,
+        name: 'time',
+        disabled: true,
+        clearable: true,
+        defaultValue: '09:00',
+      },
+      { 'aria-label': 'Time', readOnly: true, expandIcon: false, defaultValue: '10:00' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <TimePicker {...props} {...BOUNDS} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('renders the same markup with an error message and an empty list, with and without slotProps', async () => {
+    for (const reject of [false, true]) {
+      const { baseElement, rerender, unmount } = render(
+        <TimePicker aria-label="Time" {...BOUNDS} />,
+      );
+      await typeRejected(reject);
+      const markup = baseElement.innerHTML;
+      for (const slotProps of [{}, EVERY_PART, undefined]) {
+        rerender(<TimePicker aria-label="Time" {...BOUNDS} slotProps={slotProps} />);
+        expect(baseElement.innerHTML).toBe(markup);
+      }
+      unmount();
+    }
+  });
+
+  it('puts your className, style, data-* and ref on each part, after its stable class and own classes', async () => {
+    const mine = <E extends HTMLElement>(name: string, ref: React.Ref<E>) => ({
+      ref,
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    const refs = {
+      input: React.createRef<HTMLInputElement>(),
+      clearButton: React.createRef<HTMLButtonElement>(),
+      expandButton: React.createRef<HTMLButtonElement>(),
+      listbox: React.createRef<HTMLUListElement>(),
+      option: React.createRef<HTMLLIElement>(),
+      checkIcon: React.createRef<HTMLSpanElement>(),
+      surface: React.createRef<HTMLDivElement>(),
+    };
+    const controlRef = React.createRef<HTMLInputElement>();
+    render(
+      <TimePicker
+        aria-label="Time"
+        defaultOpen
+        defaultValue="09:30"
+        clearable
+        controlRef={controlRef}
+        {...BOUNDS}
+        slotProps={{
+          input: mine('input', refs.input),
+          clearButton: mine('clearButton', refs.clearButton),
+          expandButton: mine('expandButton', refs.expandButton),
+          listbox: mine('listbox', refs.listbox),
+          option: mine('option', refs.option),
+          checkIcon: mine('checkIcon', refs.checkIcon),
+          surface: mine('surface', refs.surface),
+        }}
+      />,
+    );
+    await act(async () => {});
+    const names = Object.keys(refs) as (keyof typeof refs)[];
+    for (const name of names) {
+      const elements = all(timePickerClassNames[name]);
+      expect(elements.length).toBeGreaterThan(0);
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(timePickerClassNames[name]);
+        expect(element.classList[element.classList.length - 1]).toBe(`my-${name}`);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+        expect(element).toHaveAttribute('data-part', name);
+      }
+      // One ref, several options: it holds the last one attached.
+      expect(elements).toContain(refs[name].current);
+    }
+    expect(controlRef.current).toBe(refs.input.current);
+    expect(all(timePickerClassNames.option)).toHaveLength(3);
+    // The surface is still placed: the positioning holds the same element.
+    expect(refs.surface.current).toHaveStyle({ position: 'fixed' });
+  });
+
+  it('puts your props on the error message and the empty row', async () => {
+    const errorMessage = React.createRef<HTMLParagraphElement>();
+    const emptyMessage = React.createRef<HTMLDivElement>();
+    const slotProps: TimePickerSlotProps = {
+      errorMessage: { ref: errorMessage, className: 'my-error', 'data-part': 'error' },
+      emptyMessage: { ref: emptyMessage, className: 'my-empty', 'data-part': 'empty' },
+    };
+    render(<TimePicker aria-label="Time" {...BOUNDS} slotProps={slotProps} />);
+    await typeRejected(false);
+    expect(emptyMessage.current).toBe(part(timePickerClassNames.emptyMessage));
+    expect(emptyMessage.current).toHaveClass(timePickerClassNames.emptyMessage, 'my-empty');
+    expect(emptyMessage.current).toHaveAttribute('aria-hidden', 'true');
+    fireEvent.keyDown(combobox(), { key: 'Enter' });
+    await act(async () => {});
+    expect(errorMessage.current).toBe(screen.getByRole('alert'));
+    expect(errorMessage.current).toHaveClass(timePickerClassNames.errorMessage, 'my-error');
+    expect(errorMessage.current).toHaveAttribute('data-part', 'error');
+  });
+
+  it('runs your option onClick before the selection, once per click in StrictMode; preventDefault() skips it', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    const { rerender } = render(
+      <React.StrictMode>
+        <TimePicker
+          aria-label="Time"
+          defaultOpen
+          onValueChange={onValueChange}
+          {...BOUNDS}
+          slotProps={{ option: { onClick: (event) => event.preventDefault() } }}
+        />
+      </React.StrictMode>,
+    );
+    await act(async () => {});
+    await user.click(screen.getByRole('option', { name: '9:30 AM' }));
+    expect(onValueChange).not.toHaveBeenCalled();
+    rerender(
+      <React.StrictMode>
+        <TimePicker
+          aria-label="Time"
+          defaultOpen
+          onValueChange={onValueChange}
+          {...BOUNDS}
+          slotProps={{ option: { onClick } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('option', { name: '9:30 AM' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith('09:30');
+  });
+
+  it("runs your input handlers first; preventDefault() skips the TimePicker's keys", async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onInvalidInput = vi.fn();
+    render(
+      <TimePicker
+        aria-label="Time"
+        onInvalidInput={onInvalidInput}
+        onKeyDown={() => order.push('onKeyDown')}
+        {...BOUNDS}
+        slotProps={{
+          input: {
+            onKeyDown: (event) => {
+              order.push('part key');
+              if (event.key === 'Enter') event.preventDefault();
+            },
+          },
+        }}
+      />,
+    );
+    await user.click(combobox());
+    await user.keyboard('zz');
+    order.length = 0;
+    await user.keyboard('{Enter}');
+    expect(order).toEqual(['part key']);
+    expect(onInvalidInput).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('runs your clearButton and expandButton onClick first; preventDefault() skips the clear and the toggle', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <TimePicker
+        aria-label="Time"
+        defaultValue="09:30"
+        clearable
+        onValueChange={onValueChange}
+        onOpenChange={onOpenChange}
+        {...BOUNDS}
+        slotProps={{
+          clearButton: { onClick: (event) => event.preventDefault() },
+          expandButton: { onClick: (event) => event.preventDefault() },
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Clear time' }));
+    await user.click(expandButton());
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(combobox()).toHaveValue('9:30 AM');
+  });
+
+  it('keeps the locked attributes of the input, the options, the list and the surface', async () => {
+    render(
+      <>
+        <span id="extra">Extra</span>
+        <TimePicker
+          id="own"
+          aria-label="Time"
+          defaultOpen
+          defaultValue="09:30"
+          name="time"
+          {...BOUNDS}
+          slotProps={{
+            input: {
+              id: 'mine',
+              type: 'search',
+              value: 'noon',
+              name: 'mine',
+              form: 'elsewhere',
+              hidden: true,
+              'aria-hidden': true,
+              'aria-controls': 'nowhere',
+              'aria-describedby': 'extra',
+            },
+            option: {
+              id: 'mine-option',
+              role: 'menuitem',
+              hidden: true,
+              'aria-selected': true,
+              'data-active': 'yes',
+            },
+            listbox: { id: 'mine-list', role: 'menu', hidden: true, 'aria-label': 'Other' },
+            surface: {
+              id: 'mine-surface',
+              role: 'dialog',
+              hidden: true,
+              'data-state': 'closed',
+              'data-side': 'top',
+              style: { left: 40, zIndex: 3 },
+            },
+          }}
+        />
+      </>,
+    );
+    await act(async () => {});
+    const input = combobox('Time');
+    expect(input).toHaveAttribute('id', 'own');
+    expect(input).toHaveAttribute('type', 'text');
+    expect(input).toHaveValue('9:30 AM');
+    expect(input).not.toHaveAttribute('name');
+    expect(input).not.toHaveAttribute('form');
+    expect(input).not.toHaveAttribute('hidden');
+    expect(input).not.toHaveAttribute('aria-hidden');
+    expect(input).toHaveAttribute('aria-describedby', 'extra');
+    const list = screen.getByRole('listbox', { name: 'Time' });
+    expect(input).toHaveAttribute('aria-controls', list.id);
+    expect(list.id).toMatch(/^timepicker-listbox-/);
+    expect(list).not.toHaveAttribute('hidden');
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(3);
+    for (const option of options) {
+      expect(option.id).toMatch(/^timepicker-listbox-.*-opt-\d+$/);
+      expect(option).not.toHaveAttribute('hidden');
+    }
+    expect(options.filter((option) => option.getAttribute('aria-selected') === 'true')).toEqual([
+      screen.getByRole('option', { name: '9:30 AM' }),
+    ]);
+    expect(options.filter((option) => option.hasAttribute('data-active'))).toEqual([
+      screen.getByRole('option', { name: '9:30 AM' }),
+    ]);
+    expect(input).toHaveAttribute(
+      'aria-activedescendant',
+      screen.getByRole('option', { name: '9:30 AM' }).id,
+    );
+    const surface = part(timePickerClassNames.surface)!;
+    expect(surface).not.toHaveAttribute('id');
+    expect(surface).not.toHaveAttribute('role');
+    expect(surface).not.toHaveAttribute('hidden');
+    expect(surface).toHaveAttribute('data-state', 'open');
+    expect(surface).toHaveAttribute('data-side', 'bottom');
+    expect(surface).toHaveStyle({ left: '0px', zIndex: '3' });
+  });
+
+  it('submits only the hidden input: the input part takes no name or form', () => {
+    render(
+      <form aria-label="Booking">
+        <TimePicker
+          aria-label="Time"
+          name="time"
+          defaultValue="09:30"
+          {...BOUNDS}
+          slotProps={{ input: { name: 'typed' } }}
+        />
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Booking' }) as HTMLFormElement;
+    expect([...new FormData(form).entries()]).toEqual([['time', '09:30']]);
+  });
+
+  it('keeps the locked attributes of the error message', async () => {
+    render(
+      <TimePicker
+        aria-label="Time"
+        {...BOUNDS}
+        slotProps={{ errorMessage: { id: 'mine', role: 'status' } }}
+      />,
+    );
+    await typeRejected(true);
+    const message = screen.getByRole('alert');
+    expect(message.id).not.toBe('mine');
+    expect(combobox('Time')).toHaveAttribute('aria-describedby', message.id);
+  });
+
+  it('ignores the parts the TimePicker does not render', () => {
+    const refs = [
+      React.createRef<HTMLButtonElement>(),
+      React.createRef<HTMLParagraphElement>(),
+      React.createRef<HTMLDivElement>(),
+      React.createRef<HTMLDivElement>(),
+    ] as const;
+    render(
+      <TimePicker
+        aria-label="Time"
+        {...BOUNDS}
+        slotProps={{
+          clearButton: { ref: refs[0], className: 'my-part' },
+          errorMessage: { ref: refs[1], className: 'my-part' },
+          surface: { ref: refs[2], className: 'my-part' },
+          emptyMessage: { ref: refs[3], className: 'my-part' },
+        }}
+      />,
+    );
+    expect(combobox('Time')).toBeInTheDocument();
+    for (const ref of refs) expect(ref.current).toBeNull();
+    expect(document.querySelector('.my-part')).toBeNull();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <TimePicker
+        aria-label="Time"
+        defaultOpen
+        defaultValue="09:30"
+        clearable
+        {...BOUNDS}
+        slotProps={{
+          input: { className: 'my-input', title: 'Pick a time' },
+          clearButton: { className: 'my-clear' },
+          expandButton: { className: 'my-expand' },
+          listbox: { className: 'my-list' },
+          option: { className: 'my-option' },
+          checkIcon: { className: 'my-check' },
+          surface: { className: 'my-surface' },
+        }}
+      />,
+    );
+    await act(async () => {});
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof TimePickerSlotProps>().toEqualTypeOf<
+      | 'input'
+      | 'clearButton'
+      | 'expandButton'
+      | 'errorMessage'
+      | 'listbox'
+      | 'option'
+      | 'checkIcon'
+      | 'surface'
+      | 'emptyMessage'
+    >();
+    expectTypeOf<NonNullable<TimePickerSlotProps['input']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TimePickerSlotProps['errorMessage']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLParagraphElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TimePickerSlotProps['option']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLIElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TimePickerSlotProps['checkIcon']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the TimePicker draws its content
+    void (<TimePicker slotProps={{ option: { children: 'Noon' } }} />);
   });
 });

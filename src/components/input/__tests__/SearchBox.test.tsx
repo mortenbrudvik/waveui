@@ -17,6 +17,8 @@ import {
   renderWithProviders,
   expectNoA11yViolations,
   asClientReference,
+  expectInertSlotProps,
+  openingTags,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
@@ -1764,4 +1766,373 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
       expect(wrapper).toHaveClass('border-destructive', 'focus-within:border-b-primary');
     },
   );
+});
+
+describe('SearchBox — slotProps', () => {
+  type SearchBoxSlotProps = NonNullable<SearchBoxProps['slotProps']>;
+  const EVERY_PART: SearchBoxSlotProps = { input: {}, dismissButton: {} };
+  const clearButton = () => screen.getByRole('button', { name: 'Clear search' });
+
+  it('renders the 0.17.1 parts without slotProps (opening tags, attributes sorted)', () => {
+    // Captured from b8941ef, a server render: the merged props may put the class before the
+    // locked attributes.
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(
+      <SearchBox aria-label="Search" defaultValue="query" name="q" />,
+    );
+    expect(
+      openingTags(
+        container.querySelector(`.${searchBoxClassNames.input}`)!,
+        container.querySelector(`.${searchBoxClassNames.dismissButton}`)!,
+      ),
+    ).toBe(
+      [
+        '<input aria-label="Search" class="wave-search-box__input h-full min-w-0 flex-1 appearance-none border-none bg-transparent text-foreground px-2 text-body-1 placeholder:text-muted-foreground focus:outline-hidden disabled:cursor-not-allowed [&amp;::-webkit-search-cancel-button]:hidden" name="q" placeholder="Search" type="search" value="query">',
+        '<button aria-label="Clear search" class="wave-search-box__dismiss-button me-1 flex shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground h-6 w-6 not-disabled:not-aria-disabled:hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: SearchBoxProps[] = [
+      { 'aria-label': 'Search', defaultValue: 'query' },
+      {
+        'aria-label': 'Search',
+        defaultValue: 'query',
+        id: 'own',
+        name: 'q',
+        required: true,
+        disabled: true,
+        'aria-describedby': 'hint',
+        size: 'small',
+      },
+      { 'aria-label': 'Search', defaultValue: 'query', readOnly: true },
+      { 'aria-label': 'Search', dismiss: { className: 'my-icon' }, defaultValue: 'query' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <SearchBox {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('renders the same markup with a merged dismiss button, with and without slotProps', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expectInertSlotProps(
+      (slotProps) => (
+        <SearchBox
+          aria-label="Search"
+          defaultValue="query"
+          dismiss={
+            <button type="button" title="Reset" tabIndex={-1} className="my-button">
+              Reset
+            </button>
+          }
+          slotProps={slotProps}
+        />
+      ),
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps) => (
+        <SearchBox
+          aria-label="Search"
+          defaultValue="query"
+          dismiss={<Button disabledFocusable>Reset all</Button>}
+          slotProps={slotProps}
+        />
+      ),
+      EVERY_PART,
+    );
+    expectWarnings(warn, [ELEMENT_WARNING]);
+    warn.mockRestore();
+  });
+
+  it('puts your className, style, data-* and ref on each part, after its stable class and own classes', () => {
+    const input = React.createRef<HTMLInputElement>();
+    const dismissButton = React.createRef<HTMLButtonElement>();
+    const controlRef = React.createRef<HTMLInputElement>();
+    render(
+      <SearchBox
+        aria-label="Search"
+        defaultValue="query"
+        controlRef={controlRef}
+        slotProps={{
+          input: {
+            ref: input,
+            className: 'my-input',
+            style: { opacity: 0.5 },
+            'data-part': 'input',
+          },
+          dismissButton: {
+            ref: dismissButton,
+            className: 'my-dismiss',
+            style: { opacity: 0.5 },
+            'data-part': 'dismissButton',
+          },
+        }}
+      />,
+    );
+    const searchbox = screen.getByRole('searchbox', { name: 'Search' });
+    expect(input.current).toBe(searchbox);
+    expect(controlRef.current).toBe(searchbox);
+    expect(dismissButton.current).toBe(clearButton());
+    for (const [element, stable, mine, name] of [
+      [searchbox, searchBoxClassNames.input, 'my-input', 'input'],
+      [clearButton(), searchBoxClassNames.dismissButton, 'my-dismiss', 'dismissButton'],
+    ] as const) {
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(element).toHaveAttribute('data-part', name);
+    }
+  });
+
+  it('lets your class replace a conflicting class of the part', () => {
+    render(
+      <SearchBox
+        aria-label="Search"
+        defaultValue="query"
+        slotProps={{ dismissButton: { className: 'text-foreground' } }}
+      />,
+    );
+    expect(clearButton()).toHaveClass('text-foreground');
+    expect(clearButton()).not.toHaveClass('text-muted-foreground');
+  });
+
+  it("runs your input handlers first; preventDefault() skips the SearchBox's handling", async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onValueChange = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <SearchBox
+        aria-label="Search"
+        defaultValue="query"
+        onValueChange={onValueChange}
+        onClear={onClear}
+        onKeyDown={() => order.push('onKeyDown')}
+        slotProps={{
+          input: {
+            onChange: (event) => event.preventDefault(),
+            onKeyDown: (event) => {
+              order.push('part key');
+              if (event.key === 'Escape') event.preventDefault();
+            },
+          },
+        }}
+      />,
+    );
+    const searchbox = screen.getByRole('searchbox', { name: 'Search' });
+    await user.type(searchbox, 'x');
+    expect(searchbox).toHaveValue('query');
+    expect(onValueChange).not.toHaveBeenCalled();
+    order.length = 0;
+    await user.keyboard('{Escape}');
+    expect(order).toEqual(['part key']);
+    expect(searchbox).toHaveValue('query');
+    expect(onClear).not.toHaveBeenCalled();
+  });
+
+  it('runs your dismissButton onClick before the clear, once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <React.StrictMode>
+        <SearchBox
+          aria-label="Search"
+          defaultValue="query"
+          onClear={onClear}
+          slotProps={{ dismissButton: { onClick } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(clearButton());
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
+    expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveFocus();
+  });
+
+  it('skips the clear when your dismissButton onClick prevents the default', async () => {
+    const user = userEvent.setup();
+    const onClear = vi.fn();
+    render(
+      <SearchBox
+        aria-label="Search"
+        defaultValue="query"
+        onClear={onClear}
+        slotProps={{ dismissButton: { onClick: (event) => event.preventDefault() } }}
+      />,
+    );
+    await user.click(clearButton());
+    expect(onClear).not.toHaveBeenCalled();
+    expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('query');
+  });
+
+  it('puts your dismissButton props over a merged <button>: its attributes are the defaults, the clear and the type stay', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const order: string[] = [];
+    render(
+      <form aria-label="Search form">
+        <SearchBox
+          aria-label="Search"
+          defaultValue="query"
+          onClear={() => order.push('clear')}
+          dismiss={
+            <button
+              type="button"
+              title="Reset"
+              data-from="dismiss"
+              className="my-button"
+              onClick={() => order.push('dismiss')}
+            >
+              Reset
+            </button>
+          }
+          slotProps={{
+            dismissButton: {
+              title: 'Reset the search',
+              type: 'submit',
+              className: 'my-part',
+              onClick: () => order.push('part'),
+            },
+          }}
+        />
+      </form>,
+    );
+    const button = screen.getByRole('button', { name: 'Reset' });
+    expect(button).toHaveAttribute('title', 'Reset the search');
+    expect(button).toHaveAttribute('data-from', 'dismiss');
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button.classList[0]).toBe(searchBoxClassNames.dismissButton);
+    expect(Array.from(button.classList).slice(-2)).toEqual(['my-button', 'my-part']);
+    await user.click(button);
+    expect(order).toEqual(['part', 'dismiss', 'clear']);
+    expectWarnings(warn, [ELEMENT_WARNING]);
+    warn.mockRestore();
+  });
+
+  it('does not call your dismissButton onClick while a merged Button keeps it focusable but unavailable', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onClick = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <SearchBox
+        aria-label="Search"
+        defaultValue="query"
+        onClear={onClear}
+        dismiss={<Button disabledFocusable>Reset all</Button>}
+        slotProps={{ dismissButton: { onClick, 'aria-disabled': false, disabled: true } }}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Reset all' });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toBeDisabled();
+    await user.click(button);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onClear).not.toHaveBeenCalled();
+    expectWarnings(warn, [ELEMENT_WARNING]);
+    warn.mockRestore();
+  });
+
+  it('keeps the locked attributes of the input and the clear button; your ids join aria-describedby', () => {
+    render(
+      <>
+        <span id="extra">Extra</span>
+        <span id="hint">Hint</span>
+        <form id="own-form" aria-label="Own" />
+        <SearchBox
+          id="own"
+          aria-label="Search"
+          aria-describedby="hint"
+          defaultValue="query"
+          name="q"
+          form="own-form"
+          disabled
+          slotProps={{
+            input: {
+              id: 'mine',
+              type: 'text',
+              value: 'other',
+              name: 'mine',
+              form: 'elsewhere',
+              disabled: false,
+              hidden: true,
+              'aria-hidden': true,
+              'aria-label': 'Other',
+              'aria-describedby': 'extra',
+            },
+            dismissButton: {
+              type: 'submit',
+              disabled: false,
+              tabIndex: -1,
+              hidden: true,
+              'aria-hidden': true,
+              'aria-label': 'Other',
+            },
+          }}
+        />
+      </>,
+    );
+    const input = screen.getByRole('searchbox', { name: 'Search' });
+    expect(input).toHaveAttribute('id', 'own');
+    expect(input).toHaveAttribute('type', 'search');
+    expect(input).toHaveValue('query');
+    expect(input).toHaveAttribute('name', 'q');
+    expect(input).toHaveAttribute('form', 'own-form');
+    expect(input).toBeDisabled();
+    expect(input).not.toHaveAttribute('hidden');
+    expect(input).not.toHaveAttribute('aria-hidden');
+    expect(input).toHaveAttribute('aria-describedby', 'hint extra');
+    const button = clearButton();
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button).toBeDisabled();
+    expect(button).not.toHaveAttribute('tabindex');
+    expect(button).not.toHaveAttribute('hidden');
+    expect(button).not.toHaveAttribute('aria-hidden');
+  });
+
+  it('ignores the dismissButton part while the clear button is not rendered', () => {
+    const dismissButton = React.createRef<HTMLButtonElement>();
+    render(
+      <SearchBox
+        aria-label="Search"
+        slotProps={{ dismissButton: { ref: dismissButton, className: 'my-dismiss' } }}
+      />,
+    );
+    expect(screen.getByRole('searchbox', { name: 'Search' })).toBeInTheDocument();
+    expect(dismissButton.current).toBeNull();
+    expect(document.querySelector('.my-dismiss')).toBeNull();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <SearchBox
+        aria-label="Search"
+        defaultValue="query"
+        slotProps={{
+          input: { className: 'my-input', title: 'Search the docs' },
+          dismissButton: { className: 'my-dismiss' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof SearchBoxSlotProps>().toEqualTypeOf<'input' | 'dismissButton'>();
+    expectTypeOf<NonNullable<SearchBoxSlotProps['input']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<NonNullable<SearchBoxSlotProps['dismissButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: `dismiss` fills the clear button
+    void (<SearchBox slotProps={{ dismissButton: { children: 'Reset' } }} />);
+  });
 });

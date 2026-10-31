@@ -15,6 +15,7 @@ import {
   slotRendersContent,
   slotWrapsDefaultContent,
 } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import {
   focusRing,
   hitAreaLayer,
@@ -26,7 +27,8 @@ import {
 } from '../../lib/styles';
 import type { CoreSize, InputAppearance, Slot, SlotObject } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
-import { useFieldControl } from '../../hooks/useFieldControl';
+import { useEventCallback } from '../../hooks/useEventCallback';
+import { fieldLocks, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
@@ -161,6 +163,41 @@ export interface SearchBoxProps
   ref?: React.Ref<HTMLDivElement>;
   /** Ref to the `<input type="search">` (the focusable control). */
   controlRef?: React.Ref<HTMLInputElement>;
+  /**
+   * Props for the elements the SearchBox draws inside its root, by part, merged into each part's
+   * own (Fluent UI's `input` and `dismiss` slot props): your classes after the part's (yours win
+   * a conflict), your styles over its styles, your handlers before its handlers
+   * (`preventDefault()` in yours skips the SearchBox's handling of the event, its own `on…` prop
+   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
+   * `aria-describedby`. Every attribute the SearchBox sets on a part is locked and keeps the
+   * SearchBox's value (set it through its own props); you add the attributes it does not set. A
+   * part takes no `children` (`dismiss` fills the clear button).
+   */
+  slotProps?: {
+    /**
+     * The `<input type="search">`, the focusable control (stable class `wave-search-box__input`;
+     * `controlRef` reaches it as well). Locked: `type`, `value`, `id`, the naming and Field
+     * attributes (`aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`,
+     * `aria-details`), `required`, `disabled`, `placeholder`, every input prop routed to it
+     * (`name`, `form`, `readOnly`, `tabIndex`, `maxLength`, …), `hidden` and `aria-hidden` (a
+     * focusable control is never hidden). Your handlers run before the SearchBox's:
+     * `preventDefault()` in your `onChange` ignores the typed text, in your `onKeyDown` keeps
+     * the text on Escape.
+     */
+    input?: SlotPart<'input'>;
+    /**
+     * The clear `<button>`, rendered while there is text and the SearchBox is not read-only
+     * (stable class `wave-search-box__dismiss-button`; `dismiss` fills its content). Locked:
+     * `type`, `disabled`, `tabIndex`, `hidden`, `aria-hidden`, its name (`aria-label`, "Clear
+     * search" unless `dismiss` names it) and the attributes of a merged Button's
+     * `disabledFocusable`. A `<button>` or `Button` passed as `dismiss` reaches this button too:
+     * its other attributes are the defaults these props replace (yours win), its classes come
+     * before yours, and its handlers run after yours. Your `onClick` runs before the clear
+     * (`preventDefault()` skips it) and is not called while the button is unavailable but
+     * focusable.
+     */
+    dismissButton?: SlotPart<'button'>;
+  };
 }
 
 /** Per-size metrics of SearchBox (medium is the 0.7 look). */
@@ -413,6 +450,7 @@ export const SearchBox = ({
   className,
   ref,
   controlRef,
+  slotProps,
   // Routed to the input (C-ROUTING)
   id,
   'aria-label': ariaLabel,
@@ -453,7 +491,7 @@ export const SearchBox = ({
   });
 
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const mergedInputRef = useMergedRefs(inputRef, controlRef);
+  const mergedInputRef = useMergedRefs(inputRef, controlRef, slotProps?.input?.ref);
   // The input is always React-controlled, so the browser's own reset would put the current text
   // back: restore the default here instead (C-FORMS).
   useFormReset(inputRef, () => setValue(defaultValue), form);
@@ -489,11 +527,12 @@ export const SearchBox = ({
     }
   }, [dismissKind]);
 
-  const handleClear = () => {
+  // An event callback, so the part props merged during render hold no function that reads a ref.
+  const handleClear = useEventCallback(() => {
     setValue('');
     onClear?.();
     inputRef.current?.focus();
-  };
+  });
 
   // Escape clears the text first, as native search fields do, and is consumed so an enclosing
   // Dialog, Drawer or Popover stays open; with an empty field it reaches them (C-POPUPS).
@@ -520,9 +559,8 @@ export const SearchBox = ({
     input.focus();
   };
 
-  // The slot's onClick is composed at click time (it runs first; preventDefault() cancels the
-  // clear), so handleClear, which reads the input ref, is never passed to a render-time helper.
-  // The slot's ref joins ours through a stable merged ref (never a new callback per render).
+  // The slot's onClick runs before the clear (preventDefault() cancels it). The slot's ref joins
+  // ours through a stable merged ref (never a new callback per render).
   const {
     onClick: slotOnClick,
     ref: slotRef,
@@ -555,6 +593,7 @@ export const SearchBox = ({
   const clearRef = useMergedRefs<HTMLButtonElement>(
     slotRef,
     checksContent ? setLabelTarget : undefined,
+    slotProps?.dismissButton?.ref,
   );
 
   const clearButtonProps = mergeProps(
@@ -591,6 +630,42 @@ export const SearchBox = ({
               className={searchBoxClassNames.dismissIcon}
             />
           ));
+  // The props a `dismiss` button (a `<button>` or `Button` element, or the deprecated button
+  // object) merged into the clear button are the defaults of its part: `slotProps.dismissButton`
+  // replaces them, its handlers run first and its classes come last. The type, the disabled
+  // state, the tab stop, the visibility, the name and the clear stay locked, at the values the
+  // two give together.
+  const {
+    className: clearClassName,
+    style: clearStyle,
+    type: clearType,
+    disabled: clearDisabled,
+    ...clearDefaults
+  } = clearButtonProps as UnknownProps;
+  const clearPartProps = mergeSlotProps(slotProps?.dismissButton, {
+    className: clearClassName as string | undefined,
+    style: clearStyle as React.CSSProperties | undefined,
+    defaults: clearDefaults,
+    locked: {
+      // mergeProps keeps a slot's `type: null`, which would drop the attribute and make the
+      // button submit its form; only nullish falls back (an explicit type is kept).
+      type: clearType ?? 'button',
+      disabled: disabled || (clearDisabled as boolean | undefined),
+      'aria-label': clearDefaults['aria-label'],
+      tabIndex: clearDefaults.tabIndex,
+      'aria-disabled': clearDefaults['aria-disabled'],
+      'data-disabled': clearDefaults['data-disabled'],
+      'data-disabled-focusable': clearDefaults['data-disabled-focusable'],
+      hidden: clearDefaults.hidden,
+      'aria-hidden': clearDefaults['aria-hidden'],
+      onClick: composeEventHandlers(slotOnClick, handleClear),
+      // A merged `disabledFocusable` Button makes the clear button unavailable but focusable
+      // (last: it wins over `disabled` and the clear handler).
+      ...(dismissParts.disabledFocusable ? MERGED_DISABLED_FOCUSABLE_PROPS : undefined),
+    },
+    // Unavailable but focusable, the button calls no click handler, yours included.
+    blockHandlers: dismissParts.disabledFocusable ? ['onClick'] : undefined,
+  });
   // A slot value that renders nothing is no slot (the default icon before the text, no box after).
   const hasBefore = slotRendersContent(contentBefore);
   const hasAfter = slotRendersContent(contentAfter);
@@ -637,43 +712,52 @@ export const SearchBox = ({
       </span>
 
       <input
+        {...mergeSlotProps(slotProps?.input, {
+          className: cn(
+            searchBoxClassNames.input,
+            'h-full min-w-0 flex-1 appearance-none border-none bg-transparent text-foreground',
+            SEARCH_SIZE[size].input,
+            inputTextClasses[size],
+            'placeholder:text-muted-foreground',
+            'focus:outline-hidden',
+            'disabled:cursor-not-allowed',
+            '[&::-webkit-search-cancel-button]:hidden',
+          ),
+          locked: {
+            type: 'search',
+            value,
+            onChange: (event: React.ChangeEvent<HTMLInputElement>) => setValue(event.target.value),
+            placeholder,
+            disabled,
+            'aria-errormessage': ariaErrorMessage,
+            'aria-details': ariaDetails,
+            name,
+            form,
+            readOnly,
+            autoComplete,
+            autoFocus,
+            autoCapitalize,
+            autoCorrect,
+            inputMode,
+            enterKeyHint,
+            spellCheck,
+            maxLength,
+            minLength,
+            pattern,
+            tabIndex,
+            onFocus,
+            onBlur,
+            onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
+            onKeyUp,
+            ...fieldProps,
+            // The routed naming and Field attributes, set only through the SearchBox's own props.
+            ...fieldLocks(fieldProps),
+            // A focusable control is never hidden (the root takes the SearchBox's `hidden`).
+            hidden: undefined,
+            'aria-hidden': undefined,
+          },
+        })}
         ref={mergedInputRef}
-        type="search"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        className={cn(
-          searchBoxClassNames.input,
-          'h-full min-w-0 flex-1 appearance-none border-none bg-transparent text-foreground',
-          SEARCH_SIZE[size].input,
-          inputTextClasses[size],
-          'placeholder:text-muted-foreground',
-          'focus:outline-hidden',
-          'disabled:cursor-not-allowed',
-          '[&::-webkit-search-cancel-button]:hidden',
-        )}
-        aria-errormessage={ariaErrorMessage}
-        aria-details={ariaDetails}
-        name={name}
-        form={form}
-        readOnly={readOnly}
-        autoComplete={autoComplete}
-        autoFocus={autoFocus}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={autoCorrect}
-        inputMode={inputMode}
-        enterKeyHint={enterKeyHint}
-        spellCheck={spellCheck}
-        maxLength={maxLength}
-        minLength={minLength}
-        pattern={pattern}
-        tabIndex={tabIndex}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
-        onKeyUp={onKeyUp}
-        {...fieldProps}
       />
 
       {hasAfter && (
@@ -691,16 +775,11 @@ export const SearchBox = ({
       {/* No clear button while read-only: clearing would change a value the user cannot edit. */}
       {value && !readOnly ? (
         <button
-          {...clearButtonProps}
+          // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change
+          // it).
+          type="button"
+          {...clearPartProps}
           ref={clearRef}
-          // mergeProps keeps a slot's `type: null`, which would drop the attribute and make the
-          // button submit its form; only nullish falls back (an explicit type is kept).
-          type={clearButtonProps.type ?? 'button'}
-          disabled={disabled || clearButtonProps.disabled}
-          onClick={(event) => composeEventHandlers(slotOnClick, handleClear)(event)}
-          // A merged `disabledFocusable` Button makes the clear button unavailable but focusable
-          // (spread last: it wins over `disabled` and the clear handler).
-          {...(dismissParts.disabledFocusable ? MERGED_DISABLED_FOCUSABLE_PROPS : undefined)}
         >
           {clearContent}
         </button>

@@ -16,6 +16,7 @@ import { focusRing, forcedColors } from '../../lib/styles';
 import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
 import type { Slot, SlotObject, SlotRenderFunction } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TagAppearance, TagShape, TagSize } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -567,6 +568,8 @@ interface TagDismissButtonProps {
   dismissName: string | undefined;
   /** Receives the button, so the tag's root can click it (Delete on a link in the tag's text). */
   buttonRef: React.Ref<HTMLButtonElement>;
+  /** A host's part props for the button (`TagHostContext`: TagPicker's `slotProps.removeButton`). */
+  part: SlotPart<'button'> | undefined;
 }
 
 /**
@@ -584,12 +587,18 @@ function TagDismissButton({
   contentId,
   dismissName,
   buttonRef,
+  part,
 }: TagDismissButtonProps) {
   const dismissLabelId = useId('tag-dismiss');
   const dismissTextId = useId('tag-dismiss-text');
   const { ref: slotRef, ...ownProps } = buttonProps;
   const ownRef = React.useRef<HTMLButtonElement>(null);
-  const mergedRef = useMergedRefs(ownRef, buttonRef, slotRef as React.Ref<HTMLButtonElement>);
+  const mergedRef = useMergedRefs(
+    ownRef,
+    buttonRef,
+    slotRef as React.Ref<HTMLButtonElement>,
+    part?.ref,
+  );
   // Unmounting while it has focus (`dismissible` turning `false`), the button hands focus to its
   // tag's own control (a link in the text), else, in a TagGroup, to the next tag (D35).
   useDismissControlFocus(ownRef);
@@ -625,20 +634,41 @@ function TagDismissButton({
   // A host's name (TagPicker's `labels.remove`) is the whole name: no hidden label text joins the
   // tag's own text content.
   const named = dismissName !== undefined;
+  // A host's part (TagPicker's `slotProps.removeButton`): its classes last, its handlers first;
+  // every attribute the button renders, its tab stop, visibility and disabled state included, is
+  // locked, and its click is not called while the button is unavailable but focusable.
+  const { className: ownClassName, style: ownStyle, ...ownAttributes } = ownProps;
+  const props = mergeSlotProps(part, {
+    className: ownClassName as string | undefined,
+    style: ownStyle as React.CSSProperties | undefined,
+    locked: {
+      tabIndex: undefined,
+      hidden: undefined,
+      'aria-hidden': undefined,
+      disabled: undefined,
+      'aria-disabled': undefined,
+      'data-disabled': undefined,
+      'data-disabled-focusable': undefined,
+      ...ownAttributes,
+      type: (ownAttributes.type as 'button' | 'submit' | 'reset' | undefined) ?? 'button',
+      ...stateProps,
+      'aria-label': named ? dismissName : undefined,
+      'aria-labelledby': named
+        ? undefined
+        : `${namedByContent ? dismissTextId : dismissLabelId} ${contentId}`,
+    },
+    blockHandlers: stateProps === MERGED_DISABLED_FOCUSABLE_PROPS ? ['onClick'] : undefined,
+  });
   return (
     <button
-      {...ownProps}
+      // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
+      type="button"
+      {...props}
       ref={mergedRef}
-      type={(ownProps.type as 'button' | 'submit' | 'reset' | undefined) ?? 'button'}
-      {...stateProps}
-      aria-label={named ? dismissName : undefined}
-      aria-labelledby={
-        named ? undefined : `${namedByContent ? dismissTextId : dismissLabelId} ${contentId}`
-      }
-      onFocus={composeEventHandlers(ownProps.onFocus as FocusHandler | undefined, hold.onFocus, {
+      onFocus={composeEventHandlers(props.onFocus as FocusHandler | undefined, hold.onFocus, {
         checkDefaultPrevented: false,
       })}
-      onBlur={composeEventHandlers(ownProps.onBlur as FocusHandler | undefined, hold.onBlur, {
+      onBlur={composeEventHandlers(props.onBlur as FocusHandler | undefined, hold.onBlur, {
         checkDefaultPrevented: false,
       })}
     >
@@ -1059,6 +1089,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
           contentId={contentId}
           dismissName={host?.dismissName}
           buttonRef={dismissButtonRef}
+          part={host?.dismissButtonPart}
         />
       )}
     </Component>

@@ -20,16 +20,23 @@ import { Dropdown } from '../Dropdown';
 import { collectOptionLabels, useListbox } from '../../../hooks/useListbox';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { useMergedRefs } from '../../../hooks/useMergedRefs';
-import { listboxSurfaceClassNames, optionClassNames } from '../../../lib/classNames';
+import {
+  listboxSurfaceClassNames,
+  optionClassNames,
+  optionGroupClassNames,
+} from '../../../lib/classNames';
 import type { Slot } from '../../../lib/slot';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
   mockRect,
+  openingTags,
   testDisplayName,
   expectThrows,
 } from '../../../test-utils';
+import { Listbox } from '../Listbox';
 
 function combobox() {
   return screen.getByRole('combobox', { name: 'Fruit' });
@@ -1339,5 +1346,329 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
         UseListboxPopupResult['floatingProps']
       >();
     });
+  });
+});
+
+describe('Option — slotProps', () => {
+  type OptionSlotProps = NonNullable<OptionProps['slotProps']>;
+  const part = (name: string) => document.querySelector<HTMLElement>(`.${name}`);
+
+  it('renders the 0.17.1 parts of Option and OptionGroup without slotProps (opening tags, attributes sorted)', () => {
+    // Captured from b8941ef, a server render: the merged props may put the class before the
+    // locked attributes.
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(
+      <Listbox aria-label="Fruit" multiselect defaultValue={['a']}>
+        <Option value="a">Apple</Option>
+        <OptionGroup label="More">
+          <Option value="c">Cherry</Option>
+        </OptionGroup>
+      </Listbox>,
+    );
+    const all = (name: string) => Array.from(container.querySelectorAll(`.${name}`));
+    expect(
+      openingTags(
+        ...all(optionClassNames.indicator),
+        ...all(optionClassNames.content),
+        ...all(optionGroupClassNames.label),
+        ...all(optionGroupClassNames.list),
+      ),
+    ).toBe(
+      [
+        '<span aria-hidden="true" class="wave-option__indicator flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border border-primary bg-primary text-primary-foreground forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-wave-option-box="">',
+        '<span aria-hidden="true" class="wave-option__indicator flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border border-stroke-accessible bg-transparent forced-colors:border-[ButtonText]" data-wave-option-box="">',
+        '<span class="wave-option__content min-w-0 flex-1">',
+        '<span class="wave-option__content min-w-0 flex-1">',
+        '<div class="wave-option-group__label px-3 py-1 text-caption-1 font-semibold text-muted-foreground" id="option-group-_id0_" role="presentation">',
+        '<ul aria-labelledby="option-group-_id0_" class="wave-option-group__list" role="group">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const options = (slotProps: OptionSlotProps | undefined) => [
+      <Option key="a" value="a" slotProps={slotProps}>
+        Apple
+      </Option>,
+      <Option key="b" value="b" disabled slotProps={slotProps}>
+        Banana
+      </Option>,
+    ];
+    expectInertSlotProps(
+      (slotProps) => (
+        <Listbox aria-label="Fruit" defaultValue="a">
+          {options(slotProps)}
+        </Listbox>
+      ),
+      { indicator: {}, content: {} },
+    );
+    expectInertSlotProps(
+      (slotProps) => (
+        <Listbox aria-label="Fruit" multiselect defaultValue={['a']}>
+          {options(slotProps)}
+        </Listbox>
+      ),
+      { indicator: {}, content: {} },
+    );
+  });
+
+  it('puts your className, style, data-* and ref on the indicator and the content', () => {
+    const indicator = React.createRef<HTMLSpanElement>();
+    const content = React.createRef<HTMLSpanElement>();
+    render(
+      <Listbox aria-label="Fruit" multiselect defaultValue={['a']}>
+        <Option
+          value="a"
+          slotProps={{
+            indicator: {
+              ref: indicator,
+              className: 'my-indicator',
+              style: { opacity: 0.5 },
+              'data-part': 'indicator',
+            },
+            content: {
+              ref: content,
+              className: 'my-content',
+              style: { opacity: 0.5 },
+              'data-part': 'content',
+            },
+          }}
+        >
+          Apple
+        </Option>
+      </Listbox>,
+    );
+    const option = screen.getByRole('option', { name: 'Apple' });
+    for (const [element, stable, mine, ref] of [
+      [part(optionClassNames.indicator), optionClassNames.indicator, 'my-indicator', indicator],
+      [part(optionClassNames.content), optionClassNames.content, 'my-content', content],
+    ] as const) {
+      expect(option).toContainElement(element);
+      expect(element!.classList[0]).toBe(stable);
+      expect(element!.classList[element!.classList.length - 1]).toBe(mine);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(ref.current).toBe(element);
+    }
+    expect(indicator.current).toHaveAttribute('data-part', 'indicator');
+    expect(content.current).toHaveAttribute('data-part', 'content');
+    // The option itself keeps its semantics.
+    expect(option).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('lets your class replace a conflicting class of the content', () => {
+    render(
+      <Listbox aria-label="Fruit">
+        <Option value="a" slotProps={{ content: { className: 'flex-none' } }}>
+          Apple
+        </Option>
+      </Listbox>,
+    );
+    const content = part(optionClassNames.content);
+    expect(content).toHaveClass('flex-none');
+    expect(content).not.toHaveClass('flex-1');
+  });
+
+  it('keeps the indicator decorative and marked', () => {
+    render(
+      <Listbox aria-label="Fruit" multiselect>
+        <Option
+          value="a"
+          slotProps={{ indicator: { 'aria-hidden': false, 'data-wave-option-box': undefined } }}
+        >
+          Apple
+        </Option>
+      </Listbox>,
+    );
+    const indicator = part(optionClassNames.indicator);
+    expect(indicator).toHaveAttribute('aria-hidden', 'true');
+    expect(indicator).toHaveAttribute('data-wave-option-box', '');
+  });
+
+  it('ignores the indicator part in a single-select list, which draws no square', () => {
+    const indicator = React.createRef<HTMLSpanElement>();
+    render(
+      <Listbox aria-label="Fruit" defaultValue="a">
+        <Option value="a" slotProps={{ indicator: { ref: indicator, className: 'my-indicator' } }}>
+          Apple
+        </Option>
+      </Listbox>,
+    );
+    expect(screen.getByRole('option', { name: 'Apple' })).toBeInTheDocument();
+    expect(indicator.current).toBeNull();
+    expect(document.querySelector('.my-indicator')).toBeNull();
+  });
+
+  it('reaches the options of a Combobox and a Dropdown too', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dropdown aria-label="Fruit">
+        <Option value="a" slotProps={{ content: { className: 'my-content' } }}>
+          Apple
+        </Option>
+      </Dropdown>,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Fruit' }));
+    const option = screen.getByRole('option', { name: 'Apple' });
+    expect(within(option).getByText('Apple')).toHaveClass(optionClassNames.content, 'my-content');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Listbox aria-label="Fruit" multiselect defaultValue={['a']}>
+        <Option
+          value="a"
+          slotProps={{ indicator: { className: 'my-indicator' }, content: { title: 'Apple' } }}
+        >
+          Apple
+        </Option>
+      </Listbox>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof OptionSlotProps>().toEqualTypeOf<'indicator' | 'content'>();
+    expectTypeOf<NonNullable<OptionSlotProps['indicator']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<OptionSlotProps['content']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the Option draws its content
+    void (<Option value="a" slotProps={{ content: { children: 'Other' } }} />);
+  });
+});
+
+describe('OptionGroup — slotProps', () => {
+  type OptionGroupSlotProps = NonNullable<OptionGroupProps['slotProps']>;
+  const part = (name: string) => document.querySelector<HTMLElement>(`.${name}`);
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    for (const props of [
+      { label: 'More' },
+      { 'aria-label': 'More' },
+      { label: 'More', 'aria-labelledby': 'elsewhere' },
+    ] as OptionGroupProps[]) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <Listbox aria-label="Fruit">
+            <OptionGroup {...props} slotProps={slotProps}>
+              <Option value="a">Apple</Option>
+            </OptionGroup>
+          </Listbox>
+        ),
+        { label: {}, list: {} },
+      );
+    }
+  });
+
+  it('puts your className, style, data-* and ref on the label and the list', () => {
+    const label = React.createRef<HTMLDivElement>();
+    const list = React.createRef<HTMLUListElement>();
+    render(
+      <Listbox aria-label="Fruit">
+        <OptionGroup
+          label="More"
+          slotProps={{
+            label: { ref: label, className: 'my-label', style: { opacity: 0.5 }, 'data-part': 'l' },
+            list: { ref: list, className: 'my-list', style: { opacity: 0.5 }, 'data-part': 'g' },
+          }}
+        >
+          <Option value="a">Apple</Option>
+        </OptionGroup>
+      </Listbox>,
+    );
+    const group = screen.getByRole('group', { name: 'More' });
+    expect(list.current).toBe(group);
+    expect(label.current).toBe(part(optionGroupClassNames.label));
+    for (const [element, stable, mine, data] of [
+      [label.current, optionGroupClassNames.label, 'my-label', 'l'],
+      [list.current, optionGroupClassNames.list, 'my-list', 'g'],
+    ] as const) {
+      expect(element!.classList[0]).toBe(stable);
+      expect(element!.classList[element!.classList.length - 1]).toBe(mine);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(element).toHaveAttribute('data-part', data);
+    }
+  });
+
+  it('keeps the heading id that names the list, and the list role, name and visibility', () => {
+    render(
+      <>
+        <span id="extra">Fruit</span>
+        <Listbox aria-label="Fruit">
+          <OptionGroup
+            label="More"
+            slotProps={{
+              label: { id: 'mine', role: 'heading' },
+              list: {
+                role: 'list',
+                hidden: true,
+                'aria-label': 'Other',
+                'aria-labelledby': 'extra',
+              },
+            }}
+          >
+            <Option value="a">Apple</Option>
+          </OptionGroup>
+        </Listbox>
+      </>,
+    );
+    const heading = part(optionGroupClassNames.label)!;
+    expect(heading.id).not.toBe('mine');
+    expect(heading).toHaveAttribute('role', 'presentation');
+    const group = screen.getByRole('group', { name: 'More Fruit' });
+    expect(group).not.toHaveAttribute('hidden');
+    expect(group).not.toHaveAttribute('aria-label');
+    expect(group).toHaveAttribute('aria-labelledby', `${heading.id} extra`);
+  });
+
+  it('ignores the label part without a label, and still warns about an unnamed group', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const label = React.createRef<HTMLDivElement>();
+      render(
+        <Listbox aria-label="Fruit">
+          <OptionGroup slotProps={{ label: { ref: label, className: 'my-label' } }}>
+            <Option value="a">Apple</Option>
+          </OptionGroup>
+        </Listbox>,
+      );
+      expect(label.current).toBeNull();
+      expect(document.querySelector('.my-label')).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        '[WaveUI] OptionGroup: the group has no name. Give it a text `label`, `aria-label` or `aria-labelledby`.',
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('reads the heading that a label part ref is attached to for the name check', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const label = React.createRef<HTMLDivElement>();
+    render(
+      <Listbox aria-label="Fruit">
+        <OptionGroup label={<span>More fruit</span>} slotProps={{ label: { ref: label } }}>
+          <Option value="a">Apple</Option>
+        </OptionGroup>
+      </Listbox>,
+    );
+    expect(label.current).toHaveTextContent('More fruit');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof OptionGroupSlotProps>().toEqualTypeOf<'label' | 'list'>();
+    expectTypeOf<NonNullable<OptionGroupSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<OptionGroupSlotProps['list']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLUListElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the group draws its content
+    void (<OptionGroup slotProps={{ list: { children: 'Other' } }} />);
   });
 });

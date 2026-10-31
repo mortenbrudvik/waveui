@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR, isConnectedAndFocusable, isFocusable } from '../../lib/focus';
+import type { SlotPart } from '../../lib/slotProps';
 import type { TagAppearance, TagShape, TagSize } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
@@ -64,6 +65,12 @@ export interface TagHostContextValue {
   dismissName?: string;
   /** Classes merged after the Dismiss button's own (TagPicker's `removeButton` part class). */
   dismissButtonClassName?: string;
+  /**
+   * Props merged into the Dismiss button as a `slotProps` part (TagPicker's
+   * `slotProps.removeButton`): its classes last, its handlers first, the button's own attributes
+   * locked.
+   */
+  dismissButtonPart?: SlotPart<'button'>;
 }
 
 /** Read by every Tag below it (TagPicker wraps each default tag in its own provider). */

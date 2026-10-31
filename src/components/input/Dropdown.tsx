@@ -6,6 +6,7 @@ import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon, DismissIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import {
   disabledStyles,
   focusRing,
@@ -18,7 +19,8 @@ import {
 } from '../../lib/styles';
 import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
-import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { useEventCallback } from '../../hooks/useEventCallback';
+import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -29,9 +31,9 @@ import { showsExpandButton } from './Combobox.expand';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import {
-  ListboxSurface,
   Option,
   OptionGroup,
+  PickerListboxSurface,
   useListboxPopup,
   type ListboxOptionRenderState,
 } from './Option';
@@ -278,6 +280,60 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
   controlRef?: React.Ref<HTMLButtonElement>;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the Dropdown draws, by part, merged into each part's own (Fluent UI's
+   * `button`, `clearButton` and `listbox` slot props): your classes after the part's (yours win
+   * a conflict), your styles over its styles, your handlers before its handlers
+   * (`preventDefault()` in yours skips the Dropdown's handling of the event, its own `on…` prop
+   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
+   * `aria-describedby`. Every attribute the Dropdown sets on a part is locked and keeps the
+   * Dropdown's value (set it through its own props); you add the attributes it does not set. A
+   * part takes no `children`. The options are `Option`s, which take their own props.
+   */
+  slotProps?: {
+    /**
+     * The `<button role="combobox">`, the focusable control (stable class
+     * `wave-dropdown__button`; `controlRef` reaches it as well). Locked: `type`, `role`, `id`,
+     * the naming, Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`,
+     * `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`,
+     * `aria-errormessage`, `aria-details`), `disabled`, `tabIndex`, `autoFocus`, `name`, `form`
+     * and `required` (the value is submitted by the Dropdown's hidden input), `hidden` and
+     * `aria-hidden` (a focusable control is never hidden). Your handlers run before the
+     * Dropdown's: `preventDefault()` in your `onClick` keeps the list as it is, in your
+     * `onKeyDown` skips the listbox keys.
+     */
+    button?: SlotPart<'button'>;
+    /**
+     * The `<span>` in the button that shows the selected label(s), `renderValue`'s content or the
+     * placeholder (stable class `wave-dropdown__value`).
+     */
+    value?: SlotPart<'span'>;
+    /**
+     * The clear `<button>`, rendered with `clearable` while a value is selected (stable class
+     * `wave-dropdown__clear-button`). Locked: `type`, `aria-label` (`labels.clear`), `disabled`,
+     * `tabIndex`, `aria-disabled`, `hidden` and `aria-hidden`. Your `onClick` runs before the
+     * clear (`preventDefault()` skips it).
+     */
+    clearButton?: SlotPart<'button'>;
+    /**
+     * The `<ul role="listbox">`, in the popup while it shows and hidden in place otherwise
+     * (stable class `wave-dropdown__listbox`). Locked: `id`, `role`, `tabIndex`, `hidden`,
+     * `inert`, `aria-hidden`, `aria-multiselectable`, `aria-activedescendant` and `aria-label`;
+     * your `aria-labelledby` ids join the list's name.
+     */
+    listbox?: SlotPart<'ul'>;
+    /**
+     * The popup `<div>` around the list, rendered in a portal while it shows (stable class
+     * `wave-dropdown__surface`). Locked: `data-side`, `data-align`, `role`, `id`, `hidden`,
+     * `inert` and `aria-hidden`; your `style` merges, but the position, the size limits and the
+     * visibility the positioning sets win.
+     */
+    surface?: SlotPart<'div'>;
+  };
+}
+
+function preventMouseDown(event: React.MouseEvent) {
+  event.preventDefault();
 }
 
 /** The Dropdown component's type: a multi-select signature, then the single-select one. */
@@ -337,6 +393,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     className,
     children,
     ref,
+    slotProps,
     ...rest
   } = props;
 
@@ -454,7 +511,12 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   });
 
   const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
-  const buttonMergedRef = useMergedRefs<HTMLButtonElement>(buttonRef, controlRef, setReference);
+  const buttonMergedRef = useMergedRefs<HTMLButtonElement>(
+    buttonRef,
+    controlRef,
+    setReference,
+    slotProps?.button?.ref,
+  );
   // The window scrolls the shown list only, which mounts with the popup (C-POPUPS: the window
   // holds it in state); the closed list in place is another, hidden element.
   const listScrollRef = useMergedRefs<HTMLUListElement>(
@@ -523,11 +585,12 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   };
 
   // The button disappears with the value, so focus moves to the combobox explicitly (C-DISABLED).
-  const handleClear = () => {
+  // An event callback, so the part props merged during render hold no function that reads a ref.
+  const handleClear = useEventCallback(() => {
     setValue(multiselect ? EMPTY_VALUES : '');
     setOpen(false);
     buttonRef.current?.focus();
-  };
+  });
 
   const showClear = clearable && hasValue;
   // The expand glyph's inline-end offset per size (P4-01), shared by the chevron and a consumer
@@ -557,43 +620,60 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
       {multiselect && <PickerAnnouncer />}
       <div className="relative flex items-center">
         <button
+          // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
           type="button"
-          {...fieldProps}
-          {...listbox.getComboboxProps()}
-          aria-expanded={expanded}
-          aria-errormessage={ariaErrorMessage}
-          aria-details={ariaDetails}
+          {...mergeSlotProps(slotProps?.button, {
+            className: cn(
+              dropdownClassNames.button,
+              // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The
+              // end padding keeps the text clear of the chevron (and of the clear button while it
+              // shows).
+              'relative flex w-full items-center justify-between py-0 text-start',
+              inputHeightClasses[size],
+              inputPaddingClasses[size],
+              inputTextClasses[size],
+              inputAppearanceClasses[appearance],
+              'text-foreground',
+              pickerEndPadding(Number(showClear) + Number(showExpand), size),
+              inputFocus,
+              disabledStyles,
+              invalidLook && inputInvalid,
+            ),
+            locked: {
+              type: 'button',
+              ...fieldProps,
+              // The routed naming and Field attributes, set only through the Dropdown's own props.
+              ...fieldLocks(fieldProps),
+              ...listbox.getComboboxProps(),
+              'aria-expanded': expanded,
+              'aria-errormessage': ariaErrorMessage,
+              'aria-details': ariaDetails,
+              disabled,
+              autoFocus,
+              tabIndex,
+              onClick: () => setOpen((current) => !current),
+              onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
+              onKeyUp: composeEventHandlers(onKeyUp, listbox.onKeyUp),
+              onFocus,
+              onBlur,
+              // The control's own: the hidden input submits the value, and a focusable control is
+              // never hidden.
+              name: undefined,
+              form: undefined,
+              hidden: undefined,
+              'aria-hidden': undefined,
+            },
+          })}
           ref={buttonMergedRef}
-          disabled={disabled}
-          autoFocus={autoFocus}
-          tabIndex={tabIndex}
-          onClick={() => setOpen((current) => !current)}
-          onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
-          onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          className={cn(
-            dropdownClassNames.button,
-            // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The end
-            // padding keeps the text clear of the chevron (and of the clear button while it shows).
-            'relative flex w-full items-center justify-between py-0 text-start',
-            inputHeightClasses[size],
-            inputPaddingClasses[size],
-            inputTextClasses[size],
-            inputAppearanceClasses[appearance],
-            'text-foreground',
-            pickerEndPadding(Number(showClear) + Number(showExpand), size),
-            inputFocus,
-            disabledStyles,
-            invalidLook && inputInvalid,
-          )}
         >
           <span
-            className={cn(
-              dropdownClassNames.value,
-              'truncate',
-              !showValue && 'text-muted-foreground',
-            )}
+            {...mergeSlotProps(slotProps?.value, {
+              className: cn(
+                dropdownClassNames.value,
+                'truncate',
+                !showValue && 'text-muted-foreground',
+              ),
+            })}
           >
             {showValue ? valueNode : placeholder}
           </span>
@@ -624,26 +704,38 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         </button>
         {showClear && (
           <button
+            // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
-            aria-label={labels?.clear ?? 'Clear selection'}
-            disabled={disabled}
-            // Keeps focus on the combobox while the pointer clears it.
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={handleClear}
-            className={cn(
-              dropdownClassNames.clearButton,
-              pickerIconButtonClasses(size, appearance),
-              // Before the chevron while it shows, else at the end.
-              pickerButtonOffset(size, showExpand ? 2 : 1),
-              focusRing,
-              disabledStyles,
-            )}
+            {...mergeSlotProps(slotProps?.clearButton, {
+              className: cn(
+                dropdownClassNames.clearButton,
+                pickerIconButtonClasses(size, appearance),
+                // Before the chevron while it shows, else at the end.
+                pickerButtonOffset(size, showExpand ? 2 : 1),
+                focusRing,
+                disabledStyles,
+              ),
+              locked: {
+                type: 'button',
+                'aria-label': labels?.clear ?? 'Clear selection',
+                disabled,
+                tabIndex: undefined,
+                'aria-disabled': undefined,
+                'data-disabled': undefined,
+                'data-disabled-focusable': undefined,
+                hidden: undefined,
+                'aria-hidden': undefined,
+                // Keeps focus on the combobox while the pointer clears it.
+                onMouseDown: preventMouseDown,
+                onClick: handleClear,
+              },
+            })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
           </button>
         )}
       </div>
-      <ListboxSurface
+      <PickerListboxSurface
         listbox={listbox}
         layerId={layerId}
         surfaceRef={surfaceRef}
@@ -656,6 +748,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
         listProps={activeWindow ? { ref: listScrollRef } : undefined}
+        parts={{ list: slotProps?.listbox, surface: slotProps?.surface }}
       >
         {/* Data mode: the options of the shown items while the list shows (labels come from
             `items`, so a closed list needs none), or the window's; the children are ignored. */}
@@ -670,7 +763,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
                   dropdownClassNames.spacer,
                 )
               : renderListboxItems(listbox.items, optionsState))}
-      </ListboxSurface>
+      </PickerListboxSurface>
       <HiddenInput
         name={name}
         form={form}

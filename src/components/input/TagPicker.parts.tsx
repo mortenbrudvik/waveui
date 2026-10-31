@@ -16,6 +16,7 @@ import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
 import { slotRendersContent } from '../../lib/slot';
 import type { Slot, SlotObject } from '../../lib/slot';
+import { mergeSlotProps } from '../../lib/slotProps';
 import {
   focusRing,
   inputAppearanceClasses,
@@ -35,7 +36,7 @@ import {
 import type { TagGroupHostOptions, TagHostContextValue } from '../data-display/TagGroup.context';
 import { tagRootClasses } from '../data-display/tagStyles';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
-import { ListboxSurface, Option, OptionGroup } from './Option';
+import { Option, OptionGroup, PickerListboxSurface } from './Option';
 import {
   pickerButtonOffset,
   pickerEndPadding,
@@ -133,6 +134,22 @@ function useClearButtonHold(disabled: boolean): ClearButtonHold {
 
 const NATIVELY_DISABLED = { disabled: true } as const;
 
+function preventMouseDown(event: React.MouseEvent) {
+  event.preventDefault();
+}
+
+/**
+ * What a generated option's part cannot set: its `hidden` (an Option prop that takes it out of
+ * the keys) and the state attributes the option renders only while set.
+ */
+const GENERATED_OPTION_LOCKS = {
+  hidden: undefined,
+  'data-active': undefined,
+  'data-selected': undefined,
+  'aria-disabled': undefined,
+  'data-disabled': undefined,
+};
+
 /* ------------------------------------------------------------------ */
 /*  The end buttons                                                    */
 /* ------------------------------------------------------------------ */
@@ -151,6 +168,8 @@ interface TagPickerClearButtonProps {
 function TagPickerClearButton({ ctx, position }: TagPickerClearButtonProps) {
   const ref = React.useRef<HTMLButtonElement>(null);
   const { triggerRef } = ctx;
+  const part = ctx.slotProps?.clearButton;
+  const mergedRef = useMergedRefs<HTMLButtonElement>(ref, part?.ref);
   usePreserveFocus(ref, () => triggerRef.current);
   const hold = useClearButtonHold(ctx.disabled);
   const stateProps = ctx.disabled
@@ -158,25 +177,50 @@ function TagPickerClearButton({ ctx, position }: TagPickerClearButtonProps) {
       ? MERGED_DISABLED_FOCUSABLE_PROPS
       : NATIVELY_DISABLED
     : undefined;
+  const props = mergeSlotProps(part, {
+    className: cn(
+      tagPickerClassNames.clearButton,
+      END_BUTTON_TOP[ctx.size],
+      pickerIconButtonClasses(ctx.coreSize, ctx.appearance),
+      pickerButtonOffset(ctx.coreSize, position),
+      focusRing,
+      // The control dims as a whole (D66): the button keeps only the not-allowed cursor.
+      'disabled:cursor-not-allowed aria-disabled:cursor-not-allowed',
+    ),
+    locked: {
+      type: 'button',
+      'aria-label': ctx.labels.clear,
+      // Keeps focus in the trigger: a press must not blur it.
+      onMouseDown: preventMouseDown,
+      onClick: () => ctx.clear(),
+      disabled: undefined,
+      tabIndex: undefined,
+      'aria-disabled': undefined,
+      'data-disabled': undefined,
+      'data-disabled-focusable': undefined,
+      hidden: undefined,
+      'aria-hidden': undefined,
+      ...stateProps,
+    },
+    // Held while disabled, the button calls no click handler, yours included.
+    blockHandlers: stateProps === MERGED_DISABLED_FOCUSABLE_PROPS ? ['onClick'] : undefined,
+  });
   return (
     <button
+      // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
       type="button"
-      ref={ref}
-      aria-label={ctx.labels.clear}
-      // Keeps focus in the trigger: a press must not blur it.
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => ctx.clear()}
-      {...stateProps}
-      onFocus={hold.onFocus}
-      onBlur={hold.onBlur}
-      className={cn(
-        tagPickerClassNames.clearButton,
-        END_BUTTON_TOP[ctx.size],
-        pickerIconButtonClasses(ctx.coreSize, ctx.appearance),
-        pickerButtonOffset(ctx.coreSize, position),
-        focusRing,
-        // The control dims as a whole (D66): the button keeps only the not-allowed cursor.
-        'disabled:cursor-not-allowed aria-disabled:cursor-not-allowed',
+      {...props}
+      ref={mergedRef}
+      // The held focus is tracked whatever the part's focus handlers do.
+      onFocus={composeEventHandlers(
+        props.onFocus as React.FocusEventHandler<HTMLButtonElement> | undefined,
+        hold.onFocus,
+        { checkDefaultPrevented: false },
+      )}
+      onBlur={composeEventHandlers(
+        props.onBlur as React.FocusEventHandler<HTMLButtonElement> | undefined,
+        hold.onBlur,
+        { checkDefaultPrevented: false },
       )}
     >
       <DismissIcon size={pickerGlyphSize(ctx.coreSize, 'icon')} />
@@ -287,6 +331,7 @@ function TagPickerControlImpl({
             dimDisabled={!ctx.disabled}
             className={cn(tagPickerClassNames.expandButton, END_BUTTON_TOP[ctx.size])}
             iconClassName={tagPickerClassNames.expandIcon}
+            part={ctx.slotProps?.expandButton}
           />
         )}
       </div>
@@ -344,9 +389,14 @@ interface DefaultTagProps {
 function TagPickerDefaultTag({ ctx, value }: DefaultTagProps) {
   const label = ctx.labelOf(value);
   const dismissName = ctx.labels.remove(label);
+  const removeButton = ctx.slotProps?.removeButton;
   const host = React.useMemo<TagHostContextValue>(
-    () => ({ dismissName, dismissButtonClassName: tagPickerClassNames.removeButton }),
-    [dismissName],
+    () => ({
+      dismissName,
+      dismissButtonClassName: tagPickerClassNames.removeButton,
+      dismissButtonPart: removeButton,
+    }),
+    [dismissName, removeButton],
   );
   const media = ctx.entryOf(value)?.media;
   const hasMedia = slotRendersContent(media);
@@ -356,7 +406,14 @@ function TagPickerDefaultTag({ ctx, value }: DefaultTagProps) {
   );
   return (
     <TagHostContext.Provider value={host}>
-      <Tag value={value} className={tagPickerClassNames.tag} media={mediaSlot}>
+      <Tag
+        {...mergeSlotProps(ctx.slotProps?.tag, {
+          className: tagPickerClassNames.tag,
+          // The Tag's props TagPicker sets; the Tag's own attributes follow its own rules. Its
+          // list-item role and the single-line layout's hiding stay the Tag's.
+          locked: { value, media: mediaSlot, role: undefined, hidden: undefined },
+        })}
+      >
         {label}
       </Tag>
     </TagHostContext.Provider>
@@ -380,6 +437,8 @@ function TagPickerGroupImpl({
 }: GroupImplProps) {
   const { groupRef, chipRef, hiddenValues, disabled, focusTrigger } = ctx;
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, groupRef);
+  const chipPart = ctx.slotProps?.overflowCount;
+  const chipMergedRef = useMergedRefs<HTMLSpanElement>(chipRef, chipPart?.ref);
   // Whether the click behind the latest dismissal was a pointer click (D56).
   const pointerRef = React.useRef(false);
   const host = React.useMemo<TagGroupHostOptions>(
@@ -487,18 +546,26 @@ function TagPickerGroupImpl({
       {hiddenCount > 0 && (
         // The "+N" chip (D62): hidden from assistive technology, which hears the summary.
         <span
-          ref={chipRef}
-          aria-hidden="true"
-          className={cn(
-            tagPickerClassNames.overflowCount,
-            tagRootClasses({ size: ctx.tagSize, appearance: ctx.tagAppearance, shape: 'rounded' }),
-            'shrink-0 cursor-default',
-          )}
-          // A press focuses the trigger (every tag shows); the list does not change.
-          onMouseDown={(event) => {
-            event.preventDefault();
-            focusTrigger();
-          }}
+          {...mergeSlotProps(chipPart, {
+            className: cn(
+              tagPickerClassNames.overflowCount,
+              tagRootClasses({
+                size: ctx.tagSize,
+                appearance: ctx.tagAppearance,
+                shape: 'rounded',
+              }),
+              'shrink-0 cursor-default',
+            ),
+            locked: {
+              'aria-hidden': 'true',
+              // A press focuses the trigger (every tag shows); the list does not change.
+              onMouseDown: (event: React.MouseEvent<HTMLSpanElement>) => {
+                event.preventDefault();
+                focusTrigger();
+              },
+            },
+          })}
+          ref={chipMergedRef}
         >
           {ctx.labels.overflowCount(hiddenCount)}
         </span>
@@ -877,17 +944,33 @@ function TagPickerListImpl({
   ref,
   ...rest
 }: ListImplProps) {
-  const { registerList, listbox } = ctx;
+  const { registerList, listbox, slotProps } = ctx;
   React.useLayoutEffect(() => registerList(), [registerList]);
 
+  // The generated options' parts are merged only when given: an option renders often.
+  const optionPart = slotProps?.option;
+  const createPart = slotProps?.createOption;
   const createLabel = ctx.showCreate ? ctx.labels.create(ctx.createText) : '';
+  const createClasses = cn(tagPickerClassNames.option, tagPickerClassNames.createOption);
   const createOption = ctx.showCreate ? (
     <Option
       key={ctx.createValue}
       value={ctx.createValue}
       label={createLabel}
       data-create=""
-      className={cn(tagPickerClassNames.option, tagPickerClassNames.createOption)}
+      className={createClasses}
+      // `option` applies first, then `createOption`.
+      {...((optionPart || createPart) &&
+        mergeSlotProps([optionPart, createPart], {
+          className: createClasses,
+          locked: {
+            ...GENERATED_OPTION_LOCKS,
+            value: ctx.createValue,
+            label: createLabel,
+            'data-value': ctx.createValue,
+            'data-create': '',
+          },
+        }))}
     >
       {createLabel}
     </Option>
@@ -910,6 +993,18 @@ function TagPickerListImpl({
             media={entry?.media}
             secondaryContent={entry?.secondaryContent}
             className={tagPickerClassNames.option}
+            {...(optionPart &&
+              mergeSlotProps(optionPart, {
+                className: tagPickerClassNames.option,
+                locked: {
+                  ...GENERATED_OPTION_LOCKS,
+                  value: item.value,
+                  label: item.label,
+                  'data-value': item.value,
+                  media: entry?.media,
+                  secondaryContent: entry?.secondaryContent,
+                },
+              }))}
           >
             {item.label}
           </TagPickerOption>
@@ -928,7 +1023,7 @@ function TagPickerListImpl({
 
   const ownName = ariaLabel !== undefined || ariaLabelledBy !== undefined;
   return (
-    <ListboxSurface
+    <PickerListboxSurface
       listbox={listbox}
       layerId={ctx.layerId}
       surfaceRef={ctx.surfaceRef}
@@ -941,11 +1036,13 @@ function TagPickerListImpl({
       emptyContent={
         ctx.emptyContent ? (
           <div
-            aria-hidden="true"
-            className={cn(
-              tagPickerClassNames.emptyMessage,
-              'px-3 py-1.5 text-body-1 text-muted-foreground',
-            )}
+            {...mergeSlotProps(slotProps?.emptyMessage, {
+              className: cn(
+                tagPickerClassNames.emptyMessage,
+                'px-3 py-1.5 text-body-1 text-muted-foreground',
+              ),
+              locked: { 'aria-hidden': 'true' },
+            })}
           >
             {ctx.labels.noMatches}
           </div>
@@ -954,9 +1051,10 @@ function TagPickerListImpl({
       aria-label={ownName ? ariaLabel : ctx.listLabel['aria-label']}
       aria-labelledby={ownName ? ariaLabelledBy : ctx.listLabel['aria-labelledby']}
       listProps={{ ...rest, ref }}
+      parts={{ surface: slotProps?.surface }}
     >
       {content}
-    </ListboxSurface>
+    </PickerListboxSurface>
   );
 }
 TagPickerListImpl.displayName = 'TagPickerListImpl';

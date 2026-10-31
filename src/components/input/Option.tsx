@@ -9,6 +9,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { CheckIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { PopupPositioningOptions } from '../../lib/types';
 import { useId } from '../../hooks/useId';
@@ -75,6 +76,23 @@ export interface OptionProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>,
   hidden?: boolean;
   /** Ref to the option `<li>` element. */
   ref?: React.Ref<HTMLLIElement>;
+  /**
+   * Props for the elements the Option draws inside its `<li>`, by part, merged into each part's
+   * own (Fluent UI's Option has only its `checkIcon` slot, which `checkIcon` fills here): your
+   * classes after the part's (yours win a conflict), your styles over its styles, your handlers
+   * and attributes added, your ref attached. Every attribute the Option sets on a part is locked.
+   * A part takes no `children` (the Option draws their content).
+   */
+  slotProps?: {
+    /**
+     * The 16px checkbox square of an option in a multi-select list, rendered only there (stable
+     * class `wave-option__indicator`); the check glyph sits in it while the option is selected.
+     * Locked: `aria-hidden` and the internal data attribute that marks the square.
+     */
+    indicator?: SlotPart<'span'>;
+    /** The `<span>` around the option's content (stable class `wave-option__content`). */
+    content?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -124,6 +142,8 @@ const OPTION_CLASSES = cn(
   'data-[active]:outline-2 data-[active]:-outline-offset-2 data-[active]:outline-ring',
   'aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground',
 );
+
+const OPTION_CONTENT_CLASSES = cn(optionClassNames.content, 'min-w-0 flex-1');
 
 /**
  * The values of the options rendered inside an `OptionGroup`, whatever wraps them (custom
@@ -205,11 +225,12 @@ interface CheckState {
  * takes `forcedColors.selectedLeaf` while checked. A disabled option's square follows the row, as
  * the single-select glyph does: its muted text colour draws the square and the glyph, in place of
  * the brand colour. `glyph` is the consumer's `checkIcon` when it renders content, else
- * `undefined` for the default glyph.
+ * `undefined` for the default glyph; `indicator` is the square's `slotProps` part.
  */
 function renderCheck(
   glyph: Slot<'span'> | undefined,
   { selected, multiselect, disabled }: CheckState,
+  indicator: SlotPart<'span'> | undefined,
 ): React.ReactNode {
   if (!multiselect) {
     const classes = cn(optionClassNames.checkIcon, 'shrink-0', !selected && 'invisible');
@@ -229,15 +250,22 @@ function renderCheck(
     boxClasses = cn('border-stroke-accessible bg-transparent', forcedColors.control);
   }
   const glyphClasses = disabled ? DISABLED_GLYPH_FORCED_COLORS : undefined;
+  const indicatorClasses = cn(
+    optionClassNames.indicator,
+    'flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border',
+    boxClasses,
+  );
   return (
     <span
       aria-hidden="true"
       data-wave-option-box=""
-      className={cn(
-        optionClassNames.indicator,
-        'flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border',
-        boxClasses,
-      )}
+      className={indicatorClasses}
+      // Merged only when a part is given: an option renders often.
+      {...(indicator &&
+        mergeSlotProps(indicator, {
+          className: indicatorClasses,
+          locked: { 'aria-hidden': 'true', 'data-wave-option-box': '' },
+        }))}
     >
       {selected &&
         (glyph === undefined ? (
@@ -271,6 +299,7 @@ function OptionImpl(props: OptionProps) {
     onMouseDown,
     onPointerMove,
     ref,
+    slotProps,
     ...rest
   } = props;
   const showCheck = React.useContext(OptionCheckContext);
@@ -325,8 +354,19 @@ function OptionImpl(props: OptionProps) {
       )}
     >
       {showCheck &&
-        renderCheck(checkIconRenders ? checkIcon : undefined, { selected, multiselect, disabled })}
-      <span className={cn(optionClassNames.content, 'min-w-0 flex-1')}>{children ?? value}</span>
+        renderCheck(
+          checkIconRenders ? checkIcon : undefined,
+          { selected, multiselect, disabled },
+          slotProps?.indicator,
+        )}
+      <span
+        className={OPTION_CONTENT_CLASSES}
+        // Merged only when a part is given: an option renders often.
+        {...(slotProps?.content &&
+          mergeSlotProps(slotProps.content, { className: OPTION_CONTENT_CLASSES }))}
+      >
+        {children ?? value}
+      </span>
     </li>
   );
 }
@@ -395,6 +435,27 @@ export interface OptionGroupProps extends React.LiHTMLAttributes<HTMLLIElement> 
   hidden?: boolean;
   /** Ref to the group's `<li role="presentation">` element. */
   ref?: React.Ref<HTMLLIElement>;
+  /**
+   * Props for the elements the OptionGroup draws inside its `<li>`, by part, merged into each
+   * part's own (Fluent UI's `label` slot prop): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers and attributes added, your ref
+   * attached, and your ids added to the list's `aria-labelledby`. Every attribute the OptionGroup
+   * sets on a part is locked. A part takes no `children` (`label` and the options are its
+   * content).
+   */
+  slotProps?: {
+    /**
+     * The heading `<div>`, rendered only with a `label` that renders content (stable class
+     * `wave-option-group__label`). Locked: `id`, which names the list, and `role`.
+     */
+    label?: SlotPart<'div'>;
+    /**
+     * The `<ul role="group">` of the options (stable class `wave-option-group__list`). Locked:
+     * `role`, `aria-label` and `hidden` (hide the group with its own `hidden`, which also takes
+     * its options out of the keys); your `aria-labelledby` ids join the group's.
+     */
+    list?: SlotPart<'ul'>;
+  };
 }
 
 const ELEMENT_NODE = 1;
@@ -450,6 +511,7 @@ function OptionGroupImpl({
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
   ref,
+  slotProps,
   ...rest
 }: OptionGroupProps) {
   const labelId = useId('option-group');
@@ -488,6 +550,7 @@ function OptionGroupImpl({
   // C-DEV: warn once when nothing names the group, checked again whenever the label, the
   // consumer `aria-label` or the resolved `aria-labelledby` changes.
   const headingRef = React.useRef<HTMLDivElement | null>(null);
+  const headingMergedRef = useMergedRefs<HTMLDivElement>(headingRef, slotProps?.label?.ref);
   React.useEffect(() => {
     if (!isDev || hasWarned(UNNAMED_GROUP_WARNING)) return;
     if (groupHasName(label, ariaLabel, labelledBy, labelId, headingRef.current)) return;
@@ -507,22 +570,28 @@ function OptionGroupImpl({
     >
       {hasLabel && (
         <div
-          ref={headingRef}
-          id={labelId}
-          role="presentation"
-          className={cn(
-            optionGroupClassNames.label,
-            'px-3 py-1 text-caption-1 font-semibold text-muted-foreground',
-          )}
+          {...mergeSlotProps(slotProps?.label, {
+            className: cn(
+              optionGroupClassNames.label,
+              'px-3 py-1 text-caption-1 font-semibold text-muted-foreground',
+            ),
+            locked: { id: labelId, role: 'presentation' },
+          })}
+          ref={headingMergedRef}
         >
           {materialiseSlotContent(label)}
         </div>
       )}
       <ul
-        role="group"
-        aria-label={ariaLabel}
-        aria-labelledby={labelledBy}
-        className={optionGroupClassNames.list}
+        {...mergeSlotProps(slotProps?.list, {
+          className: optionGroupClassNames.list,
+          locked: {
+            role: 'group',
+            'aria-label': ariaLabel,
+            'aria-labelledby': labelledBy,
+            hidden: undefined,
+          },
+        })}
       >
         <OptionGroupHiddenContext.Provider value={hiddenByConsumer}>
           <OptionGroupContext.Provider value={groups}>{children}</OptionGroupContext.Provider>
@@ -752,8 +821,26 @@ export interface ListboxSurfaceProps {
   children?: React.ReactNode;
 }
 
+/**
+ * The `listbox` and `surface` parts of a picker's `slotProps` (Combobox, Dropdown, TagPicker),
+ * which the ListboxSurface it renders merges into the list and the surface (module-only: no prop
+ * of the public ListboxSurface; pass them through {@link PickerListboxSurface}).
+ */
+export interface ListboxSurfaceParts {
+  list?: SlotPart<'ul'>;
+  surface?: SlotPart<'div'>;
+}
+
 function preventMouseDown(event: React.MouseEvent) {
   event.preventDefault();
+}
+
+/**
+ * A positioned surface's style with a part's style: the part's keys first, then the position,
+ * the size limits and the visibility the positioning sets, which a part cannot change.
+ */
+function lockPosition(partStyle: unknown, positionStyle: React.CSSProperties): React.CSSProperties {
+  return partStyle ? { ...(partStyle as React.CSSProperties), ...positionStyle } : positionStyle;
 }
 
 /**
@@ -795,32 +882,51 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
     listProps,
     children,
   } = props;
+  // A picker's `slotProps` parts (module-only, through PickerListboxSurface).
+  const { parts } = props as ListboxSurfaceProps & { parts?: ListboxSurfaceParts };
 
   // The consumer's list attributes go first, so the listbox's own win; its `onMouseDown` runs
   // before the list's (which keeps focus on the combobox) and its `ref` is merged with the list's.
-  const { ref: listRefProp, onMouseDown: listMouseDown, ...listRest } = listProps ?? {};
-  const listboxProps = listbox.getListboxProps();
-  const listRef = useMergedRefs<HTMLUListElement>(listRefProp, listboxProps.ref);
+  // A `className` (which the type omits) from a JavaScript caller is dropped: `listClassName` is
+  // the list's.
+  const {
+    ref: listRefProp,
+    onMouseDown: listMouseDown,
+    style: listStyle,
+    className: _className,
+    ...listRest
+  } = (listProps ?? {}) as ListboxSurfaceListProps & { className?: unknown };
+  const { ref: listboxRef, ...listboxProps } = listbox.getListboxProps();
+  const listRef = useMergedRefs<HTMLUListElement>(listRefProp, listboxRef, parts?.list?.ref);
+  const surfaceMergedRef = useMergedRefs<HTMLElement>(surfaceRef, parts?.surface?.ref);
 
   const list = (
     <OptionCheckContext.Provider value={showCheck}>
       <ListboxProvider value={listbox.context}>
         <ul
-          {...listRest}
-          {...listboxProps}
-          // Absent from `listboxProps` when not set: a caller's value never survives the spread.
-          aria-multiselectable={listboxProps['aria-multiselectable']}
-          aria-activedescendant={listboxProps['aria-activedescendant']}
-          onMouseDown={composeEventHandlers(listMouseDown, listboxProps.onMouseDown)}
+          {...mergeSlotProps(parts?.list, {
+            className: cn(
+              listboxSurfaceClassNames.list,
+              'min-h-0 max-h-60 overflow-auto',
+              listClassName,
+            ),
+            style: listStyle,
+            locked: {
+              // A part never hides the list or makes it inert; `listProps` still may.
+              inert: undefined,
+              'aria-hidden': undefined,
+              ...listRest,
+              ...listboxProps,
+              // Absent from `listboxProps` when not set: a caller's value never survives the spread.
+              'aria-multiselectable': listboxProps['aria-multiselectable'],
+              'aria-activedescendant': listboxProps['aria-activedescendant'],
+              onMouseDown: composeEventHandlers(listMouseDown, listboxProps.onMouseDown),
+              'aria-label': ariaLabel,
+              'aria-labelledby': ariaLabelledBy,
+              hidden: !expanded || undefined,
+            },
+          })}
           ref={listRef}
-          aria-label={ariaLabel}
-          aria-labelledby={ariaLabelledBy}
-          hidden={!expanded || undefined}
-          className={cn(
-            listboxSurfaceClassNames.list,
-            'min-h-0 max-h-60 overflow-auto',
-            listClassName,
-          )}
         >
           {children}
         </ul>
@@ -832,20 +938,33 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
   const showEmpty = open && !expanded && emptyContent !== undefined && emptyContent !== null;
   if (!expanded && !showEmpty) return list;
 
+  const { style: positionStyle, ...placement } = floatingProps;
+  const surfaceProps = mergeSlotProps(parts?.surface, {
+    className: cn(
+      listboxSurfaceClassNames.root,
+      'flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4',
+      surfaceClassName,
+    ),
+    locked: {
+      ...placement,
+      'data-wave-listbox-surface': '',
+      onMouseDown: preventMouseDown,
+      role: undefined,
+      id: undefined,
+      hidden: undefined,
+      inert: undefined,
+      'aria-hidden': undefined,
+    },
+  });
+
   return (
     <>
       {!expanded && list}
       <Portal layerId={layerId}>
         <div
-          ref={surfaceRef}
-          {...floatingProps}
-          data-wave-listbox-surface=""
-          onMouseDown={preventMouseDown}
-          className={cn(
-            listboxSurfaceClassNames.root,
-            'flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4',
-            surfaceClassName,
-          )}
+          {...surfaceProps}
+          style={lockPosition(surfaceProps.style, positionStyle)}
+          ref={surfaceMergedRef}
         >
           {expanded ? list : emptyContent}
         </div>
@@ -854,3 +973,12 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
   );
 }
 ListboxSurface.displayName = 'ListboxSurface';
+
+/**
+ * ListboxSurface with the `parts` of a picker's `slotProps` (module-only): the list's and the
+ * surface's part props, merged as every part's (the list's own attributes, the surface's
+ * placement and the positioning style win).
+ */
+export const PickerListboxSurface: (
+  props: ListboxSurfaceProps & { parts?: ListboxSurfaceParts },
+) => React.ReactNode = ListboxSurface;
