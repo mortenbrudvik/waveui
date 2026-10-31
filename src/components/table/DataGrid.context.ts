@@ -85,7 +85,10 @@ export function createHeaderSlotRegistry(): HeaderSlotRegistry {
 export interface DataGridContextValue {
   selectionMode: 'none' | SelectionMode;
   store: SelectionStore;
-  /** Toggles one row (single mode: selects it alone, or clears it); `event` goes to `details`. */
+  /**
+   * Toggles one row (single mode: selects it alone, or clears it); `event` goes to `details`.
+   * Without `items`, an id no rendered row has changes nothing.
+   */
   toggleRow: (rowId: string, event: Event) => void;
   /**
    * Selects every row select-all changes (with `items`, every selectable item, rendered or not),
@@ -112,7 +115,11 @@ export interface DataGridRowContextValue {
   selectionCellProps: DataGridRowSelectionCellProps | undefined;
   /** Whether a `DataGrid.SelectionCell` child was seen (then the row adds no cell of its own). */
   hasSelectionCell: boolean;
-  /** The row's id; `undefined` for a header row, or a body row without one (no control). */
+  /**
+   * The row's id (its `rowId`, else its item's), also in a grid without selection (what
+   * `useDataGridRowId` returns); `undefined` for a header row, or a body row without one (no
+   * control).
+   */
   rowId: string | undefined;
   isSelected: boolean;
   /** Resolved from the cell's own props and `selectionCellProps`. */
@@ -129,6 +136,11 @@ export interface DataGridSortContextValue {
   sort: DataGridSort | null;
   /** Sorts by the column (toggling its direction); `event` goes to `details`. */
   requestSort: (columnId: string, event: Event) => void;
+  /**
+   * Sorts by the column and direction of `sort`, unless the grid is sorted so (the `setSort` of
+   * `useDataGridSort`); `event` goes to `details`, an untrusted `sort` event without one.
+   */
+  setSort: (sort: DataGridSort, event?: Event) => void;
 }
 
 export type DataGridSection = 'header' | 'body';
@@ -187,7 +199,8 @@ export const DataGridItemSelectionDisabledContext = React.createContext<boolean 
 /** The row around a selection cell (see {@link DataGridRowContextValue}). */
 export const DataGridRowContext = React.createContext<DataGridRowContextValue | null>(null);
 
-const INERT_STORE = createSelectionStore([]);
+// Pure, so an import of only `useDataGridSort` or `useDataGridRowId` holds no selection store.
+const INERT_STORE = /* @__PURE__ */ createSelectionStore([]);
 const INERT_CONTEXT: DataGridContextValue = {
   selectionMode: 'none',
   store: INERT_STORE,
@@ -200,7 +213,11 @@ const INERT_CONTEXT: DataGridContextValue = {
   selectionAppearance: 'brand',
   subtleSelection: false,
 };
-const INERT_SORT_CONTEXT: DataGridSortContextValue = { sort: null, requestSort: () => {} };
+const INERT_SORT_CONTEXT: DataGridSortContextValue = {
+  sort: null,
+  requestSort: () => {},
+  setSort: () => {},
+};
 const INERT_ROW_CONTEXT: DataGridRowContextValue = {
   selectionCellProps: undefined,
   hasSelectionCell: true,

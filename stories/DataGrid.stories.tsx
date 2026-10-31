@@ -1,7 +1,18 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, DataGrid, Menu, MenuButton, createTableColumn, useVirtualWindow } from '../src';
+import {
+  Button,
+  DataGrid,
+  Menu,
+  MenuButton,
+  ToggleButton,
+  createTableColumn,
+  useDataGridRowId,
+  useDataGridSelection,
+  useDataGridSort,
+  useVirtualWindow,
+} from '../src';
 import type { DataGridBaseProps, DataGridColumn, DataGridSort } from '../src';
 
 interface Member {
@@ -360,6 +371,106 @@ export const SelectionCellAtTheEnd: Story = {
       </DataGrid.Body>
     </DataGrid>
   ),
+};
+
+/**
+ * A cell of your own that toggles its row's selection: `useDataGridRowId` gives the row's id and
+ * `useDataGridSelection` the grid's selection, so the toggle, the row's checkbox, Space on a cell
+ * and select-all always agree.
+ */
+function SelectToggle({ name }: { name: string }) {
+  const rowId = useDataGridRowId();
+  const { isSelected, toggle } = useDataGridSelection();
+  if (rowId === undefined) return null;
+  return (
+    <ToggleButton
+      size="small"
+      pressed={isSelected(rowId)}
+      aria-label={`Select ${name}`}
+      onClick={(event) => toggle(rowId, event.nativeEvent)}
+    >
+      Select
+    </ToggleButton>
+  );
+}
+
+/**
+ * A footer row of your own: how many members are selected (`useDataGridSelection`), the sort in
+ * words and a button that reverses it (`useDataGridSort`).
+ */
+function SummaryRow({ columnCount }: { columnCount: number }) {
+  const { sort, setSort } = useDataGridSort();
+  const { selectedItems } = useDataGridSelection();
+  return (
+    <tr>
+      <td colSpan={columnCount} className="border-t border-border px-3 py-2">
+        <span className="flex flex-wrap items-center gap-3 text-body-1 text-foreground">
+          <span>{selectedItems.length} selected</span>
+          <span>{sort ? `Sorted by ${sort.columnId}, ${sort.direction}` : 'Not sorted'}</span>
+          {sort && (
+            <Button
+              size="small"
+              onClick={(event) =>
+                setSort(
+                  {
+                    columnId: sort.columnId,
+                    direction: sort.direction === 'ascending' ? 'descending' : 'ascending',
+                  },
+                  event.nativeEvent,
+                )
+              }
+            >
+              Reverse order
+            </Button>
+          )}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+/** The member columns with a Selected column of toggles, cells of your own. */
+const CUSTOM_CELL_COLUMNS: readonly DataGridColumn<Member>[] = [
+  ...MEMBER_COLUMNS.slice(0, 3),
+  createTableColumn<Member>({
+    columnId: 'selected',
+    label: 'Selected',
+    renderCell: (member) => <SelectToggle name={member.name} />,
+  }),
+];
+
+function CustomCellGrid({ selectionMode = 'none', ...args }: MemberGridProps) {
+  return (
+    <DataGrid
+      items={MEMBERS}
+      columns={CUSTOM_CELL_COLUMNS}
+      getRowId={memberId}
+      defaultSort={{ columnId: 'name', direction: 'ascending' }}
+      selectionMode={selectionMode}
+      {...args}
+    >
+      <tfoot>
+        <SummaryRow columnCount={CUSTOM_CELL_COLUMNS.length + (selectionMode === 'none' ? 0 : 1)} />
+      </tfoot>
+    </DataGrid>
+  );
+}
+
+/**
+ * Parts of your own built on the DataGrid hooks. Each cell of the Selected column is a toggle of
+ * its row's selection (`useDataGridRowId`, `useDataGridSelection`): it follows the row's checkbox,
+ * Space on a cell and select-all, and they follow it. The footer row counts the selected members
+ * and tells the sort in words, with a button that reverses it (`useDataGridSort`); the header's
+ * arrow follows. The grid's keyboard is unchanged: the arrow keys reach the toggles and the
+ * footer's button.
+ */
+export const CustomCell: Story = {
+  args: {
+    'aria-label': 'Team members with custom cells',
+    selectionMode: 'multiple',
+    defaultSelectedItems: ['2'],
+  },
+  render: (args) => <CustomCellGrid {...args} />,
 };
 
 const PAGE_SIZE = 20;

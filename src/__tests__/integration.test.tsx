@@ -410,6 +410,25 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     }
   });
 
+  it('exports the DataGrid hooks, never the context objects, their hooks or the store (P13-02, R11, R16)', () => {
+    for (const name of ['useDataGridSort', 'useDataGridSelection', 'useDataGridRowId']) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+    for (const name of [
+      'DataGridContext',
+      'DataGridSortContext',
+      'DataGridRowContext',
+      'DataGridRowIdContext',
+      'DataGridItemsContext',
+      'useDataGridContext',
+      'useDataGridSortContext',
+      'useDataGridRowContext',
+      'createSelectionStore',
+    ]) {
+      expect(name in barrel, name).toBe(false);
+    }
+  });
+
   it('exports the 0.8 compound parts, the color parts and helpers, and createToaster', () => {
     const members: Array<[string, string]> = [
       ['Toast', 'Title'],

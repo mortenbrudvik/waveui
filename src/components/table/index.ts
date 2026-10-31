@@ -36,6 +36,9 @@ export {
   DataGridRow,
   DataGridCell,
   DataGridSelectionCell,
+  useDataGridRowId,
+  useDataGridSelection,
+  useDataGridSort,
 } from './DataGrid';
 export type {
   DataGridProps,
@@ -59,6 +62,8 @@ export type {
   SortDirection,
   DataGridColumn,
   DataGridLabels,
+  UseDataGridSelectionResult,
+  UseDataGridSortResult,
 } from './DataGrid';
 
 export { useTableFeatures } from './useTableFeatures';

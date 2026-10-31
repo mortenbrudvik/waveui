@@ -73,6 +73,8 @@ import {
 export { createSelectionStore };
 export type { SelectionStore, SelectionUniverse };
 export type { SortDirection };
+export { useDataGridRowId, useDataGridSelection, useDataGridSort } from './DataGrid.hooks';
+export type { UseDataGridSelectionResult, UseDataGridSortResult } from './DataGrid.hooks';
 
 /** The sort state of a DataGrid: the sorted column and its direction. */
 export interface DataGridSort {
@@ -84,7 +86,11 @@ export interface DataGridSort {
 
 /** Second argument of `onSortChange` (the `DataGridSort` form): the event behind the sort. */
 export interface DataGridSortChangeDetails {
-  /** The DOM event behind the sort: the click of the sort button (Enter and Space click it). */
+  /**
+   * The DOM event behind the sort: the click of the sort button (Enter and Space click it), or the
+   * event passed to `setSort` of `useDataGridSort` (without one, an untrusted `sort` event with no
+   * target).
+   */
   event: Event;
 }
 
@@ -92,7 +98,8 @@ export interface DataGridSortChangeDetails {
 export interface DataGridSelectedItemsChangeDetails {
   /**
    * The DOM event behind the change: the click of a selection control (the select-all checkbox
-   * included), or the key press of Space on a row.
+   * included), the key press of Space on a row, or the event passed to `toggle` of
+   * `useDataGridSelection` (without one, an untrusted `select` event with no target).
    */
   event: Event;
 }
@@ -411,7 +418,8 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
   defaultSelectedItems?: readonly string[];
   /**
    * Called with the new selected row ids when the selection changes, then `details` (`{ event }`,
-   * the click or key press behind the change).
+   * the click or key press behind the change). A `toggle` of `useDataGridSelection` in a part of
+   * your own calls it as the row's control does.
    *
    * With `items`, the selection follows the data: it reports every selected id, also ids whose
    * rows are not rendered or not in `items` (filtered out, on another page, restored by id), and no
@@ -470,7 +478,8 @@ export interface DataGridControlledSortProps extends NoDeprecatedSortProps {
   /** Initial sort while `sort` is not given yet. */
   defaultSort?: DataGridSort | null;
   /**
-   * Called with the new sort when a sortable header is activated, then `details` (`{ event }`).
+   * Called with the new sort when a sortable header is activated (or `setSort` of
+   * `useDataGridSort` is called), then `details` (`{ event }`).
    * With `items`, the grid orders its rows by the sorted column's `compare` (see
    * `DataGridColumn.compare`), also while `sort` is controlled; otherwise the consumer orders them.
    */
@@ -483,7 +492,8 @@ export interface DataGridUncontrolledSortProps extends NoDeprecatedSortProps {
   /** The initial sort, or `null` for an initially unsorted grid. */
   defaultSort: DataGridSort | null;
   /**
-   * Called with the new sort when a sortable header is activated, then `details` (`{ event }`).
+   * Called with the new sort when a sortable header is activated (or `setSort` of
+   * `useDataGridSort` is called), then `details` (`{ event }`).
    * With `items`, the grid orders its rows by the sorted column's `compare` (see
    * `DataGridColumn.compare`); otherwise the consumer orders them.
    */
@@ -504,7 +514,8 @@ export interface DataGridItemsSortProps<T = unknown>
   /** The initial sort while `sort` is not given. */
   defaultSort?: DataGridSort | null;
   /**
-   * Called with the new sort when a sortable header is activated, then `details` (`{ event }`).
+   * Called with the new sort when a sortable header is activated (or `setSort` of
+   * `useDataGridSort` is called), then `details` (`{ event }`).
    * The grid orders its rows by the sorted column's `compare` (see `DataGridColumn.compare`).
    */
   onSortChange?: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
@@ -537,9 +548,9 @@ export interface DataGridLegacySortProps {
   /** @deprecated Use `defaultSort`. */
   defaultSortDirection?: SortDirection;
   /**
-   * Called when a sortable header is activated, with the 0.4 arguments (deprecated: removed in
-   * 1.0, with a development warning). Pass `items`, `sort` or
-   * `defaultSort` to receive a `DataGridSort` object (and `details`) instead:
+   * Called when a sortable header is activated (or `setSort` of `useDataGridSort` is called),
+   * with the 0.4 arguments (deprecated: removed in 1.0, with a development warning). Pass
+   * `items`, `sort` or `defaultSort` to receive a `DataGridSort` object (and `details`) instead:
    * `defaultSort={null}` turns the object form on for an initially unsorted grid. A `sort` that is
    * still `undefined` (e.g. while data loads) does not: pass `sort={sort ?? null}`.
    *
@@ -953,17 +964,11 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     emitSortChange,
   );
 
-  const requestSort = React.useCallback(
-    (columnId: string, event: Event) => {
+  const changeSort = React.useCallback(
+    (event: Event, update: (previous: DataGridSort | null) => DataGridSort | null) => {
       sortDetailsRef.current = { event };
       try {
-        setSort((previous) => ({
-          columnId,
-          direction:
-            previous?.columnId === columnId && previous.direction === 'ascending'
-              ? 'descending'
-              : 'ascending',
-        }));
+        setSort(update);
       } finally {
         sortDetailsRef.current = undefined;
       }
@@ -971,9 +976,32 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     [setSort],
   );
 
+  const requestSort = React.useCallback(
+    (columnId: string, event: Event) =>
+      changeSort(event, (previous) => ({
+        columnId,
+        direction:
+          previous?.columnId === columnId && previous.direction === 'ascending'
+            ? 'descending'
+            : 'ascending',
+      })),
+    [changeSort],
+  );
+
+  // `useDataGridSort().setSort`: a sort the grid already has changes nothing and reports nothing.
+  const setSortTo = React.useCallback(
+    ({ columnId, direction }: DataGridSort, event?: Event) =>
+      changeSort(event ?? new Event('sort'), (previous) =>
+        previous?.columnId === columnId && previous.direction === direction
+          ? previous
+          : { columnId, direction },
+      ),
+    [changeSort],
+  );
+
   const sortContext = React.useMemo<DataGridSortContextValue>(
-    () => ({ sort, requestSort }),
-    [sort, requestSort],
+    () => ({ sort, requestSort, setSort: setSortTo }),
+    [sort, requestSort, setSortTo],
   );
 
   // --- selection ------------------------------------------------------------
@@ -1085,6 +1113,8 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
             toggleId(current, rowId, single ? 'single' : 'multiple', { allowEmpty: true }),
           );
         } else {
+          // Only a rendered row has a selection (`useDataGridSelection().toggle` takes any id).
+          if (store.countRegistrations(rowId) === 0) return previous;
           const effective = store.prune(previous);
           if (single) {
             // Single mode shows the first selected row that is rendered (see the store).
@@ -1775,7 +1805,7 @@ const DataGridRow = ({
     () => ({
       selectionCellProps,
       hasSelectionCell,
-      rowId: selectable ? rowId : undefined,
+      rowId: inHeader ? undefined : rowId,
       isSelected,
       disabled: selectionDisabled,
       invisible: selectionInvisible,
@@ -1785,7 +1815,7 @@ const DataGridRow = ({
     [
       selectionCellProps,
       hasSelectionCell,
-      selectable,
+      inHeader,
       rowId,
       isSelected,
       selectionDisabled,
@@ -2085,6 +2115,12 @@ export {
  * and column sizing still cover every item. The grid then carries `aria-rowcount` and its rows
  * `aria-rowindex`, so assistive technology reads each row's place in the whole list. Fluent's
  * DataGrid has no built-in counterpart.
+ *
+ * Cells, headers and footer rows of your own read and change the grid through three hooks:
+ * `useDataGridSort` (the sort, and `setSort`, which calls `onSortChange` as a sortable header
+ * does), `useDataGridSelection` (the selected ids, `isSelected`, and `toggle`, which calls
+ * `onSelectedItemsChange` as a row's selection control does) and `useDataGridRowId` (the id of
+ * the row around a cell).
  *
  * Sub-components are available as `DataGrid.Header`, `DataGrid.HeaderCell`, `DataGrid.Body`,
  * `DataGrid.Row`, `DataGrid.Cell` and `DataGrid.SelectionCell` in client components, and as the

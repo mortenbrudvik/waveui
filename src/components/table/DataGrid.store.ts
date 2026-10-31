@@ -17,6 +17,16 @@ export interface SelectionUniverse {
 }
 
 /**
+ * What the rows' subscription reads (see {@link SelectionStore.getSnapshot}).
+ *
+ * @internal Not exported from the package (exported for its unit tests).
+ */
+export interface SelectionSnapshot {
+  /** The selection last set (see {@link SelectionStore.setSelected}), as given. */
+  selectedItems: readonly string[];
+}
+
+/**
  * Selection state shared with the rows through `useSyncExternalStore`, so toggling one row
  * re-renders only that row (and the select-all header cell). The root pushes the committed
  * selection in a layout effect; rows register their ids. Select-all covers the rows of the
@@ -47,7 +57,10 @@ export interface SelectionStore {
    * while any row registered with it is.
    */
   disable(rowId: string): () => void;
-  /** Whether the row's selection is disabled (see {@link disable}). */
+  /**
+   * Whether the row's selection is disabled: by a registered row (see {@link disable}) or by the
+   * universe (`isSelectionDisabled`, a row rendered or not).
+   */
   isDisabled(rowId: string): boolean;
   /** How many rendered rows are registered with `rowId` (more than one: a duplicate). */
   countRegistrations(rowId: string): number;
@@ -73,6 +86,12 @@ export interface SelectionStore {
    * render).
    */
   isSelected(rowId: string, single?: boolean): boolean;
+  /**
+   * The selection as the rows see it: a new object whenever the rows are notified (see
+   * {@link subscribe}: the selection changed, or the one selected row of single mode moved), the
+   * same one otherwise, so it can be read with `useSyncExternalStore`.
+   */
+  getSnapshot(): SelectionSnapshot;
   /**
    * Whether all, some or none of the rows select-all changes are selected: those of the universe,
    * else the registered rows, whose selection is not disabled (`'none'` without such rows). A
@@ -104,6 +123,7 @@ export function createSelectionStore(
   initialUniverse: SelectionUniverse | null = null,
 ): SelectionStore {
   let selected: ReadonlySet<string> = new Set(initial);
+  let snapshot: SelectionSnapshot = { selectedItems: initial };
   /** Registered row id -> number of rows registered with it. */
   const registered = new Map<string, number>();
   /** Row id -> number of `disable` calls in effect for it. */
@@ -127,6 +147,12 @@ export function createSelectionStore(
 
   const notify = (listeners: Set<() => void>) => {
     for (const listener of Array.from(listeners)) listener();
+  };
+
+  /** Notifies the rows, with a new snapshot (see `getSnapshot`). */
+  const notifyRows = (selectedItems = snapshot.selectedItems) => {
+    snapshot = { selectedItems };
+    notify(rowListeners);
   };
 
   /** Computed on read: O(selected ids) once per change, and only in single mode. */
@@ -153,7 +179,7 @@ export function createSelectionStore(
     if (universeIds !== null || selected.size < 2 || !selected.has(rowId)) return;
     const previous = singleId;
     singleId = undefined;
-    if (singleMode && getSingleId() !== previous) notify(rowListeners);
+    if (singleMode && getSingleId() !== previous) notifyRows();
   };
 
   const computeSelectAll = (): SelectAllState => {
@@ -253,7 +279,7 @@ export function createSelectionStore(
       };
     },
     isDisabled(rowId) {
-      return disabled.has(rowId);
+      return disabled.has(rowId) || universeDisabled.has(rowId);
     },
     setSelected(items) {
       const next = new Set(items);
@@ -261,7 +287,7 @@ export function createSelectionStore(
       selected = next;
       singleId = undefined;
       countSelected();
-      notify(rowListeners);
+      notifyRows(items);
       updateSelectAll();
     },
     setSingleMode(single) {
@@ -276,12 +302,13 @@ export function createSelectionStore(
       // the first registered: it moves only when a grid gains or loses `items`.
       singleId = undefined;
       if (singleMode && previousSingleId !== undefined && getSingleId() !== previousSingleId) {
-        notify(rowListeners);
+        notifyRows();
       }
     },
     isSelected(rowId, single = false) {
       return single ? getSingleId() === rowId : selected.has(rowId);
     },
+    getSnapshot: () => snapshot,
     countRegistrations(rowId) {
       return registered.get(rowId) ?? 0;
     },

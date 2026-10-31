@@ -381,6 +381,8 @@ import type {
   useActiveDescendant,
   UseActiveDescendantOptions,
   UseActiveDescendantResult,
+  UseDataGridSelectionResult,
+  UseDataGridSortResult,
   UseFlatTreeOptions,
   useListbox,
   useListboxOption,
@@ -2342,5 +2344,20 @@ describe('0.18 customization surface from the package entry', () => {
       status: Status;
       layout: 'singleline' | 'multiline';
     }>();
+  });
+
+  it('useDataGridSort, useDataGridSelection and useDataGridRowId, narrow views of a DataGrid', () => {
+    expectTypeOf<Entry['useDataGridSort']>().toEqualTypeOf<() => UseDataGridSortResult>();
+    expectTypeOf<UseDataGridSortResult>().toEqualTypeOf<{
+      sort: DataGridSort | null;
+      setSort: (sort: DataGridSort, event?: Event) => void;
+    }>();
+    expectTypeOf<Entry['useDataGridSelection']>().toEqualTypeOf<() => UseDataGridSelectionResult>();
+    expectTypeOf<UseDataGridSelectionResult>().toEqualTypeOf<{
+      selectedItems: readonly string[];
+      isSelected: (id: string) => boolean;
+      toggle: (id: string, event?: Event) => void;
+    }>();
+    expectTypeOf<Entry['useDataGridRowId']>().toEqualTypeOf<() => string | undefined>();
   });
 });
