@@ -11,6 +11,8 @@ class MessageBarReflowStore {
   private reflowing = false;
   /** The bar's client width at which its text fits on one line. */
   private neededWidth = 0;
+  /** The observer of text changes, while connected. */
+  private mutations: MutationObserver | null = null;
   private readonly listeners = new Set<() => void>();
 
   subscribe = (listener: () => void): (() => void) => {
@@ -45,6 +47,15 @@ class MessageBarReflowStore {
     this.emit();
   }
 
+  /**
+   * Drops the text changes not delivered yet. Called in the commit that renders a new layout: text
+   * that renders by the layout (`useMessageBarContext`) changed in it, which is no new message, so
+   * it must not start the measurement over (each layout would change the text again, without end).
+   */
+  dropTextChanges(): void {
+    this.mutations?.takeRecords();
+  }
+
   /** Forgets the measurement: the next render uses the one-row layout and measures again. */
   reset(notify = true): void {
     if (!this.reflowing) return;
@@ -61,7 +72,8 @@ class MessageBarReflowStore {
    *   report that as a loop error). Without ResizeObserver: window size changes.
    * - Text changed inside the column without a render of the bar (a MutationObserver): measured at
    *   once in the one-row layout; in the multiline layout the measurement starts over from the
-   *   one-row layout (the render that follows measures before paint).
+   *   one-row layout (the render that follows measures before paint). Changes made by the commit
+   *   that renders a new layout are dropped ({@link dropTextChanges}).
    */
   connect(root: HTMLElement, text: HTMLElement): () => void {
     const cleanups: Array<() => void> = [];
@@ -87,7 +99,11 @@ class MessageBarReflowStore {
         else measure();
       });
       mutations.observe(text, { childList: true, subtree: true, characterData: true });
-      cleanups.push(() => mutations.disconnect());
+      this.mutations = mutations;
+      cleanups.push(() => {
+        mutations.disconnect();
+        this.mutations = null;
+      });
     }
     return () => {
       for (const cleanup of cleanups) cleanup();
@@ -139,6 +155,12 @@ export function useMessageBarReflow(
     store.measure(root, text);
     unsubscribe();
   });
+
+  // The commit that renders a new measured layout: text that renders by the layout
+  // (useMessageBarContext) changed with it, which is no new message to measure.
+  React.useLayoutEffect(() => {
+    store.dropTextChanges();
+  }, [store, layout]);
 
   return enabled ? layout : 'singleline';
 }

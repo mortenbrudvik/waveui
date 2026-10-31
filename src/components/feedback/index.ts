@@ -1,5 +1,10 @@
-export { MessageBar, MessageBarTitle, MessageBarActions } from './MessageBar';
-export type { MessageBarProps, MessageBarTitleProps, MessageBarActionsProps } from './MessageBar';
+export { MessageBar, MessageBarTitle, MessageBarActions, useMessageBarContext } from './MessageBar';
+export type {
+  MessageBarProps,
+  MessageBarTitleProps,
+  MessageBarActionsProps,
+  MessageBarContextValue,
+} from './MessageBar';
 
 export { MessageBarGroup } from './MessageBarGroup';
 export type { MessageBarGroupProps } from './MessageBarGroup';

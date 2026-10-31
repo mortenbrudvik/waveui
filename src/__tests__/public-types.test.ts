@@ -205,6 +205,7 @@ import type {
   MenuSplitGroupProps,
   MenuTriggerProps,
   MessageBarActionsProps,
+  MessageBarContextValue,
   MessageBarGroupProps,
   MessageBarProps,
   MessageBarTitleProps,
@@ -2332,6 +2333,14 @@ describe('0.18 customization surface from the package entry', () => {
     expectTypeOf<MenuListContextValue>().toEqualTypeOf<{
       hasIcons: boolean;
       hasCheckmarks: boolean;
+    }>();
+  });
+
+  it('useMessageBarContext, a narrow view of a MessageBar', () => {
+    expectTypeOf<Entry['useMessageBarContext']>().toEqualTypeOf<() => MessageBarContextValue>();
+    expectTypeOf<MessageBarContextValue>().toEqualTypeOf<{
+      intent: Status;
+      layout: 'singleline' | 'multiline';
     }>();
   });
 });

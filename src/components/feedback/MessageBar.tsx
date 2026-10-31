@@ -21,6 +21,7 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
 import { useMessageBarReflow } from './MessageBar.reflow';
+import { MessageBarContext, type MessageBarContextValue } from './MessageBar.context';
 import {
   BUTTON_OWN_PROP_KEYS,
   MERGED_DISABLED_FOCUSABLE_PROPS,
@@ -532,6 +533,11 @@ const MessageBarRoot = ({
   // While it measures one row, the text column does not wrap, so text that does not fit overflows
   // the column (never cut off) and the measurement sees it.
   const unwrapped = measuring && resolvedLayout === 'singleline';
+  // What `useMessageBarContext` reads anywhere in the bar (C-MEMO).
+  const contextValue = React.useMemo<MessageBarContextValue>(
+    () => ({ intent: status, layout: resolvedLayout }),
+    [status, resolvedLayout],
+  );
 
   // The text column: the severity text, the title (and a space, so the two never run together),
   // then the body in its order.
@@ -578,28 +584,30 @@ const MessageBarRoot = ({
         className,
       )}
     >
-      <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
-        {renderedIcon}
-        {hasActions ? (
-          // A layout wrapper (not a part): the text column and the actions, in this DOM order.
-          <div
-            className={cn(
-              'flex min-w-0 flex-1 gap-x-3 gap-y-2',
-              resolvedLayout === 'multiline' ? 'flex-col' : 'items-start',
-            )}
-          >
-            {text}
-            <MessageBarPartContext.Provider value={ACTIONS_PLACEMENT}>
-              {actions.map(({ key, element }) => (
-                <React.Fragment key={key}>{element}</React.Fragment>
-              ))}
-            </MessageBarPartContext.Provider>
-          </div>
-        ) : (
-          text
-        )}
-        {renderedDismiss}
-      </MessageBarPartContext.Provider>
+      <MessageBarContext.Provider value={contextValue}>
+        <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
+          {renderedIcon}
+          {hasActions ? (
+            // A layout wrapper (not a part): the text column and the actions, in this DOM order.
+            <div
+              className={cn(
+                'flex min-w-0 flex-1 gap-x-3 gap-y-2',
+                resolvedLayout === 'multiline' ? 'flex-col' : 'items-start',
+              )}
+            >
+              {text}
+              <MessageBarPartContext.Provider value={ACTIONS_PLACEMENT}>
+                {actions.map(({ key, element }) => (
+                  <React.Fragment key={key}>{element}</React.Fragment>
+                ))}
+              </MessageBarPartContext.Provider>
+            </div>
+          ) : (
+            text
+          )}
+          {renderedDismiss}
+        </MessageBarPartContext.Provider>
+      </MessageBarContext.Provider>
     </div>
   );
 };
@@ -620,6 +628,9 @@ MessageBarRoot.displayName = 'MessageBar';
  * - The dismiss button is always the MessageBar's own `<button>` wired to `onDismiss`
  *   (`type="button"` unless a merged button slot sets its own `type`); the `dismiss` slot only
  *   replaces its content (see {@link MessageBarProps.dismiss}).
+ * - Content of your own anywhere in the bar (an action that follows it, for example) reads the
+ *   bar's status and the layout it renders, after `layout="auto"` has measured, through
+ *   `useMessageBarContext`.
  *
  * React Server Components cannot dot into a client module: import the flat names
  * `MessageBarTitle` and `MessageBarActions` there; `MessageBar.Title` and `MessageBar.Actions`
@@ -641,3 +652,5 @@ export const MessageBar = /* @__PURE__ */ Object.assign(MessageBarRoot, {
 
 export { MessageBarTitle, MessageBarActions };
 export type { MessageBarTitleProps, MessageBarActionsProps } from './MessageBar.parts';
+export { useMessageBarContext } from './MessageBar.context';
+export type { MessageBarContextValue } from './MessageBar.context';

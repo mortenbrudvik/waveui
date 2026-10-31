@@ -403,6 +403,13 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     }
   });
 
+  it('exports the MessageBar hook, never its context objects (P13-02, R11, R15)', () => {
+    expect(barrel.useMessageBarContext).toBeTypeOf('function');
+    for (const name of ['MessageBarContext', 'MessageBarPartContext', 'useMessageBarReflow']) {
+      expect(name in barrel, name).toBe(false);
+    }
+  });
+
   it('exports the 0.8 compound parts, the color parts and helpers, and createToaster', () => {
     const members: Array<[string, string]> = [
       ['Toast', 'Title'],
