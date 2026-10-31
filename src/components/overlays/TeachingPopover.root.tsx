@@ -233,7 +233,8 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
      * `disabledFocusable` Button keeps the button unavailable. Locked, at the values the two give
      * together: `type`, `disabled`, `tabIndex`, `hidden`, `inert`, `aria-hidden`, the name
      * (`aria-label`: `closeLabel`, unless the merged button names it), `aria-disabled`,
-     * `data-disabled` and `data-disabled-focusable`; your `aria-labelledby` ids are added.
+     * `data-disabled` and `data-disabled-focusable`; your `aria-labelledby` and
+     * `aria-describedby` ids are added after the button's own.
      */
     closeButton?: SlotPart<'button'>;
     /**

@@ -4994,6 +4994,77 @@ describe('TeachingPopover — slotProps', () => {
       expect(onOpenChange).not.toHaveBeenCalled();
       expect(warn.mock.calls).toEqual([[MERGE_WARNING]]);
     });
+
+    it('keeps the name, the disabled state and the ids a merged button gives; yours are added', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <>
+          <span id="slot-note">Slot note</span>
+          <span id="part-note">Part note</span>
+          <TeachingPopover
+            steps={steps}
+            slotProps={{
+              closeButton: {
+                'aria-label': 'Other',
+                'aria-describedby': 'part-note',
+                disabled: false,
+                hidden: true,
+              },
+            }}
+          >
+            <TeachingPopover.Surface>
+              <TeachingPopover.Header
+                dismissButton={
+                  <button
+                    type="button"
+                    aria-label="Hide the tip"
+                    aria-describedby="slot-note"
+                    disabled
+                  >
+                    <svg />
+                  </button>
+                }
+              />
+              <TeachingPopover.Title />
+            </TeachingPopover.Surface>
+          </TeachingPopover>
+        </>,
+      );
+      const el = close();
+      expect(el).toHaveAccessibleName('Hide the tip');
+      expect(el).toBeDisabled();
+      expect(el).not.toHaveAttribute('hidden');
+      expect(el).toHaveAttribute('aria-describedby', 'slot-note part-note');
+      expect(warn.mock.calls).toEqual([[MERGE_WARNING]]);
+    });
+
+    it('runs yours before the handlers of a slot object, whose name stays', async () => {
+      const user = userEvent.setup();
+      const order: string[] = [];
+      render(
+        <TeachingPopover
+          steps={steps}
+          onDismiss={() => order.push('dismiss')}
+          slotProps={{ closeButton: { 'aria-label': 'Other', onClick: () => order.push('part') } }}
+        >
+          <TeachingPopover.Surface>
+            <TeachingPopover.Header
+              dismissButton={{
+                'aria-label': 'Hide the tip',
+                onClick: () => order.push('slot'),
+                children: <svg data-testid="glyph" />,
+              }}
+            />
+            <TeachingPopover.Title />
+          </TeachingPopover.Surface>
+        </TeachingPopover>,
+      );
+      const el = screen.getByRole('button', { name: 'Hide the tip' });
+      expect(el).toBe(close());
+      expect(el).toContainElement(screen.getByTestId('glyph'));
+      await user.click(el);
+      expect(order).toEqual(['part', 'slot', 'dismiss']);
+    });
   });
 
   describe('dot', () => {
