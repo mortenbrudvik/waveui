@@ -21,6 +21,7 @@ import { PortalDepthContext } from '../portal/Portal';
 import {
   MenuContext,
   MenuListContext,
+  MenuListElementContext,
   useCheckableRegistry,
   useMenuListContext,
 } from './Menu.context';
@@ -638,7 +639,9 @@ export const MenuRoot = ({
     manageTabIndex: true,
     itemSelector: MENU_ITEM_SELECTOR,
   });
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, rovingRef, staticMenuRef);
+  // The static list's element, in state for `useMenuListContext` (C-POPUPS).
+  const [listElement, setListElement] = React.useState<HTMLDivElement | null>(null);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, rovingRef, staticMenuRef, setListElement);
 
   // Disabled items never hold the tab stop, so with no enabled item the static menu itself does:
   // Tab still reaches it and a screen reader announces it. Checked whenever the roving hook's tab
@@ -698,7 +701,9 @@ export const MenuRoot = ({
           onPointerMove={composeEventHandlers(onPointerMove, listPointerMove)}
           className={cn(menuClassNames.root, menuSurfaceClasses, focusRing, className)}
         >
-          {children}
+          <MenuListElementContext.Provider value={listElement}>
+            {children}
+          </MenuListElementContext.Provider>
         </div>
       </MenuListContext.Provider>
     </MenuContext.Provider>

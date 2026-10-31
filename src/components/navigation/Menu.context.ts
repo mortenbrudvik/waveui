@@ -9,7 +9,9 @@ import type { VirtualElement } from '../../lib/types';
 /*
  * The contexts of Menu and its parts: the menu (`MenuContext`, one per `<Menu>`), the menu list
  * the items render in (`MenuListContext`: the static root's `role="menu"` element or a
- * `Menu.Popover` surface) and the submenu-trigger marker. Internal; imports no component.
+ * `Menu.Popover` surface), the list's element and the submenu-trigger marker. Internal; imports no
+ * component. The public hooks of the same names (`useMenuContext`, `useMenuListContext`) and their
+ * narrow value types are in `Menu.hooks.ts`: they map these values and never expose them.
  */
 
 /** Which item an opening focuses (`'none'`: a hover opening, which leaves focus where it is). */
@@ -187,6 +189,15 @@ MenuContext.displayName = 'MenuContext';
 
 export const MenuListContext = React.createContext<MenuListContextValue | null>(null);
 MenuListContext.displayName = 'MenuListContext';
+
+/**
+ * The element of the menu list the caller renders in (the static root's `role="menu"` element or
+ * the `Menu.Popover` surface), held in state by the list: `null` until it mounts. A context of its
+ * own, provided next to `MenuListContext`, so the items do not re-render when it arrives; only the
+ * public `useMenuListContext` reads it (the list's columns).
+ */
+export const MenuListElementContext = React.createContext<HTMLElement | null>(null);
+MenuListElementContext.displayName = 'MenuListElementContext';
 
 /** `true` inside the element a submenu's `Menu.Trigger` renders (its `Menu.Item`). */
 export const MenuSubmenuTriggerContext = React.createContext(false);

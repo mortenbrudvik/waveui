@@ -28,7 +28,12 @@ import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { getTriggerFocusTarget, useTriggerFocusRef } from '../../hooks/useTriggerElement';
 import { Portal, PortalDepthContext } from '../portal/Portal';
-import { MenuListContext, useCheckableRegistry, useMenuContext } from './Menu.context';
+import {
+  MenuListContext,
+  MenuListElementContext,
+  useCheckableRegistry,
+  useMenuContext,
+} from './Menu.context';
 import type { MenuContextValue, MenuListContextValue } from './Menu.context';
 import {
   MENU_ITEM_SELECTOR,
@@ -511,7 +516,9 @@ export const MenuPopover = ({
           onContextMenu={composeEventHandlers(onContextMenu, contextSurfaceHandlers.onContextMenu)}
           className={cn(menuPopoverClassNames.root, menuPopoverClasses, motionClassName, className)}
         >
-          {children}
+          <MenuListElementContext.Provider value={surface}>
+            {children}
+          </MenuListElementContext.Provider>
         </div>
       </MenuListContext.Provider>
     </Portal>

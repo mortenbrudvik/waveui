@@ -387,6 +387,22 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     expect('useRadioItemState' in barrel).toBe(false);
   });
 
+  it('exports the Menu hooks, never the context objects or their values (P13-02, R11, R14)', () => {
+    expect(barrel.useMenuContext).toBeTypeOf('function');
+    expect(barrel.useMenuListContext).toBeTypeOf('function');
+    for (const name of [
+      'MenuContext',
+      'MenuListContext',
+      'MenuListElementContext',
+      'MenuSubmenuTriggerContext',
+      'INERT_MENU_CONTEXT',
+      'INERT_MENU_LIST_CONTEXT',
+      'useOptionalMenuContext',
+    ]) {
+      expect(name in barrel, name).toBe(false);
+    }
+  });
+
   it('exports the 0.8 compound parts, the color parts and helpers, and createToaster', () => {
     const members: Array<[string, string]> = [
       ['Toast', 'Title'],

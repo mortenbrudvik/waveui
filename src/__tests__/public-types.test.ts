@@ -187,6 +187,7 @@ import type {
   markListboxElement,
   Menu,
   MenuButtonProps,
+  MenuContextValue,
   MenuGroupHeaderProps,
   MenuGroupProps,
   MenuItemCheckbox,
@@ -197,6 +198,7 @@ import type {
   MenuItemRadioProps,
   MenuItemSelectableProps,
   MenuItemSwitchProps,
+  MenuListContextValue,
   MenuPopoverProps,
   MenuProps,
   MenuSplitGroup,
@@ -2317,5 +2319,19 @@ describe('0.18 customization surface from the package entry', () => {
     expectTypeOf<UseRadioGroupItemResult['props']['role']>().toEqualTypeOf<'radio'>();
     expectTypeOf<UseRadioGroupItemResult['props']['tabIndex']>().toEqualTypeOf<0 | -1>();
     expectTypeOf<UseRadioGroupItemResult['checked']>().toEqualTypeOf<boolean>();
+  });
+
+  it('useMenuContext and useMenuListContext, narrow views of a Menu and its list', () => {
+    expectTypeOf<Entry['useMenuContext']>().toEqualTypeOf<() => MenuContextValue>();
+    expectTypeOf<MenuContextValue>().toEqualTypeOf<{
+      open: boolean;
+      close: () => void;
+      isSubmenu: boolean;
+    }>();
+    expectTypeOf<Entry['useMenuListContext']>().toEqualTypeOf<() => MenuListContextValue>();
+    expectTypeOf<MenuListContextValue>().toEqualTypeOf<{
+      hasIcons: boolean;
+      hasCheckmarks: boolean;
+    }>();
   });
 });

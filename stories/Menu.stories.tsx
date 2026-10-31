@@ -1,7 +1,16 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, Menu, MenuButton } from '../src';
+import {
+  Button,
+  Menu,
+  MenuButton,
+  cn,
+  focusRingInset,
+  useId,
+  useMenuContext,
+  useMenuListContext,
+} from '../src';
 import type { CheckedValues, MenuProps } from '../src';
 import { motionCases } from './_motion';
 
@@ -757,4 +766,95 @@ function CustomTargetMenu({ onOpenChange, ...args }: MenuProps) {
 export const CustomTarget: Story = {
   args: { 'aria-label': undefined, onOpenChange: fn() },
   render: (args) => <CustomTargetMenu {...args} />,
+};
+
+interface TemplateItemProps {
+  title: string;
+  description: string;
+  onSelect?: () => void;
+}
+
+/**
+ * A menu item of your own: `role="menuitem"` makes it an item of the menu, `useMenuContext` closes
+ * the menu after its action and `useMenuListContext` tells it which columns to keep.
+ */
+function TemplateItem({ title, description, onSelect }: TemplateItemProps) {
+  const id = useId('template');
+  const { close } = useMenuContext();
+  const { hasIcons, hasCheckmarks } = useMenuListContext();
+  return (
+    <div
+      role="menuitem"
+      aria-labelledby={`${id}-title`}
+      aria-describedby={`${id}-description`}
+      onClick={(event) => {
+        if (event.defaultPrevented) return;
+        onSelect?.();
+        close();
+      }}
+      onKeyDown={(event) => {
+        // The menu prevents a Space that continues a typeahead search.
+        if (event.defaultPrevented || event.target !== event.currentTarget) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.currentTarget.click();
+      }}
+      className={cn(
+        'flex cursor-pointer select-none items-start gap-2 px-3 py-1.5 hover:bg-subtle-hover focus:bg-subtle-hover',
+        focusRingInset,
+      )}
+    >
+      {hasCheckmarks && <span aria-hidden="true" className="w-4 shrink-0" />}
+      {hasIcons && <span aria-hidden="true" className="h-5 w-5 shrink-0" />}
+      <span className="flex flex-col">
+        <span id={`${id}-title`} className="text-body-1 text-foreground">
+          {title}
+        </span>
+        <span id={`${id}-description`} className="text-caption-1 text-muted-foreground">
+          {description}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Items of your own among the built-in ones. Each template item has a title and a description; it
+ * closes the menu after its action through `useMenuContext().close()`, and focus returns to the
+ * trigger as for a built-in item. It keeps the check and icon columns that `useMenuListContext`
+ * reports, so its title lines up with "Open" (an icon) and "Show ruler" (a check). The arrow keys,
+ * typeahead ("M" for "Meeting notes") and the pointer reach it, and Enter or Space activates it.
+ */
+export const CustomMenuItem: Story = {
+  args: {
+    'aria-label': undefined,
+    onOpenChange: fn(),
+    defaultCheckedValues: { view: ['ruler'] },
+    children: (
+      <>
+        <Menu.Trigger>
+          <Button>New</Button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <TemplateItem
+            title="Blank document"
+            description="Start from an empty page"
+            onSelect={fn()}
+          />
+          <TemplateItem
+            title="Meeting notes"
+            description="Agenda, decisions and actions"
+            onSelect={fn()}
+          />
+          <Menu.Divider />
+          <Menu.Item icon={{ children: '📂' }} onClick={fn()}>
+            Open
+          </Menu.Item>
+          <Menu.ItemCheckbox name="view" value="ruler">
+            Show ruler
+          </Menu.ItemCheckbox>
+        </Menu.Popover>
+      </>
+    ),
+  },
 };
