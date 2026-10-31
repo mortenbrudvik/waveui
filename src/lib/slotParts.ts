@@ -6,21 +6,24 @@ import type * as ClassNames from './classNames';
  * the part's element. `src/__tests__/slotParts.test.ts` requires each part key in exactly one of
  * the four lists below, so a part the registry gains, or one a rollout forgets, fails the gate:
  *
- * - `SLOT_PROPS_KEYS`: a `slotProps` key of the component that renders the part. Empty before
- *   the rollout; each rollout task moves its components' keys here from `PENDING_SLOT_PARTS`.
+ * - `SLOT_PROPS_KEYS`: a `slotProps` key of the component that declares it. Empty before the
+ *   rollout; each rollout task moves its components' keys here from `PENDING_SLOT_PARTS` and adds
+ *   each declaring component's props type to `SlotPropsOwners` in the gate's test file, whose
+ *   type test requires the owner's `slotProps` keys to equal the keys listed here, both ways.
  * - `NAMED_SLOT_PARTS`: the part already has a named slot prop, so it gets no `slotProps` key
  *   (R2). The rule: a `Slot` or `SlotObject` prop that fills the part's element, named as the key
  *   (`icon` fills `icon`) or, where the name differs, noted above the entry (`dismiss` fills
- *   `dismissIcon`); a props object that reaches the part counts too (`errorMessageProps`,
- *   `listProps`, `menuButtonProps`). A motion slot names no part: it gives an element its motion
- *   classes only, so a part with a motion slot is pending, and an element that exists only for its
- *   motion is an exclusion.
+ *   `dismissIcon`); a props object that reaches the part counts too (`containerProps`,
+ *   `errorMessageProps`, `listProps`, `menuButtonProps`). A motion slot names no part: it gives an
+ *   element its motion classes only, so a part with a motion slot is pending, and an element that
+ *   exists only for its motion is an exclusion.
  * - `SLOT_PART_EXCLUSIONS`: no `slotProps` key, for the stated reason (R3, R4): an element that
  *   exists only for layout, motion or measurement (a virtual spacer, a collapse element, the
  *   dialog's positioner, the carousel's viewport), or the root of another public component that
  *   you write in its place to give it props (R3: TagPicker's parts, a Rating.Item, a
  *   DataGrid.SelectionCell), also where a shorthand prop (`options`, `max`, `steps`, `items`)
- *   generates it.
+ *   generates it. A part class that only a generated member carries, and that a component you
+ *   write in its place never gets, is pending, not R3 (TagPicker's `tag` and `option`).
  * - `PENDING_SLOT_PARTS`: not decided by a rollout task yet; empty once the rollout is done.
  *
  * The lists are keyed by registry constant (`switchClassNames`), and an exclusion's `component`
@@ -53,8 +56,11 @@ export type SlotPartExclusion = {
   };
 }[ClassNameConstant];
 
-/** The `slotProps` keys of each component (R1), filled by the rollout tasks. */
-export const SLOT_PROPS_KEYS: SlotPartLists = {};
+/**
+ * The `slotProps` keys of each component (R1), filled by the rollout tasks. `as const` keeps each
+ * key a literal, for the type test of its owner; `satisfies` still checks every constant and key.
+ */
+export const SLOT_PROPS_KEYS = {} as const satisfies SlotPartLists;
 
 /** The parts that a named slot prop already fills (R2); see the module's JSDoc for the rule. */
 export const NAMED_SLOT_PARTS: SlotPartLists = {
@@ -136,8 +142,12 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   teachingPopoverClassNames: ['primaryButton', 'secondaryButton'],
   teachingPopoverHeaderClassNames: ['icon'],
   teachingPopoverBodyClassNames: ['media'],
+  // `containerProps` fills `container`.
+  tableClassNames: ['container'],
   tableHeaderCellClassNames: ['sortIcon', 'aside'],
   tableCellLayoutClassNames: ['media', 'description'],
+  // `containerProps` fills `container`.
+  dataGridClassNames: ['container'],
   dataGridHeaderCellClassNames: ['sortIcon'],
 };
 
@@ -197,12 +207,6 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
   },
   {
     component: 'tagPickerClassNames',
-    key: 'tag',
-    reason:
-      'the root of a Tag, which takes its props directly as your child of TagPicker.Group (R3)',
-  },
-  {
-    component: 'tagPickerClassNames',
     key: 'input',
     reason: 'the root of TagPicker.Input, which takes its props directly in the parts form (R3)',
   },
@@ -210,12 +214,6 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
     component: 'tagPickerClassNames',
     key: 'listbox',
     reason: 'the root of TagPicker.List, which takes its props directly in the parts form (R3)',
-  },
-  {
-    component: 'tagPickerClassNames',
-    key: 'option',
-    reason:
-      'the root of an Option or TagPicker.Option, which takes its props directly as your child of TagPicker.List (R3)',
   },
   {
     component: 'swatchPickerClassNames',
@@ -366,9 +364,11 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   ],
   dropdownClassNames: ['button', 'value', 'clearButton', 'listbox', 'surface'],
   tagPickerClassNames: [
+    'tag',
     'removeButton',
     'expandButton',
     'clearButton',
+    'option',
     'createOption',
     'overflowCount',
     'surface',
@@ -483,11 +483,9 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   drawerHeaderTitleClassNames: ['heading'],
   teachingPopoverClassNames: ['beak', 'closeButton', 'dot', 'backButton', 'nextButton'],
   teachingPopoverCarouselNavClassNames: ['button', 'indicator'],
-  tableClassNames: ['container'],
   tableHeaderCellClassNames: ['button'],
   tableSelectionCellClassNames: ['control'],
   tableCellLayoutClassNames: ['content', 'main'],
-  dataGridClassNames: ['container'],
   dataGridHeaderClassNames: ['selectAllCheckbox'],
   dataGridHeaderCellClassNames: ['button', 'resizeHandle'],
   dataGridRowClassNames: ['selectionControl'],

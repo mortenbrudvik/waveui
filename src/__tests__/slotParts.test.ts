@@ -3,11 +3,17 @@
  * registry (`src/lib/classNames.ts`, each key of a constant but `root`) is exactly one of a
  * `slotProps` key of its component, a named slot, an exclusion with a reason, or pending, as the
  * lists of `src/lib/slotParts.ts` say. The gate also fails on a list entry that names no registry
- * constant or part key (an exclusion whose part was renamed, say), on a key listed twice and on an
- * exclusion without a one-line reason. The per-component `slotProps` tests prove that a component
- * declares the keys `SLOT_PROPS_KEYS` gives it; this file proves the lists cover the registry.
- * The registry and this gate supersede the part list of the Phase 3 spec's Appendix A (R4).
+ * constant or part key (an exclusion whose part was renamed, say), on a key listed twice, on an
+ * empty or `undefined` entry and on an exclusion without a one-line reason. Each check is a
+ * function run on the real lists and, to prove its messages, on small fixtures.
+ *
+ * Owners: a type test (checked by `npm run typecheck`) requires `SlotPropsOwners` below to name
+ * the same constants as `SLOT_PROPS_KEYS`, and each owner's `slotProps` to declare exactly the
+ * keys listed for it, so a rollout task can neither move a key without declaring it nor declare
+ * one without moving it. The registry and this gate supersede the part list of the Phase 3 spec's
+ * Appendix A (R4).
  */
+import { expectTypeOf } from 'vitest';
 import * as registry from '../lib/classNames';
 import * as entry from '../index';
 import * as slotParts from '../lib/slotParts';
@@ -18,109 +24,279 @@ import {
   SLOT_PROPS_KEYS,
 } from '../lib/slotParts';
 
+type Registry = Readonly<Record<string, Readonly<Record<string, string>>>>;
+type PartLists = Readonly<Record<string, readonly string[] | undefined>>;
 type ListName = 'a slotProps key' | 'a named slot' | 'an exclusion' | 'pending';
 
-/** Every constant of the registry, `[name, { key: class }]`. */
-const constants = Object.entries(
-  registry as unknown as Record<string, Readonly<Record<string, string>>>,
-);
+/** The four lists of `src/lib/slotParts.ts`, or a fixture of them. */
+interface SlotPartData {
+  readonly slotProps: PartLists;
+  readonly named: PartLists;
+  readonly exclusions: readonly { component: string; key: string; reason: unknown }[];
+  readonly pending: PartLists;
+}
+
+const MAP_NAMES = {
+  slotProps: 'SLOT_PROPS_KEYS',
+  named: 'NAMED_SLOT_PARTS',
+  pending: 'PENDING_SLOT_PARTS',
+} as const;
 
 /** `[list, constant, key]` for every entry of the four lists, in list order. */
-function listEntries(): [ListName, string, string][] {
-  const fromMap = (list: ListName, map: object): [ListName, string, string][] =>
-    Object.entries(map as Record<string, readonly string[] | undefined>).flatMap(
-      ([constant, keys]) =>
-        (keys ?? []).map((key): [ListName, string, string] => [list, constant, key]),
+function listEntries(data: SlotPartData): [ListName, string, string][] {
+  const fromMap = (list: ListName, map: PartLists): [ListName, string, string][] =>
+    Object.entries(map).flatMap(([constant, keys]) =>
+      (keys ?? []).map((key): [ListName, string, string] => [list, constant, key]),
     );
   return [
-    ...fromMap('a slotProps key', SLOT_PROPS_KEYS),
-    ...fromMap('a named slot', NAMED_SLOT_PARTS),
-    ...SLOT_PART_EXCLUSIONS.map(({ component, key }): [ListName, string, string] => [
+    ...fromMap('a slotProps key', data.slotProps),
+    ...fromMap('a named slot', data.named),
+    ...data.exclusions.map(({ component, key }): [ListName, string, string] => [
       'an exclusion',
       component,
       key,
     ]),
-    ...fromMap('pending', PENDING_SLOT_PARTS),
+    ...fromMap('pending', data.pending),
   ];
 }
 
-/** The lists that hold `constant.key`, once per entry. */
-function membership(): Map<string, ListName[]> {
-  const found = new Map<string, ListName[]>();
-  for (const [list, constant, key] of listEntries()) {
+/** Every part key of every constant in exactly one list (R2: never a slotProps key and named). */
+function resolutionErrors(parts: Registry, data: SlotPartData): string[] {
+  const lists = new Map<string, Set<ListName>>();
+  for (const [list, constant, key] of listEntries(data)) {
     const id = `${constant}.${key}`;
-    found.set(id, [...(found.get(id) ?? []), list]);
+    lists.set(id, (lists.get(id) ?? new Set()).add(list));
   }
-  return found;
+  const wrong: string[] = [];
+  for (const [constant, value] of Object.entries(parts)) {
+    for (const key of Object.keys(value)) {
+      if (key === 'root') continue;
+      const id = `${constant}.${key}`;
+      const found = [...(lists.get(id) ?? [])];
+      if (found.length === 0) {
+        wrong.push(`${id}: neither a slotProps key, a named slot, an exclusion nor pending`);
+      } else if (found.includes('a slotProps key') && found.includes('a named slot')) {
+        wrong.push(
+          `${id}: both a slotProps key and a named slot (R2: a named slot is not repeated)`,
+        );
+      } else if (found.includes('pending') && found.length > 1) {
+        const resolved = found.filter((list) => list !== 'pending').join(' and ');
+        wrong.push(`${id}: pending, but already ${resolved}`);
+      } else if (found.length > 1) {
+        wrong.push(`${id}: both ${found.join(' and ')}`);
+      }
+    }
+  }
+  return wrong;
 }
+
+/** List entries that name no registry constant, or no part key of their constant. */
+function unknownEntryErrors(parts: Registry, data: SlotPartData): string[] {
+  const wrong = listEntries(data).flatMap(([list, constant, key]) => {
+    if (!Object.hasOwn(parts, constant)) {
+      return [`${constant}: no constant of the class-name registry (${list})`];
+    }
+    return key !== 'root' && Object.hasOwn(parts[constant], key)
+      ? []
+      : [`${constant}.${key}: no part key of ${constant} (${list})`];
+  });
+  return [...new Set(wrong)];
+}
+
+/** Keys listed twice in one list, and entries that are empty or `undefined`. */
+function listShapeErrors(data: SlotPartData): string[] {
+  const seen = new Set<string>();
+  const wrong: string[] = [];
+  for (const [list, constant, key] of listEntries(data)) {
+    const id = `${list}: ${constant}.${key}`;
+    if (seen.has(id)) wrong.push(`${constant}.${key}: listed twice as ${list}`);
+    seen.add(id);
+  }
+  for (const [field, name] of Object.entries(MAP_NAMES) as [keyof typeof MAP_NAMES, string][]) {
+    for (const [constant, keys] of Object.entries(data[field])) {
+      if (!keys || keys.length === 0) {
+        wrong.push(`${constant}: an empty or undefined entry of ${name} (remove it)`);
+      }
+    }
+  }
+  return wrong;
+}
+
+/** Exclusions whose reason is not one non-blank line. */
+function reasonErrors(data: SlotPartData): string[] {
+  return data.exclusions
+    .filter(
+      ({ reason }) => typeof reason !== 'string' || reason.trim() === '' || /[\r\n]/.test(reason),
+    )
+    .map(({ component, key }) => `${component}.${key}: an exclusion without a one-line reason`);
+}
+
+/**
+ * What keeps a module from being server-safe data: a value import or a value re-export (only
+ * `import type` and `export type … from` may name another module), a client directive or a
+ * `require()`. Comments are ignored. A re-export is `export *` or `export { … }` followed by
+ * `from` and a module name, so a data literal whose strings say "from" is none.
+ */
+function serverSafetyErrors(source: string): string[] {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  const statements = (pattern: RegExp) => (code.match(pattern) ?? []).map((s) => s.trim());
+  return [
+    ...statements(/^\s*import\b[^;]*;/gm)
+      .filter((s) => !/^import\s+type\b/.test(s))
+      .map((s) => `a value import: ${s}`),
+    ...statements(
+      /^\s*export\s+(?:type\s+)?(?:\*(?:\s+as\s+\w+)?|\{[^}]*\})\s*from\s*['"][^'"]*['"];?/gm,
+    )
+      .filter((s) => !/^export\s+type\b/.test(s))
+      .map((s) => `a value re-export: ${s}`),
+    ...(/['"]use client['"]/.test(code) ? ['a client directive'] : []),
+    ...(/\brequire\s*\(/.test(code) ? ['a require() call'] : []),
+  ];
+}
+
+const REGISTRY = registry as unknown as Registry;
+const DATA: SlotPartData = {
+  slotProps: SLOT_PROPS_KEYS,
+  named: NAMED_SLOT_PARTS,
+  exclusions: SLOT_PART_EXCLUSIONS,
+  pending: PENDING_SLOT_PARTS,
+};
 
 describe('slotProps completeness gate (R7)', () => {
   it('resolves every part key of every registry constant through exactly one list', () => {
-    const lists = membership();
-    const wrong: string[] = [];
-    for (const [constant, value] of constants) {
-      for (const key of Object.keys(value)) {
-        if (key === 'root') continue;
-        const id = `${constant}.${key}`;
-        const found = [...new Set(lists.get(id) ?? [])];
-        if (found.length === 0) {
-          wrong.push(`${id}: neither a slotProps key, a named slot, an exclusion nor pending`);
-        } else if (found.includes('a slotProps key') && found.includes('a named slot')) {
-          wrong.push(
-            `${id}: both a slotProps key and a named slot (R2: a named slot is not repeated)`,
-          );
-        } else if (found.includes('pending') && found.length > 1) {
-          const resolved = found.filter((list) => list !== 'pending').join(' and ');
-          wrong.push(`${id}: pending, but already ${resolved}`);
-        } else if (found.length > 1) {
-          wrong.push(`${id}: both ${found.join(' and ')}`);
-        }
-      }
-    }
-    expect(wrong).toEqual([]);
+    expect(resolutionErrors(REGISTRY, DATA)).toEqual([]);
   });
 
   it('names only registry constants and their part keys', () => {
-    const parts = new Map(
-      constants.map(([constant, value]) => [
-        constant,
-        Object.keys(value).filter((key) => key !== 'root'),
-      ]),
-    );
-    const wrong = listEntries().flatMap(([list, constant, key]) => {
-      const keys = parts.get(constant);
-      if (keys === undefined)
-        return [`${constant}: no constant of the class-name registry (${list})`];
-      return keys.includes(key) ? [] : [`${constant}.${key}: no part key of ${constant} (${list})`];
-    });
-    expect([...new Set(wrong)]).toEqual([]);
+    expect(unknownEntryErrors(REGISTRY, DATA)).toEqual([]);
   });
 
-  it('lists each part key once per list, and no constant without keys', () => {
-    const seen = new Set<string>();
-    const wrong: string[] = [];
-    for (const [list, constant, key] of listEntries()) {
-      const id = `${list}: ${constant}.${key}`;
-      if (seen.has(id)) wrong.push(`${constant}.${key}: listed twice as ${list}`);
-      seen.add(id);
-    }
-    for (const [list, map] of [
-      ['SLOT_PROPS_KEYS', SLOT_PROPS_KEYS],
-      ['NAMED_SLOT_PARTS', NAMED_SLOT_PARTS],
-      ['PENDING_SLOT_PARTS', PENDING_SLOT_PARTS],
-    ] as const) {
-      for (const [constant, keys] of Object.entries(map as Record<string, readonly string[]>)) {
-        if (keys.length === 0) wrong.push(`${constant}: an empty entry of ${list} (remove it)`);
-      }
-    }
-    expect(wrong).toEqual([]);
+  it('lists each part key once per list, with no empty or undefined entry', () => {
+    expect(listShapeErrors(DATA)).toEqual([]);
   });
 
   it('gives every exclusion a one-line reason', () => {
-    const wrong = SLOT_PART_EXCLUSIONS.filter(
-      ({ reason }) => typeof reason !== 'string' || reason.trim() === '' || /[\r\n]/.test(reason),
-    ).map(({ component, key }) => `${component}.${key}: an exclusion without a one-line reason`);
-    expect(wrong).toEqual([]);
+    expect(reasonErrors(DATA)).toEqual([]);
+  });
+});
+
+describe('slotProps completeness gate: the checks on fixtures', () => {
+  const PARTS: Registry = {
+    switchClassNames: {
+      root: 'wave-switch',
+      track: 'wave-switch__track',
+      thumb: 'wave-switch__thumb',
+    },
+    buttonClassNames: { root: 'wave-button', icon: 'wave-button__icon' },
+    listClassNames: { root: 'wave-list', spacer: 'wave-list__spacer' },
+  };
+  const COMPLETE: SlotPartData = {
+    slotProps: { switchClassNames: ['track'] },
+    named: { buttonClassNames: ['icon'] },
+    exclusions: [{ component: 'listClassNames', key: 'spacer', reason: 'a spacer' }],
+    pending: { switchClassNames: ['thumb'] },
+  };
+
+  it('passes complete data', () => {
+    expect(resolutionErrors(PARTS, COMPLETE)).toEqual([]);
+    expect(unknownEntryErrors(PARTS, COMPLETE)).toEqual([]);
+    expect(listShapeErrors(COMPLETE)).toEqual([]);
+    expect(reasonErrors(COMPLETE)).toEqual([]);
+  });
+
+  it('names a part key that no list holds', () => {
+    expect(resolutionErrors(PARTS, { ...COMPLETE, pending: {} })).toEqual([
+      'switchClassNames.thumb: neither a slotProps key, a named slot, an exclusion nor pending',
+    ]);
+  });
+
+  it('fails a key that is both a slotProps key and a named slot (R2)', () => {
+    const data = { ...COMPLETE, slotProps: { ...COMPLETE.slotProps, buttonClassNames: ['icon'] } };
+    expect(resolutionErrors(PARTS, data)).toEqual([
+      'buttonClassNames.icon: both a slotProps key and a named slot (R2: a named slot is not repeated)',
+    ]);
+  });
+
+  it('fails a pending key that is already resolved, and a key in two other lists', () => {
+    const data: SlotPartData = {
+      ...COMPLETE,
+      named: { ...COMPLETE.named, listClassNames: ['spacer'] },
+      pending: { switchClassNames: ['track', 'thumb'] },
+    };
+    expect(resolutionErrors(PARTS, data)).toEqual([
+      'switchClassNames.track: pending, but already a slotProps key',
+      'listClassNames.spacer: both a named slot and an exclusion',
+    ]);
+  });
+
+  it('fails an unknown constant and an unknown key, a stale exclusion included', () => {
+    const data: SlotPartData = {
+      ...COMPLETE,
+      exclusions: [
+        ...COMPLETE.exclusions,
+        { component: 'switchClassNames', key: 'knob', reason: 'x' },
+      ],
+      pending: { ...COMPLETE.pending, fooClassNames: ['bar'], buttonClassNames: ['root'] },
+    };
+    expect(unknownEntryErrors(PARTS, data)).toEqual([
+      'switchClassNames.knob: no part key of switchClassNames (an exclusion)',
+      'fooClassNames: no constant of the class-name registry (pending)',
+      'buttonClassNames.root: no part key of buttonClassNames (pending)',
+    ]);
+  });
+
+  it('fails a key listed twice, and an empty or undefined entry instead of crashing (H1)', () => {
+    const data: SlotPartData = {
+      ...COMPLETE,
+      named: { ...COMPLETE.named, listClassNames: undefined },
+      pending: { switchClassNames: ['thumb', 'thumb'], badgeClassNames: [] },
+    };
+    expect(listShapeErrors(data)).toEqual([
+      'switchClassNames.thumb: listed twice as pending',
+      'listClassNames: an empty or undefined entry of NAMED_SLOT_PARTS (remove it)',
+      'badgeClassNames: an empty or undefined entry of PENDING_SLOT_PARTS (remove it)',
+    ]);
+  });
+
+  it('fails an exclusion without a one-line reason', () => {
+    const data: SlotPartData = {
+      ...COMPLETE,
+      exclusions: [
+        { component: 'listClassNames', key: 'spacer', reason: ' ' },
+        { component: 'switchClassNames', key: 'thumb', reason: 'one\ntwo' },
+        { component: 'buttonClassNames', key: 'icon', reason: undefined },
+      ],
+    };
+    expect(reasonErrors(data)).toEqual([
+      'listClassNames.spacer: an exclusion without a one-line reason',
+      'switchClassNames.thumb: an exclusion without a one-line reason',
+      'buttonClassNames.icon: an exclusion without a one-line reason',
+    ]);
+  });
+
+  it('fails a value import, a value re-export (H2), a client directive and require()', () => {
+    const fine = [
+      "import type * as ClassNames from './classNames';",
+      "export type { SlotPart } from './slotProps';",
+      '// import { cn } from "./cn"; export { x } from "./y";',
+      'export const A = {} as const;',
+      "export const B = ['generated from `max`; written', 'from { a } here'];",
+    ].join('\n');
+    expect(serverSafetyErrors(fine)).toEqual([]);
+    const wrong = [
+      "'use client';",
+      "import { cn } from './cn';",
+      "export { buttonClassNames as reexport } from './classNames';",
+      "export * from './classNames';",
+      "const fs = require('node:fs');",
+    ].join('\n');
+    expect(serverSafetyErrors(wrong)).toEqual([
+      "a value import: import { cn } from './cn';",
+      "a value re-export: export { buttonClassNames as reexport } from './classNames';",
+      "a value re-export: export * from './classNames';",
+      'a client directive',
+      'a require() call',
+    ]);
   });
 });
 
@@ -130,7 +306,7 @@ describe('slotParts module', () => {
     expect(exported).toEqual([]);
   });
 
-  it('imports types only, so it stays server-safe', () => {
+  it('imports and re-exports types only, so it stays server-safe', () => {
     const [source] = Object.values(
       import.meta.glob<string>('../lib/slotParts.ts', {
         query: '?raw',
@@ -139,9 +315,69 @@ describe('slotParts module', () => {
       }),
     );
     expect(source).toBeTypeOf('string');
-    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-    expect(code).not.toMatch(/['"]use client['"]|\brequire\s*\(/);
-    const imports = code.match(/^\s*import\b[^;]*;/gm) ?? [];
-    expect(imports.filter((line) => !/^\s*import\s+type\b/.test(line))).toEqual([]);
+    expect(serverSafetyErrors(source)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Owners of the slotProps keys (type-level: `npm run typecheck` checks it)
+// ---------------------------------------------------------------------------
+
+/**
+ * The props type of the component that declares each constant's `slotProps` keys, by registry
+ * constant. Each rollout task adds its owners as it moves their keys to `SLOT_PROPS_KEYS`, with
+ * the first entry replacing the empty record by an object type:
+ * `{ switchClassNames: SwitchProps; checkboxClassNames: CheckboxProps }`. Where another component
+ * draws a part (TeachingPopover's `closeButton` in TeachingPopover.Header, AvatarGroup's
+ * `surface` in AvatarGroup.Popover), the owner is the component that declares the key.
+ */
+type SlotPropsOwners = Record<never, never>;
+
+/** The `slotProps` keys each owner's props type declares, by constant (modifiers dropped). */
+type OwnedSlotPropsKeys<Owners> = {
+  -readonly [C in keyof Owners]-?: Owners[C] extends { slotProps?: infer S }
+    ? keyof NonNullable<S>
+    : never;
+};
+
+/**
+ * The keys a `SLOT_PROPS_KEYS`-shaped object lists, by constant, without the `readonly` that
+ * `as const` adds (a homomorphic mapped type would copy it, and no owner map has it).
+ */
+type ListedSlotPropsKeys<Keys> = {
+  -readonly [C in keyof Keys]-?: Keys[C] extends readonly (infer K)[] ? K : never;
+};
+
+describe('slotProps owners (type-level)', () => {
+  it('names the same constants in SLOT_PROPS_KEYS and SlotPropsOwners', () => {
+    expectTypeOf<keyof typeof SLOT_PROPS_KEYS>().toEqualTypeOf<keyof SlotPropsOwners>();
+  });
+
+  it("gives each owner's slotProps exactly the keys SLOT_PROPS_KEYS lists for it", () => {
+    expectTypeOf<OwnedSlotPropsKeys<SlotPropsOwners>>().toEqualTypeOf<
+      ListedSlotPropsKeys<typeof SLOT_PROPS_KEYS>
+    >();
+  });
+
+  it('bites on fixtures: a declared key not listed, a listed key not declared, no owner', () => {
+    type Listed = { readonly switchClassNames: readonly ['track', 'thumb'] };
+    type Fewer = { readonly switchClassNames: readonly ['track'] };
+    type SwitchOwner = { slotProps?: { track?: { className?: string }; thumb?: object } };
+    type NoSlotProps = { className?: string };
+    expectTypeOf<OwnedSlotPropsKeys<{ switchClassNames: SwitchOwner }>>().toEqualTypeOf<
+      ListedSlotPropsKeys<Listed>
+    >();
+    expectTypeOf<OwnedSlotPropsKeys<{ switchClassNames: SwitchOwner }>>()
+      // @ts-expect-error -- the owner declares `thumb`, which the list does not move
+      .toEqualTypeOf<ListedSlotPropsKeys<Fewer>>();
+    expectTypeOf<OwnedSlotPropsKeys<{ switchClassNames: NoSlotProps }>>()
+      // @ts-expect-error -- the list moves keys that the owner does not declare
+      .toEqualTypeOf<ListedSlotPropsKeys<Listed>>();
+    expectTypeOf<OwnedSlotPropsKeys<Record<never, never>>>()
+      // @ts-expect-error -- a listed constant without an owner
+      .toEqualTypeOf<ListedSlotPropsKeys<Listed>>();
+    expectTypeOf<keyof Listed>()
+      // @ts-expect-error -- the same, by its constant names
+      .toEqualTypeOf<keyof Record<never, never>>();
   });
 });
