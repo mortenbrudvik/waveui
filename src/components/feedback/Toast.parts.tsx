@@ -9,6 +9,7 @@ import { warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useTriggerElement } from '../../hooks/useTriggerElement';
@@ -29,12 +30,40 @@ function useUnscannedWarning(part: 'Title' | 'Body' | 'Footer'): void {
   }, [unscanned, part]);
 }
 
+/**
+ * What a text part locks unset: its text stays in the toast's name, description and announcement,
+ * and the controls in it stay reachable.
+ */
+const TEXT_PART_LOCKS = {
+  'aria-label': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
 /** Properties for the ToastTitle sub-component. */
 export interface ToastTitleProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Content at the end of the title row, such as a link or a button (often in `Toast.Close`). */
   action?: Slot<'span'>;
   /** Ref to the title row. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the element the title row draws around your text, by part, merged into the part's
+   * own: your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref beside its ref. Every attribute the title sets on the
+   * part is locked and keeps the title's value; you add the attributes it does not set. A part
+   * takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The title text `<span>` (stable class `wave-toast-title__label`), which names the toast: in
+     * a Toaster the toast's container names itself by its `id`, and its text is announced. It
+     * carries no handler of the title: an event on it bubbles as one on your text does. Locked:
+     * `id` and, unset, `aria-label` (the text stays the name), `hidden`, `inert` and
+     * `aria-hidden`.
+     */
+    label?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -43,12 +72,25 @@ export interface ToastTitleProps extends React.HTMLAttributes<HTMLDivElement> {
  *
  * Also exported as `ToastTitle` (import the flat name from React Server Components).
  */
-export const ToastTitle = ({ action, className, children, ref, ...rest }: ToastTitleProps) => {
+export const ToastTitle = ({
+  action,
+  slotProps,
+  className,
+  children,
+  ref,
+  ...rest
+}: ToastTitleProps) => {
   const { titleId, registerPart } = useToastContext('Toast.Title');
   useUnscannedWarning('Title');
   const rowRef = React.useRef<HTMLDivElement>(null);
   const labelRef = React.useRef<HTMLSpanElement>(null);
   const mergedRef = useMergedRefs(ref, rowRef);
+  // The Toaster reads the label through this ref: a part's ref goes beside it.
+  const labelRefs = useMergedRefs(labelRef, slotProps?.label?.ref);
+  const labelClassName = cn(
+    toastTitleClassNames.label,
+    'min-w-0 flex-1 text-body-2 font-semibold text-foreground',
+  );
   React.useLayoutEffect(() => {
     if (titleId === undefined) return undefined;
     return registerPart({
@@ -65,12 +107,14 @@ export const ToastTitle = ({ action, className, children, ref, ...rest }: ToastT
       className={cn(toastTitleClassNames.root, 'flex items-start gap-2', className)}
     >
       <span
-        ref={labelRef}
         id={titleId}
-        className={cn(
-          toastTitleClassNames.label,
-          'min-w-0 flex-1 text-body-2 font-semibold text-foreground',
-        )}
+        className={labelClassName}
+        {...(slotProps?.label &&
+          mergeSlotProps(slotProps.label, {
+            className: labelClassName,
+            locked: { ...TEXT_PART_LOCKS, id: titleId },
+          }))}
+        ref={labelRefs}
       >
         {children}
       </span>
@@ -88,6 +132,24 @@ export interface ToastBodyProps extends React.HTMLAttributes<HTMLDivElement> {
   subtitle?: React.ReactNode;
   /** Ref to the body element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the element the body draws around `subtitle`, by part, merged into the part's own:
+   * your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref beside its ref. Every attribute the body sets on the
+   * part is locked and keeps the body's value; you add the attributes it does not set. A part
+   * takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The `subtitle` line `<div>` (stable class `wave-toast-body__subtitle`), rendered while
+     * `subtitle` renders content: part of the body, which describes the toast. Fluent's
+     * `subtitle` slot takes both: here `subtitle` takes the content and this part the element's
+     * props. It carries no handler of the body: an event on it bubbles as one on your content
+     * does. Locked, unset: `aria-label` (its text stays in the description), `hidden`, `inert`
+     * and `aria-hidden`.
+     */
+    subtitle?: SlotPart<'div'>;
+  };
 }
 
 /**
@@ -98,6 +160,7 @@ export interface ToastBodyProps extends React.HTMLAttributes<HTMLDivElement> {
  */
 export const ToastBody = ({
   subtitle,
+  slotProps,
   id: idProp,
   className,
   children,
@@ -114,6 +177,25 @@ export const ToastBody = ({
     () => registerPart({ kind: 'body', id, getElement: () => bodyRef.current }),
     [registerPart, id],
   );
+  let subtitleLine: React.ReactNode = null;
+  if (slotRendersContent(subtitle)) {
+    const subtitleClassName = cn(
+      toastBodyClassNames.subtitle,
+      'mt-1 text-caption-1 text-muted-foreground',
+    );
+    subtitleLine = (
+      <div
+        className={subtitleClassName}
+        {...(slotProps?.subtitle &&
+          mergeSlotProps(slotProps.subtitle, {
+            className: subtitleClassName,
+            locked: TEXT_PART_LOCKS,
+          }))}
+      >
+        {materialiseSlotContent(subtitle)}
+      </div>
+    );
+  }
   return (
     <div
       ref={mergedRef}
@@ -126,13 +208,7 @@ export const ToastBody = ({
       )}
     >
       {children}
-      {slotRendersContent(subtitle) ? (
-        <div
-          className={cn(toastBodyClassNames.subtitle, 'mt-1 text-caption-1 text-muted-foreground')}
-        >
-          {materialiseSlotContent(subtitle)}
-        </div>
-      ) : null}
+      {subtitleLine}
     </div>
   );
 };

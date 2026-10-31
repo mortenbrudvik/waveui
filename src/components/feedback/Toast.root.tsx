@@ -6,10 +6,12 @@ import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
 import type { Status } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
 import {
   STATUS_BORDER,
   STATUS_ICON_COLOR,
@@ -56,9 +58,44 @@ export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
   dismissLabel?: string;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the Toast draws around your content, by part, merged into the part's
+   * own: your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref beside its ref. Every attribute the Toast sets on a
+   * part is locked and keeps the Toast's value; you add the attributes it does not set. A part
+   * takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The text column `<div>` (stable class `wave-toast__content`) that holds the visually hidden
+     * status text, then the title, the body and the footer. It carries no handler of the Toast:
+     * an event on it bubbles as one on your content does. Locked, unset: `hidden`, `inert` and
+     * `aria-hidden`, so the controls inside it stay reachable.
+     */
+    content?: SlotPart<'div'>;
+    /**
+     * The Dismiss `<button>` (stable class `wave-toast__dismiss-button`), rendered while the Toast
+     * has `onDismiss` or sits in a Toaster. A `Toast.Close` child is your own element, not this
+     * part. Your handlers run first: `preventDefault()` in your `onClick` skips the component's
+     * handling of the event, its own `onDismiss` prop included, and the toast stays. Locked:
+     * `type`, the click, `aria-label` (`dismissLabel`) and, unset, `disabled`, `tabIndex`,
+     * `hidden`, `inert` and `aria-hidden`.
+     */
+    dismissButton?: SlotPart<'button'>;
+  };
 }
 
 const registerNothing: ToastContextValue['registerPart'] = () => () => {};
+
+/** What the Dismiss button part locks besides its click and name: a button that always works. */
+const DISMISS_BUTTON_LOCKS = {
+  type: 'button',
+  disabled: undefined,
+  tabIndex: undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
 
 /**
  * The content column's parts. With a `Toast.Title`, `Toast.Body` or `Toast.Footer` among the
@@ -108,6 +145,7 @@ export const ToastRoot = ({
   icon,
   onDismiss,
   dismissLabel = 'Dismiss',
+  slotProps,
   className,
   children,
   ref,
@@ -125,6 +163,8 @@ export const ToastRoot = ({
   const handleDismiss = useEventCallback(onDismiss);
   const hasOnDismiss = onDismiss !== undefined;
   const dismissButtonRef = React.useRef<HTMLButtonElement>(null);
+  // The Toaster finds the Dismiss button through this ref: a part's ref goes beside it.
+  const dismissButtonRefs = useMergedRefs(dismissButtonRef, slotProps?.dismissButton?.ref);
 
   React.useLayoutEffect(() => {
     if (!registerToast) return undefined;
@@ -180,6 +220,39 @@ export const ToastRoot = ({
     : status === 'error'
       ? { role: 'alert', 'aria-live': 'assertive' }
       : { role: 'status', 'aria-live': 'polite' };
+  // Each part merges only when given, so a toast without `slotProps` allocates no lock object.
+  const contentClassName = cn(toastClassNames.content, 'min-w-0 flex-1');
+  let dismissButton: React.ReactNode = null;
+  if (dismiss) {
+    const dismissClassName = cn(
+      toastClassNames.dismissButton,
+      'inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
+      'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
+      'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+      focusRing,
+    );
+    const handleDismissClick = () => dismiss();
+    dismissButton = (
+      <button
+        type="button"
+        onClick={handleDismissClick}
+        className={dismissClassName}
+        aria-label={dismissLabel}
+        {...(slotProps?.dismissButton &&
+          mergeSlotProps(slotProps.dismissButton, {
+            className: dismissClassName,
+            locked: {
+              ...DISMISS_BUTTON_LOCKS,
+              'aria-label': dismissLabel,
+              onClick: handleDismissClick,
+            },
+          }))}
+        ref={dismissButtonRefs}
+      >
+        <DismissIcon />
+      </button>
+    );
+  }
   const root = (
     <div
       ref={ref}
@@ -193,27 +266,18 @@ export const ToastRoot = ({
       )}
     >
       {renderedIcon}
-      <div className={cn(toastClassNames.content, 'min-w-0 flex-1')}>
+      <div
+        className={contentClassName}
+        {...(slotProps?.content &&
+          mergeSlotProps(slotProps.content, {
+            className: contentClassName,
+            locked: HIDDEN_PART_LOCKS,
+          }))}
+      >
         <StatusText label={label} id={statusTextId} />
         {content}
       </div>
-      {dismiss ? (
-        <button
-          ref={dismissButtonRef}
-          type="button"
-          onClick={() => dismiss()}
-          className={cn(
-            toastClassNames.dismissButton,
-            'inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
-            'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
-            'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
-            focusRing,
-          )}
-          aria-label={dismissLabel}
-        >
-          <DismissIcon />
-        </button>
-      ) : null}
+      {dismissButton}
     </div>
   );
   return inToaster ? (

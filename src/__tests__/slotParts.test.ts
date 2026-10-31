@@ -57,6 +57,10 @@ import type {
   TeachingPopoverCarouselNavProps,
   TeachingPopoverProps,
   TimePickerProps,
+  ToastBodyProps,
+  ToasterProps,
+  ToastProps,
+  ToastTitleProps,
   TooltipProps,
 } from '../index';
 import * as slotParts from '../lib/slotParts';
@@ -423,6 +427,11 @@ type SlotPropsOwners = {
   infoButtonClassNames: InfoButtonProps;
   // InfoLabel's `infoButton` and `info` are drawn by the InfoButton it renders.
   infoLabelClassNames: InfoLabelProps;
+  toastClassNames: ToastProps;
+  toastTitleClassNames: ToastTitleProps;
+  toastBodyClassNames: ToastBodyProps;
+  // The container of each toast is drawn by the Toaster.
+  toasterClassNames: ToasterProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

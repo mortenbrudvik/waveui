@@ -168,6 +168,10 @@ export const SLOT_PROPS_KEYS = {
   teachingPopoverCarouselNavClassNames: ['button', 'indicator'],
   infoButtonClassNames: ['info', 'beak'],
   infoLabelClassNames: ['label', 'infoButton', 'info'],
+  toastClassNames: ['content', 'dismissButton'],
+  toastTitleClassNames: ['label'],
+  toastBodyClassNames: ['subtitle'],
+  toasterClassNames: ['toast'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -454,10 +458,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   messageBarClassNames: ['body', 'dismissButton'],
   progressBarClassNames: ['bar', 'label'],
   spinnerClassNames: ['spinner', 'label'],
-  toastClassNames: ['content', 'dismissButton'],
-  toastTitleClassNames: ['label'],
-  toastBodyClassNames: ['subtitle'],
-  toasterClassNames: ['toast'],
   cardClassNames: ['checkmark'],
   cardHeaderClassNames: ['text', 'title', 'subtitle'],
   accordionTriggerClassNames: ['heading', 'expandIcon'],
