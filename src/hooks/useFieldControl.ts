@@ -169,17 +169,59 @@ const noVersion = (): number => 0;
 
 /**
  * Context provided by `Field`. `null` outside a Field (controls then use only their own props).
+ * Not exported from the package: {@link FieldContextProvider} and {@link useFieldContext} are its
+ * public form.
  */
 export const FieldContext: React.Context<FieldContextValue | null> =
   React.createContext<FieldContextValue | null>(null);
 FieldContext.displayName = 'FieldContext';
 
-/** The surrounding Field's context value, or `null` when the control is not inside a Field. */
+/**
+ * The surrounding Field's context, or `null` outside a `Field` (and outside a
+ * {@link FieldContextProvider}): Fluent's `useFieldContext_unstable`, which returns `undefined`
+ * there. Optional by design, so it never throws or warns: a control works with and without a
+ * Field. A control of your own reads in it what {@link useFieldControl} does not return: the
+ * Field's `required` state (for a native `required` attribute or a hidden form input), its
+ * `size`, its `validationState`, and `hasErrorMessage` (the Field already shows an error, so the
+ * control does not repeat its own).
+ */
 export function useFieldContext(): FieldContextValue | null {
   return React.useContext(FieldContext);
 }
 
-/** The labelling/validation props a control receives from its consumer and from its Field. */
+/** Props of {@link FieldContextProvider}. */
+export interface FieldContextProviderProps {
+  /** What the controls inside read: the ids of your label, message and hint, and the state. */
+  value: FieldContextValue;
+  /** The controls. */
+  children?: React.ReactNode;
+}
+
+/**
+ * Provides a Field's context to the controls inside it, for a field layout of your own (Fluent's
+ * `FieldContextProvider`). The library's inputs, and controls of your own on
+ * {@link useFieldControl}, read `value` as they read a `Field`'s and are named, described and
+ * marked invalid or required by it: render the label (a `<label>` with the `labelId` as its id,
+ * pointing at the `controlId`), the message and the hint with the ids of `value` yourself. Inside
+ * a `Field`, it replaces the Field's context for its subtree.
+ *
+ * Without `controlIdAssigned` or `controlIdClaim` in `value`, every control inside without an `id`
+ * of its own takes the `controlId`: put one such control inside, or give the others ids.
+ */
+export function FieldContextProvider({
+  value,
+  children,
+}: FieldContextProviderProps): React.ReactElement {
+  return React.createElement(FieldContext.Provider, { value }, children);
+}
+FieldContextProvider.displayName = 'FieldContextProvider';
+
+/**
+ * The labelling and validation props of a control: what a control receives from its consumer and
+ * from its Field (the argument and the result of {@link useFieldControl}), and what a `Field`'s
+ * function child receives (Fluent's `FieldControlProps`), of which Field sets only `id`,
+ * `aria-labelledby`, `aria-describedby`, `aria-invalid` and `aria-required`.
+ */
 export interface FieldControlProps {
   id?: string;
   'aria-label'?: string;

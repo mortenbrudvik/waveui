@@ -129,8 +129,10 @@ import type {
   DropdownLabels,
   DropdownProps,
   EmptySwatchProps,
+  FieldContextProviderProps,
   FieldContextValue,
   FieldControlIdClaim,
+  FieldControlProps,
   FieldProps,
   FirstWeekOfYear,
   FlatTreeItemData,
@@ -2282,5 +2284,19 @@ describe('0.18 customization surface from the package entry', () => {
       ) => NativeElementProps<E>
     >();
     expectTypeOf<NativeElementProps<'span'>>().not.toHaveProperty('href');
+  });
+
+  it("Field's function child, FieldContextProvider and useFieldContext", () => {
+    expectTypeOf<FieldProps['children']>().toEqualTypeOf<
+      ReactNode | ((props: FieldControlProps) => ReactNode)
+    >();
+    expectTypeOf<Entry['useFieldContext']>().toEqualTypeOf<() => FieldContextValue | null>();
+    expectTypeOf<Entry['FieldContextProvider']>()
+      .parameter(0)
+      .toEqualTypeOf<FieldContextProviderProps>();
+    expectTypeOf<FieldContextProviderProps>().toEqualTypeOf<{
+      value: FieldContextValue;
+      children?: ReactNode;
+    }>();
   });
 });

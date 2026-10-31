@@ -58,6 +58,7 @@ import {
   DropdownOption,
   EmptySwatch,
   Field,
+  FieldContextProvider,
   FlatTree,
   FlatTreeItem,
   ImageSwatch,
@@ -157,6 +158,7 @@ import {
   createToaster,
   getTokenStyle,
   textClassNames,
+  useFieldContext,
   useFlatTree,
   useListbox,
   useListboxPopup,
@@ -203,6 +205,8 @@ import {
   type CheckedValuesChangeDetails,
   type DataGridSort,
   type DialogProps,
+  type FieldContextValue,
+  type FieldControlProps,
   type FlatTreeItemData,
   type FlatTreeModel,
   type ListboxItem,
@@ -367,6 +371,13 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     ]) {
       expect(barrel[name], name).toBeTypeOf('function');
     }
+  });
+
+  it('exports the Field provider and hook, never the context object (P13-02, R11, R12)', () => {
+    expect(barrel.FieldContextProvider).toBeTypeOf('function');
+    expect(barrel.useFieldContext).toBeTypeOf('function');
+    expect('FieldContext' in barrel).toBe(false);
+    expect('createFieldControlIdClaim' in barrel).toBe(false);
   });
 
   it('exports the 0.8 compound parts, the color parts and helpers, and createToaster', () => {
@@ -1517,6 +1528,98 @@ describe('Field with a wrapper component around the control (input-basic#1, inpu
     const inputs = screen.getAllByRole('textbox', { name: 'Price range' });
     expect(inputs).toHaveLength(2);
     for (const input of inputs) expect(input).toHaveAccessibleDescription(/In euros/);
+    await expectNoA11yViolations(document.body);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Field's function child and FieldContextProvider (P13-02, R10, R12)
+// ---------------------------------------------------------------------------
+
+describe('a third-party control in a Field, and a field layout of your own', () => {
+  /**
+   * Stands in for a third-party control: it takes the attributes of its input as `inputProps` and
+   * ignores the others, so Field's merge into an element child cannot reach the input.
+   */
+  function PhoneInput({
+    inputProps,
+  }: {
+    inputProps?: React.InputHTMLAttributes<HTMLInputElement> & FieldControlProps;
+  }) {
+    return (
+      <span className="inline-flex gap-1">
+        <span>+47</span>
+        <input type="tel" {...inputProps} />
+      </span>
+    );
+  }
+
+  it('wires the input of a third-party control through the function child', async () => {
+    render(
+      <Field label="Phone" hint="A mobile number" error="Enter a phone number" required>
+        {(props) => <PhoneInput inputProps={props} />}
+      </Field>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Phone' });
+    expect(input).toHaveAttribute('type', 'tel');
+    expect(screen.getByText('Phone').closest('label')).toHaveAttribute('for', input.id);
+    expect(input).toHaveAccessibleDescription('Enter a phone number A mobile number');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-required', 'true');
+    expect(duplicateIds()).toEqual([]);
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('as an element child, the same control leaves its input unwired (why the function exists)', () => {
+    render(
+      <Field label="Phone" hint="A mobile number">
+        <PhoneInput />
+      </Field>,
+    );
+    const input = screen.getByRole('textbox');
+    expect(input).not.toHaveAccessibleName('Phone');
+    expect(input).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('wires library controls and a control of your own in a field layout of your own (FieldContextProvider)', async () => {
+    const field: FieldContextValue = {
+      controlId: 'quantity',
+      labelId: 'quantity-label',
+      hintId: 'quantity-hint',
+      errorId: 'quantity-error',
+      invalid: true,
+      required: true,
+      hasErrorMessage: true,
+      validationState: 'error',
+      validationMessageId: 'quantity-error',
+    };
+    function StateBadge() {
+      const context = useFieldContext();
+      return <output aria-label="State">{context?.validationState}</output>;
+    }
+    render(
+      <div className="grid grid-cols-2 gap-2">
+        <label id="quantity-label" htmlFor="quantity">
+          Quantity
+        </label>
+        <FieldContextProvider value={field}>
+          <Input error="Repeated error" />
+          <StateBadge />
+        </FieldContextProvider>
+        <p id="quantity-error" role="alert">
+          At most 10
+        </p>
+        <p id="quantity-hint">Whole units</p>
+      </div>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Quantity' });
+    expect(input).toHaveAttribute('id', 'quantity');
+    expect(input).toHaveAccessibleDescription('At most 10 Whole units');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toBeRequired();
+    // `hasErrorMessage`: the layout shows the error, so the Input does not repeat its own.
+    expect(screen.queryByText('Repeated error')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'State' })).toHaveTextContent('error');
     await expectNoA11yViolations(document.body);
   });
 });

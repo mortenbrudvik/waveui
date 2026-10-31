@@ -60,8 +60,9 @@ export type {
 } from './hooks/useRovingTabIndex';
 export { useMergedRefs } from './hooks/useMergedRefs';
 export { useIsClient } from './hooks/useIsClient';
-export { useFieldControl } from './hooks/useFieldControl';
+export { useFieldControl, useFieldContext, FieldContextProvider } from './hooks/useFieldControl';
 export type {
+  FieldContextProviderProps,
   FieldContextValue,
   FieldControlIdClaim,
   FieldControlProps,

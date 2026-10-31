@@ -145,6 +145,7 @@ const NO_ELEMENT: readonly string[] = [
   'DismissLayerProvider', // a context provider: the custom surface renders the element (0.12)
   'DrawerClose', // clones its child
   'DrawerTrigger', // clones its child
+  'FieldContextProvider', // a context provider: the custom field layout renders the elements (0.18)
   'ListboxProvider', // a context provider: the custom picker renders the list (phase 5)
   'MenuTrigger', // clones its child
   'Popover', // a context provider: Popover.Content renders the surface

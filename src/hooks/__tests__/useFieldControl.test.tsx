@@ -5,6 +5,7 @@ import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import {
   FieldContext,
+  FieldContextProvider,
   createFieldControlIdClaim,
   useFieldContext,
   useFieldControl,
@@ -13,6 +14,7 @@ import {
   type FieldControlProps,
   type UseFieldControlOptions,
 } from '../useFieldControl';
+import { asClientReference } from '../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../test-utils-field';
 
 const FIELD: FieldContextValue = {
@@ -795,5 +797,106 @@ describe('FieldContext without renderWithFieldContext', () => {
       </FieldContext.Provider>,
     );
     expect(screen.getByRole('radiogroup', { name: 'Raw label' })).toBeInTheDocument();
+  });
+});
+
+describe('useFieldContext (P13-02, R12)', () => {
+  it('returns null outside a Field, without throwing or warning (an optional hook)', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const error = vi.spyOn(console, 'error');
+    try {
+      expect(renderHook(() => useFieldContext()).result.current).toBeNull();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  });
+
+  it('returns the provided value itself', () => {
+    expect(renderHook(() => useFieldContext(), { wrapper: withField(FIELD) }).result.current).toBe(
+      FIELD,
+    );
+  });
+});
+
+describe('FieldContextProvider (P13-02, R12)', () => {
+  const OWN_FIELD: FieldContextValue = {
+    controlId: 'own-control',
+    labelId: 'own-label',
+    hintId: 'own-hint',
+    errorId: 'own-error',
+    invalid: true,
+    required: true,
+    hasErrorMessage: true,
+    validationState: 'error',
+    validationMessageId: 'own-error',
+  };
+
+  /** A field layout of one's own around `children`, with the ids of {@link OWN_FIELD}. */
+  function OwnField({ children }: { children: React.ReactNode }) {
+    return (
+      <div>
+        <label id="own-label" htmlFor="own-control">
+          Quantity
+        </label>
+        <FieldContextProvider value={OWN_FIELD}>{children}</FieldContextProvider>
+        <p id="own-error">Too many</p>
+        <p id="own-hint">Up to 10</p>
+      </div>
+    );
+  }
+
+  it('gives the controls inside a value of your own: named, described, invalid and required', () => {
+    const seen: Array<FieldContextValue | null> = [];
+    function Probe() {
+      seen.push(useFieldContext());
+      return null;
+    }
+    render(
+      <OwnField>
+        <InputControl />
+        <Probe />
+      </OwnField>,
+    );
+    expect(seen.at(-1)).toBe(OWN_FIELD);
+    const input = screen.getByRole('textbox', { name: 'Quantity' });
+    expect(input).toHaveAttribute('id', 'own-control');
+    expect(input).toHaveAccessibleDescription('Too many Up to 10');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-required', 'true');
+    expect(input).toBeRequired();
+  });
+
+  it('replaces the context of a surrounding provider for its subtree', () => {
+    const seen: Array<FieldContextValue | null> = [];
+    function Probe() {
+      seen.push(useFieldContext());
+      return null;
+    }
+    render(
+      <FieldContextProvider value={FIELD}>
+        <Probe />
+        <FieldContextProvider value={OWN_FIELD}>
+          <Probe />
+        </FieldContextProvider>
+      </FieldContextProvider>,
+    );
+    expect(seen).toEqual([FIELD, OWN_FIELD]);
+  });
+
+  it('is a named function component, the same on the server through a client reference', () => {
+    expect(FieldContextProvider.displayName).toBe('FieldContextProvider');
+    const Reference = asClientReference(FieldContextProvider);
+    const tree = (Provider: typeof FieldContextProvider) => (
+      <Provider value={OWN_FIELD}>
+        <InputControl />
+      </Provider>
+    );
+    const plain = renderToString(tree(FieldContextProvider));
+    expect(plain).toContain('id="own-control"');
+    expect(plain).toContain('aria-describedby="own-error own-hint"');
+    expect(renderToString(tree(Reference))).toBe(plain);
   });
 });
