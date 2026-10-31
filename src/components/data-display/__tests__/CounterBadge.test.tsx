@@ -69,7 +69,7 @@ const DOT_FORCED_COLORS = [
 
 /** The development warning of `color="important"` (P13-03), which the color tables render on purpose. */
 const IMPORTANT_WARNING =
-  '[WaveUI] CounterBadge: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="brand" or color="informative" to keep a coloured badge.';
+  '[WaveUI] CounterBadge: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.';
 
 describe('CounterBadge', () => {
   // The tables below render `important` (0.x: the severe colors); nothing else may be logged.

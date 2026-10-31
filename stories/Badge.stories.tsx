@@ -80,7 +80,7 @@ export const ImportantIn1: Story = {
       <p className="max-w-prose">
         <code>important</code> changes meaning in 1.0: it becomes a neutral high-emphasis color, and
         a badge with it logs a development warning from now on. Use <code>severe</code> to keep the
-        orange look, or <code>brand</code> or <code>informative</code> for a colored badge.
+        orange look.
       </p>
       {APPEARANCES.map((appearance) => (
         <div key={appearance} className="flex gap-2">

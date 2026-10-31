@@ -51,7 +51,7 @@ const COLOR_CLASSES: Array<[BadgeAppearance, BadgeColor, string[]]> = [
 
 /** The development warning of `color="important"` (P13-03), which the color tables render on purpose. */
 const IMPORTANT_WARNING =
-  '[WaveUI] Badge: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="brand" or color="informative" to keep a coloured badge.';
+  '[WaveUI] Badge: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.';
 
 describe('Badge', () => {
   // The tables below render `important` (0.x: the severe colors); nothing else may be logged.

@@ -75,7 +75,8 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * the default classes with yours (see `MotionSlot`), also under a `WaveProvider` with
    * `motion="none"`, which otherwise turns the default off. A `className` that holds
    * `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default motion,
-   * your classes animate the surface. Fluent's `Menu` `surfaceMotion`.
+   * your classes animate the surface; development builds log a warning once, and the rule is
+   * removed in 1.0, so pass `motion` instead. Fluent's `Menu` `surfaceMotion`.
    * @default the fade and slide above
    */
   motion?: MotionSlot | null;

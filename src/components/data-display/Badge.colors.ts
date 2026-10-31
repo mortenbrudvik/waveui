@@ -101,7 +101,7 @@ export function warnImportantColor(name: 'Badge' | 'CounterBadge'): void {
     if (process.env.NODE_ENV !== 'production') {
       warnOnce(
         `${name}:color:important`,
-        `${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="brand" or color="informative" to keep a coloured badge.`,
+        `${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.`,
       );
     }
   } catch {

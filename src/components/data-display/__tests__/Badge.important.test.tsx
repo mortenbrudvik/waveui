@@ -13,7 +13,7 @@ import type { BadgeColor } from '../../../lib/types';
  */
 
 const message = (name: string) =>
-  `[WaveUI] ${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="brand" or color="informative" to keep a coloured badge.`;
+  `[WaveUI] ${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.`;
 
 const cases: Array<[string, (color?: BadgeColor) => React.ReactElement]> = [
   ['Badge', (color) => <Badge color={color}>Text</Badge>],
@@ -60,4 +60,28 @@ describe.each(cases)('%s color="important" (P13-03)', (name, element) => {
       expect(warn).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('CounterBadge color="important" when it draws or not (P13-03)', () => {
+  let warn: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('logs nothing while it renders nothing (count 0)', () => {
+    render(<CounterBadge count={0} color="important" />);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['showZero', <CounterBadge key="z" count={0} showZero color="important" />],
+    ['dot', <CounterBadge key="d" dot color="important" />],
+  ])('warns once, with its own message, for %s', (_name, ui) => {
+    const { rerender } = render(ui);
+    rerender(ui);
+    expect(warn.mock.calls).toEqual([[message('CounterBadge')]]);
+  });
 });

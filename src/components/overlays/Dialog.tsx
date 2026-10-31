@@ -169,7 +169,8 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
    * or `{ className }` replaces the default classes with yours (see `MotionSlot`), also under a
    * `WaveProvider` with `motion="none"`, which otherwise turns the default off. A `className` that
    * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
-   * motion, your classes animate the surface. Fluent's `Dialog` `surfaceMotion`.
+   * motion, your classes animate the surface; development builds log a warning once, and the rule
+   * is removed in 1.0, so pass `motion` instead. Fluent's `Dialog` `surfaceMotion`.
    * @default the scale and fade above
    */
   motion?: MotionSlot | null;
