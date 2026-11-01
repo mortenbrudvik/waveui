@@ -1419,6 +1419,38 @@ describe('ColorPicker — slotProps', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('calls your onClick on the opacity row in every state: a ColorPicker has no disabled state', () => {
+    // While the value is not a hex color only the bound parts are disabled (the opacity slider
+    // here); the caption and the percentage beside it pass no click to it, so yours runs.
+    const warn = spyWarn();
+    try {
+      for (const value of ['#0f6cbd', 'red']) {
+        const onLabelClick = vi.fn();
+        const onValueClick = vi.fn();
+        const { unmount } = render(
+          <ColorPicker
+            aria-label="Accent"
+            showOpacity
+            value={value}
+            slotProps={{
+              opacityLabel: { onClick: onLabelClick },
+              opacityValue: { onClick: onValueClick },
+            }}
+          />,
+        );
+        expect(opacitySlider().hasAttribute('disabled')).toBe(value === 'red');
+        fireEvent.click(screen.getByText('Opacity'));
+        fireEvent.click(screen.getByText('100%'));
+        expect(onLabelClick).toHaveBeenCalledTimes(1);
+        expect(onValueClick).toHaveBeenCalledTimes(1);
+        unmount();
+      }
+      expect(warn.mock.calls).toEqual([[invalidValueWarning('red')]]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('lets your class replace a conflicting class of the part', () => {
     render(
       <ColorPicker

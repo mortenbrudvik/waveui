@@ -183,6 +183,8 @@ describe('Combobox data mode (items)', () => {
     expect(options().map((option) => option.textContent)).toEqual(['Item 7']);
   });
 
+  // Typing eight characters filters the 500 items once per key: more than Vitest's 5 s default
+  // under the parallel gate, hence the 30 s timeout.
   it('keeps option ids per value across filtering and reopening', async () => {
     const user = userEvent.setup();
     renderData();
@@ -194,7 +196,7 @@ describe('Combobox data mode (items)', () => {
     await user.keyboard('{Escape}{Escape}');
     await user.click(combobox());
     expect(screen.getByRole('option', { name: 'Item 495' }).id).toBe(id);
-  });
+  }, 30_000);
 
   it('renders a disabled item as a disabled option that the keys skip', async () => {
     const user = userEvent.setup();

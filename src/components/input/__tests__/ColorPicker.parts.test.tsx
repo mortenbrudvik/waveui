@@ -4,6 +4,7 @@ import { act, fireEvent, render, renderHook, screen } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { DEFAULT_PART_COLOR, useColorPartState } from '../ColorPicker.parts';
+import { ColorSlider } from '../ColorSlider';
 import { PickerHarness } from './colorPartHarness';
 import {
   ColorPicker,
@@ -777,6 +778,50 @@ describe('ColorPicker.HexField — slotProps', () => {
   it('keeps the input reachable: a part sets no inert on it', () => {
     render(inPicker(<ColorPicker.HexField slotProps={{ input: { inert: true } }} />));
     expect(hexInput()).not.toHaveAttribute('inert');
+  });
+
+  it('calls your label and errorMessage onClick in every state: the field is never disabled', () => {
+    // A ColorPicker has no disabled state: while its value is not a hex color only the bound
+    // color parts are disabled (the hue slider here), and the hex field stays editable.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const value of ['#0f6cbd', 'red']) {
+        const onLabelClick = vi.fn();
+        const onErrorClick = vi.fn();
+        const { unmount } = render(
+          inPicker(
+            <>
+              <ColorSlider />
+              <ColorPicker.HexField
+                slotProps={{
+                  label: { onClick: onLabelClick },
+                  errorMessage: { onClick: onErrorClick },
+                }}
+              />
+            </>,
+            { value },
+          ),
+        );
+        expect(screen.getByRole('slider', { name: 'Hue' }).hasAttribute('disabled')).toBe(
+          value === 'red',
+        );
+        expect(hexInput()).toBeEnabled();
+        fireEvent.change(hexInput(), { target: { value: 'zz' } });
+        fireEvent.click(screen.getByText('Hex'));
+        fireEvent.click(screen.getByText(ERROR_TEXT));
+        expect(onLabelClick).toHaveBeenCalledTimes(1);
+        expect(onErrorClick).toHaveBeenCalledTimes(1);
+        unmount();
+      }
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] ColorPicker: "red" is not a hex color (#rrggbb or #rrggbbaa). Pass a hex ' +
+            'value; the color area and sliders are disabled until then.',
+        ],
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('keeps the error message id that the input names', () => {

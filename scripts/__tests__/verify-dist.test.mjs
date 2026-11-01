@@ -1822,13 +1822,15 @@ describe('checkImports (repo-level#4)', () => {
 });
 
 describe('checkServerImport (repo-level#2)', () => {
+  // Each check loads the fixture in two child Node.js processes: more than Vitest's 5 s default
+  // under load (the parallel gate, a CI runner), hence 30 s per check.
   const withIndexImport = (line) => ({
     'dist/index.mjs': `${line}\n${goodFiles()['dist/index.mjs']}`,
   });
 
   it('loads the package in both formats under the react-server condition', async () => {
     expect(await checkServerImport(fixture().dist)).toEqual([]);
-  });
+  }, 30_000);
 
   it('reports a cn module that needs client-only React APIs', async () => {
     const { dist } = fixture({
@@ -1840,10 +1842,8 @@ describe('checkServerImport (repo-level#2)', () => {
     expect(await checkServerImport(dist)).toEqual([
       expect.stringMatching(/lib\/cn\.mjs.*react-server/s),
     ]);
-  });
+  }, 30_000);
 
-  // Two checks, each loading the fixture in two child Node.js processes: slow under load (the
-  // parallel gate, a CI runner), hence the timeout.
   it('reports a cn that is missing or returns the wrong value', async () => {
     expect(await checkServerImport(fixture({ 'dist/lib/cn.cjs': null }).dist)).toEqual([
       expect.stringContaining('lib/cn.cjs'),
@@ -1853,7 +1853,7 @@ describe('checkServerImport (repo-level#2)', () => {
         fixture({ 'dist/lib/cn.mjs': 'export function cn() { return 1; }\n' }).dist,
       ),
     ).toEqual([expect.stringContaining('lib/cn.mjs')]);
-  }, 30_000);
+  }, 60_000);
 
   it('loads every other src/lib module the entry imports, not only cn', async () => {
     const { dist } = fixture({
@@ -1869,7 +1869,7 @@ describe('checkServerImport (repo-level#2)', () => {
       expect.stringMatching(/^lib\/theme\.mjs does not load under node --conditions=react-server/),
     ]);
     expect(errors.join('\n')).not.toMatch(/^index\.mjs/m);
-  });
+  }, 30_000);
 
   it('treats "use client" modules as client references, never evaluated on the server', async () => {
     const dialog = goodFiles()['dist/components/overlays/Dialog.mjs'].replace(
@@ -1897,7 +1897,7 @@ describe('checkServerImport (repo-level#2)', () => {
     expect(await checkServerImport(dist)).toEqual([
       expect.stringMatching(/^index\.mjs does not load .*Cannot access Card\.Header on the server/),
     ]);
-  });
+  }, 30_000);
 
   it('reports server code that awaits a client reference, as React refuses it', async () => {
     const { dist } = fixture({
@@ -1909,13 +1909,13 @@ describe('checkServerImport (repo-level#2)', () => {
     expect(await checkServerImport(dist)).toEqual([
       expect.stringMatching(/^index\.mjs does not load .*Cannot await or return from a thenable/),
     ]);
-  });
+  }, 30_000);
 
   it('leaves no directory behind next to dist', async () => {
     const { dir, dist } = fixture();
     expect(await checkServerImport(dist)).toEqual([]);
     expect(readdirSync(dir).sort()).toEqual(['dist', 'package.json']);
-  });
+  }, 30_000);
 
   it('reports an entry whose cn comes from a "use client" module', async () => {
     const files = goodFiles();
@@ -1929,7 +1929,7 @@ describe('checkServerImport (repo-level#2)', () => {
     expect(await checkServerImport(dist)).toEqual([
       expect.stringMatching(/^index\.mjs under node --conditions=react-server: cn is a client/),
     ]);
-  });
+  }, 30_000);
 });
 
 describe('clientReferenceStub', () => {
@@ -2464,7 +2464,7 @@ describe('the 0.8 opt-in modules and the Toaster probe (INTEGRATION)', () => {
     expect(errors).toEqual([
       'lib/color.mjs is in the bundle of an import of only Button (ColorArea must be dropped)',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('verifyDist reports a Toaster bundle without the presence core', async () => {
     const files = goodFiles();
@@ -2480,7 +2480,7 @@ describe('the 0.8 opt-in modules and the Toaster probe (INTEGRATION)', () => {
     expect(errors).toEqual([
       'hooks/usePresence.mjs is not in the bundle of an import of only Toaster',
     ]);
-  }, 30_000);
+  }, 90_000);
 });
 
 describe('verifyDist: the 0.12 hook probes', () => {
@@ -2495,7 +2495,7 @@ describe('verifyDist: the 0.12 hook probes', () => {
     expect(errors).toEqual([
       'components/overlays/Dialog.mjs is in the bundle of an import of only useFocusVisible',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('reports a hook that imports the positioning library without needing it', async () => {
     const { dist } = fixture({
@@ -2509,7 +2509,7 @@ describe('verifyDist: the 0.12 hook probes', () => {
     expect(errors).toContain(
       'the bundle of an import of only useFocusVisible imports @floating-ui/react-dom',
     );
-  }, 30_000);
+  }, 90_000);
 
   it('reports a probe module that dist lacks', async () => {
     const { dist } = fixture();
@@ -2520,7 +2520,7 @@ describe('verifyDist: the 0.12 hook probes', () => {
         /Popover\.mjs, listed for the hook .* does not exist in dist/.test(error),
       ),
     ).toBe(true);
-  }, 30_000);
+  }, 90_000);
 });
 
 describe('verifyDist: the 0.13 helper probes', () => {
@@ -2535,7 +2535,7 @@ describe('verifyDist: the 0.13 helper probes', () => {
       'components/data-display/Avatar.mjs is in the bundle of an import of only getInitials',
       'the bundle of an import of only getInitials imports react',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('reports a helper that imports a React module', async () => {
     const { dist } = fixture({
@@ -2548,7 +2548,7 @@ describe('verifyDist: the 0.13 helper probes', () => {
     expect(errors).toContain(
       'the bundle of an import of only partitionAvatarGroupItems imports react',
     );
-  }, 30_000);
+  }, 90_000);
 
   it('reports a helper module that dist lacks', async () => {
     const { dist } = fixture();
@@ -2559,7 +2559,7 @@ describe('verifyDist: the 0.13 helper probes', () => {
         /Persona\.mjs, listed for the hook .* does not exist in dist/.test(error),
       ),
     ).toBe(true);
-  }, 30_000);
+  }, 90_000);
 });
 
 describe('verifyDist: the 0.14 helper probes', () => {
@@ -2574,7 +2574,7 @@ describe('verifyDist: the 0.14 helper probes', () => {
       'components/table/DataGrid.mjs is in the bundle of an import of only createTableColumn',
       'the bundle of an import of only createTableColumn imports react',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('probes each breadcrumb helper on its own', async () => {
     const { esm } = breadcrumbModule(() => 'return Breadcrumb.displayName;', {
@@ -2589,7 +2589,7 @@ describe('verifyDist: the 0.14 helper probes', () => {
         `the bundle of an import of only ${name} imports react`,
       ]),
     );
-  }, 30_000);
+  }, 90_000);
 
   it('reports a breadcrumb helper whose bundle holds the Overflow the Breadcrumb is built on', async () => {
     const { esm } = breadcrumbModule(
@@ -2603,7 +2603,7 @@ describe('verifyDist: the 0.14 helper probes', () => {
       'components/layout/Overflow.mjs is in the bundle of an import of only truncateBreadcrumbLongTooltip',
       'the bundle of an import of only truncateBreadcrumbLongTooltip imports react',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('reports every helper of a module that imports a React module', async () => {
     // One helper uses React; the bundler keeps the external import for the others too.
@@ -2617,7 +2617,7 @@ describe('verifyDist: the 0.14 helper probes', () => {
     expect(errors).toEqual(
       BREADCRUMB_HELPERS.map((name) => `the bundle of an import of only ${name} imports react`),
     );
-  }, 30_000);
+  }, 90_000);
 
   it('reports a helper module that dist lacks', async () => {
     const { dist } = fixture();
@@ -2626,7 +2626,7 @@ describe('verifyDist: the 0.14 helper probes', () => {
     expect(errors).toContain(
       'components/table/Table.shared.mjs, listed for the hook createTableColumn, does not exist in dist',
     );
-  }, 30_000);
+  }, 90_000);
 });
 
 describe('checkServerImport: the 0.8 server-safe modules (INTEGRATION)', () => {
@@ -2757,7 +2757,7 @@ describe('the 0.10 probes (INTEGRATION)', () => {
       'components/input/Calendar.mjs is in the bundle of an import of only Listbox (Calendar must be dropped)',
       'Calendar code (displayName "Calendar") is in the bundle of an import of only Listbox',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('verifyDist reports a Calendar that imports the listbox hook (the CALENDAR_ONLY probe)', async () => {
     const files = goodFiles();
@@ -2773,7 +2773,7 @@ describe('the 0.10 probes (INTEGRATION)', () => {
     expect(errors).toEqual([
       'hooks/useListbox.mjs is in the bundle of an import of only Calendar (Dropdown must be dropped)',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('reports a missing lib/date module', async () => {
     const errors = await checkServerImport(fixture({ 'dist/lib/date.cjs': null }).dist);
@@ -2957,7 +2957,7 @@ describe('the 0.11 probes (INTEGRATION)', () => {
       'components/overlays/Drawer.panel.mjs is in the bundle of an import of only Nav (NavDrawer must be dropped)',
       'hooks/useModalLayer.mjs is in the bundle of an import of only Nav (NavDrawer must be dropped)',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('verifyDist runs the inclusion probes', async () => {
     const { dist } = fixture(INCLUSION_DEFECTS.NavDrawer());
@@ -2967,7 +2967,7 @@ describe('the 0.11 probes (INTEGRATION)', () => {
         (path) => `${path} is not in the bundle of an import of only NavDrawer`,
       ),
     );
-  }, 30_000);
+  }, 90_000);
 });
 
 describe('module-only names (0.11 INTEGRATION)', () => {
@@ -3086,7 +3086,7 @@ describe('module-only names (0.11 INTEGRATION)', () => {
     expect(errors).toEqual([
       'dist/index.mjs exports useToolbarNavigation, which is module-only (keep it out of the barrels)',
     ]);
-  }, 30_000);
+  }, 90_000);
 });
 
 describe('names declared as a type and a value (0.11 INTEGRATION)', () => {
@@ -3162,7 +3162,7 @@ describe('the class-name registry (P3-00)', () => {
         /^index\.mjs under node --conditions=react-server: buttonClassNames is not a plain object/,
       ),
     ]);
-  });
+  }, 30_000);
 
   it('reports a class-name module whose export is not an object of strings', async () => {
     const files = goodFiles();
@@ -3174,7 +3174,7 @@ describe('the class-name registry (P3-00)', () => {
         /^lib\/classNames\.mjs under node --conditions=react-server: brokenClassNames is not an object of class-name strings/,
       ),
     ]);
-  });
+  }, 30_000);
 
   it('passes when the entry exports every class-name constant with the same value, in both formats', async () => {
     expect(await checkClassNameExports(fixture().dist)).toEqual([]);
@@ -3761,7 +3761,7 @@ describe('the 0.15 probes (INTEGRATION)', () => {
     expect(errors).toEqual([
       'hooks/usePresenceGroup.mjs is in the bundle of an import of only MessageBar (MessageBarGroup must be dropped)',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('verifyDist runs the Accordion and MessageBarGroup controls', async () => {
     const files = goodFiles();
@@ -3785,7 +3785,7 @@ describe('the 0.15 probes (INTEGRATION)', () => {
       `the bundle of an import of only Accordion lacks the string "${MOTION_RECIPES.collapseMotion}"`,
       'hooks/usePresenceGroup.mjs is not in the bundle of an import of only MessageBarGroup',
     ]);
-  }, 30_000);
+  }, 90_000);
 });
 
 describe('the 0.16 probes (INTEGRATION)', () => {
@@ -4044,7 +4044,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
         (path) => `${path} is not in the bundle of an import of only FlatTree`,
       ),
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('verifyDist reports a window over its budget, and an import outside react', async () => {
     const big = changed('lib/virtual', (spec) => ({
@@ -4067,7 +4067,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     expect((await verifyDist(fixture(withClsx).dist, noPending)).errors).toEqual([
       'useVirtualWindow imports clsx, outside the measured closure (allowed: react)',
     ]);
-  }, 60_000);
+  }, 180_000);
 
   it('verifyDist gates the DataGrid-only import: passes on a correct dist, reports a grid over its budget and an import outside the dependencies', async () => {
     const good = await probeSizeBudget(fixture().dist, DATA_GRID_BUDGET);
@@ -4107,7 +4107,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
         'DataGrid imports virtual-rows, outside the measured closure (allowed: clsx, react, react-dom, react/jsx-runtime, tailwind-merge)',
       ],
     });
-  }, 30_000);
+  }, 90_000);
 
   it('verifyDist measures the recorded imports, and main prints them with the window and DataGrid budgets', async () => {
     const { dist } = fixture();
@@ -4162,7 +4162,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
         ),
       );
     }
-  }, 60_000);
+  }, 180_000);
 
   it('the real exports carry the 0.16 flat names', async () => {
     const mod = await import('../../src/index.ts');
@@ -4672,7 +4672,7 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       'the bundle of an import of only createBrandTokens contains "createBrandTokens:contrast" outside comments (its minified code)',
       ...WITHOUT.WaveProvider.reports,
     ]);
-  }, 60_000);
+  }, 180_000);
 
   it('verifyDist gates the 0.17 budgets: passes on a correct dist, reports an import over its budget', async () => {
     const good = await verifyDist(fixture().dist, noPending);
@@ -4698,7 +4698,7 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       `createBrandTokens: ${brand.minified} bytes minified, over the budget of 4495`,
       `createBrandTokens: ${brand.gzip} bytes gzip, over the budget of 3072`,
     ]);
-  }, 60_000);
+  }, 180_000);
 
   it('main prints the 0.17 imports against 0.16.0, and the new ones with their budgets', async () => {
     const lines = [];
@@ -4725,7 +4725,7 @@ describe('the 0.17 probes (INTEGRATION)', () => {
         ),
       );
     }
-  }, 60_000);
+  }, 180_000);
 
   it('the real exports carry the 0.17 names', async () => {
     const mod = await import('../../src/index.ts');
@@ -5269,7 +5269,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       'components/button/Button.mjs is in the bundle of an import of only useMessageBarContext (no module under components/ may be)',
       ...WITHOUT.Dialog.reports,
     ]);
-  }, 60_000);
+  }, 180_000);
 
   it('verifyDist gates the 0.18 budgets: passes on a correct dist, reports each import over its budget', async () => {
     const good = await verifyDist(fixture().dist, noPending);
@@ -5316,7 +5316,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       ...over('Dialog', 73111, 24658),
       ...over('WaveProvider + Dialog', 75659, 25650),
     ]);
-  }, 60_000);
+  }, 180_000);
 
   it('main prints the 0.18 imports against 0.17.1, with their budgets', async () => {
     const lines = [];
@@ -5337,7 +5337,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
         ),
       );
     }
-  }, 60_000);
+  }, 180_000);
 
   it('the real exports carry the 0.18 names, mergeSlotProps last in the entry', async () => {
     const mod = await import('../../src/index.ts');
@@ -5485,13 +5485,15 @@ describe('the 0.18 probes (INTEGRATION)', () => {
 
 describe('verifyDist and main', () => {
   // Every test runs the whole check: its probes bundle the fixture with Vite several times and
-  // load it in child Node.js processes. That takes about a second alone, and more than Vitest's
-  // 5 s default under the parallel gate or on a CI runner, hence the 30 s timeouts.
+  // load it in child Node.js processes. That takes about 6 s alone, and more than 30 s at times
+  // under the parallel gate or on a CI runner, hence the 90 s timeouts, here and in the other
+  // suites that run it (180 s or more where a test runs it more than once or measures the
+  // recorded imports).
   it('passes a correct dist', async () => {
     const { dist } = fixture();
     const result = await verifyDist(dist, noPending);
     expect(result.errors).toEqual([]);
-  }, 30_000);
+  }, 90_000);
 
   it('runs the class-name checks: a registry constant missing from the entry fails', async () => {
     const files = goodFiles();
@@ -5510,7 +5512,7 @@ describe('verifyDist and main', () => {
       'index.mjs does not export dialogContentClassNames (a class-name constant of lib/classNames.mjs)',
       'index.cjs does not export dialogContentClassNames (a class-name constant of lib/classNames.cjs)',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('collects the failures of every check', async () => {
     const { dist } = fixture({
@@ -5526,7 +5528,7 @@ describe('verifyDist and main', () => {
         'lib/dev.cjs is missing',
       ]),
     );
-  }, 30_000);
+  }, 90_000);
 
   it('fails a dist whose JavaScript is correct but whose declarations rolled up empty', async () => {
     // TypeScript 6 without tsconfig.json's rootDir: the build passes, index.d.ts is `export { }`.
@@ -5539,7 +5541,7 @@ describe('verifyDist and main', () => {
       expect.stringMatching(/^index\.d\.ts does not declare and export cn, Button, /),
       expect.stringMatching(/^index\.d\.cts does not declare and export cn, Button, /),
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('runs the presence probes: a Button bundle with the presence core fails', async () => {
     const files = goodFiles();
@@ -5555,7 +5557,7 @@ describe('verifyDist and main', () => {
     expect(errors).toEqual([
       'hooks/usePresence.mjs is in the bundle of an import of only Button (Presence must be dropped)',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('runs the motion probe: a Button bundle with a recipe literal fails (D23)', async () => {
     const { dist } = fixture({
@@ -5568,7 +5570,7 @@ describe('verifyDist and main', () => {
       `the bundle of an import of only Button contains the string "${MOTION_RECIPES.dialogMotion}" (an unused constant was not tree-shaken)`,
       'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('runs the motion probe: a Button bundle with the motion modules fails (D23)', async () => {
     const { dist } = fixture({
@@ -5586,7 +5588,7 @@ describe('verifyDist and main', () => {
       'lib/motion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
       'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('runs the motion control: a Dialog bundle without one of its recipes fails (D23)', async () => {
     const dialog = 'dist/components/overlays/Dialog.mjs';
@@ -5604,7 +5606,7 @@ describe('verifyDist and main', () => {
     expect(errors).toEqual([
       `the bundle of an import of only Dialog lacks the string "${MOTION_RECIPES.dialogBackdropMotion}"`,
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('runs the Field probe: a Field bundle that pulls InfoButton fails', async () => {
     const files = goodFiles();
@@ -5622,7 +5624,7 @@ describe('verifyDist and main', () => {
       'InfoButton code (displayName "InfoButton") is in the bundle of an import of only Field',
       'the bundle of an import of only Field contains the string "wave-info-button" (an unused constant was not tree-shaken)',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('reports a dist without the presence core module (the include probe)', async () => {
     const files = goodFiles();
@@ -5639,7 +5641,7 @@ describe('verifyDist and main', () => {
     expect(errors).toEqual([
       'hooks/usePresence.mjs is not in the bundle of an import of only Menu',
     ]);
-  }, 30_000);
+  }, 90_000);
 
   it('prints the measured presence budget', async () => {
     const lines = [];
@@ -5648,7 +5650,7 @@ describe('verifyDist and main', () => {
     expect(lines.join('\n')).toMatch(
       /verify-dist: presence core \(usePresence \+ Presence\): \d+ B minified \(budget 6804\), \d+ B gzip \(budget 2927\)/,
     );
-  }, 30_000);
+  }, 90_000);
 
   it('exits 0 for a correct dist and 1 otherwise', async () => {
     const quiet = { log: () => {}, error: () => {} };
@@ -5657,7 +5659,7 @@ describe('verifyDist and main', () => {
       await main(['--dist', fixture({ 'dist/index.d.cts': null }).dist, '--no-pending'], quiet),
     ).toBe(1);
     expect(await main(['--dist', join(fixtureRoot, 'missing')], quiet)).toBe(1);
-  }, 60_000);
+  }, 180_000);
 
   it('fails the final gate (--final) while PENDING_FLAT_EXPORTS is not empty', async () => {
     const lines = [];
@@ -5671,7 +5673,7 @@ describe('verifyDist and main', () => {
     }
     const { errors } = await verifyDist(fixture().dist, { pendingFlatExports: [], final: true });
     expect(errors).toEqual([]);
-  }, 60_000);
+  }, 180_000);
 
   it('tolerates pending flat names, and only while the bridge is open', async () => {
     const { dist } = fixture({
@@ -5700,7 +5702,7 @@ describe('verifyDist and main', () => {
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     expect(await main(['--dist', dist, '--no-pending'], io)).toBe(1);
     expect(lines.join('\n')).toMatch(/CardHeader is not exported/);
-  }, 90_000);
+  }, 270_000);
 });
 
 describe('the entry guard of the gate scripts', () => {
