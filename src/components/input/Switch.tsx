@@ -23,6 +23,9 @@ import { HiddenInput } from '../internal/HiddenInput';
 const onTrack = 'forced-colors:border-[Highlight] forced-colors:bg-[Highlight]';
 const disabledOnTrack = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
 
+/** The handlers a part drops while the switch is unavailable: it does not activate then. */
+const BLOCK_CLICK = ['onClick'] as const;
+
 /** Handlers that run on the `role="switch"` button instead of the root label (C-ROUTING). */
 type SwitchControlHandlers = 'onClick' | 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
 
@@ -151,17 +154,25 @@ export interface SwitchProps extends Omit<
      * Field attributes routed to it (`aria-label`, `aria-invalid`, `aria-required`,
      * `aria-errormessage`, `aria-details`, `aria-disabled`), `required` (unset: the hidden input
      * carries it), `form` (the switch belongs to the form of its own `form` prop, as its hidden
-     * input does), `hidden` and `aria-hidden` (a focusable control is never hidden). Your
-     * `onClick` runs before the Switch's `onClick` and its toggle (`preventDefault()` skips both)
-     * and is not called under `disabledFocusable`; your focus and key handlers run before the
-     * Switch's.
+     * input does), `hidden`, `inert` and `aria-hidden` (a focusable control is never hidden).
+     * Your `onClick` runs before the Switch's `onClick` and its toggle (`preventDefault()` skips
+     * both) and is not called under `disabledFocusable`; your focus and key handlers run before
+     * the Switch's.
      */
     track?: SlotPart<'button'>;
-    /** The thumb `<span>` inside the track (stable class `wave-switch__thumb`). Locked: `aria-hidden`. */
+    /**
+     * The decorative thumb `<span>` inside the track (stable class `wave-switch__thumb`).
+     * Locked: `aria-hidden`, and `tabIndex` (unset: the thumb is never a tab stop). Your
+     * `onClick` is not called while the switch is `disabled` or `disabledFocusable`, as the
+     * switch does not toggle then.
+     */
     thumb?: SlotPart<'span'>;
     /**
      * The `<span>` around the `label` text, rendered only with a `label` (stable class
-     * `wave-switch__label`). Locked: `id`, which names the control.
+     * `wave-switch__label`). Locked: `id`, which names the control, and `aria-label` unset (it
+     * would replace the text in the name). `hidden`, `inert` and `aria-hidden` stay yours: the
+     * control's `aria-labelledby` still reads hidden text. Your `onClick` is not called while the
+     * switch is `disabled` or `disabledFocusable`, as the switch does not toggle then.
      */
     label?: SlotPart<'span'>;
   };
@@ -276,14 +287,18 @@ export const Switch = ({
   // as the default: TypeScript rejects one, but the value still reaches this render.
   const resolvedSize: SwitchSize = Object.hasOwn(SWITCH_SIZE, size) ? size : 'medium';
   const sizeMetrics = SWITCH_SIZE[resolvedSize];
+  // Focusable-disabled wins over `disabled`: the switch stays focusable but looks and acts disabled.
+  const unavailable = disabled || disabledFocusable;
+  // The parts inside the switch do not activate while it is unavailable, as the switch does not.
+  const partBlock = unavailable ? BLOCK_CLICK : undefined;
   const labelProps = mergeSlotProps(slotProps?.label, {
     className: cn(switchClassNames.label, 'text-body-1 text-foreground'),
-    locked: { id: labelTextId },
+    // The text names the control through aria-labelledby: an aria-label would replace it.
+    locked: { id: labelTextId, 'aria-label': undefined },
+    blockHandlers: partBlock,
   });
   const labelText = hasLabel ? <span {...labelProps}>{materialiseSlotContent(label)}</span> : null;
   const labelFirst = labelPosition === 'before' || labelPosition === 'above';
-  // Focusable-disabled wins over `disabled`: the switch stays focusable but looks and acts disabled.
-  const unavailable = disabled || disabledFocusable;
   const trackProps = mergeSlotProps(slotProps?.track, {
     className: cn(
       switchClassNames.track,
@@ -329,6 +344,7 @@ export const Switch = ({
       // submits with, and a focusable control is never hidden.
       form: undefined,
       hidden: undefined,
+      inert: undefined,
       'aria-hidden': undefined,
       disabled: disabled && !disabledFocusable,
       ...focusableDisabledProps(disabledFocusable, { reachable: true }),
@@ -342,7 +358,7 @@ export const Switch = ({
         : composeEventHandlers(onClick, () => setChecked((prev) => !prev)),
     },
     // Under disabledFocusable your click handler is not called, as the Switch's `onClick` is not.
-    blockHandlers: disabledFocusable ? ['onClick'] : undefined,
+    blockHandlers: disabledFocusable ? BLOCK_CLICK : undefined,
   });
   const thumbProps = mergeSlotProps(slotProps?.thumb, {
     className: cn(
@@ -358,7 +374,9 @@ export const Switch = ({
           ? 'forced-colors:bg-[HighlightText]'
           : 'forced-colors:bg-[ButtonText]',
     ),
-    locked: { 'aria-hidden': 'true' },
+    locked: { 'aria-hidden': 'true', tabIndex: undefined },
+    // The thumb sits in the track, which `disabledFocusable` leaves natively enabled.
+    blockHandlers: partBlock,
   });
 
   return (

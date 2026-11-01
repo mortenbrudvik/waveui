@@ -9,7 +9,12 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { CheckIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
-import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  HIDDEN_PART_LOCKS,
+  lockPositionStyle,
+  mergeSlotProps,
+  type SlotPart,
+} from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { PopupPositioningOptions } from '../../lib/types';
 import { useId } from '../../hooks/useId';
@@ -90,10 +95,15 @@ export interface OptionProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>,
     /**
      * The 16px checkbox square of an option in a multi-select list, rendered only there (stable
      * class `wave-option__indicator`); the check glyph sits in it while the option is selected.
-     * Locked: `aria-hidden` and the internal data attribute that marks the square.
+     * Locked: `aria-hidden`, the internal data attribute that marks the square, and `tabIndex`
+     * (unset: the square is never a tab stop).
      */
     indicator?: SlotPart<'span'>;
-    /** The `<span>` around the option's content (stable class `wave-option__content`). */
+    /**
+     * The `<span>` around the option's content, whose text names the option (stable class
+     * `wave-option__content`). Locked unset: `role`, `aria-label` (it would replace the text in
+     * the option's name), `hidden`, `inert` and `aria-hidden`.
+     */
     content?: SlotPart<'span'>;
   };
 }
@@ -267,7 +277,7 @@ function renderCheck(
       {...(indicator &&
         mergeSlotProps(indicator, {
           className: indicatorClasses,
-          locked: { 'aria-hidden': 'true', 'data-wave-option-box': '' },
+          locked: { 'aria-hidden': 'true', 'data-wave-option-box': '', tabIndex: undefined },
         }))}
     >
       {selected &&
@@ -366,7 +376,11 @@ function OptionImpl(props: OptionProps) {
         className={OPTION_CONTENT_CLASSES}
         // Merged only when a part is given: an option renders often.
         {...(slotProps?.content &&
-          mergeSlotProps(slotProps.content, { className: OPTION_CONTENT_CLASSES }))}
+          mergeSlotProps(slotProps.content, {
+            className: OPTION_CONTENT_CLASSES,
+            // The text names the option: a part neither renames nor hides it.
+            locked: { role: undefined, 'aria-label': undefined, ...HIDDEN_PART_LOCKS },
+          }))}
       >
         {children ?? value}
       </span>
@@ -454,8 +468,9 @@ export interface OptionGroupProps extends React.LiHTMLAttributes<HTMLLIElement> 
     label?: SlotPart<'div'>;
     /**
      * The `<ul role="group">` of the options (stable class `wave-option-group__list`). Locked:
-     * `role`, `aria-label` and `hidden` (hide the group with its own `hidden`, which also takes
-     * its options out of the keys); your `aria-labelledby` ids join the group's.
+     * `role`, `aria-label`, and `hidden`, `inert` and `aria-hidden` unset (hide the group with
+     * its own `hidden`, which also takes its options out of the keys); your `aria-labelledby`
+     * ids join the group's.
      */
     list?: SlotPart<'ul'>;
   };
@@ -593,6 +608,8 @@ function OptionGroupImpl({
             'aria-label': ariaLabel,
             'aria-labelledby': labelledBy,
             hidden: undefined,
+            inert: undefined,
+            'aria-hidden': undefined,
           },
         })}
       >

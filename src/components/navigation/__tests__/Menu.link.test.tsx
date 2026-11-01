@@ -617,6 +617,36 @@ describe('Menu.ItemLink — slotProps', () => {
     expect(about).toHaveFocus();
   });
 
+  it('keeps the label naming the link: no aria-label, hidden state or roving container from a part', () => {
+    renderInMenuList(
+      <MenuItemLink
+        href="#docs"
+        slotProps={{
+          content: {
+            'aria-label': 'Other',
+            hidden: true,
+            inert: true,
+            'aria-hidden': true,
+            'data-roving-container': '',
+          },
+        }}
+      >
+        Docs
+      </MenuItemLink>,
+    );
+    const row = named('Docs');
+    expect(row).toHaveAccessibleName('Docs');
+    for (const attribute of [
+      'aria-label',
+      'hidden',
+      'inert',
+      'aria-hidden',
+      'data-roving-container',
+    ]) {
+      expect(content(row)).not.toHaveAttribute(attribute);
+    }
+  });
+
   it('runs a part’s handler first: a prevented click calls onClick but neither navigates nor closes', async () => {
     const user = userEvent.setup();
     const prevented = recordClicks();

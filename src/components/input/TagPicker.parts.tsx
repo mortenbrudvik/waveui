@@ -184,6 +184,7 @@ function TagPickerClearButton({ ctx, position }: TagPickerClearButtonProps) {
       'data-disabled': undefined,
       'data-disabled-focusable': undefined,
       hidden: undefined,
+      inert: undefined,
       'aria-hidden': undefined,
       ...stateProps,
     },
@@ -196,7 +197,7 @@ function TagPickerClearButton({ ctx, position }: TagPickerClearButtonProps) {
       type="button"
       {...props}
       ref={mergedRef}
-      // The held focus is tracked whatever the part's focus handlers do.
+      // The held focus is tracked also when the part's focus handlers prevent the default.
       onFocus={composeEventHandlers(
         props.onFocus as React.FocusEventHandler<HTMLButtonElement> | undefined,
         hold.onFocus,
@@ -543,6 +544,7 @@ function TagPickerGroupImpl({
             ),
             locked: {
               'aria-hidden': 'true',
+              tabIndex: undefined,
               // A press focuses the trigger (every tag shows); the list does not change.
               onMouseDown: (event: React.MouseEvent<HTMLSpanElement>) => {
                 event.preventDefault();
@@ -1026,7 +1028,7 @@ function TagPickerListImpl({
                 tagPickerClassNames.emptyMessage,
                 'px-3 py-1.5 text-body-1 text-muted-foreground',
               ),
-              locked: { 'aria-hidden': 'true' },
+              locked: { 'aria-hidden': 'true', tabIndex: undefined },
             })}
           >
             {ctx.labels.noMatches}

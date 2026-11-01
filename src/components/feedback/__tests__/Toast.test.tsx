@@ -2156,6 +2156,13 @@ describe('Toast — slotProps', () => {
     expect(button).toHaveAttribute('title', 'Close the notice');
   });
 
+  it('keeps the Dismiss button a button: a part sets no role on it', () => {
+    render(
+      <Toast title="Saved" onDismiss={() => {}} slotProps={{ dismissButton: { role: 'link' } }} />,
+    );
+    expect(screen.getByRole('button', { name: 'Dismiss' })).not.toHaveAttribute('role');
+  });
+
   it('runs your Dismiss button handler first; preventDefault() skips onDismiss', async () => {
     const user = userEvent.setup();
     const calls: string[] = [];

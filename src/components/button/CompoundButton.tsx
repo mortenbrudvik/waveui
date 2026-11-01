@@ -77,14 +77,15 @@ export interface CompoundButtonOwnProps {
      */
     contentContainer?: SlotPart<'span'>;
     /**
-     * The `<span>` of the main label, the CompoundButton's `children` (stable class
-     * `wave-compound-button__primary-text`). It sets no attribute of its own, so none is locked.
+     * The `<span>` of the main label, the CompoundButton's `children`, whose text names the
+     * button (stable class `wave-compound-button__primary-text`). Locked unset: `aria-label` (it
+     * would replace the text in the button's name), `hidden`, `inert` and `aria-hidden`.
      */
     primaryText?: SlotPart<'span'>;
     /**
-     * The `<span>` of the second line, rendered while `secondaryText` renders content (stable
-     * class `wave-compound-button__secondary-text`). It sets no attribute of its own, so none is
-     * locked.
+     * The `<span>` of the second line, rendered while `secondaryText` renders content, whose text
+     * is part of the button's name (stable class `wave-compound-button__secondary-text`). Locked
+     * unset: `aria-label`, `hidden`, `inert` and `aria-hidden`, as on `primaryText`.
      */
     secondaryText?: SlotPart<'span'>;
   };
@@ -120,6 +121,17 @@ const iconBoxClasses: Record<Size, string> = {
   large: 'size-10',
   'extra-large': 'size-10',
 };
+
+/**
+ * What the two text parts lock unset: their text is the button's name, which an `aria-label`
+ * would replace and the hidden state would take away.
+ */
+const TEXT_PART_LOCKS = {
+  'aria-label': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
 
 /** The props the implementation reads, for any `as`. */
 type CompoundButtonImplProps = CompoundButtonOwnProps & {
@@ -212,6 +224,8 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
       <span
         {...mergeSlotProps(slotProps?.primaryText, {
           className: cn(compoundButtonClassNames.primaryText, 'font-bold'),
+          // The text names the button: a part neither renames nor hides it.
+          locked: TEXT_PART_LOCKS,
           blockHandlers,
         })}
       >
@@ -225,6 +239,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
               'text-caption-1 font-normal',
               appearance === 'primary' ? 'text-primary-foreground' : 'text-muted-foreground',
             ),
+            locked: TEXT_PART_LOCKS,
             blockHandlers,
           })}
         >

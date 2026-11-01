@@ -180,4 +180,4 @@ export type { NativeElementProps } from './lib/nativeProps';
 
 // Structural parts (`slotProps`): last, so the modules it imports keep their order in a bundle.
 export { mergeSlotProps } from './lib/slotProps';
-export type { SlotPart, SlotPartOwn } from './lib/slotProps';
+export type { SlotPart, SlotPartOwn, SlotPartWithRef } from './lib/slotProps';

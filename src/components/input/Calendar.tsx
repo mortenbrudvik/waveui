@@ -347,7 +347,8 @@ export interface CalendarProps extends Omit<
     day?: SlotPart<'button'>;
     /**
      * The dot `<span>` inside a marked day's button (`markedDates`; stable class
-     * `wave-calendar__marked-dot`). Locked: `aria-hidden` (the day's name says "marked").
+     * `wave-calendar__marked-dot`). Locked: `aria-hidden` (the day's name says "marked") and
+     * `tabIndex` (unset: a drawing is never a tab stop).
      */
     markedDot?: SlotPart<'span'>;
     /**

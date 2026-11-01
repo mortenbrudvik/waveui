@@ -107,14 +107,14 @@ export interface ColorAreaProps extends Omit<
     /**
      * The `<div>` that draws the color field, the gradient a press or a drag is measured against
      * (stable class `wave-color-area__field`). Locked: `aria-hidden`, which keeps the drawing
-     * out of the accessibility tree.
+     * out of the accessibility tree, and `tabIndex` (unset: a drawing is never a tab stop).
      */
     field?: SlotPart<'div'>;
     /**
      * The `<span>` of the drawn thumb, placed at the value (stable class
      * `wave-color-area__thumb`). It takes no pointer events, so a press over it lands on the
      * field and reaches the `field` part's handlers, not this part's (unless a class of yours
-     * gives it pointer events back). Locked: `aria-hidden`.
+     * gives it pointer events back). Locked: `aria-hidden`, and `tabIndex` (unset).
      */
     thumb?: SlotPart<'span'>;
   };
@@ -437,7 +437,7 @@ export const ColorArea = ({
             colorAreaClassNames.field,
             'absolute inset-0 rounded-[inherit] bg-(image:--wave-color-area-gradient) wave-rtl:-scale-x-100 forced-colors:forced-color-adjust-none',
           ),
-          locked: { 'aria-hidden': 'true' },
+          locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
         // The pointer is measured against the field: a part's inline ref never detaches it.
         ref={mergedFieldRef}
@@ -450,7 +450,7 @@ export const ColorArea = ({
             'start-(--wave-color-area-x) bottom-(--wave-color-area-y) -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2',
             'group-has-[:focus-visible]/color-area:ring-2 group-has-[:focus-visible]/color-area:ring-background forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas] group-has-[:focus-visible]/color-area:outline-2 group-has-[:focus-visible]/color-area:outline-offset-2 group-has-[:focus-visible]/color-area:outline-ring forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]',
           ),
-          locked: { 'aria-hidden': 'true' },
+          locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
       />
       <input

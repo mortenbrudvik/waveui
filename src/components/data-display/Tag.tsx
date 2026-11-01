@@ -248,7 +248,8 @@ export interface TagOwnProps {
      * `preventDefault()` in your `onKeyDown` keeps Delete and Backspace from dismissing. While the
      * button is disabled, or unavailable but focusable (a disabled tag's button that keeps its
      * focus, a merged `Button` with `disabledFocusable`), your `onClick` is not called. The tag
-     * records focus and blur after your `onFocus` and `onBlur`, whatever they do. `title` is not
+     * records focus and blur after your `onFocus` and `onBlur`, also when they prevent the
+     * default. `title` is not
      * locked: a `title` of yours replaces a merged button's tooltip, while the button's name stays
      * the one the tag gives it (its locked `aria-label` or `aria-labelledby`).
      */

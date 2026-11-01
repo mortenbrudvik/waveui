@@ -2105,6 +2105,28 @@ describe('MessageBar — slotProps', () => {
     expect(order).toEqual(['body', 'bar']);
   });
 
+  it('keeps the body in the bar’s announcement: a part sets no role, live region or hidden state', () => {
+    render(
+      <MessageBar
+        slotProps={{
+          body: {
+            role: 'alert',
+            'aria-live': 'assertive',
+            hidden: true,
+            inert: true,
+            'aria-hidden': true,
+          },
+        }}
+      >
+        Saved.
+      </MessageBar>,
+    );
+    const body = bodyOf(screen.getByRole('status'));
+    for (const name of ['role', 'aria-live', 'hidden', 'inert', 'aria-hidden']) {
+      expect(body, name).not.toHaveAttribute(name);
+    }
+  });
+
   it('dismisses a bar of a MessageBarGroup through your part, and focus moves to the next bar', async () => {
     const motion = mockAnimations({
       animated: (el) => el.classList.contains(messageBarGroupClassNames.item),

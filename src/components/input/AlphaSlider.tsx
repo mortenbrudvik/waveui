@@ -75,7 +75,8 @@ export interface AlphaSliderProps extends Omit<
     /**
      * The `<div>` that draws the rail: the checkerboard, with the color's gradient in a `<span>`
      * inside it (stable class `wave-alpha-slider__rail`). Locked: `aria-hidden`, which keeps the
-     * drawing out of the accessibility tree.
+     * drawing out of the accessibility tree, and `tabIndex` (unset: a drawing is never a tab
+     * stop).
      */
     rail?: SlotPart<'div'>;
     /**
@@ -233,7 +234,7 @@ export const AlphaSlider = ({
             vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
             resolvedShape === 'square' && 'rounded-none',
           ),
-          locked: { 'aria-hidden': 'true' },
+          locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
       >
         <span className={cn('absolute inset-0', RAIL_GRADIENT)} />

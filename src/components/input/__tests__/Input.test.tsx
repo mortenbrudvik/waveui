@@ -900,6 +900,26 @@ describe('Input — slotProps', () => {
     expect(field).toHaveAttribute('hidden');
   });
 
+  it.each([
+    ['one <input>', {}],
+    ['a wrapper', { contentBefore: '@' }],
+  ] as const)('takes inert from the Input itself in %s, never from a part', (_, shape) => {
+    const { rerender } = render(
+      <Input
+        aria-label="Name"
+        {...shape}
+        slotProps={{ root: { inert: true, 'aria-hidden': true }, input: { inert: true } }}
+      />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    const field = input.closest(`.${inputClassNames.root}`) as HTMLElement;
+    expect(field).not.toHaveAttribute('inert');
+    expect(field).not.toHaveAttribute('aria-hidden');
+    expect(input).not.toHaveAttribute('inert');
+    rerender(<Input aria-label="Name" {...shape} inert />);
+    expect(screen.getByRole('textbox', { name: 'Name', hidden: true })).toHaveAttribute('inert');
+  });
+
   it('has no accessibility violations with both shapes customised', async () => {
     render(
       <>

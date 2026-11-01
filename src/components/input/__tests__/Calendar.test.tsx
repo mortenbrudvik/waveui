@@ -2691,6 +2691,12 @@ describe('Calendar — slotProps', () => {
     expect(today).not.toBeDisabled();
   });
 
+  it('keeps the marked dot out of the tab order: a part sets no tabIndex on it', () => {
+    render(<Calendar {...FULL} slotProps={{ markedDot: { tabIndex: 0 } }} />);
+    expect(part(k.markedDot)).not.toHaveAttribute('tabindex');
+    expect(tabStops()).toEqual([dayButton('Sunday, June 15, 2025')]);
+  });
+
   it('keeps the state its buttons render only while set: a part sets none of it', () => {
     const state = {
       'aria-pressed': true,

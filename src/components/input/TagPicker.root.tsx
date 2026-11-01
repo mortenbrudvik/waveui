@@ -348,10 +348,11 @@ export interface TagPickerProps extends Omit<
     /**
      * The clear `<button>` of `TagPicker.Control`, rendered with `clearable` while a tag is
      * selected (stable class `wave-tag-picker__clear-button`). Locked: `type`, `aria-label`
-     * (`labels.clear`), `disabled`, `tabIndex`, `hidden`, `aria-hidden` and the attributes of a
-     * button kept focusable while it is disabled. Your `onClick` runs before the clear
-     * (`preventDefault()` skips it) and is not called while the button is unavailable; the
-     * button's focus tracking runs whatever your `onFocus` and `onBlur` do.
+     * (`labels.clear`), `disabled`, `tabIndex`, `hidden`, `inert`, `aria-hidden` and the
+     * attributes of a button kept focusable while it is disabled. Your `onClick` runs before the
+     * clear (`preventDefault()` skips it) and is not called while the button is unavailable;
+     * the button's focus tracking runs after your `onFocus` and `onBlur`, also when they prevent
+     * the default.
      */
     clearButton?: SlotPart<'button'>;
     /**
@@ -373,8 +374,8 @@ export interface TagPickerProps extends Omit<
     /**
      * The "+N" `<span>` of `overflow="count"`, rendered while tags give way to it (stable class
      * `wave-tag-picker__overflow-count`). Locked: `aria-hidden` (the trigger's description lists
-     * every tag). Your `onMouseDown` runs before the press that focuses the trigger
-     * (`preventDefault()` skips it).
+     * every tag) and `tabIndex` (unset: it is never a tab stop). Your `onMouseDown` runs before
+     * the press that focuses the trigger (`preventDefault()` skips it).
      */
     overflowCount?: SlotPart<'span'>;
     /**
@@ -387,7 +388,7 @@ export interface TagPickerProps extends Omit<
     /**
      * The "No matches" row of the popup, rendered while typed text matches no option (stable
      * class `wave-tag-picker__empty-message`). Locked: `aria-hidden` (a status region announces
-     * the text).
+     * the text) and `tabIndex` (unset: it is never a tab stop).
      */
     emptyMessage?: SlotPart<'div'>;
   };

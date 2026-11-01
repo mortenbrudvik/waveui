@@ -303,8 +303,8 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
      * `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`,
      * `aria-autocomplete`, `aria-errormessage`, `aria-details`), `disabled`, `tabIndex`,
      * `autoFocus`, `name`, `form`
-     * and `required` (the value is submitted by the Dropdown's hidden input), `hidden` and
-     * `aria-hidden` (a focusable control is never hidden). Your handlers run before the
+     * and `required` (the value is submitted by the Dropdown's hidden input), `hidden`, `inert`
+     * and `aria-hidden` (a focusable control is never hidden). Your handlers run before the
      * Dropdown's: `preventDefault()` in your `onClick` keeps the list as it is, in your
      * `onKeyDown` skips the listbox keys.
      */
@@ -317,8 +317,8 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
     /**
      * The clear `<button>`, rendered with `clearable` while a value is selected (stable class
      * `wave-dropdown__clear-button`). Locked: `type`, `aria-label` (`labels.clear`), `disabled`,
-     * `tabIndex`, `aria-disabled`, `hidden` and `aria-hidden`. Your `onClick` runs before the
-     * clear (`preventDefault()` skips it).
+     * `tabIndex`, `aria-disabled`, `hidden`, `inert` and `aria-hidden`. Your `onClick` runs
+     * before the clear (`preventDefault()` skips it).
      */
     clearButton?: SlotPart<'button'>;
     /**
@@ -667,6 +667,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
               name: undefined,
               form: undefined,
               hidden: undefined,
+              inert: undefined,
               'aria-hidden': undefined,
             },
           })}
@@ -730,6 +731,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
                 'data-disabled': undefined,
                 'data-disabled-focusable': undefined,
                 hidden: undefined,
+                inert: undefined,
                 'aria-hidden': undefined,
                 // Keeps focus on the combobox while the pointer clears it.
                 onMouseDown: preventMouseDown,

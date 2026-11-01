@@ -1804,6 +1804,49 @@ describe('SpinButton — slotProps', () => {
       expect(spin()).toHaveValue('1');
     });
 
+    it('still ends when your onPointerUp throws', () => {
+      const failure = new Error('part handler failed');
+      const reported: unknown[] = [];
+      // React reports an error thrown in a handler (window.reportError); keep it off the console.
+      const onError = (event: ErrorEvent) => {
+        reported.push(event.error);
+        event.preventDefault();
+      };
+      window.addEventListener('error', onError);
+      try {
+        render(
+          <SpinButton
+            aria-label="Quantity"
+            slotProps={{
+              incrementButton: {
+                onPointerUp: () => {
+                  throw failure;
+                },
+              },
+            }}
+          />,
+        );
+        fireEvent.pointerDown(incrementButton(), {
+          button: 0,
+          pointerId: 1,
+          pointerType: 'mouse',
+          isPrimary: true,
+        });
+        advance(310);
+        expect(spin()).toHaveValue('1');
+        try {
+          fireEvent.pointerUp(incrementButton(), { button: 0, pointerId: 1, pointerType: 'mouse' });
+        } catch (error) {
+          reported.push(error);
+        }
+        advance(1000);
+        expect(spin()).toHaveValue('1');
+        expect(reported).toEqual([failure]);
+      } finally {
+        window.removeEventListener('error', onError);
+      }
+    });
+
     it('does not start when your onPointerDown prevents the default', () => {
       render(
         <SpinButton
@@ -1962,6 +2005,11 @@ describe('SpinButton — slotProps', () => {
     } finally {
       error.mockRestore();
     }
+  });
+
+  it('keeps the input reachable: a part sets no inert on it', () => {
+    render(<SpinButton aria-label="Quantity" slotProps={{ input: { inert: true } }} />);
+    expect(spin()).not.toHaveAttribute('inert');
   });
 
   it('adds the attributes the SpinButton does not set, but no name, hidden or aria-hidden', () => {

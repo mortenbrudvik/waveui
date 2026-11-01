@@ -25,6 +25,9 @@ const checkedBox = 'forced-colors:border-[Highlight] forced-colors:bg-[Highlight
 const disabledCheckedBox = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
 const disabledGlyph = 'forced-colors:text-[GrayText] forced-colors:forced-color-adjust-none';
 
+/** The handlers a part drops while the checkbox is unavailable: it does not activate then. */
+const BLOCK_CLICK = ['onClick'] as const;
+
 /** Handlers that run on the `role="checkbox"` button instead of the root label (C-ROUTING). */
 type CheckboxControlHandlers = 'onClick' | 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
 
@@ -161,15 +164,18 @@ export interface CheckboxProps extends Omit<
      * `disabledFocusable`, the naming and Field attributes routed to it (`aria-label`,
      * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `aria-disabled`),
      * `required` (unset: the hidden input carries it), `form` (the checkbox belongs to the form
-     * of its own `form` prop, as its hidden input does), `hidden` and `aria-hidden` (a focusable
-     * control is never hidden). Your `onClick` runs before the Checkbox's `onClick` and its
-     * toggle (`preventDefault()` skips both) and is not called under `disabledFocusable`; your
-     * focus and key handlers run before the Checkbox's.
+     * of its own `form` prop, as its hidden input does), `hidden`, `inert` and `aria-hidden` (a
+     * focusable control is never hidden). Your `onClick` runs before the Checkbox's `onClick`
+     * and its toggle (`preventDefault()` skips both) and is not called under
+     * `disabledFocusable`; your focus and key handlers run before the Checkbox's.
      */
     indicator?: SlotPart<'button'>;
     /**
      * The `<span>` around the `label` text, rendered only with a `label` (stable class
-     * `wave-checkbox__label`). Locked: `id`, which names the control.
+     * `wave-checkbox__label`). Locked: `id`, which names the control, and `aria-label` unset (it
+     * would replace the text in the name). `hidden`, `inert` and `aria-hidden` stay yours: the
+     * control's `aria-labelledby` still reads hidden text. Your `onClick` is not called while the
+     * checkbox is `disabled` or `disabledFocusable`, as the checkbox does not toggle then.
      */
     label?: SlotPart<'span'>;
   };
@@ -298,7 +304,10 @@ export const Checkbox = ({
   const glyphClassName = unavailable ? disabledGlyph : forcedColors.selectedLeaf;
   const labelProps = mergeSlotProps(slotProps?.label, {
     className: cn(checkboxClassNames.label, 'text-body-1 text-foreground'),
-    locked: { id: labelTextId },
+    // The text names the control through aria-labelledby: an aria-label would replace it.
+    locked: { id: labelTextId, 'aria-label': undefined },
+    // The label does not activate while the checkbox is unavailable, as the checkbox does not.
+    blockHandlers: unavailable ? BLOCK_CLICK : undefined,
   });
   const labelText = hasLabel ? <span {...labelProps}>{materialiseSlotContent(label)}</span> : null;
   const indicatorProps = mergeSlotProps(slotProps?.indicator, {
@@ -345,6 +354,7 @@ export const Checkbox = ({
       // submits with, and a focusable control is never hidden.
       form: undefined,
       hidden: undefined,
+      inert: undefined,
       'aria-hidden': undefined,
       'aria-checked': indeterminate ? 'mixed' : checked,
       disabled: disabled && !disabledFocusable,
@@ -360,7 +370,7 @@ export const Checkbox = ({
     },
     // Under disabledFocusable your click handler is not called, as the Checkbox's `onClick`
     // is not.
-    blockHandlers: disabledFocusable ? ['onClick'] : undefined,
+    blockHandlers: disabledFocusable ? BLOCK_CLICK : undefined,
   });
 
   return (

@@ -122,7 +122,8 @@ export interface ColorSliderProps extends Omit<
   slotProps?: {
     /**
      * The `<div>` that draws the gradient rail (stable class `wave-color-slider__rail`).
-     * Locked: `aria-hidden`, which keeps the drawing out of the accessibility tree.
+     * Locked: `aria-hidden`, which keeps the drawing out of the accessibility tree, and
+     * `tabIndex` (unset: a drawing is never a tab stop).
      */
     rail?: SlotPart<'div'>;
     /**
@@ -298,7 +299,7 @@ export const ColorSlider = ({
             vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
             resolvedShape === 'square' && 'rounded-none',
           ),
-          locked: { 'aria-hidden': 'true' },
+          locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
       />
       <input

@@ -361,7 +361,7 @@ export const CalendarDayGrid = ({
                         {...(markedDotPart &&
                           mergeSlotProps(markedDotPart, {
                             className: markedDotClassName,
-                            locked: { 'aria-hidden': 'true' },
+                            locked: { 'aria-hidden': 'true', tabIndex: undefined },
                           }))}
                       />
                     )}

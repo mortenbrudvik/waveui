@@ -1484,6 +1484,44 @@ describe('Option — slotProps', () => {
     expect(indicator).toHaveAttribute('data-wave-option-box', '');
   });
 
+  it('keeps the indicator out of the tab order: a part sets no tabIndex on it', () => {
+    render(
+      <Listbox aria-label="Fruit" multiselect>
+        <Option value="a" slotProps={{ indicator: { tabIndex: 0 } }}>
+          Apple
+        </Option>
+      </Listbox>,
+    );
+    expect(part(optionClassNames.indicator)).not.toHaveAttribute('tabindex');
+  });
+
+  it('keeps the content naming the option: no role, aria-label or hidden state from a part', () => {
+    render(
+      <Listbox aria-label="Fruit">
+        <Option
+          value="a"
+          slotProps={{
+            content: {
+              role: 'img',
+              'aria-label': 'Other',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        >
+          Apple
+        </Option>
+      </Listbox>,
+    );
+    const option = screen.getByRole('option', { name: 'Apple' });
+    const content = part(optionClassNames.content);
+    expect(option).toContainElement(content);
+    for (const attribute of ['role', 'aria-label', 'hidden', 'inert', 'aria-hidden']) {
+      expect(content).not.toHaveAttribute(attribute);
+    }
+  });
+
   it('ignores the indicator part in a single-select list, which draws no square', () => {
     const indicator = React.createRef<HTMLSpanElement>();
     render(
@@ -1630,6 +1668,19 @@ describe('OptionGroup — slotProps', () => {
     expect(group).not.toHaveAttribute('hidden');
     expect(group).not.toHaveAttribute('aria-label');
     expect(group).toHaveAttribute('aria-labelledby', `${heading.id} extra`);
+  });
+
+  it('keeps its options reachable: a part sets no inert or aria-hidden on the list', () => {
+    render(
+      <Listbox aria-label="Fruit">
+        <OptionGroup label="More" slotProps={{ list: { inert: true, 'aria-hidden': true } }}>
+          <Option value="a">Apple</Option>
+        </OptionGroup>
+      </Listbox>,
+    );
+    const group = screen.getByRole('group', { name: 'More' });
+    expect(group).not.toHaveAttribute('inert');
+    expect(group).not.toHaveAttribute('aria-hidden');
   });
 
   it('ignores the label part without a label, and still warns about an unnamed group', () => {

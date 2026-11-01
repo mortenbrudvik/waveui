@@ -589,6 +589,11 @@ describe('ColorSlider — slotProps', () => {
     expect(ref.current).toBe(rootOf(input));
   });
 
+  it('keeps the rail out of the tab order: a part sets no tabIndex on it', () => {
+    render(<ColorSlider defaultValue={DARK_BLUE} slotProps={{ rail: { tabIndex: 0 } }} />);
+    expect(railOf(slider())).not.toHaveAttribute('tabindex');
+  });
+
   it('adds your attributes and handlers; the rail stays hidden from assistive technology', () => {
     const onClick = vi.fn();
     const onValueChange = vi.fn();

@@ -698,6 +698,15 @@ describe('InfoLabel — slotProps', () => {
     expect(el).toHaveAttribute('title', 'More information');
   });
 
+  it('keeps the info button reachable: a part sets no inert on it', () => {
+    render(
+      <InfoLabel info={INFO} slotProps={{ infoButton: { inert: true } }}>
+        Password
+      </InfoLabel>,
+    );
+    expect(button()).not.toHaveAttribute('inert');
+  });
+
   it('keeps the props it passes on to its InfoButton over yours from untyped code', async () => {
     render(
       <InfoLabel

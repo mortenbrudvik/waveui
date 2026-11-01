@@ -7,7 +7,7 @@ import { partitionBreadcrumbItems } from '../../lib/breadcrumb';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import type { CoreSize, FocusMode, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, type SlotPart, type SlotPartWithRef } from '../../lib/slotProps';
 import { unwrapFragment } from '../../lib/renderTrigger';
 import { warnOnce } from '../../lib/dev';
 import { ChevronRightIcon } from '../../lib/icons';
@@ -103,7 +103,7 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
      * `onOverflowChange` of yours is dropped (the trail decides what overflows). An attribute only
      * an `<ol>` has does nothing on the `<div>`.
      */
-    list?: Omit<SlotPart<'ol'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
+    list?: SlotPartWithRef<'ol', HTMLElement>;
     /**
      * Every `<li>` of the trail, the one that holds the "…" button of `maxDisplayedItems`
      * included (stable class `wave-breadcrumb__list-item`); with `overflow="auto"` the button

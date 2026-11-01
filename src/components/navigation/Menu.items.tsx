@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn';
 import { menuDividerClassNames, menuItemClassNames } from '../../lib/classNames';
 import type { Slot } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { warnOnce } from '../../lib/dev';
 import { isOwnEvent } from '../../lib/events';
 import { ChevronRightIcon } from '../../lib/icons';
@@ -64,21 +64,25 @@ export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
   slotProps?: {
     /**
      * The `<span>` of the label (`children`), which fills the row (stable class
-     * `wave-menu-item__content`). Locked: no role or tab index, and the menu's markers (typeahead
-     * reads a label that is no string through this element).
+     * `wave-menu-item__content`). Locked: no role, tab index or roving container marker, the
+     * menu's markers (typeahead reads a label that is no string through this element), and unset
+     * `aria-label` (it would replace the text in the item's name), `hidden`, `inert` and
+     * `aria-hidden`.
      */
     content?: SlotPart<'span'>;
     /**
      * The `<span>` of `shortcut`, rendered while `shortcut` is set (stable class
      * `wave-menu-item__shortcut`). Locked: `dir` (`auto`, so the text keeps its own direction and
-     * "Ctrl+," its order in a right-to-left menu), no role or tab index, and the menu's markers.
+     * "Ctrl+," its order in a right-to-left menu), no role, tab index or roving container marker,
+     * and the menu's markers.
      */
     shortcut?: SlotPart<'span'>;
     /**
      * The chevron `<svg>` at the end of a submenu's trigger item, rendered only there and mirrored
      * in a right-to-left menu (stable class `wave-menu-item__submenu-indicator`). Locked:
-     * `aria-hidden` and `focusable` (it is a drawing), no role or tab index, and the menu's
-     * markers; its size, view box and paint are the glyph's, which your attributes replace.
+     * `aria-hidden` and `focusable` (it is a drawing), no role, tab index or roving container
+     * marker, and the menu's markers; its size, view box and paint are the glyph's, which your
+     * attributes replace.
      */
     submenuIndicator?: SlotPart<'svg'>;
   };
@@ -216,7 +220,13 @@ export function MenuItemRow({
         {...(parts?.content &&
           mergeSlotProps(parts.content, {
             className: contentClasses,
-            locked: { ...MENU_PART_LOCKS, 'data-menu-label': labelMarker },
+            // The label names the item: a part neither renames nor hides it.
+            locked: {
+              ...MENU_PART_LOCKS,
+              'aria-label': undefined,
+              ...HIDDEN_PART_LOCKS,
+              'data-menu-label': labelMarker,
+            },
             blockHandlers: disabled ? BLOCK_CLICK : undefined,
           }))}
       >

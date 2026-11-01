@@ -934,6 +934,18 @@ describe('ColorArea — slotProps', () => {
     expect(thumbOf(root)).toHaveAttribute('title', 'Thumb');
   });
 
+  it('keeps both drawings out of the tab order: a part sets no tabIndex on them', () => {
+    render(
+      <ColorArea
+        aria-label="Accent"
+        slotProps={{ field: { tabIndex: 0 }, thumb: { tabIndex: 0 } }}
+      />,
+    );
+    const root = group();
+    expect(fieldOf(root)).not.toHaveAttribute('tabindex');
+    expect(thumbOf(root)).not.toHaveAttribute('tabindex');
+  });
+
   it('attaches your refs to the parts; the area still measures a press against the field', () => {
     const field = React.createRef<HTMLDivElement>();
     const thumb = React.createRef<HTMLSpanElement>();

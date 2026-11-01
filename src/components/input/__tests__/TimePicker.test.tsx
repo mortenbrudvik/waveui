@@ -2489,6 +2489,27 @@ describe('TimePicker — slotProps', () => {
     expect(errorMessage.current).toHaveAttribute('data-part', 'error');
   });
 
+  it('keeps the empty row out of the tab order: a part sets no tabIndex on it', async () => {
+    render(
+      <TimePicker aria-label="Time" {...BOUNDS} slotProps={{ emptyMessage: { tabIndex: 0 } }} />,
+    );
+    await typeRejected(false);
+    expect(part(timePickerClassNames.emptyMessage)).not.toHaveAttribute('tabindex');
+  });
+
+  it('keeps the input and the clear button reachable: a part sets no inert on them', () => {
+    render(
+      <TimePicker
+        aria-label="Time"
+        defaultValue="09:00"
+        clearable
+        slotProps={{ input: { inert: true }, clearButton: { inert: true } }}
+      />,
+    );
+    expect(combobox()).not.toHaveAttribute('inert');
+    expect(part(timePickerClassNames.clearButton)).not.toHaveAttribute('inert');
+  });
+
   it('runs your option onClick before the selection, once per click in StrictMode; preventDefault() skips it', async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();

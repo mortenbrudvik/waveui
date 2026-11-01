@@ -10,7 +10,7 @@ import { INTERACTIVE_SELECTOR, isForeignEvent, type ForeignEventOptions } from '
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
 import { CheckIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, type SlotPartWithRef } from '../../lib/slotProps';
 import { focusRingInset, forcedColors } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -243,14 +243,14 @@ export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
      * The element around the item's children (stable class `wave-list-item__content`). Also
      * locked: `aria-label` unset (it would replace the content in the item's name).
      */
-    content?: Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
+    content?: SlotPartWithRef<'span', HTMLElement>;
     /**
      * The element around `action` (stable class `wave-list-item__action`), drawn while the
      * action renders content. In a grid it is a focusable cell with `tabIndex={-1}` (locked),
      * whose widgets the arrow keys reach. Clicks and keys that start in it never activate the
      * item.
      */
-    action?: Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
+    action?: SlotPartWithRef<'span', HTMLElement>;
   };
   /** Ref to the item element: an `<li>`, or a `<div role="row">` in grid mode. */
   ref?: React.Ref<HTMLLIElement | HTMLDivElement>;

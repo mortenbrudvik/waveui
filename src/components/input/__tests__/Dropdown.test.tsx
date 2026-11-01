@@ -2409,6 +2409,21 @@ describe('Dropdown — slotProps', () => {
     expect(clear).not.toHaveAttribute('aria-disabled');
   });
 
+  it('keeps the button and the clear button reachable: a part sets no inert on them', () => {
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        defaultValue="a"
+        clearable
+        slotProps={{ button: { inert: true }, clearButton: { inert: true } }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    expect(screen.getByRole('combobox', { name: 'Fruit' })).not.toHaveAttribute('inert');
+    expect(screen.getByRole('button', { name: 'Clear selection' })).not.toHaveAttribute('inert');
+  });
+
   it('submits only the hidden input and resets with its own form: the button part takes no name or form', () => {
     render(
       <>

@@ -44,8 +44,10 @@ export interface MenuItemLinkOwnProps {
   slotProps?: {
     /**
      * The `<span>` of the label (`children`), which fills the row (stable classes
-     * `wave-menu-item__content` and `wave-menu-item-link__content`). Locked: no role or tab index,
-     * and the menu's markers (typeahead reads a label that is no string through this element).
+     * `wave-menu-item__content` and `wave-menu-item-link__content`). Locked: no role, tab index
+     * or roving container marker, the menu's markers (typeahead reads a label that is no string
+     * through this element), and unset `aria-label` (it would replace the text in the item's
+     * name), `hidden`, `inert` and `aria-hidden`.
      */
     content?: SlotPart<'span'>;
     /**

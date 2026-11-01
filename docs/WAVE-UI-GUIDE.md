@@ -2916,12 +2916,12 @@ Named slots are not repeated in `slotProps`: a leaf has one way in. Where both r
 
 ### How a Part's Props Combine
 
-A part's props (`SlotPart<'<element>'>`) are its element's attributes, handlers and `ref` and any `data-*` attribute. They combine with the component's by the rules a component applies to the props of its root (C-COMPOSE), through `mergeSlotProps`:
+A part's props (`SlotPart<'<element>'>`) are its element's attributes, handlers and `ref` and any `data-*` attribute (a string, a number or a boolean). A value typed by an interface (`React.ButtonHTMLAttributes<HTMLButtonElement>`, one of yours) or returned by `getNativeElementProps` fits a part as an object literal does; a part whose ref takes another element than its own is typed `SlotPartWithRef<'<element>', <ref element>>` (List item's `content` and `action`, Input's `root`, Breadcrumb's `list`, InteractionTag.Secondary's `dismissIcon`). They combine with the component's by the rules a component applies to the props of its root (C-COMPOSE), through `mergeSlotProps`:
 
 1. **Order.** The component's default attributes, then yours, then its locked attributes: yours replace a default, a locked attribute always wins, also when its value is `undefined` (an `aria-controls` that exists only while a popup is open stays absent while it is closed).
 2. **Classes.** The component's classes, its stable class first, then yours, through `cn()`, so yours replace a conflicting class of the same variant ([Pattern 5](#pattern-5-cn-utility)); a gated state class (`data-[selected]:…`, `not-disabled:not-aria-disabled:hover:…`) stays next to a bare class of yours and wins by specificity, as it does on a root.
 3. **Style.** Your keys over the component's. A component that must control a key writes it after yours: a positioned popup's position, size limits and visibility (`lockPositionStyle`, also the beaks' offsets), a carousel track's translation and duration, a slide's width, a progress bar's value width.
-4. **Handlers.** Yours run first (several layers in order), then the component's, unless one of yours called `preventDefault()`: that skips the component's handling of the event, the component's own `on…` prop included. Work that only mirrors the DOM into state (the roving tab stop following focus, the end of a drag, a held key forgotten, the pointer over a control or a note) runs whatever yours do; each part's documentation says where. A disabled control's parts never call your `onClick` (the control's own is not called either); a consumer `aria-disabled` alone blocks nothing.
+4. **Handlers.** Yours run first (several layers in order), then the component's, unless one of yours called `preventDefault()`: that skips the component's handling of the event, the component's own `on…` prop included. Work that only mirrors the DOM into state (the roving tab stop following focus, the end of a drag, a held key forgotten, the pointer over a control or a note) runs after yours, also when they prevent the default; each part's documentation says where. A disabled control's parts never call your `onClick` (the control's own is not called either): neither the control's own element nor a part inside or beside it (a Switch's thumb and label, a Checkbox's or radio's label, a CompoundButton's text); a consumer `aria-disabled` alone blocks nothing.
 5. **Id lists.** `aria-labelledby` and `aria-describedby` are joined, the component's ids first: a part can add a name or a description, never remove the component's ids. Adding still changes a name in two cases: an `aria-labelledby` of yours wins over a part's locked `aria-label` in the name (a Pagination, Carousel or Breadcrumb overflow button, the Dismiss buttons of MessageBar and Toast, SpinButton's step buttons, a resize handle), and on a part whose text names its control (a menu item's or a Nav item's label, an InteractionTag Primary's text) it renames that control. Every other id reference (`aria-controls`, `aria-owns`, `aria-errormessage`, `aria-details`, `aria-activedescendant`) is no list: it follows rule 1, replacing a default, and is locked wherever the component wires it.
 6. **Refs.** Yours is attached beside the component's ref, which keeps working through inline refs that change on every render.
 7. **Nothing removes.** `null` and `undefined` are skipped, at the top level and in `style`, and only a function counts as a handler (`onClick: cond && fn` never removes the component's); `children`, `as`, `key` and `dangerouslySetInnerHTML` are type errors and are dropped.
@@ -2929,10 +2929,11 @@ A part's props (`SlotPart<'<element>'>`) are its element's attributes, handlers 
 **Locked attributes**, by kind:
 
 - **What the component sets on the part, as it sets it**: the role, the ids other elements point at, the ARIA state and references, the tab index of a roving item, the disabled state, the markers the component finds its elements by, and the component's own props routed to the part (an Input's `placeholder`, a Switch's `id`). Set those through the component.
-- **The hidden state of a part that holds a control, an item or the text of a name**: `hidden`, `inert` and `aria-hidden` are locked unset, so the content stays reachable by keyboard and assistive technology.
+- **The hidden state of a part that holds a control, an item or the text of a name**: `hidden`, `inert` and `aria-hidden` are locked unset, so the content stays reachable by keyboard and assistive technology. The label of a Switch, Checkbox or radio is the exception: the control's `aria-labelledby` still reads its text while it is hidden, so those three are yours.
 - **No item inside a composite**: a part inside a menu, a tree, a toolbar, a TagGroup, an arrow-key trail or a grid locks `role`, `tabIndex` and `data-roving-container` unset, so it never becomes another item, a second tab stop or a nested composite that takes the items out of the arrow order. Parts that only hold text and sit in no composite of their own (Card.Header's text parts, AvatarGroup.Item's name) lock the role but leave the tab index to you.
 - **Form wiring**: the control part of every control that a Field wires (Switch's and Checkbox's buttons, the inputs of Input, SearchBox, SpinButton, Combobox, TimePicker and DatePicker, Dropdown's button) locks `required` with the rest of that wiring (`id`, `aria-label`, `aria-invalid`, `aria-required`), at the control's own value, unset where the control renders no native `required` (Switch's and Checkbox's buttons); `ColorPicker.HexField`'s input locks it unset. A control whose value a hidden input submits also locks the other form attributes of its focusable part that could take the value from that input: `name` on a part that could submit itself (an `<input>`, a combobox button), and `form` where the control resets with the form its part names (Switch, Checkbox, SpinButton and the pickers). A `RadioGroup.Item` radio locks none of the three, since the group holds the hidden input and the reset. So the hidden input alone submits the value under the component's own `name` and resets it; a Switch's or Checkbox's `type="button"`, never a form entry, locks `form` and `required` but not `name`. A controlled input part locks `defaultValue` unset beside its `value`.
-- **Names**: a part whose text names a control locks `aria-label` unset, since an `aria-label` would replace its text in the name.
+- **Names**: a part whose text names a control locks `aria-label` unset, since an `aria-label` would replace its text in the name (a menu item's label, an Option's content, a CompoundButton's two lines, the label of a Switch, Checkbox or radio, a List item's content, a Tree or Nav item's label).
+- **Decorative parts**: a part that is `aria-hidden` (a thumb, a beak, a required mark, a dot, an empty row a status region announces) locks `tabIndex` unset, so it never becomes a tab stop that assistive technology cannot name.
 
 | Legend | Means |
 |---|---|
@@ -2944,7 +2945,7 @@ A part's props (`SlotPart<'<element>'>`) are its element's attributes, handlers 
 | popup | `role`, `id`, `data-side`, `data-align` and the hidden state; the position, size limits and visibility the positioning writes win over your style |
 | decorative | `aria-hidden` (and `focusable="false"` on an `<svg>`), with `role` and `tabIndex` unset |
 | its click, its keys | the component's handler of the event is locked: yours runs first, `preventDefault()` skips it |
-| always runs | bookkeeping that runs after your handler whatever it does |
+| always runs | bookkeeping that runs after your handler, also when it prevents the default |
 
 `aria-labelledby` and `aria-describedby` are joined on every part (rule 5), so the tables leave them out; every other attribute a row names is locked, and an id reference a row does not name (`aria-controls` on a part that sets none) is yours to set.
 
@@ -2956,22 +2957,22 @@ Every `slotProps` key, by group, with its element and what it locks; the JSDoc o
 
 | Component | Part | Element | Locked |
 |---|---|---|---|
-| Switch | `track` | `<button role="switch">` | Field wiring, `type`, `role`, `aria-checked`, `disabled`, `tabIndex`, `autoFocus`, `aria-disabled` and the other `disabledFocusable` attributes, `hidden`, `aria-hidden`, and unset `required` and `form` (the hidden input submits); its click (not under `disabledFocusable`) |
-| | `thumb` | `<span>` | `aria-hidden` |
-| | `label` | `<span>` | `id` (it names the switch) |
+| Switch | `track` | `<button role="switch">` | Field wiring, `type`, `role`, `aria-checked`, `disabled`, `tabIndex`, `autoFocus`, `aria-disabled` and the other `disabledFocusable` attributes, `hidden`, `inert`, `aria-hidden`, and unset `required` and `form` (the hidden input submits); its click (not under `disabledFocusable`) |
+| | `thumb` | `<span>` | `aria-hidden`, unset `tabIndex`; your click is not called while the switch is disabled |
+| | `label` | `<span>` | `id` (it names the switch), unset `aria-label`; your click is not called while the switch is disabled |
 | Checkbox | `indicator` | `<button role="checkbox">` | as Switch's `track` |
-| | `label` | `<span>` | `id` |
-| RadioGroup.Item | `indicator` | `<button role="radio">` | every prop of the item, `id`, `type`, `role`, `aria-checked`, `disabled`, the roving `tabIndex` and value, `aria-label`, `hidden`, `aria-hidden`; its click |
-| | `label` | `<span>` | `id`; its classes come after the label's own and `labelClassName` |
-| Input | `root` | the bordered `<span>` with `contentBefore` or `contentAfter`, else the `<input>` (with `input` applied after it) | `hidden` (the Input's own); on the `<span>` `data-size` and `data-appearance`; on the `<input>`, what `input` locks |
-| | `input` | `<input>` | every prop of the Input, `value` and `defaultValue` (its own or unset), `id`, `aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`, `disabled`, `readOnly`, `required`, `hidden`, `aria-hidden`, the native `size`; its `onChange` (an uncontrolled Input's text still changes) |
+| | `label` | `<span>` | as Switch's `label` |
+| RadioGroup.Item | `indicator` | `<button role="radio">` | every prop of the item, `id`, `type`, `role`, `aria-checked`, `disabled`, the roving `tabIndex` and value, unset `data-roving-container` and `data-roving-disabled`, `aria-label`, `hidden`, `inert`, `aria-hidden`; its click |
+| | `label` | `<span>` | `id`, unset `aria-label`; your click is not called while the radio is disabled; its classes come after the label's own and `labelClassName` |
+| Input | `root` | the bordered `<span>` with `contentBefore` or `contentAfter`, else the `<input>` (with `input` applied after it) | `hidden` (the Input's own); on the `<span>` `data-size`, `data-appearance` and unset `inert` and `aria-hidden`; on the `<input>`, what `input` locks |
+| | `input` | `<input>` | every prop of the Input, `value` and `defaultValue` (its own or unset), `id`, `aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`, `disabled`, `readOnly`, `required`, `hidden`, `inert`, `aria-hidden`, the native `size`; its `onChange` (an uncontrolled Input's text still changes) |
 | SpinButton | `decrementButton`, `incrementButton` | `<button>` | `type`, `tabIndex`, `disabled`, `aria-label`; its click and press (the end of a hold always runs) |
-| | `input` | `<input role="spinbutton">` | `type`, `role`, `value` (`defaultValue` unset), `disabled`, `readOnly`, `form`, the `aria-value*` attributes, Field wiring and every routed input prop, `name` unset (the hidden input submits), `hidden`, `aria-hidden`; its handlers (its focus and blur work always runs) |
+| | `input` | `<input role="spinbutton">` | `type`, `role`, `value` (`defaultValue` unset), `disabled`, `readOnly`, `form`, the `aria-value*` attributes, Field wiring and every routed input prop, `name` unset (the hidden input submits), `hidden`, `inert`, `aria-hidden`; its handlers (its focus and blur work always runs) |
 | RatingDisplay | `star` | `<span>`, the one star of `compact` | nothing (a full display's stars are `RatingDisplay.Item`s, which take their own props) |
 | | `value`, `count` | `<span>` | nothing |
-| Label | `required` | `<span>` | `aria-hidden` |
+| Label | `required` | `<span>` | `aria-hidden`, unset `tabIndex` |
 | Field | `label` | Field's own `<label>` (a `Label` or `InfoLabel` element as `label` takes your props directly) | `id`, `htmlFor` |
-| | `required` | `<span>`, the asterisk | `aria-hidden` |
+| | `required` | `<span>`, the asterisk | `aria-hidden`, unset `tabIndex` |
 | | `validationMessage` | `<p>` | `id`, `role`, `data-validation-state` |
 | | `hint` | `<p>` | `id` |
 
@@ -2979,38 +2980,38 @@ Every `slotProps` key, by group, with its element and what it locks; the JSDoc o
 
 | Component | Part | Element | Locked |
 |---|---|---|---|
-| Combobox | `input` | `<input role="combobox">` | `type`, `role`, `value` (`defaultValue` unset), Field wiring, `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`, `disabled`, `readOnly`, `placeholder`, every routed input prop, `name`, `form` and `required` unset (the hidden input submits), `hidden`, `aria-hidden`; its handlers (typed text is dropped on blur whatever yours do) |
-| | `clearButton` | `<button>` | `type`, `aria-label`, `disabled`, `tabIndex`, `aria-disabled`, `hidden`, `aria-hidden`; its click |
+| Combobox | `input` | `<input role="combobox">` | `type`, `role`, `value` (`defaultValue` unset), Field wiring, `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`, `disabled`, `readOnly`, `placeholder`, every routed input prop, `name`, `form` and `required` unset (the hidden input submits), `hidden`, `inert`, `aria-hidden`; its handlers (typed text is dropped on blur, also when yours prevent the default) |
+| | `clearButton` | `<button>` | `type`, `aria-label`, `disabled`, `tabIndex`, `aria-disabled`, the hidden state; its click |
 | | `expandButton` | `<button>` | `type`, `tabIndex` (never a tab stop), `aria-label`, `aria-expanded`, `aria-controls`, `disabled`, `aria-disabled`; its click |
 | | `listbox` | `<ul role="listbox">` | `id`, `role`, `tabIndex`, `aria-multiselectable`, `aria-activedescendant`, `aria-label`, the hidden state |
 | | `surface` | `<div>`, the popup | popup |
-| | `emptyMessage` | `<div>` | `aria-hidden` (a status region announces the text) |
-| Dropdown | `button` | `<button role="combobox">` | `type`, `role`, Field wiring, the listbox wiring of Combobox's `input`, `disabled`, `tabIndex`, `autoFocus`, `hidden`, `aria-hidden`, and unset `name`, `form` and `required`; its handlers |
+| | `emptyMessage` | `<div>` | `aria-hidden` (a status region announces the text), unset `tabIndex` |
+| Dropdown | `button` | `<button role="combobox">` | `type`, `role`, Field wiring, the listbox wiring of Combobox's `input`, `disabled`, `tabIndex`, `autoFocus`, the hidden state, and unset `name`, `form` and `required`; its handlers |
 | | `value` | `<span>` | nothing |
 | | `clearButton`, `listbox`, `surface` | `<button>`, `<ul role="listbox">`, `<div>` | as Combobox's |
-| Option | `indicator` | `<span>`, the checkbox square of a multi-select list | `aria-hidden`, its marker |
-| | `content` | `<span>` | nothing |
+| Option | `indicator` | `<span>`, the checkbox square of a multi-select list | `aria-hidden`, its marker, unset `tabIndex` |
+| | `content` | `<span>`, the text that names the option | unset `role` and `aria-label`, the hidden state |
 | OptionGroup | `label` | `<div>` | `id` (it names the list), `role` |
-| | `list` | `<ul role="group">` | `role`, `aria-label`, `hidden` |
+| | `list` | `<ul role="group">` | `role`, `aria-label`, the hidden state |
 | TagPicker | `tag` | a default tag's `<span>`: the props of the `Tag` TagPicker renders | `value`, `media`, `role`, `hidden`; otherwise the Tag's own rules |
-| | `removeButton` | a default tag's Dismiss `<button>` | `type`, `aria-label`, `disabled`, `tabIndex`, `hidden`, `aria-hidden`, the attributes of a button held focusable while disabled; its click (not while unavailable) |
+| | `removeButton` | a default tag's Dismiss `<button>` | `type`, `aria-label`, `disabled`, `tabIndex`, the hidden state, the attributes of a button held focusable while disabled; its click (not while unavailable) |
 | | `expandButton` | `<button>` | as Combobox's |
 | | `clearButton` | `<button>` | as `removeButton` (its focus tracking always runs) |
 | | `option` | a generated option's `<li>`: the props of the option | `value`, `label`, `data-value`, `media`, `secondaryContent`, option state; its own rules otherwise |
 | | `createOption` | the create option's `<li>`, applied after `option` | as `option`, and `data-create` |
-| | `overflowCount` | `<span>`, the "+N" chip | `aria-hidden` (the trigger's description lists the tags); its press |
+| | `overflowCount` | `<span>`, the "+N" chip | `aria-hidden` (the trigger's description lists the tags), unset `tabIndex`; its press |
 | | `surface` | `<div>`, the popup | popup |
-| | `emptyMessage` | `<div>` | `aria-hidden` |
-| SearchBox | `input` | `<input type="search">` | `type`, `value` (`defaultValue` unset), Field wiring, `required`, `disabled`, `placeholder`, every routed input prop (`name`, `form`, `readOnly`, …), `hidden`, `aria-hidden`; its handlers |
-| | `dismissButton` | the clear `<button>` | `type`, `disabled`, `tabIndex`, `hidden`, `aria-hidden`, the name, a merged `disabledFocusable` Button's attributes; its click. A `<button>` or `Button` passed as `dismiss` gives the defaults this part replaces |
+| | `emptyMessage` | `<div>` | as Combobox's |
+| SearchBox | `input` | `<input type="search">` | `type`, `value` (`defaultValue` unset), Field wiring, `required`, `disabled`, `placeholder`, every routed input prop (`name`, `form`, `readOnly`, …), the hidden state; its handlers |
+| | `dismissButton` | the clear `<button>` | `type`, `disabled`, `tabIndex`, the hidden state, the name, a merged `disabledFocusable` Button's attributes; its click. A `<button>` or `Button` passed as `dismiss` gives the defaults this part replaces |
 | TimePicker | `input` | `<input role="combobox">` | as Combobox's `input` |
 | | `clearButton`, `expandButton`, `listbox` | `<button>`, `<button>`, `<ul role="listbox">` | as Combobox's |
 | | `errorMessage` | `<p role="alert">` | `id`, `role` |
 | | `option` | `<li role="option">` | `id`, `role`, `aria-selected`, option state; its click |
 | | `checkIcon` | `<span>` | nothing |
 | | `surface` | `<div>`, the popup | popup, `data-state`, unset `data-presence` |
-| | `emptyMessage` | `<div>` | `aria-hidden` |
-| DatePicker | `input` | `<input>` | `type`, `value` (`defaultValue` unset), Field wiring, `disabled`, `readOnly`, `placeholder`, every routed input prop, `hidden`, `aria-hidden`, and unset `name`, `form` and `required`; its handlers |
+| | `emptyMessage` | `<div>` | as Combobox's |
+| DatePicker | `input` | `<input>` | `type`, `value` (`defaultValue` unset), Field wiring, `disabled`, `readOnly`, `placeholder`, every routed input prop, the hidden state, and unset `name`, `form` and `required`; its handlers |
 | | `clearButton` | `<button>` | `aria-label`, button state, the hidden state; its click and press |
 | | `openCalendarButton` | `<button>` | `aria-label`, `aria-haspopup`, `aria-expanded`, `aria-controls`, button state, the hidden state; its click |
 | | `errorMessage` | `<p role="alert">` | `id`, `role` |
@@ -3024,7 +3025,7 @@ Every `slotProps` key, by group, with its element and what it locks; the JSDoc o
 | | `weekNumberHeader` | `<th>` | `scope` |
 | | `weekNumber` | `<th>` | `scope`, `aria-label` |
 | | `day` | `<button>`, 42 a month | the roving `tabIndex`, the name, `aria-pressed`, `aria-current`, button state, `data-date`, `data-selected`, `data-today`, `data-marked`, `data-outside`, the hidden state, each also while unset; its click (not while unavailable); the tab stop follows focus (always runs) |
-| | `markedDot` | `<span>` | `aria-hidden` |
+| | `markedDot` | `<span>` | `aria-hidden`, unset `tabIndex` |
 | | `month`, `year` | `<button>` | as `day`, the attributes each renders (a year is named by its text) |
 | | `todayButton`, `closeButton` | `<button>` | button state, the hidden state; its click |
 | Calendar | `header`, `previousButton`, `heading` (a `<div>`), `headingButton`, `nextButton`, `grid`, `weekday`, `weekNumberHeader`, `weekNumber`, `day`, `markedDot`, `month`, `year`, `footer`, `todayButton` | as DatePicker's | as DatePicker's parts of the same names; `previousButton` and `nextButton` as its `previousMonthButton` and `nextMonthButton` |
@@ -3035,14 +3036,14 @@ Every `slotProps` key, by group, with its element and what it locks; the JSDoc o
 |---|---|---|---|
 | ColorPicker | `opacityLabel`, `opacityValue` | `<span>` (the default layout with `showOpacity`) | nothing |
 | ColorPicker.HexField | `label` | `<span>` | nothing (a click focuses the input unless yours prevents it) |
-| | `input` | `<input>` | `type`, `value` (`defaultValue` unset), `id`, `maxLength`, `autoComplete`, the naming and validation attributes, `autoFocus`, `tabIndex`, the routed text-entry attributes, `hidden`, `aria-hidden`, and unset `name`, `form` and `required` (the picker submits the color); its handlers |
+| | `input` | `<input>` | `type`, `value` (`defaultValue` unset), `id`, `maxLength`, `autoComplete`, the naming and validation attributes, `autoFocus`, `tabIndex`, the routed text-entry attributes, the hidden state, and unset `name`, `form` and `required` (the picker submits the color); its handlers |
 | | `errorMessage` | `<span>` | `id` |
-| ColorArea | `field` | `<div>`, the gradient | `aria-hidden`; a prevented `onPointerDown` cancels the press |
-| | `thumb` | `<span>` | `aria-hidden` (it takes no pointer events) |
-| ColorSlider, AlphaSlider | `rail` | `<div>` | `aria-hidden` |
+| ColorArea | `field` | `<div>`, the gradient | `aria-hidden`, unset `tabIndex`; a prevented `onPointerDown` cancels the press |
+| | `thumb` | `<span>` | `aria-hidden`, unset `tabIndex` (it takes no pointer events) |
+| ColorSlider, AlphaSlider | `rail` | `<div>` | `aria-hidden`, unset `tabIndex` |
 | | `thumb` | `<span>` | nothing (the range input over it takes the pointer) |
 | CompoundButton | `contentContainer` | `<span>` | its marker `data-wave-compound-content` |
-| | `primaryText`, `secondaryText` | `<span>` | nothing |
+| | `primaryText`, `secondaryText` | `<span>`, the text that names the button | unset `aria-label`, the hidden state |
 
 The sliders of ColorArea, ColorSlider and AlphaSlider are their range inputs, which take the component's own props and `controlRef`. CompoundButton's button and `icon` are Button's. A disabled CompoundButton calls no `onClick` of its parts.
 
@@ -3056,9 +3057,9 @@ The sliders of ColorArea, ColorSlider and AlphaSlider are their range inputs, wh
 | Drawer.HeaderTitle | `heading` | `<h2>`, or the level of `headingLevel` | `id` (the drawer's `aria-labelledby`) |
 | NavDrawer | `nav` | `<nav>` | its name (`aria-label`, unset while `aria-labelledby` names it), no item, the hidden state |
 | NavDrawer.Body, NavDrawer.Footer | `list` | `<ul>` | no item, the hidden state |
-| Popover.Content | `beak` | `<div>` | `aria-hidden`, `data-wave-popover-arrow`, the position keys of its style |
+| Popover.Content | `beak` | `<div>` | `aria-hidden`, `data-wave-popover-arrow`, unset `tabIndex`, the position keys of its style |
 | | `title` | `<h2>` | `id` (the surface's `aria-labelledby`) |
-| Menu.Item | `content` | `<span>`, the label | no item, the menu's markers (typeahead, the icon and check columns) |
+| Menu.Item | `content` | `<span>`, the label | no item, the menu's markers (typeahead, the icon and check columns), unset `aria-label`, the hidden state |
 | | `shortcut` | `<span>` | `dir`, no item, the menu's markers |
 | | `submenuIndicator` | `<svg>` | decorative, the menu's markers |
 | Menu.ItemCheckbox, Menu.ItemRadio, Menu.ItemLink | `content`, `shortcut` | `<span>` | as Menu.Item's |
@@ -3076,10 +3077,10 @@ The sliders of ColorArea, ColorSlider and AlphaSlider are their range inputs, wh
 | InfoButton | `info` | `<div role="note">` | `id`, `role`, `data-wave-infolabel-surface`, `data-state`, `data-presence`, `inert`, `data-side`, `data-align`, unset `hidden` and `aria-hidden`, the position; its Tab order (the hover bookkeeping always runs) |
 | | `beak` | `<div>` | as TeachingPopover's |
 | InfoLabel | `label` | `<label>`, a `Label` | `id`, `htmlFor`, the Label props InfoLabel passes on |
-| | `infoButton` | `<button>`, an `InfoButton` | `id`, `aria-label`, the InfoButton props InfoLabel passes on, and unset `type`, `disabled`, `aria-haspopup`, `tabIndex`, `hidden` and `aria-hidden` (the InfoButton's own apply) |
+| | `infoButton` | `<button>`, an `InfoButton` | `id`, `aria-label`, the InfoButton props InfoLabel passes on, and unset `type`, `disabled`, `aria-haspopup`, `tabIndex` and the hidden state (the InfoButton's own apply) |
 | | `info` | the InfoButton's note | as InfoButton's `info` |
 | Toast | `content` | `<div>`, the text column | the hidden state |
-| | `dismissButton` | `<button>` | `type`, `aria-label`, and unset `disabled`, `tabIndex` and the hidden state; its click |
+| | `dismissButton` | `<button>` | `type`, `aria-label`, and unset `role`, `disabled`, `tabIndex` and the hidden state; its click |
 | Toast.Title | `label` | `<span>` | `id`, unset `aria-label`, the hidden state |
 | Toast.Body | `subtitle` | `<div>` | unset `aria-label`, the hidden state |
 | Toaster | `toast` | `<div role="group">`, every toast's container | `role`, `tabIndex`, `data-wave-toast`, `data-presence`, `inert` (set while the toast exits), and unset `hidden` and `aria-hidden`; its keys (Delete, Backspace, Escape). The timers pause on the region, never on the part |
@@ -3178,7 +3179,7 @@ Every Carousel part also locks `role`, `tabIndex`, `data-roving-container`, `dat
 | DataGrid.HeaderCell | `button` | the sort `<button>` | `type`, `id`, unset `role`, `tabIndex`, `disabled` and `contentEditable`, the hidden state, the grid markers unset (the cell sorts after your click) |
 | | `resizeHandle` | `<div role="separator">` | `role`, `aria-orientation`, the `aria-value*` attributes, `tabIndex`, the name, `data-dragging`, `data-grid-auxiliary`, the hidden state, unset `contentEditable` and `data-roving-container`; its press, move, keys and double click (the end of a drag, the blur and the measure always run, and the pressed key is forgotten on its release) |
 | DataGrid.Row | `selectionControl` | `<input type="checkbox">` or `type="radio"` | as `selectAllCheckbox`, with the radios' `name` and `form` |
-| MessageBar | `body` | `<div>`, the text column | the hidden state |
+| MessageBar | `body` | `<div>`, the text column | unset `role` and `aria-live`, the hidden state |
 | | `dismissButton` | `<button>` | at the values the bar and a `<button>` merged through `dismiss` give together: `type`, `disabled`, `tabIndex`, the hidden state, `role`, `contentEditable`, the name, `aria-disabled`, `data-disabled`, `data-disabled-focusable`, the roving markers; its click |
 | ProgressBar | `bar` | `<div>`, the fill | unset `role`, `tabIndex` and `hidden`; the value's width over your style |
 | | `label` | `<span>` | `id`, unset `aria-label`, the hidden state |
@@ -3737,7 +3738,7 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | `src/lib/cn.ts` | Class name merge utility |
 | `src/lib/types.ts` | Shared types (`Size`, `Appearance`, `Status`, `Orientation`, …) |
 | `src/lib/slot.ts` | Slot system for customizable sub-elements (`slotRendersContent`, `materialiseSlotContent`, `slotWrapsDefaultContent`, render-function children) |
-| `src/lib/slotProps.ts`, `src/lib/nativeProps.ts` | `mergeSlotProps` and `SlotPart`, the merge of every part (public, server-safe; the shared lock constants are internal), and `getNativeElementProps` (public, server-safe) |
+| `src/lib/slotProps.ts`, `src/lib/nativeProps.ts` | `mergeSlotProps`, `SlotPart` and `SlotPartWithRef`, the merge of every part (public, server-safe; the shared lock constants are internal), and `getNativeElementProps` (public, server-safe) |
 | `src/lib/slotParts.ts`, `src/__tests__/slotParts.test.ts` | The completeness gate of the parts: every part key a `slotProps` key, a named slot or an exclusion with its reason (test-only data) |
 | `src/components/input/RadioGroup.context.ts`, `src/components/navigation/Menu.hooks.ts`, `src/components/feedback/MessageBar.context.ts`, `src/components/table/DataGrid.hooks.ts` | The context hooks of RadioGroup, Menu, MessageBar and DataGrid (public; each module imports no component) |
 | `src/lib/children.ts` | `getElementType` (`{ suspend: false }` for walks deeper than the direct children), `isElementOfType`, `flattenChildren` for compound parts (Server Component references, Fragments) |

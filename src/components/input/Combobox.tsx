@@ -381,17 +381,18 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
      * `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`, `aria-errormessage`,
      * `aria-details`), `disabled`, `readOnly`, `placeholder`, every text input prop routed to it
      * (`autoComplete`, `maxLength`, `tabIndex`, …), `name`, `form` and `required` (the value is
-     * submitted by the Combobox's hidden input), `hidden` and `aria-hidden` (a focusable control
-     * is never hidden). Your handlers run before the Combobox's: `preventDefault()` in your
-     * `onChange` ignores the typed text, in your `onKeyDown` skips the listbox keys; the typed
-     * text is still dropped on blur whatever your `onBlur` does.
+     * submitted by the Combobox's hidden input), `hidden`, `inert` and `aria-hidden` (a
+     * focusable control is never hidden). Your handlers run before the Combobox's:
+     * `preventDefault()` in your `onChange` ignores the typed text, in your `onKeyDown` skips the
+     * listbox keys; the typed text is still dropped on blur, also when your `onBlur` prevents the
+     * default.
      */
     input?: SlotPart<'input'>;
     /**
      * The clear `<button>`, rendered with `clearable` while a value is selected (stable class
      * `wave-combobox__clear-button`). Locked: `type`, `aria-label` (`labels.clear`), `disabled`,
-     * `tabIndex`, `aria-disabled`, `hidden` and `aria-hidden`. Your `onClick` runs before the
-     * clear (`preventDefault()` skips it).
+     * `tabIndex`, `aria-disabled`, `hidden`, `inert` and `aria-hidden`. Your `onClick` runs
+     * before the clear (`preventDefault()` skips it).
      */
     clearButton?: SlotPart<'button'>;
     /**
@@ -419,7 +420,7 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
     /**
      * The "No matches" row of the popup, rendered while typed text matches no option (stable
      * class `wave-combobox__empty-message`). Locked: `aria-hidden` (a status region announces
-     * the text).
+     * the text) and `tabIndex` (unset: it is never a tab stop).
      */
     emptyMessage?: SlotPart<'div'>;
   };
@@ -1051,6 +1052,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       name: undefined,
       form: undefined,
       hidden: undefined,
+      inert: undefined,
       'aria-hidden': undefined,
     },
   });
@@ -1069,7 +1071,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
           {...inputProps}
           ref={inputMergedRef}
           // Dropping the typed text on blur runs after the part's and the Combobox's own `onBlur`,
-          // whatever they do.
+          // also when they prevent the default.
           onBlur={composeEventHandlers(
             inputProps.onBlur as React.FocusEventHandler<HTMLInputElement> | undefined,
             dropDraft,
@@ -1097,6 +1099,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
                 'data-disabled': undefined,
                 'data-disabled-focusable': undefined,
                 hidden: undefined,
+                inert: undefined,
                 'aria-hidden': undefined,
                 // Keeps focus in the input, so its blur does not act on a draft before the clear.
                 onMouseDown: preventMouseDown,
@@ -1147,7 +1150,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
                   comboboxClassNames.emptyMessage,
                   'px-3 py-1.5 text-body-1 text-muted-foreground',
                 ),
-                locked: { 'aria-hidden': 'true' },
+                locked: { 'aria-hidden': 'true', tabIndex: undefined },
               })}
             >
               {noMatchesText}

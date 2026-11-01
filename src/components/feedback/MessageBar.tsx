@@ -151,7 +151,9 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
      * row the column keeps its text on one line, so a class of yours that sets how the text wraps
      * replaces that, and the actions then stay on the text's row. It carries no handler of the bar:
      * an event on it bubbles as one on your message does. Locked, unset: `hidden`, `inert` and
-     * `aria-hidden`, so the message stays announced and the links in it reachable.
+     * `aria-hidden`, so the message stays announced and the links in it reachable, and `role` and
+     * `aria-live`, so the column adds no role or live region of its own (the bar's role says how
+     * the message is announced).
      */
     body?: SlotPart<'div'>;
     /**
@@ -653,7 +655,11 @@ const MessageBarRoot = ({
     <div
       className={bodyClassName}
       {...(bodyPart &&
-        mergeSlotProps(bodyPart, { className: bodyClassName, locked: HIDDEN_PART_LOCKS }))}
+        mergeSlotProps(bodyPart, {
+          className: bodyClassName,
+          // The bar's role says how the message is announced: no role or live region of its own.
+          locked: { role: undefined, 'aria-live': undefined, ...HIDDEN_PART_LOCKS },
+        }))}
       ref={bodyRef}
     >
       <StatusText id={namedByTitle && statusText ? statusTextId : undefined} label={statusText} />

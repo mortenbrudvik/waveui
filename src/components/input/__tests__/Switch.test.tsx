@@ -1295,6 +1295,45 @@ describe('Switch — slotProps', () => {
     expect(control).toHaveAttribute('aria-checked', 'false');
   });
 
+  it.each([
+    ['enabled', {}, 1],
+    ['disabled', { disabled: true }, 0],
+    ['disabledFocusable', { disabledFocusable: true }, 0],
+  ] as const)(
+    'calls your label and thumb onClick only while the switch is enabled (%s)',
+    (_, state, calls) => {
+      const labelClick = vi.fn();
+      const thumbClick = vi.fn();
+      render(
+        <Switch
+          label="Dark mode"
+          {...state}
+          slotProps={{ label: { onClick: labelClick }, thumb: { onClick: thumbClick } }}
+        />,
+      );
+      const track = screen.getByRole('switch', { name: 'Dark mode' });
+      fireEvent.click(screen.getByText('Dark mode'));
+      fireEvent.click(getThumb(track));
+      expect(labelClick).toHaveBeenCalledTimes(calls);
+      expect(thumbClick).toHaveBeenCalledTimes(calls);
+    },
+  );
+
+  it('keeps the label text naming the switch: a part sets no aria-label on it', () => {
+    render(<Switch label="Dark mode" slotProps={{ label: { 'aria-label': 'Other' } }} />);
+    expect(screen.getByText('Dark mode')).not.toHaveAttribute('aria-label');
+    expect(screen.getByRole('switch')).toHaveAccessibleName('Dark mode');
+  });
+
+  it('keeps the thumb out of the tab order and the track reachable: no tabIndex or inert from a part', () => {
+    render(
+      <Switch label="Dark mode" slotProps={{ thumb: { tabIndex: 0 }, track: { inert: true } }} />,
+    );
+    const track = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(getThumb(track)).not.toHaveAttribute('tabindex');
+    expect(track).not.toHaveAttribute('inert');
+  });
+
   it('has no accessibility violations with every part customised', async () => {
     render(
       <Switch

@@ -38,7 +38,8 @@ export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> 
   slotProps?: {
     /**
      * The `<span>` of the required indicator, rendered while `required` shows one (stable class
-     * `wave-label__required`). Locked: `aria-hidden`, which keeps it out of the label's name.
+     * `wave-label__required`). Locked: `aria-hidden`, which keeps it out of the label's name,
+     * and `tabIndex` (unset: a decorative element is never a tab stop).
      */
     required?: SlotPart<'span'>;
   };
@@ -79,7 +80,7 @@ export const Label = ({
 }: LabelProps) => {
   const requiredProps = mergeSlotProps(slotProps?.required, {
     className: cn(labelClassNames.required, 'ms-1 text-error'),
-    locked: { 'aria-hidden': 'true' },
+    locked: { 'aria-hidden': 'true', tabIndex: undefined },
   });
   return (
     <label

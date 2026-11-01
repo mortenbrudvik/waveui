@@ -2097,6 +2097,18 @@ describe('SearchBox — slotProps', () => {
     expect(button).not.toHaveAttribute('aria-hidden');
   });
 
+  it('keeps the input and the clear button reachable: a part sets no inert on them', () => {
+    render(
+      <SearchBox
+        aria-label="Search"
+        defaultValue="query"
+        slotProps={{ input: { inert: true }, dismissButton: { inert: true } }}
+      />,
+    );
+    expect(screen.getByRole('searchbox', { name: 'Search' })).not.toHaveAttribute('inert');
+    expect(clearButton()).not.toHaveAttribute('inert');
+  });
+
   it('keeps the text its own: a part’s defaultValue never reaches the controlled input', async () => {
     const user = userEvent.setup();
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});

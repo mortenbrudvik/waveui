@@ -222,9 +222,10 @@ export interface PopoverContentProps extends Omit<React.HTMLAttributes<HTMLDivEl
     /**
      * The `<div>` of the beak, the rotated square on the edge that faces the trigger (stable
      * class `wave-popover-content__beak`). The positioning places it, and your ref is attached
-     * beside the popover's. Locked: `aria-hidden` (it is a drawing), its marker
-     * `data-wave-popover-arrow`, and the keys of its style that the positioning sets (`position`,
-     * `left`, `top` and the offset of the edge it sits on), which win over yours.
+     * beside the popover's. Locked: `aria-hidden` (it is a drawing), `tabIndex` (unset: a drawing
+     * is never a tab stop), its marker `data-wave-popover-arrow`, and the keys of its style that
+     * the positioning sets (`position`, `left`, `top` and the offset of the edge it sits on),
+     * which win over yours.
      */
     beak?: SlotPart<'div'>;
     /**
@@ -1058,7 +1059,7 @@ export const PopoverContent = ({
   );
   const beak = mergeSlotProps(slotProps?.beak, {
     className: popoverContentClassNames.beak,
-    locked: { 'aria-hidden': 'true', 'data-wave-popover-arrow': '' },
+    locked: { 'aria-hidden': 'true', 'data-wave-popover-arrow': '', tabIndex: undefined },
   });
 
   return (

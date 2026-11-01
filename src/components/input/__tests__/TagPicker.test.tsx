@@ -2641,6 +2641,32 @@ describe('TagPicker — slotProps', () => {
     expect(clear).not.toBeDisabled();
   });
 
+  it('keeps the clear button reachable and the empty row out of the tab order', async () => {
+    const { unmount } = render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultValue={['apple']}
+        clearable
+        slotProps={{ clearButton: { inert: true } }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Clear selection' })).not.toHaveAttribute('inert');
+    unmount();
+
+    render(
+      <TagPicker
+        aria-label="Fruit"
+        options={TWO}
+        defaultOpen
+        defaultQuery="zzz"
+        slotProps={{ emptyMessage: { tabIndex: 0 } }}
+      />,
+    );
+    await act(async () => {});
+    expect(part(tagPickerClassNames.emptyMessage)).not.toHaveAttribute('tabindex');
+  });
+
   it('runs your clearButton, expandButton and option onClick first; preventDefault() skips their action', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
@@ -2742,6 +2768,32 @@ describe('TagPicker — slotProps', () => {
       fireEvent.mouseDown(element);
       expect(onMouseDown).toHaveBeenCalledTimes(1);
       expect(combobox('Fruit')).toHaveFocus();
+    } finally {
+      ro.restore();
+    }
+  });
+
+  it('keeps the +N chip out of the tab order: a part sets no tabIndex on it', () => {
+    const ro = installResizeObserverMock();
+    try {
+      render(
+        <TagPicker
+          aria-label="Fruit"
+          options={options}
+          defaultValue={['apple', 'banana', 'cherry']}
+          overflow="count"
+          slotProps={{ overflowCount: { tabIndex: 0 } }}
+        />,
+      );
+      const control = combobox('Fruit').closest<HTMLElement>('[data-wave-tagpicker-control]')!;
+      mockRect(control, { width: 130 });
+      for (const tag of Array.from(control.querySelectorAll('[data-wave-tag-item]'))) {
+        mockRect(tag, { width: 60 });
+      }
+      ro.trigger(control);
+      const element = part(tagPickerClassNames.overflowCount)!;
+      expect(element).toHaveTextContent('+1');
+      expect(element).not.toHaveAttribute('tabindex');
     } finally {
       ro.restore();
     }

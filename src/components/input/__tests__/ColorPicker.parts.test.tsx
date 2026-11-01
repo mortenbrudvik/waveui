@@ -774,6 +774,11 @@ describe('ColorPicker.HexField — slotProps', () => {
     }
   });
 
+  it('keeps the input reachable: a part sets no inert on it', () => {
+    render(inPicker(<ColorPicker.HexField slotProps={{ input: { inert: true } }} />));
+    expect(hexInput()).not.toHaveAttribute('inert');
+  });
+
   it('keeps the error message id that the input names', () => {
     render(inPicker(<ColorPicker.HexField slotProps={{ errorMessage: { id: 'mine' } }} />));
     fireEvent.change(hexInput(), { target: { value: 'zz' } });

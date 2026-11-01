@@ -1279,6 +1279,31 @@ describe('Checkbox — slotProps', () => {
     expect(control).toHaveAttribute('aria-checked', 'false');
   });
 
+  it.each([
+    ['enabled', {}, 1],
+    ['disabled', { disabled: true }, 0],
+    ['disabledFocusable', { disabledFocusable: true }, 0],
+  ] as const)(
+    'calls your label onClick only while the checkbox is enabled (%s)',
+    (_, state, calls) => {
+      const onClick = vi.fn();
+      render(<Checkbox label="Accept" {...state} slotProps={{ label: { onClick } }} />);
+      fireEvent.click(screen.getByText('Accept'));
+      expect(onClick).toHaveBeenCalledTimes(calls);
+    },
+  );
+
+  it('keeps the label text naming the checkbox: a part sets no aria-label on it', () => {
+    render(<Checkbox label="Accept" slotProps={{ label: { 'aria-label': 'Other' } }} />);
+    expect(screen.getByText('Accept')).not.toHaveAttribute('aria-label');
+    expect(screen.getByRole('checkbox')).toHaveAccessibleName('Accept');
+  });
+
+  it('keeps the checkbox reachable: a part sets no inert on it', () => {
+    render(<Checkbox label="Accept" slotProps={{ indicator: { inert: true } }} />);
+    expect(screen.getByRole('checkbox', { name: 'Accept' })).not.toHaveAttribute('inert');
+  });
+
   it('has no accessibility violations with every part customised', async () => {
     render(
       <Checkbox

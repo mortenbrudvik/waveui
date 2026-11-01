@@ -735,6 +735,30 @@ describe('CompoundButton — slotProps', () => {
     expect(secondary).toHaveAttribute('id', 'second-line');
   });
 
+  it('keeps the text naming the button: no aria-label or hidden state from the text parts', () => {
+    const NAME_PART = {
+      'aria-label': 'Other',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as const;
+    render(
+      <CompoundButton
+        secondaryText="Later"
+        slotProps={{ primaryText: NAME_PART, secondaryText: NAME_PART }}
+      >
+        Send mail
+      </CompoundButton>,
+    );
+    const button = screen.getByRole('button', { name: /^Send mail\s*Later$/ });
+    const [, primary, secondary] = partsOf(button);
+    for (const element of [primary, secondary]) {
+      for (const attribute of ['aria-label', 'hidden', 'inert', 'aria-hidden']) {
+        expect(element).not.toHaveAttribute(attribute);
+      }
+    }
+  });
+
   it("runs your part's onClick first, then the button's onClick (StrictMode: once each)", async () => {
     const user = userEvent.setup();
     const order: string[] = [];

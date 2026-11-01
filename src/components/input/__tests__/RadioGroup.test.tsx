@@ -1678,6 +1678,66 @@ describe('RadioGroup.Item — slotProps', () => {
     expect(radio).not.toHaveAttribute('aria-hidden');
   });
 
+  it('keeps the label text naming the radio: a part sets no aria-label on it', () => {
+    render(
+      <RadioGroup aria-label="Choice">
+        <RadioGroup.Item value="a" label="One" slotProps={{ label: { 'aria-label': 'Other' } }} />
+      </RadioGroup>,
+    );
+    expect(screen.getByText('One')).not.toHaveAttribute('aria-label');
+    expect(screen.getByRole('radio')).toHaveAccessibleName('One');
+  });
+
+  it('keeps the radio reachable: a part sets no inert on it', () => {
+    render(
+      <RadioGroup aria-label="Choice">
+        <RadioGroup.Item value="a" label="One" slotProps={{ indicator: { inert: true } }} />
+      </RadioGroup>,
+    );
+    expect(screen.getByRole('radio', { name: 'One' })).not.toHaveAttribute('inert');
+  });
+
+  it("keeps the radio in the group's arrow order: a part sets no roving container or skip marker", async () => {
+    const user = userEvent.setup();
+    render(
+      <RadioGroup aria-label="Choice" defaultValue="a">
+        <RadioGroup.Item value="a" label="One" />
+        <RadioGroup.Item
+          value="b"
+          label="Two"
+          slotProps={{
+            indicator: { 'data-roving-container': '', 'data-roving-disabled': '' },
+          }}
+        />
+      </RadioGroup>,
+    );
+    const two = screen.getByRole('radio', { name: 'Two' });
+    expect(two).not.toHaveAttribute('data-roving-container');
+    expect(two).not.toHaveAttribute('data-roving-disabled');
+    await user.tab();
+    await user.keyboard('{ArrowDown}');
+    expect(two).toHaveFocus();
+    expect(two).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it.each([
+    ['enabled', {}, {}, 1],
+    ['disabled by the item', {}, { disabled: true }, 0],
+    ['disabled by the group', { disabled: true }, {}, 0],
+  ] as const)(
+    'calls your label onClick only while the radio is enabled (%s)',
+    (_, group, item, calls) => {
+      const onClick = vi.fn();
+      render(
+        <RadioGroup aria-label="Choice" {...group}>
+          <RadioGroup.Item value="a" label="One" {...item} slotProps={{ label: { onClick } }} />
+        </RadioGroup>,
+      );
+      fireEvent.click(screen.getByText('One'));
+      expect(onClick).toHaveBeenCalledTimes(calls);
+    },
+  );
+
   it('has no accessibility violations with every part customised', async () => {
     render(
       <RadioGroup aria-label="Choice" defaultValue="a">

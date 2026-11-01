@@ -3751,6 +3751,11 @@ describe('Popover.Content — slotProps', () => {
     expect(beak()).toHaveStyle({ opacity: '0.5' });
   });
 
+  it('keeps the beak out of the tab order: a part sets no tabIndex on it', () => {
+    render(<Open slotProps={{ beak: { tabIndex: 0 } }} />);
+    expect(beak()).not.toHaveAttribute('tabindex');
+  });
+
   it('locks the title’s id, which names the popover', () => {
     render(<Open slotProps={{ title: { id: 'mine', title: 'Heading' } }} />);
     expect(title().id).not.toBe('mine');

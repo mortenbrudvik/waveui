@@ -1653,6 +1653,40 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
     },
   );
 
+  it('keeps the label naming each kind: no aria-label, hidden state or roving container from a part', () => {
+    const LABEL_PART = {
+      'aria-label': 'Other',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+      'data-roving-container': '',
+    } as const;
+    render(
+      <PinnedItems
+        row={{ content: LABEL_PART }}
+        toggle={{ content: LABEL_PART, track: { 'data-roving-container': '' } }}
+      />,
+    );
+    for (const [role, label] of [
+      ['menuitemcheckbox', 'Grid'],
+      ['menuitemradio', 'Name'],
+      ['menuitemcheckbox', 'Wrap'],
+    ] as const) {
+      const row = named(role, label);
+      const content = get(row, menuItemClassNames.content);
+      for (const attribute of [
+        'aria-label',
+        'hidden',
+        'inert',
+        'aria-hidden',
+        'data-roving-container',
+      ]) {
+        expect(content, `${label} ${attribute}`).not.toHaveAttribute(attribute);
+      }
+    }
+    expect(track(named('menuitemcheckbox', 'Wrap'))).not.toHaveAttribute('data-roving-container');
+  });
+
   it('ignores the parts an item does not draw: no shortcut, and no switch on a checkbox or radio', () => {
     const parts = {
       shortcut: { className: 'my-shortcut' },

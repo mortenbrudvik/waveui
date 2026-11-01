@@ -342,8 +342,8 @@ export interface TimePickerProps extends Omit<
      * `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`,
      * `aria-errormessage`, `aria-details`), `disabled`, `readOnly`, `placeholder`, every text
      * input prop routed to it (`autoComplete`, `maxLength`, `tabIndex`, …), `name`, `form` and
-     * `required` (the value is submitted by the TimePicker's hidden input), `hidden` and
-     * `aria-hidden` (a focusable control is never hidden). Your handlers run before the
+     * `required` (the value is submitted by the TimePicker's hidden input), `hidden`, `inert`
+     * and `aria-hidden` (a focusable control is never hidden). Your handlers run before the
      * TimePicker's: `preventDefault()` in your `onChange` ignores the typed text, in your
      * `onKeyDown` skips the picker's keys, in your `onBlur` keeps the typed text uncommitted.
      */
@@ -351,8 +351,8 @@ export interface TimePickerProps extends Omit<
     /**
      * The clear `<button>`, rendered with `clearable` while a time is selected (stable class
      * `wave-time-picker__clear-button`). Locked: `type`, `aria-label` (`labels.clear`),
-     * `disabled`, `tabIndex`, `aria-disabled`, `hidden` and `aria-hidden`. Your `onClick` runs
-     * before the clear (`preventDefault()` skips it).
+     * `disabled`, `tabIndex`, `aria-disabled`, `hidden`, `inert` and `aria-hidden`. Your
+     * `onClick` runs before the clear (`preventDefault()` skips it).
      */
     clearButton?: SlotPart<'button'>;
     /**
@@ -402,7 +402,7 @@ export interface TimePickerProps extends Omit<
     /**
      * The status row of the open popup while no time is listed ("No matching times", "No times
      * available"; stable class `wave-time-picker__empty-message`). Locked: `aria-hidden` (a
-     * status region announces the text).
+     * status region announces the text) and `tabIndex` (unset: it is never a tab stop).
      */
     emptyMessage?: SlotPart<'div'>;
   };
@@ -1037,6 +1037,7 @@ export const TimePicker = (props: TimePickerProps) => {
                 name: undefined,
                 form: undefined,
                 hidden: undefined,
+                inert: undefined,
                 'aria-hidden': undefined,
               },
             })}
@@ -1064,6 +1065,7 @@ export const TimePicker = (props: TimePickerProps) => {
                   'data-disabled': undefined,
                   'data-disabled-focusable': undefined,
                   hidden: undefined,
+                  inert: undefined,
                   'aria-hidden': undefined,
                   // Keeps focus (and an open list) on the input while the pointer clears it.
                   onMouseDown: preventMouseDown,
@@ -1126,7 +1128,7 @@ export const TimePicker = (props: TimePickerProps) => {
                       timePickerClassNames.emptyMessage,
                       'px-3 py-1.5 text-body-1 text-muted-foreground',
                     ),
-                    locked: { 'aria-hidden': 'true' },
+                    locked: { 'aria-hidden': 'true', tabIndex: undefined },
                   })}
                 >
                   {statusMessage}

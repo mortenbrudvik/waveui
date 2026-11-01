@@ -82,12 +82,12 @@ export interface InfoButtonProps extends Omit<
      * The note `<div role="note">`, rendered in a portal while it shows (stable class
      * `wave-info-button__info`), which holds the beak and `info`; `motion` gives it its motion
      * classes, before yours. Your `onKeyDown` runs before the note's Tab order
-     * (`preventDefault()` skips it, as it does in `info`); the hover bookkeeping of your
-     * `onPointerEnter` and `onPointerLeave` runs whatever yours do. Locked: `id` (the button's
-     * `aria-controls`), `role`, `aria-labelledby` (your ids are added after the note's own), its
-     * marker `data-wave-infolabel-surface`, `data-state`, `data-presence`, `inert`, `data-side`
-     * and `data-align`, and, unset, `hidden` and `aria-hidden`; your `style` merges, but the
-     * position the positioning sets wins.
+     * (`preventDefault()` skips it, as it does in `info`); the hover bookkeeping runs after your
+     * `onPointerEnter` and `onPointerLeave`, also when they prevent the default. Locked: `id`
+     * (the button's `aria-controls`), `role`, `aria-labelledby` (your ids are added after the
+     * note's own), its marker `data-wave-infolabel-surface`, `data-state`, `data-presence`,
+     * `inert`, `data-side` and `data-align`, and, unset, `hidden` and `aria-hidden`; your `style`
+     * merges, but the position the positioning sets wins.
      */
     info?: SlotPart<'div'>;
     /**
@@ -469,8 +469,8 @@ export const InfoButton = ({
           {...noteProps}
           ref={noteRefs}
           style={lockPositionStyle(noteProps.style, floatingProps.style)}
-          // Bookkeeping of where the pointer is (the hover intent's state): it runs whatever a
-          // part's handlers do.
+          // Bookkeeping of where the pointer is (the hover intent's state): it runs also when a
+          // part's handlers prevent the default.
           onPointerEnter={composeEventHandlers(
             noteProps.onPointerEnter as React.PointerEventHandler<HTMLDivElement> | undefined,
             hoverSurfaceHandlers.onPointerEnter,

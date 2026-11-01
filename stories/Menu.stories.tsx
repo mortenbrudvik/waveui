@@ -800,7 +800,9 @@ function TemplateItem({ title, description, onSelect }: TemplateItemProps) {
         event.currentTarget.click();
       }}
       className={cn(
-        'flex cursor-pointer select-none items-start gap-2 px-3 py-1.5 hover:bg-subtle-hover focus:bg-subtle-hover',
+        'flex cursor-pointer select-none items-start gap-2 px-3 py-1.5',
+        // Gated as the built-in items' colors are: a disabled item takes no hover or focus color.
+        'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed not-disabled:not-aria-disabled:focus:bg-subtle-hover',
         focusRingInset,
       )}
     >

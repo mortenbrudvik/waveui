@@ -70,7 +70,7 @@ export interface InfoLabelProps
      * its press and focus bookkeeping aside, as with an InfoButton you render). Locked: `id`,
      * `type` (a button), `aria-label` (`infoButtonLabel`), `aria-labelledby` (your ids are added
      * after the label's and the button's), `disabled` and `aria-haspopup` (unset), `tabIndex`,
-     * `hidden` and `aria-hidden` (unset), and the InfoButton props the InfoLabel passes on
+     * `hidden`, `inert` and `aria-hidden` (unset), and the InfoButton props the InfoLabel passes on
      * (`info`, `size`, `openOnHover`, `motion` and the InfoButton's own `slotProps`, which carry
      * `info` below: one passed on through this part is ignored). A `data-*` attribute you set
      * replaces the InfoButton's own of that name (`data-size`), and its look does not follow it.
@@ -161,6 +161,7 @@ export const InfoLabel = ({
               disabled: undefined,
               tabIndex: undefined,
               hidden: undefined,
+              inert: undefined,
               'aria-hidden': undefined,
               'aria-haspopup': undefined,
               'aria-label': infoButtonLabel,

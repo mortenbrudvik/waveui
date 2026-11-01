@@ -2,11 +2,12 @@ import type * as React from 'react';
 
 /**
  * The props of the element `E` that {@link getNativeElementProps} can return: its attributes,
- * event handlers and `ref`, and any `data-*` attribute.
+ * event handlers and `ref`, and any `data-*` attribute, typed as a string, a number or a boolean
+ * (the values React writes as the attribute's text), so the result also fits a `slotProps` part.
  */
 export type NativeElementProps<E extends keyof React.JSX.IntrinsicElements> = Partial<
   React.JSX.IntrinsicElements[E]
-> & { [K in `data-${string}`]?: unknown };
+> & { [K in `data-${string}`]?: string | number | boolean | undefined };
 
 // The lists are space-separated literals (smaller than arrays of strings once minified);
 // `src/lib/__tests__/nativeProps.test.tsx` proves at type level that every name is a prop of the

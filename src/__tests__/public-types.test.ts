@@ -282,6 +282,7 @@ import type {
   SlotObject,
   SlotPart,
   SlotPartOwn,
+  SlotPartWithRef,
   NativeElementProps,
   SlotRenderFunction,
   SlotRenderProps,
@@ -566,9 +567,10 @@ function findUnexportedPublicTypes(program: ts.Program, entry: string, ownDir: s
  * Named types that public declarations refer to but that are deliberately not public API: they
  * name no concept of their own, and exporting them would make every rename a breaking change.
  * Each is a key union for an `Omit` (the handlers a composite routes to its focusable control), a
- * mask whose members are all `undefined`/`never` (it only makes other props a type error), or a
+ * mask whose members are all `undefined`/`never` (it only makes other props a type error), a
  * type-level conversion that only spells out literal types (its accumulator parameters are an
- * implementation detail).
+ * implementation detail), or a member of a public union named only so that inference can match
+ * it.
  */
 const INTERNAL_HELPERS: Record<string, string> = {
   'components/input/Checkbox.tsx#CheckboxControlHandlers':
@@ -583,6 +585,8 @@ const INTERNAL_HELPERS: Record<string, string> = {
     'mask: link-only attributes are a type error on items without `href`',
   'components/table/DataGrid.tsx#NoDeprecatedSortProps':
     'mask: the 0.4 sort props are a type error next to the 0.5 sort API',
+  'lib/slotProps.ts#SlotPartProps':
+    'member: the props half of the `SlotPart` union, named only so that a call infers the part element',
   'lib/tokens.ts#TokenVariable':
     'conversion: spells out the literal `var(--wave-…)` value of each `waveTokens` member',
 };
@@ -2250,6 +2254,32 @@ describe('0.18 customization surface from the package entry', () => {
     expect(part).toBeDefined();
   });
 
+  it('SlotPart takes interface-typed props; SlotPartWithRef types a ref of another element', () => {
+    const attributes: HTMLAttributes<HTMLElement> = { title: 'Attributes' };
+    const button: ComponentProps<'button'> = { title: 'Button' };
+    const native: NativeElementProps<'span'> = { 'data-part': 'native' };
+    const fromAttributes: SlotPart<'span'> = attributes;
+    const fromButton: SlotPart<'button'> = button;
+    const fromNative: SlotPart<'span'> = native;
+    expectTypeOf<Entry['mergeSlotProps']>().toBeCallableWith(attributes, {});
+
+    expectTypeOf<SlotPartWithRef<'span', HTMLElement>['ref']>().toEqualTypeOf<
+      Ref<HTMLElement> | undefined
+    >();
+    expectTypeOf<SlotPartWithRef<'span', HTMLElement>>().toHaveProperty('title');
+    expectTypeOf<SlotPartWithRef<'span', HTMLElement>>().not.toHaveProperty('children');
+    const fromAttributesWithRef: SlotPartWithRef<'span', HTMLElement> = attributes;
+    // @ts-expect-error a data attribute is a string, a number or a boolean
+    const objectData: SlotPartWithRef<'span', HTMLElement> = { title: 'T', 'data-part': {} };
+    expect([
+      fromAttributes,
+      fromButton,
+      fromNative,
+      fromAttributesWithRef,
+      objectData,
+    ]).toHaveLength(5);
+  });
+
   it('SlotRenderProps, and SlotRenderFunction defaulting to it', () => {
     expectTypeOf<SlotRenderProps>().toEqualTypeOf<
       HTMLAttributes<HTMLElement> & { [dataAttribute: `data-${string}`]: unknown }
@@ -2285,7 +2315,9 @@ describe('0.18 customization surface from the package entry', () => {
 
   it('getNativeElementProps and the props it returns for an element', () => {
     expectTypeOf<NativeElementProps<'input'>>().toEqualTypeOf<
-      Partial<JSX.IntrinsicElements['input']> & { [K in `data-${string}`]?: unknown }
+      Partial<JSX.IntrinsicElements['input']> & {
+        [K in `data-${string}`]?: string | number | boolean | undefined;
+      }
     >();
     expectTypeOf<Entry['getNativeElementProps']>().toEqualTypeOf<
       <P extends object, E extends keyof JSX.IntrinsicElements>(
@@ -2377,8 +2409,8 @@ describe('0.18 customization surface from the package entry', () => {
     }>();
     // A part whose element is a `span` or another element takes a ref to either.
     expectTypeOf<NonNullable<ListItemProps['slotProps']>>().toEqualTypeOf<{
-      content?: Omit<SlotPart<'span'>, 'ref'> & { ref?: Ref<HTMLElement> };
-      action?: Omit<SlotPart<'span'>, 'ref'> & { ref?: Ref<HTMLElement> };
+      content?: SlotPartWithRef<'span', HTMLElement>;
+      action?: SlotPartWithRef<'span', HTMLElement>;
     }>();
     expectTypeOf<NonNullable<AccordionTriggerProps['slotProps']>>().toEqualTypeOf<{
       heading?: SlotPart<'h3'>;

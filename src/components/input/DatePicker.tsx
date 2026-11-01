@@ -340,12 +340,12 @@ export interface DatePickerProps extends Omit<
      * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `disabled`,
      * `readOnly`, `placeholder`, every text input prop routed to it (`autoComplete`,
      * `inputMode`, `tabIndex`, …), `name`, `form` and `required` (the value is submitted by the
-     * DatePicker's hidden input), `hidden` and `aria-hidden` (a focusable control is never
-     * hidden). Your handlers run before the DatePicker's, and `preventDefault()` in yours skips
-     * the DatePicker's handling of the event, its own `on…` prop included (`onFocus`, `onBlur`,
-     * `onKeyDown`, `onKeyUp`): in your `onChange` it ignores the typed text, in your `onKeyDown`
-     * it skips the picker's keys (Enter, Alt+ArrowDown), in your `onBlur` it keeps the typed
-     * text uncommitted.
+     * DatePicker's hidden input), `hidden`, `inert` and `aria-hidden` (a focusable control is
+     * never hidden). Your handlers run before the DatePicker's, and `preventDefault()` in yours
+     * skips the DatePicker's handling of the event, its own `on…` prop included (`onFocus`,
+     * `onBlur`, `onKeyDown`, `onKeyUp`): in your `onChange` it ignores the typed text, in your
+     * `onKeyDown` it skips the picker's keys (Enter, Alt+ArrowDown), in your `onBlur` it keeps
+     * the typed text uncommitted.
      */
     input?: SlotPart<'input'>;
     /**
@@ -459,7 +459,8 @@ export interface DatePickerProps extends Omit<
     day?: SlotPart<'button'>;
     /**
      * The dot `<span>` inside a marked day's button (`markedDates`; stable class
-     * `wave-date-picker__marked-dot`). Locked: `aria-hidden` (the day's name says "marked").
+     * `wave-date-picker__marked-dot`). Locked: `aria-hidden` (the day's name says "marked") and
+     * `tabIndex` (unset: a drawing is never a tab stop).
      */
     markedDot?: SlotPart<'span'>;
     /**
@@ -1048,6 +1049,7 @@ export const DatePicker = (props: DatePickerProps) => {
               name: undefined,
               form: undefined,
               hidden: undefined,
+              inert: undefined,
               'aria-hidden': undefined,
             },
           })}

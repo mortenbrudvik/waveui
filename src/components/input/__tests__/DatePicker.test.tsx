@@ -3171,6 +3171,11 @@ describe('DatePicker — slotProps', () => {
     expect(screen.getByRole('grid')).toHaveAttribute('aria-labelledby', heading.id);
   });
 
+  it('keeps the input reachable: a part sets no inert on it', () => {
+    render(<DatePicker aria-label="Date" slotProps={{ input: { inert: true } }} />);
+    expect(textbox()).not.toHaveAttribute('inert');
+  });
+
   it('submits only the hidden input: the input part takes no name or form', () => {
     render(
       <form aria-label="Booking">

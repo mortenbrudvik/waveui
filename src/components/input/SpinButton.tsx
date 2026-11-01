@@ -167,11 +167,11 @@ export interface SpinButtonBaseProps
      * `readOnly`, `form`, the `aria-value*` attributes, `id`, the naming and Field attributes and
      * every other input prop routed to it (`placeholder`, `tabIndex`, `inputMode`, …), `name`
      * (the form submits the committed value under the SpinButton's own `name`, on its hidden
-     * input, never the shown text), `hidden` and `aria-hidden` (a focusable control is never
-     * hidden). Your handlers run before the SpinButton's and `preventDefault()` in them skips its
-     * handling, its own `onChange`, `onKeyDown`, `onFocus` and `onBlur` props included (a typed
-     * character or a step key is ignored); its focus and blur work (the shown text, committing
-     * typed text) runs after them whatever they do.
+     * input, never the shown text), `hidden`, `inert` and `aria-hidden` (a focusable control is
+     * never hidden). Your handlers run before the SpinButton's and `preventDefault()` in them
+     * skips its handling, its own `onChange`, `onKeyDown`, `onFocus` and `onBlur` props included
+     * (a typed character or a step key is ignored); its focus and blur work (the shown text,
+     * committing typed text) runs after them, also when they prevent the default.
      */
     input?: SlotPart<'input'>;
     /**
@@ -738,7 +738,8 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
 
   /**
    * A step button's props: its part merged with its own. The hold ends after a part's pointer
-   * handlers whatever they do, so a prevented release cannot leave the value spinning.
+   * handlers whatever they do (also when one throws), so a prevented release cannot leave the
+   * value spinning.
    */
   const stepButtonProps = (
     part: SlotPart<'button'> | undefined,
@@ -761,9 +762,13 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
         'aria-label': label,
       },
     });
+    // In a `finally`: the hold ends also when a part's handler throws.
     const ending = (handler: unknown) => (event: React.PointerEvent<HTMLButtonElement>) => {
-      (handler as React.PointerEventHandler<HTMLButtonElement> | undefined)?.(event);
-      endHold(event);
+      try {
+        (handler as React.PointerEventHandler<HTMLButtonElement> | undefined)?.(event);
+      } finally {
+        endHold(event);
+      }
     };
     return {
       ...props,
@@ -821,6 +826,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       // (its hidden input), never the shown text, and a focusable control is never hidden.
       name: undefined,
       hidden: undefined,
+      inert: undefined,
       'aria-hidden': undefined,
     },
   });
@@ -870,7 +876,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
         {...inputProps}
         ref={mergedInputRef}
         // The focus and blur work (the shown text, committing a draft) runs after the part's and
-        // the SpinButton's own handlers whatever they do.
+        // the SpinButton's own handlers, also when they prevent the default.
         onFocus={composeEventHandlers(
           inputProps.onFocus as React.FocusEventHandler<HTMLInputElement> | undefined,
           handleFocus,

@@ -54,9 +54,10 @@ export interface MenuItemCheckboxProps
   slotProps?: {
     /**
      * The `<span>` of the label (`children`), which fills the row (stable classes
-     * `wave-menu-item__content` and `wave-menu-item-checkbox__content`). Locked: no role or tab
-     * index, and the menu's markers (typeahead reads a label that is no string through this
-     * element).
+     * `wave-menu-item__content` and `wave-menu-item-checkbox__content`). Locked: no role, tab
+     * index or roving container marker, the menu's markers (typeahead reads a label that is no
+     * string through this element), and unset `aria-label` (it would replace the text in the
+     * item's name), `hidden`, `inert` and `aria-hidden`.
      */
     content?: SlotPart<'span'>;
     /**
@@ -94,9 +95,10 @@ export interface MenuItemRadioProps
   slotProps?: {
     /**
      * The `<span>` of the label (`children`), which fills the row (stable classes
-     * `wave-menu-item__content` and `wave-menu-item-radio__content`). Locked: no role or tab
-     * index, and the menu's markers (typeahead reads a label that is no string through this
-     * element).
+     * `wave-menu-item__content` and `wave-menu-item-radio__content`). Locked: no role, tab
+     * index or roving container marker, the menu's markers (typeahead reads a label that is no
+     * string through this element), and unset `aria-label` (it would replace the text in the
+     * item's name), `hidden`, `inert` and `aria-hidden`.
      */
     content?: SlotPart<'span'>;
     /**
@@ -132,9 +134,10 @@ export interface MenuItemSwitchProps
   slotProps?: {
     /**
      * The `<span>` of the label (`children`), which fills the row (stable classes
-     * `wave-menu-item__content` and `wave-menu-item-switch__content`). Locked: no role or tab
-     * index, and the menu's markers (typeahead reads a label that is no string through this
-     * element).
+     * `wave-menu-item__content` and `wave-menu-item-switch__content`). Locked: no role, tab
+     * index or roving container marker, the menu's markers (typeahead reads a label that is no
+     * string through this element), and unset `aria-label` (it would replace the text in the
+     * item's name), `hidden`, `inert` and `aria-hidden`.
      */
     content?: SlotPart<'span'>;
     /**
@@ -148,13 +151,13 @@ export interface MenuItemSwitchProps
      * The `<span>` of the switch at the row's end, its track, which follows the item's checked and
      * disabled state through its classes (stable class `wave-menu-item-switch__track`). Locked:
      * `aria-hidden` (the switch is a drawing: the item carries the state) and the switch's
-     * internal marker, no role or tab index, and the menu's markers.
+     * internal marker, no role, tab index or roving container marker, and the menu's markers.
      */
     track?: SlotPart<'span'>;
     /**
      * The `<span>` of the switch's thumb, inside the track, at the track's far end while the item
-     * is checked (stable class `wave-menu-item-switch__thumb`). Locked: no role or tab index, and
-     * the menu's markers.
+     * is checked (stable class `wave-menu-item-switch__thumb`). Locked: no role, tab index or
+     * roving container marker, and the menu's markers.
      */
     thumb?: SlotPart<'span'>;
   };

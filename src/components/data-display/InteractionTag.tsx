@@ -13,7 +13,7 @@ import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, type SlotPart, type SlotPartWithRef } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { TagAppearance, TagShape, TagSize } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -197,9 +197,7 @@ export interface InteractionTagSecondaryProps extends React.ButtonHTMLAttributes
      * the Secondary's own `onClick` still runs. While the Secondary is disabled your `onClick`
      * here is not called, as its own is not.
      */
-    dismissIcon?: Omit<SlotPart<'span'>, 'ref'> & {
-      ref?: React.Ref<HTMLSpanElement | SVGSVGElement>;
-    };
+    dismissIcon?: SlotPartWithRef<'span', HTMLSpanElement | SVGSVGElement>;
   };
   ref?: React.Ref<HTMLButtonElement>;
 }

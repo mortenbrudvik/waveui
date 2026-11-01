@@ -1020,6 +1020,37 @@ describe('Menu.Item — slotProps', () => {
     expect(row.contains(document.activeElement)).toBe(false);
   });
 
+  it('keeps the label naming the item: no aria-label, hidden state or roving container from a part', () => {
+    renderInMenuList(
+      <MenuItem
+        shortcut="Ctrl+S"
+        slotProps={{
+          content: {
+            'aria-label': 'Other',
+            hidden: true,
+            inert: true,
+            'aria-hidden': true,
+            'data-roving-container': '',
+          },
+          shortcut: { 'data-roving-container': '' },
+          submenuIndicator: { 'data-roving-container': '' },
+        }}
+      >
+        Save
+      </MenuItem>,
+      { submenuTrigger: true },
+    );
+    const row = named('Save');
+    expect(row).toHaveAccessibleName(/^Save/);
+    const label = content(row);
+    for (const attribute of ['aria-label', 'hidden', 'inert', 'aria-hidden']) {
+      expect(label).not.toHaveAttribute(attribute);
+    }
+    for (const element of [label, shortcut(row), chevron(row)]) {
+      expect(element).not.toHaveAttribute('data-roving-container');
+    }
+  });
+
   it('calls no click handler of a part while the item is disabled, as it calls no onClick', async () => {
     const parts = { content: vi.fn(), shortcut: vi.fn(), chevron: vi.fn() };
     const onClick = vi.fn();

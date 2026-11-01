@@ -78,8 +78,8 @@ export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
      * has `onDismiss` or sits in a Toaster. A `Toast.Close` child is your own element, not this
      * part. Your handlers run first: `preventDefault()` in your `onClick` skips the component's
      * handling of the event, its own `onDismiss` prop included, and the toast stays. Locked:
-     * `type`, the click, `aria-label` (`dismissLabel`) and, unset, `disabled`, `tabIndex`,
-     * `hidden`, `inert` and `aria-hidden`.
+     * `type`, the click, `aria-label` (`dismissLabel`) and, unset, `role`, `disabled`,
+     * `tabIndex`, `hidden`, `inert` and `aria-hidden`.
      */
     dismissButton?: SlotPart<'button'>;
   };
@@ -90,6 +90,7 @@ const registerNothing: ToastContextValue['registerPart'] = () => () => {};
 /** What the Dismiss button part locks besides its click and name: a button that always works. */
 const DISMISS_BUTTON_LOCKS = {
   type: 'button',
+  role: undefined,
   disabled: undefined,
   tabIndex: undefined,
   hidden: undefined,

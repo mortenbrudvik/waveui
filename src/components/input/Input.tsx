@@ -4,7 +4,7 @@ import { joinIds } from '../../lib/aria';
 import { inputClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, type SlotPart, type SlotPartWithRef } from '../../lib/slotProps';
 import {
   inputAppearanceClasses,
   inputFocus,
@@ -193,16 +193,17 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
      * The element that draws the field (stable class `wave-input`): the bordered `<span>` around
      * the input with `contentBefore` or `contentAfter`, else the `<input>` itself, where `input`
      * applies after it. Locked in both shapes: `hidden`, the Input's own. On the `<span>`, also
-     * `data-size` and `data-appearance`; on the `<input>`, the locked attributes of `input`.
+     * `data-size` and `data-appearance`, and `inert` and `aria-hidden` unset (the input inside
+     * stays reachable); on the `<input>`, the locked attributes of `input`.
      */
-    root?: Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
+    root?: SlotPartWithRef<'span', HTMLElement>;
     /**
      * The `<input>` (stable class `wave-input__input`), which the Input's own props, `ref`
      * included, reach as well. Locked: every prop you give the Input itself, its value (`value`
      * and `defaultValue`, the Input's own or unset), its id and naming (`id`, `aria-label`), its
      * Field and error wiring (`aria-invalid`, `aria-required`, `aria-errormessage`), the state
-     * its look follows (`disabled`, `readOnly`, `required`), `hidden` and `aria-hidden` (the
-     * Input's own: a focusable control is hidden only by them), the native `size` and, without
+     * its look follows (`disabled`, `readOnly`, `required`), `hidden`, `inert` and `aria-hidden`
+     * (the Input's own: a focusable control is hidden only by them), the native `size` and, without
      * content slots, `data-size` and `data-appearance`. Your `onChange` runs before the Input's
      * `onChange` and `onValueChange`, and `preventDefault()` in it skips both: on an
      * uncontrolled Input the text still changes, only `onChange` and `onValueChange` are
@@ -311,6 +312,7 @@ export const Input = ({
     defaultValue: props.defaultValue,
     ...fieldLocks(fieldProps),
     'aria-hidden': props['aria-hidden'],
+    inert: props.inert,
     disabled: props.disabled,
     readOnly: props.readOnly,
     size: nativeSize,
@@ -350,7 +352,8 @@ export const Input = ({
         className,
       ),
       style,
-      locked: { hidden, ...look },
+      // The wrapper holds the input: a part neither hides it nor takes it out of reach.
+      locked: { hidden, inert: undefined, 'aria-hidden': undefined, ...look },
     });
     control = (
       <span {...rootProps}>

@@ -4402,6 +4402,36 @@ describe('Combobox — slotProps', () => {
     }
   });
 
+  it('keeps the input and the clear button reachable: a part sets no inert on them', () => {
+    render(
+      <Combobox
+        aria-label="Fruit"
+        defaultValue="a"
+        clearable
+        slotProps={{ input: { inert: true }, clearButton: { inert: true } }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    expect(screen.getByRole('combobox')).not.toHaveAttribute('inert');
+    expect(screen.getByRole('button', { name: 'Clear selection' })).not.toHaveAttribute('inert');
+  });
+
+  it('keeps the empty row out of the tab order: a part sets no tabIndex on it', async () => {
+    render(
+      <Combobox
+        aria-label="Fruit"
+        defaultOpen
+        defaultQuery="zzz"
+        slotProps={{ emptyMessage: { tabIndex: 0 } }}
+      >
+        {TWO}
+      </Combobox>,
+    );
+    await act(async () => {});
+    expect(part(comboboxClassNames.emptyMessage)).not.toHaveAttribute('tabindex');
+  });
+
   it('keeps the locked attributes of the listbox and the surface; the position wins your style', async () => {
     render(
       <>

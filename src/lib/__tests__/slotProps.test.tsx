@@ -11,7 +11,9 @@ import {
   mergeSlotProps,
   type SlotPart,
   type SlotPartOwn,
+  type SlotPartWithRef,
 } from '../slotProps';
+import type { NativeElementProps } from '../nativeProps';
 import slotPropsSource from '../slotProps.ts?raw';
 
 afterEach(() => {
@@ -1190,6 +1192,103 @@ describe('SlotPart and mergeSlotProps types', () => {
     expect([withChildren, withAs, withKey, withHtml]).toHaveLength(4);
   });
 
+  it('takes a value typed by an interface, and what getNativeElementProps returns', () => {
+    // React's own interfaces and an interface of yours: no `data-*` index of their own.
+    const attributes: React.ButtonHTMLAttributes<HTMLButtonElement> = { title: 'Attributes' };
+    const componentProps: React.ComponentProps<'button'> = { title: 'Props' };
+    interface ButtonPartOfMine {
+      title?: string;
+      onClick?: React.MouseEventHandler<HTMLButtonElement>;
+    }
+    const mine: ButtonPartOfMine = { title: 'Mine' };
+    const fromAttributes: SlotPart<'button'> = attributes;
+    const fromProps: SlotPart<'button'> = componentProps;
+    const fromMine: SlotPart<'button'> = mine;
+    const svg: React.SVGProps<SVGSVGElement> = { focusable: 'false' };
+    const fromSvg: SlotPart<'svg'> = svg;
+    // What getNativeElementProps returns, `data-*` attributes included.
+    const native: NativeElementProps<'button'> = { title: 'Native', 'data-part': 'native' };
+    const fromNative: SlotPart<'button'> = native;
+    expect([fromAttributes, fromProps, fromMine, fromSvg, fromNative]).toHaveLength(5);
+
+    // mergeSlotProps takes them too, an HTMLAttributes value among them.
+    const html: React.HTMLAttributes<HTMLElement> = { title: 'Html' };
+    expect(mergeSlotProps(html, {})).toStrictEqual({ title: 'Html' });
+    expect(mergeSlotProps(attributes, {})).toStrictEqual({ title: 'Attributes' });
+    expect(mergeSlotProps(native, {})).toStrictEqual({ title: 'Native', 'data-part': 'native' });
+  });
+
+  it('still rejects what a part never takes in an object literal, next to a valid prop', () => {
+    // @ts-expect-error a part never takes children, also next to an attribute it takes
+    const withChildren: SlotPart<'span'> = { title: 'T', children: 'Replaced' };
+    // @ts-expect-error nor `as`
+    const withAs: SlotPart<'span'> = { title: 'T', as: 'div' };
+    // @ts-expect-error nor `key`
+    const withKey: SlotPart<'span'> = { title: 'T', key: 'k' };
+    // @ts-expect-error nor markup of its own
+    const withHtml: SlotPart<'span'> = { title: 'T', dangerouslySetInnerHTML: { __html: '' } };
+    // @ts-expect-error a class name is a string, not an array
+    const withClassList: SlotPart<'span'> = { title: 'T', className: ['a', 'b'] };
+    // @ts-expect-error a data attribute is a string, a number or a boolean
+    const withObjectData: SlotPart<'span'> = { title: 'T', 'data-part': { nested: true } };
+    const svgRef = React.createRef<SVGSVGElement>();
+    // @ts-expect-error a button part's ref takes a button, not an svg
+    const withWrongRef: SlotPart<'button'> = { title: 'T', ref: svgRef };
+    expect([
+      withChildren,
+      withAs,
+      withKey,
+      withHtml,
+      withClassList,
+      withObjectData,
+      withWrongRef,
+    ]).toHaveLength(7);
+  });
+
+  it('infers an svg part, and types the ref of a part with SlotPartWithRef', () => {
+    const inferred = <E extends keyof React.JSX.IntrinsicElements = 'span'>(
+      part: SlotPart<E> | readonly (SlotPart<E> | undefined)[] | undefined,
+    ): E => part as unknown as E;
+    const parts: { icon?: SlotPart<'svg'>; heading?: SlotPart<'h3'> } = {};
+    expectTypeOf(inferred(parts.icon)).toEqualTypeOf<'svg'>();
+    expectTypeOf(inferred(parts.heading)).toEqualTypeOf<'h3'>();
+
+    expectTypeOf<SlotPartWithRef<'span', HTMLElement>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLElement> | undefined
+    >();
+    const elementRef = React.createRef<HTMLElement>();
+    const divRef = React.createRef<HTMLDivElement>();
+    const svgRef = React.createRef<SVGSVGElement>();
+    const content: SlotPartWithRef<'span', HTMLElement> = {
+      title: 'Content',
+      'data-part': 'content',
+      ref: elementRef,
+    };
+    const list: SlotPartWithRef<'ol', HTMLElement> = { reversed: true, ref: divRef };
+    const icon: SlotPartWithRef<'span', HTMLSpanElement | SVGSVGElement> = { ref: svgRef };
+    const attributes: React.HTMLAttributes<HTMLElement> = { title: 'Attributes' };
+    const fromAttributes: SlotPartWithRef<'span', HTMLElement> = attributes;
+    // @ts-expect-error the rest is the props of the element: a span part takes no `reversed`
+    const notOl: SlotPartWithRef<'span', HTMLElement> = { reversed: true };
+    // @ts-expect-error and no children
+    const withChildren: SlotPartWithRef<'span', HTMLElement> = { title: 'T', children: 'x' };
+    // @ts-expect-error and checks its data attributes
+    const withObjectData: SlotPartWithRef<'span', HTMLElement> = { 'data-part': {} };
+    // @ts-expect-error its ref takes the elements it names only
+    const withSvgRef: SlotPartWithRef<'span', HTMLElement> = { ref: svgRef };
+    expect([
+      content,
+      list,
+      icon,
+      fromAttributes,
+      notOl,
+      withChildren,
+      withObjectData,
+      withSvgRef,
+    ]).toHaveLength(8);
+    expect(mergeSlotProps(content, {})).toMatchObject({ title: 'Content', ref: elementRef });
+  });
+
   it('infers the element from a typed part, and falls back to a span', () => {
     type Signature = <E extends keyof React.JSX.IntrinsicElements = 'span'>(
       part: SlotPart<E> | readonly (SlotPart<E> | undefined)[] | undefined,
@@ -1416,6 +1515,20 @@ describe('composeAfterPart', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(ours).toHaveBeenCalledTimes(1);
     expect(ours).toHaveBeenCalledWith(event);
+  });
+
+  it("runs ours when the part's handler throws, and lets the error go on", () => {
+    const calls: string[] = [];
+    const failure = new Error('part handler failed');
+    const composed = composeAfterPart<FakeEvent>(
+      () => {
+        calls.push('theirs');
+        throw failure;
+      },
+      () => calls.push('ours'),
+    );
+    expect(() => composed!(fakeEvent())).toThrow(failure);
+    expect(calls).toEqual(['theirs', 'ours']);
   });
 
   it('gives ours itself without a part handler, and skips a part value that is not a function', () => {

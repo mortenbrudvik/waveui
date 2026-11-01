@@ -208,6 +208,9 @@ RadioGroupRoot.displayName = 'RadioGroup';
 /** Forced-colors look of the dot of a disabled selected radio: GrayText, no Highlight fill. */
 const disabledDot = 'forced-colors:bg-[GrayText] forced-colors:forced-color-adjust-none';
 
+/** The handlers the label part drops while the radio is disabled: it does not select then. */
+const BLOCK_CLICK = ['onClick'] as const;
+
 /** Properties for the RadioItem component. */
 export interface RadioItemProps extends Omit<
   React.ButtonHTMLAttributes<HTMLButtonElement>,
@@ -249,16 +252,23 @@ export interface RadioItemProps extends Omit<
      * The `role="radio"` `<button>` that draws the circle: the element the item's own props
      * and `ref` reach, but for `className` (stable class `wave-radio-group-item__indicator`).
      * Locked: `id`, `type`, `role`, `aria-checked`, `disabled`, `tabIndex` (the group's roving
-     * tab stop), the roving value the group finds its radios by, `aria-label`, `hidden` and
-     * `aria-hidden` (a focusable radio is hidden only by the item's own props) and every prop
-     * you give the item itself. Your `onClick` runs before the item's `onClick` and its
-     * selection (`preventDefault()` skips both); your other handlers run before the item's.
+     * tab stop), the roving markers the group finds its radios by (`data-roving-value`, and
+     * `data-roving-container` and `data-roving-disabled` unset: a part can make the radio
+     * neither a nested composite nor a skipped item of the arrow order), `aria-label`,
+     * `hidden`, `inert` and `aria-hidden` (a focusable radio is hidden only by the item's own
+     * props) and every prop you give the item itself. Your `onClick` runs before the item's
+     * `onClick` and its selection (`preventDefault()` skips both); your other handlers run
+     * before the item's.
      */
     indicator?: SlotPart<'button'>;
     /**
      * The `<span>` around the `label` text, rendered only with a `label` (stable class
      * `wave-radio-group-item__label`). Its classes come in the order: the element's own, then
-     * `labelClassName`, then this part's `className`. Locked: `id`, which names the radio.
+     * `labelClassName`, then this part's `className`. Locked: `id`, which names the radio, and
+     * `aria-label` unset (it would replace the text in the name). `hidden`, `inert` and
+     * `aria-hidden` stay yours: the radio's `aria-labelledby` still reads hidden text. Your
+     * `onClick` is not called while the radio is disabled (its own `disabled` or the group's),
+     * as the radio is not selected then.
      */
     label?: SlotPart<'span'>;
   };
@@ -338,6 +348,10 @@ export function RadioItem({
     ),
     style,
     locked: {
+      // The group's arrow order: a part makes the radio neither a nested composite nor a skipped
+      // item (the item's own props, spread below, still can).
+      'data-roving-container': undefined,
+      'data-roving-disabled': undefined,
       id: generatedId,
       type: 'button',
       role: 'radio',
@@ -346,6 +360,7 @@ export function RadioItem({
       // radio is hidden only by the item's own props).
       'aria-label': rest['aria-label'],
       hidden: rest.hidden,
+      inert: rest.inert,
       'aria-hidden': rest['aria-hidden'],
       'aria-labelledby': labelledBy,
       'aria-checked': selected,
@@ -357,7 +372,9 @@ export function RadioItem({
   });
   const labelProps = mergeSlotProps(slotProps?.label, {
     className: cn(radioGroupItemClassNames.label, 'text-body-1 text-foreground', labelClassName),
-    locked: { id: labelTextId },
+    // The text names the control through aria-labelledby: an aria-label would replace it.
+    locked: { id: labelTextId, 'aria-label': undefined },
+    blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
   });
 
   return (

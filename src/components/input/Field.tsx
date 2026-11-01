@@ -155,8 +155,9 @@ export interface FieldProps extends Omit<React.HTMLAttributes<HTMLDivElement>, '
     label?: SlotPart<'label'>;
     /**
      * The asterisk `<span>` inside the Field's own `<label>`, rendered while the Field is
-     * `required` (stable class `wave-field__required`). Locked: `aria-hidden`. A `Label` or
-     * `InfoLabel` element shows its own indicator instead (its `required` part).
+     * `required` (stable class `wave-field__required`). Locked: `aria-hidden`, and `tabIndex`
+     * (unset: a decorative element is never a tab stop). A `Label` or `InfoLabel` element shows
+     * its own indicator instead (its `required` part).
      */
     required?: SlotPart<'span'>;
     /**
@@ -791,7 +792,7 @@ export const Field = ({
   });
   const requiredProps = mergeSlotProps(slotProps?.required, {
     className: cn(fieldClassNames.required, 'ms-0.5 text-error'),
-    locked: { 'aria-hidden': 'true' },
+    locked: { 'aria-hidden': 'true', tabIndex: undefined },
   });
   const messageProps = mergeSlotProps(slotProps?.validationMessage, {
     className: cn(

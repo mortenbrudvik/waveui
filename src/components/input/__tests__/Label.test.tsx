@@ -231,6 +231,15 @@ describe('Label — slotProps', () => {
     expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument();
   });
 
+  it('keeps the indicator out of the tab order: a part sets no tabIndex on it', () => {
+    render(
+      <Label required slotProps={{ required: { tabIndex: 0 } }}>
+        Name
+      </Label>,
+    );
+    expect(screen.getByText('*')).not.toHaveAttribute('tabindex');
+  });
+
   it('ignores the part while no indicator is shown', () => {
     const ref = React.createRef<HTMLSpanElement>();
     render(<Label slotProps={{ required: { ref } }}>Name</Label>);

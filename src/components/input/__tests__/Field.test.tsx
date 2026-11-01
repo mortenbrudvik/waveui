@@ -2455,6 +2455,15 @@ describe('Field — slotProps', () => {
     expect(input).toHaveAttribute('aria-describedby', `${message.id} ${hint.id}`);
   });
 
+  it('keeps the asterisk out of the tab order: a part sets no tabIndex on it', () => {
+    render(
+      <Field label="Name" required slotProps={{ required: { tabIndex: 0 } }}>
+        <Input />
+      </Field>,
+    );
+    expect(screen.getByText('*')).not.toHaveAttribute('tabindex');
+  });
+
   it('runs your handlers on the parts', () => {
     const onClick = vi.fn();
     render(

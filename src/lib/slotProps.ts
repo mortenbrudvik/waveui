@@ -22,9 +22,25 @@ import { mergeRefs } from './mergeRefs';
  * always renders and is never replaced; its props are merged into the element the component
  * draws.
  *
+ * Besides an object literal, a part takes a value typed by an interface of yours or of React's
+ * (`React.ButtonHTMLAttributes<HTMLButtonElement>`, `React.ComponentProps<'button'>`) and what
+ * `getNativeElementProps` returns. The type is a union of the props with any `data-*` attribute
+ * and the props alone, since a value typed by an interface has no `data-*` index of its own; an
+ * object literal's `data-*` attributes are still checked (a string, a number or a boolean).
+ *
  * @typeParam E - The part's element, as an intrinsic tag (`'span'`, `'input'`, `'div'`).
  */
-export type SlotPart<E extends keyof React.JSX.IntrinsicElements> = Omit<
+export type SlotPart<E extends keyof React.JSX.IntrinsicElements> =
+  | (SlotPartProps<E> & { [K in `data-${string}`]?: string | number | boolean | undefined })
+  | SlotPartProps<E>;
+
+/**
+ * The props of a part of the element `E` without its `data-*` attributes (module type): the
+ * second member of {@link SlotPart}, and the first one's base. Named so that a call of
+ * {@link mergeSlotProps} infers the part's element from a typed part (a union member without a
+ * name of its own gives inference nothing to match).
+ */
+type SlotPartProps<E extends keyof React.JSX.IntrinsicElements> = Omit<
   React.ComponentPropsWithRef<E>,
   'children' | 'className' | 'style' | 'key' | 'dangerouslySetInnerHTML'
 > & {
@@ -32,7 +48,24 @@ export type SlotPart<E extends keyof React.JSX.IntrinsicElements> = Omit<
   className?: string;
   /** Inline styles merged over the component's own, your keys winning. */
   style?: React.CSSProperties;
-} & { [K in `data-${string}`]?: string | number | boolean | undefined };
+};
+
+/**
+ * A {@link SlotPart} of the element `E` whose `ref` takes the element `R`: the type of a part that
+ * is not always the same element (a List item's content, an `<ol>` or a `<div>` of a Breadcrumb,
+ * Input's root, which is the `<input>` itself without content slots), or whose ref reaches either
+ * of two elements (an InteractionTag Secondary's `<span>` or `<svg>`). Everything but the ref is
+ * the props of `E`, as `SlotPart<E>` takes them.
+ *
+ * @typeParam E - The part's element, whose props the part takes.
+ * @typeParam R - The element (or elements) its `ref` takes, such as `HTMLElement`.
+ */
+export type SlotPartWithRef<E extends keyof React.JSX.IntrinsicElements, R> =
+  SlotPart<E> extends infer P
+    ? P extends unknown
+      ? Omit<P, 'ref'> & { ref?: React.Ref<R> }
+      : never
+    : never;
 
 /** What the component itself puts on a part, the second argument of {@link mergeSlotProps}. */
 export interface SlotPartOwn {
@@ -154,18 +187,26 @@ export function lockPositionStyle(
 
 /**
  * Internal work composed after a part's own handler (module-only): `ours` runs after `theirs`
- * whatever that does (as `composeEventHandlers` with `checkDefaultPrevented: false`), for work a
- * `preventDefault()` must not leave stale, such as bookkeeping that follows focus or the pointer.
- * `theirs` is the handler read from the part itself (`slotProps?.track?.onFocus`), so, as in
- * {@link mergeSlotProps}, only a function counts: another value from an untyped caller is skipped
- * instead of throwing before that work. Without a part handler, `ours` itself.
+ * whatever that does, for work a `preventDefault()` must not leave stale, such as bookkeeping
+ * that follows focus or the pointer. It runs when `theirs` prevents the default (as
+ * `composeEventHandlers` with `checkDefaultPrevented: false`) and when `theirs` throws (in a
+ * `finally`, after which the error goes on). `theirs` is the handler read from the part itself
+ * (`slotProps?.track?.onFocus`), so, as in {@link mergeSlotProps}, only a function counts:
+ * another value from an untyped caller is skipped instead of throwing before that work. Without
+ * a part handler, `ours` itself.
  */
 export function composeAfterPart<E extends { defaultPrevented: boolean }>(
   theirs: unknown,
   ours: ((event: E) => void) | undefined,
 ): ((event: E) => void) | undefined {
   return typeof theirs === 'function'
-    ? composeEventHandlers(theirs as (event: E) => void, ours, { checkDefaultPrevented: false })
+    ? (event: E) => {
+        try {
+          (theirs as (event: E) => void)(event);
+        } finally {
+          ours?.(event);
+        }
+      }
     : ours;
 }
 
@@ -218,7 +259,7 @@ export function composeAfterPart<E extends { defaultPrevented: boolean }>(
  *   own)` compiles with no type argument (it infers `'span'`, which both parts fit) or with
  *   `<'span' | 'input'>`, never with `<'input'>`. Without content slots the root part is
  *   spread on the input element, so Input types the root part's ref for any element:
- *   `Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> }`.
+ *   `SlotPartWithRef<'span', HTMLElement>`.
  * - **Never forwarded:** `children`, `as`, `key` and `dangerouslySetInnerHTML` (type errors on
  *   {@link SlotPart}; the component owns the part's content and element), and an own
  *   `__proto__` key (parsed JSON), which never reaches the result or its prototype.

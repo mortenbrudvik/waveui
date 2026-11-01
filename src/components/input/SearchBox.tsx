@@ -180,16 +180,16 @@ export interface SearchBoxProps
      * SearchBox controls the text), `id`, the naming and Field attributes (`aria-label`,
      * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `required`,
      * `disabled`, `placeholder`, every input prop routed to it (`name`, `form`, `readOnly`,
-     * `tabIndex`, `maxLength`, …), `hidden` and `aria-hidden` (a focusable control is never
-     * hidden). Your handlers run before the SearchBox's: `preventDefault()` in your `onChange`
-     * ignores the typed text, in your `onKeyDown` keeps the text on Escape.
+     * `tabIndex`, `maxLength`, …), `hidden`, `inert` and `aria-hidden` (a focusable control is
+     * never hidden). Your handlers run before the SearchBox's: `preventDefault()` in your
+     * `onChange` ignores the typed text, in your `onKeyDown` keeps the text on Escape.
      */
     input?: SlotPart<'input'>;
     /**
      * The clear `<button>`, rendered while there is text and the SearchBox is not read-only
      * (stable class `wave-search-box__dismiss-button`; `dismiss` fills its content). Locked:
-     * `type`, `disabled`, `tabIndex`, `hidden`, `aria-hidden`, its name (`aria-label`, "Clear
-     * search" unless `dismiss` names it) and the attributes of a merged Button's
+     * `type`, `disabled`, `tabIndex`, `hidden`, `inert`, `aria-hidden`, its name (`aria-label`,
+     * "Clear search" unless `dismiss` names it) and the attributes of a merged Button's
      * `disabledFocusable`. A `<button>` or `Button` passed as `dismiss` reaches this button too:
      * its other attributes are the defaults these props replace (yours win), its classes come
      * before yours, and its handlers run after yours. Your `onClick` runs before the clear
@@ -657,6 +657,7 @@ export const SearchBox = ({
       'data-disabled': clearDefaults['data-disabled'],
       'data-disabled-focusable': clearDefaults['data-disabled-focusable'],
       hidden: clearDefaults.hidden,
+      inert: clearDefaults.inert,
       'aria-hidden': clearDefaults['aria-hidden'],
       onClick: composeEventHandlers(slotOnClick, handleClear),
       // A merged `disabledFocusable` Button makes the clear button unavailable but focusable
@@ -756,6 +757,7 @@ export const SearchBox = ({
             ...fieldLocks(fieldProps),
             // A focusable control is never hidden (the root takes the SearchBox's `hidden`).
             hidden: undefined,
+            inert: undefined,
             'aria-hidden': undefined,
           },
         })}
