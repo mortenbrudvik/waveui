@@ -9,6 +9,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from '../../lib/icons';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRing, forcedColors } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -80,7 +81,89 @@ export interface PaginationProps extends Omit<React.HTMLAttributes<HTMLElement>,
   getItemAriaLabel?: (type: PaginationItemType, page: number, selected: boolean) => string;
   /** Ref to the root `<nav>` element. */
   ref?: React.Ref<HTMLElement>;
+  /**
+   * Props for the elements the control draws inside its landmark, by part, merged into each
+   * part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref attached. Every attribute the control
+   * sets on a part is locked, and no part takes another role or hides what it holds. A part takes
+   * no `children` (the control draws their content). On a button your handler runs before the
+   * button's own: `preventDefault()` in yours skips the page change, `onPageChange` included. The
+   * list and the list items receive the buttons' events after them. Fluent UI has no Pagination.
+   */
+  slotProps?: {
+    /**
+     * The `<ol>` of the buttons (stable class `wave-pagination__list`). Locked: no role (it stays
+     * a list), and no `hidden`, `inert` or `aria-hidden`, since it holds the buttons.
+     */
+    list?: SlotPart<'ol'>;
+    /**
+     * Every `<li>`: around each button, and around each ellipsis (stable class
+     * `wave-pagination__list-item`). Locked: no role (it stays a list item); around a button no
+     * `hidden`, `inert` or `aria-hidden`; around an ellipsis its `aria-hidden` and no tab index.
+     */
+    listItem?: SlotPart<'li'>;
+    /**
+     * The First button, with `showFirstLast` (stable class `wave-pagination__first-button`),
+     * locked as the Previous button (`previousButton`): on the first page it is unavailable.
+     */
+    firstButton?: SlotPart<'button'>;
+    /**
+     * The Previous button, with `showPreviousNext` (stable class
+     * `wave-pagination__previous-button`). Locked: `type`, its name (`aria-label`, from
+     * `getItemAriaLabel`), `disabled` (the control's), its click (the page change), no
+     * `aria-current`, no role or tab index, and no `hidden`, `inert` or `aria-hidden`. While it
+     * points at the current page (on the first page) it is unavailable: `aria-disabled` and
+     * `data-disabled`, both locked (unset otherwise), and your `onClick` is not called, as the page
+     * change is not.
+     */
+    previousButton?: SlotPart<'button'>;
+    /**
+     * Every page button (stable class `wave-pagination__page-button`), the current page's
+     * included. Locked as the Previous button, with `aria-current="page"` on the current page's
+     * and none on the others, and never unavailable (no `aria-disabled` or `data-disabled`).
+     */
+    pageButton?: SlotPart<'button'>;
+    /**
+     * The Next button, with `showPreviousNext` (stable class `wave-pagination__next-button`),
+     * locked as the Previous button: on the last page it is unavailable.
+     */
+    nextButton?: SlotPart<'button'>;
+    /**
+     * The Last button, with `showFirstLast` (stable class `wave-pagination__last-button`), locked
+     * as the Previous button: on the last page it is unavailable.
+     */
+    lastButton?: SlotPart<'button'>;
+    /**
+     * The "…" of every gap in the pages (stable class `wave-pagination__ellipsis`), inside its
+     * `aria-hidden` list item. Locked: no tab index.
+     */
+    ellipsis?: SlotPart<'span'>;
+  };
 }
+
+/** The `blockHandlers` of an unavailable button: no click of a part, as no page change. */
+const BLOCK_CLICK = ['onClick'] as const;
+
+/**
+ * What the list, the list item of a button and the buttons lock unset: a role, and the hidden
+ * state (each is or holds a button).
+ */
+const LIST_PART_LOCKS = {
+  role: undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/** What the list item of an ellipsis locks: no role, its own `aria-hidden` and no tab index. */
+const ELLIPSIS_ITEM_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'aria-hidden': 'true',
+} as const;
+
+/** What the ellipsis locks: no tab index (it sits in an `aria-hidden` list item). */
+const ELLIPSIS_LOCKS = { tabIndex: undefined } as const;
 
 function defaultGetItemAriaLabel(type: PaginationItemType, page: number): string {
   switch (type) {
@@ -215,6 +298,7 @@ const Pagination = ({
   getItemAriaLabel = defaultGetItemAriaLabel,
   className,
   ref,
+  slotProps,
   ...rest
 }: PaginationProps) => {
   // `isControlled` is useControllable's sticky mode: a pager that was ever controlled stays
@@ -276,27 +360,67 @@ const Pagination = ({
     emitPageChange(target);
   };
 
+  // The parts, merged only when given: a pager renders a list item and a button per page.
+  const listItemPart = slotProps?.listItem;
+  const listItemProps = (locked: Record<string, unknown>) =>
+    listItemPart &&
+    mergeSlotProps(listItemPart, { className: paginationClassNames.listItem, locked });
+  /** A button part with the button's own attributes and click locked. */
+  const buttonPartProps = (
+    part: SlotPart<'button'> | undefined,
+    className: string,
+    label: string,
+    current: 'page' | undefined,
+    unavailable: boolean,
+    onClick: React.MouseEventHandler<HTMLButtonElement>,
+  ) =>
+    part &&
+    mergeSlotProps(part, {
+      className,
+      locked: {
+        ...LIST_PART_LOCKS,
+        type: 'button',
+        'aria-label': label,
+        'aria-current': current,
+        disabled,
+        'aria-disabled': undefined,
+        'data-disabled': undefined,
+        ...(disabled ? {} : focusableDisabledProps(unavailable)),
+        tabIndex: undefined,
+        onClick,
+      },
+      blockHandlers: unavailable ? BLOCK_CLICK : undefined,
+    });
+
   const renderNavButton = (
     type: Exclude<PaginationItemType, 'page'>,
     target: number,
     unavailable: boolean,
     icon: React.ReactNode,
     partClassName: string,
-  ) => (
-    <li className={paginationClassNames.listItem}>
-      <button
-        type="button"
-        aria-label={getItemAriaLabel(type, target, false)}
-        disabled={disabled}
-        {...(disabled ? {} : focusableDisabledProps(unavailable))}
-        onClick={preventIfDisabled(unavailable, () => goTo(target))}
-        className={cn(partClassName, itemBaseClasses, sizeClasses, idleItemClasses)}
-      >
-        {icon}
-      </button>
-    </li>
-  );
+    part: SlotPart<'button'> | undefined,
+  ) => {
+    const label = getItemAriaLabel(type, target, false);
+    const onClick = preventIfDisabled(unavailable, () => goTo(target));
+    const buttonClassName = cn(partClassName, itemBaseClasses, sizeClasses, idleItemClasses);
+    return (
+      <li className={paginationClassNames.listItem} {...listItemProps(LIST_PART_LOCKS)}>
+        <button
+          type="button"
+          aria-label={label}
+          disabled={disabled}
+          {...(disabled ? {} : focusableDisabledProps(unavailable))}
+          onClick={onClick}
+          className={buttonClassName}
+          {...buttonPartProps(part, buttonClassName, label, undefined, unavailable, onClick)}
+        >
+          {icon}
+        </button>
+      </li>
+    );
+  };
 
+  const listClassName = cn(paginationClassNames.list, 'm-0 flex list-none items-center gap-1 p-0');
   return (
     <nav
       ref={ref}
@@ -304,7 +428,11 @@ const Pagination = ({
       {...rest}
       className={cn(paginationClassNames.root, className)}
     >
-      <ol className={cn(paginationClassNames.list, 'm-0 flex list-none items-center gap-1 p-0')}>
+      <ol
+        className={listClassName}
+        {...(slotProps?.list &&
+          mergeSlotProps(slotProps.list, { className: listClassName, locked: LIST_PART_LOCKS }))}
+      >
         {showFirstLast &&
           renderNavButton(
             'first',
@@ -312,6 +440,7 @@ const Pagination = ({
             atStart,
             <ChevronDoubleLeftIcon className={chevronClasses} />,
             paginationClassNames.firstButton,
+            slotProps?.firstButton,
           )}
         {showPreviousNext &&
           renderNavButton(
@@ -320,45 +449,72 @@ const Pagination = ({
             atStart,
             <ChevronLeftIcon className={chevronClasses} />,
             paginationClassNames.previousButton,
+            slotProps?.previousButton,
           )}
 
-        {range.map((item, index) =>
-          item === 'ellipsis' ? (
-            <li
-              key={index < range.length / 2 ? 'start-ellipsis' : 'end-ellipsis'}
-              aria-hidden="true"
-              className={paginationClassNames.listItem}
-            >
-              <span
-                className={cn(
-                  paginationClassNames.ellipsis,
-                  'inline-flex items-center justify-center text-muted-foreground',
-                  sizeClasses,
-                )}
+        {range.map((item, index) => {
+          if (item === 'ellipsis') {
+            const ellipsisClassName = cn(
+              paginationClassNames.ellipsis,
+              'inline-flex items-center justify-center text-muted-foreground',
+              sizeClasses,
+            );
+            return (
+              <li
+                key={index < range.length / 2 ? 'start-ellipsis' : 'end-ellipsis'}
+                aria-hidden="true"
+                className={paginationClassNames.listItem}
+                {...listItemProps(ELLIPSIS_ITEM_LOCKS)}
               >
-                …
-              </span>
-            </li>
-          ) : (
-            <li key={item} className={paginationClassNames.listItem}>
+                <span
+                  className={ellipsisClassName}
+                  {...(slotProps?.ellipsis &&
+                    mergeSlotProps(slotProps.ellipsis, {
+                      className: ellipsisClassName,
+                      locked: ELLIPSIS_LOCKS,
+                    }))}
+                >
+                  …
+                </span>
+              </li>
+            );
+          }
+          const label = getItemAriaLabel('page', item, item === page);
+          const current = item === page ? 'page' : undefined;
+          const onClick = () => goTo(item);
+          const buttonClassName = cn(
+            paginationClassNames.pageButton,
+            itemBaseClasses,
+            sizeClasses,
+            item === page ? currentItemClasses : idleItemClasses,
+          );
+          return (
+            <li
+              key={item}
+              className={paginationClassNames.listItem}
+              {...listItemProps(LIST_PART_LOCKS)}
+            >
               <button
                 type="button"
-                aria-label={getItemAriaLabel('page', item, item === page)}
-                aria-current={item === page ? 'page' : undefined}
+                aria-label={label}
+                aria-current={current}
                 disabled={disabled}
-                onClick={() => goTo(item)}
-                className={cn(
-                  paginationClassNames.pageButton,
-                  itemBaseClasses,
-                  sizeClasses,
-                  item === page ? currentItemClasses : idleItemClasses,
+                onClick={onClick}
+                className={buttonClassName}
+                {...buttonPartProps(
+                  slotProps?.pageButton,
+                  buttonClassName,
+                  label,
+                  current,
+                  false,
+                  onClick,
                 )}
               >
                 {item}
               </button>
             </li>
-          ),
-        )}
+          );
+        })}
 
         {showPreviousNext &&
           renderNavButton(
@@ -367,6 +523,7 @@ const Pagination = ({
             atEnd,
             <ChevronRightIcon className={chevronClasses} />,
             paginationClassNames.nextButton,
+            slotProps?.nextButton,
           )}
         {showFirstLast &&
           renderNavButton(
@@ -375,6 +532,7 @@ const Pagination = ({
             atEnd,
             <ChevronDoubleRightIcon className={chevronClasses} />,
             paginationClassNames.lastButton,
+            slotProps?.lastButton,
           )}
       </ol>
     </nav>

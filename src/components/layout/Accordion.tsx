@@ -10,6 +10,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 import type { HeadingLevel, MotionSlot, SelectionMode } from '../../lib/types';
 import { useCollapsePresence } from '../../hooks/useCollapsePresence';
@@ -96,6 +97,38 @@ const AccordionHeadingOutsideContext = React.createContext(false);
  * shrink the full-width button and move its chevron away from the row end.
  */
 const HEADING_CLASS = 'm-0 grid';
+
+/**
+ * What the heading part locks unset: a role and a level (it stays the heading `headingLevel`
+ * sets) and its hidden state (it holds the trigger).
+ */
+const HEADING_PART_LOCKS = {
+  role: undefined,
+  'aria-level': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/** What the chevron part locks: decorative, never a tab stop or focusable. */
+const EXPAND_ICON_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'aria-hidden': true,
+  focusable: 'false',
+} as const;
+
+/** The `blockHandlers` of the chevron of a disabled trigger: no click, as no toggle. */
+const BLOCK_CLICK = ['onClick'] as const;
+
+/**
+ * The props of the heading around a trigger, its `slotProps.heading` merged in when given (the
+ * Trigger renders the heading, or the Item around a wrapper of the Trigger).
+ */
+function headingProps(part: SlotPart<'h3'> | undefined): Record<string, unknown> {
+  const className = cn(accordionTriggerClassNames.heading, HEADING_CLASS);
+  return part ? mergeSlotProps(part, { className, locked: HEADING_PART_LOCKS }) : { className };
+}
 
 /**
  * C-CONTEXT: throws in development; in production logs once (`reportMissingContext`) and returns
@@ -348,6 +381,8 @@ export interface AccordionItemProps extends React.HTMLAttributes<HTMLDivElement>
 interface PartProps {
   id?: unknown;
   children?: unknown;
+  /** A Trigger's parts: the Item renders the heading around a wrapper of the Trigger. */
+  slotProps?: AccordionTriggerProps['slotProps'];
 }
 
 /**
@@ -461,7 +496,7 @@ const AccordionItem = ({
       panelElement ??= panel;
       parts.push(
         wrapsTriggerOnly(child) ? (
-          <Heading key={key} className={cn(accordionTriggerClassNames.heading, HEADING_CLASS)}>
+          <Heading key={key} {...headingProps(trigger?.props.slotProps?.heading)}>
             <AccordionHeadingOutsideContext.Provider value={true}>
               {child}
             </AccordionHeadingOutsideContext.Provider>
@@ -525,6 +560,33 @@ AccordionItem.displayName = 'AccordionItem';
 export interface AccordionTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Ref to the trigger `<button>`. */
   ref?: React.Ref<HTMLButtonElement>;
+  /**
+   * Props for the elements the trigger draws around and inside its button, by part, merged into
+   * each part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref attached. Every attribute the trigger
+   * sets on a part is locked. A part takes no `children` (the trigger draws their content); the
+   * button takes the trigger's own props. Fluent UI's AccordionHeader has a `button` and an
+   * `expandIcon` slot instead: here the button is the trigger itself.
+   */
+  slotProps?: {
+    /**
+     * The heading around the button, an `<h1>` to `<h6>` by `headingLevel` (stable class
+     * `wave-accordion-trigger__heading`); around a wrapper of the trigger (a Tooltip) the Item
+     * draws it, with this part merged in all the same. Locked: no role or `aria-level` (it stays
+     * the heading of its level), and no `hidden`, `inert` or `aria-hidden`, since it holds the
+     * button. It receives the button's events after the trigger has handled them.
+     */
+    heading?: SlotPart<'h3'>;
+    /**
+     * The chevron after the button's content (stable class
+     * `wave-accordion-trigger__expand-icon`), turned while the item is open. Locked:
+     * `aria-hidden`, `focusable="false"`, no role and no tab index (it is decorative). A click on
+     * it is a click on the button, after yours: `preventDefault()` in yours keeps the item as it
+     * is, and the trigger's own `onClick` still runs. While the button is `disabled` your
+     * `onClick` here is not called.
+     */
+    expandIcon?: SlotPart<'svg'>;
+  };
 }
 
 /**
@@ -541,6 +603,7 @@ const AccordionTrigger = ({
   children,
   onClick,
   ref,
+  slotProps,
   ...rest
 }: AccordionTriggerProps) => {
   const item = useAccordionItemContext('Accordion.Trigger');
@@ -553,6 +616,12 @@ const AccordionTrigger = ({
   const headingOutside = React.useContext(AccordionHeadingOutsideContext);
   const Heading: `h${AccordionHeadingLevel}` = `h${item.headingLevel}`;
   const state = item.isOpen ? 'open' : 'closed';
+  const iconPart = slotProps?.expandIcon;
+  const iconClassName = cn(
+    accordionTriggerClassNames.expandIcon,
+    'shrink-0 transition-transform motion-reduce:transition-none',
+    item.isOpen && 'rotate-180',
+  );
 
   const button = (
     <button
@@ -579,11 +648,14 @@ const AccordionTrigger = ({
       {children}
       <ChevronDownIcon
         size={16}
-        className={cn(
-          accordionTriggerClassNames.expandIcon,
-          'shrink-0 transition-transform motion-reduce:transition-none',
-          item.isOpen && 'rotate-180',
-        )}
+        className={iconClassName}
+        {...(iconPart &&
+          mergeSlotProps(iconPart, {
+            className: iconClassName,
+            locked: EXPAND_ICON_LOCKS,
+            // A disabled button does not toggle: no click of the part either.
+            blockHandlers: rest.disabled ? BLOCK_CLICK : undefined,
+          }))}
       />
     </button>
   );
@@ -591,7 +663,7 @@ const AccordionTrigger = ({
   return headingOutside ? (
     button
   ) : (
-    <Heading className={cn(accordionTriggerClassNames.heading, HEADING_CLASS)}>{button}</Heading>
+    <Heading {...headingProps(slotProps?.heading)}>{button}</Heading>
   );
 };
 AccordionTrigger.displayName = 'AccordionTrigger';

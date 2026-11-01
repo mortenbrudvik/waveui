@@ -33,12 +33,18 @@ import type {
   UseOverflowMenuResult,
 } from '../Overflow';
 import type { Orientation } from '../../../lib/types';
-import { overflowDividerClassNames, overflowItemClassNames } from '../../../lib/classNames';
+import {
+  overflowClassNames,
+  overflowDividerClassNames,
+  overflowItemClassNames,
+} from '../../../lib/classNames';
 import { Toolbar } from '../../button/Toolbar';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
   installResizeObserverMock,
+  openingTags,
   testCompoundExposure,
   testSystemProps,
   expectThrows,
@@ -2922,5 +2928,235 @@ describe('Overflow - focus when the overflow button goes away (browser pass M1)'
     await act(async () => {});
     expect(screen.queryByRole('button', { name: /^\+\d$/ })).toBeNull();
     expect(a).toHaveFocus();
+  });
+});
+
+describe('Overflow — slotProps', () => {
+  type OverflowSlotProps = NonNullable<OverflowProps['slotProps']>;
+  // Four 30px items in 100 with the 20px button: two of them hide, and the button fits beside the
+  // first two. In 40 the first item is wider than the room the button leaves: the button covers it.
+  const FOUR = {
+    overflow: 100,
+    'item-a': 30,
+    'item-b': 30,
+    'item-c': 30,
+    'item-d': 30,
+    button: 20,
+  };
+
+  /** Each item holds a button named after it. */
+  function Tools(props: Partial<OverflowProps>) {
+    return (
+      <Overflow data-testid="overflow" overflowButton={moreButton} {...props}>
+        {['a', 'b', 'c', 'd'].map((id) => (
+          <OverflowItem key={id} itemId={id} data-testid={`item-${id}`}>
+            <button type="button">{id.toUpperCase()}</button>
+          </OverflowItem>
+        ))}
+      </Overflow>
+    );
+  }
+  const wrapper = () =>
+    document.querySelector<HTMLElement>(`.${overflowClassNames.overflowButton}`);
+  const shownWrapper = () => wrapper() as HTMLElement;
+
+  // Captured from 414fe7d's dist (client and server agree).
+  const BASE_SERVER =
+    '<div class="wave-overflow__overflow-button sticky -end-1 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1" data-overflow-button="">';
+  const BASE_SERVER_LIST =
+    '<div class="wave-overflow__overflow-button sticky -end-1 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1" data-overflow-button="" role="listitem">';
+  const BASE_PINNED =
+    '<div class="wave-overflow__overflow-button sticky -end-1 flex shrink-0 items-center self-stretch data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1" data-overflow-button="" data-overflow-pinned="">';
+
+  it('renders the wrapper of 414fe7d (attributes sorted), on the server and the client', () => {
+    for (const slotProps of [undefined, { overflowButton: {} }]) {
+      for (const [props, pin] of [
+        [{}, BASE_SERVER],
+        [{ role: 'list' }, BASE_SERVER_LIST],
+      ] as const) {
+        const template = document.createElement('template');
+        template.innerHTML = renderToString(
+          <Tools hasHiddenItems slotProps={slotProps} {...props} />,
+        );
+        const element = template.content.querySelector(`.${overflowClassNames.overflowButton}`);
+        expect(openingTags(element as Element)).toBe(pin);
+      }
+      const stub = layoutWith({ ...FOUR, overflow: 40 });
+      const view = render(<Tools buttonPosition="before-hidden" slotProps={slotProps} />);
+      expect(openingTags(shownWrapper())).toBe(BASE_PINNED);
+      view.unmount();
+      stub.restore();
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with the part empty', () => {
+    for (const props of [{}, { role: 'list' }, { buttonPosition: 'before-hidden' as const }]) {
+      for (const room of [100, 40]) {
+        const stub = layoutWith({ ...FOUR, overflow: room });
+        expectInertSlotProps(
+          (slotProps: OverflowSlotProps | undefined) => <Tools slotProps={slotProps} {...props} />,
+          { overflowButton: {} },
+        );
+        stub.restore();
+      }
+    }
+  });
+
+  it('puts your className, style, data-* and ref on the wrapper, after its own classes', () => {
+    layoutWith({ ...FOUR });
+    const ref = React.createRef<HTMLDivElement>();
+    render(
+      <Tools
+        slotProps={{
+          overflowButton: {
+            className: 'my-wrapper ps-3',
+            style: { opacity: 0.5 },
+            'data-part': 'wrapper',
+            ref,
+          },
+        }}
+      />,
+    );
+    const element = shownWrapper();
+    expect(element).toContainElement(screen.getByRole('button', { name: '+2' }));
+    expect(element.classList[0]).toBe(overflowClassNames.overflowButton);
+    expect(element.classList[element.classList.length - 1]).toBe('ps-3');
+    expect(element).toHaveClass('my-wrapper', 'sticky', '-end-1');
+    // Your class replaces a conflicting one of the wrapper.
+    expect(element).not.toHaveClass('ps-1');
+    expect(element).toHaveStyle({ opacity: '0.5' });
+    expect(element).toHaveAttribute('data-part', 'wrapper');
+    expect(ref.current).toBe(element);
+    // The row itself takes none of it.
+    expect(screen.getByTestId('overflow')).not.toHaveClass('my-wrapper');
+  });
+
+  it('keeps the row measuring the wrapper and moving focus out of it, with a new inline ref on every render', async () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ ...FOUR });
+    const onOverflowChange = vi.fn();
+    const seen: Array<HTMLDivElement | null> = [];
+    function Inline({ tick }: { tick: number }) {
+      return (
+        <Tools
+          data-tick={tick}
+          onOverflowChange={onOverflowChange}
+          slotProps={{
+            overflowButton: { ref: (node: HTMLDivElement | null) => void seen.push(node) },
+          }}
+        />
+      );
+    }
+    const { rerender } = render(<Inline tick={0} />);
+    rerender(<Inline tick={1} />);
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    // Reported only once the row has measured the wrapper (the row's own ref on it).
+    expect(onOverflowChange).toHaveBeenCalledTimes(1);
+    expect(onOverflowChange).toHaveBeenLastCalledWith(['c', 'd'], expect.anything());
+    expect(seen.at(-1)).toBe(wrapper());
+    // A wider wrapper is measured again: one more item hides.
+    stub.widths.button = 50;
+    resize.trigger(screen.getByTestId('overflow'));
+    rerender(<Inline tick={2} />);
+    expect(hiddenItems()).toEqual(['b', 'c', 'd']);
+    // Focus in the wrapper moves to the first item it stood for when it goes away.
+    const more = screen.getByRole('button', { name: '+3' });
+    act(() => more.focus());
+    stub.widths.overflow = 200;
+    resize.trigger(screen.getByTestId('overflow'));
+    await act(async () => {});
+    expect(wrapper()).toBeNull();
+    expect(screen.getByRole('button', { name: 'B' })).toHaveFocus();
+  });
+
+  it('locks the wrapper’s marker, role, pinned state, tab index and hidden state', () => {
+    const attempt = {
+      role: 'button',
+      tabIndex: 0,
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+      'data-overflow-button': 'mine',
+      'data-overflow-pinned': 'mine',
+    } as OverflowSlotProps['overflowButton'];
+    // A plain row: no role. The button fits beside the first items, so it is not pinned (a
+    // state-off check: your marker is dropped).
+    const stub = layoutWith({ ...FOUR });
+    const view = render(<Tools slotProps={{ overflowButton: attempt }} />);
+    let element = shownWrapper();
+    for (const name of [
+      'role',
+      'tabindex',
+      'hidden',
+      'inert',
+      'aria-hidden',
+      'data-overflow-pinned',
+    ]) {
+      expect(element).not.toHaveAttribute(name);
+    }
+    expect(element).toHaveAttribute('data-overflow-button', '');
+    expect(screen.getByRole('button', { name: '+2' })).toBeVisible();
+    view.unmount();
+    // A list row, with the button covering the first item: listitem and pinned, as the row says.
+    stub.widths.overflow = 40;
+    render(<Tools role="list" slotProps={{ overflowButton: attempt }} />);
+    element = shownWrapper();
+    expect(element).toHaveAttribute('role', 'listitem');
+    expect(element).toHaveAttribute('data-overflow-pinned', '');
+    expect(element).toHaveAttribute('data-overflow-button', '');
+  });
+
+  it('runs your handler after the button’s own, once per click in StrictMode', async () => {
+    layoutWith({ ...FOUR });
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <React.StrictMode>
+        <Tools
+          overflowButton={(count) => (
+            <button type="button" onClick={() => void order.push('button')}>
+              +{count}
+            </button>
+          )}
+          slotProps={{ overflowButton: { onClick: () => void order.push('wrapper') } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('button', { name: '+2' }));
+    expect(order).toEqual(['button', 'wrapper']);
+  });
+
+  it('ignores the part while nothing is hidden', () => {
+    layoutWith({ ...FOUR, overflow: 200 });
+    render(<Tools slotProps={{ overflowButton: { className: 'my-wrapper' } }} />);
+    expect(hiddenItems()).toEqual([]);
+    expect(document.querySelector('.my-wrapper')).toBeNull();
+  });
+
+  it('applies the part in RTL, the wrapper keeping its logical inset', () => {
+    layoutWith({ ...FOUR });
+    renderWithProviders(<Tools slotProps={{ overflowButton: { className: 'my-wrapper' } }} />, {
+      dir: 'rtl',
+    });
+    expect(shownWrapper()).toHaveClass('my-wrapper', '-end-1', 'ps-1');
+  });
+
+  it('has no accessibility violations with the part customised', async () => {
+    layoutWith({ ...FOUR });
+    render(<Tools slotProps={{ overflowButton: { className: 'my-wrapper', title: 'More' } }} />);
+    await expectNoA11yViolations();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof OverflowSlotProps>().toEqualTypeOf<'overflowButton'>();
+    expectTypeOf<NonNullable<OverflowSlotProps['overflowButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: overflowButton renders them
+        <Overflow slotProps={{ overflowButton: { children: 'More' } }}>{null}</Overflow>
+      )
+    );
   });
 });

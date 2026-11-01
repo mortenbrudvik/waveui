@@ -7,6 +7,7 @@ import { partitionBreadcrumbItems } from '../../lib/breadcrumb';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import type { CoreSize, FocusMode, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { unwrapFragment } from '../../lib/renderTrigger';
 import { warnOnce } from '../../lib/dev';
 import { ChevronRightIcon } from '../../lib/icons';
@@ -78,6 +79,50 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
   divider?: Slot<'span'>;
   /** Ref to the `<nav>` element. */
   ref?: React.Ref<HTMLElement>;
+  /**
+   * Props for the elements the trail draws around its items, by part, merged into each part's
+   * own: your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref attached. Every attribute the trail sets on a part is
+   * locked, no part takes another role, and no part hides what it holds. A part takes no
+   * `children` (the trail draws their content); the items take their own props and `divider`
+   * fills its own slot. In `focusMode="arrow"` a part's `onKeyDown` runs before the trail's arrow
+   * keys, which `preventDefault()` in it skips. Fluent UI's Breadcrumb has no such parts: its list
+   * is drawn inside its root, its items are yours.
+   */
+  slotProps?: {
+    /**
+     * The trail's list (stable class `wave-breadcrumb__list`): an `<ol>`, or with
+     * `overflow="auto"` the `role="list"` `<div>` of the `Overflow` it renders, which takes the
+     * part's props as its own (your ref attached beside the Overflow's). Locked: no role (`list`
+     * on the Overflow's), and no `hidden`, `inert` or `aria-hidden`, since it holds the items.
+     * With `overflow="auto"` the Overflow props the trail sets are locked too (the overflow
+     * direction, the button and where it stands, the axis, no hidden items reserved and none
+     * kept visible) and so are its `data-orientation`, `data-overflow-direction` and
+     * `data-button-position`. An attribute only an `<ol>` has does nothing on the `<div>`.
+     */
+    list?: Omit<SlotPart<'ol'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
+    /**
+     * Every `<li>` of the trail, the one that holds the "…" button of `maxDisplayedItems`
+     * included (stable class `wave-breadcrumb__list-item`); with `overflow="auto"` the button
+     * stands in the Overflow's own wrapper, which this part does not reach. Locked: no role (it
+     * stays a list item), and no `hidden`, `inert`, `aria-hidden` or `data-overflow-hidden`, since
+     * it holds an item. With `overflow="auto"` a list item that does not fit is hidden by the
+     * Overflow (`data-overflow-hidden`, `aria-hidden`, `inert` and an inline `display: none`, all
+     * over yours), and your ref is attached beside the Overflow's.
+     */
+    listItem?: SlotPart<'li'>;
+    /**
+     * The "…" button that opens the menu of the collapsed items, with `maxDisplayedItems` or
+     * `overflow="auto"` (stable class `wave-breadcrumb__overflow-button`). Locked: `type`, its
+     * name (`aria-label`, from `overflowLabel`), no role or tab index, never disabled (no
+     * `disabled`, `aria-disabled` or `data-roving-disabled`), and no `hidden`, `inert` or
+     * `aria-hidden`. Its menu sets `aria-haspopup`, `aria-expanded` and `aria-controls`, which
+     * win over yours, and labels itself with the button's id (yours, when you give one); an
+     * `aria-labelledby` of yours is joined, not locked, and renames the button. Your `onClick`
+     * and `onKeyDown` run before the menu's: `preventDefault()` in yours keeps the menu as it is.
+     */
+    overflowButton?: SlotPart<'button'>;
+  };
 }
 
 /**
@@ -279,6 +324,37 @@ const BREADCRUMB_FOCUS_SELECTOR = 'a[href], button, [role="link"]';
 
 /** The key of the list item that holds the overflow button; a flattened child key never matches. */
 const OVERFLOW_KEY = '\u0000overflow';
+
+/**
+ * What the trail's list and list item parts lock unset: a role (in `focusMode="arrow"` one with
+ * the link role would be an item of the arrow keys), their hidden state (they hold the items) and
+ * the marker by which the Overflow of `overflow="auto"` tells a hidden list item (it stops
+ * measuring an item that carries it). In the order the Overflow writes its hidden state, so a
+ * hidden list item keeps its attribute order.
+ */
+const LIST_PART_LOCKS = {
+  'aria-hidden': undefined,
+  inert: undefined,
+  'data-overflow-hidden': undefined,
+  role: undefined,
+  hidden: undefined,
+} as const;
+
+/**
+ * What the overflow button part locks besides its name: a button that is never disabled, takes no
+ * other role or tab index and is never hidden (it is the only way to the collapsed items).
+ */
+const OVERFLOW_BUTTON_LOCKS = {
+  type: 'button',
+  role: undefined,
+  tabIndex: undefined,
+  disabled: undefined,
+  'aria-disabled': undefined,
+  'data-roving-disabled': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
 
 type BreadcrumbEntry = ReturnType<typeof flattenChildren>[number];
 
@@ -522,9 +598,12 @@ function overflowMenuItem(entry: BreadcrumbEntry): { node: React.ReactNode; mapp
 function BreadcrumbOverflowMenu({
   entries,
   label,
+  part,
 }: {
   entries: readonly BreadcrumbEntry[];
   label: string;
+  /** The trail's `slotProps.overflowButton`. */
+  part: SlotPart<'button'> | undefined;
 }) {
   const items = entries.map(overflowMenuItem);
   const unlistable = items.some((item) => !item.mappable);
@@ -537,13 +616,19 @@ function BreadcrumbOverflowMenu({
     }
   }, [unlistable]);
 
+  const className = cn(breadcrumbClassNames.overflowButton, linkClasses, 'rounded px-1');
   return (
     <Menu>
       <Menu.Trigger>
         <button
           type="button"
           aria-label={label}
-          className={cn(breadcrumbClassNames.overflowButton, linkClasses, 'rounded px-1')}
+          className={className}
+          {...(part &&
+            mergeSlotProps(part, {
+              className,
+              locked: { ...OVERFLOW_BUTTON_LOCKS, 'aria-label': label },
+            }))}
         >
           <span aria-hidden="true">…</span>
         </button>
@@ -566,12 +651,17 @@ const BreadcrumbRoot = ({
   onKeyDown,
   onFocus,
   ref,
+  slotProps,
   ...rest
 }: BreadcrumbProps) => {
   // Fragments are opened (`{isAdmin && <>…</>}`), so every crumb gets its own list item and separator.
   const entries = flattenChildren(children);
   const auto = overflow === 'auto';
   const collapsed = auto ? [] : collapsedIndexes(entries, maxDisplayedItems, overflowIndex);
+  // The parts, merged only when given: every list item would otherwise pay for its merge.
+  const listPart = slotProps?.list;
+  const listItemPart = slotProps?.listItem;
+  const buttonPart = slotProps?.overflowButton;
 
   // The trail in order, the overflow button standing where the first collapsed item was.
   const trail: Array<{ key: string; node: React.ReactNode }> = [];
@@ -585,6 +675,7 @@ const BreadcrumbRoot = ({
           <BreadcrumbOverflowMenu
             entries={collapsed.map((collapsedIndex) => entries[collapsedIndex])}
             label={overflowLabel}
+            part={buttonPart}
           />
         ),
       });
@@ -620,51 +711,95 @@ const BreadcrumbRoot = ({
       )
     ) : null;
 
-  const renderListItem = (node: React.ReactNode, index: number, key?: string) => (
-    <li key={key} className={cn(breadcrumbClassNames.listItem, 'flex items-center gap-1')}>
-      {index > 0 && renderDivider()}
-      {node}
-    </li>
-  );
+  const renderListItem = (node: React.ReactNode, index: number, key?: string) => {
+    const itemClassName = cn(breadcrumbClassNames.listItem, 'flex items-center gap-1');
+    return (
+      <li
+        key={key}
+        className={itemClassName}
+        {...(listItemPart &&
+          mergeSlotProps(listItemPart, { className: itemClassName, locked: LIST_PART_LOCKS }))}
+      >
+        {index > 0 && renderDivider()}
+        {node}
+      </li>
+    );
+  };
 
   // `overflow="auto"`: the list is an Overflow of `<li>` items. The first and the last current
   // entry are pinned; the others hide from the start of the trail. The "…" menu is the Overflow's
   // button: it stands just before the first hidden entry (never first, since that one is pinned),
   // with its own separator, and lists the hidden entries.
   const currentIndex = entries.map(isCurrentEntry).lastIndexOf(true);
-  const list = auto ? (
-    <Overflow
-      role="list"
-      overflowDirection="start"
-      buttonPosition="before-hidden"
-      overflowButton={(_count, hiddenIds) => (
-        <span className="flex items-center gap-1">
-          {renderDivider()}
-          <BreadcrumbOverflowMenu
-            entries={entries.filter((entry) => hiddenIds.includes(entry.key))}
-            label={overflowLabel}
-          />
-        </span>
-      )}
-      className={cn(breadcrumbClassNames.list, 'gap-1', breadcrumbSizes[size].text)}
-    >
-      {entries.map(({ key, node }, index) => (
-        <OverflowItem key={key} asChild itemId={key} pinned={index === 0 || index === currentIndex}>
-          {renderListItem(node, index)}
-        </OverflowItem>
-      ))}
-    </Overflow>
-  ) : (
-    <ol
-      className={cn(
-        breadcrumbClassNames.list,
-        'm-0 flex list-none items-center gap-1 p-0',
-        breadcrumbSizes[size].text,
-      )}
-    >
-      {trail.map(({ key, node }, index) => renderListItem(node, index, key))}
-    </ol>
-  );
+  let list: React.ReactNode;
+  if (auto) {
+    const overflowButton = (_count: number, hiddenIds: string[]) => (
+      <span className="flex items-center gap-1">
+        {renderDivider()}
+        <BreadcrumbOverflowMenu
+          entries={entries.filter((entry) => hiddenIds.includes(entry.key))}
+          label={overflowLabel}
+          part={buttonPart}
+        />
+      </span>
+    );
+    const listClassName = cn(breadcrumbClassNames.list, 'gap-1', breadcrumbSizes[size].text);
+    list = (
+      <Overflow
+        role="list"
+        overflowDirection="start"
+        buttonPosition="before-hidden"
+        overflowButton={overflowButton}
+        className={listClassName}
+        // The Overflow takes the part as its own props: the ones the trail sets win, and so do the
+        // attributes the Overflow renders from them (its own come before the props it passes on).
+        {...(listPart &&
+          mergeSlotProps(listPart, {
+            className: listClassName,
+            locked: {
+              ...LIST_PART_LOCKS,
+              role: 'list',
+              overflowDirection: 'start',
+              buttonPosition: 'before-hidden',
+              overflowButton,
+              orientation: undefined,
+              minimumVisible: undefined,
+              hasHiddenItems: undefined,
+              slotProps: undefined,
+              'data-orientation': 'horizontal',
+              'data-overflow-direction': 'start',
+              'data-button-position': 'before-hidden',
+            },
+          }))}
+      >
+        {entries.map(({ key, node }, index) => (
+          <OverflowItem
+            key={key}
+            asChild
+            itemId={key}
+            pinned={index === 0 || index === currentIndex}
+          >
+            {renderListItem(node, index)}
+          </OverflowItem>
+        ))}
+      </Overflow>
+    );
+  } else {
+    const listClassName = cn(
+      breadcrumbClassNames.list,
+      'm-0 flex list-none items-center gap-1 p-0',
+      breadcrumbSizes[size].text,
+    );
+    list = (
+      <ol
+        className={listClassName}
+        {...(listPart &&
+          mergeSlotProps(listPart, { className: listClassName, locked: LIST_PART_LOCKS }))}
+      >
+        {trail.map(({ key, node }, index) => renderListItem(node, index, key))}
+      </ol>
+    );
+  }
 
   return (
     <nav

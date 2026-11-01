@@ -18,7 +18,9 @@ import { expectTypeOf } from 'vitest';
 import * as registry from '../lib/classNames';
 import * as entry from '../index';
 import type {
+  AccordionTriggerProps,
   AlphaSliderProps,
+  BreadcrumbProps,
   CalendarProps,
   CheckboxProps,
   ColorAreaProps,
@@ -55,11 +57,15 @@ import type {
   NavSubItemProps,
   OptionGroupProps,
   OptionProps,
+  OverflowProps,
+  PaginationProps,
   PopoverContentProps,
   RadioGroupItemProps,
   RatingDisplayProps,
   SearchBoxProps,
   SpinButtonProps,
+  StepperProps,
+  StepProps,
   SwitchProps,
   TagPickerProps,
   TeachingPopoverCarouselNavProps,
@@ -456,6 +462,15 @@ type SlotPropsOwners = {
   navSectionHeaderClassNames: NavSectionHeaderProps;
   navAppItemClassNames: NavAppItemProps;
   navAppItemStaticClassNames: NavAppItemStaticProps;
+  // With overflow="auto" the trail's list is the Overflow it renders, which takes the part as its
+  // own props; the Overflow's button wrapper is the Overflow's own part.
+  breadcrumbClassNames: BreadcrumbProps;
+  paginationClassNames: PaginationProps;
+  stepperClassNames: StepperProps;
+  stepperStepClassNames: StepProps;
+  // The Item draws the heading around a wrapper of the Trigger, with the Trigger's part.
+  accordionTriggerClassNames: AccordionTriggerProps;
+  overflowClassNames: OverflowProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

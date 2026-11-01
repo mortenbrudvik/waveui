@@ -1,12 +1,20 @@
 import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf, afterEach } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { composeStories } from '@storybook/react';
 import * as stories from '../../../../stories/Pagination.stories';
 import { Pagination, getPaginationRange } from '../Pagination';
 import type { PaginationItemType, PaginationProps } from '../Pagination';
-import { renderWithProviders, testSystemProps } from '../../../test-utils';
+import { paginationClassNames } from '../../../lib/classNames';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  renderWithProviders,
+  testSystemProps,
+} from '../../../test-utils';
 
 /** The rendered page/ellipsis sequence in DOM order (render with `showPreviousNext={false}`). */
 function renderedSequence(): Array<number | 'ellipsis'> {
@@ -831,6 +839,523 @@ describe('Pagination', () => {
       );
       expect(renderedSequence()).toEqual([1, 2, 'ellipsis', 8, 9, 10, 11, 12, 'ellipsis', 19, 20]);
     });
+  });
+});
+
+describe('Pagination — slotProps', () => {
+  type PaginationSlotProps = NonNullable<PaginationProps['slotProps']>;
+  const EVERY_PART: PaginationSlotProps = {
+    list: {},
+    listItem: {},
+    firstButton: {},
+    previousButton: {},
+    pageButton: {},
+    nextButton: {},
+    lastButton: {},
+    ellipsis: {},
+  };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const one = (cls: string) => document.querySelector<HTMLElement>(`.${cls}`) as HTMLElement;
+  /** Every part, in the order of the pins: the list, the list items, the buttons, the ellipses. */
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, paginationClassNames.list),
+    ...all(root, paginationClassNames.listItem),
+    ...all(root, paginationClassNames.firstButton),
+    ...all(root, paginationClassNames.previousButton),
+    ...all(root, paginationClassNames.pageButton),
+    ...all(root, paginationClassNames.nextButton),
+    ...all(root, paginationClassNames.lastButton),
+    ...all(root, paginationClassNames.ellipsis),
+  ];
+
+  // Captured from 414fe7d's dist (client and server agree).
+  const buttonClasses = (size: string) =>
+    'inline-flex items-center justify-center rounded border cursor-pointer transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 ' +
+    size;
+  const IDLE =
+    'border-border bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed';
+  const CURRENT =
+    'border-primary bg-primary text-primary-foreground forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none';
+  const LIST = '<ol class="wave-pagination__list m-0 flex list-none items-center gap-1 p-0">';
+  const ITEM = '<li class="wave-pagination__list-item">';
+  const GAP_ITEM = '<li aria-hidden="true" class="wave-pagination__list-item">';
+  const MEDIUM = buttonClasses('h-8 w-8 text-body-1');
+  const SMALL = buttonClasses('h-7 w-7 text-caption-1');
+  const BASE_FIRST_PAGE = [
+    LIST,
+    ITEM,
+    ITEM,
+    ITEM,
+    ITEM,
+    GAP_ITEM,
+    ITEM,
+    ITEM,
+    ITEM,
+    `<button aria-disabled="true" aria-label="First page" class="wave-pagination__first-button ${MEDIUM} ${IDLE}" data-disabled="" type="button">`,
+    `<button aria-disabled="true" aria-label="Previous page" class="wave-pagination__previous-button ${MEDIUM} ${IDLE}" data-disabled="" type="button">`,
+    `<button aria-current="page" aria-label="Page 1" class="wave-pagination__page-button ${MEDIUM} ${CURRENT}" type="button">`,
+    `<button aria-label="Page 2" class="wave-pagination__page-button ${MEDIUM} ${IDLE}" type="button">`,
+    `<button aria-label="Page 20" class="wave-pagination__page-button ${MEDIUM} ${IDLE}" type="button">`,
+    `<button aria-label="Next page" class="wave-pagination__next-button ${MEDIUM} ${IDLE}" type="button">`,
+    `<button aria-label="Last page" class="wave-pagination__last-button ${MEDIUM} ${IDLE}" type="button">`,
+    '<span class="wave-pagination__ellipsis inline-flex items-center justify-center text-muted-foreground h-8 w-8 text-body-1">',
+  ].join('\n');
+  const BASE_DISABLED_LAST_PAGE = [
+    LIST,
+    ITEM,
+    ITEM,
+    ITEM,
+    GAP_ITEM,
+    ITEM,
+    ITEM,
+    ITEM,
+    ITEM,
+    `<button aria-label="First page" class="wave-pagination__first-button ${SMALL} ${IDLE}" disabled="" type="button">`,
+    `<button aria-label="Previous page" class="wave-pagination__previous-button ${SMALL} ${IDLE}" disabled="" type="button">`,
+    `<button aria-label="Page 1" class="wave-pagination__page-button ${SMALL} ${IDLE}" disabled="" type="button">`,
+    `<button aria-label="Page 19" class="wave-pagination__page-button ${SMALL} ${IDLE}" disabled="" type="button">`,
+    `<button aria-current="page" aria-label="Page 20" class="wave-pagination__page-button ${SMALL} ${CURRENT}" disabled="" type="button">`,
+    `<button aria-label="Next page" class="wave-pagination__next-button ${SMALL} ${IDLE}" disabled="" type="button">`,
+    `<button aria-label="Last page" class="wave-pagination__last-button ${SMALL} ${IDLE}" disabled="" type="button">`,
+    '<span class="wave-pagination__ellipsis inline-flex items-center justify-center text-muted-foreground h-7 w-7 text-caption-1">',
+  ].join('\n');
+
+  it('renders the parts of 414fe7d (attributes sorted), on the client and the server', () => {
+    for (const slotProps of [undefined, EVERY_PART]) {
+      for (const [ui, pin] of [
+        [
+          <Pagination
+            key="first"
+            totalPages={20}
+            defaultCurrentPage={1}
+            showFirstLast
+            slotProps={slotProps}
+          />,
+          BASE_FIRST_PAGE,
+        ],
+        [
+          <Pagination
+            key="last"
+            totalPages={20}
+            defaultCurrentPage={20}
+            showFirstLast
+            disabled
+            size="small"
+            slotProps={slotProps}
+          />,
+          BASE_DISABLED_LAST_PAGE,
+        ],
+      ] as const) {
+        const view = render(ui);
+        expect(openingTags(...partsOf())).toBe(pin);
+        view.unmount();
+        const template = document.createElement('template');
+        template.innerHTML = renderToString(ui);
+        expect(openingTags(...partsOf(template.content))).toBe(pin);
+      }
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    for (const props of [
+      { defaultCurrentPage: 1, showFirstLast: true },
+      { defaultCurrentPage: 10 },
+      { defaultCurrentPage: 20, showFirstLast: true, disabled: true },
+      { defaultCurrentPage: 3, showPreviousNext: false, size: 'small' as const },
+    ]) {
+      expectInertSlotProps(
+        (slotProps: PaginationSlotProps | undefined) => (
+          <Pagination totalPages={20} {...props} slotProps={slotProps} />
+        ),
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on every part, after its stable class and own classes', () => {
+    const mine = (name: string) => ({
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    const names = Object.keys(EVERY_PART) as Array<keyof PaginationSlotProps>;
+    render(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={10}
+        showFirstLast
+        slotProps={Object.fromEntries(names.map((name) => [name, mine(name)]))}
+      />,
+    );
+    for (const name of names) {
+      const elements = all(document, paginationClassNames[name]);
+      expect(elements.length).toBeGreaterThan(0);
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(paginationClassNames[name]);
+        expect(element.classList[element.classList.length - 1]).toBe(`my-${name}`);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+      }
+    }
+    // Every list item takes the part: around the buttons and the ellipses.
+    expect(all(document, paginationClassNames.listItem)).toHaveLength(11);
+    // The landmark takes none of it.
+    expect(screen.getByRole('navigation')).not.toHaveClass('my-list');
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={10}
+        slotProps={{
+          list: { className: 'gap-2' },
+          pageButton: { className: 'rounded-full' },
+          nextButton: { className: 'border-0' },
+          ellipsis: { className: 'text-foreground' },
+        }}
+      />,
+    );
+    expect(one(paginationClassNames.list)).toHaveClass('gap-2');
+    expect(one(paginationClassNames.list)).not.toHaveClass('gap-1');
+    expect(page(10)).toHaveClass('rounded-full');
+    expect(page(10)).not.toHaveClass('rounded');
+    expect(screen.getByRole('button', { name: 'Next page' })).not.toHaveClass('border');
+    expect(one(paginationClassNames.ellipsis)).not.toHaveClass('text-muted-foreground');
+  });
+
+  it('attaches your refs to the parts', () => {
+    const refs = {
+      list: React.createRef<HTMLOListElement>(),
+      listItem: React.createRef<HTMLLIElement>(),
+      firstButton: React.createRef<HTMLButtonElement>(),
+      previousButton: React.createRef<HTMLButtonElement>(),
+      pageButton: React.createRef<HTMLButtonElement>(),
+      nextButton: React.createRef<HTMLButtonElement>(),
+      lastButton: React.createRef<HTMLButtonElement>(),
+      ellipsis: React.createRef<HTMLSpanElement>(),
+    };
+    render(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={10}
+        showFirstLast
+        slotProps={Object.fromEntries(Object.entries(refs).map(([name, ref]) => [name, { ref }]))}
+      />,
+    );
+    for (const [name, ref] of Object.entries(refs)) {
+      // A part of many elements: the last one rendered.
+      expect(ref.current).toBe(
+        all(document, paginationClassNames[name as keyof typeof refs]).at(-1),
+      );
+    }
+  });
+
+  it('locks every button’s type, name, current page, disabled state, role, tab index and hidden state', () => {
+    const attempt = {
+      type: 'submit',
+      'aria-label': 'Mine',
+      'aria-current': 'step',
+      disabled: true,
+      'aria-disabled': true,
+      'data-disabled': '',
+      role: 'link',
+      tabIndex: -1,
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as PaginationSlotProps['pageButton'];
+    render(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={10}
+        showFirstLast
+        slotProps={{
+          firstButton: attempt,
+          previousButton: attempt,
+          pageButton: attempt,
+          nextButton: attempt,
+          lastButton: attempt,
+        }}
+      />,
+    );
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      'First page',
+      'Previous page',
+      'Page 1',
+      'Page 9',
+      'Page 10',
+      'Page 11',
+      'Page 20',
+      'Next page',
+      'Last page',
+    ]);
+    for (const button of buttons) {
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).toBeEnabled();
+      for (const name of [
+        'aria-disabled',
+        'data-disabled',
+        'role',
+        'tabindex',
+        'hidden',
+        'inert',
+        'aria-hidden',
+      ]) {
+        expect(button).not.toHaveAttribute(name);
+      }
+    }
+    // Only the current page is current (a state-off check on every other button).
+    expect(buttons.filter((button) => button.hasAttribute('aria-current'))).toEqual([page(10)]);
+    expect(page(10)).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps the control’s own disabled and unavailable states over a part’s', () => {
+    const enabled = {
+      disabled: false,
+      'aria-disabled': false,
+    } as PaginationSlotProps['firstButton'];
+    const { rerender } = render(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={1}
+        showFirstLast
+        slotProps={{ firstButton: enabled, previousButton: enabled }}
+      />,
+    );
+    for (const name of ['First page', 'Previous page']) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveAttribute('data-disabled', '');
+    }
+    rerender(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={1}
+        showFirstLast
+        disabled
+        slotProps={{ pageButton: enabled, nextButton: enabled }}
+      />,
+    );
+    expect(page(2)).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+  });
+
+  it('locks the list’s and the list items’ role and hidden state, and the ellipses’ own', () => {
+    const attempt = {
+      role: 'button',
+      hidden: true,
+      inert: true,
+      'aria-hidden': false,
+      tabIndex: 0,
+    };
+    render(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={10}
+        slotProps={{ list: attempt, listItem: attempt, ellipsis: attempt }}
+      />,
+    );
+    const list = one(paginationClassNames.list);
+    const items = all(document, paginationClassNames.listItem);
+    const gapItems = items.filter((item) => item.querySelector('button') === null);
+    const buttonItems = items.filter((item) => !gapItems.includes(item));
+    expect(gapItems).toHaveLength(2);
+    for (const element of [list, ...items]) expect(element).not.toHaveAttribute('role');
+    // The list and the list items of the buttons hold the buttons: never hidden.
+    for (const element of [list, ...buttonItems]) {
+      for (const name of ['hidden', 'inert', 'aria-hidden']) {
+        expect(element).not.toHaveAttribute(name);
+      }
+    }
+    expect(screen.getAllByRole('button')).toHaveLength(7);
+    for (const button of screen.getAllByRole('button')) expect(button).toBeVisible();
+    // A tab index is yours to give where nothing is hidden from assistive technology.
+    expect(list).toHaveAttribute('tabindex', '0');
+    // The ellipses stay out of the accessibility tree and of the tab order; hiding them is yours.
+    for (const item of gapItems) {
+      expect(item).toHaveAttribute('aria-hidden', 'true');
+      expect(item).not.toHaveAttribute('tabindex');
+      expect(item).toHaveAttribute('hidden');
+    }
+    for (const ellipsis of all(document, paginationClassNames.ellipsis)) {
+      expect(ellipsis).not.toHaveAttribute('tabindex');
+    }
+  });
+
+  it('runs your button handlers first: preventDefault() skips the page change and onPageChange', async () => {
+    const user = userEvent.setup();
+    const onPageChange = vi.fn();
+    const prevent = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    render(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={10}
+        showFirstLast
+        onPageChange={onPageChange}
+        slotProps={{
+          firstButton: { onClick: prevent },
+          previousButton: { onClick: prevent },
+          pageButton: { onClick: prevent },
+          nextButton: { onClick: prevent },
+          lastButton: { onClick: prevent },
+        }}
+      />,
+    );
+    for (const name of ['First page', 'Previous page', 'Page 11', 'Next page', 'Last page']) {
+      await user.click(screen.getByRole('button', { name }));
+    }
+    expect(prevent).toHaveBeenCalledTimes(5);
+    expect(onPageChange).not.toHaveBeenCalled();
+    expect(page(10)).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('runs a part handler that prevents nothing before the page change', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={10}
+        onPageChange={(target) => void order.push(`change:${target}`)}
+        slotProps={{
+          pageButton: { onClick: () => void order.push('page') },
+          nextButton: { onClick: () => void order.push('next') },
+        }}
+      />,
+    );
+    await user.click(page(11));
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(order).toEqual(['page', 'change:11', 'next', 'change:12']);
+  });
+
+  it('does not call your click handler on an unavailable button, as no page change happens', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const parts = { firstButton: { onClick }, previousButton: { onClick } };
+    const { rerender } = render(
+      <Pagination totalPages={5} currentPage={1} showFirstLast slotProps={parts} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'First page' }));
+    await user.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(onClick).not.toHaveBeenCalled();
+    // Once they point at another page, they are available: yours runs.
+    rerender(<Pagination totalPages={5} currentPage={3} showFirstLast slotProps={parts} />);
+    await user.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onPageChange = vi.fn();
+    const handlers = { list: vi.fn(), listItem: vi.fn(), pageButton: vi.fn(), ellipsis: vi.fn() };
+    render(
+      <React.StrictMode>
+        <Pagination
+          totalPages={20}
+          defaultCurrentPage={10}
+          onPageChange={onPageChange}
+          slotProps={{
+            list: { onClick: handlers.list },
+            listItem: { onClick: handlers.listItem },
+            pageButton: { onClick: handlers.pageButton },
+            ellipsis: { onClick: handlers.ellipsis },
+          }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(page(11));
+    expect(handlers.pageButton).toHaveBeenCalledTimes(1);
+    expect(handlers.listItem).toHaveBeenCalledTimes(1);
+    expect(handlers.list).toHaveBeenCalledTimes(1);
+    expect(onPageChange).toHaveBeenCalledTimes(1);
+    fireEvent.click(one(paginationClassNames.ellipsis));
+    expect(handlers.ellipsis).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the parts of buttons and ellipses it does not render', () => {
+    render(
+      <Pagination
+        totalPages={5}
+        defaultCurrentPage={3}
+        showPreviousNext={false}
+        slotProps={{
+          firstButton: { className: 'my-first' },
+          previousButton: { className: 'my-previous' },
+          nextButton: { className: 'my-next' },
+          lastButton: { className: 'my-last' },
+          ellipsis: { className: 'my-ellipsis' },
+        }}
+      />,
+    );
+    for (const name of ['first', 'previous', 'next', 'last', 'ellipsis']) {
+      expect(document.querySelector(`.my-${name}`)).toBeNull();
+    }
+    expect(screen.getAllByRole('button')).toHaveLength(5);
+  });
+
+  it('applies the parts in RTL, the glyphs still mirrored', () => {
+    renderWithProviders(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={10}
+        showFirstLast
+        slotProps={{ nextButton: { className: 'my-next' }, firstButton: { dir: 'ltr' } }}
+      />,
+      { dir: 'rtl' },
+    );
+    const next = screen.getByRole('button', { name: 'Next page' });
+    expect(next).toHaveClass('my-next');
+    expect(next.querySelector('svg')).toHaveClass('wave-rtl:-scale-x-100');
+    expect(screen.getByRole('button', { name: 'First page' })).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    const names = Object.keys(EVERY_PART) as Array<keyof PaginationSlotProps>;
+    render(
+      <Pagination
+        totalPages={20}
+        defaultCurrentPage={1}
+        showFirstLast
+        slotProps={Object.fromEntries(
+          names.map((name) => [name, { className: `my-${name}`, title: name }]),
+        )}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof PaginationSlotProps>().toEqualTypeOf<
+      | 'list'
+      | 'listItem'
+      | 'firstButton'
+      | 'previousButton'
+      | 'pageButton'
+      | 'nextButton'
+      | 'lastButton'
+      | 'ellipsis'
+    >();
+    expectTypeOf<NonNullable<PaginationSlotProps['list']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLOListElement> | undefined
+    >();
+    expectTypeOf<NonNullable<PaginationSlotProps['listItem']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLIElement> | undefined
+    >();
+    expectTypeOf<NonNullable<PaginationSlotProps['pageButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<PaginationSlotProps['ellipsis']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the control renders them
+        <Pagination totalPages={3} slotProps={{ pageButton: { children: 'x' } }} />
+      )
+    );
   });
 });
 

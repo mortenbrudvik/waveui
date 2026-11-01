@@ -8,8 +8,12 @@ import * as stories from '../../../../stories/Stepper.stories';
 import { Stepper, StepperStep } from '../Stepper';
 import type { StepProps, StepperProps } from '../Stepper';
 import type { Orientation, Slot } from '../../../lib/types';
+import { stepperClassNames, stepperStepClassNames } from '../../../lib/classNames';
 import {
   asClientReference,
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
   renderWithProviders,
   testClassName,
   testCompoundExposure,
@@ -961,5 +965,583 @@ describe('Stepper', () => {
     expect(screen.getByText('Account')).toBeVisible();
     expect(screen.getByText('Create your account')).toBeVisible();
     expect(screen.getByText('Profile')).toBeVisible();
+  });
+});
+
+describe('Stepper and Stepper.Step — slotProps', () => {
+  type StepperSlotProps = NonNullable<StepperProps['slotProps']>;
+  type StepSlotProps = NonNullable<StepProps['slotProps']>;
+  /** The parts of the stepper and of every step of {@link Steps}. */
+  interface PartsSlotProps {
+    root?: StepperSlotProps;
+    step?: StepSlotProps;
+  }
+  const STEP_PARTS = [
+    'listItem',
+    'button',
+    'indicator',
+    'label',
+    'description',
+    'connector',
+  ] as const;
+  const EVERY_PART: PartsSlotProps = {
+    root: { list: {} },
+    step: { listItem: {}, button: {}, indicator: {}, label: {}, description: {}, connector: {} },
+  };
+
+  /**
+   * Four steps: a completed one with a description, the active one, an error step that is the next
+   * one (reachable in a linear stepper), and a disabled last step with an icon.
+   */
+  function Steps({ parts, ...props }: Partial<StepperProps> & { parts?: PartsSlotProps }) {
+    return (
+      <Stepper activeStep={1} linear slotProps={parts?.root} {...props}>
+        <Stepper.Step label="Account" description="Your details" slotProps={parts?.step} />
+        <Stepper.Step label="Profile" slotProps={parts?.step} />
+        <Stepper.Step label="Review" error slotProps={parts?.step} />
+        <Stepper.Step label="Done" disabled icon={<span>D</span>} slotProps={parts?.step} />
+      </Stepper>
+    );
+  }
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  /** Every part, in the order of the pins. */
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, stepperClassNames.list),
+    ...STEP_PARTS.flatMap((name) => all(root, stepperStepClassNames[name])),
+  ];
+
+  // Captured from 414fe7d's dist (client and server agree).
+  const ITEM = 'wave-stepper-step__list-item flex min-w-0';
+  const BUTTON =
+    'wave-stepper-step__button relative flex rounded flex-col items-center gap-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  const INDICATOR =
+    'wave-stepper-step__indicator flex size-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors motion-reduce:transition-none';
+  const LABEL = 'wave-stepper-step__label font-semibold text-caption-1 whitespace-nowrap';
+  const CONNECTOR =
+    'wave-stepper-step__connector transition-colors motion-reduce:transition-none mx-2 h-0.5 flex-1';
+  const BASE_PINS = [
+    '<ol class="wave-stepper__list m-0 flex list-none p-0 flex-1 flex-row items-start" role="list">',
+    `<li class="${ITEM} flex-1">`,
+    `<li class="${ITEM} flex-1">`,
+    `<li class="${ITEM} flex-1">`,
+    `<li class="${ITEM}">`,
+    `<div aria-describedby="wave-step-_id0_-description" aria-labelledby="wave-step-_id0_-label" class="${BUTTON} cursor-pointer" role="button" tabindex="0">`,
+    `<div aria-current="step" aria-labelledby="wave-step-_id1_-label" class="${BUTTON} cursor-pointer" role="button" tabindex="0">`,
+    `<div aria-labelledby="wave-step-_id2_-label" class="${BUTTON} cursor-pointer" role="button" tabindex="0">`,
+    `<div aria-disabled="true" aria-labelledby="wave-step-_id3_-label" class="${BUTTON} cursor-default opacity-50" role="button" tabindex="-1">`,
+    `<span aria-hidden="true" class="${INDICATOR} border-success bg-success-tint text-success-tint-foreground">`,
+    `<span aria-hidden="true" class="${INDICATOR} border-primary bg-primary text-primary-foreground forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none">`,
+    `<span aria-hidden="true" class="${INDICATOR} border-error bg-error-tint text-error-tint-foreground">`,
+    `<span aria-hidden="true" class="${INDICATOR} border-border bg-background text-muted-foreground">`,
+    `<span class="${LABEL} text-success" id="wave-step-_id0_-label">`,
+    `<span class="${LABEL} text-primary" id="wave-step-_id1_-label">`,
+    `<span class="${LABEL} text-error" id="wave-step-_id2_-label">`,
+    `<span class="${LABEL} text-foreground" id="wave-step-_id3_-label">`,
+    '<span class="wave-stepper-step__description text-muted-foreground text-caption-2 whitespace-nowrap" id="wave-step-_id0_-description">',
+    `<div aria-hidden="true" class="${CONNECTOR} bg-success forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none" data-wave-stepper-connector="">`,
+    `<div aria-hidden="true" class="${CONNECTOR} bg-border forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-stepper-connector="">`,
+    `<div aria-hidden="true" class="${CONNECTOR} bg-border forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-stepper-connector="">`,
+  ].join('\n');
+
+  it('renders the parts of 414fe7d (attributes sorted), on the client and the server', () => {
+    for (const parts of [undefined, EVERY_PART]) {
+      const view = render(<Steps parts={parts} />);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Steps parts={parts} />);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    for (const props of [
+      {},
+      { orientation: 'vertical' as const, activeStep: 0 },
+      { linear: false, activeStep: 3 },
+    ]) {
+      expectInertSlotProps(
+        (parts: PartsSlotProps | undefined) => <Steps {...props} parts={parts} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on every part, after its stable class and own classes', () => {
+    const mine = (name: string) => ({
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    render(
+      <Steps
+        parts={{
+          root: { list: mine('list') },
+          step: Object.fromEntries(STEP_PARTS.map((name) => [name, mine(name)])),
+        }}
+      />,
+    );
+    const elements: Array<[HTMLElement, string, string]> = [
+      ...all(document, stepperClassNames.list).map((el): [HTMLElement, string, string] => [
+        el,
+        stepperClassNames.list,
+        'list',
+      ]),
+      ...STEP_PARTS.flatMap((name) =>
+        all(document, stepperStepClassNames[name]).map((el): [HTMLElement, string, string] => [
+          el,
+          stepperStepClassNames[name],
+          name,
+        ]),
+      ),
+    ];
+    // The list, four list items, buttons, indicators and labels, one description, three connectors.
+    expect(elements).toHaveLength(1 + 4 * 4 + 1 + 3);
+    for (const [element, stable, name] of elements) {
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(`my-${name}`);
+      expect(element).toHaveAttribute('data-part', name);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+    }
+    // The roots take none of it.
+    expect(screen.getByRole('group', { name: 'Progress' })).not.toHaveClass('my-list');
+    for (const root of all(document, stepperStepClassNames.root)) {
+      expect(root).not.toHaveClass('my-listItem');
+    }
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Steps
+        parts={{
+          root: { list: { className: 'p-2' } },
+          step: {
+            listItem: { className: 'min-w-8' },
+            button: { className: 'rounded-md' },
+            indicator: { className: 'size-6' },
+            label: { className: 'font-bold' },
+            description: { className: 'text-foreground' },
+            connector: { className: 'h-1' },
+          },
+        }}
+      />,
+    );
+    const first = (name: (typeof STEP_PARTS)[number]) =>
+      all(document, stepperStepClassNames[name])[0];
+    expect(all(document, stepperClassNames.list)[0]).not.toHaveClass('p-0');
+    expect(first('listItem')).not.toHaveClass('min-w-0');
+    expect(first('button')).not.toHaveClass('rounded');
+    expect(first('indicator')).not.toHaveClass('size-8');
+    expect(first('label')).not.toHaveClass('font-semibold');
+    expect(first('description')).not.toHaveClass('text-muted-foreground');
+    expect(first('connector')).not.toHaveClass('h-0.5');
+  });
+
+  it('attaches your refs to the parts', () => {
+    const list = React.createRef<HTMLOListElement>();
+    const step = {
+      listItem: React.createRef<HTMLLIElement>(),
+      button: React.createRef<HTMLDivElement>(),
+      indicator: React.createRef<HTMLSpanElement>(),
+      label: React.createRef<HTMLSpanElement>(),
+      description: React.createRef<HTMLSpanElement>(),
+      connector: React.createRef<HTMLDivElement>(),
+    };
+    render(
+      <Stepper slotProps={{ list: { ref: list } }}>
+        <Stepper.Step
+          label="Account"
+          description="Your details"
+          slotProps={Object.fromEntries(Object.entries(step).map(([name, ref]) => [name, { ref }]))}
+        />
+        <Stepper.Step label="Profile" />
+      </Stepper>,
+    );
+    expect(list.current).toBe(all(document, stepperClassNames.list)[0]);
+    for (const [name, ref] of Object.entries(step)) {
+      expect(ref.current).toBe(all(document, stepperStepClassNames[name as keyof typeof step])[0]);
+    }
+  });
+
+  it('keeps the stepper watching its list with your ref on it: a reorder of reused steps renumbers them', async () => {
+    const alphaBeta = () => [
+      <Stepper.Step key="alpha" label="Alpha" />,
+      <Stepper.Step key="beta" label="Beta" />,
+    ];
+    function ReorderingSteps({ ref }: { ref: React.Ref<() => void> }) {
+      const [reversed, setReversed] = React.useState(false);
+      React.useImperativeHandle(ref, () => () => setReversed((r) => !r), []);
+      // The same elements: React moves the list items without re-rendering either step.
+      const [[alpha, beta]] = React.useState(alphaBeta);
+      return reversed ? [beta, alpha] : [alpha, beta];
+    }
+    const flip = React.createRef<() => void>();
+    const seen: Array<HTMLOListElement | null> = [];
+    function Inline({ tick }: { tick: number }) {
+      return (
+        <Stepper
+          data-tick={tick}
+          slotProps={{ list: { ref: (node: HTMLOListElement | null) => void seen.push(node) } }}
+        >
+          <ReorderingSteps ref={flip} />
+          <Stepper.Step label="Gamma" />
+        </Stepper>
+      );
+    }
+    const { rerender } = render(<Inline tick={0} />);
+    rerender(<Inline tick={1} />);
+    expect(seen.at(-1)).toBe(all(document, stepperClassNames.list)[0]);
+    await act(async () => flip.current?.());
+    const [beta, alpha, gamma] = stepButtons();
+    expect(beta).toHaveAccessibleName('1. Beta');
+    expect(alpha).toHaveAccessibleName('2. Alpha');
+    expect(gamma).toHaveAccessibleName('3. Gamma');
+  });
+
+  it('keeps each step registered with your list item ref on it: a wrapper’s steps are numbered', () => {
+    const seen: Array<HTMLLIElement | null> = [];
+    const parts = {
+      listItem: { ref: (node: HTMLLIElement | null) => void seen.push(node) },
+    };
+    function TwoSteps({ tick }: { tick: number }) {
+      return (
+        <>
+          <Stepper.Step label="Shipping" data-tick={tick} slotProps={parts} />
+          <Stepper.Step label="Payment" slotProps={parts} />
+        </>
+      );
+    }
+    function Checkout({ tick }: { tick: number }) {
+      return (
+        <Stepper>
+          <TwoSteps tick={tick} />
+          <Stepper.Step label="Confirm" slotProps={{ listItem: { ref: () => {} } }} />
+        </Stepper>
+      );
+    }
+    const { rerender } = render(<Checkout tick={0} />);
+    rerender(<Checkout tick={1} />);
+    expect(stepButton('Shipping')).toHaveAccessibleName('1. Shipping');
+    expect(stepButton('Payment')).toHaveAccessibleName('2. Payment');
+    expect(stepButton('Confirm')).toHaveAccessibleName('3. Confirm');
+    expect(seen).toContain(all(document, stepperStepClassNames.listItem)[0]);
+  });
+
+  it('locks the list’s and the list items’ role and hidden state', () => {
+    const attempt = { role: 'menu', hidden: true, inert: true, 'aria-hidden': true };
+    render(<Steps parts={{ root: { list: attempt }, step: { listItem: attempt } }} />);
+    expect(screen.getByRole('list')).toBe(all(document, stepperClassNames.list)[0]);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    for (const element of [
+      ...all(document, stepperClassNames.list),
+      ...all(document, stepperStepClassNames.listItem),
+    ]) {
+      for (const name of ['hidden', 'inert', 'aria-hidden']) {
+        expect(element).not.toHaveAttribute(name);
+      }
+    }
+    expect(all(document, stepperStepClassNames.listItem)[0]).not.toHaveAttribute('role');
+  });
+
+  it('locks the button’s role, tab stop, state, name and description, and its hidden state', () => {
+    const attempt = {
+      role: 'link',
+      tabIndex: 0,
+      'aria-current': 'step',
+      'aria-disabled': true,
+      'aria-labelledby': 'mine',
+      'aria-describedby': 'mine',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as StepSlotProps['button'];
+    render(
+      <>
+        <span id="mine">Mine</span>
+        <Steps parts={{ step: { button: attempt } }} />
+      </>,
+    );
+    const [account, profile, review, done] = stepButtons();
+    // Yours is joined after the step's name and description.
+    expect(account).toHaveAccessibleName('Completed: 1. Account Mine');
+    expect(account).toHaveAccessibleDescription('Your details Mine');
+    expect(review).toHaveAccessibleDescription('Mine');
+    // Only the active step is current, and only the unreachable step unavailable (state-off).
+    expect(profile).toHaveAttribute('aria-current', 'step');
+    for (const button of [account, review, done])
+      expect(button).not.toHaveAttribute('aria-current');
+    expect(done).toHaveAttribute('aria-disabled', 'true');
+    expect(done).toHaveAttribute('tabindex', '-1');
+    for (const button of [account, profile, review]) {
+      expect(button).not.toHaveAttribute('aria-disabled');
+      expect(button).toHaveAttribute('tabindex', '0');
+    }
+    for (const button of [account, profile, review, done]) {
+      expect(button).toHaveAttribute('role', 'button');
+      for (const name of ['hidden', 'inert', 'aria-hidden']) {
+        expect(button).not.toHaveAttribute(name);
+      }
+    }
+  });
+
+  it('locks the label’s and the description’s ids, names and hidden state', () => {
+    const attempt = {
+      id: 'mine',
+      'aria-label': 'Mine',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as StepSlotProps['label'];
+    render(<Steps parts={{ step: { label: attempt, description: attempt } }} />);
+    const [account] = stepButtons();
+    expect(account).toHaveAccessibleName('Completed: 1. Account');
+    expect(account).toHaveAccessibleDescription('Your details');
+    expect(document.getElementById('mine')).toBeNull();
+    for (const element of [
+      ...all(document, stepperStepClassNames.label),
+      ...all(document, stepperStepClassNames.description),
+    ]) {
+      for (const name of ['aria-label', 'hidden', 'inert', 'aria-hidden']) {
+        expect(element).not.toHaveAttribute(name);
+      }
+    }
+  });
+
+  it('keeps the indicators and connectors decorative', () => {
+    const attempt = { 'aria-hidden': false, tabIndex: 0, 'data-wave-stepper-connector': 'mine' };
+    render(<Steps parts={{ step: { indicator: attempt, connector: attempt } }} />);
+    for (const element of [
+      ...all(document, stepperStepClassNames.indicator),
+      ...all(document, stepperStepClassNames.connector),
+    ]) {
+      expect(element).toHaveAttribute('aria-hidden', 'true');
+      expect(element).not.toHaveAttribute('tabindex');
+    }
+    expect(document.querySelectorAll('[data-wave-stepper-connector=""]')).toHaveLength(3);
+  });
+
+  it('runs your button handlers first: preventDefault() skips the step’s own onClick and the step change', async () => {
+    const user = userEvent.setup();
+    const onStepChange = vi.fn();
+    const onClick = vi.fn();
+    const prevent = (event: React.SyntheticEvent) => event.preventDefault();
+    render(
+      <Stepper onStepChange={onStepChange}>
+        <Stepper.Step label="Account" />
+        <Stepper.Step
+          label="Profile"
+          onClick={onClick}
+          slotProps={{ button: { onClick: prevent, onKeyDown: prevent, onKeyUp: prevent } }}
+        />
+      </Stepper>,
+    );
+    const profile = stepButton('Profile');
+    await user.click(profile);
+    act(() => profile.focus());
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onStepChange).not.toHaveBeenCalled();
+    expect(stepButton('Account')).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('runs a button handler that prevents nothing before the step’s own onClick', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <Stepper onStepChange={(step) => void order.push(`change:${step}`)}>
+        <Stepper.Step label="Account" />
+        <Stepper.Step
+          label="Profile"
+          onClick={() => void order.push('step')}
+          slotProps={{ button: { onClick: () => void order.push('part') } }}
+        />
+      </Stepper>,
+    );
+    await user.click(stepButton('Profile'));
+    expect(order).toEqual(['part', 'step', 'change:1']);
+  });
+
+  it('keeps the active step on a click prevented in a part inside the button, its own onClick still called', async () => {
+    const user = userEvent.setup();
+    const onStepChange = vi.fn();
+    const onClick = vi.fn();
+    render(
+      <Stepper onStepChange={onStepChange}>
+        <Stepper.Step label="Account" />
+        <Stepper.Step
+          label="Profile"
+          onClick={onClick}
+          slotProps={{ label: { onClick: (event) => event.preventDefault() } }}
+        />
+      </Stepper>,
+    );
+    await user.click(screen.getByText('Profile'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onStepChange).not.toHaveBeenCalled();
+    expect(stepButton('Account')).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('calls no click handler of the button or the parts inside it while the step cannot be activated', async () => {
+    const user = userEvent.setup();
+    const handlers = {
+      button: vi.fn(),
+      indicator: vi.fn(),
+      label: vi.fn(),
+      description: vi.fn(),
+      connector: vi.fn(),
+      listItem: vi.fn(),
+    };
+    const parts = Object.fromEntries(
+      Object.entries(handlers).map(([name, onClick]) => [name, { onClick }]),
+    );
+    const { rerender } = render(
+      <Stepper linear>
+        <Stepper.Step label="Account" />
+        <Stepper.Step label="Profile" />
+        <Stepper.Step label="Review" description="Check it" slotProps={parts} />
+        <Stepper.Step label="Done" />
+      </Stepper>,
+    );
+    // Two past the active step of a linear stepper: unreachable.
+    const review = stepButton('Review');
+    for (const target of [
+      review,
+      ...['indicator', 'label', 'description'].map(
+        (name) => review.querySelector(`.${stepperStepClassNames[name as 'label']}`) as HTMLElement,
+      ),
+    ]) {
+      await user.click(target);
+    }
+    for (const name of ['button', 'indicator', 'label', 'description'] as const) {
+      expect(handlers[name]).not.toHaveBeenCalled();
+    }
+    // The connector and the list item are outside the button: not blocked.
+    fireEvent.click(all(document, stepperStepClassNames.connector)[2]);
+    expect(handlers.connector).toHaveBeenCalledTimes(1);
+    expect(handlers.listItem).toHaveBeenCalled();
+    // Reachable again: each is called.
+    rerender(
+      <Stepper>
+        <Stepper.Step label="Account" />
+        <Stepper.Step label="Profile" />
+        <Stepper.Step label="Review" description="Check it" slotProps={parts} />
+        <Stepper.Step label="Done" />
+      </Stepper>,
+    );
+    await user.click(screen.getByText('Check it'));
+    expect(handlers.description).toHaveBeenCalledTimes(1);
+    expect(handlers.button).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls no click handler of the button of a disabled step', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <Stepper>
+        <Stepper.Step label="Account" />
+        <Stepper.Step label="Profile" disabled slotProps={{ button: { onClick } }} />
+      </Stepper>,
+    );
+    await user.click(stepButton('Profile'));
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onStepChange = vi.fn();
+    const handlers = { list: vi.fn(), listItem: vi.fn(), button: vi.fn(), label: vi.fn() };
+    render(
+      <React.StrictMode>
+        <Stepper onStepChange={onStepChange} slotProps={{ list: { onClick: handlers.list } }}>
+          <Stepper.Step label="Account" />
+          <Stepper.Step
+            label="Profile"
+            slotProps={{
+              listItem: { onClick: handlers.listItem },
+              button: { onClick: handlers.button },
+              label: { onClick: handlers.label },
+            }}
+          />
+        </Stepper>
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByText('Profile'));
+    for (const handler of Object.values(handlers)) expect(handler).toHaveBeenCalledTimes(1);
+    expect(onStepChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the parts a step does not render', () => {
+    render(
+      <Stepper>
+        <Stepper.Step
+          label="Only"
+          slotProps={{
+            description: { className: 'my-description' },
+            connector: { className: 'my-connector' },
+          }}
+        />
+      </Stepper>,
+    );
+    expect(document.querySelector('.my-description')).toBeNull();
+    expect(document.querySelector('.my-connector')).toBeNull();
+    expect(stepButton('Only')).toHaveAccessibleName('1. Only');
+  });
+
+  it('applies the parts in RTL', () => {
+    renderWithProviders(
+      <Steps
+        orientation="vertical"
+        activeStep={0}
+        parts={{ step: { connector: { className: 'my-connector' }, label: { dir: 'ltr' } } }}
+      />,
+      { dir: 'rtl' },
+    );
+    const [connector] = all(document, stepperStepClassNames.connector);
+    expect(connector).toHaveClass('my-connector', 'ms-3.75');
+    expect(all(document, stepperStepClassNames.label)[0]).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    const mine = (name: string) => ({ className: `my-${name}`, title: name });
+    render(
+      <Steps
+        parts={{
+          root: { list: mine('list') },
+          step: Object.fromEntries(STEP_PARTS.map((name) => [name, mine(name)])),
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof StepperSlotProps>().toEqualTypeOf<'list'>();
+    expectTypeOf<keyof StepSlotProps>().toEqualTypeOf<(typeof STEP_PARTS)[number]>();
+    expectTypeOf<NonNullable<StepperSlotProps['list']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLOListElement> | undefined
+    >();
+    expectTypeOf<NonNullable<StepSlotProps['listItem']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLIElement> | undefined
+    >();
+    expectTypeOf<NonNullable<StepSlotProps['button']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<StepSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the steps are yours
+        <Stepper slotProps={{ list: { children: 'x' } }}>{null}</Stepper>
+      )
+    );
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the step renders them
+        <Stepper.Step label="A" slotProps={{ label: { children: 'x' } }} />
+      )
+    );
   });
 });

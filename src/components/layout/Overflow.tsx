@@ -10,6 +10,7 @@ import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable } from '../../lib/focus';
 import { mergeProps } from '../../lib/mergeProps';
 import { isCloneableElement, unwrapFragment } from '../../lib/renderTrigger';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
@@ -102,6 +103,25 @@ export interface OverflowProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   onOverflowChange?: (hiddenItems: string[], details?: OverflowChangeDetails) => void;
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the wrapper the row draws around what `overflowButton` returns, merged into its
+   * own: your classes after its classes (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref attached beside the row's own. Every attribute the row
+   * sets on it is locked. A part takes no `children` (`overflowButton` renders them) and carries
+   * no handler of the row. Fluent UI has no such part: its overflow menu is rendered by you.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` around the overflow button, rendered while items are hidden (stable class
+     * `wave-overflow__overflow-button`). The row measures its size on the row's axis and reserves
+     * it, so your classes and styles count in the room the items get; when every item fits again
+     * and focus was in it, focus moves to the first item it stood for. Locked: its marker
+     * `data-overflow-button`, its `data-overflow-pinned` (only while it covers the end of the
+     * visible items), its `role` (`listitem` in a `role="list"` row, else none), no tab index, and
+     * no `hidden`, `inert` or `aria-hidden`, since it holds the button.
+     */
+    overflowButton?: SlotPart<'div'>;
+  };
 }
 
 /**
@@ -492,6 +512,8 @@ interface OverflowButtonSlotProps extends React.HTMLAttributes<HTMLDivElement> {
   hiddenIds: string[];
   /** The store's ref callback for the wrapper. */
   buttonRef: (node: HTMLDivElement | null) => void;
+  /** The ref of the `overflowButton` part, attached beside the store's. */
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -500,9 +522,16 @@ interface OverflowButtonSlotProps extends React.HTMLAttributes<HTMLDivElement> {
  * never falls to the body (`usePreserveFocus`). Focus inside the button's menu is not inside the
  * wrapper, so an open menu keeps its own focus return.
  */
-function OverflowButtonSlot({ store, hiddenIds, buttonRef, ...rest }: OverflowButtonSlotProps) {
+function OverflowButtonSlot({
+  store,
+  hiddenIds,
+  buttonRef,
+  ref: partRef,
+  ...rest
+}: OverflowButtonSlotProps) {
   const elementRef = React.useRef<HTMLDivElement>(null);
-  const ref = useMergedRefs<HTMLDivElement>(buttonRef, elementRef);
+  // The part's ref joins the merged ref, so an inline one never detaches the store's.
+  const ref = useMergedRefs<HTMLDivElement>(buttonRef, elementRef, partRef);
   const wereHiddenRef = React.useRef<readonly string[]>(NO_IDS);
   React.useLayoutEffect(() => {
     wereHiddenRef.current = hiddenIds;
@@ -551,6 +580,7 @@ const OverflowRoot = ({
   children,
   className,
   ref,
+  slotProps,
   ...rest
 }: OverflowProps) => {
   const [store] = React.useState(() => new OverflowStore());
@@ -648,30 +678,45 @@ const OverflowRoot = ({
     });
   }, [store, hiddenIds, hasButton, emitOverflowChange]);
 
-  const button =
-    (hiddenCount > 0 || (hasHiddenItems && !measured)) && overflowButton ? (
-      // In the row's flow (it adds to the row height and follows justify-*), sticking to the end
-      // of the axis when the visible items are wider than the room beside it. Browsers stop a
-      // sticky element at the scroll container's padding, so -end-1 lets it reach the clipping
-      // edge, and while pinned it keeps 4px inside for its own focus indicator. (WebKit stops a
-      // sticky element short of the inline end of a right-to-left row; it stays in the row.)
-      <OverflowButtonSlot
-        key={BUTTON_KEY}
-        store={store}
-        hiddenIds={hiddenIds}
-        buttonRef={setButton}
-        // A list row (role="list", a Breadcrumb trail) holds only list items.
-        role={rest.role === 'list' ? 'listitem' : undefined}
-        data-overflow-button=""
-        data-overflow-pinned={buttonCovers ? '' : undefined}
-        className={cn(
-          overflowClassNames.overflowButton,
-          BUTTON_CLASSES[buttonPosition][orientation],
-        )}
-      >
-        {overflowButton(hiddenCount, buttonIds)}
-      </OverflowButtonSlot>
-    ) : null;
+  const showButton = (hiddenCount > 0 || (hasHiddenItems && !measured)) && overflowButton;
+  // A list row (role="list", a Breadcrumb trail) holds only list items.
+  const buttonRole = rest.role === 'list' ? 'listitem' : undefined;
+  const buttonPinned = buttonCovers ? '' : undefined;
+  const buttonClassName = showButton
+    ? cn(overflowClassNames.overflowButton, BUTTON_CLASSES[buttonPosition][orientation])
+    : undefined;
+  const buttonPart = slotProps?.overflowButton;
+  const button = showButton ? (
+    // In the row's flow (it adds to the row height and follows justify-*), sticking to the end
+    // of the axis when the visible items are wider than the room beside it. Browsers stop a
+    // sticky element at the scroll container's padding, so -end-1 lets it reach the clipping
+    // edge, and while pinned it keeps 4px inside for its own focus indicator. (WebKit stops a
+    // sticky element short of the inline end of a right-to-left row; it stays in the row.)
+    <OverflowButtonSlot
+      key={BUTTON_KEY}
+      store={store}
+      hiddenIds={hiddenIds}
+      buttonRef={setButton}
+      role={buttonRole}
+      data-overflow-button=""
+      data-overflow-pinned={buttonPinned}
+      className={buttonClassName}
+      // The part's ref reaches the wrapper's merged ref (the store measures the wrapper).
+      {...(buttonPart &&
+        mergeSlotProps(buttonPart, {
+          className: buttonClassName,
+          locked: {
+            ...HIDDEN_PART_LOCKS,
+            role: buttonRole,
+            tabIndex: undefined,
+            'data-overflow-button': '',
+            'data-overflow-pinned': buttonPinned,
+          },
+        }))}
+    >
+      {overflowButton(hiddenCount, buttonIds)}
+    </OverflowButtonSlot>
+  ) : null;
   // `before-hidden`: the button stands just before the first hidden item (hiddenIds are in DOM
   // order).
   const placed =
