@@ -218,6 +218,12 @@ export const SLOT_PROPS_KEYS = {
   tagClassNames: ['primaryText', 'secondaryText', 'dismissButton'],
   interactionTagPrimaryClassNames: ['primaryText', 'secondaryText'],
   interactionTagSecondaryClassNames: ['dismissIcon'],
+  tableHeaderCellClassNames: ['button'],
+  tableSelectionCellClassNames: ['control'],
+  tableCellLayoutClassNames: ['content', 'main'],
+  dataGridHeaderClassNames: ['selectAllCheckbox'],
+  dataGridHeaderCellClassNames: ['button', 'resizeHandle'],
+  dataGridRowClassNames: ['selectionControl'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -495,10 +501,4 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   messageBarClassNames: ['body', 'dismissButton'],
   progressBarClassNames: ['bar', 'label'],
   spinnerClassNames: ['spinner', 'label'],
-  tableHeaderCellClassNames: ['button'],
-  tableSelectionCellClassNames: ['control'],
-  tableCellLayoutClassNames: ['content', 'main'],
-  dataGridHeaderClassNames: ['selectAllCheckbox'],
-  dataGridHeaderCellClassNames: ['button', 'resizeHandle'],
-  dataGridRowClassNames: ['selectionControl'],
 };

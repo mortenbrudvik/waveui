@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { reportMissingContext } from '../../lib/dev';
+import type { SlotPart } from '../../lib/slotProps';
 import type { SelectionMode } from '../../lib/types';
 import { createSelectionStore, type SelectionStore } from './DataGrid.store';
 import type {
@@ -130,6 +131,8 @@ export interface DataGridRowContextValue {
   ariaLabel: string | undefined;
   /** The control's `aria-labelledby`. */
   ariaLabelledBy: string | undefined;
+  /** The row's `slotProps.selectionControl`, for the control of a body row's selection cell. */
+  selectionControlPart?: SlotPart<'input'>;
 }
 
 export interface DataGridSortContextValue {
@@ -156,6 +159,13 @@ export const DataGridHeaderSlotsContext = React.createContext<HeaderSlotRegistry
  * children. Only the initial (and server) render uses it; the slots then follow the DOM order.
  */
 export const DataGridHeaderRowHintContext = React.createContext(true);
+/**
+ * The header's `slotProps.selectAllCheckbox`, for the select-all checkbox wherever a header row
+ * draws it (a `<tr>` child, a `DataGrid.Row`, a `DataGrid.SelectionCell`).
+ */
+export const DataGridSelectAllPartContext = React.createContext<SlotPart<'input'> | undefined>(
+  undefined,
+);
 
 /** Renders the row of one item of `items` (a `DataGrid.Body` render function, or from `columns`). */
 export type DataGridRenderRow = (item: unknown, index: number) => React.ReactNode;

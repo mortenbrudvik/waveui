@@ -31,6 +31,7 @@ import type {
   DataGridCellProps,
   DataGridColumn,
   DataGridHeaderCellProps,
+  DataGridHeaderProps,
   DataGridLabels,
   DataGridProps,
   DataGridRowProps,
@@ -52,6 +53,7 @@ import {
 } from '../../../lib/classNames';
 import { getTabbableElements } from '../../../lib/focus';
 import type { Slot } from '../../../lib/slot';
+import type { SlotPart } from '../../../lib/slotProps';
 import { createTableColumn } from '../../../lib/table';
 import { useRovingTabIndex } from '../../../hooks/useRovingTabIndex';
 import { Button } from '../../button/Button';
@@ -63,7 +65,9 @@ import { Menu } from '../../navigation/Menu';
 import { countTabIndexWrites, flushObservers } from './tabIndexWrites';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testComposedHandler,
@@ -6169,5 +6173,692 @@ describe('DataGrid types', () => {
       <DataGrid key="items" aria-label="People" columns={sized} items={PEOPLE} />,
     ];
     expect(elements).toHaveLength(2);
+  });
+});
+
+describe('DataGrid parts — slotProps', () => {
+  type HeaderParts = NonNullable<DataGridHeaderProps['slotProps']>;
+  type HeaderCellParts = NonNullable<DataGridHeaderCellProps['slotProps']>;
+  type RowParts = NonNullable<DataGridRowProps['slotProps']>;
+  interface Parts {
+    header?: HeaderParts;
+    headerCell?: HeaderCellParts;
+    row?: RowParts;
+  }
+  const EVERY_PART: Required<Parts> = {
+    header: { selectAllCheckbox: {} },
+    headerCell: { button: {}, resizeHandle: {} },
+    row: { selectionControl: {} },
+  };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const selectAllOf = (root: ParentNode = document) =>
+    all(root, dataGridHeaderClassNames.selectAllCheckbox);
+  const buttonsOf = (root: ParentNode = document) => all(root, dataGridHeaderCellClassNames.button);
+  const controlsOf = (root: ParentNode = document) =>
+    all(root, dataGridRowClassNames.selectionControl);
+  const partsOf = (root: ParentNode = document) => [
+    ...selectAllOf(root),
+    ...buttonsOf(root),
+    ...controlsOf(root),
+  ];
+  const grid = () => screen.getByRole('grid', { name: 'People' });
+  const tabStops = () => grid().querySelectorAll('[tabindex="0"]');
+  const rowOf = (name: string) => bodyRows().find((row) => row.textContent?.includes(name))!;
+
+  /** A selectable grid: a sortable and a plain header cell, and a row per person. */
+  function People({
+    parts,
+    onHeaderCellClick,
+    ...props
+  }: GridTestProps & { parts?: Parts; onHeaderCellClick?: React.MouseEventHandler }) {
+    return (
+      <DataGrid aria-label="People" selectionMode="multiple" {...props}>
+        <DataGrid.Header slotProps={parts?.header}>
+          <tr>
+            <DataGrid.HeaderCell
+              columnId="name"
+              sortable
+              onClick={onHeaderCellClick}
+              slotProps={parts?.headerCell}
+            >
+              Name
+            </DataGrid.HeaderCell>
+            <DataGrid.HeaderCell columnId="role" slotProps={parts?.headerCell}>
+              Role
+            </DataGrid.HeaderCell>
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          {PEOPLE.map((person) => (
+            <DataGrid.Row key={person.id} rowId={person.id} slotProps={parts?.row}>
+              <DataGrid.Cell>{person.name}</DataGrid.Cell>
+              <DataGrid.Cell>{person.role}</DataGrid.Cell>
+            </DataGrid.Row>
+          ))}
+        </DataGrid.Body>
+      </DataGrid>
+    );
+  }
+
+  // Captured from 6f6b500's dist: the server markup, and the client one after the grid's
+  // navigation wrote its tab stops.
+  const FOCUS =
+    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
+  const CONTROL = `accent-primary cursor-pointer disabled:cursor-not-allowed ${FOCUS}`;
+  const BUTTON = `inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider ${FOCUS}`;
+  const pins = (stamps: boolean) =>
+    [
+      `<input aria-label="Select all rows" class="wave-data-grid-header__select-all-checkbox ${CONTROL}"${stamps ? ' tabindex="0"' : ''} type="checkbox">`,
+      `<button class="wave-data-grid-header-cell__button ${BUTTON}"${stamps ? ' tabindex="-1"' : ''} type="button">`,
+      ...[0, 1, 2].map(
+        (id) =>
+          `<input aria-labelledby="wave-datagrid-row-label-_id${id}_" class="wave-data-grid-row__selection-control ${CONTROL}"${stamps ? ' tabindex="-1"' : ''} type="checkbox">`,
+      ),
+    ].join('\n');
+  const SERVER_PINS = pins(false);
+  const CLIENT_PINS = pins(true);
+
+  it('renders the parts of 6f6b500 (attributes sorted), on the client and the server', () => {
+    for (const parts of [undefined, EVERY_PART]) {
+      const view = render(<People parts={parts} />);
+      expect(openingTags(...partsOf())).toBe(CLIENT_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<People parts={parts} />);
+      expect(openingTags(...partsOf(template.content))).toBe(SERVER_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps(
+      (slotProps: Parts | undefined) => (
+        <People parts={slotProps} defaultSelectedItems={['2']} subtleSelection />
+      ),
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: Parts | undefined) => (
+        <DataGrid aria-label="Pick" selectionMode="single" selectOnRowClick>
+          <DataGrid.Header slotProps={slotProps?.header}>
+            <DataGrid.Row slotProps={slotProps?.row}>
+              <DataGrid.HeaderCell colSpan={2} slotProps={slotProps?.headerCell}>
+                Person
+              </DataGrid.HeaderCell>
+            </DataGrid.Row>
+            <tr>
+              <DataGrid.HeaderCell columnId="name" sortable slotProps={slotProps?.headerCell}>
+                Name
+              </DataGrid.HeaderCell>
+              <DataGrid.SelectionCell />
+            </tr>
+          </DataGrid.Header>
+          <DataGrid.Body>
+            <DataGrid.Row rowId="1" slotProps={slotProps?.row}>
+              <DataGrid.Cell>One</DataGrid.Cell>
+              <DataGrid.SelectionCell aria-describedby="note" />
+            </DataGrid.Row>
+            <DataGrid.Row
+              rowId="2"
+              selectionCellProps={{ disabled: true }}
+              slotProps={slotProps?.row}
+            >
+              <DataGrid.Cell>Two</DataGrid.Cell>
+            </DataGrid.Row>
+          </DataGrid.Body>
+        </DataGrid>
+      ),
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: Parts | undefined) => (
+        <DataGrid aria-label="Header row" selectionMode="multiple">
+          <DataGrid.Header slotProps={slotProps?.header}>
+            <DataGrid.Row
+              selectionCellProps={{ 'aria-label': 'Every row' }}
+              slotProps={slotProps?.row}
+            >
+              <DataGrid.HeaderCell slotProps={slotProps?.headerCell}>Name</DataGrid.HeaderCell>
+            </DataGrid.Row>
+          </DataGrid.Header>
+          <DataGrid.Body>
+            <DataGrid.Row
+              rowId="a"
+              selectionCellProps={{ invisible: true }}
+              slotProps={slotProps?.row}
+            >
+              <DataGrid.Cell>A</DataGrid.Cell>
+            </DataGrid.Row>
+          </DataGrid.Body>
+        </DataGrid>
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('puts your className, style, data-* and ref on each part, a DataGrid.SelectionCell’s control included', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    const part = (name: string, cls: string) => ({
+      className: cls,
+      style: { opacity: 0.5 },
+      'data-part': name,
+      ref: collect,
+    });
+    render(
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Header
+          slotProps={{ selectAllCheckbox: part('select-all', 'my-select-all cursor-default') }}
+        >
+          <tr>
+            <DataGrid.HeaderCell
+              columnId="name"
+              sortable
+              slotProps={{ button: part('button', 'my-button px-2') }}
+            >
+              Name
+            </DataGrid.HeaderCell>
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row
+            rowId="1"
+            slotProps={{ selectionControl: part('control', 'my-control cursor-default') }}
+          >
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+          <DataGrid.Row
+            rowId="2"
+            slotProps={{ selectionControl: part('control', 'my-control cursor-default') }}
+          >
+            <DataGrid.Cell>Bob</DataGrid.Cell>
+            <DataGrid.SelectionCell />
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    for (const [cls, name, conflict, count] of [
+      [dataGridHeaderClassNames.selectAllCheckbox, 'select-all', 'cursor-pointer', 1],
+      [dataGridHeaderCellClassNames.button, 'button', 'px-4', 1],
+      [dataGridRowClassNames.selectionControl, 'control', 'cursor-pointer', 2],
+    ] as const) {
+      const elements = all(document, cls);
+      expect(elements).toHaveLength(count);
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(cls);
+        expect(element).toHaveClass(`my-${name}`);
+        // Your class replaces a conflicting one of the part.
+        expect(element).not.toHaveClass(conflict);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+        expect(refs).toContain(element);
+      }
+    }
+    expect(refs).toHaveLength(4);
+    // The control of the DataGrid.SelectionCell child, where it stands.
+    expect(within(rowOf('Bob')).getAllByRole('gridcell')[1]).toContainElement(controlsOf()[1]);
+  });
+
+  it('locks the attributes each part sets and the markers the grid reads', () => {
+    const error = vi.spyOn(console, 'error');
+    const attempt = {
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+      'data-roving-container': '',
+      'data-grid-auxiliary': '',
+      role: 'toolbar',
+      tabIndex: -1,
+      id: 'mine',
+    };
+    const control = {
+      ...attempt,
+      type: 'radio',
+      checked: true,
+      defaultChecked: true,
+      defaultValue: 'mine',
+      'aria-checked': 'true',
+      name: 'mine',
+      form: 'mine',
+      disabled: true,
+      required: true,
+      'aria-label': 'Mine',
+    } as unknown as RowParts['selectionControl'];
+    const parts: Parts = {
+      header: { selectAllCheckbox: control },
+      headerCell: {
+        button: {
+          ...attempt,
+          type: 'submit',
+          disabled: true,
+          contentEditable: true,
+        } as unknown as HeaderCellParts['button'],
+      },
+      row: { selectionControl: control },
+    };
+    render(<People parts={parts} />);
+    // The part's id lands where the grid sets none (the controls), never on the sort button.
+    expect(openingTags(...partsOf()).replace(/ id="mine"/g, '')).toBe(CLIENT_PINS);
+    expect(buttonsOf()[0]).not.toHaveAttribute('id');
+    expect(controlsOf()[0]).toHaveAttribute('id', 'mine');
+    // The server markup has no tab stops of the grid: the part's tab index is locked there too.
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<People parts={parts} />);
+    expect(openingTags(...partsOf(template.content)).replace(/ id="mine"/g, '')).toBe(SERVER_PINS);
+    // No controlled-and-uncontrolled warning: the defaults are locked unset.
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('keeps the radios’ group and form wiring with a part', () => {
+    render(
+      <People
+        selectionMode="single"
+        parts={{
+          row: {
+            selectionControl: { name: 'mine', form: 'mine' } as RowParts['selectionControl'],
+          },
+        }}
+      />,
+    );
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(3);
+    const name = radios[0].getAttribute('name');
+    expect(name).toBeTruthy();
+    expect(name).not.toBe('mine');
+    for (const radio of radios) {
+      expect(radio).toHaveAttribute('name', name);
+      expect(radio).toHaveAttribute('form', '');
+    }
+  });
+
+  it('keeps one tab stop and the arrow order with every marker on every part', async () => {
+    const user = userEvent.setup();
+    const onSortChange = vi.fn();
+    const attempt = {
+      'data-roving-container': '',
+      'data-grid-auxiliary': '',
+      role: 'toolbar',
+      // An author's tabindex="-1" opts a widget out of the grid's targets.
+      tabIndex: -1,
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    };
+    const control = attempt as unknown as RowParts['selectionControl'];
+    // One stable object per part, shared by every row.
+    const parts: Parts = {
+      header: { selectAllCheckbox: control },
+      headerCell: {
+        button: { ...attempt, contentEditable: true } as unknown as HeaderCellParts['button'],
+      },
+      row: { selectionControl: control },
+    };
+    render(<People parts={parts} defaultSort={null} onSortChange={onSortChange} />);
+    const [selectAll] = selectAllOf();
+    const [button] = buttonsOf();
+    const controls = controlsOf();
+    expect(tabStops()).toHaveLength(1);
+    expect(tabStops()[0]).toBe(selectAll);
+    act(() => selectAll.focus());
+    for (const [key, target] of [
+      ['{ArrowRight}', () => button],
+      ['{ArrowRight}', () => header('Role')],
+      ['{ArrowDown}', () => cell('Engineer')],
+      ['{Home}', () => controls[0]],
+      ['{ArrowDown}', () => controls[1]],
+      ['{Control>}{Home}{/Control}', () => selectAll],
+      ['{ArrowRight}', () => button],
+    ] as const) {
+      await user.keyboard(key);
+      expect(target()).toHaveFocus();
+      expect(tabStops()).toHaveLength(1);
+      expect(tabStops()[0]).toBe(target());
+    }
+    // The sort button is still the cell's target: Enter sorts.
+    await user.keyboard('{Enter}');
+    expect(onSortChange).toHaveBeenCalledWith(
+      { columnId: 'name', direction: 'ascending' },
+      DETAILS,
+    );
+  });
+
+  it('runs your select-all onChange first: preventDefault() keeps the selection as it is', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const ui = (prevent: boolean) => (
+      <People
+        onSelectedItemsChange={onSelectedItemsChange}
+        parts={{
+          header: {
+            selectAllCheckbox: {
+              onChange: (event) => {
+                onSelectedItemsChange('part');
+                if (prevent) event.preventDefault();
+              },
+            },
+          },
+        }}
+      />
+    );
+    // A browser restores the checkedness of a cancelled click; jsdom toggles it back after React
+    // restored it, so each case gets a render of its own and only the calls are asserted.
+    const view = render(ui(true));
+    await user.click(selectAllOf()[0]);
+    expect(onSelectedItemsChange.mock.calls).toEqual([['part']]);
+    view.unmount();
+    render(ui(false));
+    await user.click(selectAllOf()[0]);
+    expect(onSelectedItemsChange.mock.calls).toEqual([
+      ['part'],
+      ['part'],
+      [['1', '2', '3'], DETAILS],
+    ]);
+  });
+
+  it('runs your row control onChange first: preventDefault() keeps the row as it is', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onSelectedItemsChange = vi.fn(() => void order.push('grid'));
+    const ui = (prevent: boolean) => (
+      <People
+        onSelectedItemsChange={onSelectedItemsChange}
+        parts={{
+          row: {
+            selectionControl: {
+              onChange: (event) => {
+                order.push('part');
+                if (prevent) event.preventDefault();
+              },
+            },
+          },
+        }}
+      />
+    );
+    const view = render(ui(true));
+    await user.click(controlsOf()[0]);
+    expect(order).toEqual(['part']);
+    expect(rowOf('Alice')).toHaveAttribute('aria-selected', 'false');
+    view.unmount();
+    render(ui(false));
+    await user.click(controlsOf()[0]);
+    expect(order).toEqual(['part', 'part', 'grid']);
+    expect(rowOf('Alice')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('runs your sort button onClick first: preventDefault() skips the sort, the cell’s onClick still runs', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onSortChange = vi.fn(() => void order.push('sort'));
+    const ui = (prevent: boolean) => (
+      <People
+        defaultSort={null}
+        onSortChange={onSortChange}
+        onHeaderCellClick={() => void order.push('cell')}
+        parts={{
+          headerCell: {
+            button: {
+              onClick: (event) => {
+                order.push('part');
+                if (prevent) event.preventDefault();
+              },
+            },
+          },
+        }}
+      />
+    );
+    const { rerender } = render(ui(true));
+    await user.click(buttonsOf()[0]);
+    expect(order).toEqual(['part', 'cell']);
+    expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+    rerender(ui(false));
+    await user.click(buttonsOf()[0]);
+    expect(order).toEqual(['part', 'cell', 'part', 'cell', 'sort']);
+    expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
+  });
+
+  it('toggles a row once for a click on its control with a part, also with selectOnRowClick', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const onClick = vi.fn();
+    render(
+      <People
+        selectOnRowClick
+        onSelectedItemsChange={onSelectedItemsChange}
+        parts={{ row: { selectionControl: { onClick } } }}
+      />,
+    );
+    await user.click(controlsOf()[1]);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onSelectedItemsChange.mock.calls).toEqual([[['2'], DETAILS]]);
+    expect(rowOf('Bob')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('calls no click handler of a disabled control, and yours on an enabled one', () => {
+    const onClick = vi.fn();
+    const selectAll = vi.fn();
+    render(
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Header slotProps={{ selectAllCheckbox: { onClick: selectAll } }}>
+          <DataGrid.Row selectionCellProps={{ disabled: true }}>
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </DataGrid.Row>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row
+            rowId="1"
+            selectionCellProps={{ disabled: true }}
+            slotProps={{ selectionControl: { onClick } }}
+          >
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+          <DataGrid.Row rowId="2" slotProps={{ selectionControl: { onClick } }}>
+            <DataGrid.Cell>Bob</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    fireEvent.click(selectAllOf()[0]);
+    fireEvent.click(controlsOf()[0]);
+    expect(selectAll).not.toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
+    fireEvent.click(controlsOf()[1]);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a mixed select-all mixed and controlRef attached while new inline part refs arrive', async () => {
+    const user = userEvent.setup();
+    const controlRef = React.createRef<HTMLInputElement>();
+    const seen: Element[] = [];
+    const collect = (node: Element | null) => void (node && seen.push(node));
+    const ui = () => (
+      <DataGrid aria-label="People" selectionMode="multiple" defaultSelectedItems={['1']}>
+        <DataGrid.Header slotProps={{ selectAllCheckbox: { ref: (node) => collect(node) } }}>
+          <tr>
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          {PEOPLE.map((person) => (
+            <DataGrid.Row
+              key={person.id}
+              rowId={person.id}
+              slotProps={{ selectionControl: { ref: (node) => collect(node) } }}
+            >
+              <DataGrid.Cell>{person.name}</DataGrid.Cell>
+              <DataGrid.SelectionCell controlRef={person.id === '2' ? controlRef : undefined} />
+            </DataGrid.Row>
+          ))}
+        </DataGrid.Body>
+      </DataGrid>
+    );
+    const { rerender } = render(ui());
+    rerender(ui());
+    const selectAll = selectAllOf()[0] as HTMLInputElement;
+    expect(selectAll.indeterminate).toBe(true);
+    expect(controlRef.current).toBe(controlsOf()[1]);
+    expect(new Set(seen)).toEqual(new Set([selectAll, ...controlsOf()]));
+    await user.click(controlsOf()[1]);
+    expect(selectAll.indeterminate).toBe(true);
+    await user.click(controlsOf()[2]);
+    expect(selectAll.indeterminate).toBe(false);
+    expect(selectAll).toBeChecked();
+  });
+
+  it('follows parts that change between renders', () => {
+    const parts = (cls: string): Parts => ({
+      header: { selectAllCheckbox: { className: cls } },
+      headerCell: { button: { className: cls } },
+      row: { selectionControl: { className: cls } },
+    });
+    const { rerender } = render(<People parts={parts('first')} />);
+    expect(partsOf()).toHaveLength(5);
+    for (const part of partsOf()) expect(part).toHaveClass('first');
+    rerender(<People parts={parts('second')} />);
+    for (const part of partsOf()) {
+      expect(part).toHaveClass('second');
+      expect(part).not.toHaveClass('first');
+    }
+  });
+
+  it('reaches the select-all checkbox wherever a header row draws it, and no control of a header row', () => {
+    const tree = (cellInRow: boolean) => (
+      <DataGrid aria-label="People" selectionMode="multiple">
+        <DataGrid.Header slotProps={{ selectAllCheckbox: { 'data-part': 'select-all' } }}>
+          <DataGrid.Row slotProps={{ selectionControl: { 'data-part': 'control' } }}>
+            {cellInRow && <DataGrid.SelectionCell />}
+            <DataGrid.HeaderCell>Name</DataGrid.HeaderCell>
+          </DataGrid.Row>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row rowId="1">
+            <DataGrid.Cell>Alice</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>
+    );
+    for (const cellInRow of [false, true]) {
+      const view = render(tree(cellInRow));
+      expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toHaveAttribute(
+        'data-part',
+        'select-all',
+      );
+      expect(document.querySelector('[data-part="control"]')).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('ignores the parts a grid does not draw', () => {
+    const error = vi.spyOn(console, 'error');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <DataGrid aria-label="People" selectionMode="single">
+        <DataGrid.Header slotProps={{ selectAllCheckbox: { className: 'my-part' } }}>
+          <tr>
+            <DataGrid.HeaderCell columnId="name" slotProps={{ button: { className: 'my-part' } }}>
+              Name
+            </DataGrid.HeaderCell>
+          </tr>
+        </DataGrid.Header>
+        <DataGrid.Body>
+          <DataGrid.Row slotProps={{ selectionControl: { className: 'my-part' } }}>
+            <DataGrid.Cell>No id</DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    expect(partsOf()).toEqual([]);
+    expect(document.querySelector('.my-part')).toBeNull();
+    for (const el of [header('Name'), screen.getByRole('row', { name: /No id/ })]) {
+      expect(el).not.toHaveAttribute('slotprops');
+    }
+    expect(error).not.toHaveBeenCalled();
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.Row: a selectable grid needs a `rowId` on every row; this row has no selection control.',
+      ],
+    ]);
+  });
+
+  it('calls each part handler once per activation in StrictMode', async () => {
+    const user = userEvent.setup();
+    const selectAll = vi.fn();
+    const button = vi.fn();
+    const control = vi.fn();
+    const onSortChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <People
+          defaultSort={null}
+          onSortChange={onSortChange}
+          parts={{
+            header: { selectAllCheckbox: { onChange: selectAll } },
+            headerCell: { button: { onClick: button } },
+            row: { selectionControl: { onChange: control } },
+          }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(selectAllOf()[0]);
+    await user.click(buttonsOf()[0]);
+    await user.click(controlsOf()[0]);
+    for (const fn of [selectAll, button, control, onSortChange])
+      expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the mirrored arrow order in a right-to-left grid with parts', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <People
+        parts={{
+          header: { selectAllCheckbox: { className: 'my-select-all' } },
+          headerCell: { button: { className: 'my-button' } },
+          row: { selectionControl: { className: 'my-control' } },
+        }}
+      />,
+      { dir: 'rtl' },
+    );
+    const [selectAll] = selectAllOf();
+    act(() => selectAll.focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(buttonsOf()[0]).toHaveFocus();
+    expect(buttonsOf()[0]).toHaveClass('my-button');
+    await user.keyboard('{ArrowDown}{ArrowRight}');
+    expect(controlsOf()[0]).toHaveFocus();
+    expect(controlsOf()[0]).toHaveClass('my-control');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <>
+        <span id="select-hint">Selects the people to invite</span>
+        <People
+          defaultSelectedItems={['1']}
+          parts={{
+            header: { selectAllCheckbox: { 'aria-describedby': 'select-hint' } },
+            headerCell: { button: { className: 'my-button', title: 'Sort' } },
+            row: { selectionControl: { 'aria-describedby': 'select-hint' } },
+          }}
+        />
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof HeaderParts>().toEqualTypeOf<'selectAllCheckbox'>();
+    expectTypeOf<keyof HeaderCellParts>().toEqualTypeOf<'button' | 'resizeHandle'>();
+    expectTypeOf<keyof RowParts>().toEqualTypeOf<'selectionControl'>();
+    expectTypeOf<HeaderParts['selectAllCheckbox']>().toEqualTypeOf<SlotPart<'input'> | undefined>();
+    expectTypeOf<HeaderCellParts['button']>().toEqualTypeOf<SlotPart<'button'> | undefined>();
+    expectTypeOf<HeaderCellParts['resizeHandle']>().toEqualTypeOf<SlotPart<'div'> | undefined>();
+    expectTypeOf<RowParts['selectionControl']>().toEqualTypeOf<SlotPart<'input'> | undefined>();
+    expectTypeOf<NonNullable<HeaderCellParts['resizeHandle']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- the header cell draws its children into the button
+    const button: HeaderCellParts = { button: { children: 'x' } };
+    // @ts-expect-error -- a control has no children
+    const control: RowParts = { selectionControl: { children: 'x' } };
+    expect([button, control]).toHaveLength(2);
   });
 });

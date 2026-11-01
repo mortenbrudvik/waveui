@@ -789,3 +789,39 @@ describe('DataGrid virtualWindow', () => {
     });
   });
 });
+
+describe('DataGrid.Row slotProps in a window', () => {
+  it('gives the rows of the window their selection control part, never a spacer, also after a scroll', () => {
+    // One stable object for every row (a new object renders each row's selection cell again).
+    const slotProps = { selectionControl: { 'data-part': 'control' } };
+    render(
+      <Grid selectionMode="multiple">
+        <DataGrid.Body>
+          {(item: Item) => (
+            <DataGrid.Row slotProps={slotProps}>
+              <DataGrid.Cell>{item.name}</DataGrid.Cell>
+              <DataGrid.Cell>{`Size ${item.size}`}</DataGrid.Cell>
+            </DataGrid.Row>
+          )}
+        </DataGrid.Body>
+      </Grid>,
+    );
+    const controls = () =>
+      Array.from(grid().querySelectorAll(`.${dataGridRowClassNames.selectionControl}`));
+    const check = () => {
+      expect(bodyRows().length).toBeLessThanOrEqual(30);
+      expect(controls()).toHaveLength(bodyRows().length);
+      for (const control of controls()) expect(control).toHaveAttribute('data-part', 'control');
+      for (const spacer of spacerRows()) {
+        expect(spacer.querySelector('[data-part]')).toBeNull();
+      }
+      expect(screen.getByRole('checkbox', { name: 'Select all rows' })).not.toHaveAttribute(
+        'data-part',
+      );
+    };
+    check();
+    scrollTo(5000 * ITEM);
+    expect(mountedIndexes()[0]).toBeGreaterThan(4000);
+    check();
+  });
+});

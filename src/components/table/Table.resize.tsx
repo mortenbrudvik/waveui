@@ -3,12 +3,39 @@ import { tableResizeHandleClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getArrowIntent, getDirection } from '../../lib/direction';
+import { mergeSlotProps } from '../../lib/slotProps';
+import type { SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
 import { useEventCallback } from '../../hooks/useEventCallback';
 
 /** How far an arrow key moves the edge, in pixels, and how far with Shift held. */
 const KEY_STEP = 20;
 const SHIFT_KEY_STEP = 5;
+
+/** The work that runs whatever the handler before it does with the event. */
+const ALWAYS = { checkDefaultPrevented: false } as const;
+
+/**
+ * What a handle part locks unset, before the handle's own attributes (which follow and win): the
+ * hidden state (a focusable widget is never hidden) and the marker of a nested composite, which
+ * a grid's navigation reads.
+ */
+const HANDLE_PART_LOCKS = {
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+  'data-roving-container': undefined,
+} as const;
+
+/**
+ * The props a DataGrid header cell renders its handle with (module-only): the public props and
+ * the cell's `resizeHandle` part, merged into the handle's element. Not a prop of
+ * `Table.ResizeHandle` (whose `part` is the native attribute); the cell merges the part's ref
+ * into its own `ref`.
+ */
+export interface TableResizeHandlePartProps extends TableResizeHandleProps {
+  slotPart?: SlotPart<'div'>;
+}
 
 /** Properties for the TableResizeHandle sub-component. */
 export interface TableResizeHandleProps extends Omit<
@@ -247,42 +274,73 @@ const TableResizeHandle = ({
     leaveKeyRef.current = null;
   });
 
+  // A DataGrid header cell's `resizeHandle` part (see TableResizeHandlePartProps), never a prop of
+  // the public handle.
+  const { slotPart: part, ...divProps } = rest as typeof rest &
+    Pick<TableResizeHandlePartProps, 'slotPart'>;
+  const classes = cn(
+    tableResizeHandleClassNames.root,
+    'absolute inset-y-0 end-0 z-1 w-2 cursor-col-resize touch-none select-none border-e-2 border-transparent',
+    'hover:border-stroke-accessible focus-visible:border-primary data-[dragging]:border-primary',
+    // The line is a border, so forced colors paint it only where it shows.
+    'forced-colors:forced-color-adjust-none forced-colors:hover:border-[ButtonText] forced-colors:focus-visible:border-[Highlight] forced-colors:data-[dragging]:border-[Highlight]',
+    focusRing,
+    className,
+  );
+  // The handle's attributes, in their order, and the handlers that act on an event: with a part,
+  // all of them are locked (a part's handler runs first and may cancel the action).
+  const own: SlotPart<'div'> = {
+    tabIndex: 0,
+    'aria-label': label,
+    'data-dragging': dragging ? '' : undefined,
+    ...divProps,
+    role: 'separator',
+    'aria-orientation': 'vertical',
+    'aria-valuenow': width,
+    'aria-valuemin': minWidth,
+    'aria-valuemax': maxWidth,
+    'aria-valuetext': valueText ? valueText(width) : `${Math.round(width)} pixels`,
+    'data-grid-auxiliary': '',
+  };
+  const actions = {
+    onPointerDown: composeEventHandlers(onPointerDown, startDrag),
+    onPointerMove: composeEventHandlers(onPointerMove, moveDrag),
+    onDoubleClick: handleDoubleClick,
+    onKeyDown: composeEventHandlers(onKeyDown, handleKey),
+  };
+  // The end of a drag and the forgotten key: they run whatever the handler before them does.
+  const releasePointer = composeEventHandlers(onPointerUp, releaseDrag, ALWAYS);
+  const cancelPointer = composeEventHandlers(onPointerCancel, cancelDrag, ALWAYS);
+  const losePointer = composeEventHandlers(onLostPointerCapture, loseCapture, ALWAYS);
+  const releaseKey = composeEventHandlers(onKeyUp, leaveOnRelease, ALWAYS);
+  const blur = composeEventHandlers(onBlur, forgetPressedKey, ALWAYS);
+
   return (
     <div
+      {...own}
+      className={classes}
+      {...actions}
+      onPointerUp={releasePointer}
+      onPointerCancel={cancelPointer}
+      onLostPointerCapture={losePointer}
+      onKeyUp={releaseKey}
+      onBlur={blur}
+      {...(part && {
+        ...mergeSlotProps(part, {
+          className: classes,
+          locked: { ...HANDLE_PART_LOCKS, ...own, ...actions },
+        }),
+        // After the part's handler whatever it does: the end of a drag, the forgotten key, and
+        // the host's focus work (a DataGrid header cell measures its column).
+        onPointerUp: composeEventHandlers(part.onPointerUp, releasePointer, ALWAYS),
+        onPointerCancel: composeEventHandlers(part.onPointerCancel, cancelPointer, ALWAYS),
+        onLostPointerCapture: composeEventHandlers(part.onLostPointerCapture, losePointer, ALWAYS),
+        onKeyUp: composeEventHandlers(part.onKeyUp, releaseKey, ALWAYS),
+        onBlur: composeEventHandlers(part.onBlur, blur, ALWAYS),
+        onFocus: composeEventHandlers(part.onFocus, divProps.onFocus, ALWAYS),
+      })}
+      // After the part: the host merges the part's ref into this one.
       ref={ref}
-      tabIndex={0}
-      aria-label={label}
-      data-dragging={dragging ? '' : undefined}
-      {...rest}
-      role="separator"
-      aria-orientation="vertical"
-      aria-valuenow={width}
-      aria-valuemin={minWidth}
-      aria-valuemax={maxWidth}
-      aria-valuetext={valueText ? valueText(width) : `${Math.round(width)} pixels`}
-      data-grid-auxiliary=""
-      className={cn(
-        tableResizeHandleClassNames.root,
-        'absolute inset-y-0 end-0 z-1 w-2 cursor-col-resize touch-none select-none border-e-2 border-transparent',
-        'hover:border-stroke-accessible focus-visible:border-primary data-[dragging]:border-primary',
-        // The line is a border, so forced colors paint it only where it shows.
-        'forced-colors:forced-color-adjust-none forced-colors:hover:border-[ButtonText] forced-colors:focus-visible:border-[Highlight] forced-colors:data-[dragging]:border-[Highlight]',
-        focusRing,
-        className,
-      )}
-      onPointerDown={composeEventHandlers(onPointerDown, startDrag)}
-      onPointerMove={composeEventHandlers(onPointerMove, moveDrag)}
-      onPointerUp={composeEventHandlers(onPointerUp, releaseDrag, { checkDefaultPrevented: false })}
-      onPointerCancel={composeEventHandlers(onPointerCancel, cancelDrag, {
-        checkDefaultPrevented: false,
-      })}
-      onLostPointerCapture={composeEventHandlers(onLostPointerCapture, loseCapture, {
-        checkDefaultPrevented: false,
-      })}
-      onDoubleClick={handleDoubleClick}
-      onKeyDown={composeEventHandlers(onKeyDown, handleKey)}
-      onKeyUp={composeEventHandlers(onKeyUp, leaveOnRelease, { checkDefaultPrevented: false })}
-      onBlur={composeEventHandlers(onBlur, forgetPressedKey, { checkDefaultPrevented: false })}
     />
   );
 };

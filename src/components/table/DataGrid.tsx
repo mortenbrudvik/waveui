@@ -14,6 +14,7 @@ import type { ColumnSizingOption } from '../../lib/columnSizing';
 import { endsTextSelection, isForeignEvent } from '../../lib/events';
 import { clearIds, selectAllIds, summarizeSelection, toggleId } from '../../lib/selection';
 import type { Slot } from '../../lib/slot';
+import type { SlotPart } from '../../lib/slotProps';
 import { focusRingInset, forcedColors } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -586,6 +587,32 @@ export interface DataGridHeaderProps extends React.HTMLAttributes<HTMLTableSecti
    * an empty cell.
    */
   children: React.ReactNode;
+  /**
+   * Props for the select-all checkbox the header draws, by part, merged into the part's own
+   * (Fluent UI's DataGridHeader has no slot for it: it is its selection cell's checkbox): your
+   * classes after the part's (yours win a conflict), your styles over its styles, your handlers
+   * before its handlers, your ids added to its `aria-labelledby` and `aria-describedby`, and your
+   * ref beside its ref. Every attribute the header sets on the checkbox is locked and keeps the
+   * header's value (set it through the row's `selectionCellProps` or a `DataGrid.SelectionCell`);
+   * you add the attributes it does not set. A part takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The select-all `<input type="checkbox">` of a grid with multiple selection, in the first
+     * header row's selection cell, whichever draws it: the cell the header adds to a `<tr>`, a
+     * `DataGrid.Row` header row, or a `DataGrid.SelectionCell` (stable class
+     * `wave-data-grid-header__select-all-checkbox`). A grid with single selection draws none.
+     * Locked: `type`, the checked and mixed state (with `defaultChecked`, `defaultValue` and
+     * `aria-checked` unset: it is controlled and natively checked), `disabled`, the name
+     * (`aria-label`, and `aria-labelledby` and `aria-describedby`, to which your ids are added)
+     * and its change handler (your `onChange` runs first, and `preventDefault()` in it keeps the
+     * selection as it is), and unset `role`, `tabIndex` (the grid's navigation writes it),
+     * `name`, `form`, `required`, `hidden`, `inert`, `aria-hidden` and the markers the grid's
+     * navigation reads (`data-roving-container`, `data-grid-auxiliary`). A disabled checkbox
+     * calls no click handler, yours included.
+     */
+    selectAllCheckbox?: SlotPart<'input'>;
+  };
   /** Ref to the `<thead>` element. */
   ref?: React.Ref<HTMLTableSectionElement>;
 }
@@ -610,6 +637,48 @@ export interface DataGridHeaderCellProps extends React.ThHTMLAttributes<HTMLTabl
    * become the glyph and its props are dropped, with a development warning.
    */
   sortIcon?: Slot<'span'>;
+  /**
+   * Props for the elements the header cell draws inside it, by part, merged into each part's own
+   * (Fluent UI's `button` slot prop, and the props of its column's resize handle): your classes
+   * after the part's (yours win a conflict), your styles over its styles, your handlers before
+   * its handlers, your ids added to its `aria-labelledby` and `aria-describedby`, and your ref
+   * beside its ref. Every attribute the cell sets on a part is locked and keeps the cell's value;
+   * you add the attributes it does not set. A part takes no `children`: the cell's children fill
+   * the sort button, and `sortIcon` is a slot of its own.
+   */
+  slotProps?: {
+    /**
+     * The sort `<button>` of a `sortable` header with a `columnId`, around the content and the
+     * direction glyph (stable class `wave-data-grid-header-cell__button`); a header that is not
+     * sortable draws none. Locked: `type`, `id` (the cell's `aria-labelledby` names it in a grid
+     * with resizable columns; unset otherwise), and unset `role`, `tabIndex` (the grid's
+     * navigation writes it), `disabled`, `contentEditable` (the grid takes an editable element for
+     * text entry, so the cell would take focus instead), `hidden`, `inert`, `aria-hidden` and the
+     * markers the grid's navigation reads (`data-roving-container`, which makes a nested
+     * composite, and `data-grid-auxiliary`, which keeps a widget from being the cell's target).
+     * The cell sorts when a click on the button reaches it: your `onClick` runs first, and
+     * `preventDefault()` in it skips the sort, while the cell's own `onClick` still runs. The
+     * direction is the cell's `aria-sort`.
+     */
+    button?: SlotPart<'button'>;
+    /**
+     * The column's resize handle in a grid with `resizableColumns`, a `<div role="separator">`
+     * (stable class `wave-data-grid-header-cell__resize-handle`, beside the handle's own
+     * `wave-table-resize-handle`); a header without a column of `columns` draws none. A
+     * `Table.ResizeHandle` you render yourself takes its props directly. Locked: `role`,
+     * `aria-orientation`, the `aria-value*` attributes, `tabIndex` (the grid's navigation writes
+     * it), the name (`aria-label`, from `labels.resizeColumn`; your ids are added to
+     * `aria-labelledby` and `aria-describedby`), `data-dragging`, `data-grid-auxiliary` (the
+     * marker that keeps it from being its cell's target and lets F2 reach it), unset `hidden`,
+     * `inert`, `aria-hidden` and `data-roving-container`, and its pointer, key and double-click
+     * handling: your `onPointerDown`, `onPointerMove`, `onKeyDown`, `onKeyDownCapture` and
+     * `onDoubleClick` run first, and `preventDefault()` in them skips the drag, the move, the key
+     * and the reset. The end of a drag (`onPointerUp`, `onPointerCancel`,
+     * `onLostPointerCapture`), the release of Enter or Space (`onKeyUp`), the blur and the
+     * measure of the column on focus run after yours whatever they do.
+     */
+    resizeHandle?: SlotPart<'div'>;
+  };
   /** Header cell content. */
   children: React.ReactNode;
   /** Ref to the `<th>` element. */
@@ -662,6 +731,35 @@ export interface DataGridRowProps extends React.HTMLAttributes<HTMLTableRowEleme
    * props win (their classes are merged). In a header row they apply to the select-all cell.
    */
   selectionCellProps?: DataGridRowSelectionCellProps;
+  /**
+   * Props for the selection control of the row, by part, merged into the part's own (Fluent UI's
+   * `checkboxIndicator` and `radioIndicator` of its selection cell stand for it): your classes
+   * after the part's (yours win a conflict), your styles over its styles, your handlers before
+   * its handlers, your ids added to its `aria-labelledby` and `aria-describedby`, and your ref
+   * beside its ref. Every attribute the row sets on the control is locked and keeps the row's
+   * value (set it through `selectionLabel`, `selectionCellProps` or a `DataGrid.SelectionCell`);
+   * you add the attributes it does not set. A part takes no `children`. In a grid of many rows,
+   * keep the object stable: a new object renders the row's selection cell again.
+   */
+  slotProps?: {
+    /**
+     * The `<input type="checkbox">` (multiple selection) or `<input type="radio">` (single
+     * selection) in the row's selection cell, the cell the row adds or a `DataGrid.SelectionCell`
+     * child (stable class `wave-data-grid-row__selection-control`). A row without a `rowId`, a
+     * header row (whose select-all checkbox is `DataGrid.Header`'s `selectAllCheckbox`) and a grid
+     * without selection draw none. Locked: `type`, the checked state (with `defaultChecked`,
+     * `defaultValue` and `aria-checked` unset: it is controlled and natively checked),
+     * `disabled`, `name` and `form` (which group the radios and keep them out of any form; unset
+     * on a checkbox), the name (`aria-label`, and `aria-labelledby` and `aria-describedby`, to
+     * which your ids are added) and its change handler (your `onChange` runs first, and
+     * `preventDefault()` in it keeps the row's selection as it is), and unset `role`, `tabIndex`
+     * (the grid's navigation writes it), `required`, `hidden`, `inert`, `aria-hidden` and the
+     * markers the grid's navigation reads (`data-roving-container`, `data-grid-auxiliary`). A
+     * click on the control never also selects the row through `selectOnRowClick`, and a disabled
+     * control calls no click handler, yours included.
+     */
+    selectionControl?: SlotPart<'input'>;
+  };
   /**
    * DataGrid cell elements. A `DataGrid.SelectionCell` child (also inside a Fragment) is the row's
    * selection cell, where it stands: the row then adds none.
@@ -1631,6 +1729,7 @@ const DataGridRow = ({
   rowId: rowIdProp,
   selectionLabel,
   selectionCellProps,
+  slotProps,
   children,
   className,
   style,
@@ -1800,6 +1899,7 @@ const DataGridRow = ({
   // The selection control's name: the cell's own, else the row's first cell, else "Select row".
   const controlLabelledBy = ownLabelledBy ?? labelledBy;
   const controlLabel = ownLabel ?? (controlLabelledBy === undefined ? 'Select row' : undefined);
+  const selectionControlPart = slotProps?.selectionControl;
 
   const rowContext = React.useMemo<DataGridRowContextValue>(
     () => ({
@@ -1811,6 +1911,7 @@ const DataGridRow = ({
       invisible: selectionInvisible,
       ariaLabel: controlLabel,
       ariaLabelledBy: controlLabelledBy,
+      selectionControlPart,
     }),
     [
       selectionCellProps,
@@ -1822,6 +1923,7 @@ const DataGridRow = ({
       selectionInvisible,
       controlLabel,
       controlLabelledBy,
+      selectionControlPart,
     ],
   );
 
@@ -1937,6 +2039,7 @@ function DataGridBodySelectionCell({
           aria-labelledby={row.ariaLabelledBy}
           aria-describedby={ariaDescribedBy}
           className={dataGridRowClassNames.selectionControl}
+          part={row.selectionControlPart}
         />
       )}
     </td>

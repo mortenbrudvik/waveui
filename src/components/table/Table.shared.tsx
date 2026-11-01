@@ -5,6 +5,8 @@ import { warnOnce } from '../../lib/dev';
 import { SortArrowDownIcon, SortArrowUpIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
+import { mergeSlotProps } from '../../lib/slotProps';
+import type { SlotPart } from '../../lib/slotProps';
 import { focusRingInset } from '../../lib/styles';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { unwrapButtonGlyph } from '../button/Button.slots';
@@ -58,10 +60,54 @@ const SUBTLE_CONTROL_CLASSES = {
   grid: 'opacity-0 group-hover/grid:opacity-100 group-focus-within/grid:opacity-100 focus-visible:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
 } as const;
 
+/**
+ * What a selection control part locks unset, before the control's own attributes (which follow
+ * and win): a role, a tab index (the host decides it, and a grid's navigation writes it), the
+ * form wiring and the required state (the control is a selection, not a form value, unless its
+ * host routes them), the uncontrolled defaults and `aria-checked` (the control is controlled, and
+ * its checked state is native), the hidden state (a focusable control is never hidden) and the
+ * markers a grid's navigation reads (a nested composite, an auxiliary widget). Written out, as
+ * every lock constant of a part.
+ */
+const SELECTION_CONTROL_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  name: undefined,
+  form: undefined,
+  required: undefined,
+  defaultChecked: undefined,
+  defaultValue: undefined,
+  'aria-checked': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+  'data-roving-container': undefined,
+  'data-grid-auxiliary': undefined,
+} as const;
+
+/**
+ * What a sort button part locks, before the button's own attributes (which follow and win): its
+ * type, and unset a role, a tab index (a grid's navigation writes it), the disabled and hidden
+ * state, `contentEditable` (a grid takes an editable element for text entry) and the markers a
+ * grid's navigation reads (a nested composite, an auxiliary widget).
+ */
+const SORT_BUTTON_PART_LOCKS = {
+  type: 'button',
+  role: undefined,
+  tabIndex: undefined,
+  disabled: undefined,
+  contentEditable: undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+  'data-roving-container': undefined,
+  'data-grid-auxiliary': undefined,
+} as const;
+
 /** Properties of {@link TableSelectionControl}. */
 export interface TableSelectionControlProps extends Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
-  'type' | 'checked' | 'defaultChecked'
+  'type' | 'checked' | 'defaultChecked' | 'part'
 > {
   /** A checkbox (multiple selection, select-all) or a radio (single selection). */
   type: 'checkbox' | 'radio';
@@ -85,6 +131,12 @@ export interface TableSelectionControlProps extends Omit<
   invisible?: boolean;
   /** The host's stable class for the control, merged first. */
   className?: string;
+  /**
+   * The host's part for the control (`slotProps.control`, `selectAllCheckbox` or
+   * `selectionControl`), merged into the control's props: its classes last, its handlers first,
+   * every attribute the control sets locked, and its ref beside the control's.
+   */
+  part?: SlotPart<'input'>;
   /** Ref to the `<input>` element. */
   ref?: React.Ref<HTMLInputElement>;
 }
@@ -96,6 +148,11 @@ export interface TableSelectionControlProps extends Omit<
  * checkbox's `indeterminate` flag, which is set again after every change of a mixed control (a
  * click clears it, and a parent that keeps the state mixed, or ignores the change, renders nothing
  * new). A `disabled` control is natively disabled.
+ *
+ * A host's `part` adds to the control: the attributes the host gives (`rest`), the type, the
+ * checked state and the change handler are locked (a part's `onChange` runs first, and
+ * `preventDefault()` in it skips the change), and so are the attributes of
+ * {@link SELECTION_CONTROL_PART_LOCKS} the host does not give.
  */
 export const TableSelectionControl = ({
   type,
@@ -105,11 +162,13 @@ export const TableSelectionControl = ({
   invisible = false,
   className,
   onChange,
+  part,
   ref,
   ...rest
 }: TableSelectionControlProps) => {
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const mergedRef = useMergedRefs<HTMLInputElement>(ref, inputRef);
+  // A part's ref joins after the spread, so an inline one never detaches the control's own.
+  const mergedRef = useMergedRefs<HTMLInputElement>(ref, inputRef, part?.ref);
   const mixed = checked === 'mixed';
   // Changes of a mixed control: the flag is applied again after each (see the JSDoc above).
   const [mixedChanges, setMixedChanges] = React.useState(0);
@@ -118,23 +177,37 @@ export const TableSelectionControl = ({
     if (inputRef.current) inputRef.current.indeterminate = mixed;
   }, [mixed, mixedChanges]);
 
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (mixed) setMixedChanges((count) => count + 1);
+    onChange?.(event);
+  };
+  const classes = cn(
+    className,
+    'accent-primary cursor-pointer disabled:cursor-not-allowed',
+    focusRingInset,
+    subtle && checked === false && SUBTLE_CONTROL_CLASSES[reveal],
+    invisible && 'invisible',
+  );
+
   return (
     <input
       {...rest}
-      ref={mergedRef}
       type={type}
       checked={checked === true}
-      onChange={(event) => {
-        if (mixed) setMixedChanges((count) => count + 1);
-        onChange?.(event);
-      }}
-      className={cn(
-        className,
-        'accent-primary cursor-pointer disabled:cursor-not-allowed',
-        focusRingInset,
-        subtle && checked === false && SUBTLE_CONTROL_CLASSES[reveal],
-        invisible && 'invisible',
-      )}
+      onChange={handleChange}
+      className={classes}
+      {...(part &&
+        mergeSlotProps(part, {
+          className: classes,
+          locked: {
+            ...SELECTION_CONTROL_PART_LOCKS,
+            ...rest,
+            type,
+            checked: checked === true,
+            onChange: handleChange,
+          },
+        }))}
+      ref={mergedRef}
     />
   );
 };
@@ -146,7 +219,7 @@ export type SortDirection = 'ascending' | 'descending';
 /** Properties of {@link TableSortButton}. */
 export interface TableSortButtonProps extends Omit<
   React.ButtonHTMLAttributes<HTMLButtonElement>,
-  'type' | 'children'
+  'type' | 'children' | 'part'
 > {
   /** The header cell's public name, for the development warning (`DataGrid.HeaderCell`). */
   component: string;
@@ -161,6 +234,11 @@ export interface TableSortButtonProps extends Omit<
    * button's own classes win where they conflict.
    */
   className?: string;
+  /**
+   * The host's `slotProps.button`, merged into the button's props: its classes last, its
+   * handlers first, every attribute the button sets locked.
+   */
+  part?: SlotPart<'button'>;
   /** The header content. */
   children?: React.ReactNode;
 }
@@ -175,6 +253,10 @@ export interface TableSortButtonProps extends Omit<
  * renders in a `<span>`. A `<button>` or `Button` element passed as `sortIcon`, or a slot object
  * whose `as` is one, is not nested: its children become the glyph (the arrow when they render
  * nothing), its props are dropped and a one-time development warning names the slot.
+ *
+ * A host's `part` adds to the button: the attributes and handlers the host gives (`rest`) are
+ * locked (a part's handler runs first, and `preventDefault()` in it skips the host's), and so are
+ * the attributes of {@link SORT_BUTTON_PART_LOCKS}.
  */
 export const TableSortButton = ({
   component,
@@ -182,6 +264,7 @@ export const TableSortButton = ({
   sortIcon,
   iconClassName,
   className,
+  part,
   children,
   ...rest
 }: TableSortButtonProps) => {
@@ -210,15 +293,21 @@ export const TableSortButton = ({
     }
   }
 
+  const classes = cn(
+    className,
+    'inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider',
+    focusRingInset,
+  );
   return (
     <button
       type="button"
       {...rest}
-      className={cn(
-        className,
-        'inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider',
-        focusRingInset,
-      )}
+      className={classes}
+      {...(part &&
+        mergeSlotProps(part, {
+          className: classes,
+          locked: { ...SORT_BUTTON_PART_LOCKS, ...rest },
+        }))}
     >
       {children}
       {icon}

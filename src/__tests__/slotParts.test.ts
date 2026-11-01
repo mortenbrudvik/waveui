@@ -35,6 +35,9 @@ import type {
   ColorSliderProps,
   ComboboxProps,
   CompoundButtonProps,
+  DataGridHeaderCellProps,
+  DataGridHeaderProps,
+  DataGridRowProps,
   DatePickerProps,
   DialogContentProps,
   DividerProps,
@@ -78,6 +81,9 @@ import type {
   StepperProps,
   StepProps,
   SwitchProps,
+  TableCellLayoutProps,
+  TableHeaderCellProps,
+  TableSelectionCellProps,
   TagPickerProps,
   TagProps,
   TeachingPopoverCarouselNavProps,
@@ -502,6 +508,16 @@ type SlotPropsOwners = {
   tagClassNames: TagProps;
   interactionTagPrimaryClassNames: InteractionTagPrimaryProps;
   interactionTagSecondaryClassNames: InteractionTagSecondaryProps;
+  tableHeaderCellClassNames: TableHeaderCellProps;
+  tableSelectionCellClassNames: TableSelectionCellProps;
+  tableCellLayoutClassNames: TableCellLayoutProps;
+  // The select-all checkbox, wherever a header row draws it, reads the header's part.
+  dataGridHeaderClassNames: DataGridHeaderProps;
+  // `resizeHandle` reaches the handle the cell draws with resizable columns; a Table.ResizeHandle
+  // you render takes its props directly.
+  dataGridHeaderCellClassNames: DataGridHeaderCellProps;
+  // The control of the row's selection cell, the automatic one or a DataGrid.SelectionCell child.
+  dataGridRowClassNames: DataGridRowProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

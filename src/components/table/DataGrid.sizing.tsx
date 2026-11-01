@@ -10,15 +10,21 @@ import {
   resolveColumnWidths,
   type ColumnSizingOption,
 } from '../../lib/columnSizing';
+import type { SlotPart } from '../../lib/slotProps';
 import { focusRingInset } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { TableResizeHandle } from './Table.resize';
+import type { TableResizeHandlePartProps } from './Table.resize';
 import { returnFocusToGridCell } from './useGridNavigation';
 import type { TableColumnWidthsChangeDetails } from './useTableColumnSizing';
 
 // The column sizing of a DataGrid (module-only): its width state, the `<colgroup>`, the table
 // style and the resize handle of a header cell. It imports nothing from `DataGrid.tsx`.
+
+/** The handle with the header cell's `resizeHandle` part, which the public handle does not take. */
+const ResizeHandle: (props: TableResizeHandlePartProps) => React.ReactNode = TableResizeHandle;
 
 /** The width of the selection column in pixels, as its cells draw it. */
 export const SELECTION_COLUMN_WIDTH = 40;
@@ -324,14 +330,18 @@ export function useDataGridColumnSizing(
  * wider than its width when the browser spreads the grid, so the handle measures its cell when it
  * gets focus, at each key press and when a drag starts (before the handle reads the width), and
  * starts from there. It is an auxiliary widget of the grid's navigation (entered with F2), and
- * Enter, Space and Escape return focus to its cell's target.
+ * Enter, Space and Escape return focus to its cell's target. `part` is the header cell's
+ * `slotProps.resizeHandle`: the handle locks its attributes and handlers, and runs the end of a
+ * drag and the measure on focus after the part's handlers whatever they do.
  */
 export function DataGridColumnResizeHandle({
   columnId,
   context,
+  part,
 }: {
   columnId: string;
   context: DataGridResizeContextValue;
+  part?: SlotPart<'div'>;
 }) {
   const {
     isSized,
@@ -346,6 +356,8 @@ export function DataGridColumnResizeHandle({
     valueText,
   } = context;
   const handleRef = React.useRef<HTMLDivElement>(null);
+  // A part's ref joins the handle's own, so an inline one never detaches the ref read below.
+  const handleRefs = useMergedRefs<HTMLDivElement>(handleRef, part?.ref);
   /** The pointer of the drag this handle reported. */
   const pointerRef = React.useRef<number | null>(null);
   const [drawnWidthOfCell, setDrawnWidthOfCell] = React.useState<number | null>(null);
@@ -371,8 +383,9 @@ export function DataGridColumnResizeHandle({
 
   const width = widths[columnId];
   return (
-    <TableResizeHandle
-      ref={handleRef}
+    <ResizeHandle
+      ref={handleRefs}
+      slotPart={part}
       width={isSized ? width : (drawnWidthOfCell ?? width)}
       minWidth={minWidths[columnId]}
       label={label}
