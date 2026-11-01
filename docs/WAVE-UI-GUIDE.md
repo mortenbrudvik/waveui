@@ -2922,7 +2922,7 @@ A part's props (`SlotPart<'<element>'>`) are its element's attributes, handlers 
 2. **Classes.** The component's classes, its stable class first, then yours, through `cn()`, so yours replace a conflicting class of the same variant ([Pattern 5](#pattern-5-cn-utility)); a gated state class (`data-[selected]:…`, `not-disabled:not-aria-disabled:hover:…`) stays next to a bare class of yours and wins by specificity, as it does on a root.
 3. **Style.** Your keys over the component's. A component that must control a key writes it after yours: a positioned popup's position, size limits and visibility (`lockPositionStyle`, also the beaks' offsets), a carousel track's translation and duration, a slide's width, a progress bar's value width.
 4. **Handlers.** Yours run first (several layers in order), then the component's, unless one of yours called `preventDefault()`: that skips the component's handling of the event, the component's own `on…` prop included. Work that only mirrors the DOM into state (the roving tab stop following focus, the end of a drag, a held key forgotten, the pointer over a control or a note) runs whatever yours do; each part's documentation says where. A disabled control's parts never call your `onClick` (the control's own is not called either); a consumer `aria-disabled` alone blocks nothing.
-5. **Ids.** `aria-labelledby`, `aria-describedby` and the other id lists are joined, the component's ids first: a part can add a name or a description, never remove the wiring. The one consequence to know: an id of yours in the `aria-labelledby` of a part that names its control (a menu item's or a Nav item's label, an InteractionTag Primary's text) renames that control.
+5. **Id lists.** `aria-labelledby` and `aria-describedby` are joined, the component's ids first: a part can add a name or a description, never remove the component's ids. Adding still changes a name in two cases: an `aria-labelledby` of yours wins over a part's locked `aria-label` in the name (a Pagination, Carousel or Breadcrumb overflow button, the Dismiss buttons of MessageBar and Toast, SpinButton's step buttons, a resize handle), and on a part whose text names its control (a menu item's or a Nav item's label, an InteractionTag Primary's text) it renames that control. Every other id reference (`aria-controls`, `aria-owns`, `aria-errormessage`, `aria-details`, `aria-activedescendant`) is no list: it follows rule 1, replacing a default, and is locked wherever the component wires it.
 6. **Refs.** Yours is attached beside the component's ref, which keeps working through inline refs that change on every render.
 7. **Nothing removes.** `null` and `undefined` are skipped, at the top level and in `style`, and only a function counts as a handler (`onClick: cond && fn` never removes the component's); `children`, `as`, `key` and `dangerouslySetInnerHTML` are type errors and are dropped.
 
@@ -2931,7 +2931,7 @@ A part's props (`SlotPart<'<element>'>`) are its element's attributes, handlers 
 - **What the component sets on the part, as it sets it**: the role, the ids other elements point at, the ARIA state and references, the tab index of a roving item, the disabled state, the markers the component finds its elements by, and the component's own props routed to the part (an Input's `placeholder`, a Switch's `id`). Set those through the component.
 - **The hidden state of a part that holds a control, an item or the text of a name**: `hidden`, `inert` and `aria-hidden` are locked unset, so the content stays reachable by keyboard and assistive technology.
 - **No item inside a composite**: a part inside a menu, a tree, a toolbar, a TagGroup, an arrow-key trail or a grid locks `role`, `tabIndex` and `data-roving-container` unset, so it never becomes another item, a second tab stop or a nested composite that takes the items out of the arrow order. Parts that only hold text and sit in no composite of their own (Card.Header's text parts, AvatarGroup.Item's name) lock the role but leave the tab index to you.
-- **Form wiring**: a control whose value a hidden input submits locks `name` and `form` on its focusable part (the hidden input submits under the component's own `name`), and a controlled input part locks `defaultValue` unset beside its `value`.
+- **Form wiring**: a control whose value a hidden input submits locks the form attributes of its focusable part that could take the value from that input: `name` and `required` on a part that could submit or validate itself (an `<input>`, a combobox button), and `form` where the control resets with the form its part names (Switch, Checkbox, SpinButton and the pickers; a `RadioGroup.Item` radio needs none, since the group holds the reset). So the hidden input alone submits the value under the component's own `name` and resets it; a Switch's or Checkbox's `type="button"`, never a form entry, locks `form` and `required` only. A controlled input part locks `defaultValue` unset beside its `value`.
 - **Names**: a part whose text names a control locks `aria-label` unset, since an `aria-label` would replace its text in the name.
 
 | Legend | Means |
@@ -2946,7 +2946,7 @@ A part's props (`SlotPart<'<element>'>`) are its element's attributes, handlers 
 | its click, its keys | the component's handler of the event is locked: yours runs first, `preventDefault()` skips it |
 | always runs | bookkeeping that runs after your handler whatever it does |
 
-`aria-labelledby` and `aria-describedby` are joined on every part, so the tables leave them out.
+`aria-labelledby` and `aria-describedby` are joined on every part (rule 5), so the tables leave them out; every other attribute a row names is locked, and an id reference a row does not name (`aria-controls` on a part that sets none) is yours to set.
 
 ### Part Tables
 
@@ -3084,7 +3084,7 @@ The sliders of ColorArea, ColorSlider and AlphaSlider are their range inputs, wh
 | Toast.Body | `subtitle` | `<div>` | unset `aria-label`, the hidden state |
 | Toaster | `toast` | `<div role="group">`, every toast's container | `role`, `tabIndex`, `data-wave-toast`, `data-presence`, `inert` (set while the toast exits), and unset `hidden` and `aria-hidden`; its keys (Delete, Backspace, Escape). The timers pause on the region, never on the part |
 
-No part of the overlays above carries a handler of its component: an event bubbles from the part to the surface after yours, so a prevented Escape keeps a Dialog, Drawer or Popover open, as it does in the content. A disabled menu item calls no `onClick` of its parts.
+A part above whose row names no click, keys or Tab order carries no handler of its component (the parts of Dialog.Content, Drawer, NavDrawer, Popover.Content and Tooltip, the beaks, the dots and indicators, the menu items' and the Toast's text parts): an event bubbles from the part to the surface or the item after yours, so a prevented Escape keeps a Dialog, Drawer or Popover open, as it does in the content, and a prevented click activates no menu item. The rows that name one (the TeachingPopover and Toast buttons, the Toaster's container, InfoButton's note) lock that handler: yours runs first and `preventDefault()` skips it, apart from the bookkeeping the row says always runs. InfoLabel's `label` and `infoButton` are a Label and an InfoButton, whose own rules apply. A disabled menu item calls no `onClick` of its parts.
 
 #### Navigation and disclosure
 
@@ -3198,7 +3198,7 @@ Each part key of the registry is a `slotProps` key, a named slot, the root of a 
 | The element around each bar of a MessageBarGroup, and each toast's content element | Presence and motion elements: the bar or toast inside takes its own props |
 | `Dialog.Content`'s positioner | It places the surface and lets presses through to the backdrop; the surface's own margin, in `className`, sets the gap |
 | The Carousel's viewport | It clips the track and is measured for `groupSize="auto"` |
-| Menu.Item's check column | Menu.Item draws none; the checkable kinds' `checkmark` slot fills theirs |
+| Menu.Item's check column | Menu.Item keeps only an unclassed placeholder there (shown while its list holds a checkable item); the checkable kinds' `checkmark` slot fills theirs |
 | The roots of `Rating.Item`, the swatches, `TagPicker.Control`, `Group`, `Input` and `List`, `TeachingPopover.Title`, `Body` and `Footer`, `Drawer.Body`, `DataGrid.SelectionCell` and `AvatarGroup.Popover` | Components you write yourself (or that a shorthand generates): they take their props directly |
 
 Neither are hidden form inputs, live regions and visually hidden text. App-wide class hooks per component (Fluent's `customStyleHooks_unstable`, a `WaveProvider classNames`) are left for after 1.0.
@@ -3333,7 +3333,7 @@ export function TemplateItem({ title, description, disabled, onSelect }: Templat
       }}
       className={cn(
         'flex cursor-pointer select-none items-start gap-2 px-3 py-1.5 hover:bg-subtle-hover focus:bg-subtle-hover',
-        'aria-disabled:cursor-not-allowed aria-disabled:text-disabled-foreground',
+        'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100',
         focusRingInset,
       )}
     >
@@ -3611,7 +3611,7 @@ How the library's components add a part, for contributors; the [Phase 13 spec](s
 | Topic | Fluent UI v9 | WaveUI |
 |---|---|---|
 | Part customization | Each part is a prop of its own name (`<Switch indicator={{ className }} input={{ … }} />`); native props go to the primary slot, `className` and `style` to the root | One `slotProps` object keyed by the class-name registry's part keys (`slotProps={{ track: { className } }}`), beside the named slots for leaves. A deliberate difference: one name instead of a prop per part, which would collide with WaveUI's named slots |
-| Merge rules | No single rule: style hooks put the consumer's class last; handlers are merged (`mergeCallbacks`, both always run) or gated on `isDefaultPrevented` per component; `{ ...defaultProps, ...props }` replaces, so a consumer's `ref` or handler replaces the component's | One rule everywhere: the consumer's handler first and cancellable with `preventDefault()`, refs merged, id lists joined, locked attributes winning |
+| Merge rules | No single rule: style hooks put the consumer's class last; handlers are merged (`mergeCallbacks`, both always run) or gated on `isDefaultPrevented` per component; `{ ...defaultProps, ...props }` replaces, so a consumer's `ref` or handler replaces the component's | One rule everywhere: the consumer's handler first and cancellable with `preventDefault()`, refs merged, `aria-labelledby` and `aria-describedby` joined, locked attributes winning |
 | Render-function children | `children: (Component, props) => ReactNode` on any slot, documented as an escape hatch | The same type (`SlotRenderFunction`) on every slot object, through `renderSlot` |
 | Native props helper | `getIntrinsicElementProps` (and the deprecated `getNativeElementProps`): a per-tag whitelist plus `data-*` and `aria-*` | `getNativeElementProps`, the same whitelist idea, smaller, in a server-safe module of its own |
 | Field render function | `children: (props: FieldControlProps) => ReactNode` with five props; `useFieldContext_unstable()` returns `undefined` outside a Field | The same five props; `useFieldContext()` returns `null` outside a Field, and `FieldContextProvider` is public |
