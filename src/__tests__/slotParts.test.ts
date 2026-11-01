@@ -20,8 +20,13 @@ import * as entry from '../index';
 import type {
   AccordionTriggerProps,
   AlphaSliderProps,
+  AvatarGroupItemProps,
+  AvatarGroupProps,
+  AvatarProps,
   BreadcrumbProps,
   CalendarProps,
+  CardHeaderProps,
+  CardProps,
   CheckboxProps,
   ColorAreaProps,
   ColorPickerHexFieldProps,
@@ -60,6 +65,7 @@ import type {
   OverflowProps,
   PaginationProps,
   PopoverContentProps,
+  PresenceBadgeProps,
   RadioGroupItemProps,
   RatingDisplayProps,
   SearchBoxProps,
@@ -471,6 +477,16 @@ type SlotPropsOwners = {
   // The Item draws the heading around a wrapper of the Trigger, with the Trigger's part.
   accordionTriggerClassNames: AccordionTriggerProps;
   overflowClassNames: OverflowProps;
+  // Card and Card.Header are polymorphic: their keys are in CardOwnProps and CardHeaderOwnProps.
+  cardClassNames: CardProps;
+  cardHeaderClassNames: CardHeaderProps;
+  // Without a badge the visual is the root itself; the part applies to it.
+  avatarClassNames: AvatarProps;
+  // AvatarGroup.Popover, built in or yours, reads the popup's parts from the group's context.
+  avatarGroupClassNames: AvatarGroupProps;
+  // AvatarGroup.Item omits Avatar's parts and declares the name of its overflow row.
+  avatarGroupItemClassNames: AvatarGroupItemProps;
+  presenceBadgeClassNames: PresenceBadgeProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

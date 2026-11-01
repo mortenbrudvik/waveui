@@ -894,6 +894,7 @@ export const INCLUSION_PROBES_0_11 = [
  * TypeScript compiler, against the entry), so a new one cannot be missed. Sorted.
  */
 export const MODULE_ONLY_NAMES = [
+  'AVATAR_GROUP_PART_LOCKS',
   'AvatarSizeContext',
   'AvatarSizeContextValue',
   'BLOCK_CLICK',

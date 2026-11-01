@@ -3,6 +3,7 @@ import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
+import { avatarClassNames } from '../../../lib/classNames';
 import { Avatar } from '../Avatar';
 import type { AvatarProps } from '../Avatar';
 import { hashToNamedColor, type AvatarNamedColor } from '../Avatar.colors';
@@ -10,7 +11,13 @@ import { AvatarSizeContext, type AvatarSizeContextValue } from '../Avatar.contex
 import { PresenceBadge } from '../PresenceBadge';
 import { Tag } from '../Tag';
 import { InteractionTag } from '../InteractionTag';
-import { expectNoA11yViolations, renderWithProviders, testSystemProps } from '../../../test-utils';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  renderWithProviders,
+  testSystemProps,
+} from '../../../test-utils';
 import type { Size } from '../../../lib/types';
 
 const PHOTO = 'https://example.com/photo.jpg';
@@ -1429,5 +1436,346 @@ describe('Avatar', () => {
         'ring' | 'ring-shadow' | 'shadow' | 'glow' | undefined
       >();
     });
+  });
+});
+
+describe('Avatar — slotProps', () => {
+  type AvatarSlotProps = NonNullable<AvatarProps['slotProps']>;
+  const visuals = (root: ParentNode = document) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${avatarClassNames.visual}`));
+
+  /** Without a badge (the visual is the root), with a badge, and decorative. */
+  const Avatars = ({ parts }: { parts?: AvatarSlotProps }) => (
+    <>
+      <Avatar name="Jane Doe" slotProps={parts} />
+      <Avatar name="Jane Doe" badge={<PresenceBadge status="busy" />} slotProps={parts} />
+      <Avatar decorative slotProps={parts} />
+    </>
+  );
+
+  // Captured from 112d7f8's dist (client and server agree).
+  const SIZE = 'rounded-full w-10 h-10 text-sm';
+  const VISUAL = `wave-avatar__visual inline-flex items-center justify-center overflow-hidden shrink-0 font-bold ${SIZE}`;
+  const STATE =
+    'data-active="unset" data-active-appearance="ring" data-color="brand" data-shape="circular" data-size="medium"';
+  const BASE_PINS = [
+    `<span aria-label="Jane Doe" class="wave-avatar ${VISUAL} bg-primary text-primary-foreground" ${STATE} role="img">`,
+    `<span aria-label="Jane Doe" class="${VISUAL} bg-primary text-primary-foreground" role="img">`,
+    `<span aria-hidden="true" class="wave-avatar ${VISUAL} bg-muted text-muted-foreground" ${STATE}>`,
+  ].join('\n');
+
+  it('renders the visual of 112d7f8 (attributes sorted), on the client and the server', () => {
+    for (const parts of [undefined, { visual: {} }]) {
+      const view = render(<Avatars parts={parts} />);
+      expect(openingTags(...visuals())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Avatars parts={parts} />);
+      expect(openingTags(...visuals(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with the part empty', () => {
+    const own = {
+      id: 'me',
+      title: 'Me',
+      style: { opacity: 0.5 },
+      'data-x': '1',
+      className: 'my-avatar',
+      'aria-describedby': 'note',
+      onClick: () => {},
+    };
+    for (const props of [
+      {},
+      own,
+      { src: PHOTO },
+      { role: 'button', tabIndex: 0, 'aria-label': 'Profile', image: { src: PHOTO, alt: 'Jane' } },
+      { ...own, badge: <PresenceBadge status="away" />, color: 'colorful', active: 'active' },
+    ] as AvatarProps[]) {
+      expectInertSlotProps(
+        (parts: AvatarSlotProps | undefined) => (
+          <Avatar name="Jane Doe" {...props} slotProps={parts} />
+        ),
+        { visual: {} },
+      );
+    }
+  });
+
+  it('applies the part to the root without a badge, after the avatar’s own props', () => {
+    const ref = React.createRef<HTMLSpanElement>();
+    const partRef = React.createRef<HTMLSpanElement>();
+    render(
+      <Avatar
+        ref={ref}
+        name="Jane Doe"
+        id="own"
+        className="my-avatar"
+        style={{ opacity: 0.5, marginTop: '2px' }}
+        data-x="1"
+        slotProps={{
+          visual: {
+            className: 'my-visual bg-error',
+            style: { opacity: 0.25 },
+            id: 'part',
+            title: 'Jane',
+            'data-x': '2',
+            'data-y': '3',
+            'data-size': 'huge',
+            ref: partRef,
+          },
+        }}
+      />,
+    );
+    const root = screen.getByRole('img', { name: 'Jane Doe' });
+    expect(root.classList[0]).toBe(avatarClassNames.root);
+    expect(root.classList[1]).toBe(avatarClassNames.visual);
+    expect(root).toHaveClass('my-avatar', 'my-visual', 'bg-error');
+    // Your class replaces a conflicting one of the part.
+    expect(root).not.toHaveClass('bg-primary');
+    expect(root).toHaveStyle({ opacity: '0.25', marginTop: '2px' });
+    // The avatar's own props and its state win; you add what it does not set.
+    expect(root).toHaveAttribute('id', 'own');
+    expect(root).toHaveAttribute('data-x', '1');
+    expect(root).toHaveAttribute('data-size', 'medium');
+    expect(root).toHaveAttribute('data-y', '3');
+    expect(root).toHaveAttribute('title', 'Jane');
+    expect(ref.current).toBe(root);
+    expect(partRef.current).toBe(root);
+  });
+
+  it('applies the part to the visual inside the wrapper with a badge', () => {
+    const ref = React.createRef<HTMLSpanElement>();
+    const partRef = React.createRef<HTMLSpanElement>();
+    const { container } = renderWithProviders(
+      <Avatar
+        ref={ref}
+        name="Jane Doe"
+        className="my-avatar"
+        data-x="1"
+        badge={<PresenceBadge status="out-of-office" />}
+        slotProps={{
+          visual: {
+            className: 'my-visual',
+            style: { opacity: 0.25 },
+            'data-x': '2',
+            ref: partRef,
+          },
+        }}
+      />,
+      { dir: 'rtl' },
+    );
+    const wrapper = container.querySelector<HTMLElement>(`.${avatarClassNames.root}`)!;
+    const [visual] = visuals();
+    expect(visual).not.toBe(wrapper);
+    expect(wrapper).toContainElement(visual);
+    expect(visual).toBe(screen.getByRole('img', { name: 'Jane Doe' }));
+    expect(visual.classList[0]).toBe(avatarClassNames.visual);
+    expect(visual).toHaveClass('my-visual');
+    expect(visual).toHaveStyle({ opacity: '0.25' });
+    expect(visual).toHaveAttribute('data-x', '2');
+    expect(wrapper).toHaveClass('my-avatar');
+    expect(wrapper).not.toHaveClass('my-visual');
+    expect(wrapper).toHaveAttribute('data-x', '1');
+    expect(ref.current).toBe(wrapper);
+    expect(partRef.current).toBe(visual);
+    expect(screen.getByRole('img', { name: 'Out of office' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['named', { name: 'Jane Doe' }],
+    ['decorative', { name: 'Jane Doe', decorative: true }],
+    ['unnamed', {}],
+    ['named by its image', { src: PHOTO, name: 'Jane Doe' }],
+    ['with a badge', { name: 'Jane Doe', badge: <PresenceBadge status="busy" /> }],
+  ] as Array<[string, AvatarProps]>)(
+    'locks the name wiring, the tab stop and the hidden state of the visual (%s)',
+    (_case, props) => {
+      const { container, rerender } = render(<Avatar {...props} />);
+      const [base] = visuals(container);
+      const wiring = ['role', 'aria-label', 'aria-hidden', 'aria-description', 'aria-details'];
+      const before = wiring.map((name) => base.getAttribute(name));
+      const attempt = {
+        role: 'button',
+        'aria-label': 'Replaced',
+        'aria-hidden': base.hasAttribute('aria-hidden') ? false : true,
+        'aria-description': 'More',
+        'aria-details': 'details',
+        tabIndex: 0,
+        hidden: true,
+        inert: true,
+      } as unknown as AvatarSlotProps['visual'];
+      rerender(<Avatar {...props} slotProps={{ visual: attempt }} />);
+      const [visual] = visuals(container);
+      expect(wiring.map((name) => visual.getAttribute(name))).toEqual(before);
+      for (const name of ['tabindex', 'hidden', 'inert']) {
+        expect(visual).not.toHaveAttribute(name);
+      }
+    },
+  );
+
+  it('keeps the attributes the avatar sets from your props, which win over the part', () => {
+    render(
+      <Avatar
+        name="Jane Doe"
+        role="button"
+        tabIndex={0}
+        aria-label="Open profile"
+        slotProps={{ visual: { role: 'link', tabIndex: -1 } as AvatarSlotProps['visual'] }}
+      />,
+    );
+    const visual = screen.getByRole('button', { name: 'Open profile' });
+    expect(visual).toHaveAttribute('tabindex', '0');
+  });
+
+  it('adds your ids to the aria-describedby of the visual', () => {
+    render(
+      <>
+        <span id="own">Own</span>
+        <span id="part">Part</span>
+        <Avatar
+          name="Jane Doe"
+          aria-describedby="own"
+          slotProps={{ visual: { 'aria-describedby': 'part' } }}
+        />
+      </>,
+    );
+    expect(screen.getByRole('img', { name: 'Jane Doe' })).toHaveAttribute(
+      'aria-describedby',
+      'own part',
+    );
+  });
+
+  it('runs your handler before the avatar’s own: preventDefault() skips it without a badge', () => {
+    const order: string[] = [];
+    const onClick = vi.fn(() => void order.push('own'));
+    const { container, rerender } = render(
+      <Avatar
+        name="Jane Doe"
+        onClick={onClick}
+        slotProps={{ visual: { onClick: () => void order.push('part') } }}
+      />,
+    );
+    fireEvent.click(visuals(container)[0]);
+    expect(order).toEqual(['part', 'own']);
+    rerender(
+      <Avatar
+        name="Jane Doe"
+        onClick={onClick}
+        slotProps={{ visual: { onClick: (event) => event.preventDefault() } }}
+      />,
+    );
+    fireEvent.click(visuals(container)[0]);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the avatar’s own handlers on the wrapper with a badge', () => {
+    const onClick = vi.fn();
+    const { container } = render(
+      <Avatar
+        name="Jane Doe"
+        onClick={onClick}
+        badge={<PresenceBadge status="busy" />}
+        slotProps={{ visual: { onClick: (event) => event.preventDefault() } }}
+      />,
+    );
+    fireEvent.click(visuals(container)[0]);
+    // The wrapper's handler is the avatar's own prop, which a bubbling click reaches.
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls a handler of the visual once per click in StrictMode', () => {
+    const onClick = vi.fn();
+    const { container } = render(
+      <React.StrictMode>
+        <Avatar name="Jane Doe" slotProps={{ visual: { onClick } }} />
+        <Avatar
+          name="Jane Doe"
+          badge={<PresenceBadge status="busy" />}
+          slotProps={{ visual: { onClick } }}
+        />
+      </React.StrictMode>,
+    );
+    for (const visual of visuals(container)) fireEvent.click(visual);
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['without a badge', {}],
+    ['with a badge', { badge: <PresenceBadge status="busy" /> }],
+  ] as Array<[string, Partial<AvatarProps>]>)(
+    'never detaches the avatar’s ref for an inline ref of the part (%s)',
+    (_case, props) => {
+      const ref = vi.fn();
+      const partRefs: Array<HTMLSpanElement | null> = [];
+      const ui = () => (
+        <Avatar
+          ref={ref}
+          name="Jane Doe"
+          {...props}
+          slotProps={{ visual: { ref: (node) => void partRefs.push(node) } }}
+        />
+      );
+      const { rerender } = render(ui());
+      rerender(ui());
+      rerender(ui());
+      expect(ref.mock.calls).toEqual([[expect.any(HTMLSpanElement)]]);
+      const [visual] = visuals();
+      expect(partRefs.filter((node) => node !== null)).toEqual([visual, visual, visual]);
+    },
+  );
+
+  it.each([
+    ['without a badge', {}],
+    ['with a badge', { badge: <PresenceBadge status="busy" /> }],
+  ] as Array<[string, Partial<AvatarProps>]>)(
+    'still finds an image that failed before hydration with a ref of the part (%s)',
+    async (_case, props) => {
+      const partRef = React.createRef<HTMLSpanElement>();
+      const ui = (
+        <Avatar
+          name="Jane Doe"
+          src="https://example.com/expired.jpg"
+          {...props}
+          slotProps={{ visual: { ref: partRef } }}
+        />
+      );
+      const host = document.createElement('div');
+      host.innerHTML = renderToString(ui);
+      document.body.appendChild(host);
+      const img = host.querySelector('img')!;
+      Object.defineProperty(img, 'complete', { configurable: true, get: () => true });
+      Object.defineProperty(img, 'naturalWidth', { configurable: true, get: () => 0 });
+      img.dispatchEvent(new Event('error'));
+      const root = await act(async () => hydrateRoot(host, ui));
+      try {
+        await act(async () => {});
+        expect(host.querySelector('img')).toBeNull();
+        expect(screen.getByRole('img', { name: 'Jane Doe' })).toHaveTextContent('JD');
+        expect(partRef.current).toBe(visuals(host)[0]);
+      } finally {
+        act(() => root.unmount());
+        host.remove();
+      }
+    },
+  );
+
+  it('has no accessibility violations with the part customised', async () => {
+    render(
+      <>
+        <Avatars parts={{ visual: { className: 'my-visual', title: 'Avatar' } }} />
+        <Avatar src={PHOTO} name="John Doe" slotProps={{ visual: { className: 'my-visual' } }} />
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof AvatarSlotProps>().toEqualTypeOf<'visual'>();
+    expectTypeOf<NonNullable<AvatarSlotProps['visual']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- the avatar draws the content of the visual
+    const parts: AvatarSlotProps = { visual: { children: 'x' } };
+    expect(parts).toBeDefined();
   });
 });

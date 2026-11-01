@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { SlotPart } from '../../lib/slotProps';
 import type { AvatarGroupLayout } from './AvatarGroup.partition';
 import type { AvatarSize } from './Avatar.sizes';
 
@@ -15,6 +16,12 @@ export interface AvatarGroupContextValue {
   layout: AvatarGroupLayout;
   /** Whether the group shows any member inline (the overflow button overlaps it in a stack). */
   hasInlineItems: boolean;
+  /** The group's `slotProps.surface`, which AvatarGroup.Popover merges into its popup. */
+  surface?: SlotPart<'div'>;
+  /** The group's `slotProps.list`, the popup's list. */
+  list?: SlotPart<'ul'>;
+  /** The group's `slotProps.listItem`, each item of the popup's list. */
+  listItem?: SlotPart<'li'>;
 }
 
 /** Internal: provided by AvatarGroup around its members; `null` elsewhere. */

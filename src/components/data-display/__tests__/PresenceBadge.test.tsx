@@ -1,9 +1,18 @@
-import type * as React from 'react';
+import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { presenceBadgeClassNames } from '../../../lib/classNames';
 import { PresenceBadge } from '../PresenceBadge';
 import type { PresenceBadgeProps } from '../PresenceBadge';
-import { renderWithProviders, testSystemProps } from '../../../test-utils';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  renderWithProviders,
+  testSystemProps,
+} from '../../../test-utils';
 import type { DeprecatedPresenceStatus, PresenceStatus, Size } from '../../../lib/types';
 
 const STATUSES: PresenceStatus[] = [
@@ -198,5 +207,122 @@ describe('PresenceBadge', () => {
       expectTypeOf<DeprecatedPresenceStatus>().toEqualTypeOf<'dnd' | 'oof'>();
       expectTypeOf<DeprecatedPresenceStatus>().toExtend<PresenceStatus>();
     });
+  });
+});
+
+describe('PresenceBadge — slotProps', () => {
+  type BadgeSlotProps = NonNullable<PresenceBadgeProps['slotProps']>;
+  const icons = (root: ParentNode = document) =>
+    Array.from(root.querySelectorAll<SVGSVGElement>(`.${presenceBadgeClassNames.icon}`));
+
+  // Captured from 112d7f8's dist (client and server agree).
+  const GLYPH =
+    'fill="none" focusable="false" height="100%" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 16 16" width="100%" xmlns="http://www.w3.org/2000/svg"';
+  const BASE_PINS = [
+    `<svg aria-hidden="true" class="wave-presence-badge__icon size-full wave-rtl:-scale-x-100" data-wave-icon="presence-oof" ${GLYPH}>`,
+    `<svg aria-hidden="true" class="wave-presence-badge__icon size-full" data-wave-icon="presence-available" ${GLYPH}>`,
+  ].join('\n');
+  const Badges = ({ parts }: { parts?: BadgeSlotProps }) => (
+    <>
+      <PresenceBadge status="out-of-office" slotProps={parts} />
+      <PresenceBadge status="available" size="large" slotProps={parts} />
+    </>
+  );
+
+  it('renders the glyph of 112d7f8 (attributes sorted), on the client and the server', () => {
+    for (const parts of [undefined, { icon: {} }]) {
+      const view = render(<Badges parts={parts} />);
+      expect(openingTags(...icons())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Badges parts={parts} />);
+      expect(openingTags(...icons(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with the part empty', () => {
+    expectInertSlotProps((parts: BadgeSlotProps | undefined) => <Badges parts={parts} />, {
+      icon: {},
+    });
+  });
+
+  it('puts your className, style, data-* and ref on the glyph', () => {
+    const ref = React.createRef<SVGSVGElement>();
+    render(
+      <PresenceBadge
+        status="away"
+        slotProps={{
+          icon: { className: 'my-icon size-2', style: { opacity: 0.5 }, 'data-part': 'icon', ref },
+        }}
+      />,
+    );
+    const [icon] = icons();
+    expect(icon.classList[0]).toBe(presenceBadgeClassNames.icon);
+    expect(icon).toHaveClass('my-icon', 'size-2');
+    // Your class replaces a conflicting one of the part.
+    expect(icon).not.toHaveClass('size-full');
+    expect(icon).toHaveAttribute('data-part', 'icon');
+    expect(icon).toHaveStyle({ opacity: '0.5' });
+    expect(ref.current).toBe(icon);
+    // The badge takes none of it.
+    expect(screen.getByRole('img', { name: 'Away' })).not.toHaveClass('my-icon');
+  });
+
+  it('keeps the glyph decorative, and the badge its name', () => {
+    const attempt = {
+      role: 'img',
+      tabIndex: 0,
+      'aria-hidden': false,
+      focusable: 'true',
+    } as unknown as BadgeSlotProps['icon'];
+    render(<PresenceBadge status="busy" slotProps={{ icon: attempt }} />);
+    const [icon] = icons();
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(icon).toHaveAttribute('focusable', 'false');
+    expect(icon).not.toHaveAttribute('role');
+    expect(icon).not.toHaveAttribute('tabindex');
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+    expect(screen.getByRole('img')).toHaveAccessibleName('Busy');
+  });
+
+  it('keeps the mirrored glyph of out of office in right-to-left layouts', () => {
+    renderWithProviders(
+      <PresenceBadge status="out-of-office" slotProps={{ icon: { className: 'my-icon' } }} />,
+      { dir: 'rtl' },
+    );
+    expect(icons()[0]).toHaveClass(
+      presenceBadgeClassNames.icon,
+      'wave-rtl:-scale-x-100',
+      'my-icon',
+    );
+  });
+
+  it('calls a handler of the glyph once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <PresenceBadge status="available" slotProps={{ icon: { onClick } }} />
+      </React.StrictMode>,
+    );
+    await user.click(icons()[0]);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no accessibility violations with the part customised', async () => {
+    render(
+      <PresenceBadge status="away" slotProps={{ icon: { className: 'my-icon', id: 'glyph' } }} />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof BadgeSlotProps>().toEqualTypeOf<'icon'>();
+    expectTypeOf<NonNullable<BadgeSlotProps['icon']>['ref']>().toEqualTypeOf<
+      React.Ref<SVGSVGElement> | undefined
+    >();
+    // @ts-expect-error -- the badge draws the glyph's content
+    const parts: BadgeSlotProps = { icon: { children: 'x' } };
+    expect(parts).toBeDefined();
   });
 });

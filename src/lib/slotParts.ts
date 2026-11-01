@@ -197,6 +197,12 @@ export const SLOT_PROPS_KEYS = {
   stepperStepClassNames: ['listItem', 'button', 'indicator', 'label', 'description', 'connector'],
   accordionTriggerClassNames: ['heading', 'expandIcon'],
   overflowClassNames: ['overflowButton'],
+  cardClassNames: ['checkmark'],
+  cardHeaderClassNames: ['text', 'title', 'subtitle'],
+  avatarClassNames: ['visual'],
+  avatarGroupClassNames: ['item', 'pie', 'surface', 'list', 'listItem'],
+  avatarGroupItemClassNames: ['name'],
+  presenceBadgeClassNames: ['icon'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -471,10 +477,6 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
 
 /** The parts no rollout task has covered yet (R7); empty once the rollout is done. */
 export const PENDING_SLOT_PARTS: SlotPartLists = {
-  avatarClassNames: ['visual'],
-  avatarGroupClassNames: ['item', 'pie', 'surface', 'list', 'listItem'],
-  avatarGroupItemClassNames: ['name'],
-  presenceBadgeClassNames: ['icon'],
   tagClassNames: ['primaryText', 'secondaryText', 'dismissButton'],
   interactionTagPrimaryClassNames: ['primaryText', 'secondaryText'],
   interactionTagSecondaryClassNames: ['dismissIcon'],
@@ -483,8 +485,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   messageBarClassNames: ['body', 'dismissButton'],
   progressBarClassNames: ['bar', 'label'],
   spinnerClassNames: ['spinner', 'label'],
-  cardClassNames: ['checkmark'],
-  cardHeaderClassNames: ['text', 'title', 'subtitle'],
   carouselClassNames: [
     'autoPlayButton',
     'track',

@@ -2,7 +2,7 @@
 
 Generated in Task 4 from the data of `src/lib/slotParts.ts` and the class-name registry (`src/lib/classNames.ts`), which `src/__tests__/slotParts.test.ts` checks. The data is the source: when the two differ, `slotParts.ts` wins and this list is stale.
 
-186 constants, 113 with parts, 365 part keys: 192 `slotProps` keys (19 in Task 12, 35 in Task 13, 36 in Task 13b, 14 in Task 14, 9 in Task 15a, 13 in Task 15b, 13 in Task 15c, 5 in Task 15d, 13 in Task 16a, 14 in Task 16b, 21 in Task 16c), 44 pending, 100 named slots, 29 exclusions.
+186 constants, 113 with parts, 365 part keys: 204 `slotProps` keys (19 in Task 12, 35 in Task 13, 36 in Task 13b, 14 in Task 14, 9 in Task 15a, 13 in Task 15b, 13 in Task 15c, 5 in Task 15d, 13 in Task 16a, 14 in Task 16b, 21 in Task 16c, 12 in Task 17a), 32 pending, 100 named slots, 29 exclusions.
 
 **How to read it.** One row per registry constant with parts, in the group of spec §8 that rolls it out. *Pending keys* are the work: each becomes a `slotProps` key of the component, typed `SlotPart<'<element>'>` for the element named in brackets (read from the source; where a part is one of two elements, both are named), and moves from `PENDING_SLOT_PARTS` to `SLOT_PROPS_KEYS` in the same change, which also adds the declaring component's props type to `SlotPropsOwners` in `src/__tests__/slotParts.test.ts` (its type test requires the owner's `slotProps` keys to equal the listed keys, both ways). *Named slots* already reach their part (R2) and get no `slotProps` key; a prop in brackets is the slot or props object whose name differs from the key. *Exclusions* get no key; their reasons are in the table at the end. *Notes* say where a part is rendered by another component than its constant's, or what the rollout must lock.
 
@@ -155,6 +155,8 @@ Generated in Task 4 from the data of `src/lib/slotParts.ts` and the class-name r
 ## D6 layout and data display (Task 17)
 
 12 components with pending keys (30 keys): **longer than 8, split into consecutive tasks.** Nothing pending (named slots and exclusions only): `cardPreviewClassNames`, `personaClassNames`, `carouselItemClassNames`, `listClassNames`.
+
+**Done in Task 17a (Card, Avatar, AvatarGroup and PresenceBadge):** the 12 keys of Card, CardHeader, Avatar, AvatarGroup, AvatarGroupItem and PresenceBadge are `slotProps` keys now, each declared by the component whose constant names it (no classification change): Card and Card.Header in their `OwnProps` (both are polymorphic), AvatarGroup all five of its keys (the popup's `surface`, `list` and `listItem` reach AvatarGroup.Popover, built in or yours, through the group's context), and AvatarGroup.Item `name`, for which `AvatarGroupItemProps` omits Avatar's `slotProps` and declares its own. Avatar's `visual` is the root itself without a `badge` (one element, as Input's R6), where it applies after the avatar's own props. Every per-member part merges only when given. The locks (the glyphs' decorative attributes, the text parts' name and hidden state, the title's id in a checkbox card, the visual's name wiring and state, the group parts' roles, tab stops, roving marker and hidden state, the popup's wiring and position) are in the spec, section 11, "Task 17a".
 
 | Component | Pending keys (element) | Named slots (prop) | Exclusions | Notes |
 |---|---|---|---|---|

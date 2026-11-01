@@ -3,17 +3,22 @@ import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
+import { avatarGroupClassNames, avatarGroupItemClassNames } from '../../../lib/classNames';
 import { AvatarGroup, AvatarGroupItem, AvatarGroupPopover } from '../AvatarGroup';
 import type { AvatarGroupProps, AvatarGroupItemProps } from '../AvatarGroup';
 import { Avatar } from '../Avatar';
+import { AvatarGroupContext } from '../AvatarGroup.context';
 import type { AvatarProps } from '../Avatar';
+import { Toolbar } from '../../button/Toolbar';
 import { Portal } from '../../portal/Portal';
 import { WaveProvider } from '../../provider/WaveProvider';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
+  openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
@@ -1194,7 +1199,9 @@ describe('AvatarGroup', () => {
       >();
       expectTypeOf<AvatarGroupProps['open']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<NonNullable<AvatarGroupProps['onOpenChange']>>().toBeFunction();
-      expectTypeOf<AvatarGroupItemProps>().toEqualTypeOf<AvatarProps>();
+      expectTypeOf<Omit<AvatarGroupItemProps, 'slotProps'>>().toEqualTypeOf<
+        Omit<AvatarProps, 'slotProps'>
+      >();
     });
   });
 
@@ -1215,5 +1222,497 @@ describe('AvatarGroup', () => {
       );
       for (const el of initials()) expect(el).not.toHaveClass('invisible');
     });
+  });
+});
+
+describe('AvatarGroup and AvatarGroup.Item — slotProps', () => {
+  type GroupSlotProps = NonNullable<AvatarGroupProps['slotProps']>;
+  type ItemSlotProps = NonNullable<AvatarGroupItemProps['slotProps']>;
+  const GROUP_PARTS: GroupSlotProps = { item: {}, pie: {}, surface: {}, list: {}, listItem: {} };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const STRUCTURE_LOCKS = ['role', 'tabindex', 'data-roving-container', 'hidden', 'inert'];
+
+  /** Two members shown, two in the open popup (an Item, which draws a row, and an Avatar). */
+  function Team({
+    parts,
+    item,
+    ...props
+  }: Partial<AvatarGroupProps> & { parts?: GroupSlotProps; item?: ItemSlotProps }) {
+    return (
+      <AvatarGroup aria-label="Team" max={2} defaultOpen slotProps={parts} {...props}>
+        <AvatarGroup.Item name="Alice Smith" slotProps={item} />
+        <AvatarGroup.Item name="Bob Jones" slotProps={item} />
+        <AvatarGroup.Item name="Carol White" slotProps={item} />
+        <Avatar name="Dave" />
+      </AvatarGroup>
+    );
+  }
+  function Pie({ parts }: { parts?: GroupSlotProps }) {
+    return (
+      <AvatarGroup aria-label="Team" layout="pie" slotProps={parts}>
+        <AvatarGroup.Item name="Alice Smith" />
+        <AvatarGroup.Item name="Bob Jones" />
+      </AvatarGroup>
+    );
+  }
+  const surfaceOf = () => document.querySelector<HTMLElement>(`.${avatarGroupClassNames.surface}`)!;
+
+  // Captured from 112d7f8's dist: the open popup on the client (a portal renders nothing on the
+  // server); the pie on the client and the server alike.
+  const ITEM = 'wave-avatar-group__item inline-flex rounded-full ring-2 ring-background';
+  const SURFACE =
+    'wave-avatar-group__surface min-w-32 max-w-xs rounded-md border border-border bg-background p-2 text-body-1 text-foreground shadow-16 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  const OPEN_PINS = [
+    `<span class="${ITEM}">`,
+    `<span class="${ITEM} -ms-2">`,
+    `<div aria-label="2 more" class="${SURFACE}" data-align="start" data-side="bottom" data-state="open" id="avatar-group-overflow-_id0_" role="dialog" tabindex="-1">`,
+    '<ul class="wave-avatar-group__list m-0 flex list-none flex-col gap-1 p-0">',
+    '<li class="wave-avatar-group__list-item px-1 py-0.5">',
+    '<li class="wave-avatar-group__list-item px-1 py-0.5">',
+    '<span class="wave-avatar-group-item__name">',
+  ].join('\n');
+  const PIE_PINS = [
+    '<span class="wave-avatar-group__pie relative inline-block shrink-0 overflow-hidden rounded-full w-12 h-12 text-base">',
+    '<span aria-hidden="true" class="wave-avatar-group__item absolute inset-0 inline-flex [clip-path:inset(0_50%_0_0)]">',
+    '<span aria-hidden="true" class="wave-avatar-group__item absolute inset-0 inline-flex [clip-path:inset(0_0_0_50%)]">',
+  ].join('\n');
+  const openParts = () => [
+    ...all(document, avatarGroupClassNames.item),
+    surfaceOf(),
+    ...all(document, avatarGroupClassNames.list),
+    ...all(document, avatarGroupClassNames.listItem),
+    ...all(document, avatarGroupItemClassNames.name),
+  ];
+  const pieParts = (root: ParentNode = document) => [
+    ...all(root, avatarGroupClassNames.pie),
+    ...all(root, avatarGroupClassNames.item),
+  ];
+
+  it('renders the parts of 112d7f8 (attributes sorted): the open popup and the pie', () => {
+    for (const [parts, item] of [
+      [undefined, undefined],
+      [GROUP_PARTS, { name: {} }],
+    ] as const) {
+      const view = render(<Team parts={parts} item={item} />);
+      // The position is the positioning's (tested below), not a pinned value.
+      const surface = surfaceOf();
+      expect(surface.style.position).toBe('fixed');
+      const style = surface.getAttribute('style')!;
+      surface.removeAttribute('style');
+      expect(openingTags(...openParts())).toBe(OPEN_PINS);
+      surface.setAttribute('style', style);
+      view.unmount();
+
+      const pie = render(<Pie parts={parts} />);
+      expect(openingTags(...pieParts())).toBe(PIE_PINS);
+      pie.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Pie parts={parts} />);
+      expect(openingTags(...pieParts(template.content))).toBe(PIE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps(
+      (parts: GroupSlotProps | undefined) => <Team parts={parts} />,
+      GROUP_PARTS,
+    );
+    expectInertSlotProps((item: ItemSlotProps | undefined) => <Team item={item} />, { name: {} });
+    expectInertSlotProps((parts: GroupSlotProps | undefined) => <Pie parts={parts} />, GROUP_PARTS);
+    expectInertSlotProps(
+      (parts: GroupSlotProps | undefined) => (
+        <AvatarGroup aria-label="Team" layout="spread" slotProps={parts}>
+          <AvatarGroup.Item name="Alice Smith" />
+          <AvatarGroup.Popover defaultOpen label="More people">
+            <AvatarGroup.Item name="Bob Jones" />
+            <a href="#erin">Erin</a>
+          </AvatarGroup.Popover>
+        </AvatarGroup>
+      ),
+      GROUP_PARTS,
+    );
+  });
+
+  it('puts your className, style, data-* and ref on each part', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    const part = (name: string, className: string) => ({
+      className: `my-${name} ${className}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+      ref: collect,
+    });
+    render(
+      <Team
+        parts={{
+          item: part('item', 'ring-4'),
+          surface: part('surface', 'shadow-4'),
+          list: part('list', 'gap-2'),
+          listItem: part('listItem', 'px-2'),
+        }}
+        item={{ name: part('name', '') }}
+      />,
+    );
+    for (const [cls, name, conflict, count] of [
+      [avatarGroupClassNames.item, 'item', 'ring-2', 2],
+      [avatarGroupClassNames.surface, 'surface', 'shadow-16', 1],
+      [avatarGroupClassNames.list, 'list', 'gap-1', 1],
+      [avatarGroupClassNames.listItem, 'listItem', 'px-1', 2],
+      [avatarGroupItemClassNames.name, 'name', undefined, 1],
+    ] as const) {
+      const elements = all(document, cls);
+      expect(elements).toHaveLength(count);
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(cls);
+        expect(element).toHaveClass(`my-${name}`);
+        // Your class replaces a conflicting one of the part.
+        if (conflict) expect(element).not.toHaveClass(conflict);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+        expect(refs).toContain(element);
+      }
+    }
+    expect(refs).toHaveLength(7);
+    // The group, the button and the members take none of it.
+    expect(screen.getByRole('group', { name: 'Team' })).not.toHaveAttribute('data-part');
+    expect(screen.getByRole('button', { name: '2 more' })).not.toHaveAttribute('data-part');
+  });
+
+  it('puts the pie and wedge parts on the pie', () => {
+    const pieRef = React.createRef<HTMLSpanElement>();
+    render(
+      <Pie
+        parts={{
+          pie: { className: 'my-pie rounded-md', 'data-part': 'pie', ref: pieRef },
+          item: { className: 'my-wedge', 'data-part': 'wedge' },
+        }}
+      />,
+    );
+    const [pie] = all(document, avatarGroupClassNames.pie);
+    expect(pie.classList[0]).toBe(avatarGroupClassNames.pie);
+    expect(pie).toHaveClass('my-pie', 'rounded-md');
+    expect(pie).not.toHaveClass('rounded-full');
+    expect(pie).toHaveAttribute('data-part', 'pie');
+    expect(pieRef.current).toBe(pie);
+    const wedges = all(document, avatarGroupClassNames.item);
+    expect(wedges).toHaveLength(2);
+    for (const wedge of wedges) {
+      expect(wedge).toHaveClass('my-wedge');
+      expect(wedge).toHaveAttribute('data-part', 'wedge');
+      expect(pie).toContainElement(wedge);
+    }
+  });
+
+  it('locks the role, tab stop, roving marker and hidden state of the wrappers and the list', () => {
+    const attempt = {
+      role: 'button',
+      tabIndex: 0,
+      'data-roving-container': '',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as GroupSlotProps['item'];
+    render(
+      <Team
+        parts={{
+          item: attempt,
+          list: attempt as GroupSlotProps['list'],
+          listItem: attempt as GroupSlotProps['listItem'],
+        }}
+      />,
+    );
+    for (const cls of [
+      avatarGroupClassNames.item,
+      avatarGroupClassNames.list,
+      avatarGroupClassNames.listItem,
+    ]) {
+      for (const element of all(document, cls)) {
+        for (const name of [...STRUCTURE_LOCKS, 'aria-hidden']) {
+          expect(element).not.toHaveAttribute(name);
+        }
+      }
+    }
+    expect(screen.getByRole('img', { name: 'Alice Smith' })).toBeVisible();
+    expect(within(screen.getByRole('dialog')).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('locks the pie as the wrappers, and keeps its wedges hidden from assistive technology', () => {
+    const attempt = {
+      role: 'img',
+      tabIndex: 0,
+      'data-roving-container': '',
+      hidden: true,
+      inert: true,
+      'aria-hidden': false,
+    } as unknown as GroupSlotProps['item'];
+    render(<Pie parts={{ pie: attempt, item: attempt }} />);
+    const [pie, ...wedges] = pieParts();
+    for (const name of [...STRUCTURE_LOCKS, 'aria-hidden']) {
+      expect(pie).not.toHaveAttribute(name);
+    }
+    for (const wedge of wedges) {
+      for (const name of STRUCTURE_LOCKS) expect(wedge).not.toHaveAttribute(name);
+      expect(wedge).toHaveAttribute('aria-hidden', 'true');
+    }
+    expect(screen.getByRole('group', { name: 'Team' })).toBeInTheDocument();
+  });
+
+  it('locks the popup’s wiring, state and position', () => {
+    const attempt = {
+      id: 'mine',
+      role: 'menu',
+      'aria-label': 'Replaced',
+      'aria-modal': true,
+      tabIndex: 0,
+      'data-state': 'closed',
+      'data-side': 'top',
+      'data-align': 'end',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+      style: { position: 'static', top: '9px', opacity: 0.5 },
+    } as unknown as GroupSlotProps['surface'];
+    render(<Team parts={{ surface: attempt }} />);
+    const surface = screen.getByRole('dialog', { name: '2 more' });
+    expect(surface).toHaveClass(avatarGroupClassNames.surface);
+    expect(surface.id).not.toBe('mine');
+    expect(screen.getByRole('button', { name: '2 more' })).toHaveAttribute(
+      'aria-controls',
+      surface.id,
+    );
+    expect(surface).toHaveAttribute('tabindex', '-1');
+    expect(surface).toHaveAttribute('data-state', 'open');
+    expect(surface).toHaveAttribute('data-side', 'bottom');
+    expect(surface).toHaveAttribute('data-align', 'start');
+    for (const name of ['aria-modal', 'hidden', 'inert', 'aria-hidden']) {
+      expect(surface).not.toHaveAttribute(name);
+    }
+    // The position wins over your style; the rest of it applies.
+    expect(surface.style.position).toBe('fixed');
+    expect(surface.style.top).toBe('0px');
+    expect(surface).toHaveStyle({ opacity: '0.5' });
+  });
+
+  it('runs your key handler before the popup’s Tab handling, which preventDefault() skips', () => {
+    const onOpenChange = vi.fn();
+    const onKeyDown = vi.fn();
+    const { rerender } = render(
+      <Team parts={{ surface: { onKeyDown } }} onOpenChange={onOpenChange} />,
+    );
+    fireEvent.keyDown(surfaceOf(), { key: 'Tab' });
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    rerender(
+      <Team
+        key="again"
+        parts={{ surface: { onKeyDown: (event) => event.preventDefault() } }}
+        onOpenChange={onOpenChange}
+      />,
+    );
+    fireEvent.keyDown(surfaceOf(), { key: 'Tab' });
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('moves focus to the popup and keeps its own refs with an inline ref of the part', async () => {
+    const refs: Array<HTMLDivElement | null> = [];
+    const ui = () => (
+      <Team parts={{ surface: { ref: (node: HTMLDivElement | null) => void refs.push(node) } }} />
+    );
+    const { rerender } = render(ui());
+    await act(async () => {});
+    const surface = screen.getByRole('dialog');
+    expect(document.activeElement).toBe(surface);
+    rerender(ui());
+    rerender(ui());
+    expect(refs.filter((node) => node !== null)).toEqual([surface, surface, surface]);
+    // Escape still closes it (the dismiss layer knows the surface) and focus returns.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '2 more' }));
+  });
+
+  it('gives an AvatarGroup.Popover of your own the popup’s parts', () => {
+    render(
+      <AvatarGroup
+        aria-label="Team"
+        slotProps={{
+          surface: { className: 'my-surface' },
+          list: { className: 'my-list' },
+          listItem: { className: 'my-list-item' },
+        }}
+      >
+        <AvatarGroup.Item name="Alice Smith" />
+        <AvatarGroup.Popover defaultOpen label="More people">
+          <AvatarGroup.Item name="Bob Jones" slotProps={{ name: { className: 'my-name' } }} />
+          <a href="#erin">Erin</a>
+        </AvatarGroup.Popover>
+      </AvatarGroup>,
+    );
+    const surface = screen.getByRole('dialog', { name: 'More people' });
+    expect(surface).toHaveClass('my-surface');
+    expect(within(surface).getByRole('list')).toHaveClass('my-list');
+    for (const listItem of within(surface).getAllByRole('listitem')) {
+      expect(listItem).toHaveClass('my-list-item');
+    }
+    expect(within(surface).getByText('Bob Jones')).toHaveClass('my-name');
+  });
+
+  it('locks the role, name and hidden state of the name of an item row', () => {
+    const attempt = {
+      role: 'heading',
+      'aria-label': 'Replaced',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as ItemSlotProps['name'];
+    render(<Team item={{ name: attempt }} />);
+    const [name] = all(document, avatarGroupItemClassNames.name);
+    for (const attribute of ['role', 'aria-label', 'hidden', 'inert', 'aria-hidden']) {
+      expect(name).not.toHaveAttribute(attribute);
+    }
+    expect(within(screen.getByRole('dialog')).getByText('Carol White')).toBe(name);
+  });
+
+  it('draws no name in the group: an inline item takes its own props', () => {
+    render(
+      <AvatarGroup aria-label="Team">
+        <AvatarGroup.Item
+          name="Alice Smith"
+          className="my-item"
+          slotProps={{ name: { className: 'my-name' } }}
+        />
+      </AvatarGroup>,
+    );
+    expect(all(document, avatarGroupItemClassNames.name)).toHaveLength(0);
+    expect(document.querySelector('.my-name')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Alice Smith' })).toHaveClass(
+      avatarGroupItemClassNames.root,
+      'my-item',
+    );
+  });
+
+  it('keeps the arrow-key order of a toolbar around the group', async () => {
+    const user = userEvent.setup();
+    const attempt = { tabIndex: 0, 'data-roving-container': '' } as GroupSlotProps['item'];
+    render(
+      <Toolbar aria-label="Tools">
+        <Toolbar.Button>Edit</Toolbar.Button>
+        <AvatarGroup aria-label="Team" max={2} slotProps={{ item: attempt }}>
+          <a href="#alice">Alice</a>
+          <a href="#bob">Bob</a>
+          <Avatar name="Carol" />
+        </AvatarGroup>
+      </Toolbar>,
+    );
+    const toolbar = screen.getByRole('toolbar');
+    expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Edit' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('link', { name: 'Alice' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('link', { name: 'Bob' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('button', { name: '1 more' })).toHaveFocus();
+    expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    for (const item of all(toolbar, avatarGroupClassNames.item)) {
+      expect(item).not.toHaveAttribute('tabindex');
+      expect(item).not.toHaveAttribute('data-roving-container');
+    }
+  });
+
+  it('renders the members again for a new popup part, not for a new wrapper part', () => {
+    // A member that reads the group's context, as an Avatar does, counting its renders.
+    const renders = vi.fn();
+    const Member = () => {
+      renders(React.useContext(AvatarGroupContext));
+      return <Avatar name="Alice Smith" />;
+    };
+    const member = <Member />;
+    const surface = { className: 'my-surface' };
+    const ui = (parts: GroupSlotProps) => (
+      <AvatarGroup aria-label="Team" slotProps={parts}>
+        {member}
+      </AvatarGroup>
+    );
+    const { rerender } = render(ui({ item: { className: 'a' }, surface }));
+    renders.mockClear();
+    rerender(ui({ item: { className: 'b' }, surface }));
+    expect(renders).not.toHaveBeenCalled();
+    rerender(ui({ item: { className: 'b' }, surface: { className: 'my-surface' } }));
+    expect(renders).toHaveBeenCalledTimes(1);
+    expect(renders.mock.calls[0][0]).toMatchObject({ surface: { className: 'my-surface' } });
+  });
+
+  it('calls each part handler once per event in StrictMode', () => {
+    const item = vi.fn();
+    const listItem = vi.fn();
+    const name = vi.fn();
+    render(
+      <React.StrictMode>
+        <Team
+          parts={{ item: { onClick: item }, listItem: { onClick: listItem } }}
+          item={{ name: { onClick: name } }}
+        />
+      </React.StrictMode>,
+    );
+    fireEvent.click(all(document, avatarGroupClassNames.item)[0]);
+    fireEvent.click(all(document, avatarGroupItemClassNames.name)[0]);
+    expect(item).toHaveBeenCalledTimes(1);
+    expect(listItem).toHaveBeenCalledTimes(1);
+    expect(name).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the overlap of a stack in right-to-left layouts', () => {
+    renderWithProviders(<Team parts={{ item: { className: 'my-item' } }} />, { dir: 'rtl' });
+    const [first, second] = all(document, avatarGroupClassNames.item);
+    expect(first).toHaveClass('my-item');
+    expect(first).not.toHaveClass('-ms-2');
+    expect(second).toHaveClass('my-item', '-ms-2');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Team
+        parts={{
+          item: { className: 'my-item' },
+          surface: { className: 'my-surface', 'aria-describedby': undefined },
+          list: { className: 'my-list' },
+          listItem: { className: 'my-list-item' },
+        }}
+        item={{ name: { className: 'my-name' } }}
+      />,
+    );
+    await act(async () => {});
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof GroupSlotProps>().toEqualTypeOf<
+      'item' | 'pie' | 'surface' | 'list' | 'listItem'
+    >();
+    expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<'name'>();
+    expectTypeOf<NonNullable<GroupSlotProps['surface']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<GroupSlotProps['list']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLUListElement> | undefined
+    >();
+    expectTypeOf<NonNullable<GroupSlotProps['listItem']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLIElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['name']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- the group draws the content of the popup
+    const parts: GroupSlotProps = { surface: { children: 'x' } };
+    // @ts-expect-error -- the item draws the name
+    const item: ItemSlotProps = { name: { children: 'x' } };
+    expect([parts, item]).toHaveLength(2);
   });
 });
