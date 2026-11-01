@@ -3052,6 +3052,7 @@ describe('Carousel — slotProps', () => {
         tabIndex: 0,
         'data-dragging': '',
         'data-roving-container': 'mine',
+        'data-carousel-rotation': '',
       },
       // On a shown slide your inert would land without the lock, on a hidden one your aria-hidden.
       slide: {
@@ -3064,6 +3065,9 @@ describe('Carousel — slotProps', () => {
         'aria-label': 'Mine',
         'data-roving-value': '9',
         'data-roving-container': '',
+        'data-carousel-rotation': '',
+        'aria-disabled': 'true',
+        'data-roving-disabled': '',
       },
       // Unavailable: its state wins over yours.
       previousButton: {
@@ -3076,6 +3080,7 @@ describe('Carousel — slotProps', () => {
         'aria-controls': 'mine',
         'aria-disabled': false,
         'data-roving-container': '',
+        'data-carousel-rotation': '',
       },
       // Available: no unavailable state of yours lands.
       nextButton: {
@@ -3089,6 +3094,7 @@ describe('Carousel — slotProps', () => {
         'aria-disabled': true,
         'data-disabled': '',
         'data-roving-container': '',
+        'data-carousel-rotation': '',
       },
       picker: {
         ...hiddenState,
@@ -3096,6 +3102,7 @@ describe('Carousel — slotProps', () => {
         tabIndex: 0,
         'aria-label': 'Mine',
         'data-roving-container': '',
+        'data-carousel-rotation': '',
       },
       pickerButton: {
         ...hiddenState,
@@ -3106,6 +3113,7 @@ describe('Carousel — slotProps', () => {
         'aria-label': 'Mine',
         'aria-current': 'page',
         'data-roving-container': '',
+        'data-carousel-rotation': '',
       },
       pickerIndicator: {
         hidden: true,
@@ -3114,10 +3122,77 @@ describe('Carousel — slotProps', () => {
         role: 'img',
         tabIndex: 0,
         'data-roving-container': '',
+        'data-carousel-rotation': '',
       },
     } as unknown as CarouselSlotProps;
     render(<Featured slotProps={attempts} />);
     expect(withoutStyle(openingTags(...partsOf()))).toBe(BASE_PINS);
+  });
+
+  it.each([
+    ['aria-disabled', { 'aria-disabled': 'true' }],
+    ['data-roving-disabled', { 'data-roving-disabled': '' }],
+  ] as const)(
+    'keeps the shown slides in the arrow order and one Tab stop with your %s',
+    async (_, attempt) => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Before</button>
+          <Carousel groupSize={2} slotProps={{ slide: attempt }}>
+            {slides(4)}
+          </Carousel>
+        </>,
+      );
+      const tabStops = () =>
+        Array.from(one(carouselClassNames.track).querySelectorAll('[tabindex="0"]'));
+      const [first, second, third] = slideGroups();
+      expect(tabStops()).toEqual([first]);
+      act(() => screen.getByRole('button', { name: 'Before' }).focus());
+      await user.tab();
+      expect(first).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(second).toHaveFocus();
+      expect(tabStops()).toEqual([second]);
+      // On past the page: the next page's first slide.
+      await user.keyboard('{ArrowRight}');
+      expect(third).toHaveFocus();
+      expect(tabStops()).toEqual([third]);
+      for (const slide of slideGroups()) {
+        expect(slide).not.toHaveAttribute('aria-disabled');
+        expect(slide).not.toHaveAttribute('data-roving-disabled');
+      }
+    },
+  );
+
+  it('pauses the rotation when focus moves on into a part that tries the rotation marker', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    mockMatchMedia({ '(prefers-reduced-motion: reduce)': true });
+    render(
+      <Carousel
+        autoPlay
+        loop
+        autoPlayInterval={1000}
+        slotProps={{
+          track: { 'data-carousel-rotation': '' },
+          slide: { 'data-carousel-rotation': '' },
+        }}
+      >
+        {threeSlides}
+      </Carousel>,
+    );
+    // Start on the control: the rotation runs while focus stays there.
+    await user.tab();
+    const toggle = screen.getByRole('button', { name: 'Start slide rotation' });
+    expect(toggle).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(liveRegion()).toHaveAttribute('aria-live', 'off');
+    // Focus moving on into a slide pauses it again.
+    act(() => screen.getByRole('link', { name: 'First link' }).focus());
+    expect(liveRegion()).toHaveAttribute('aria-live', 'polite');
+    expect(one(carouselClassNames.track)).not.toHaveAttribute('data-carousel-rotation');
+    for (const slide of slideGroups()) expect(slide).not.toHaveAttribute('data-carousel-rotation');
   });
 
   it('runs your handler of a control first: preventDefault() skips the carousel', () => {

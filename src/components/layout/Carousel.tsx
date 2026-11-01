@@ -207,7 +207,9 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
    * yours skips the carousel's handling of the event, except where a part says its work always
    * runs. A part takes no `children` (the carousel draws their content). Each part locks, unset
    * where the carousel sets none, `role`, `tabIndex`, `data-roving-container` (it would take the
-   * slides out of their arrow-key order) and `hidden`, `inert` and `aria-hidden`. A
+   * slides out of their arrow-key order), `data-carousel-rotation` (the rotation control's marker:
+   * focus inside a part that carries it would not pause the rotation) and `hidden`, `inert` and
+   * `aria-hidden`. A
    * `Carousel.Button` you write replaces the built-in button of its direction and takes its props
    * directly: `previousButton` and `nextButton` reach only the built-in buttons. The viewport
    * around the track has no part.
@@ -237,8 +239,9 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
      * Each slide around a `Carousel.Item` (stable class `wave-carousel__slide`). Locked:
      * `role="group"`, `aria-roledescription` and `aria-label` (from `labels`), `aria-hidden` and
      * `inert` on the slides that are not shown, and `tabIndex` and `data-roving-value` (set with
-     * several slides per page, which share one arrow-key focus group); the width and the timing it
-     * sets win over your style. The same props reach every slide.
+     * several slides per page, which share one arrow-key focus group), with `aria-disabled` and
+     * `data-roving-disabled` unset (the group would skip a slide that carries either); the width
+     * and the timing it sets win over your style. The same props reach every slide.
      */
     slide?: SlotPart<'div'>;
     /**
@@ -368,12 +371,15 @@ const BLOCK_CLICK = ['onClick'] as const;
 /**
  * What every `slotProps` part locks unset before its own attributes: a role and a tab index (the
  * carousel decides both), the marker of a roving container (around the slides it would take them
- * out of their arrow-key order) and the hidden state (the parts hold the slides and controls).
+ * out of their arrow-key order), the rotation control's marker (focus inside a part that carries
+ * it would count as focus on the control and keep the rotation running) and the hidden state (the
+ * parts hold the slides and controls).
  */
 const PART_LOCKS = {
   role: undefined,
   tabIndex: undefined,
   'data-roving-container': undefined,
+  'data-carousel-rotation': undefined,
   hidden: undefined,
   inert: undefined,
   'aria-hidden': undefined,
@@ -384,6 +390,7 @@ const BUTTON_PART_LOCKS = {
   role: undefined,
   tabIndex: undefined,
   'data-roving-container': undefined,
+  'data-carousel-rotation': undefined,
   hidden: undefined,
   inert: undefined,
   'aria-hidden': undefined,
@@ -396,6 +403,7 @@ const INDICATOR_PART_LOCKS = {
   role: undefined,
   tabIndex: undefined,
   'data-roving-container': undefined,
+  'data-carousel-rotation': undefined,
   hidden: undefined,
   inert: undefined,
   'aria-hidden': true,
@@ -990,6 +998,9 @@ const CarouselRoot = ({
                       inert: !active,
                       'data-roving-value': rovingValue,
                       tabIndex,
+                      // The roving group would skip a slide that carries either.
+                      'aria-disabled': undefined,
+                      'data-roving-disabled': undefined,
                     },
                   }),
                   slidePart,
