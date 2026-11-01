@@ -263,6 +263,13 @@ describe('slotProps completeness gate (R7)', () => {
   it('gives every exclusion a one-line reason', () => {
     expect(reasonErrors(DATA)).toEqual([]);
   });
+
+  it('leaves nothing pending: the rollout decided every part key of 0.18 (no cut line was taken)', () => {
+    // A part key added later gets its decision (a slotProps key, a named slot or an exclusion) in
+    // the change that adds it; a phase whose parts land before their decision lists them here and
+    // empties the list again in its INTEGRATION package, as with the other pending lists.
+    expect(PENDING_SLOT_PARTS).toEqual({});
+  });
 });
 
 describe('slotProps completeness gate: the checks on fixtures', () => {

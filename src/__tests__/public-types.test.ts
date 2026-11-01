@@ -39,6 +39,7 @@ import type {
   AccordionMultipleProps,
   AccordionPanelProps,
   AccordionSingleProps,
+  AccordionTriggerProps,
   addDays,
   addMonths,
   AlphaSliderLabels,
@@ -91,6 +92,7 @@ import type {
   DataGridBaseProps,
   DataGridBodyProps,
   DataGridColumn,
+  DataGridHeaderProps,
   DataGridItemsProps,
   DataGridItemsSortProps,
   DataGridLabels,
@@ -245,6 +247,7 @@ import type {
   OverflowItemPriorityProps,
   OverflowItemProps,
   OverflowProps,
+  PaginationProps,
   PartitionBreadcrumbItemsOptions,
   PartitionBreadcrumbItemsResult,
   PopoverContentProps,
@@ -2359,5 +2362,50 @@ describe('0.18 customization surface from the package entry', () => {
       toggle: (id: string, event?: Event) => void;
     }>();
     expectTypeOf<Entry['useDataGridRowId']>().toEqualTypeOf<() => string | undefined>();
+  });
+
+  it('slotProps: each part a SlotPart of its element, one component of each category', () => {
+    expectTypeOf<NonNullable<CompoundButtonProps['slotProps']>>().toEqualTypeOf<{
+      contentContainer?: SlotPart<'span'>;
+      primaryText?: SlotPart<'span'>;
+      secondaryText?: SlotPart<'span'>;
+    }>();
+    expectTypeOf<NonNullable<SwitchProps['slotProps']>>().toEqualTypeOf<{
+      track?: SlotPart<'button'>;
+      thumb?: SlotPart<'span'>;
+      label?: SlotPart<'span'>;
+    }>();
+    // A part whose element is a `span` or another element takes a ref to either.
+    expectTypeOf<NonNullable<ListItemProps['slotProps']>>().toEqualTypeOf<{
+      content?: Omit<SlotPart<'span'>, 'ref'> & { ref?: Ref<HTMLElement> };
+      action?: Omit<SlotPart<'span'>, 'ref'> & { ref?: Ref<HTMLElement> };
+    }>();
+    expectTypeOf<NonNullable<AccordionTriggerProps['slotProps']>>().toEqualTypeOf<{
+      heading?: SlotPart<'h3'>;
+      expandIcon?: SlotPart<'svg'>;
+    }>();
+    expectTypeOf<NonNullable<PaginationProps['slotProps']>>().toEqualTypeOf<{
+      list?: SlotPart<'ol'>;
+      listItem?: SlotPart<'li'>;
+      firstButton?: SlotPart<'button'>;
+      previousButton?: SlotPart<'button'>;
+      pageButton?: SlotPart<'button'>;
+      nextButton?: SlotPart<'button'>;
+      lastButton?: SlotPart<'button'>;
+      ellipsis?: SlotPart<'span'>;
+    }>();
+    expectTypeOf<NonNullable<ProgressBarProps['slotProps']>>().toEqualTypeOf<{
+      bar?: SlotPart<'div'>;
+      label?: SlotPart<'span'>;
+    }>();
+    expectTypeOf<NonNullable<DrawerProps['slotProps']>>().toEqualTypeOf<{
+      header?: SlotPart<'div'>;
+    }>();
+    expectTypeOf<NonNullable<DataGridHeaderProps['slotProps']>>().toEqualTypeOf<{
+      selectAllCheckbox?: SlotPart<'input'>;
+    }>();
+    // @ts-expect-error a part takes no children
+    const parts: NonNullable<SwitchProps['slotProps']> = { track: { children: 'x' } };
+    expect(parts).toBeDefined();
   });
 });

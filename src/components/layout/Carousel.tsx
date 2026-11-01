@@ -391,7 +391,7 @@ const PART_LOCKS = {
 } as const;
 
 /** What a button part locks: `PART_LOCKS`, its type, and no native `disabled` (it stays focusable). */
-const BUTTON_PART_LOCKS = {
+const CAROUSEL_BUTTON_LOCKS = {
   role: undefined,
   tabIndex: undefined,
   'data-roving-container': undefined,
@@ -887,7 +887,7 @@ const CarouselRoot = ({
             // An unavailable button calls no click handler of a part, as it calls none of its own.
             blockHandlers: disabled ? BLOCK_CLICK : undefined,
             locked: {
-              ...BUTTON_PART_LOCKS,
+              ...CAROUSEL_BUTTON_LOCKS,
               'aria-label': label,
               'aria-controls': trackId,
               'aria-disabled': undefined,
@@ -1058,7 +1058,7 @@ const CarouselRoot = ({
                 mergeSlotProps(rotationPart, {
                   className: rotationClassName,
                   locked: {
-                    ...BUTTON_PART_LOCKS,
+                    ...CAROUSEL_BUTTON_LOCKS,
                     'data-carousel-rotation': '',
                     'aria-label': rotationLabel,
                     'aria-controls': trackId,
@@ -1123,7 +1123,7 @@ const CarouselRoot = ({
                     mergeSlotProps(pickerButtonPart, {
                       className,
                       locked: {
-                        ...BUTTON_PART_LOCKS,
+                        ...CAROUSEL_BUTTON_LOCKS,
                         'aria-label': label,
                         'aria-current': current,
                         onClick,

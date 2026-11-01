@@ -29,6 +29,7 @@ import ts from 'typescript';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   BRAND_TOKENS_BUDGET,
+  BUDGET_MARGIN_0_18,
   checkCjsParity,
   checkClassNameExports,
   checkDeclarations,
@@ -39,8 +40,10 @@ import {
   checkImports,
   checkModuleOnlyNames,
   checkServerImport,
+  checkTestOnlyModules,
   clientReferenceStub,
   createWorkDir,
+  CUSTOMIZATION_MODULES,
   BASELINES_0_17_1,
   DATA_GRID_BUDGET,
   DATA_SCALE_MODULES,
@@ -51,15 +54,17 @@ import {
   EXCLUSION_PROBES_0_15,
   EXCLUSION_PROBES_0_16,
   EXCLUSION_PROBES_0_17,
+  EXCLUSION_PROBES_0_18,
   expectsUseClient,
   HOOK_PROBES_0_16,
   HOOK_PROBES_0_17,
+  HOOK_PROBES_0_18,
   importSpecifiers,
   INCLUSION_PROBES_0_11,
   INCLUSION_PROBES_0_16,
   INCLUSION_PROBES_0_17,
+  INCLUSION_PROBES_0_18,
   isMainModule,
-  PHASE_13_INTERIM_ALLOWANCE,
   main,
   measureImport,
   missingDeclarations,
@@ -78,9 +83,11 @@ import {
   probeTreeShaking,
   RECORDED_IMPORTS,
   RECORDED_IMPORTS_0_17,
+  RECORDED_IMPORTS_0_18,
   removeWorkDir,
   REQUIRED_DECLARATIONS,
   runScript,
+  TEST_ONLY_MODULES,
   TOKEN_MODULES,
   undocumentedComponents,
   VALUE_AND_TYPE_DECLARATIONS,
@@ -131,10 +138,13 @@ const EMPTY_ROLL_UP = 'export { }\n';
 /**
  * A correct preserveModules dist: Button, a Card and a Dialog compound, a hook and `cn`, the
  * modules of each phase since 0.11, the 0.15 modules of {@link withPhase10Modules}, the 0.16
- * modules of {@link withPhase11Modules} and the 0.17 modules of {@link withPhase12Modules}.
+ * modules of {@link withPhase11Modules}, the 0.17 modules of {@link withPhase12Modules} and the
+ * 0.18 modules of {@link withPhase13Modules}.
  */
 function goodFiles() {
-  return withPhase12Modules(withPhase11Modules(withPhase10Modules(goodFilesBefore015())));
+  return withPhase13Modules(
+    withPhase12Modules(withPhase11Modules(withPhase10Modules(goodFilesBefore015()))),
+  );
 }
 
 /** The good files up to 0.14 ({@link goodFiles} adds the 0.15 modules). */
@@ -1236,6 +1246,155 @@ function withPhase12Modules(files) {
     result['dist/index.cjs'] += spec.entry
       .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
       .join('');
+  }
+  return result;
+}
+
+/**
+ * The 0.18 modules of the fixture (INTEGRATION), in the shape of PHASE12_MODULES (`entry`: the
+ * names the package entry exports; a module without it holds seams only): the part helper and the
+ * native-props helper, server-safe and working on the server as the react-server check calls them;
+ * Field's context module with its two public names; the context modules of RadioGroup, Menu,
+ * MessageBar and DataGrid with their public hooks (the DataGrid's selection hook on the selection
+ * store, as the real one reaches it through the inert context); and a RadioGroup on its context.
+ * {@link withPhase13Modules} also has the MessageBar read its context module and merge its parts
+ * with the helper, and the Dialog merge its surface's parts, as the real ones do; a Button reaches
+ * none of them.
+ */
+const PHASE13_MODULES = {
+  'lib/slotProps': {
+    imports: [['lib/cn', ['cn']]],
+    body:
+      'const HIDDEN_PART_LOCKS = { hidden: undefined, inert: undefined };\n' +
+      'function mergeSlotProps(part, own = {}) { return { ...own.defaults, ...part, ' +
+      'className: part && part.className ? cn(own.className, part.className) : own.className, ...own.locked }; }\n',
+    exports: ['HIDDEN_PART_LOCKS', 'mergeSlotProps'],
+    entry: ['mergeSlotProps'],
+  },
+  'lib/nativeProps': {
+    imports: [],
+    body:
+      "const NATIVE_GLOBAL_PROPS = 'id title onClick';\n" +
+      "const NATIVE_TAG_PROPS = { button: 'disabled type' };\n" +
+      'function getNativeElementProps(tag, props, excludedNames = []) { ' +
+      "const kept = new Set((NATIVE_GLOBAL_PROPS + ' ' + (NATIVE_TAG_PROPS[tag] ?? '')).split(' ')); " +
+      "return Object.fromEntries(Object.entries(props).filter(([name]) => !excludedNames.includes(name) && (kept.has(name) || name.startsWith('data-')))); }\n",
+    exports: ['NATIVE_GLOBAL_PROPS', 'NATIVE_TAG_PROPS', 'getNativeElementProps'],
+    entry: ['getNativeElementProps'],
+  },
+  'hooks/useFieldControl': {
+    imports: [['react', ['createContext', 'createElement', 'useContext']]],
+    body:
+      'const FieldContext = createContext(null);\n' +
+      'function useFieldContext() { return useContext(FieldContext); }\n' +
+      'function FieldContextProvider(props) { return createElement(FieldContext.Provider, { value: props.value }, props.children); }\n' +
+      "FieldContextProvider.displayName = 'FieldContextProvider';\n",
+    exports: ['FieldContext', 'useFieldContext', 'FieldContextProvider'],
+    entry: ['useFieldContext', 'FieldContextProvider'],
+  },
+  'components/input/RadioGroup.context': {
+    imports: [['react', ['createContext', 'useContext']]],
+    body:
+      'const RadioGroupContext = createContext(null);\n' +
+      'function useRadioGroupContext() { return useContext(RadioGroupContext); }\n' +
+      "function useRadioGroupItem(value) { const group = useContext(RadioGroupContext); return { checked: group !== null && group.value === value, props: { role: 'radio' } }; }\n",
+    exports: ['RadioGroupContext', 'useRadioGroupContext', 'useRadioGroupItem'],
+    entry: ['useRadioGroupContext', 'useRadioGroupItem'],
+  },
+  'components/input/RadioGroup': {
+    imports: [
+      ['react', ['createElement']],
+      ['components/input/RadioGroup.context', ['RadioGroupContext']],
+    ],
+    body:
+      "function RadioGroup(props) { return createElement(RadioGroupContext.Provider, { value: { value: props.value } }, createElement('div', { role: 'radiogroup' }, props.children)); }\n" +
+      "RadioGroup.displayName = 'RadioGroup';\n",
+    exports: ['RadioGroup'],
+    entry: ['RadioGroup'],
+  },
+  'components/navigation/Menu.context': {
+    imports: [['react', ['createContext']]],
+    body: 'const MenuContext = createContext(null);\nconst MenuListContext = createContext(null);\n',
+    exports: ['MenuContext', 'MenuListContext'],
+  },
+  'components/navigation/Menu.hooks': {
+    imports: [
+      ['react', ['useContext']],
+      ['components/navigation/Menu.context', ['MenuContext', 'MenuListContext']],
+    ],
+    body:
+      'function useMenuContext() { const menu = useContext(MenuContext); return { open: menu !== null && menu.open, close: () => menu && menu.close(), isSubmenu: false }; }\n' +
+      'function useMenuListContext() { const list = useContext(MenuListContext); return { hasIcons: list !== null && list.hasIcons, hasCheckmarks: false }; }\n',
+    exports: ['useMenuContext', 'useMenuListContext'],
+    entry: ['useMenuContext', 'useMenuListContext'],
+  },
+  'components/feedback/MessageBar.context': {
+    imports: [['react', ['createContext', 'useContext']]],
+    body:
+      'const MessageBarContext = createContext(null);\n' +
+      "function useMessageBarContext() { return useContext(MessageBarContext) ?? { status: 'info', layout: 'singleline' }; }\n",
+    exports: ['MessageBarContext', 'useMessageBarContext'],
+    entry: ['useMessageBarContext'],
+  },
+  'components/table/DataGrid.hooks': {
+    imports: [
+      ['react', ['useContext']],
+      ['components/table/DataGrid.context', ['DataGridContext']],
+      ['components/table/DataGrid.store', ['createSelectionStore']],
+    ],
+    body:
+      'function useDataGridSort() { const grid = useContext(DataGridContext); return { sort: grid && grid.sort, setSort: () => {} }; }\n' +
+      'function useDataGridSelection() { const grid = useContext(DataGridContext); const store = grid ? grid.store : createSelectionStore([]); ' +
+      'return { selectedItems: [], toggle: (id) => store.toggle(id) }; }\n' +
+      'function useDataGridRowId() { const grid = useContext(DataGridContext); return grid ? grid.rowId : undefined; }\n',
+    exports: ['useDataGridSort', 'useDataGridSelection', 'useDataGridRowId'],
+    entry: ['useDataGridSort', 'useDataGridSelection', 'useDataGridRowId'],
+  },
+};
+
+/** The ESM and CommonJS code of the 0.18 module `path` (see PHASE13_MODULES). */
+const phase13Module = phase11Module;
+
+/**
+ * The calls of the real MessageBar and Dialog into the 0.18 modules: the MessageBar reads its
+ * context module and merges its parts, the Dialog merges its surface's parts.
+ */
+const PHASE13_CALLS = [
+  [
+    'components/feedback/MessageBar',
+    'components/feedback/MessageBar.context',
+    'useMessageBarContext',
+  ],
+  ['components/feedback/MessageBar', 'lib/slotProps', 'mergeSlotProps'],
+  ['components/overlays/Dialog', 'lib/slotProps', 'mergeSlotProps'],
+];
+
+/**
+ * The good files with the 0.18 modules of PHASE13_MODULES, their `entry` names in the entry, and
+ * the calls of PHASE13_CALLS.
+ */
+function withPhase13Modules(files) {
+  const result = { ...files };
+  for (const [path, spec] of Object.entries(PHASE13_MODULES)) {
+    const { esm, cjs } = phase13Module(path, spec);
+    result[`dist/${path}.mjs`] = esm;
+    result[`dist/${path}.cjs`] = cjs;
+    if (!spec.entry) continue;
+    result['dist/index.mjs'] += `export { ${spec.entry.join(', ')} } from './${path}.mjs';\n`;
+    result['dist/index.cjs'] += spec.entry
+      .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
+      .join('');
+  }
+  for (const [path, target, name] of PHASE13_CALLS) {
+    for (const ext of ['mjs', 'cjs']) {
+      result[`dist/${path}.${ext}`] = withCall(
+        result[`dist/${path}.${ext}`],
+        path,
+        target,
+        name,
+        ext,
+      );
+    }
   }
   return result;
 }
@@ -3695,19 +3854,18 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       maxGzipBytes: 2048,
       allowedExternals: ['react'],
     });
-    // Measured in 0.16.0 (69,592 and 23,545 bytes), plus 25 %.
+    // Measured in 0.16.0 (69,592 and 23,545 bytes), plus 25 % (86,990 and 29,431), until 0.18
+    // re-set it from the size measured at the end of Phase 13 (73,310 and 24,921) plus 512 and 192
+    // (spec R23; RECORDED_IMPORTS_0_18 holds it).
     expect(DATA_GRID_BUDGET).toEqual({
       names: ['DataGrid'],
-      maxMinifiedBytes: 86990,
-      maxGzipBytes: 29431,
+      maxMinifiedBytes: 73822,
+      maxGzipBytes: 25113,
       allowedExternals: ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'],
     });
+    // Printed against 0.15.0 for drift; the budgets live in the newest record.
     expect(RECORDED_IMPORTS).toEqual([
-      {
-        names: ['DataGrid'],
-        baseline: { version: '0.15.0', minified: 48403, gzip: 16520 },
-        budget: DATA_GRID_BUDGET,
-      },
+      { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
       { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
       { names: ['Button'], baseline: { version: '0.15.0', minified: 11195, gzip: 3855 } },
       { names: ['MessageBar'], baseline: { version: '0.15.0', minified: 26831, gzip: 9312 } },
@@ -3927,9 +4085,10 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     const [dataGrid] = result.recorded;
     expect(dataGrid.minified).toBeGreaterThan(DATA_GRID_BUDGET.maxMinifiedBytes);
     expect(dataGrid.gzip).toBeGreaterThan(DATA_GRID_BUDGET.maxGzipBytes);
+    // Reported once, by the 0.18 record that holds the budget.
     expect(result.errors).toEqual([
-      `DataGrid: ${dataGrid.minified} bytes minified, over the budget of 86990`,
-      `DataGrid: ${dataGrid.gzip} bytes gzip, over the budget of 29431`,
+      `DataGrid: ${dataGrid.minified} bytes minified, over the budget of 73822`,
+      `DataGrid: ${dataGrid.gzip} bytes gzip, over the budget of 25113`,
     ]);
 
     const withLibrary = changed('components/table/DataGrid.window', (spec) => ({
@@ -3955,14 +4114,22 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     const { errors, virtualBudget, recorded } = await verifyDist(dist, noPending);
     expect(errors).toEqual([]);
     expect(virtualBudget).toEqual({ minified: expect.any(Number), gzip: expect.any(Number) });
-    // 0.17 appends its own records (RECORDED_IMPORTS_0_17, against 0.16.0).
+    // 0.17 appends its own records (RECORDED_IMPORTS_0_17, against 0.16.0), and 0.18 its own
+    // (RECORDED_IMPORTS_0_18, against 0.17.1).
     expect(recorded).toEqual(
-      [...RECORDED_IMPORTS, ...RECORDED_IMPORTS_0_17].map((entry) => ({
+      [...RECORDED_IMPORTS, ...RECORDED_IMPORTS_0_17, ...RECORDED_IMPORTS_0_18].map((entry) => ({
         ...entry,
         minified: expect.any(Number),
         gzip: expect.any(Number),
       })),
     );
+    // An import recorded in several lists is measured once.
+    for (const label of ['DataGrid', 'Tree', 'Button', 'MessageBar']) {
+      const sizes = recorded
+        .filter(({ names }) => names.join(' + ') === label)
+        .map(({ minified, gzip }) => `${minified}/${gzip}`);
+      expect(new Set(sizes).size, label).toBe(1);
+    }
     const lines = [];
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     expect(await main(['--dist', dist, '--no-pending'], io)).toBe(0);
@@ -3971,9 +4138,10 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       /verify-dist: window \(useVirtualWindow\): \d+ B minified \(budget 4415\), \d+ B gzip \(budget 2048\)/,
     );
     expect(output).toMatch(
-      /verify-dist: DataGrid-only import: \d+ B minified \(budget 86990\), \d+ B gzip \(budget 29431\) \(0\.15\.0: 48403 B, 16520 B; [+-]\d+\.\d{2} %, [+-]\d+\.\d{2} %\)/,
+      /verify-dist: DataGrid-only import: \d+ B minified \(budget 73822\), \d+ B gzip \(budget 25113\) \(0\.17\.1: 70097 B, 23719 B; [+-]\d+\.\d{2} %, [+-]\d+\.\d{2} %\)/,
     );
     for (const [name, minified, gzip] of [
+      ['DataGrid', 48403, 16520],
       ['Tree', 47248, 16201],
       ['Button', 11195, 3855],
       ['MessageBar', 26831, 9312],
@@ -4137,50 +4305,25 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       allowedExternals: [],
     });
     // The published 0.16.0 package, measured with this release's tools (the printed comparison).
-    // Interim, re-set from measurements in Task 19 (spec R23): each budget is the published 0.17.1
-    // size plus 4 KiB minified and 1.5 KiB gzip.
-    const components = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
-    const portal = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
-    expect(PHASE_13_INTERIM_ALLOWANCE).toEqual({ minified: 4096, gzip: 1536 });
-    expect(BASELINES_0_17_1).toEqual({
-      Button: { minified: 11222, gzip: 3866 },
-      MessageBar: { minified: 26858, gzip: 9324 },
-      Tree: { minified: 47327, gzip: 16232 },
-      Dialog: { minified: 70850, gzip: 23786 },
-      'WaveProvider + Dialog': { minified: 73403, gzip: 24778 },
-    });
+    // The five component imports are printed for drift only: 0.18 budgets them against 0.17.1
+    // (RECORDED_IMPORTS_0_18).
     const records = [
-      [['Button'], { minified: 11195, gzip: 3855 }, [15318, 5402], components],
-      [['MessageBar'], { minified: 26831, gzip: 9312 }, [30954, 10860], components],
-      [['Tree'], { minified: 47248, gzip: 16196 }, [51423, 17768], components],
-      [['Dialog'], { minified: 70721, gzip: 23723 }, [74946, 25322], portal],
-      [['WaveProvider', 'Dialog'], { minified: 71884, gzip: 24127 }, [77499, 26314], portal],
+      [['Button'], { minified: 11195, gzip: 3855 }],
+      [['MessageBar'], { minified: 26831, gzip: 9312 }],
+      [['Tree'], { minified: 47248, gzip: 16196 }],
+      [['Dialog'], { minified: 70721, gzip: 23723 }],
+      [['WaveProvider', 'Dialog'], { minified: 71884, gzip: 24127 }],
     ];
     expect(RECORDED_IMPORTS_0_17).toEqual([
       { names: ['createBrandTokens'], baseline: null, budget: BRAND_TOKENS_BUDGET },
       { names: ['waveTokens'], baseline: null, budget: WAVE_TOKENS_BUDGET },
-      ...records.map(([names, baseline, [maxMinifiedBytes, maxGzipBytes], allowedExternals]) => ({
+      ...records.map(([names, baseline]) => ({
         names,
         baseline: { version: '0.16.0', ...baseline },
-        budget: { names, maxMinifiedBytes, maxGzipBytes, allowedExternals },
       })),
     ]);
-    // The 0.17.1 sizes are those of the CHANGELOG's Size tables (0.17.1 changed only the
-    // provider, so the component imports keep their 0.17.0 sizes).
-    const log = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
-    const rows = log.slice(log.indexOf('## [0.17.1]'), log.indexOf('## [0.16.0]')).split('\n');
-    for (const [label, minified, gzip] of [
-      ['only `Button`', '11,222', '3,866'],
-      ['only `MessageBar`', '26,858', '9,324'],
-      ['only `Tree`', '47,327', '16,232'],
-      ['only `Dialog`', '70,850', '23,786'],
-      ['`WaveProvider` and `Dialog`', '73,403', '24,778'],
-    ]) {
-      // The newest row of the import (0.17.1's table comes first), its last column.
-      const row = rows.find((line) => line.startsWith(`| An import of ${label} |`));
-      expect(row, label).toMatch(new RegExp(` \\| ${minified} \\(${gzip} gzip\\) \\|$`));
-    }
-    // 0.4 and 0.7 KiB, rounded down: a budget never above the spec's figure.
+    // The 0.17 allowances (Dialog +0.4 KiB, WaveProvider with Dialog +0.7 KiB), rounded down: a
+    // budget never above the spec's figure.
     expect(Math.floor(0.4 * 1024)).toBe(409);
     expect(Math.floor(0.7 * 1024)).toBe(716);
     // The 0.16.0 figures of Button, MessageBar and Tree are those of the 0.16.0 CHANGELOG.
@@ -4526,28 +4669,24 @@ describe('the 0.17 probes (INTEGRATION)', () => {
     expect(good.errors).toEqual([]);
     // 120,000 characters of random base64 (see the DataGrid budget): over every budget.
     const table = randomBytes(90_000).toString('base64');
-    const { dist } = fixture({
-      'dist/components/button/Button.mjs': goodFiles()['dist/components/button/Button.mjs'].replace(
-        'function ButtonRoot(props) { return cn(',
-        `const TABLE = ${JSON.stringify(table)};\nfunction ButtonRoot(props) { return cn(TABLE, `,
-      ),
-      ...changed('lib/brand', (spec) => ({
+    const { dist } = fixture(
+      changed('lib/brand', (spec) => ({
         ...spec,
         body: `const TABLE = ${JSON.stringify(table)};\n${spec.body.replace("'#7f7f7f'", 'TABLE')}`,
       })),
-    });
+    );
     const result = await verifyDist(dist, noPending);
     // The 0.17 records follow those of RECORDED_IMPORTS (against 0.15.0, without these budgets).
     const records = result.recorded.slice(RECORDED_IMPORTS.length);
     const brand = records.find(({ names }) => names.join() === 'createBrandTokens');
     const button = records.find(({ names }) => names.join() === 'Button');
     expect(brand.baseline).toBeNull();
+    // The component imports of 0.17 have no budget there since 0.18 (RECORDED_IMPORTS_0_18).
     expect(button.baseline.version).toBe('0.16.0');
+    expect(button.budget).toBeUndefined();
     expect(result.errors).toEqual([
       `createBrandTokens: ${brand.minified} bytes minified, over the budget of 4495`,
       `createBrandTokens: ${brand.gzip} bytes gzip, over the budget of 3072`,
-      `Button: ${button.minified} bytes minified, over the budget of 15318`,
-      `Button: ${button.gzip} bytes gzip, over the budget of 5402`,
     ]);
   }, 60_000);
 
@@ -4562,16 +4701,17 @@ describe('the 0.17 probes (INTEGRATION)', () => {
     expect(output).toMatch(
       /verify-dist: waveTokens-only import: \d+ B minified \(budget 3839\), \d+ B gzip \(budget 3072\)\n/,
     );
-    for (const [label, minified, gzip, maxMinified, maxGzip] of [
-      ['Button', 11195, 3855, 15318, 5402],
-      ['MessageBar', 26831, 9312, 30954, 10860],
-      ['Tree', 47248, 16196, 51423, 17768],
-      ['Dialog', 70721, 23723, 74946, 25322],
-      ['WaveProvider \\+ Dialog', 71884, 24127, 77499, 26314],
+    // Without a budget since 0.18, which prints them with theirs against 0.17.1.
+    for (const [label, minified, gzip] of [
+      ['Button', 11195, 3855],
+      ['MessageBar', 26831, 9312],
+      ['Tree', 47248, 16196],
+      ['Dialog', 70721, 23723],
+      ['WaveProvider \\+ Dialog', 71884, 24127],
     ]) {
       expect(output).toMatch(
         new RegExp(
-          `verify-dist: ${label}-only import: \\d+ B minified \\(budget ${maxMinified}\\), \\d+ B gzip \\(budget ${maxGzip}\\) \\(0\\.16\\.0: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
+          `verify-dist: ${label}-only import: \\d+ B minified, \\d+ B gzip \\(0\\.16\\.0: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
         ),
       );
     }
@@ -4637,6 +4777,700 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       'index.d.ts exports TokenVariable, which is module-only (keep it out of the barrels)',
     ]);
   });
+});
+
+describe('the 0.18 probes (INTEGRATION)', () => {
+  /**
+   * The fixture module of `path` (see PHASE13_MODULES, else PHASE12_MODULES, else PHASE11_MODULES)
+   * with `change` applied.
+   */
+  const changed = (path, change) => {
+    const spec = PHASE13_MODULES[path] ?? PHASE12_MODULES[path] ?? PHASE11_MODULES[path];
+    const { esm, cjs } = phase13Module(path, change(spec));
+    return { [`dist/${path}.mjs`]: esm, [`dist/${path}.cjs`]: cjs };
+  };
+  /** The fixture module of `path` whose function `fn` also imports `name` from `target` and calls it. */
+  const callingIn = (path, fn, target, name) =>
+    changed(path, (spec) => {
+      const start = new RegExp(`(function ${fn}\\([^)]*\\) \\{ )`);
+      expect(spec.body).toMatch(start);
+      return {
+        ...spec,
+        imports: [...spec.imports, [target, [name]]],
+        body: spec.body.replace(start, `$1${name}(); `),
+      };
+    });
+  /** The fixture component `path` (a module of goodFiles) that also imports `name` and calls it. */
+  const componentCalling = (path, target, name) => ({
+    [`dist/${path}.mjs`]: withCall(goodFiles()[`dist/${path}.mjs`], path, target, name),
+  });
+  /** The fixture component `path` without its call of `name` (one of PHASE13_CALLS). */
+  const componentWithout = (path, target, name) => {
+    const file = `dist/${path}.mjs`;
+    const relative = posix.relative(posix.dirname(path), target);
+    const line = `import { ${name} } from '${relative.startsWith('.') ? relative : `./${relative}`}.mjs';\n`;
+    const code = goodFiles()[file];
+    expect(code).toContain(line);
+    expect(code).toContain(`${name}(props); `);
+    return { [file]: code.replace(line, '').replace(`${name}(props); `, '') };
+  };
+
+  it('lists the 0.18 modules: each has its source and the fixture holds it; no module of the package imports one that only the tests read', () => {
+    expect(CUSTOMIZATION_MODULES).toEqual([...new Set(CUSTOMIZATION_MODULES)].sort());
+    for (const path of CUSTOMIZATION_MODULES) {
+      const source = join(repoRoot, 'src', path.replace(/\.mjs$/, ''));
+      expect(
+        existsSync(`${source}.ts`) || existsSync(`${source}.tsx`),
+        `src/${path} has no source`,
+      ).toBe(true);
+    }
+    const files = goodFiles();
+    expect(CUSTOMIZATION_MODULES.filter((path) => !(`dist/${path}` in files))).toEqual([]);
+
+    expect(TEST_ONLY_MODULES).toEqual(['lib/deprecations', 'lib/slotParts']);
+    const sources = readdirSync(join(repoRoot, 'src'), { recursive: true })
+      .map((path) => String(path).replaceAll('\\', '/'))
+      .filter((path) => /\.tsx?$/.test(path) && !/(^|\/)__tests__\//.test(path))
+      .filter((path) => !/^test-utils/.test(path));
+    for (const module of TEST_ONLY_MODULES) {
+      expect(sources, module).toContain(`${module}.ts`);
+    }
+    const importers = sources.filter((path) =>
+      importSpecifiers(readFileSync(join(repoRoot, 'src', path), 'utf8')).some((specifier) =>
+        TEST_ONLY_MODULES.some((module) => specifier.endsWith(`/${module.split('/')[1]}`)),
+      ),
+    );
+    expect(importers).toEqual([]);
+  });
+
+  it('lists the probes, the budgets and the recorded imports of the spec (§5, R23)', () => {
+    const context = (...names) => names.map((name) => `components/${name}.mjs`);
+    expect(HOOK_PROBES_0_18.map(({ keep, modules }) => [keep, modules])).toEqual([
+      ['getNativeElementProps', ['lib/nativeProps.mjs']],
+      ['mergeSlotProps', ['lib/slotProps.mjs']],
+      ['useFieldContext', ['hooks/useFieldControl.mjs']],
+      ['FieldContextProvider', ['hooks/useFieldControl.mjs']],
+      ['useRadioGroupContext', context('input/RadioGroup.context')],
+      ['useRadioGroupItem', context('input/RadioGroup.context')],
+      ['useMenuContext', context('navigation/Menu.hooks', 'navigation/Menu.context')],
+      ['useMenuListContext', context('navigation/Menu.hooks', 'navigation/Menu.context')],
+      ['useMessageBarContext', context('feedback/MessageBar.context')],
+      ['useDataGridSort', context('table/DataGrid.hooks', 'table/DataGrid.context')],
+      [
+        'useDataGridSelection',
+        context('table/DataGrid.hooks', 'table/DataGrid.context', 'table/DataGrid.store'),
+      ],
+      ['useDataGridRowId', context('table/DataGrid.hooks', 'table/DataGrid.context')],
+    ]);
+    for (const probe of HOOK_PROBES_0_18) {
+      expect(probe.dropPrefixes, probe.keep).toEqual(['components/', 'hooks/']);
+    }
+    const [nativeProps, slotProps, ...hooks] = HOOK_PROBES_0_18;
+    for (const probe of [nativeProps, slotProps]) {
+      expect(probe.dropModules, probe.keep).toEqual([]);
+      expect(probe.dropExternals, probe.keep).toEqual(['react', 'react-dom', 'react/jsx-runtime']);
+    }
+    // Each hook: no component it belongs to, no presence core, no positioning, no portal.
+    expect(hooks.map(({ keep, dropModules }) => [keep, ...dropModules])).toEqual(
+      [
+        ['useFieldContext', 'input/Field'],
+        ['FieldContextProvider', 'input/Field'],
+        ['useRadioGroupContext', 'input/RadioGroup'],
+        ['useRadioGroupItem', 'input/RadioGroup'],
+        ['useMenuContext', 'navigation/Menu'],
+        ['useMenuListContext', 'navigation/Menu'],
+        ['useMessageBarContext', 'feedback/MessageBar'],
+        ['useDataGridSort', 'table/DataGrid'],
+        ['useDataGridSelection', 'table/DataGrid'],
+        ['useDataGridRowId', 'table/DataGrid'],
+      ].map(([keep, component]) => [
+        keep,
+        `components/${component}.mjs`,
+        'hooks/usePresence.mjs',
+        'hooks/usePopupPosition.mjs',
+      ]),
+    );
+    for (const probe of hooks) {
+      expect(probe.dropExternals, probe.keep).toEqual(['react-dom', '@floating-ui/react-dom']);
+    }
+    expect(CUSTOMIZATION_MODULES).toEqual([
+      'components/feedback/MessageBar.context.mjs',
+      'components/input/RadioGroup.context.mjs',
+      'components/navigation/Menu.hooks.mjs',
+      'components/table/DataGrid.hooks.mjs',
+      'hooks/useFieldControl.mjs',
+      'lib/nativeProps.mjs',
+      'lib/slotProps.mjs',
+    ]);
+    expect(EXCLUSION_PROBES_0_18).toEqual([
+      { keep: 'Button', drop: null, dropModules: CUSTOMIZATION_MODULES },
+      {
+        keep: 'Dialog',
+        drop: 'DataGrid',
+        dropModules: CUSTOMIZATION_MODULES.filter((path) => path !== 'lib/slotProps.mjs'),
+      },
+      {
+        keep: 'DataGrid',
+        drop: null,
+        dropModules: ['components/table/DataGrid.hooks.mjs', 'lib/nativeProps.mjs'],
+      },
+    ]);
+    expect(INCLUSION_PROBES_0_18).toEqual([
+      { keep: 'Dialog', modules: ['lib/slotProps.mjs'] },
+      {
+        keep: 'MessageBar',
+        modules: ['components/feedback/MessageBar.context.mjs', 'lib/slotProps.mjs'],
+      },
+    ]);
+
+    // Spec R23: each budget is the size measured at the end of Phase 13 plus 512 bytes minified
+    // and 192 gzip; each import is printed against its size in the published 0.17.1 package.
+    expect(BUDGET_MARGIN_0_18).toEqual({ minified: 512, gzip: 192 });
+    expect(BASELINES_0_17_1).toEqual({
+      Button: { minified: 11222, gzip: 3866 },
+      MessageBar: { minified: 26858, gzip: 9324 },
+      Tree: { minified: 47327, gzip: 16232 },
+      Dialog: { minified: 70850, gzip: 23786 },
+      'WaveProvider + Dialog': { minified: 73403, gzip: 24778 },
+      DataGrid: { minified: 70097, gzip: 23719 },
+    });
+    const components = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
+    const portal = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
+    const records = [
+      [['Button'], [11222, 3866], [11079, 3865], [11591, 4057], components],
+      [['MessageBar'], [26858, 9324], [29185, 10188], [29697, 10380], components],
+      [['Tree'], [47327, 16232], [50387, 17260], [50899, 17452], components],
+      [['Dialog'], [70850, 23786], [72599, 24466], [73111, 24658], portal],
+      [['WaveProvider', 'Dialog'], [73403, 24778], [75147, 25458], [75659, 25650], portal],
+      [['DataGrid'], [70097, 23719], [73310, 24921], [73822, 25113], portal],
+    ];
+    expect(RECORDED_IMPORTS_0_18).toEqual(
+      records.map(([names, baseline, measured, budget, allowedExternals]) => ({
+        names,
+        baseline: { version: '0.17.1', minified: baseline[0], gzip: baseline[1] },
+        measured: { minified: measured[0], gzip: measured[1] },
+        budget: { names, maxMinifiedBytes: budget[0], maxGzipBytes: budget[1], allowedExternals },
+      })),
+    );
+    expect(RECORDED_IMPORTS_0_18.at(-1).budget).toBe(DATA_GRID_BUDGET);
+    for (const { names, measured, budget } of RECORDED_IMPORTS_0_18) {
+      expect([budget.maxMinifiedBytes, budget.maxGzipBytes], names.join(' + ')).toEqual([
+        measured.minified + BUDGET_MARGIN_0_18.minified,
+        measured.gzip + BUDGET_MARGIN_0_18.gzip,
+      ]);
+    }
+    // The growth over 0.17.1 that the script's header and spec §11 state.
+    expect(
+      RECORDED_IMPORTS_0_18.map(({ names, baseline, measured }) => [
+        names.join(' + '),
+        measured.minified - baseline.minified,
+        measured.gzip - baseline.gzip,
+      ]),
+    ).toEqual([
+      ['Button', -143, -1],
+      ['MessageBar', 2327, 864],
+      ['Tree', 3060, 1028],
+      ['Dialog', 1749, 680],
+      ['WaveProvider + Dialog', 1744, 680],
+      ['DataGrid', 3213, 1202],
+    ]);
+    // The 0.17.1 sizes are those of the CHANGELOG's Size tables (0.17.1 changed only the
+    // provider, so the component imports keep their 0.17.0 sizes).
+    const log = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
+    const rows = log.slice(log.indexOf('## [0.17.1]'), log.indexOf('## [0.16.0]')).split('\n');
+    for (const [label, minified, gzip] of [
+      ['only `Button`', '11,222', '3,866'],
+      ['only `MessageBar`', '26,858', '9,324'],
+      ['only `Tree`', '47,327', '16,232'],
+      ['only `Dialog`', '70,850', '23,786'],
+      ['`WaveProvider` and `Dialog`', '73,403', '24,778'],
+      ['only `DataGrid`', '70,097', '23,719'],
+    ]) {
+      // The newest row of the import (0.17.1's table comes first), its last column.
+      const row = rows.find((line) => line.startsWith(`| An import of ${label} |`));
+      expect(row, label).toMatch(new RegExp(` \\| ${minified} \\(${gzip} gzip\\) \\|$`));
+    }
+  });
+
+  it('the hook probes pass on a correct dist', async () => {
+    const { dist } = fixture();
+    for (const probe of HOOK_PROBES_0_18) {
+      expect(await probeHook(dist, probe), probe.keep).toEqual([]);
+    }
+  }, 60_000);
+
+  it('a helper probe reports React, a component or a hook in the bundle', async () => {
+    const probe = (keep) => HOOK_PROBES_0_18.find((candidate) => candidate.keep === keep);
+    const withReact = fixture(
+      changed('lib/nativeProps', (spec) => ({
+        ...spec,
+        imports: [['react', ['useState']]],
+        body: spec.body.replace('const kept = ', 'useState(0); const kept = '),
+      })),
+    );
+    expect(await probeHook(withReact.dist, probe('getNativeElementProps'))).toEqual([
+      'the bundle of an import of only getNativeElementProps imports react',
+    ]);
+    const withButton = fixture(
+      callingIn('lib/slotProps', 'mergeSlotProps', 'components/button/Button', 'Button'),
+    );
+    expect(await probeHook(withButton.dist, probe('mergeSlotProps'))).toEqual([
+      'components/button/Button.mjs is in the bundle of an import of only mergeSlotProps (no module under components/ may be)',
+    ]);
+    const withHook = fixture(
+      callingIn('lib/slotProps', 'mergeSlotProps', 'hooks/useThing', 'useThing'),
+    );
+    expect(await probeHook(withHook.dist, probe('mergeSlotProps'))).toEqual([
+      'hooks/useThing.mjs is in the bundle of an import of only mergeSlotProps (no module under hooks/ may be)',
+      'the bundle of an import of only mergeSlotProps imports react',
+    ]);
+  }, 60_000);
+
+  it('a context hook probe reports its component, another component, popup code and a portal', async () => {
+    const probe = (keep) => HOOK_PROBES_0_18.find((candidate) => candidate.keep === keep);
+    const cases = [
+      [
+        'useFieldContext',
+        callingIn('hooks/useFieldControl', 'useFieldContext', 'components/input/Field', 'Field'),
+        ['components/input/Field.mjs is in the bundle of an import of only useFieldContext'],
+      ],
+      [
+        'useRadioGroupItem',
+        callingIn(
+          'components/input/RadioGroup.context',
+          'useRadioGroupItem',
+          'components/input/RadioGroup',
+          'RadioGroup',
+        ),
+        ['components/input/RadioGroup.mjs is in the bundle of an import of only useRadioGroupItem'],
+      ],
+      [
+        'useMenuListContext',
+        callingIn(
+          'components/navigation/Menu.hooks',
+          'useMenuListContext',
+          'hooks/usePresence',
+          'usePresence',
+        ),
+        ['hooks/usePresence.mjs is in the bundle of an import of only useMenuListContext'],
+      ],
+      [
+        'useMessageBarContext',
+        callingIn(
+          'components/feedback/MessageBar.context',
+          'useMessageBarContext',
+          'components/button/Button',
+          'Button',
+        ),
+        [
+          'components/button/Button.mjs is in the bundle of an import of only useMessageBarContext (no module under components/ may be)',
+        ],
+      ],
+      [
+        'useDataGridRowId',
+        callingIn(
+          'components/table/DataGrid.hooks',
+          'useDataGridRowId',
+          'react-dom',
+          'createPortal',
+        ),
+        ['the bundle of an import of only useDataGridRowId imports react-dom'],
+      ],
+    ];
+    for (const [keep, files, reports] of cases) {
+      expect(await probeHook(fixture(files).dist, probe(keep)), keep).toEqual(reports);
+    }
+  }, 60_000);
+
+  it("probeHook: a probe's modules may sit under its dropPrefixes, and nothing else may", async () => {
+    const { dist } = fixture();
+    const probe = {
+      keep: 'useMenuContext',
+      modules: ['components/navigation/Menu.hooks.mjs', 'components/navigation/Menu.context.mjs'],
+      dropPrefixes: ['components/'],
+    };
+    expect(await probeHook(dist, probe)).toEqual([]);
+    expect(
+      await probeHook(dist, { ...probe, modules: ['components/navigation/Menu.hooks.mjs'] }),
+    ).toEqual([
+      'components/navigation/Menu.context.mjs is in the bundle of an import of only useMenuContext (no module under components/ may be)',
+    ]);
+  }, 30_000);
+
+  /** For each exclusion probe: the call that leaks code into its bundle, and what it reports. */
+  const LEAKS = {
+    Button: {
+      leak: () => componentCalling('components/button/Button', 'lib/slotProps', 'mergeSlotProps'),
+      reports: [
+        'lib/slotProps.mjs is in the bundle of an import of only Button (it must be dropped)',
+      ],
+    },
+    Dialog: {
+      leak: () =>
+        componentCalling(
+          'components/overlays/Dialog',
+          'components/table/DataGrid.hooks',
+          'useDataGridSort',
+        ),
+      reports: [
+        'components/table/DataGrid.hooks.mjs is in the bundle of an import of only Dialog (DataGrid must be dropped)',
+      ],
+    },
+    DataGrid: {
+      leak: () =>
+        callingIn(
+          'components/table/DataGrid',
+          'DataGrid',
+          'components/table/DataGrid.hooks',
+          'useDataGridSort',
+        ),
+      reports: [
+        'components/table/DataGrid.hooks.mjs is in the bundle of an import of only DataGrid (it must be dropped)',
+      ],
+    },
+  };
+
+  it.each(EXCLUSION_PROBES_0_18.map((probe) => [probe.keep, probe]))(
+    'an import of only %s holds none of the 0.18 modules it does not use: passes on a correct dist, reports a leak',
+    async (keep, probe) => {
+      expect(await probeTreeShaking(fixture().dist, probe)).toEqual([]);
+      expect(LEAKS[keep], keep).toBeDefined();
+      expect(await probeTreeShaking(fixture(LEAKS[keep].leak()).dist, probe)).toEqual(
+        LEAKS[keep].reports,
+      );
+    },
+    30_000,
+  );
+
+  /** For each inclusion probe: the fixture without the call the probe looks for, and the report. */
+  const WITHOUT = {
+    Dialog: {
+      files: () =>
+        componentWithout('components/overlays/Dialog', 'lib/slotProps', 'mergeSlotProps'),
+      reports: ['lib/slotProps.mjs is not in the bundle of an import of only Dialog'],
+    },
+    MessageBar: {
+      files: () =>
+        componentWithout(
+          'components/feedback/MessageBar',
+          'components/feedback/MessageBar.context',
+          'useMessageBarContext',
+        ),
+      reports: [
+        'components/feedback/MessageBar.context.mjs is not in the bundle of an import of only MessageBar',
+      ],
+    },
+  };
+
+  it.each(INCLUSION_PROBES_0_18.map((probe) => [probe.keep, probe]))(
+    'an import of only %s holds the 0.18 modules its exclusions look for: passes on a correct dist, reports one missing',
+    async (keep, probe) => {
+      expect(await probeIncludes(fixture().dist, probe)).toEqual([]);
+      expect(WITHOUT[keep], keep).toBeDefined();
+      expect(await probeIncludes(fixture(WITHOUT[keep].files()).dist, probe)).toEqual(
+        WITHOUT[keep].reports,
+      );
+    },
+    30_000,
+  );
+
+  it('checkTestOnlyModules passes a correct dist and reports every file of a module the tests read', () => {
+    expect(checkTestOnlyModules(fixture().dist)).toEqual([]);
+    const { dist } = fixture({
+      'dist/lib/slotParts.mjs': 'export const SLOT_PROPS_KEYS = {};\n',
+      'dist/lib/slotParts.mjs.map': '{}\n',
+      'dist/lib/deprecations.cjs': 'exports.DEPRECATIONS = [];\n',
+      // Only a module of that name counts, not one whose name starts like it.
+      'dist/lib/slotPartsGuide.mjs': 'export const guide = 1;\n',
+    });
+    const reason = (module) =>
+      `is in dist: ${module} is read by the tests only (no module of the package may import it)`;
+    expect(checkTestOnlyModules(dist)).toEqual([
+      `lib/deprecations.cjs ${reason('lib/deprecations')}`,
+      `lib/slotParts.mjs ${reason('lib/slotParts')}`,
+      `lib/slotParts.mjs.map ${reason('lib/slotParts')}`,
+    ]);
+  });
+
+  it('checkServerImport reads the part helpers from lib and from the entry on the server', async () => {
+    expect(await checkServerImport(fixture().dist)).toEqual([]);
+    const missing = await checkServerImport(
+      fixture({ 'dist/lib/slotProps.cjs': null, 'dist/lib/nativeProps.mjs': null }).dist,
+    );
+    expect(missing).toEqual(['lib/nativeProps.mjs is missing', 'lib/slotProps.cjs is missing']);
+  }, 60_000);
+
+  it('checkServerImport reports a part helper that is wrong on the server, and one the entry takes from a "use client" module', async () => {
+    const { dist } = fixture({
+      ...changed('lib/slotProps', (spec) => ({
+        ...spec,
+        body: spec.body.replace(', ...own.locked }', ' }'),
+      })),
+      ...changed('lib/nativeProps', (spec) => ({
+        ...spec,
+        body: spec.body.replace(" || name.startsWith('data-')", ''),
+      })),
+    });
+    const helper =
+      'getNativeElementProps(\'button\', { id, disabled, onClick, onValueChange, tone, data-x }, [\'id\']) kept ["disabled","onClick"]';
+    const merge =
+      "mergeSlotProps({ title: 'Yours', role: 'button' }, { className: 'part', locked: { role: " +
+      "'status' } }) returned " +
+      '{"title":"Yours","role":"button","className":"part"}';
+    expect(await checkServerImport(dist)).toEqual([
+      `lib/nativeProps.cjs under node --conditions=react-server: ${helper}`,
+      `lib/nativeProps.mjs under node --conditions=react-server: ${helper}`,
+      `lib/slotProps.cjs under node --conditions=react-server: ${merge}`,
+      `lib/slotProps.mjs under node --conditions=react-server: ${merge}`,
+    ]);
+
+    const files = goodFiles();
+    const fromClient = fixture({
+      'dist/hooks/useThing.mjs': `${files['dist/hooks/useThing.mjs']}export { mergeSlotProps } from '../lib/slotProps.mjs';\n`,
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        "export { mergeSlotProps } from './lib/slotProps.mjs';",
+        "export { mergeSlotProps } from './hooks/useThing.mjs';",
+      ),
+    });
+    expect(await checkServerImport(fromClient.dist)).toEqual([
+      expect.stringMatching(
+        /^index\.mjs under node --conditions=react-server: mergeSlotProps is a client reference/,
+      ),
+    ]);
+  }, 60_000);
+
+  it('verifyDist runs the 0.18 probes and the check of the test-only modules', async () => {
+    const leak = callingIn(
+      'components/feedback/MessageBar.context',
+      'useMessageBarContext',
+      'components/button/Button',
+      'Button',
+    );
+    const { dist } = fixture({
+      'dist/lib/slotParts.mjs': 'export const SLOT_PROPS_KEYS = {};\n',
+      ...LEAKS.Button.leak(),
+      ...leak,
+      ...WITHOUT.Dialog.files(),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'lib/slotParts.mjs is in dist: lib/slotParts is read by the tests only (no module of the package may import it)',
+      ...LEAKS.Button.reports,
+      'components/button/Button.mjs is in the bundle of an import of only useMessageBarContext (no module under components/ may be)',
+      ...WITHOUT.Dialog.reports,
+    ]);
+  }, 60_000);
+
+  it('verifyDist gates the 0.18 budgets: passes on a correct dist, reports each import over its budget', async () => {
+    const good = await verifyDist(fixture().dist, noPending);
+    expect(good.errors).toEqual([]);
+    // 120,000 characters of random base64 (see the DataGrid budget) in Button and in the part
+    // helper, which MessageBar and Dialog merge their parts with: over those four budgets.
+    const table = randomBytes(90_000).toString('base64');
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': goodFiles()['dist/components/button/Button.mjs'].replace(
+        'function ButtonRoot(props) { return cn(',
+        `const TABLE = ${JSON.stringify(table)};\nfunction ButtonRoot(props) { return cn(TABLE, `,
+      ),
+      ...changed('lib/slotProps', (spec) => ({
+        ...spec,
+        body: `const TABLE = ${JSON.stringify(table)};\n${spec.body.replace(
+          '...own.locked }',
+          "...own.locked, 'data-table': TABLE }",
+        )}`,
+      })),
+    });
+    const result = await verifyDist(dist, noPending);
+    // The 0.18 records follow those of RECORDED_IMPORTS (0.15.0) and RECORDED_IMPORTS_0_17 (0.16.0).
+    const records = result.recorded.slice(RECORDED_IMPORTS.length + RECORDED_IMPORTS_0_17.length);
+    expect(
+      records.map(({ names, baseline }) => `${names.join(' + ')} ${baseline.version}`),
+    ).toEqual([
+      'Button 0.17.1',
+      'MessageBar 0.17.1',
+      'Tree 0.17.1',
+      'Dialog 0.17.1',
+      'WaveProvider + Dialog 0.17.1',
+      'DataGrid 0.17.1',
+    ]);
+    const over = (label, maxMinified, maxGzip) => {
+      const { minified, gzip } = records.find(({ names }) => names.join(' + ') === label);
+      return [
+        `${label}: ${minified} bytes minified, over the budget of ${maxMinified}`,
+        `${label}: ${gzip} bytes gzip, over the budget of ${maxGzip}`,
+      ];
+    };
+    expect(result.errors).toEqual([
+      ...over('Button', 11591, 4057),
+      ...over('MessageBar', 29697, 10380),
+      ...over('Dialog', 73111, 24658),
+      ...over('WaveProvider + Dialog', 75659, 25650),
+    ]);
+  }, 60_000);
+
+  it('main prints the 0.18 imports against 0.17.1, with their budgets', async () => {
+    const lines = [];
+    const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
+    expect(await main(['--dist', fixture().dist, '--no-pending'], io)).toBe(0);
+    const output = lines.join('\n');
+    for (const [label, minified, gzip, maxMinified, maxGzip] of [
+      ['Button', 11222, 3866, 11591, 4057],
+      ['MessageBar', 26858, 9324, 29697, 10380],
+      ['Tree', 47327, 16232, 50899, 17452],
+      ['Dialog', 70850, 23786, 73111, 24658],
+      ['WaveProvider \\+ Dialog', 73403, 24778, 75659, 25650],
+      ['DataGrid', 70097, 23719, 73822, 25113],
+    ]) {
+      expect(output).toMatch(
+        new RegExp(
+          `verify-dist: ${label}-only import: \\d+ B minified \\(budget ${maxMinified}\\), \\d+ B gzip \\(budget ${maxGzip}\\) \\(0\\.17\\.1: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
+        ),
+      );
+    }
+  }, 60_000);
+
+  it('the real exports carry the 0.18 names, mergeSlotProps last in the entry', async () => {
+    const mod = await import('../../src/index.ts');
+    for (const name of [
+      'mergeSlotProps',
+      'getNativeElementProps',
+      'useFieldContext',
+      'FieldContextProvider',
+      'useRadioGroupContext',
+      'useRadioGroupItem',
+      'useMenuContext',
+      'useMenuListContext',
+      'useMessageBarContext',
+      'useDataGridSort',
+      'useDataGridSelection',
+      'useDataGridRowId',
+    ]) {
+      expect(mod[name], name).toBeTypeOf('function');
+    }
+    // Its export order sets the order of the helper's imports in every bundle (spec §11, Task 1).
+    const entry = readFileSync(join(repoRoot, 'src/index.ts'), 'utf8');
+    const values = [...entry.matchAll(/^export (?!type\b)[^;]*;/gms)].map(
+      ([statement]) => statement,
+    );
+    expect(values.at(-1)).toBe("export { mergeSlotProps } from './lib/slotProps';");
+  }, 60_000);
+
+  it('lists every module-only export of the 0.18 modules, read with the compiler against the entry', () => {
+    // The modules 0.18 adds: every export the entry does not export must be listed.
+    const sources = [
+      'src/lib/slotProps.ts',
+      'src/lib/nativeProps.ts',
+      'src/lib/slotParts.ts',
+      'src/lib/deprecations.ts',
+      'src/components/input/RadioGroup.context.ts',
+      'src/components/navigation/Menu.hooks.ts',
+      'src/components/feedback/MessageBar.context.ts',
+      'src/components/table/DataGrid.hooks.ts',
+    ].map((path) => join(repoRoot, path));
+    // The seams 0.18 adds to modules that existed before (their older exports are not listed).
+    const seams = {
+      'src/components/data-display/AvatarGroup.parts.tsx': ['AVATAR_GROUP_PART_LOCKS'],
+      'src/components/data-display/Badge.colors.ts': ['warnImportantColor'],
+      'src/components/data-display/TagGroup.context.ts': ['BLOCK_CLICK', 'TAG_PART_LOCKS'],
+      'src/components/input/Calendar.tsx': ['CalendarViewParts'],
+      'src/components/input/Calendar.views.tsx': ['CalendarDayGridParts'],
+      'src/components/input/Option.tsx': ['ListboxSurfaceParts', 'PickerListboxSurface'],
+      'src/components/layout/Tree.context.ts': ['TREE_PART_LOCKS'],
+      'src/components/navigation/Menu.context.ts': ['MenuListElementContext'],
+      'src/components/navigation/Menu.shared.ts': ['BLOCK_CLICK', 'MENU_PART_LOCKS'],
+      'src/components/navigation/Nav.context.ts': [
+        'BLOCK_CLICK',
+        'NAV_PART_LOCKS',
+        'NAV_SHOWN_PART_LOCKS',
+      ],
+      'src/components/overlays/TeachingPopover.context.ts': [
+        'hasRenderFunction',
+        'withoutRenderFunction',
+      ],
+      'src/components/table/DataGrid.context.ts': ['DataGridSelectAllPartContext'],
+      'src/components/table/DataGrid.store.ts': ['SelectionSnapshot'],
+      'src/components/table/Table.resize.tsx': ['TableResizeHandlePartProps'],
+      'src/hooks/useFieldControl.ts': ['fieldLocks'],
+      'src/hooks/useListbox.ts': ['OPTION_STATE_LOCKS', 'preventMouseDown'],
+      'src/hooks/useMotion.ts': ['useLegacyMotionWarning'],
+      'src/lib/mergeProps.ts': ['ID_LIST_KEYS'],
+      'src/lib/slot.ts': ['resolveWiredSlot'],
+    };
+    const entry = join(repoRoot, 'src/index.ts');
+    const config = ts.readConfigFile(join(repoRoot, 'tsconfig.json'), ts.sys.readFile);
+    const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, repoRoot);
+    const program = ts.createProgram({
+      rootNames: [entry, ...sources, ...Object.keys(seams).map((path) => join(repoRoot, path))],
+      options: { ...parsed.options, noEmit: true },
+    });
+    const checker = program.getTypeChecker();
+    const exportsOf = (file) => {
+      const source = program.getSourceFile(file);
+      expect(source, file).toBeDefined();
+      return checker.getExportsOfModule(checker.getSymbolAtLocation(source)).map((s) => s.name);
+    };
+    const entryNames = new Set(exportsOf(entry));
+    const moduleOnly = sources.flatMap((file) =>
+      exportsOf(file).filter((name) => !entryNames.has(name)),
+    );
+    expect(moduleOnly.filter((name) => !MODULE_ONLY_NAMES.includes(name))).toEqual([]);
+    expect([...moduleOnly].sort()).toEqual([
+      'BUTTON_PART_LOCKS',
+      'ClassNameConstant',
+      'DEPRECATIONS',
+      'Deprecation',
+      'DeprecationKind',
+      'HIDDEN_PART_LOCKS',
+      'MessageBarContext',
+      'NAMED_SLOT_PARTS',
+      'NATIVE_EVENT_NAMES',
+      'NATIVE_GLOBAL_PROPS',
+      'NATIVE_NO_CAPTURE_EVENTS',
+      'NATIVE_TAG_PROPS',
+      'PENDING_SLOT_PARTS',
+      'RadioGroupContext',
+      'RadioGroupItemsContextValue',
+      'RadioItemState',
+      'SLOT_PART_EXCLUSIONS',
+      'SLOT_PROPS_KEYS',
+      'SLOT_PROPS_ROOT_OWNERS',
+      'SlotPartExclusion',
+      'SlotPartKey',
+      'SlotPartLists',
+      'composeAfterPart',
+      'lockPositionStyle',
+      'useRadioItemState',
+    ]);
+    for (const [path, names] of Object.entries(seams)) {
+      const exported = exportsOf(join(repoRoot, path));
+      for (const name of names) {
+        expect(exported, `${path} exports ${name}`).toContain(name);
+        expect(entryNames.has(name), `the entry exports ${name}`).toBe(false);
+        expect(MODULE_ONLY_NAMES, name).toContain(name);
+      }
+    }
+    // The public names of the new modules stay out of the list.
+    for (const name of [
+      'mergeSlotProps',
+      'SlotPart',
+      'SlotPartOwn',
+      'getNativeElementProps',
+      'NativeElementProps',
+      'useFieldContext',
+      'FieldContextProvider',
+      'useRadioGroupContext',
+      'useRadioGroupItem',
+      'useMenuContext',
+      'useMenuListContext',
+      'useMessageBarContext',
+      'useDataGridSort',
+      'useDataGridSelection',
+      'useDataGridRowId',
+    ]) {
+      expect(entryNames.has(name), name).toBe(true);
+      expect(MODULE_ONLY_NAMES, name).not.toContain(name);
+    }
+  }, 60_000);
 });
 
 describe('verifyDist and main', () => {

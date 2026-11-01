@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { joinIds } from '../aria';
 import {
+  BUTTON_PART_LOCKS,
+  composeAfterPart,
   HIDDEN_PART_LOCKS,
   lockPositionStyle,
   mergeSlotProps,
@@ -1348,6 +1350,94 @@ describe('HIDDEN_PART_LOCKS', () => {
       inert: undefined,
       'aria-hidden': undefined,
     });
+  });
+});
+
+describe('BUTTON_PART_LOCKS', () => {
+  it('holds every key of HIDDEN_PART_LOCKS with the same value (the written-out copy cannot drift)', () => {
+    for (const [key, value] of Object.entries(HIDDEN_PART_LOCKS)) {
+      expect(BUTTON_PART_LOCKS, key).toHaveProperty([key], value);
+    }
+  });
+
+  it("locks a button type and unset the tab stop and the disabled states, before the button's own attributes", () => {
+    expect(BUTTON_PART_LOCKS).toEqual({
+      type: 'button',
+      tabIndex: undefined,
+      disabled: undefined,
+      'aria-disabled': undefined,
+      'data-disabled': undefined,
+      'data-disabled-focusable': undefined,
+      hidden: undefined,
+      inert: undefined,
+      'aria-hidden': undefined,
+    });
+    const merged = mergeSlotProps<'button'>(
+      { type: 'submit', tabIndex: 0, disabled: true, hidden: true, title: 'Mine' },
+      { className: 'part', locked: { ...BUTTON_PART_LOCKS, tabIndex: -1 } },
+    );
+    expect(merged).toEqual({
+      className: 'part',
+      title: 'Mine',
+      ...BUTTON_PART_LOCKS,
+      tabIndex: -1,
+    });
+  });
+});
+
+describe('composeAfterPart', () => {
+  it("runs the part's handler first, then ours, with the same event", () => {
+    const calls: string[] = [];
+    const event = fakeEvent();
+    const theirs = vi.fn((received: FakeEvent) => {
+      expect(received).toBe(event);
+      calls.push('theirs');
+    });
+    const ours = vi.fn((received: FakeEvent) => {
+      expect(received).toBe(event);
+      calls.push('ours');
+    });
+    const composed = composeAfterPart<FakeEvent>(theirs, ours);
+    expect(composed).toBeTypeOf('function');
+    composed!(event);
+    expect(calls).toEqual(['theirs', 'ours']);
+    expect(theirs).toHaveBeenCalledTimes(1);
+    expect(ours).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs ours even when the part's handler prevented the default (checkDefaultPrevented: false)", () => {
+    const ours = vi.fn();
+    const composed = composeAfterPart<FakeEvent>(
+      (event: FakeEvent) => event.preventDefault(),
+      ours,
+    );
+    const event = fakeEvent();
+    composed!(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(ours).toHaveBeenCalledTimes(1);
+    expect(ours).toHaveBeenCalledWith(event);
+  });
+
+  it('gives ours itself without a part handler, and skips a part value that is not a function', () => {
+    const ours = vi.fn();
+    expect(composeAfterPart<FakeEvent>(undefined, ours)).toBe(ours);
+    // An untyped caller's value: neither called nor in the way of ours.
+    for (const value of ['not a handler', 0, null, true, {}]) {
+      const composed = composeAfterPart<FakeEvent>(value, ours);
+      expect(composed, String(value)).toBe(ours);
+      expect(() => composed!(fakeEvent())).not.toThrow();
+    }
+    expect(ours).toHaveBeenCalledTimes(5);
+  });
+
+  it('gives the part handler alone when there is no work of ours, and undefined without either', () => {
+    const theirs = vi.fn();
+    const composed = composeAfterPart<FakeEvent>(theirs, undefined);
+    const event = fakeEvent();
+    composed!(event);
+    expect(theirs).toHaveBeenCalledWith(event);
+    expect(composeAfterPart<FakeEvent>(undefined, undefined)).toBeUndefined();
+    expect(composeAfterPart<FakeEvent>('not a handler', undefined)).toBeUndefined();
   });
 });
 
