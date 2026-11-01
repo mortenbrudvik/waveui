@@ -7,7 +7,7 @@ A React component library inspired by the Fluent UI 2 design language: 80 access
 - [Requirements](#requirements) · [Installation](#installation) · [Quick start](#quick-start)
 - [Styles](#styles) · [Theming](#theming) · [Global effects](#global-effects) · [Styling hooks](#styling-hooks) · [Customization](#customization)
 - [React Server Components](#react-server-components) · [Components](#components) · [Usage notes](#usage-notes)
-- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [1.0 notices](#10-notices) · [Upgrading from 0.16](#upgrading-from-016) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
+- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [1.0 notices](#10-notices) · [Upgrading from 0.17](#upgrading-from-017) · [Upgrading from 0.16](#upgrading-from-016) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
 
 ## Requirements
 
@@ -3384,6 +3384,17 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
 ## 1.0 notices
 
 1.0 removes what 0.x deprecated, changes a few defaults and meanings, and makes the optional `details` arguments required. Every change decided for 1.0 was announced in a 0.x release, 0.18 restates them all, and none of them happens before 1.0. [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) lists every item with its replacement and the release that announced it, and how to find the uses in your app: a development build warns once about each use that the guide marks "Warns: yes". Namespaced utilities (see [Global effects](#global-effects)) are not decided yet; if 1.0 ships them, a 0.x release announces them first.
+
+## Upgrading from 0.17
+
+0.18 removes nothing public and changes no default, and everything it adds is opt-in (`slotProps`, slot render functions, `getNativeElementProps` and `mergeSlotProps`, Field's function child, `useFieldContext` and `FieldContextProvider`, and the context hooks of RadioGroup, Menu, MessageBar and DataGrid); it also announces what 1.0 changes ([1.0 notices](#10-notices)). These changes can affect your tests and types:
+
+1. **Attribute order.** Without `slotProps` every component renders the attributes and values of 0.17, but on some elements in another order: a part's class may now come before attributes it followed, a Tag's Dismiss button renders the attributes its `dismissIcon` slot adds before its `class`, and MessageBar's Dismiss button renders its `type` first. Queries, hydration and Vitest's DOM snapshots ignore the order; a test that compares raw HTML strings changes.
+2. **New development warnings** for uses that 1.0 removes or changes: Badge and CounterBadge `color="important"` (pass `color="severe"` to keep the orange look), `useRovingTabIndex(containerRef, options)`, DataGrid's positional `onSortChange(columnId, direction)`, and a `className` with presence variants on `Menu.Popover`, `Dialog.Content`, Drawer or NavDrawer while `motion` is unset. A test that spies on `console.warn` and renders one of these forms asserts the warning. A production bundle drops them, and an import without a bundler (no `process`) skips them.
+3. **Types.** `FieldProps['children']` and a slot object's `children` widen to functions; `CardProps['checkbox']` narrows (its slot object takes no `children`, so a variable typed `Slot<'input'>` no longer fits: type it `CardProps['checkbox']`); `AvatarGroupItemProps` is an interface (Avatar's props with a `slotProps` of its own) rather than an alias of `AvatarProps`. `WaveContextValue` is unchanged.
+4. **`details.event` may be the grid's own.** A cell of yours that sorts or selects through `useDataGridSort().setSort` or `useDataGridSelection().toggle` without an event reaches `onSortChange` and `onSelectedItemsChange` with an untrusted `Event` of type `sort` or `select` and no target.
+
+`ref` stays where it is in 1.0 (see [`ref` and `controlRef`](#ref-and-controlref)), and `WaveProvider classNames` is left for after 1.0. [Customization](#customization) shows the new API; the CHANGELOG's [0.18.0 section](CHANGELOG.md) lists the additions and the full upgrade notes.
 
 ## Upgrading from 0.16
 
