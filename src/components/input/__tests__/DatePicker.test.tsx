@@ -3186,6 +3186,21 @@ describe('DatePicker — slotProps', () => {
     expect([...new FormData(form).entries()]).toEqual([['due', '2025-06-15']]);
   });
 
+  it('keeps the text its own: a part’s defaultValue never reaches the controlled input', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <DatePicker
+        aria-label="Date"
+        locale="en-US"
+        defaultValue={JUNE_15}
+        slotProps={{ input: { defaultValue: '01/01/2000' } }}
+      />,
+    );
+    expect(textbox()).toHaveValue('06/15/2025');
+    // No warning of an input both controlled and uncontrolled: the part's default is unset.
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it('keeps the attributes its wiring renders only while set: a part sets none of them', async () => {
     const user = userEvent.setup();
     const disabledState = {

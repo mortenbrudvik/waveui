@@ -1321,6 +1321,21 @@ describe('Stepper and Stepper.Step — slotProps', () => {
     expect(document.querySelectorAll('[data-wave-stepper-connector=""]')).toHaveLength(3);
   });
 
+  it('gives the indicators and connectors no role of yours', () => {
+    const attempt = { role: 'img', title: 'Step mark' };
+    render(<Steps parts={{ step: { indicator: attempt, connector: attempt } }} />);
+    const decorative = [
+      ...all(document, stepperStepClassNames.indicator),
+      ...all(document, stepperStepClassNames.connector),
+    ];
+    expect(decorative.length).toBeGreaterThan(0);
+    for (const element of decorative) {
+      expect(element).not.toHaveAttribute('role');
+      expect(element).toHaveAttribute('title', 'Step mark');
+      expect(element).toHaveAttribute('aria-hidden', 'true');
+    }
+  });
+
   it('runs your button handlers first: preventDefault() skips the step’s own onClick and the step change', async () => {
     const user = userEvent.setup();
     const onStepChange = vi.fn();

@@ -1907,12 +1907,17 @@ describe('MessageBar — slotProps', () => {
           dismiss={{
             as: 'button',
             type: 'reset',
-            id: 'object',
+            name: 'object',
             className: 'obj',
             'aria-label': 'Close',
           }}
           slotProps={{
-            dismissButton: { id: 'part', className: 'part', type: 'button', 'aria-label': 'Mine' },
+            dismissButton: {
+              name: 'part',
+              className: 'part',
+              type: 'button',
+              'aria-label': 'Mine',
+            },
           }}
         >
           Object.
@@ -1924,8 +1929,8 @@ describe('MessageBar — slotProps', () => {
     expect(merged).not.toHaveAttribute('aria-label');
     const object = screen.getByRole('button', { name: 'Close' });
     expect(object).toHaveAttribute('type', 'reset');
-    // The object's attributes are defaults too: your id replaces its id.
-    expect(object).toHaveAttribute('id', 'part');
+    // The button attributes of the object are defaults too: your name replaces its name.
+    expect(object).toHaveAttribute('name', 'part');
     expect(object).toHaveClass('obj', 'part');
     expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING], [BUTTON_OBJECT_WARNING]]);
   });

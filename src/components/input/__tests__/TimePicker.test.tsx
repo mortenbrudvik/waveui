@@ -2676,6 +2676,40 @@ describe('TimePicker — slotProps', () => {
     expect([...new FormData(form).entries()]).toEqual([['time', '09:30']]);
   });
 
+  it('keeps the text its own: a part’s defaultValue never reaches the controlled input', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(
+        <TimePicker
+          aria-label="Time"
+          defaultValue="09:30"
+          {...BOUNDS}
+          slotProps={{ input: { defaultValue: 'noon' } }}
+        />,
+      );
+      expect(combobox('Time')).toHaveValue('9:30 AM');
+      // No warning of an input both controlled and uncontrolled: the part's default is unset.
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('keeps the surface out of the presence phases: it mounts open, and a part sets no data-presence', async () => {
+    render(
+      <TimePicker
+        aria-label="Time"
+        defaultOpen
+        {...BOUNDS}
+        slotProps={{ surface: { 'data-presence': 'exiting' } }}
+      />,
+    );
+    await act(async () => {});
+    const surface = part(timePickerClassNames.surface)!;
+    expect(surface).toHaveAttribute('data-state', 'open');
+    expect(surface).not.toHaveAttribute('data-presence');
+  });
+
   it('keeps the locked attributes of the error message', async () => {
     render(
       <TimePicker

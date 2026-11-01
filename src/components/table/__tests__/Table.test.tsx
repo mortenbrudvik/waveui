@@ -2069,6 +2069,15 @@ describe('Table parts — slotProps', () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it('keeps the selection controls out of text entry: your contentEditable stays unset', () => {
+    const attempt = { contentEditable: true } as unknown as SelectionParts['control'];
+    render(<Files parts={{ selection: { control: attempt } }} />);
+    expect(openingTags(...partsOf())).toBe(BASE_PINS);
+    for (const element of all(document, tableSelectionCellClassNames.control)) {
+      expect(element).not.toHaveAttribute('contenteditable');
+    }
+  });
+
   it('adds your ids to the control’s aria-labelledby and aria-describedby', () => {
     render(
       <>

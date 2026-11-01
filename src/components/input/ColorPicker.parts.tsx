@@ -309,16 +309,17 @@ export interface ColorPickerHexFieldProps extends React.HTMLAttributes<HTMLEleme
     label?: SlotPart<'span'>;
     /**
      * The hex text `<input>` (stable class `wave-color-picker-hex-field__input`; `controlRef`
-     * reaches it as well). Locked: `type`, `value`, `id`, `maxLength`, `autoComplete`, the
-     * naming and validation attributes (`aria-label`, `aria-invalid`, `aria-errormessage`,
-     * `aria-details`, `aria-required`), `autoFocus`, `tabIndex` and the text-entry attributes the
-     * field routes to it (`inputMode`, `enterKeyHint`, `autoCapitalize`, `autoCorrect`,
-     * `spellCheck`); `name`, `form` and `required`, which it never sets (the picker submits the
-     * color under its own `name`, never the typed text); `hidden` and `aria-hidden` (a focusable
-     * control is never hidden). Your handlers run first: `preventDefault()` in your `onChange`
-     * rejects the edit (the text stays), and in your `onFocus`, `onBlur`, `onKeyDown` or
-     * `onKeyUp` it skips the field's own handler of that event, so in `onBlur` or on Enter the
-     * typed text is neither applied nor flagged.
+     * reaches it as well). Locked: `type`, `value` (and, unset, `defaultValue`: the field controls
+     * the text), `id`, `maxLength`, `autoComplete`, the naming and validation attributes
+     * (`aria-label`, `aria-invalid`, `aria-errormessage`, `aria-details`, `aria-required`),
+     * `autoFocus`, `tabIndex` and the text-entry attributes the field routes to it (`inputMode`,
+     * `enterKeyHint`, `autoCapitalize`, `autoCorrect`, `spellCheck`); `name`, `form` and
+     * `required`, which it never sets (the picker submits the color under its own `name`, never
+     * the typed text); `hidden` and `aria-hidden` (a focusable control is never hidden). Your
+     * handlers run first: `preventDefault()` in your `onChange` rejects the edit (the text
+     * stays), and in your `onFocus`, `onBlur`, `onKeyDown` or `onKeyUp` it skips the field's own
+     * handler of that event, so in `onBlur` or on Enter the typed text is neither applied nor
+     * flagged.
      */
     input?: SlotPart<'input'>;
     /**
@@ -473,6 +474,8 @@ export const ColorPickerHexField = ({
             id,
             type: 'text',
             value: hexText,
+            // Controlled: a part's default value would only make React warn.
+            defaultValue: undefined,
             onChange: handleChange,
             onKeyDown: handleKeyDown,
             onKeyUp,

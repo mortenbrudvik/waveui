@@ -78,9 +78,11 @@ export interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
      * The fill `<div>` inside the track (stable class `wave-progress-bar__bar`), which shows the
      * value: its color follows `color` (or the Field's validation state) and, without `value`,
      * `indeterminateMotion` gives it its motion classes, before yours. Your `style` merges, but
-     * while the bar has a `value` the width that shows it wins. It carries no handler of the
-     * progress bar. Locked, unset: `role`, `tabIndex` (the fill is part of the progress bar, never
-     * a widget of its own) and `hidden` (it shows the value).
+     * while the bar has a `value` the width that shows it wins: your `width`, `minWidth`,
+     * `maxWidth`, `inlineSize`, `minInlineSize` and `maxInlineSize` apply only to the
+     * indeterminate fill. It carries no handler of the progress bar. Locked, unset: `role`,
+     * `tabIndex` (the fill is part of the progress bar, never a widget of its own) and `hidden`
+     * (it shows the value).
      */
     bar?: SlotPart<'div'>;
     /**
@@ -110,6 +112,18 @@ const fieldColors: Partial<Record<ValidationState, ProgressBarColor>> = {
 
 /** What the fill part locks unset: it is part of the progress bar, and it shows the value. */
 const FILL_LOCKS = { role: undefined, tabIndex: undefined, hidden: undefined } as const;
+
+/**
+ * The fill's size keys a part's style loses while the bar has a value: with the width that shows
+ * the value, its limits and their logical forms, which would otherwise draw another width.
+ */
+const VALUE_WIDTH_LOCKS = {
+  minWidth: undefined,
+  maxWidth: undefined,
+  inlineSize: undefined,
+  minInlineSize: undefined,
+  maxInlineSize: undefined,
+} as const;
 
 /** What the label part locks unset besides its id: its text stays the bar's name, and visible. */
 const LABEL_LOCKS = { 'aria-label': undefined, ...HIDDEN_PART_LOCKS } as const;
@@ -302,7 +316,7 @@ export const ProgressBar = ({
         style={
           width === undefined
             ? (fill.style as React.CSSProperties | undefined)
-            : { ...(fill.style as React.CSSProperties | undefined), width }
+            : { ...(fill.style as React.CSSProperties | undefined), ...VALUE_WIDTH_LOCKS, width }
         }
       />
     </div>

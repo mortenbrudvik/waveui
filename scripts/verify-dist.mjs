@@ -1068,6 +1068,7 @@ export const MODULE_ONLY_NAMES = [
   'collapseMotion',
   'collapseStructure',
   'collectTokenStyle',
+  'composeAfterPart',
   'computeCheckStates',
   'computeVirtualLayout',
   'containsValue',

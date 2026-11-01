@@ -3,7 +3,7 @@ import { tableResizeHandleClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getArrowIntent, getDirection } from '../../lib/direction';
-import { mergeSlotProps } from '../../lib/slotProps';
+import { composeAfterPart, mergeSlotProps } from '../../lib/slotProps';
 import type { SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -17,13 +17,14 @@ const ALWAYS = { checkDefaultPrevented: false } as const;
 
 /**
  * What a handle part locks unset, before the handle's own attributes (which follow and win): the
- * hidden state (a focusable widget is never hidden) and the marker of a nested composite, which
- * a grid's navigation reads.
+ * hidden state (a focusable widget is never hidden), `contentEditable` (a grid takes an editable
+ * element for text entry) and the marker of a nested composite, which a grid's navigation reads.
  */
 const HANDLE_PART_LOCKS = {
   hidden: undefined,
   inert: undefined,
   'aria-hidden': undefined,
+  contentEditable: undefined,
   'data-roving-container': undefined,
 } as const;
 
@@ -332,12 +333,12 @@ const TableResizeHandle = ({
         }),
         // After the part's handler whatever it does: the end of a drag, the forgotten key, and
         // the host's focus work (a DataGrid header cell measures its column).
-        onPointerUp: composeEventHandlers(part.onPointerUp, releasePointer, ALWAYS),
-        onPointerCancel: composeEventHandlers(part.onPointerCancel, cancelPointer, ALWAYS),
-        onLostPointerCapture: composeEventHandlers(part.onLostPointerCapture, losePointer, ALWAYS),
-        onKeyUp: composeEventHandlers(part.onKeyUp, releaseKey, ALWAYS),
-        onBlur: composeEventHandlers(part.onBlur, blur, ALWAYS),
-        onFocus: composeEventHandlers(part.onFocus, divProps.onFocus, ALWAYS),
+        onPointerUp: composeAfterPart(part.onPointerUp, releasePointer),
+        onPointerCancel: composeAfterPart(part.onPointerCancel, cancelPointer),
+        onLostPointerCapture: composeAfterPart(part.onLostPointerCapture, losePointer),
+        onKeyUp: composeAfterPart(part.onKeyUp, releaseKey),
+        onBlur: composeAfterPart(part.onBlur, blur),
+        onFocus: composeAfterPart(part.onFocus, divProps.onFocus),
       })}
       // After the part: the host merges the part's ref into this one.
       ref={ref}

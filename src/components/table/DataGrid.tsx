@@ -607,9 +607,9 @@ export interface DataGridHeaderProps extends React.HTMLAttributes<HTMLTableSecti
      * (`aria-label`, and `aria-labelledby` and `aria-describedby`, to which your ids are added)
      * and its change handler (your `onChange` runs first, and `preventDefault()` in it keeps the
      * selection as it is), and unset `role`, `tabIndex` (the grid's navigation writes it),
-     * `name`, `form`, `required`, `hidden`, `inert`, `aria-hidden` and the markers the grid's
-     * navigation reads (`data-roving-container`, `data-grid-auxiliary`). A disabled checkbox
-     * calls no click handler, yours included.
+     * `name`, `form`, `required`, `contentEditable`, `hidden`, `inert`, `aria-hidden` and the
+     * markers the grid's navigation reads (`data-roving-container`, `data-grid-auxiliary`). A
+     * disabled checkbox calls no click handler, yours included.
      */
     selectAllCheckbox?: SlotPart<'input'>;
   };
@@ -670,12 +670,12 @@ export interface DataGridHeaderCellProps extends React.ThHTMLAttributes<HTMLTabl
      * it), the name (`aria-label`, from `labels.resizeColumn`; your ids are added to
      * `aria-labelledby` and `aria-describedby`), `data-dragging`, `data-grid-auxiliary` (the
      * marker that keeps it from being its cell's target and lets F2 reach it), unset `hidden`,
-     * `inert`, `aria-hidden` and `data-roving-container`, and its pointer, key and double-click
-     * handling: your `onPointerDown`, `onPointerMove`, `onKeyDown`, `onKeyDownCapture` and
-     * `onDoubleClick` run first, and `preventDefault()` in them skips the drag, the move, the key
-     * and the reset. The end of a drag (`onPointerUp`, `onPointerCancel`,
-     * `onLostPointerCapture`), the release of Enter or Space (`onKeyUp`), the blur and the
-     * measure of the column on focus run after yours whatever they do.
+     * `inert`, `aria-hidden`, `contentEditable` and `data-roving-container`, and its pointer,
+     * key and double-click handling: your `onPointerDown`, `onPointerMove`, `onKeyDown`,
+     * `onKeyDownCapture` and `onDoubleClick` run first, and `preventDefault()` in them skips the
+     * drag, the move, the key and the reset. The end of a drag (`onPointerUp`,
+     * `onPointerCancel`, `onLostPointerCapture`), the release of Enter or Space (`onKeyUp`), the
+     * blur and the measure of the column on focus run after yours whatever they do.
      */
     resizeHandle?: SlotPart<'div'>;
   };
@@ -753,10 +753,10 @@ export interface DataGridRowProps extends React.HTMLAttributes<HTMLTableRowEleme
      * on a checkbox), the name (`aria-label`, and `aria-labelledby` and `aria-describedby`, to
      * which your ids are added) and its change handler (your `onChange` runs first, and
      * `preventDefault()` in it keeps the row's selection as it is), and unset `role`, `tabIndex`
-     * (the grid's navigation writes it), `required`, `hidden`, `inert`, `aria-hidden` and the
-     * markers the grid's navigation reads (`data-roving-container`, `data-grid-auxiliary`). A
-     * click on the control never also selects the row through `selectOnRowClick`, and a disabled
-     * control calls no click handler, yours included.
+     * (the grid's navigation writes it), `required`, `contentEditable`, `hidden`, `inert`,
+     * `aria-hidden` and the markers the grid's navigation reads (`data-roving-container`,
+     * `data-grid-auxiliary`). A click on the control never also selects the row through
+     * `selectOnRowClick`, and a disabled control calls no click handler, yours included.
      */
     selectionControl?: SlotPart<'input'>;
   };

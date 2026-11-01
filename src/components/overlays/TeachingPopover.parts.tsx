@@ -22,7 +22,12 @@ import {
   slotRendersContent,
   type Slot,
 } from '../../lib/slot';
-import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  BUTTON_PART_LOCKS,
+  lockPositionStyle,
+  mergeSlotProps,
+  type SlotPart,
+} from '../../lib/slotProps';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { popupMotion } from '../../lib/motion';
 import { focusRing, forcedColors } from '../../lib/styles';
@@ -152,23 +157,6 @@ function resolveTarget(target: TeachingPopoverTarget | undefined): HTMLElement |
   if (!target || isVirtualTarget(target)) return null;
   return isRefObject(target) ? target.current : target;
 }
-
-/**
- * What a button part locks before the button's own values: a button `type`, and unset the
- * attributes that would change whether the button works or can be reached (a disabled state, a
- * tab stop, the hidden state), so a part can set none of them. Shared by every button part.
- */
-const BUTTON_PART_LOCKS = {
-  type: 'button',
-  disabled: undefined,
-  tabIndex: undefined,
-  hidden: undefined,
-  inert: undefined,
-  'aria-hidden': undefined,
-  'aria-disabled': undefined,
-  'data-disabled': undefined,
-  'data-disabled-focusable': undefined,
-} as const;
 
 /** The locks of a footer button, a Wave Button: also its `disabledFocusable` prop, unset. */
 const STEP_BUTTON_LOCKS = { ...BUTTON_PART_LOCKS, disabledFocusable: undefined } as const;
@@ -1197,10 +1185,10 @@ export const TeachingPopoverCarouselNav = ({
             ? cn('w-4 bg-primary', forcedColors.fill)
             : 'w-1.5 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
         );
-        // A click whose default a part prevented (the indicator's, inside the button) shows no
-        // other step.
+        // A click whose default the indicator part prevented (inside the button) shows no other
+        // step; without that part every click shows it, whoever prevented its default.
         const select = (event: React.MouseEvent) => {
-          if (!event.defaultPrevented) goToStep(i);
+          if (!(slotProps?.indicator && event.defaultPrevented)) goToStep(i);
         };
         // The parts are merged only when given, so a step without them builds no lock object.
         return (

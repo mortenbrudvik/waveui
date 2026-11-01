@@ -1943,6 +1943,27 @@ describe('SpinButton — slotProps', () => {
     expect(input).toHaveAttribute('placeholder', 'From the SpinButton');
   });
 
+  it('keeps the text its own: a part’s defaultValue never reaches the controlled input', async () => {
+    const user = userEvent.setup();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          defaultValue={2}
+          slotProps={{ input: { defaultValue: '9' } }}
+        />,
+      );
+      expect(spin()).toHaveValue('2');
+      await user.click(screen.getByRole('button', { name: 'Increment' }));
+      expect(spin()).toHaveValue('3');
+      // No warning of an input both controlled and uncontrolled: the part's default is unset.
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('adds the attributes the SpinButton does not set, but no name, hidden or aria-hidden', () => {
     render(
       <form aria-label="Order">

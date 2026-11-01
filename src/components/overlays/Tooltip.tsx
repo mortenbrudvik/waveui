@@ -496,29 +496,44 @@ export const Tooltip = ({
   }
   const child = renderTrigger(target, triggerProps, { componentName: 'Tooltip' });
   useRelationshipTarget(wrapperRef, tooltipId, relationship, childIsFallback);
-  // The presence attributes are present only in some phases: the keys they may add are locked
-  // unset before them.
-  const surface = mergeSlotProps(slotProps?.content, {
-    className: cn(
-      tooltipClassNames.content,
-      surfaceClasses,
-      appearanceClasses[appearance],
-      motionClassName,
-    ),
-    locked: {
-      role: undefined,
-      id: undefined,
-      tabIndex: undefined,
-      hidden: undefined,
-      inert: undefined,
-      'aria-hidden': 'true',
-      'data-wave-tooltip-surface': '',
-      'data-state': visible ? 'open' : 'closed',
-      ...presenceProps,
-      'data-side': floatingProps['data-side'],
-      'data-align': floatingProps['data-align'],
-    },
-  });
+
+  // The surface's props are merged only while it is mounted. The presence attributes are present
+  // only in some phases: the keys they may add are locked unset before them.
+  let surface: React.ReactNode = null;
+  if (isMounted) {
+    const surfaceProps = mergeSlotProps(slotProps?.content, {
+      className: cn(
+        tooltipClassNames.content,
+        surfaceClasses,
+        appearanceClasses[appearance],
+        motionClassName,
+      ),
+      locked: {
+        role: undefined,
+        id: undefined,
+        tabIndex: undefined,
+        hidden: undefined,
+        inert: undefined,
+        'aria-hidden': 'true',
+        'data-wave-tooltip-surface': '',
+        'data-state': visible ? 'open' : 'closed',
+        ...presenceProps,
+        'data-side': floatingProps['data-side'],
+        'data-align': floatingProps['data-align'],
+      },
+    });
+    surface = (
+      <Portal layer="tooltip">
+        <span
+          {...surfaceProps}
+          ref={surfaceElementRef}
+          style={lockPositionStyle(surfaceProps.style, floatingProps.style)}
+        >
+          {content}
+        </span>
+      </Portal>
+    );
+  }
 
   return (
     <span
@@ -538,17 +553,7 @@ export const Tooltip = ({
       <span id={tooltipId} role="tooltip" hidden>
         {content}
       </span>
-      {isMounted && (
-        <Portal layer="tooltip">
-          <span
-            {...surface}
-            ref={surfaceElementRef}
-            style={lockPositionStyle(surface.style, floatingProps.style)}
-          >
-            {content}
-          </span>
-        </Portal>
-      )}
+      {surface}
     </span>
   );
 };

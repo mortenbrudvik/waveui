@@ -4,7 +4,13 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusableDisabledProps } from '../../lib/aria';
 import { getArrowIntent, getDirection } from '../../lib/direction';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  BUTTON_PART_LOCKS,
+  composeAfterPart,
+  HIDDEN_PART_LOCKS,
+  mergeSlotProps,
+  type SlotPart,
+} from '../../lib/slotProps';
 import { disabledStyles, focusRing, forcedColors } from '../../lib/styles';
 import { getWeekNumber } from '../../lib/date';
 import type { CalendarLabels } from './Calendar';
@@ -28,38 +34,11 @@ const DAY_CLASSES =
 const HEADER_CELL_CLASSES = 'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground';
 
 /**
- * Internal: what a part that holds focusable buttons (the header, the heading, the grid, the
- * footer, DatePicker's dialog) locks unset, so a part cannot hide them or take them out of reach.
- */
-export const HIDDEN_PART_LOCKS = {
-  hidden: undefined,
-  inert: undefined,
-  'aria-hidden': undefined,
-} as const;
-
-/**
- * Internal: what every button part of a calendar and of DatePicker locks, set or not: the type,
- * the tab stop, the native and the focusable disabled state, and the hidden state (a focusable
- * button is never hidden). The button's own attributes are spread after it.
- */
-export const BUTTON_PART_LOCKS = {
-  type: 'button',
-  tabIndex: undefined,
-  disabled: undefined,
-  'aria-disabled': undefined,
-  'data-disabled': undefined,
-  'data-disabled-focusable': undefined,
-  ...HIDDEN_PART_LOCKS,
-} as const;
-
-/**
  * The focus handler of a roving cell: `focus` (the tab stop follows the focused cell) runs after
  * the part's `onFocus`, whatever that does, since it only mirrors where focus is.
  */
 const followFocus = (part: SlotPart<'button'> | undefined, focus: () => void) =>
-  part?.onFocus
-    ? composeEventHandlers(part.onFocus, focus, { checkDefaultPrevented: false })
-    : focus;
+  composeAfterPart(part?.onFocus, focus);
 
 /**
  * Internal: the consumer props of the day view's parts (the `slotProps` of the component that

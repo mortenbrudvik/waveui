@@ -7,7 +7,12 @@ import { warnOnce } from '../../lib/dev';
 import { getArrowIntent } from '../../lib/direction';
 import { carouselFadeMotion, carouselSlideMotion } from '../../lib/motion';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  composeAfterPart,
+  lockPositionStyle,
+  mergeSlotProps,
+  type SlotPart,
+} from '../../lib/slotProps';
 import type { MotionPreference, Slot } from '../../lib/types';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { focusRing, forcedColors } from '../../lib/styles';
@@ -415,7 +420,8 @@ type PartHandler = (event: { defaultPrevented: boolean }) => void;
  * A part's merged props with the carousel's own work kept: the keys of `style` win over the
  * part's (the track's position, a slide's width and timing), and each handler of `always` runs
  * after the part's handler of its key, whatever that does (bookkeeping that follows the pointer or
- * focus, which a `preventDefault()` must not leave stale).
+ * focus, which a `preventDefault()` must not leave stale; a part value that is no function is
+ * skipped).
  */
 function keepOwnWork(
   props: Record<string, unknown>,
@@ -425,10 +431,9 @@ function keepOwnWork(
 ): Record<string, unknown> {
   if (style) props.style = lockPositionStyle(props.style, style);
   for (const key of Object.keys(always)) {
-    props[key] = composeEventHandlers(
-      (part as Record<string, PartHandler | undefined>)[key],
+    props[key] = composeAfterPart(
+      (part as Record<string, unknown>)[key],
       always[key] as PartHandler | undefined,
-      { checkDefaultPrevented: false },
     );
   }
   return props;

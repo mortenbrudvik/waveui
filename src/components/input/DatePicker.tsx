@@ -4,7 +4,13 @@ import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { datePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  BUTTON_PART_LOCKS,
+  HIDDEN_PART_LOCKS,
+  lockPositionStyle,
+  mergeSlotProps,
+  type SlotPart,
+} from '../../lib/slotProps';
 import type {
   CoreSize,
   DayOfWeek,
@@ -39,7 +45,6 @@ import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
 import { CalendarView, type CalendarLabels, type CalendarViewPartClassNames } from './Calendar';
-import { BUTTON_PART_LOCKS, HIDDEN_PART_LOCKS } from './Calendar.views';
 import {
   formatDate as formatLocaleDate,
   formatISODate,
@@ -330,16 +335,17 @@ export interface DatePickerProps extends Omit<
   slotProps?: {
     /**
      * The text `<input>`, the focusable control (stable class `wave-date-picker__input`;
-     * `controlRef` reaches it as well). Locked: `type`, `value`, `id`, the naming and Field
-     * wiring (`aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`,
-     * `aria-details`), `disabled`, `readOnly`, `placeholder`, every text input prop routed to it
-     * (`autoComplete`, `inputMode`, `tabIndex`, …), `name`, `form` and `required` (the value is
-     * submitted by the DatePicker's hidden input), `hidden` and `aria-hidden` (a focusable
-     * control is never hidden). Your handlers run before the DatePicker's, and
-     * `preventDefault()` in yours skips the DatePicker's handling of the event, its own `on…`
-     * prop included (`onFocus`, `onBlur`, `onKeyDown`, `onKeyUp`): in your `onChange` it
-     * ignores the typed text, in your `onKeyDown` it skips the picker's keys (Enter,
-     * Alt+ArrowDown), in your `onBlur` it keeps the typed text uncommitted.
+     * `controlRef` reaches it as well). Locked: `type`, `value` (and, unset, `defaultValue`: the
+     * DatePicker controls the text), `id`, the naming and Field wiring (`aria-label`,
+     * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `disabled`,
+     * `readOnly`, `placeholder`, every text input prop routed to it (`autoComplete`,
+     * `inputMode`, `tabIndex`, …), `name`, `form` and `required` (the value is submitted by the
+     * DatePicker's hidden input), `hidden` and `aria-hidden` (a focusable control is never
+     * hidden). Your handlers run before the DatePicker's, and `preventDefault()` in yours skips
+     * the DatePicker's handling of the event, its own `on…` prop included (`onFocus`, `onBlur`,
+     * `onKeyDown`, `onKeyUp`): in your `onChange` it ignores the typed text, in your `onKeyDown`
+     * it skips the picker's keys (Enter, Alt+ArrowDown), in your `onBlur` it keeps the typed
+     * text uncommitted.
      */
     input?: SlotPart<'input'>;
     /**
@@ -1019,6 +1025,8 @@ export const DatePicker = (props: DatePickerProps) => {
               'aria-errormessage': ariaErrorMessage,
               'aria-details': ariaDetails,
               value: inputText,
+              // Controlled: a part's default value would only make React warn.
+              defaultValue: undefined,
               onChange: handleInputChange,
               onFocus,
               onBlur: handleInputBlur,

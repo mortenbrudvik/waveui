@@ -337,15 +337,15 @@ export interface TimePickerProps extends Omit<
     /**
      * The `<input role="combobox">`, the focusable control (stable class
      * `wave-time-picker__input`; `controlRef` reaches it as well). Locked: `type`, `role`,
-     * `value`, `id`, the naming, Field and listbox wiring (`aria-label`, `aria-invalid`,
-     * `aria-required`, `aria-expanded`, `aria-controls`, `aria-activedescendant`,
-     * `aria-haspopup`, `aria-autocomplete`, `aria-errormessage`, `aria-details`), `disabled`,
-     * `readOnly`, `placeholder`, every text input prop routed to it (`autoComplete`,
-     * `maxLength`, `tabIndex`, …), `name`, `form` and `required` (the value is submitted by the
-     * TimePicker's hidden input), `hidden` and `aria-hidden` (a focusable control is never
-     * hidden). Your handlers run before the TimePicker's: `preventDefault()` in your `onChange`
-     * ignores the typed text, in your `onKeyDown` skips the picker's keys, in your `onBlur`
-     * keeps the typed text uncommitted.
+     * `value` (and, unset, `defaultValue`: the TimePicker controls the text), `id`, the naming,
+     * Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`, `aria-expanded`,
+     * `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`,
+     * `aria-errormessage`, `aria-details`), `disabled`, `readOnly`, `placeholder`, every text
+     * input prop routed to it (`autoComplete`, `maxLength`, `tabIndex`, …), `name`, `form` and
+     * `required` (the value is submitted by the TimePicker's hidden input), `hidden` and
+     * `aria-hidden` (a focusable control is never hidden). Your handlers run before the
+     * TimePicker's: `preventDefault()` in your `onChange` ignores the typed text, in your
+     * `onKeyDown` skips the picker's keys, in your `onBlur` keeps the typed text uncommitted.
      */
     input?: SlotPart<'input'>;
     /**
@@ -393,9 +393,10 @@ export interface TimePickerProps extends Omit<
     checkIcon?: SlotPart<'span'>;
     /**
      * The popup `<div>` around the list or the status row, rendered in a portal while the list
-     * is open (stable class `wave-time-picker__surface`). Locked: `data-state`, `data-side`,
-     * `data-align`, `role`, `id`, `hidden`, `inert` and `aria-hidden`; your `style` merges, but
-     * the position, the size limits and the visibility the positioning sets win.
+     * is open (stable class `wave-time-picker__surface`). Locked: `data-state`, `data-presence`
+     * (unset: it mounts open), `data-side`, `data-align`, `role`, `id`, `hidden`, `inert` and
+     * `aria-hidden`; your `style` merges, but the position, the size limits and the visibility
+     * the positioning sets win.
      */
     surface?: SlotPart<'div'>;
     /**
@@ -958,6 +959,8 @@ export const TimePicker = (props: TimePickerProps) => {
     locked: {
       ...placement,
       'data-state': 'open',
+      // No presence phase: the list mounts open (a part cannot pretend otherwise).
+      'data-presence': undefined,
       role: undefined,
       id: undefined,
       hidden: undefined,
@@ -1009,6 +1012,8 @@ export const TimePicker = (props: TimePickerProps) => {
                 'aria-errormessage': ariaErrorMessage,
                 'aria-details': ariaDetails,
                 value: draft ?? displayLabel,
+                // Controlled: a part's default value would only make React warn.
+                defaultValue: undefined,
                 onChange: handleInputChange,
                 onClick: handleInputClick,
                 onFocus,

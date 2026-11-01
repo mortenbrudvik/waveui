@@ -133,7 +133,7 @@ export interface StepProps extends React.HTMLAttributes<HTMLDivElement> {
     button?: SlotPart<'div'>;
     /**
      * The circle with the step's number, check mark, error mark or `icon` (stable class
-     * `wave-stepper-step__indicator`). Locked: its `aria-hidden`, and no tab index (it is
+     * `wave-stepper-step__indicator`). Locked: its `aria-hidden`, and no role or tab index (it is
      * decorative).
      */
     indicator?: SlotPart<'span'>;
@@ -154,7 +154,7 @@ export interface StepProps extends React.HTMLAttributes<HTMLDivElement> {
     /**
      * The line to the next step, rendered on every step but the last (stable class
      * `wave-stepper-step__connector`). Locked: its `aria-hidden`, its marker
-     * `data-wave-stepper-connector`, and no tab index.
+     * `data-wave-stepper-connector`, and no role or tab index.
      */
     connector?: SlotPart<'div'>;
   };
@@ -354,8 +354,15 @@ const TEXT_PART_LOCKS = {
   'aria-hidden': undefined,
 } as const;
 
-/** What the indicator and the connector lock: hidden from assistive technology, no tab stop. */
-const DECORATIVE_PART_LOCKS = { 'aria-hidden': 'true', tabIndex: undefined } as const;
+/**
+ * What the indicator and the connector lock: hidden from assistive technology, and no role or tab
+ * stop.
+ */
+const DECORATIVE_PART_LOCKS = {
+  'aria-hidden': 'true',
+  role: undefined,
+  tabIndex: undefined,
+} as const;
 
 /**
  * One step of a {@link Stepper}: a `role="button"` step (indicator, label, optional description)

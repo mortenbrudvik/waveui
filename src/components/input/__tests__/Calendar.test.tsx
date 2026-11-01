@@ -2585,6 +2585,15 @@ describe('Calendar — slotProps', () => {
     expect(document.activeElement).toHaveAccessibleName('2028');
   });
 
+  it('moves the tab stop to a focused day when an untyped part gives no function as its onFocus', () => {
+    // From JavaScript: a value that is no handler is skipped, as the merge skips it.
+    const day = { onFocus: 'not a handler' } as unknown as CalendarSlotProps['day'];
+    render(<Calendar {...FULL} slotProps={{ day }} />);
+    expect(tabStops()).toEqual([dayButton('Sunday, June 15, 2025')]);
+    act(() => dayButton('Wednesday, June 18, 2025').focus());
+    expect(tabStops()).toEqual([dayButton('Wednesday, June 18, 2025')]);
+  });
+
   it('runs your heading button onClick before the view changes; preventDefault() skips it', async () => {
     const user = userEvent.setup();
     render(

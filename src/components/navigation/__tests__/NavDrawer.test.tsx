@@ -1519,6 +1519,19 @@ describe('NavDrawer, NavDrawer.Body and NavDrawer.Footer — slotProps', () => {
     expect(nav()).toHaveAttribute('aria-describedby', 'own-note note');
   });
 
+  it('names the landmark by your aria-labelledby when the drawer has no name of its own: yours wins over the default aria-label, which stays locked, since aria-labelledby comes first in the accessible name', () => {
+    render(
+      <>
+        <h2 id="menu-heading">Main menu</h2>
+        <Open type="inline" slotProps={{ nav: { 'aria-labelledby': 'menu-heading' } }} />
+      </>,
+    );
+    expect(nav()).toHaveAttribute('aria-label', 'Navigation');
+    expect(nav()).toHaveAttribute('aria-labelledby', 'menu-heading');
+    expect(navigation('Main menu')).toBe(nav());
+    expect(screen.queryByRole('navigation', { name: 'Navigation' })).toBeNull();
+  });
+
   it('keeps the landmark and the lists visible and reachable: hidden, inert and aria-hidden stay unset', () => {
     const locked = { hidden: true, inert: true, 'aria-hidden': true } as const;
     render(

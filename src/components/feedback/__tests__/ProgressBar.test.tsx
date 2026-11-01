@@ -889,6 +889,26 @@ describe('ProgressBar — slotProps', () => {
     );
   });
 
+  it('draws the value’s width over your size keys while the bar has a value, and yours without one', () => {
+    const sizes = {
+      inlineSize: '90%',
+      minInlineSize: '80%',
+      maxInlineSize: '10%',
+      minWidth: '70%',
+      maxWidth: '5%',
+    };
+    const keys = Object.keys(sizes) as Array<keyof typeof sizes>;
+    const slotProps: ProgressSlotProps = { bar: { style: { ...sizes, opacity: 0.5 } } };
+    const { rerender } = render(<ProgressBar value={30} label="Upload" slotProps={slotProps} />);
+    const fill = () => fillOf(screen.getByRole('progressbar'));
+    expect(fill().style.width).toBe('30%');
+    expect(fill().style.opacity).toBe('0.5');
+    for (const key of keys) expect(fill().style[key], key).toBe('');
+    rerender(<ProgressBar label="Upload" slotProps={slotProps} />);
+    // The indeterminate fill shows no value: every size of yours applies there.
+    for (const key of keys) expect(fill().style[key], key).toBe(sizes[key]);
+  });
+
   it('follows the value with your style, and keeps the Field look and the motion classes next to yours', () => {
     const slotProps: ProgressSlotProps = {
       bar: { className: 'my-bar', style: { width: '90%', opacity: 0.5 } },

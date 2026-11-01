@@ -248,13 +248,13 @@ export interface TableSelectionCellProps extends Omit<
      * `type` and the checked state (with `defaultChecked`, `defaultValue` and `aria-checked`
      * unset: the control is controlled and natively checked), every prop the cell routes to it
      * (`id`, `name`, `value`, `form`, `disabled`, `required`, `autoFocus`, `tabIndex`, the
-     * naming and other ARIA attributes, the focus and key handlers), and unset `role`, `hidden`,
-     * `inert`, `aria-hidden` and the markers a grid's keyboard navigation reads
-     * (`data-roving-container`, `data-grid-auxiliary`). Your handlers run before the cell's:
-     * `preventDefault()` in your `onChange` cancels the change, its own `onChange` and
-     * `onCheckedChange` included, and in your `onFocus`, `onBlur`, `onKeyDown` or `onKeyUp` it
-     * skips the cell's prop of that event. A disabled control is natively disabled and calls
-     * no click handler, yours included.
+     * naming and other ARIA attributes, the focus and key handlers), and unset `role`,
+     * `contentEditable`, `hidden`, `inert`, `aria-hidden` and the markers a grid's keyboard
+     * navigation reads (`data-roving-container`, `data-grid-auxiliary`). Your handlers run
+     * before the cell's: `preventDefault()` in your `onChange` cancels the change, its own
+     * `onChange` and `onCheckedChange` included, and in your `onFocus`, `onBlur`, `onKeyDown` or
+     * `onKeyUp` it skips the cell's prop of that event. A disabled control is natively disabled
+     * and calls no click handler, yours included.
      */
     control?: SlotPart<'input'>;
   };

@@ -762,6 +762,18 @@ describe('ColorPicker.HexField — slotProps', () => {
     expect([...new FormData(form).entries()]).toEqual([['accent', '#0f6cbd']]);
   });
 
+  it('keeps the text its own: a part’s defaultValue never reaches the controlled input', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(inPicker(<ColorPicker.HexField slotProps={{ input: { defaultValue: '#ffffff' } }} />));
+      expect(hexInput()).toHaveValue('#0f6cbd');
+      // No warning of an input both controlled and uncontrolled: the part's default is unset.
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('keeps the error message id that the input names', () => {
     render(inPicker(<ColorPicker.HexField slotProps={{ errorMessage: { id: 'mine' } }} />));
     fireEvent.change(hexInput(), { target: { value: 'zz' } });

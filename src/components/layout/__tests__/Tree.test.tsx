@@ -1904,6 +1904,35 @@ describe('Tree.Item — slotProps', () => {
     expect(order).toEqual(['focus', 'blur', 'focus', 'blur']);
   });
 
+  it('runs the actions’ focus bookkeeping when an untyped part gives no function as its handlers', () => {
+    // From JavaScript: a value that is no handler is skipped, as the merge skips it.
+    const untyped = { onFocus: 'not a handler', onBlur: 'not a handler' };
+    render(
+      <Tree aria-label="Files">
+        <Tree.Item
+          value="docs"
+          actions={
+            <>
+              <button type="button">Rename</button>
+              <button type="button">Open</button>
+            </>
+          }
+          slotProps={{
+            actions: untyped as unknown as ItemSlotProps['actions'],
+          }}
+        >
+          Documents
+        </Tree.Item>
+      </Tree>,
+    );
+    const button = (name: string) => screen.getByRole('button', { name });
+    act(() => button('Open').focus());
+    expect(button('Open')).toHaveAttribute('tabindex', '0');
+    expect(button('Rename')).toHaveAttribute('tabindex', '-1');
+    act(() => button('Rename').focus());
+    expect(button('Rename')).toHaveAttribute('tabindex', '0');
+  });
+
   it('runs a group part’s keys after the nested item’s and before the tree’s: preventDefault() skips the tree’s', async () => {
     const user = userEvent.setup();
     function Keys({ prevent }: { prevent: boolean }) {

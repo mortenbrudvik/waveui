@@ -625,6 +625,7 @@ describe('FlatTree virtualWindow — slotProps', () => {
       />,
     );
     expect(mountedIndexes()).toEqual(range(0, FIRST_WINDOW));
+    expect(items().length).toBeLessThanOrEqual(40);
     expect(order()).toEqual([...range(0, FIRST_WINDOW), 'spacer']);
     for (const el of items()) {
       expect(partOf(el, 'row')).toHaveClass('my-row');
@@ -636,6 +637,7 @@ describe('FlatTree virtualWindow — slotProps', () => {
     // between the spacers.
     await scrollTo(2000 * ITEM);
     const mounted = mountedIndexes();
+    expect(mounted.length).toBeLessThanOrEqual(40);
     expect(order()).toEqual([0, 'spacer', ...mounted.slice(1), 'spacer']);
     expect(document.querySelectorAll('.my-row')).toHaveLength(mounted.length);
     for (const el of items()) expect(partOf(el, 'row')).toHaveClass('my-row');

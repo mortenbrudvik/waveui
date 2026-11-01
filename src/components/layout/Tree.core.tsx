@@ -11,7 +11,12 @@ import { isHiddenInput } from '../../lib/focus';
 import { CheckIcon, ChevronRightIcon, SubtractIcon } from '../../lib/icons';
 import type { MotionSlot, SelectionMode } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
-import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  composeAfterPart,
+  HIDDEN_PART_LOCKS,
+  mergeSlotProps,
+  type SlotPart,
+} from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import { useCollapsePresence } from '../../hooks/useCollapsePresence';
 import { useControllable } from '../../hooks/useControllable';
@@ -805,16 +810,8 @@ const TreeItemActions = ({
           },
         }))}
       // Bookkeeping that follows focus whatever a part's handlers do: after them, never skipped.
-      onFocus={
-        part?.onFocus
-          ? composeEventHandlers(part.onFocus, handleToolbarFocus, { checkDefaultPrevented: false })
-          : handleToolbarFocus
-      }
-      onBlur={
-        part?.onBlur
-          ? composeEventHandlers(part.onBlur, handleToolbarBlur, { checkDefaultPrevented: false })
-          : handleToolbarBlur
-      }
+      onFocus={composeAfterPart(part?.onFocus, handleToolbarFocus)}
+      onBlur={composeAfterPart(part?.onBlur, handleToolbarBlur)}
       ref={toolbarRef}
     >
       {children}

@@ -375,16 +375,16 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
   slotProps?: {
     /**
      * The `<input role="combobox">`, the focusable control (stable class `wave-combobox__input`;
-     * `controlRef` reaches it as well). Locked: `type`, `role`, `value`, `id`, the naming, Field
-     * and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`, `aria-expanded`,
-     * `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`,
-     * `aria-errormessage`, `aria-details`), `disabled`, `readOnly`, `placeholder`, every text
-     * input prop routed to it (`autoComplete`, `maxLength`, `tabIndex`, …), `name`, `form` and
-     * `required` (the value is submitted by the Combobox's hidden input), `hidden` and
-     * `aria-hidden` (a focusable control is never hidden). Your handlers run before the
-     * Combobox's: `preventDefault()` in your `onChange` ignores the typed text, in your
-     * `onKeyDown` skips the listbox keys; the typed text is still dropped on blur whatever your
-     * `onBlur` does.
+     * `controlRef` reaches it as well). Locked: `type`, `role`, `value` (and, unset,
+     * `defaultValue`: the Combobox controls the text), `id`, the naming, Field and listbox wiring
+     * (`aria-label`, `aria-invalid`, `aria-required`, `aria-expanded`, `aria-controls`,
+     * `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`, `aria-errormessage`,
+     * `aria-details`), `disabled`, `readOnly`, `placeholder`, every text input prop routed to it
+     * (`autoComplete`, `maxLength`, `tabIndex`, …), `name`, `form` and `required` (the value is
+     * submitted by the Combobox's hidden input), `hidden` and `aria-hidden` (a focusable control
+     * is never hidden). Your handlers run before the Combobox's: `preventDefault()` in your
+     * `onChange` ignores the typed text, in your `onKeyDown` skips the listbox keys; the typed
+     * text is still dropped on blur whatever your `onBlur` does.
      */
     input?: SlotPart<'input'>;
     /**
@@ -1033,6 +1033,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       autoFocus,
       tabIndex,
       value: inputText,
+      // Controlled: a part's default value would only make React warn.
+      defaultValue: undefined,
       onChange: handleChange,
       onClick: () => {
         if (!open && interactive) setOpen(true);

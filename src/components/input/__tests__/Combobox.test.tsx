@@ -4382,6 +4382,26 @@ describe('Combobox — slotProps', () => {
     expect([...new FormData(form).entries()]).toEqual([['fruit', 'a']]);
   });
 
+  it('keeps the text its own: a part’s defaultValue never reaches the controlled input', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(
+        <Combobox
+          aria-label="Fruit"
+          defaultValue="a"
+          slotProps={{ input: { defaultValue: 'Pear' } }}
+        >
+          {TWO}
+        </Combobox>,
+      );
+      expect(screen.getByRole('combobox', { name: 'Fruit' })).toHaveValue('Apple');
+      // No warning of an input both controlled and uncontrolled: the part's default is unset.
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('keeps the locked attributes of the listbox and the surface; the position wins your style', async () => {
     render(
       <>

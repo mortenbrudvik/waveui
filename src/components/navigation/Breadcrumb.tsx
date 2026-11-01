@@ -101,7 +101,8 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
      * With `overflow="auto"` the Overflow props the trail sets are locked too (the overflow
      * direction, the button and where it stands, the axis, no hidden items reserved and none
      * kept visible) and so are its `data-orientation`, `data-overflow-direction` and
-     * `data-button-position`. An attribute only an `<ol>` has does nothing on the `<div>`.
+     * `data-button-position`; an `onOverflowChange` of yours is dropped (the trail decides what
+     * overflows). An attribute only an `<ol>` has does nothing on the `<div>`.
      */
     list?: Omit<SlotPart<'ol'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
     /**
@@ -365,6 +366,12 @@ const OVERFLOW_BUTTON_LOCKS = {
   inert: undefined,
   'aria-hidden': undefined,
 } as const;
+
+/**
+ * The handlers the list part of `overflow="auto"` does not pass to its Overflow: the trail decides
+ * what overflows, and reports nothing of it.
+ */
+const BLOCK_OVERFLOW_CHANGE = ['onOverflowChange'] as const;
 
 type BreadcrumbEntry = ReturnType<typeof flattenChildren>[number];
 
@@ -780,6 +787,7 @@ const BreadcrumbRoot = ({
               'data-overflow-direction': 'start',
               'data-button-position': 'before-hidden',
             },
+            blockHandlers: BLOCK_OVERFLOW_CHANGE,
           }))}
       >
         {entries.map(({ key, node }, index) => (

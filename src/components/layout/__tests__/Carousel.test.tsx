@@ -3671,6 +3671,19 @@ describe('Carousel — slotProps of the dragged track', () => {
     expect(onValueChange).toHaveBeenCalledTimes(1);
   });
 
+  it('ends a drag when an untyped part gives no function as its pointer up handler', () => {
+    // From JavaScript: a value that is no handler is skipped, as the merge skips it.
+    const { el, onValueChange } = renderDraggable({
+      onPointerUp: 'not a handler',
+    } as unknown as NonNullable<CarouselProps['slotProps']>['track']);
+    press(el, 300);
+    move(el, 150);
+    expect(el).toHaveAttribute('data-dragging');
+    release(el, 150);
+    expect(el).not.toHaveAttribute('data-dragging');
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
   it('swallows the click that ends a drag whatever your click capture does', () => {
     const capture = vi.fn((event: React.MouseEvent) => event.preventDefault());
     const { el, onSlideClick } = renderDraggable({ onClickCapture: capture });

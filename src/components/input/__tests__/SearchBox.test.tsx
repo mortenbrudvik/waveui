@@ -2097,6 +2097,28 @@ describe('SearchBox — slotProps', () => {
     expect(button).not.toHaveAttribute('aria-hidden');
   });
 
+  it('keeps the text its own: a part’s defaultValue never reaches the controlled input', async () => {
+    const user = userEvent.setup();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="query"
+          slotProps={{ input: { defaultValue: 'mine' } }}
+        />,
+      );
+      const input = screen.getByRole('searchbox', { name: 'Search' });
+      expect(input).toHaveValue('query');
+      await user.type(input, 's');
+      expect(input).toHaveValue('querys');
+      // No warning of an input both controlled and uncontrolled: the part's default is unset.
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('ignores the dismissButton part while the clear button is not rendered', () => {
     const dismissButton = React.createRef<HTMLButtonElement>();
     render(

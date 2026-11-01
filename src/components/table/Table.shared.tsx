@@ -65,9 +65,10 @@ const SUBTLE_CONTROL_CLASSES = {
  * and win): a role, a tab index (the host decides it, and a grid's navigation writes it), the
  * form wiring and the required state (the control is a selection, not a form value, unless its
  * host routes them), the uncontrolled defaults and `aria-checked` (the control is controlled, and
- * its checked state is native), the hidden state (a focusable control is never hidden) and the
- * markers a grid's navigation reads (a nested composite, an auxiliary widget). Written out, as
- * every lock constant of a part.
+ * its checked state is native), `contentEditable` (a grid takes an editable element for text
+ * entry), the hidden state (a focusable control is never hidden) and the markers a grid's
+ * navigation reads (a nested composite, an auxiliary widget). Written out, as every lock constant
+ * of a part.
  */
 const SELECTION_CONTROL_PART_LOCKS = {
   role: undefined,
@@ -78,6 +79,7 @@ const SELECTION_CONTROL_PART_LOCKS = {
   defaultChecked: undefined,
   defaultValue: undefined,
   'aria-checked': undefined,
+  contentEditable: undefined,
   hidden: undefined,
   inert: undefined,
   'aria-hidden': undefined,

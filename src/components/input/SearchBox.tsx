@@ -176,13 +176,13 @@ export interface SearchBoxProps
   slotProps?: {
     /**
      * The `<input type="search">`, the focusable control (stable class `wave-search-box__input`;
-     * `controlRef` reaches it as well). Locked: `type`, `value`, `id`, the naming and Field
-     * attributes (`aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`,
-     * `aria-details`), `required`, `disabled`, `placeholder`, every input prop routed to it
-     * (`name`, `form`, `readOnly`, `tabIndex`, `maxLength`, …), `hidden` and `aria-hidden` (a
-     * focusable control is never hidden). Your handlers run before the SearchBox's:
-     * `preventDefault()` in your `onChange` ignores the typed text, in your `onKeyDown` keeps
-     * the text on Escape.
+     * `controlRef` reaches it as well). Locked: `type`, `value` (and, unset, `defaultValue`: the
+     * SearchBox controls the text), `id`, the naming and Field attributes (`aria-label`,
+     * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `required`,
+     * `disabled`, `placeholder`, every input prop routed to it (`name`, `form`, `readOnly`,
+     * `tabIndex`, `maxLength`, …), `hidden` and `aria-hidden` (a focusable control is never
+     * hidden). Your handlers run before the SearchBox's: `preventDefault()` in your `onChange`
+     * ignores the typed text, in your `onKeyDown` keeps the text on Escape.
      */
     input?: SlotPart<'input'>;
     /**
@@ -726,6 +726,8 @@ export const SearchBox = ({
           locked: {
             type: 'search',
             value,
+            // Controlled: a part's default value would only make React warn.
+            defaultValue: undefined,
             onChange: (event: React.ChangeEvent<HTMLInputElement>) => setValue(event.target.value),
             placeholder,
             disabled,

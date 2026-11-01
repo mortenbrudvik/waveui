@@ -198,14 +198,15 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
     root?: Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
     /**
      * The `<input>` (stable class `wave-input__input`), which the Input's own props, `ref`
-     * included, reach as well. Locked: every prop you give the Input itself, its id and naming
-     * (`id`, `aria-label`), its Field and error wiring (`aria-invalid`, `aria-required`,
-     * `aria-errormessage`), the state its look follows (`disabled`, `readOnly`, `required`),
-     * `hidden` and `aria-hidden` (the Input's own: a focusable control is hidden only by them),
-     * the native `size` and, without content slots, `data-size` and `data-appearance`. Your
-     * `onChange` runs before the Input's `onChange` and `onValueChange`, and `preventDefault()`
-     * in it skips both: on an uncontrolled Input the text still changes, only `onChange` and
-     * `onValueChange` are skipped.
+     * included, reach as well. Locked: every prop you give the Input itself, its value (`value`
+     * and `defaultValue`, the Input's own or unset), its id and naming (`id`, `aria-label`), its
+     * Field and error wiring (`aria-invalid`, `aria-required`, `aria-errormessage`), the state
+     * its look follows (`disabled`, `readOnly`, `required`), `hidden` and `aria-hidden` (the
+     * Input's own: a focusable control is hidden only by them), the native `size` and, without
+     * content slots, `data-size` and `data-appearance`. Your `onChange` runs before the Input's
+     * `onChange` and `onValueChange`, and `preventDefault()` in it skips both: on an
+     * uncontrolled Input the text still changes, only `onChange` and `onValueChange` are
+     * skipped.
      */
     input?: SlotPart<'input'>;
   };
@@ -300,11 +301,14 @@ export const Input = ({
     'aria-errormessage': joinIds(ariaErrorMessage, messageId),
     onChange: handleChange,
   };
-  // Set on the input only through the Input's own props (locked against `slotProps`): its id and
-  // naming, the Field and error wiring, the state its look follows and whether the focusable
-  // input is hidden from assistive technology, whether or not they are given (an unset one
-  // renders nothing).
+  // Set on the input only through the Input's own props (locked against `slotProps`): its value,
+  // its id and naming, the Field and error wiring, the state its look follows and whether the
+  // focusable input is hidden from assistive technology, whether or not they are given (an unset
+  // one renders nothing; a part's value or default value would make the input controlled and
+  // uncontrolled at once).
   const inputWiring = {
+    value: props.value,
+    defaultValue: props.defaultValue,
     ...fieldLocks(fieldProps),
     'aria-hidden': props['aria-hidden'],
     disabled: props.disabled,

@@ -1259,6 +1259,28 @@ describe('DataGrid.HeaderCell — slotProps.resizeHandle', () => {
     expect(onColumnWidthsChange.mock.calls.every(([widths]) => widths.item !== 400)).toBe(true);
   });
 
+  it('ends the drag when an untyped part gives no function as its onPointerUp', () => {
+    // From JavaScript: a value that is no handler is skipped, as the merge skips it.
+    render(<Sized handle={{ onPointerUp: 'not a handler' } as unknown as HandlePart} />);
+    const handle = handleOf('Item');
+    down(handle);
+    move(handle, 140);
+    expect(handle).toHaveAttribute('data-dragging', '');
+    up(handle);
+    expect(grid()).not.toHaveAttribute('data-resizing');
+    expect(handle).not.toHaveAttribute('data-dragging');
+  });
+
+  it('keeps the handle out of text entry: your contentEditable stays unset', () => {
+    const attempt = { contentEditable: true } as unknown as HandlePart;
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<Sized handle={attempt} />);
+    expect(openingTags(...handles(template.content))).toBe(SERVER_PINS);
+    render(<Sized handle={attempt} />);
+    expect(openingTags(...handles())).toBe(CLIENT_PINS);
+    for (const handle of handles()) expect(handle).not.toHaveAttribute('contenteditable');
+  });
+
   it('measures the column on focus and forgets a pressed key after your handlers whatever they do', async () => {
     const user = userEvent.setup();
     let preventKeyUp = true;

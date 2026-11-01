@@ -2758,6 +2758,19 @@ describe('Breadcrumb — slotProps', () => {
     );
   });
 
+  it('passes no onOverflowChange of yours to the Overflow of overflow="auto": the trail owns it', () => {
+    const layout = autoLayout(160);
+    const onOverflowChange = vi.fn();
+    const list = { onOverflowChange, title: 'Trail' } as unknown as BreadcrumbSlotProps['list'];
+    render(<Crumbs overflow="auto" slotProps={{ list }} />);
+    expect(shownLabels()).toEqual(['Home', '…', 'Page']);
+    layout.resizeTo(300);
+    expect(shownLabels()).toEqual(['Home', 'Alpha', 'Beta', 'Gamma', 'Page']);
+    // The part's other props still reach the list; the Overflow reported to no handler of yours.
+    expect(partsOf().list).toHaveAttribute('title', 'Trail');
+    expect(onOverflowChange).not.toHaveBeenCalled();
+  });
+
   it('keeps a shown list item measured: your overflow marker is dropped', () => {
     autoLayout(160);
     render(

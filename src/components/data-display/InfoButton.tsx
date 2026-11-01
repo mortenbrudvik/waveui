@@ -432,34 +432,67 @@ export const InfoButton = ({
     slotProps?.info?.ref,
   );
   const beakRef = useMergedRefs<HTMLDivElement>(arrowRef, slotProps?.beak?.ref);
-  // The presence attributes are present only in some phases: the keys they may add are locked
-  // unset before them.
-  const noteProps = mergeSlotProps(slotProps?.info, {
-    className: cn(
-      infoButtonClassNames.info,
-      noteClassName,
-      'w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
-      motionClassName,
-    ),
-    locked: {
-      id: noteId,
-      role: 'note',
-      'aria-labelledby': ariaLabelledBy || id,
-      'data-wave-infolabel-surface': '',
-      'data-state': open ? 'open' : 'closed',
-      hidden: undefined,
-      inert: undefined,
-      'aria-hidden': undefined,
-      ...presenceProps,
-      'data-side': floatingProps['data-side'],
-      'data-align': floatingProps['data-align'],
-      onKeyDown: onNoteKeyDown,
-    },
-  });
-  const beak = mergeSlotProps(slotProps?.beak, {
-    className: infoButtonClassNames.beak,
-    locked: { 'aria-hidden': 'true', 'data-wave-popover-arrow': '', tabIndex: undefined },
-  });
+
+  // The note's props are merged only while it is mounted. The presence attributes are present
+  // only in some phases: the keys they may add are locked unset before them.
+  let renderedNote: React.ReactNode = null;
+  if (isMounted) {
+    const noteProps = mergeSlotProps(slotProps?.info, {
+      className: cn(
+        infoButtonClassNames.info,
+        noteClassName,
+        'w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
+        motionClassName,
+      ),
+      locked: {
+        id: noteId,
+        role: 'note',
+        'aria-labelledby': ariaLabelledBy || id,
+        'data-wave-infolabel-surface': '',
+        'data-state': open ? 'open' : 'closed',
+        hidden: undefined,
+        inert: undefined,
+        'aria-hidden': undefined,
+        ...presenceProps,
+        'data-side': floatingProps['data-side'],
+        'data-align': floatingProps['data-align'],
+        onKeyDown: onNoteKeyDown,
+      },
+    });
+    const beak = mergeSlotProps(slotProps?.beak, {
+      className: infoButtonClassNames.beak,
+      locked: { 'aria-hidden': 'true', 'data-wave-popover-arrow': '', tabIndex: undefined },
+    });
+    renderedNote = (
+      <Portal layerId={layerId}>
+        <div
+          {...noteProps}
+          ref={noteRefs}
+          style={lockPositionStyle(noteProps.style, floatingProps.style)}
+          // Bookkeeping of where the pointer is (the hover intent's state): it runs whatever a
+          // part's handlers do.
+          onPointerEnter={composeEventHandlers(
+            noteProps.onPointerEnter as React.PointerEventHandler<HTMLDivElement> | undefined,
+            hoverSurfaceHandlers.onPointerEnter,
+            { checkDefaultPrevented: false },
+          )}
+          onPointerLeave={composeEventHandlers(
+            noteProps.onPointerLeave as React.PointerEventHandler<HTMLDivElement> | undefined,
+            hoverSurfaceHandlers.onPointerLeave,
+            { checkDefaultPrevented: false },
+          )}
+        >
+          <PopoverBeak
+            {...beak}
+            ref={beakRef}
+            side={side}
+            style={lockPositionStyle(beak.style, arrowStyles)}
+          />
+          <div id={infoId}>{info}</div>
+        </div>
+      </Portal>
+    );
+  }
 
   return (
     <>
@@ -506,35 +539,7 @@ export const InfoButton = ({
       <span id={isMounted ? undefined : infoId} hidden>
         {isMounted ? null : info}
       </span>
-      {isMounted && (
-        <Portal layerId={layerId}>
-          <div
-            {...noteProps}
-            ref={noteRefs}
-            style={lockPositionStyle(noteProps.style, floatingProps.style)}
-            // Bookkeeping of where the pointer is (the hover intent's state): it runs whatever a
-            // part's handlers do.
-            onPointerEnter={composeEventHandlers(
-              noteProps.onPointerEnter as React.PointerEventHandler<HTMLDivElement> | undefined,
-              hoverSurfaceHandlers.onPointerEnter,
-              { checkDefaultPrevented: false },
-            )}
-            onPointerLeave={composeEventHandlers(
-              noteProps.onPointerLeave as React.PointerEventHandler<HTMLDivElement> | undefined,
-              hoverSurfaceHandlers.onPointerLeave,
-              { checkDefaultPrevented: false },
-            )}
-          >
-            <PopoverBeak
-              {...beak}
-              ref={beakRef}
-              side={side}
-              style={lockPositionStyle(beak.style, arrowStyles)}
-            />
-            <div id={infoId}>{info}</div>
-          </div>
-        </Portal>
-      )}
+      {renderedNote}
     </>
   );
 };

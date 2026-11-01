@@ -1005,13 +1005,15 @@ describe('ColorArea — slotProps', () => {
         defaultValue={MIDDLE}
         onPointerDown={onPointerDown}
         onValueChange={onValueChange}
-        slotProps={{ thumb: { onPointerDown: (event) => event.preventDefault() } }}
+        slotProps={{ field: { onPointerDown: (event) => event.preventDefault() } }}
       />,
     );
     const root = group();
     mockRect(fieldOf(root), { left: 0, top: 0, width: 200, height: 100 });
-    fireEvent.pointerDown(thumbOf(root), PRESS);
-    // The area's own prop on its root still runs; the press is cancelled as a whole.
+    // The field, not the thumb: the drawn thumb takes no pointer events, so a press lands on the
+    // field under it. The area's own prop on its root still runs; the press is cancelled as a
+    // whole.
+    fireEvent.pointerDown(fieldOf(root), PRESS);
     expect(onPointerDown).toHaveBeenCalledTimes(1);
     expect(onValueChange).not.toHaveBeenCalled();
     expect(root.hasPointerCapture(1)).toBe(false);

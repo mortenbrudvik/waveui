@@ -119,6 +119,26 @@ export const HIDDEN_PART_LOCKS = {
 } as const;
 
 /**
+ * What a button part locks before the button's own attributes (module-only): a button `type`, and
+ * unset the tab stop, the native and the focusable disabled state and the keys of
+ * {@link HIDDEN_PART_LOCKS}, so a part can change neither whether the button works nor whether it
+ * can be reached (the buttons of a calendar, of DatePicker and of TeachingPopover). Spread the
+ * button's own attributes after it. Written out: a spread of another constant would stay in
+ * every bundle of this module, used or not.
+ */
+export const BUTTON_PART_LOCKS = {
+  type: 'button',
+  tabIndex: undefined,
+  disabled: undefined,
+  'aria-disabled': undefined,
+  'data-disabled': undefined,
+  'data-disabled-focusable': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/**
  * A positioned surface's style with its part's (module-only): `partStyle` is the `style` of the
  * part's merged props, `positionStyle` the surface's position (`usePopupPosition`'s
  * `floatingProps.style`). The part's keys first, then every key the positioning sets (the
@@ -130,6 +150,23 @@ export function lockPositionStyle(
   positionStyle: React.CSSProperties,
 ): React.CSSProperties {
   return partStyle ? { ...(partStyle as React.CSSProperties), ...positionStyle } : positionStyle;
+}
+
+/**
+ * Internal work composed after a part's own handler (module-only): `ours` runs after `theirs`
+ * whatever that does (as `composeEventHandlers` with `checkDefaultPrevented: false`), for work a
+ * `preventDefault()` must not leave stale, such as bookkeeping that follows focus or the pointer.
+ * `theirs` is the handler read from the part itself (`slotProps?.track?.onFocus`), so, as in
+ * {@link mergeSlotProps}, only a function counts: another value from an untyped caller is skipped
+ * instead of throwing before that work. Without a part handler, `ours` itself.
+ */
+export function composeAfterPart<E extends { defaultPrevented: boolean }>(
+  theirs: unknown,
+  ours: ((event: E) => void) | undefined,
+): ((event: E) => void) | undefined {
+  return typeof theirs === 'function'
+    ? composeEventHandlers(theirs as (event: E) => void, ours, { checkDefaultPrevented: false })
+    : ours;
 }
 
 /**

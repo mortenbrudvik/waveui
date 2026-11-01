@@ -5428,6 +5428,23 @@ describe('TeachingPopover.CarouselNav — slotProps', () => {
     expect(onStepChange.mock.calls).toEqual([[2]]);
   });
 
+  it('changes the step on a click whose default something else prevented, without an indicator part, as before parts existed', async () => {
+    const user = userEvent.setup();
+    const onStepChange = vi.fn();
+    // A capture listener of the document prevents the default of every click before React sees it.
+    const prevent = (event: Event) => event.preventDefault();
+    document.addEventListener('click', prevent, true);
+    onTestFinished(() => document.removeEventListener('click', prevent, true));
+    const { rerender } = render(<Nav onStepChange={onStepChange} />);
+    await user.click(screen.getByRole('button', { name: 'Step 3 of 3' }));
+    expect(onStepChange.mock.calls).toEqual([[2]]);
+    // Only the indicator part's own click decides: with the part given, a prevented click shows no
+    // step, whoever prevented it.
+    rerender(<Nav onStepChange={onStepChange} slotProps={{ indicator: { title: 'Dot' } }} />);
+    await user.click(screen.getByRole('button', { name: 'Step 1 of 3' }));
+    expect(onStepChange.mock.calls).toEqual([[2]]);
+  });
+
   it('attaches your refs to every button and indicator', () => {
     const buttonElements: Array<HTMLButtonElement | null> = [];
     const indicatorElements: Array<HTMLSpanElement | null> = [];

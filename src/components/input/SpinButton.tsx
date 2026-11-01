@@ -163,14 +163,15 @@ export interface SpinButtonBaseProps
     /**
      * The `<input role="spinbutton">`, the focusable control (stable class
      * `wave-spin-button__input`; `controlRef` reaches it as well). Locked: `type`, `role`,
-     * `value`, `disabled`, `readOnly`, `form`, the `aria-value*` attributes, `id`, the naming and
-     * Field attributes and every other input prop routed to it (`placeholder`, `tabIndex`,
-     * `inputMode`, …), `name` (the form submits the committed value under the SpinButton's own
-     * `name`, on its hidden input, never the shown text), `hidden` and `aria-hidden` (a
-     * focusable control is never hidden). Your handlers run before the SpinButton's and
-     * `preventDefault()` in them skips its handling, its own `onChange`, `onKeyDown`, `onFocus`
-     * and `onBlur` props included (a typed character or a step key is ignored); its focus and
-     * blur work (the shown text, committing typed text) runs after them whatever they do.
+     * `value` (and, unset, `defaultValue`: the SpinButton controls the text), `disabled`,
+     * `readOnly`, `form`, the `aria-value*` attributes, `id`, the naming and Field attributes and
+     * every other input prop routed to it (`placeholder`, `tabIndex`, `inputMode`, …), `name`
+     * (the form submits the committed value under the SpinButton's own `name`, on its hidden
+     * input, never the shown text), `hidden` and `aria-hidden` (a focusable control is never
+     * hidden). Your handlers run before the SpinButton's and `preventDefault()` in them skips its
+     * handling, its own `onChange`, `onKeyDown`, `onFocus` and `onBlur` props included (a typed
+     * character or a step key is ignored); its focus and blur work (the shown text, committing
+     * typed text) runs after them whatever they do.
      */
     input?: SlotPart<'input'>;
     /**
@@ -808,6 +809,8 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
           : value === null
             ? ''
             : String(value)),
+      // Controlled: a part's default value would only make React warn.
+      defaultValue: undefined,
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
       onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
       onKeyUp,

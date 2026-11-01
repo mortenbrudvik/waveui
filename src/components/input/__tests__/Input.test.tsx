@@ -807,6 +807,60 @@ describe('Input — slotProps', () => {
     );
   });
 
+  it('keeps a controlled Input’s value its own: no part’s defaultValue reaches the input', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const own = { value: 'Own', onChange: () => {} };
+      render(
+        <>
+          <Input aria-label="Input" {...own} slotProps={{ input: { defaultValue: 'Part' } }} />
+          <Input aria-label="Root" {...own} slotProps={{ root: { defaultValue: 'Part' } }} />
+          <Input
+            aria-label="Wrapped"
+            contentBefore="@"
+            {...own}
+            slotProps={{ input: { defaultValue: 'Part' } }}
+          />
+        </>,
+      );
+      for (const name of ['Input', 'Root', 'Wrapped']) {
+        expect(screen.getByRole('textbox', { name })).toHaveValue('Own');
+      }
+      // No warning of an input both controlled and uncontrolled: the parts' defaults are unset.
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('keeps an uncontrolled Input uncontrolled: no part’s value reaches the input', async () => {
+    const user = userEvent.setup();
+    const part = { value: 'Part' };
+    render(
+      <>
+        <Input aria-label="Input" defaultValue="Own" slotProps={{ input: part }} />
+        <Input
+          aria-label="Root"
+          defaultValue="Own"
+          // The root part is typed for the wrapper, which takes no value: from untyped code.
+          slotProps={{ root: part as unknown as InputSlotProps['root'] }}
+        />
+        <Input
+          aria-label="Wrapped"
+          contentBefore="@"
+          defaultValue="Own"
+          slotProps={{ input: part }}
+        />
+      </>,
+    );
+    for (const name of ['Input', 'Root', 'Wrapped']) {
+      const input = screen.getByRole('textbox', { name });
+      expect(input).toHaveValue('Own');
+      await user.type(input, '!');
+      expect(input).toHaveValue('Own!');
+    }
+  });
+
   it('adds the attributes the Input does not set, and joins your ids to its description', () => {
     render(
       <>

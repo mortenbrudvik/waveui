@@ -6,7 +6,12 @@ import { calendarClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { isOwnEvent } from '../../lib/events';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../lib/icons';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  BUTTON_PART_LOCKS,
+  HIDDEN_PART_LOCKS,
+  mergeSlotProps,
+  type SlotPart,
+} from '../../lib/slotProps';
 import { disabledStyles, focusRing } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -18,10 +23,8 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { makeDate } from '../../lib/date';
 import {
-  BUTTON_PART_LOCKS,
   CalendarDayGrid,
   CalendarPickerGrid,
-  HIDDEN_PART_LOCKS,
   type CalendarDayGridPartClassNames,
   type CalendarDayGridParts,
 } from './Calendar.views';
