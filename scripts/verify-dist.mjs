@@ -975,6 +975,7 @@ export const MODULE_ONLY_NAMES = [
   'ModalCloseButton',
   'ModalCloseButtonProps',
   'NAV_PART_LOCKS',
+  'NAV_SHOWN_PART_LOCKS',
   'NO_GROUPS',
   'NO_IDS',
   'NavCategoryStore',

@@ -184,6 +184,22 @@ export const NAV_PART_LOCKS = {
 } as const;
 
 /**
+ * {@link NAV_PART_LOCKS} and `lib/slotProps`' hidden locks (`hidden`, `inert` and `aria-hidden`
+ * unset), written out so that an import that does not use it drops it (module-only): the locks of
+ * a part that holds an entry, a control or a name (a list, a list item, a toggle, a label span, the
+ * actions), which must stay shown and reachable. A part with attributes of its own spreads it
+ * first (a label span adds `aria-label` unset: its link or button takes its name from its text).
+ */
+export const NAV_SHOWN_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/**
  * The `blockHandlers` of a part inside a link or button that does not activate while disabled
  * (module-only): your click handler of the part is not called there, as the item's own is not.
  */

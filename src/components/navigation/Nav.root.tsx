@@ -2,12 +2,12 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { navClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp, warnDeprecated, warnOnce } from '../../lib/dev';
-import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import {
-  NAV_PART_LOCKS,
+  NAV_SHOWN_PART_LOCKS,
   NavContext,
   createCategoryStore,
   findCategoriesContaining,
@@ -279,7 +279,7 @@ export const NavRoot = ({
         <ul
           {...mergeSlotProps(slotProps?.list, {
             className: cn(navClassNames.list, 'm-0 list-none p-0'),
-            locked: { ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS },
+            locked: NAV_SHOWN_PART_LOCKS,
           })}
           ref={listMergedRef}
         >

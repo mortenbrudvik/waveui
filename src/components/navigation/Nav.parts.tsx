@@ -7,12 +7,13 @@ import {
   navSectionHeaderClassNames,
 } from '../../lib/classNames';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
-import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 import type { HeadingLevel, Slot } from '../../lib/types';
 import {
   BLOCK_CLICK,
   NAV_PART_LOCKS,
+  NAV_SHOWN_PART_LOCKS,
   useNavContext,
   type NoAnchorOnlyAttributes,
 } from './Nav.context';
@@ -166,14 +167,16 @@ export interface NavAppItemOwnProps {
      * The `<li>` around the link or button (stable class `wave-nav-app-item__list-item`).
      * Locked: no role (it stays a list item), no tab index or roving container's marker, and no
      * `hidden`, `inert` or `aria-hidden`, since it holds the item. The link or button handles its
-     * events before yours.
+     * events before yours; in an arrow-key body your `onKeyDown` runs before the body's arrow
+     * keys, which `preventDefault()` in yours skips.
      */
     listItem?: SlotPart<'li'>;
     /**
      * The `<span>` of the app's name inside the link or button, which names it (stable class
      * `wave-nav-app-item__content`). Locked: no `aria-label` (it would replace the name), no
-     * role, tab index or roving container's marker, and no `hidden`, `inert` or `aria-hidden`. A
-     * click on it is a click on the item, after yours. While a button item is `disabled` your
+     * role, tab index or roving container's marker, and no `hidden`, `inert` or `aria-hidden`. An
+     * `aria-labelledby` of yours is joined, not locked: its ids rename the item. A click on it is a
+     * click on the item, after yours. While a button item is `disabled` your
      * `onClick` here is not called, as the item's own is not.
      */
     content?: SlotPart<'span'>;
@@ -316,7 +319,7 @@ export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): Rea
         {...(contentPart &&
           mergeSlotProps(contentPart, {
             className: contentClassName,
-            locked: { ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS, 'aria-label': undefined },
+            locked: { ...NAV_SHOWN_PART_LOCKS, 'aria-label': undefined },
             blockHandlers: disabled ? BLOCK_CLICK : undefined,
           }))}
       >
@@ -328,7 +331,7 @@ export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): Rea
     slotProps?.listItem &&
     mergeSlotProps(slotProps.listItem, {
       className: navAppItemClassNames.listItem,
-      locked: { ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS },
+      locked: NAV_SHOWN_PART_LOCKS,
     });
 
   if (href !== undefined) {

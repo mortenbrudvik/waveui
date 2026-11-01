@@ -1639,6 +1639,55 @@ describe('NavDrawer, NavDrawer.Body and NavDrawer.Footer — slotProps', () => {
     expect(onValueChange).toHaveBeenCalledWith('reports');
   });
 
+  it('keeps the arrow order of an arrow-key body: its list is neither an entry nor a nested composite', async () => {
+    const user = userEvent.setup();
+    const lists: Array<NonNullable<BodySlotProps['list']>> = [
+      { role: 'menu', 'data-roving-container': '' },
+      { role: 'button', tabIndex: 0 },
+    ];
+    for (const list of lists) {
+      const { unmount } = render(
+        <Open type="inline" bodyProps={{ focusMode: 'arrow', slotProps: { list } }} />,
+      );
+      expect(bodyList()).not.toHaveAttribute('role');
+      expect(bodyList()).not.toHaveAttribute('data-roving-container');
+      act(() => button('Home').focus());
+      await user.keyboard('{ArrowDown}');
+      expect(button('Reports')).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(button('Home')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(button('Reports')).toHaveFocus();
+      unmount();
+    }
+  });
+
+  it('keeps the Tab order and the landmark: no part adds a stop or takes a role', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <Open
+          type="inline"
+          slotProps={{ nav: { role: 'menu', tabIndex: 0, 'data-roving-container': '' } }}
+          bodyProps={{ slotProps: { list: { role: 'menu', tabIndex: 0 } } }}
+          footerProps={{ slotProps: { list: { role: 'menu', tabIndex: 0 } } }}
+        />
+        <button type="button">After</button>
+      </>,
+    );
+    for (const element of [nav(), bodyList(), footerList()]) {
+      expect(element).not.toHaveAttribute('role');
+      expect(element).not.toHaveAttribute('tabindex');
+      expect(element).not.toHaveAttribute('data-roving-container');
+    }
+    expect(navigation()).toBe(nav());
+    expect(screen.getAllByRole('list')).toHaveLength(2);
+    for (const name of ['Home', 'Reports', 'Settings', 'After']) {
+      await user.tab();
+      expect(button(name)).toHaveFocus();
+    }
+  });
+
   it('has no accessibility violations with every part customised, both types', async () => {
     const custom = {
       slotProps: { nav: { className: 'my-nav', title: 'Main navigation' } },

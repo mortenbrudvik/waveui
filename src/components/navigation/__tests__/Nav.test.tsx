@@ -27,7 +27,8 @@ import type {
 } from '../Nav';
 import { NavDrawer, type NavDrawerProps } from '../NavDrawer';
 import type { Slot } from '../../../lib/types';
-import { NavContext, NavRovingContext } from '../Nav.context';
+import { NAV_PART_LOCKS, NAV_SHOWN_PART_LOCKS, NavContext, NavRovingContext } from '../Nav.context';
+import { HIDDEN_PART_LOCKS } from '../../../lib/slotProps';
 import type { NavContextValue, NavRovingContextValue } from '../Nav.context';
 import { useNavRootState } from '../Nav.root';
 import {
@@ -2664,7 +2665,39 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     expect(toggle()).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('keeps the category as it is on a click prevented in the label part or in your label content', async () => {
+  it('toggles on every click without slotProps, as before: a default your label or icon content or a capture handler prevents does not keep it', async () => {
+    const user = userEvent.setup();
+    const onOpenCategoriesChange = vi.fn();
+    const prevent = (event: React.MouseEvent) => event.preventDefault();
+    const { rerender } = render(
+      <Nav onOpenCategoriesChange={onOpenCategoriesChange}>
+        <Nav.Category
+          value="docs"
+          label={<span onClick={prevent}>Docs</span>}
+          icon={<span onClick={prevent}>D</span>}
+        >
+          <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+        </Nav.Category>
+      </Nav>,
+    );
+    await user.click(screen.getByText('Docs'));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    await user.click(screen.getByText('D'));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    // A capture handler of the category's own, on its list item, prevents the click first.
+    rerender(
+      <Nav onOpenCategoriesChange={onOpenCategoriesChange}>
+        <Nav.Category value="docs" label="Docs" onClickCapture={prevent}>
+          <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+        </Nav.Category>
+      </Nav>,
+    );
+    await user.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(onOpenCategoriesChange.mock.calls).toEqual([[['docs']], [[]], [['docs']]]);
+  });
+
+  it('keeps the category as it is on a click prevented before the button while the label part or a toggle handler of yours is given', async () => {
     const user = userEvent.setup();
     const onOpenCategoriesChange = vi.fn();
     const order: string[] = [];
@@ -2672,58 +2705,42 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
       order.push(name);
       event.preventDefault();
     };
-    const { rerender } = render(
-      <Nav onOpenCategoriesChange={onOpenCategoriesChange}>
-        <Nav.Category
-          value="docs"
-          label="Docs"
-          slotProps={{ label: { onClick: prevent('label') } }}
-        >
-          <Nav.SubItem value="intro">Introduction</Nav.SubItem>
-        </Nav.Category>
-      </Nav>,
-    );
-    await user.click(screen.getByText('Docs'));
-    // With a toggle part too: yours run from the inside out, then nothing.
-    rerender(
-      <Nav onOpenCategoriesChange={onOpenCategoriesChange}>
-        <Nav.Category
-          value="docs"
-          label="Docs"
-          slotProps={{
-            label: { onClick: prevent('label') },
-            button: { onClick: () => void order.push('button') },
-          }}
-        >
-          <Nav.SubItem value="intro">Introduction</Nav.SubItem>
-        </Nav.Category>
-      </Nav>,
-    );
-    await user.click(screen.getByText('Docs'));
-    // Your own label content that prevents the click, without parts.
-    rerender(
-      <Nav onOpenCategoriesChange={onOpenCategoriesChange}>
-        <Nav.Category value="docs" label={<span onClick={prevent('content')}>Docs</span>}>
-          <Nav.SubItem value="intro">Introduction</Nav.SubItem>
-        </Nav.Category>
-      </Nav>,
-    );
-    await user.click(screen.getByText('Docs'));
-    expect(order).toEqual(['label', 'label', 'button', 'content']);
+    function Category(props: Partial<NavCategoryProps>) {
+      return (
+        <Nav onOpenCategoriesChange={onOpenCategoriesChange}>
+          <Nav.Category value="docs" label="Docs" {...props}>
+            <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+          </Nav.Category>
+        </Nav>
+      );
+    }
+    const content = <span onClick={prevent('content')}>Docs</span>;
+    const cases: Partial<NavCategoryProps>[] = [
+      // Your label part prevents the click.
+      { slotProps: { label: { onClick: prevent('label') } } },
+      // ... with a toggle part too: yours run from the inside out, then nothing.
+      {
+        slotProps: {
+          label: { onClick: prevent('label') },
+          button: { onClick: () => void order.push('button') },
+        },
+      },
+      // With the label part given, your label content or a capture handler prevents it.
+      { label: content, slotProps: { label: {} } },
+      { onClickCapture: prevent('capture'), slotProps: { label: {} } },
+      // Your toggle handler runs after the content that prevented the click.
+      { label: content, slotProps: { button: { onClick: () => void order.push('button') } } },
+    ];
+    const { rerender } = render(<Category {...cases[0]} />);
+    for (const props of cases) {
+      rerender(<Category {...props} />);
+      await user.click(screen.getByText('Docs'));
+    }
+    expect(order).toEqual(['label', 'label', 'button', 'content', 'capture', 'content', 'button']);
     expect(onOpenCategoriesChange).not.toHaveBeenCalled();
     expect(toggle()).toHaveAttribute('aria-expanded', 'false');
     // A label part that prevents nothing: the click opens the category.
-    rerender(
-      <Nav onOpenCategoriesChange={onOpenCategoriesChange}>
-        <Nav.Category
-          value="docs"
-          label="Docs"
-          slotProps={{ label: { onClick: () => void order.push('mine') } }}
-        >
-          <Nav.SubItem value="intro">Introduction</Nav.SubItem>
-        </Nav.Category>
-      </Nav>,
-    );
+    rerender(<Category slotProps={{ label: { onClick: () => void order.push('mine') } }} />);
     await user.click(screen.getByText('Docs'));
     expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs']);
   });
@@ -2803,7 +2820,8 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     rerender(<Item />);
     fireEvent.click(screen.getByText('Home'));
     expect(onClick).toHaveBeenCalledTimes(1);
-    // Your aria-disabled alone does not disable the item: it is selected, and yours is called.
+    // Your aria-disabled alone does not disable the item: your handler is called (the item was
+    // selected by the click before, so its value does not change again).
     rerender(<Item aria-disabled />);
     fireEvent.click(screen.getByText('Home'));
     expect(onClick).toHaveBeenCalledTimes(2);
@@ -2885,6 +2903,58 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     rerender(<Keys prevent={false} />);
     await user.keyboard('{ArrowDown}');
     expect(button('API')).toHaveFocus();
+  });
+
+  it('runs the keys of the toggle, a list item and the actions before an arrow-key body’s: preventDefault() skips them', async () => {
+    const user = userEvent.setup();
+    type Part = 'listItem' | 'button' | 'actions';
+    function Keys({ prevent }: { prevent: Part | null }) {
+      const keys = (part: Part) => ({
+        onKeyDown: (event: React.KeyboardEvent) => {
+          if (prevent === part) event.preventDefault();
+        },
+      });
+      return (
+        <ArrowBody>
+          <Nav.Item value="home" slotProps={{ listItem: keys('listItem') }}>
+            Home
+          </Nav.Item>
+          <Nav.Category value="docs" label="Docs" slotProps={{ button: keys('button') }}>
+            <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+          </Nav.Category>
+          <Nav.Item
+            value="reports"
+            actions={<button type="button">Pin Reports</button>}
+            slotProps={{ actions: keys('actions') }}
+          >
+            Reports
+          </Nav.Item>
+        </ArrowBody>
+      );
+    }
+    const { rerender } = render(<Keys prevent="listItem" />);
+    act(() => button('Home').focus());
+    await user.keyboard('{ArrowDown}');
+    expect(button('Home')).toHaveFocus();
+    rerender(<Keys prevent={null} />);
+    await user.keyboard('{ArrowDown}');
+    expect(toggle()).toHaveFocus();
+    rerender(<Keys prevent="button" />);
+    await user.keyboard('{ArrowDown}');
+    expect(toggle()).toHaveFocus();
+    rerender(<Keys prevent={null} />);
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(button('Pin Reports')).toHaveFocus();
+    rerender(<Keys prevent="actions" />);
+    await user.keyboard('{ArrowUp}');
+    expect(button('Pin Reports')).toHaveFocus();
+    rerender(<Keys prevent={null} />);
+    await user.keyboard('{ArrowUp}');
+    expect(button('Reports')).toHaveFocus();
+  });
+
+  it('writes out the shared locks as the Nav locks and the hidden locks together', () => {
+    expect(NAV_SHOWN_PART_LOCKS).toStrictEqual({ ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS });
   });
 
   it('calls each part handler once per click in StrictMode; the Nav updates once', async () => {

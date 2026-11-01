@@ -10,7 +10,7 @@ import {
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import type { Slot, SlotObject } from '../../lib/slot';
-import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { BackdropAppearance, FocusMode, ModalType, MotionSlot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -30,6 +30,7 @@ import type {
 import { DrawerPanel, useDrawerOpen } from '../overlays/Drawer.panel';
 import { scrollSeparatorClasses, useScrollState } from '../overlays/Drawer.scroll';
 import {
+  NAV_SHOWN_PART_LOCKS,
   NavContext,
   NavRovingContext,
   useNavListChildCheck,
@@ -229,7 +230,8 @@ export interface NavDrawerProps
      * The `<nav>` landmark around `NavDrawer.Header`, `NavDrawer.Body` and `NavDrawer.Footer`
      * (stable class `wave-nav-drawer__nav`). Locked: its name, the drawer's `aria-label` (unset
      * while `aria-labelledby` names it; an `aria-labelledby` of yours names it instead of the
-     * `aria-label`), and `hidden`, `inert` and `aria-hidden`, unset (it holds the items).
+     * `aria-label`), no role (it stays the navigation landmark), no tab index or roving
+     * container's marker, and `hidden`, `inert` and `aria-hidden`, unset (it holds the items).
      */
     nav?: SlotPart<'nav'>;
   };
@@ -273,8 +275,11 @@ export interface NavDrawerBodyProps extends React.HTMLAttributes<HTMLDivElement>
    */
   slotProps?: {
     /**
-     * The `<ul>` of the items (stable class `wave-nav-drawer-body__list`). Locked: `hidden`,
-     * `inert` and `aria-hidden`, unset (it holds the items).
+     * The `<ul>` of the items (stable class `wave-nav-drawer-body__list`). Locked: no role (it
+     * stays a list for its list items), no tab index and no roving container's marker (with
+     * `focusMode="arrow"`, a role or a tab index would make the list an entry of the arrow order,
+     * and a composite role or the marker a nested composite that takes the items out of it), and
+     * `hidden`, `inert` and `aria-hidden`, unset (it holds the items).
      */
     list?: SlotPart<'ul'>;
   };
@@ -295,8 +300,9 @@ export interface NavDrawerFooterProps extends React.HTMLAttributes<HTMLDivElemen
    */
   slotProps?: {
     /**
-     * The `<ul>` of the items (stable class `wave-nav-drawer-footer__list`). Locked: `hidden`,
-     * `inert` and `aria-hidden`, unset (it holds the items).
+     * The `<ul>` of the items (stable class `wave-nav-drawer-footer__list`). Locked: no role (it
+     * stays a list for its list items), no tab index (it would add a Tab stop) and no roving
+     * container's marker, and `hidden`, `inert` and `aria-hidden`, unset (it holds the items).
      */
     list?: SlotPart<'ul'>;
   };
@@ -462,7 +468,7 @@ const NavDrawerRoot = ({
       <nav
         {...mergeSlotProps(slotProps?.nav, {
           className: cn(navDrawerClassNames.nav, 'flex min-h-0 flex-1 flex-col'),
-          locked: { ...HIDDEN_PART_LOCKS, ...nameProps },
+          locked: { ...NAV_SHOWN_PART_LOCKS, ...nameProps },
         })}
         ref={navMergedRef}
       >
@@ -588,7 +594,7 @@ export const NavDrawerBody = ({
         <ul
           {...mergeSlotProps(slotProps?.list, {
             className: cn(navDrawerBodyClassNames.list, 'm-0 list-none p-0'),
-            locked: HIDDEN_PART_LOCKS,
+            locked: NAV_SHOWN_PART_LOCKS,
           })}
           ref={listMergedRef}
         >
@@ -631,7 +637,7 @@ export const NavDrawerFooter = ({
       <ul
         {...mergeSlotProps(slotProps?.list, {
           className: cn(navDrawerFooterClassNames.list, 'm-0 list-none p-0'),
-          locked: HIDDEN_PART_LOCKS,
+          locked: NAV_SHOWN_PART_LOCKS,
         })}
         ref={listMergedRef}
       >

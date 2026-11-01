@@ -7,7 +7,7 @@ import {
 } from '../../lib/classNames';
 import type { MotionPreference, MotionSlot, Slot } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
-import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 // Aliased: `expandIconMotion` is also Nav.Category's prop.
@@ -23,7 +23,7 @@ import { useMotionClasses, useMotionPreference } from '../../hooks/useMotion';
 import { unwrapButtonGlyph } from '../button/Button.slots';
 import {
   BLOCK_CLICK,
-  NAV_PART_LOCKS,
+  NAV_SHOWN_PART_LOCKS,
   NavCategoryValueContext,
   NavRovingContext,
   containsValue,
@@ -139,16 +139,21 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
      * current page), the value an arrow-key body tracks it by, no role or tab index, no
      * `disabled`, `aria-disabled` or roving container's marker, and no `hidden`, `inert` or
      * `aria-hidden`. An `aria-label` of yours names it instead of the label. Its `onClick`, which
-     * opens or closes the category, is locked: `preventDefault()` in yours skips it (also in a
-     * part inside it, such as the label).
+     * opens or closes the category, is locked and runs after yours: a click whose default is
+     * prevented by then (in yours, or before the click reaches the button) keeps the category as it
+     * is. In an arrow-key body your `onKeyDown` runs before the body's arrow keys, which
+     * `preventDefault()` in yours skips.
      */
     button?: SlotPart<'button'>;
     /**
      * The `<span>` of `label` inside the toggle button, which names it (stable class
      * `wave-nav-category__label`). Locked: no `aria-label` (it would replace the label in the
      * button's name), no role, tab index or roving container's marker, and no `hidden`, `inert`
-     * or `aria-hidden`. It carries no handler of the category: a click on it is a click on the
-     * toggle button, after yours, and `preventDefault()` in yours keeps the category as it is.
+     * or `aria-hidden`. An `aria-labelledby` of yours is joined, not locked: its ids rename the
+     * button. It carries no handler of the category: a click on it is a click on the toggle
+     * button, after yours. While this part is given, a click whose default is prevented before it
+     * reaches the button (in yours, in your label or icon content, or in a capture handler) keeps
+     * the category as it is.
      */
     label?: SlotPart<'span'>;
     /**
@@ -222,14 +227,16 @@ export interface NavItemOwnProps {
      * class `wave-nav-item__list-item`); with actions it is the item's row, which draws the
      * selected look. Locked: no role (it stays a list item), no tab index or roving container's
      * marker, and no `hidden`, `inert` or `aria-hidden`, since it holds the item. The link or
-     * button and the actions handle their events before yours.
+     * button and the actions handle their events before yours; in an arrow-key body your
+     * `onKeyDown` runs before the body's arrow keys, which `preventDefault()` in yours skips.
      */
     listItem?: SlotPart<'li'>;
     /**
      * The `<span>` of the label inside the link or button, which names the item (stable class
      * `wave-nav-item__content`). Locked: no `aria-label` (it would replace the label in the
      * item's name), no role, tab index or roving container's marker, and no `hidden`, `inert` or
-     * `aria-hidden`. A click on it is a click on the item, after yours: `preventDefault()` in
+     * `aria-hidden`. An `aria-labelledby` of yours is joined, not locked: its ids rename the item.
+     * A click on it is a click on the item, after yours: `preventDefault()` in
      * yours acts as in the item's `onClick` (a button item is not selected; a link is not
      * followed and is still selected, as with client-side routing). While the item is `disabled`
      * your `onClick` here is not called, as the item's own is not.
@@ -240,7 +247,8 @@ export interface NavItemOwnProps {
      * `wave-nav-item__actions`). Locked: its role (`group`), its name (`aria-labelledby`, the
      * item; your ids are joined after it), its marker, no tab index or roving container's marker
      * (each action is a stop of its own) and no `hidden`, `inert` or `aria-hidden`, since it holds
-     * the actions. The actions handle their events before yours.
+     * the actions. The actions handle their events before yours; in an arrow-key body your
+     * `onKeyDown` runs before the body's arrow keys, which `preventDefault()` in yours skips.
      */
     actions?: SlotPart<'span'>;
   };
@@ -330,7 +338,8 @@ export type NavSubItemOwnProps = Omit<NavItemOwnProps, 'icon' | 'slotProps'> & {
      * class `wave-nav-sub-item__list-item`); with actions it is the sub-item's row. Locked: no
      * role (it stays a list item), no tab index or roving container's marker, and no `hidden`,
      * `inert` or `aria-hidden`, since it holds the sub-item. The link or button and the actions
-     * handle their events before yours.
+     * handle their events before yours; in an arrow-key body your `onKeyDown` runs before the
+     * body's arrow keys, which `preventDefault()` in yours skips.
      */
     listItem?: SlotPart<'li'>;
     /**
@@ -338,7 +347,8 @@ export type NavSubItemOwnProps = Omit<NavItemOwnProps, 'icon' | 'slotProps'> & {
      * `wave-nav-sub-item__actions`). Locked: its role (`group`), its name (`aria-labelledby`, the
      * sub-item; your ids are joined after it), its marker, no tab index or roving container's
      * marker (each action is a stop of its own) and no `hidden`, `inert` or `aria-hidden`, since
-     * it holds the actions. The actions handle their events before yours.
+     * it holds the actions. The actions handle their events before yours; in an arrow-key body
+     * your `onKeyDown` runs before the body's arrow keys, which `preventDefault()` in yours skips.
      */
     actions?: SlotPart<'span'>;
   };
@@ -586,7 +596,7 @@ function renderNavEntry(
           {...(contentPart &&
             mergeSlotProps(contentPart, {
               className: contentClassName,
-              locked: { ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS, 'aria-label': undefined },
+              locked: { ...NAV_SHOWN_PART_LOCKS, 'aria-label': undefined },
               blockHandlers: disabled ? BLOCK_CLICK : undefined,
             }))}
         >
@@ -617,7 +627,7 @@ function renderNavEntry(
     slotProps?.listItem &&
     mergeSlotProps(slotProps.listItem, {
       className: listItemClassName,
-      locked: { ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS },
+      locked: NAV_SHOWN_PART_LOCKS,
     });
 
   let actionsGroup: React.ReactElement | null = null;
@@ -638,8 +648,7 @@ function renderNavEntry(
           mergeSlotProps(actionsPart, {
             className: actionsClassName,
             locked: {
-              ...NAV_PART_LOCKS,
-              ...HIDDEN_PART_LOCKS,
+              ...NAV_SHOWN_PART_LOCKS,
               role: 'group',
               'aria-labelledby': itemId,
               'data-wave-nav-actions': '',
@@ -853,17 +862,19 @@ const NavCategory = ({
     items = parts.filter((part) => !isText(part));
   }
 
-  // A click whose default was prevented before it reached the button (in a part, or in your label
-  // content) keeps the category as it is (C-COMPOSE), as a button Nav.Item stays unselected.
-  const handleToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (!event.defaultPrevented) toggleCategory(value);
-  };
-
   // The parts are merged only when given, with the attributes the category sets on each (those it
   // sets only in some states included, as `undefined` otherwise) locked.
   const buttonPart = slotProps?.button;
   const labelPart = slotProps?.label;
   const listPart = slotProps?.list;
+
+  // As in 0.17.1, a click that reaches the button toggles the category whatever prevented its
+  // default before. While the label part is given, a prevented click keeps the category as it is,
+  // so `preventDefault()` in that part (inside the button) acts as in the button part, whose merge
+  // already skips this locked handler on a prevented event.
+  const handleToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!(labelPart && event.defaultPrevented)) toggleCategory(value);
+  };
   const ariaControls = isOpen ? listId : undefined;
   const ariaCurrent = containsCurrent ? true : undefined;
   const containsCurrentMarker = containsCurrent ? '' : undefined;
@@ -889,8 +900,7 @@ const NavCategory = ({
           mergeSlotProps(buttonPart, {
             className: buttonClassName,
             locked: {
-              ...NAV_PART_LOCKS,
-              ...HIDDEN_PART_LOCKS,
+              ...NAV_SHOWN_PART_LOCKS,
               type: 'button',
               disabled: undefined,
               'aria-disabled': undefined,
@@ -911,7 +921,7 @@ const NavCategory = ({
           {...(labelPart &&
             mergeSlotProps(labelPart, {
               className: labelClassName,
-              locked: { ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS, 'aria-label': undefined },
+              locked: { ...NAV_SHOWN_PART_LOCKS, 'aria-label': undefined },
             }))}
         >
           {buttonLabel}
@@ -931,7 +941,7 @@ const NavCategory = ({
               {...(listPart &&
                 mergeSlotProps(listPart, {
                   className: listClassName,
-                  locked: { ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS, id: listId },
+                  locked: { ...NAV_SHOWN_PART_LOCKS, id: listId },
                 }))}
               ref={listMergedRef}
             >
