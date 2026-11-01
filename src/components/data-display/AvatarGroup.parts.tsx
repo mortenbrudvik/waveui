@@ -68,8 +68,10 @@ export interface AvatarGroupItemProps extends Omit<AvatarProps, 'slotProps'> {
    * Props for the element the item draws in the overflow list, by part, merged into the part's
    * own: your classes after the part's (yours win a conflict), your styles over its styles, your
    * attributes and handlers added, your ref attached. Every attribute the item sets on the part is
-   * locked. A part takes no `children`. In the group the item is an `Avatar`, which takes the
-   * item's other props; the avatar's own parts are not reached from here.
+   * locked. A part takes no `children`. These are the item's parts, not its avatar's: the item
+   * passes none of them to the `Avatar` it renders, so its avatar takes no `visual` part (in the
+   * group, the item's other props, its `className` and `style` included, still reach that
+   * avatar).
    */
   slotProps?: {
     /**
@@ -112,7 +114,7 @@ AvatarGroupItemImpl.displayName = 'AvatarGroupItem';
 /**
  * A member of an AvatarGroup. In the group it renders as an `Avatar`; in the overflow list of the
  * popup it renders as a row with the avatar and the name. It takes the props of an `Avatar`, but
- * its `slotProps` reach the name of that row.
+ * its `slotProps` reach the name of that row: its avatar takes no `visual` part.
  */
 export const AvatarGroupItem = AvatarGroupItemImpl;
 
