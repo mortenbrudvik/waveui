@@ -4,14 +4,20 @@ import { renderToString } from 'react-dom/server';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { List, ListItem } from '../List';
-import type { ListProps, ListSelectionMode } from '../List';
+import type { ListItemProps, ListProps, ListSelectionMode } from '../List';
 import { ListRegistrySnapshot } from '../List.registry';
 import { Button } from '../../button/Button';
 import { Toolbar } from '../../button/Toolbar';
 import { Menu } from '../../navigation/Menu';
 import { Popover } from '../../overlays/Popover';
+import { useVirtualWindow } from '../../../hooks/useVirtualWindow';
+import { listClassNames, listItemClassNames } from '../../../lib/classNames';
 import {
   asClientReference,
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  normaliseIds,
+  openingTags,
   renderWithProviders,
   testComposedHandler,
   testCompoundExposure,
@@ -2168,5 +2174,445 @@ describe('List', () => {
       expect(onKeyDown).toHaveBeenCalled();
       expect(onChange).toHaveBeenCalledWith(['a']);
     });
+  });
+});
+
+describe('List.Item — slotProps', () => {
+  type ItemSlotProps = NonNullable<ListItemProps['slotProps']>;
+  const EVERY_PART: ItemSlotProps = { content: {}, action: {} };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, listItemClassNames.content),
+    ...all(root, listItemClassNames.action),
+  ];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** An item with an action in a plain list, and one in a selectable list (a grid). */
+  function Lists({
+    slotProps,
+    onClick,
+    onAction,
+  }: {
+    slotProps?: ItemSlotProps;
+    onClick?: React.MouseEventHandler<HTMLLIElement>;
+    onAction?: () => void;
+  }) {
+    return (
+      <>
+        <List aria-label="Plain">
+          <List.Item action={<button type="button">Delete</button>} slotProps={slotProps}>
+            One
+          </List.Item>
+        </List>
+        <List aria-label="Grid" selectable>
+          <List.Item
+            value="a"
+            action={<button type="button">Edit</button>}
+            onClick={onClick}
+            onAction={onAction}
+            slotProps={slotProps}
+          >
+            Doc a
+          </List.Item>
+        </List>
+      </>
+    );
+  }
+
+  // Captured from ee05cf8's dist (client and server agree).
+  const BASE_PINS = [
+    '<span class="wave-list-item__content min-w-0 flex-1">',
+    '<div class="wave-list-item__content min-w-0 flex-1" role="gridcell">',
+    '<span class="wave-list-item__action ms-2 shrink-0" data-list-action="">',
+    '<div class="wave-list-item__action ms-2 shrink-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" data-list-action="" role="gridcell" tabindex="-1">',
+  ].join('\n');
+
+  it('renders the parts of ee05cf8 (attributes sorted), on the client and the server', () => {
+    for (const slotProps of [undefined, EVERY_PART]) {
+      const view = render(<Lists slotProps={slotProps} />);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Lists slotProps={slotProps} />);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps(
+      (slotProps: ItemSlotProps | undefined) => <Lists slotProps={slotProps} />,
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: ItemSlotProps | undefined) => (
+        <List aria-label="Box" selectable checkmark defaultSelectedItem="b">
+          <List.Item value="a" slotProps={slotProps}>
+            A
+          </List.Item>
+          <List.Item value="b" slotProps={slotProps}>
+            B
+          </List.Item>
+          <List.Item value="c" disabledSelection slotProps={slotProps}>
+            C
+          </List.Item>
+        </List>
+      ),
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: ItemSlotProps | undefined) => (
+        <List aria-label="Items" navigationMode="composite">
+          <List.Item value="a" onAction={() => {}} slotProps={slotProps}>
+            A
+          </List.Item>
+          <List.Item action={<input aria-label="Rename" />} slotProps={slotProps}>
+            B
+          </List.Item>
+        </List>
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('keeps the attribute order of ee05cf8 with every part empty', () => {
+    const markup = (slotProps?: ItemSlotProps) => {
+      const { container, unmount } = render(<Lists slotProps={slotProps} />);
+      const html = normaliseIds(container.innerHTML);
+      unmount();
+      return html;
+    };
+    expect(markup(EVERY_PART)).toBe(markup());
+  });
+
+  it('puts your className, style, data-* and ref on each part, in a list and in a grid', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    render(
+      <Lists
+        slotProps={{
+          content: {
+            className: 'my-content flex-none',
+            style: { opacity: 0.5 },
+            'data-part': 'content',
+            ref: collect,
+          },
+          action: {
+            className: 'my-action ms-4',
+            style: { opacity: 0.5 },
+            'data-part': 'action',
+            ref: collect,
+          },
+        }}
+      />,
+    );
+    for (const [cls, name, conflict] of [
+      [listItemClassNames.content, 'content', 'flex-1'],
+      [listItemClassNames.action, 'action', 'ms-2'],
+    ] as const) {
+      const elements = all(document, cls);
+      expect(elements.map((el) => el.localName)).toEqual(['span', 'div']);
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(cls);
+        expect(element).toHaveClass(`my-${name}`);
+        // Your class replaces a conflicting one of the part.
+        expect(element).not.toHaveClass(conflict);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+        expect(refs).toContain(element);
+      }
+    }
+    expect(refs).toHaveLength(4);
+    for (const item of [screen.getByRole('listitem'), screen.getByRole('row')]) {
+      expect(item).not.toHaveAttribute('data-part');
+    }
+  });
+
+  it('locks the attributes the item sets and the markers it reads', async () => {
+    const user = userEvent.setup();
+    const onSelectionChange = vi.fn();
+    const hiddenState = { hidden: true, inert: true, 'aria-hidden': true };
+    const attempt = {
+      ...hiddenState,
+      role: 'toolbar',
+      tabIndex: 0,
+      'aria-label': 'Mine',
+      'data-list-action': 'mine',
+      'data-roving-container': '',
+    } as unknown as ItemSlotProps['content'];
+    render(<Lists slotProps={{ content: attempt, action: attempt }} />);
+    // Only the action cells take your name; an action's widgets stay out of the grid's Tab order.
+    expect(openingTags(...partsOf()).replace(/ aria-label="Mine"/g, '')).toBe(BASE_PINS);
+    expect(all(document, listItemClassNames.content)[1]).not.toHaveAttribute('aria-label');
+    expect(all(document, listItemClassNames.action)[1]).toHaveAttribute('aria-label', 'Mine');
+    expect(screen.getByRole('button', { name: 'Edit' })).toHaveAttribute('tabindex', '-1');
+    // The content is no action: a click on it selects the row; the row reaches its action.
+    render(
+      <List aria-label="Docs" selectable onSelectionChange={onSelectionChange}>
+        <List.Item
+          value="b"
+          action={<button type="button">Open</button>}
+          slotProps={{ content: attempt }}
+        >
+          Doc b
+        </List.Item>
+      </List>,
+    );
+    await user.click(screen.getByText('Doc b'));
+    expect(onSelectionChange).toHaveBeenLastCalledWith(['b']);
+    act(() => row(/Doc b/).focus());
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+  });
+
+  it('runs your content handler before the item: preventDefault() skips the activation, the item onClick still runs', () => {
+    const order: string[] = [];
+    const onClick = vi.fn(() => void order.push('item'));
+    const onAction = vi.fn(() => void order.push('action'));
+    const ui = (prevent: boolean) => (
+      <Lists
+        onClick={onClick}
+        onAction={onAction}
+        slotProps={{
+          content: {
+            onClick: (event) => {
+              order.push('content');
+              if (prevent) event.preventDefault();
+            },
+          },
+        }}
+      />
+    );
+    const { rerender } = render(ui(false));
+    fireEvent.click(screen.getByText('Doc a'));
+    expect(order).toEqual(['content', 'item', 'action']);
+    expect(row(/Doc a/)).toHaveAttribute('aria-selected', 'true');
+    rerender(ui(true));
+    fireEvent.click(screen.getByText('Doc a'));
+    expect(order).toEqual(['content', 'item', 'action', 'content', 'item']);
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(row(/Doc a/)).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('runs your action key handler before the row: preventDefault() keeps focus where it is', async () => {
+    const user = userEvent.setup();
+    const keys: string[] = [];
+    const ui = (prevent: boolean) => (
+      <Lists
+        slotProps={{
+          action: {
+            onKeyDown: (event) => {
+              keys.push(event.key);
+              if (prevent) event.preventDefault();
+            },
+          },
+        }}
+      />
+    );
+    const { rerender } = render(ui(true));
+    const edit = screen.getByRole('button', { name: 'Edit' });
+    act(() => edit.focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(edit).toHaveFocus();
+    rerender(ui(false));
+    await user.keyboard('{ArrowLeft}');
+    expect(row(/Doc a/)).toHaveFocus();
+    expect(keys).toEqual(['ArrowLeft', 'ArrowLeft']);
+  });
+
+  it('calls the part handlers of an item whose selection is disabled, as its own onClick', () => {
+    const onClick = vi.fn();
+    const content = vi.fn();
+    const onSelectionChange = vi.fn();
+    render(
+      <List aria-label="Docs" selectable onSelectionChange={onSelectionChange}>
+        <List.Item
+          value="a"
+          disabledSelection
+          onClick={onClick}
+          slotProps={{ content: { onClick: content } }}
+        >
+          Doc a
+        </List.Item>
+      </List>,
+    );
+    fireEvent.click(screen.getByText('Doc a'));
+    expect(content).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the action cell working while a new inline ref arrives on every render', async () => {
+    const user = userEvent.setup();
+    const seen: Element[] = [];
+    function Deletable() {
+      const [items, setItems] = React.useState(['a', 'b', 'c']);
+      return (
+        <List selectable aria-label="Docs">
+          {items.map((value) => (
+            <List.Item
+              key={value}
+              value={value}
+              action={
+                value === 'b' ? (
+                  <button
+                    type="button"
+                    onClick={() => setItems((current) => current.filter((item) => item !== value))}
+                  >
+                    Delete {value}
+                  </button>
+                ) : undefined
+              }
+              slotProps={{ action: { ref: (node) => void (node && seen.push(node)) } }}
+            >
+              Doc {value}
+            </List.Item>
+          ))}
+        </List>
+      );
+    }
+    const { rerender } = render(<Deletable />);
+    rerender(<Deletable />);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((node) => node === all(document, listItemClassNames.action)[0])).toBe(true);
+    act(() => row(/Doc b/).focus());
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('button', { name: 'Delete b' })).toHaveFocus();
+    // The cell still records the focus it held when it goes: focus moves to the next item.
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('listbox', { name: 'Docs' })).toBeInTheDocument();
+    expect(option('Doc c')).toHaveFocus();
+  });
+
+  it('ignores the action part of an item without an action', () => {
+    const error = vi.spyOn(console, 'error');
+    render(
+      <List aria-label="Plain">
+        <List.Item slotProps={{ action: { className: 'my-action' }, content: {} }}>One</List.Item>
+      </List>,
+    );
+    expect(all(document, listItemClassNames.action)).toHaveLength(0);
+    expect(document.querySelector('.my-action')).toBeNull();
+    expect(screen.getByRole('listitem')).not.toHaveAttribute('slotprops');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('reaches the items a window renders', async () => {
+    vi.spyOn(Element.prototype, 'clientHeight', 'get').mockImplementation(function (this: Element) {
+      return this.classList.contains(listClassNames.root) ? 200 : 0;
+    });
+    function Windowed() {
+      const virtualWindow = useVirtualWindow({ itemSize: 40 });
+      return (
+        <List
+          aria-label="Files"
+          selectable
+          navigationMode="composite"
+          virtualWindow={virtualWindow}
+          count={1000}
+        >
+          {(index) => (
+            <List.Item
+              value={`file-${index}`}
+              action={<button type="button">{`Open ${index}`}</button>}
+              slotProps={{ content: { 'data-part': 'content' }, action: { 'data-part': 'action' } }}
+            >
+              {`File ${index}`}
+            </List.Item>
+          )}
+        </List>
+      );
+    }
+    render(<Windowed />);
+    await flushItemObserver();
+    const rows = screen.getAllByRole('row');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(40);
+    for (const item of rows) {
+      expect(item.querySelector(`.${listItemClassNames.content}`)).toHaveAttribute(
+        'data-part',
+        'content',
+      );
+      expect(item.querySelector(`.${listItemClassNames.action}`)).toHaveAttribute(
+        'data-part',
+        'action',
+      );
+    }
+    for (const spacer of document.querySelectorAll(`.${listClassNames.spacer}`)) {
+      expect(spacer).not.toHaveAttribute('data-part');
+    }
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const content = vi.fn();
+    const action = vi.fn();
+    const onAction = vi.fn();
+    render(
+      <React.StrictMode>
+        <Lists
+          onAction={onAction}
+          slotProps={{ content: { onClick: content }, action: { onClick: action } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByText('Doc a'));
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(content).toHaveBeenCalledTimes(1);
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the action reachable with the mirrored arrows in right-to-left lists', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <List aria-label="Docs" selectable>
+        <List.Item
+          value="a"
+          action={<button type="button">Edit</button>}
+          slotProps={{ content: { className: 'my-content' }, action: { className: 'my-action' } }}
+        >
+          Doc a
+        </List.Item>
+      </List>,
+      { dir: 'rtl' },
+    );
+    act(() => row(/Doc a/).focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('button', { name: 'Edit' })).toHaveFocus();
+    expect(all(document, listItemClassNames.action)[0]).toHaveClass('my-action');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <>
+        <p id="docs-note">Selected documents are synced</p>
+        <Lists
+          slotProps={{
+            content: { className: 'my-content', lang: 'en' },
+            action: { className: 'my-action', 'aria-describedby': 'docs-note' },
+          }}
+        />
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<'content' | 'action'>();
+    expectTypeOf<NonNullable<ItemSlotProps['content']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ItemSlotProps['action']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLElement> | undefined
+    >();
+    // @ts-expect-error -- the item draws its children into the content
+    const content: ItemSlotProps = { content: { children: 'x' } };
+    // @ts-expect-error -- the item draws its action into the cell
+    const action: ItemSlotProps = { action: { children: 'x' } };
+    expect([content, action]).toHaveLength(2);
   });
 });

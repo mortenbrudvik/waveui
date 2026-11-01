@@ -7,6 +7,7 @@ import { warnOnce } from '../../lib/dev';
 import { getArrowIntent } from '../../lib/direction';
 import { carouselFadeMotion, carouselSlideMotion } from '../../lib/motion';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { MotionPreference, Slot } from '../../lib/types';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { focusRing, forcedColors } from '../../lib/styles';
@@ -198,6 +199,81 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 300
    */
   motionDuration?: number;
+  /**
+   * Props for the elements the carousel draws around and between its slides, by part, merged into
+   * each part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref attached. Every attribute the carousel
+   * sets on a part is locked, and so are its handlers: yours runs first, and `preventDefault()` in
+   * yours skips the carousel's handling of the event, except where a part says its work always
+   * runs. A part takes no `children` (the carousel draws their content). Each part locks, unset
+   * where the carousel sets none, `role`, `tabIndex`, `data-roving-container` (it would take the
+   * slides out of their arrow-key order) and `hidden`, `inert` and `aria-hidden`. A
+   * `Carousel.Button` you write replaces the built-in button of its direction and takes its props
+   * directly: `previousButton` and `nextButton` reach only the built-in buttons. The viewport
+   * around the track has no part.
+   */
+  slotProps?: {
+    /**
+     * The rotation control shown while `autoPlay` rotates (stable class
+     * `wave-carousel__auto-play-button`). Locked: `type`, its marker `data-carousel-rotation`,
+     * `aria-label` (from `autoPlayLabels`), `aria-controls`, `disabled` and `aria-pressed` unset
+     * (its name says what it does), and its click (Pause or Start). Its pointer tracking (the
+     * pointer over the control does not pause the rotation) always runs after your mouse enter
+     * and leave handlers, whatever they do.
+     */
+    autoPlayButton?: SlotPart<'button'>;
+    /**
+     * The track that holds the slides and moves between pages (stable class
+     * `wave-carousel__track`). Locked: its `id` (the controls' `aria-controls`), its position and
+     * timing (the translation and the duration it writes in its style win over your style),
+     * `data-dragging`, and with several slides per page the roving container of the slides'
+     * arrow keys (`data-roving-container` and the arrow-key handling). The drag (`draggable`)
+     * starts on its pointer down and follows its pointer moves: `preventDefault()` in yours skips
+     * them. The end of a drag (pointer up and cancel), the swallowed click that ends it and the
+     * focus bookkeeping of the arrow keys always run after yours, whatever it does.
+     */
+    track?: SlotPart<'div'>;
+    /**
+     * Each slide around a `Carousel.Item` (stable class `wave-carousel__slide`). Locked:
+     * `role="group"`, `aria-roledescription` and `aria-label` (from `labels`), `aria-hidden` and
+     * `inert` on the slides that are not shown, and `tabIndex` and `data-roving-value` (set with
+     * several slides per page, which share one arrow-key focus group); the width and the timing it
+     * sets win over your style. The same props reach every slide.
+     */
+    slide?: SlotPart<'div'>;
+    /**
+     * The built-in Previous button (stable class `wave-carousel__previous-button`). Locked:
+     * `type`, `aria-label` (`labels.previous`), `aria-controls`, `disabled` unset, its click, and
+     * `aria-disabled` and `data-disabled` while it is unavailable (at the start without `loop`, or
+     * with one page), which keep it focusable. While it is unavailable your click handler is not
+     * called, as the carousel's is not.
+     */
+    previousButton?: SlotPart<'button'>;
+    /**
+     * The built-in Next button (stable class `wave-carousel__next-button`), locked as
+     * `previousButton` (`labels.next`; unavailable at the end without `loop`).
+     */
+    nextButton?: SlotPart<'button'>;
+    /**
+     * The group of slide picker buttons (stable class `wave-carousel__picker`). Locked:
+     * `role="group"` and `aria-label` (`labels.picker`).
+     */
+    picker?: SlotPart<'div'>;
+    /**
+     * Each button of the slide picker, one per page (stable class
+     * `wave-carousel__picker-button`). Locked: `type`, `aria-label` (the page's name from
+     * `labels`), `aria-current` on the button of the shown page, `disabled` unset, and its click.
+     * The same props reach every button.
+     */
+    pickerButton?: SlotPart<'button'>;
+    /**
+     * The dot inside each picker button of a page without a thumbnail (stable class
+     * `wave-carousel__picker-indicator`). Locked: `aria-hidden` (it is decorative: the button is
+     * named by its page) and, unset, `role` and `tabIndex`. A click on it is a click on its
+     * button, after yours.
+     */
+    pickerIndicator?: SlotPart<'span'>;
+  };
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -286,6 +362,70 @@ function thumbnailSlot(thumbnail: Slot<'img'>): Slot<'img'> {
   return typeof thumbnail === 'string' ? { src: thumbnail } : thumbnail;
 }
 
+/** The handler an unavailable Previous or Next button's part does not deliver. */
+const BLOCK_CLICK = ['onClick'] as const;
+
+/**
+ * What every `slotProps` part locks unset before its own attributes: a role and a tab index (the
+ * carousel decides both), the marker of a roving container (around the slides it would take them
+ * out of their arrow-key order) and the hidden state (the parts hold the slides and controls).
+ */
+const PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/** What a button part locks: `PART_LOCKS`, its type, and no native `disabled` (it stays focusable). */
+const BUTTON_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+  type: 'button',
+  disabled: undefined,
+} as const;
+
+/** What a picker dot locks: `PART_LOCKS`, decorative. */
+const INDICATOR_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': true,
+} as const;
+
+type PartHandler = (event: { defaultPrevented: boolean }) => void;
+
+/**
+ * A part's merged props with the carousel's own work kept: the keys of `style` win over the
+ * part's (the track's position, a slide's width and timing), and each handler of `always` runs
+ * after the part's handler of its key, whatever that does (bookkeeping that follows the pointer or
+ * focus, which a `preventDefault()` must not leave stale).
+ */
+function keepOwnWork(
+  props: Record<string, unknown>,
+  part: object,
+  style: React.CSSProperties | undefined,
+  always: Record<string, unknown> = {},
+): Record<string, unknown> {
+  if (style) props.style = lockPositionStyle(props.style, style);
+  for (const key of Object.keys(always)) {
+    props[key] = composeEventHandlers(
+      (part as Record<string, PartHandler | undefined>)[key],
+      always[key] as PartHandler | undefined,
+      { checkDefaultPrevented: false },
+    );
+  }
+  return props;
+}
+
 const PauseGlyph = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
     <rect x="4" y="3" width="3" height="10" rx="1" />
@@ -316,6 +456,7 @@ const CarouselRoot = ({
   appearance = 'flat',
   motion,
   motionDuration = DEFAULT_MOTION_DURATION,
+  slotProps,
   className,
   children,
   onMouseEnter,
@@ -517,7 +658,13 @@ const CarouselRoot = ({
     dir,
     tabStop: 'last-focused',
   });
-  const trackRef = useMergedRefs<HTMLDivElement>(roving.containerProps.ref, setTrackEl);
+  // The roving container's ref only with several slides per page; a part's ref joins after the
+  // spread, so an inline ref never detaches the container or the track's state.
+  const trackRef = useMergedRefs<HTMLDivElement>(
+    grouped ? roving.containerProps.ref : null,
+    setTrackEl,
+    slotProps?.track?.ref,
+  );
   // Which slide of the new page takes focus after an arrow past the end of a page.
   const pendingFocus = React.useRef<'first' | 'last' | null>(null);
   React.useLayoutEffect(() => {
@@ -527,7 +674,8 @@ const CarouselRoot = ({
     const target = pending === 'first' ? index : pageEnd - 1;
     trackEl.querySelector<HTMLElement>(`[data-roving-value="${target}"]`)?.focus();
   }, [index, pageEnd, trackEl]);
-  const handleTrackKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+  // A stable callback: it writes `pendingFocus` and goes through a track part's merge.
+  const handleTrackKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
     const slideIndex = (event.target as HTMLElement).getAttribute('data-roving-value');
     const intent = getArrowIntent(event.key, { orientation: 'horizontal', dir });
     if (
@@ -557,7 +705,7 @@ const CarouselRoot = ({
       }
     }
     roving.containerProps.onKeyDown(event);
-  };
+  });
 
   const previousLabel = labels?.previous ?? DEFAULT_PREVIOUS_LABEL;
   const nextLabel = labels?.next ?? DEFAULT_NEXT_LABEL;
@@ -658,36 +806,108 @@ const CarouselRoot = ({
 
   const inline = controlsLayout === 'inline' || controlsLayout === 'inline-wide';
   const layoutClasses = CAROUSEL_CONTROL_LAYOUT[controlsLayout];
-  const previousControl = customButtons.previous ?? (
-    <button
-      key="previous"
-      type="button"
-      aria-label={previousLabel}
-      aria-controls={trackId}
-      {...focusableDisabledProps(prevDisabled)}
-      onClick={preventIfDisabled(prevDisabled, goPrev)}
-      className={cn(
-        carouselClassNames.previousButton,
-        CAROUSEL_CONTROL_BASE,
-        layoutClasses.previous,
-      )}
-    >
-      <ChevronLeftIcon size={16} className={chevronClass} />
-    </button>
+  const rotationPart = slotProps?.autoPlayButton;
+  const rotationLabel = stopped ? playLabel : pauseLabel;
+  const rotationClassName = cn(
+    carouselClassNames.autoPlayButton,
+    CAROUSEL_CONTROL_BASE,
+    // Above the edge strips of the wide layouts, which would dim and cover it.
+    'absolute z-20 h-8 w-8 rounded-full border border-border bg-background shadow-2 top-2',
+    // Over the viewport's corner: past the Previous button of an inline layout.
+    inline ? 'start-12' : 'start-2',
   );
-  const nextControl = customButtons.next ?? (
-    <button
-      key="next"
-      type="button"
-      aria-label={nextLabel}
-      aria-controls={trackId}
-      {...focusableDisabledProps(nextDisabled)}
-      onClick={preventIfDisabled(nextDisabled, goNext)}
-      className={cn(carouselClassNames.nextButton, CAROUSEL_CONTROL_BASE, layoutClasses.next)}
-    >
-      <ChevronRightIcon size={16} className={chevronClass} />
-    </button>
+  // The pointer over the control does not pause (APG): the user is operating it.
+  const enterControl = () => setPointerOnControl(true);
+  const leaveControl = () => setPointerOnControl(false);
+  const pickerClassName = cn(
+    carouselClassNames.picker,
+    hasThumbnails
+      ? 'relative mx-auto flex w-fit flex-wrap justify-center gap-2 p-2'
+      : 'absolute inset-x-0 bottom-1 z-10 mx-auto flex w-fit',
   );
+  const pickerButtonPart = slotProps?.pickerButton;
+  /** The dot of a picker button without a thumbnail, its `slotProps` part merged in when given. */
+  const pickerIndicator = (active: boolean) => {
+    const className = cn(
+      carouselClassNames.pickerIndicator,
+      'block h-2 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none',
+      active
+        ? cn('w-5 bg-primary', forcedColors.selectedLeaf)
+        : 'w-2 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
+    );
+    return (
+      <span
+        aria-hidden="true"
+        className={className}
+        {...(slotProps?.pickerIndicator &&
+          mergeSlotProps(slotProps.pickerIndicator, {
+            className,
+            locked: INDICATOR_PART_LOCKS,
+          }))}
+      />
+    );
+  };
+  /** A built-in Previous or Next button, its `slotProps` part merged in when given. */
+  const builtInControl = (previous: boolean) => {
+    const disabled = previous ? prevDisabled : nextDisabled;
+    const label = previous ? previousLabel : nextLabel;
+    const part = previous ? slotProps?.previousButton : slotProps?.nextButton;
+    const onClick = preventIfDisabled(disabled, previous ? goPrev : goNext);
+    const className = cn(
+      previous ? carouselClassNames.previousButton : carouselClassNames.nextButton,
+      CAROUSEL_CONTROL_BASE,
+      previous ? layoutClasses.previous : layoutClasses.next,
+    );
+    const Chevron = previous ? ChevronLeftIcon : ChevronRightIcon;
+    return (
+      <button
+        key={previous ? 'previous' : 'next'}
+        type="button"
+        aria-label={label}
+        aria-controls={trackId}
+        {...focusableDisabledProps(disabled)}
+        onClick={onClick}
+        className={className}
+        {...(part &&
+          mergeSlotProps(part, {
+            className,
+            // An unavailable button calls no click handler of a part, as it calls none of its own.
+            blockHandlers: disabled ? BLOCK_CLICK : undefined,
+            locked: {
+              ...BUTTON_PART_LOCKS,
+              'aria-label': label,
+              'aria-controls': trackId,
+              'aria-disabled': undefined,
+              'data-disabled': undefined,
+              ...focusableDisabledProps(disabled),
+              onClick,
+            },
+          }))}
+      >
+        <Chevron size={16} className={chevronClass} />
+      </button>
+    );
+  };
+  const previousControl = customButtons.previous ?? builtInControl(true);
+  const nextControl = customButtons.next ?? builtInControl(false);
+
+  const trackPart = slotProps?.track;
+  const slidePart = slotProps?.slide;
+  const trackClassName = cn(
+    carouselClassNames.track,
+    // One column with a zero minimum: the slides keep the viewport's width, whatever their
+    // content's longest line.
+    fading ? 'grid grid-cols-[minmax(0,1fr)]' : 'flex',
+    trackMoves && carouselSlideMotion,
+    // Horizontal pointer moves belong to the drag; a vertical swipe still scrolls the page.
+    draggable && 'touch-pan-y',
+  );
+  const trackStyle = fading
+    ? undefined
+    : { transform, ...(trackMoves ? durationStyle : undefined) };
+  const dragging = drag.dragging ? '' : undefined;
+  const trackKeyDown = grouped ? handleTrackKeyDown : undefined;
+  const slideStyle = fading ? durationStyle : slideWidth;
 
   const viewport = (
     <div
@@ -696,44 +916,85 @@ const CarouselRoot = ({
     >
       <div
         id={trackId}
-        className={cn(
-          carouselClassNames.track,
-          // One column with a zero minimum: the slides keep the viewport's width, whatever their
-          // content's longest line.
-          fading ? 'grid grid-cols-[minmax(0,1fr)]' : 'flex',
-          trackMoves && carouselSlideMotion,
-          // Horizontal pointer moves belong to the drag; a vertical swipe still scrolls the page.
-          draggable && 'touch-pan-y',
-        )}
-        style={fading ? undefined : { transform, ...(trackMoves ? durationStyle : undefined) }}
-        data-dragging={drag.dragging ? '' : undefined}
+        className={trackClassName}
+        style={trackStyle}
+        data-dragging={dragging}
         {...drag.handlers}
         {...(grouped ? roving.containerProps : null)}
-        ref={grouped ? trackRef : setTrackEl}
-        onKeyDown={grouped ? handleTrackKeyDown : undefined}
+        onKeyDown={trackKeyDown}
+        {...(trackPart &&
+          keepOwnWork(
+            mergeSlotProps(trackPart, {
+              className: trackClassName,
+              locked: {
+                ...PART_LOCKS,
+                id: trackId,
+                'data-dragging': dragging,
+                'data-roving-container': grouped ? '' : undefined,
+                onPointerDown: drag.handlers.onPointerDown,
+                onPointerMove: drag.handlers.onPointerMove,
+                onKeyDown: trackKeyDown,
+                onKeyDownCapture: grouped ? roving.containerProps.onKeyDownCapture : undefined,
+              },
+            }),
+            trackPart,
+            trackStyle,
+            // The end of a drag, the click it swallows and the slides' focus record.
+            {
+              onPointerUp: drag.handlers.onPointerUp,
+              onPointerCancel: drag.handlers.onPointerCancel,
+              onClickCapture: drag.handlers.onClickCapture,
+              onFocus: grouped ? roving.containerProps.onFocus : undefined,
+            },
+          ))}
+        ref={trackRef}
       >
         {items.map(({ key, node }, i) => {
           const active = i >= index && i < index + size;
+          const ref = i === 0 ? setFirstSlideEl : undefined;
+          const label = slideLabel(i, total);
+          const rovingValue = grouped && active ? String(i) : undefined;
+          const tabIndex = grouped && active ? roving.getTabIndex(String(i)) : undefined;
+          const className = cn(
+            carouselClassNames.slide,
+            slideLayout,
+            fading && carouselFadeMotion,
+            fading && !active && 'opacity-0',
+            grouped &&
+              'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+          );
           return (
             <div
               key={key}
-              ref={i === 0 ? setFirstSlideEl : undefined}
+              ref={ref}
               role="group"
               aria-roledescription={slideRoleDescription}
-              aria-label={slideLabel(i, total)}
+              aria-label={label}
               aria-hidden={active ? undefined : true}
               inert={!active}
-              data-roving-value={grouped && active ? String(i) : undefined}
-              tabIndex={grouped && active ? roving.getTabIndex(String(i)) : undefined}
-              className={cn(
-                carouselClassNames.slide,
-                slideLayout,
-                fading && carouselFadeMotion,
-                fading && !active && 'opacity-0',
-                grouped &&
-                  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
-              )}
-              style={fading ? durationStyle : slideWidth}
+              data-roving-value={rovingValue}
+              tabIndex={tabIndex}
+              className={className}
+              style={slideStyle}
+              {...(slidePart &&
+                keepOwnWork(
+                  mergeSlotProps(slidePart, {
+                    className,
+                    ref,
+                    locked: {
+                      ...PART_LOCKS,
+                      role: 'group',
+                      'aria-roledescription': slideRoleDescription,
+                      'aria-label': label,
+                      'aria-hidden': active ? undefined : true,
+                      inert: !active,
+                      'data-roving-value': rovingValue,
+                      tabIndex,
+                    },
+                  }),
+                  slidePart,
+                  slideStyle,
+                ))}
             >
               {node}
             </div>
@@ -770,20 +1031,29 @@ const CarouselRoot = ({
           <button
             type="button"
             data-carousel-rotation=""
-            aria-label={stopped ? playLabel : pauseLabel}
+            aria-label={rotationLabel}
             aria-controls={trackId}
             onClick={toggleRotation}
-            // The pointer over the control does not pause (APG): the user is operating it.
-            onMouseEnter={() => setPointerOnControl(true)}
-            onMouseLeave={() => setPointerOnControl(false)}
-            className={cn(
-              carouselClassNames.autoPlayButton,
-              CAROUSEL_CONTROL_BASE,
-              // Above the edge strips of the wide layouts, which would dim and cover it.
-              'absolute z-20 h-8 w-8 rounded-full border border-border bg-background shadow-2 top-2',
-              // Over the viewport's corner: past the Previous button of an inline layout.
-              inline ? 'start-12' : 'start-2',
-            )}
+            onMouseEnter={enterControl}
+            onMouseLeave={leaveControl}
+            className={rotationClassName}
+            {...(rotationPart &&
+              keepOwnWork(
+                mergeSlotProps(rotationPart, {
+                  className: rotationClassName,
+                  locked: {
+                    ...BUTTON_PART_LOCKS,
+                    'data-carousel-rotation': '',
+                    'aria-label': rotationLabel,
+                    'aria-controls': trackId,
+                    'aria-pressed': undefined,
+                    onClick: toggleRotation,
+                  },
+                }),
+                rotationPart,
+                undefined,
+                { onMouseEnter: enterControl, onMouseLeave: leaveControl },
+              ))}
           >
             {stopped ? <PlayGlyph /> : <PauseGlyph />}
           </button>
@@ -804,57 +1074,60 @@ const CarouselRoot = ({
         <div
           role="group"
           aria-label={pickerLabel}
-          className={cn(
-            carouselClassNames.picker,
-            hasThumbnails
-              ? 'relative mx-auto flex w-fit flex-wrap justify-center gap-2 p-2'
-              : 'absolute inset-x-0 bottom-1 z-10 mx-auto flex w-fit',
-          )}
+          className={pickerClassName}
+          {...(slotProps?.picker &&
+            mergeSlotProps(slotProps.picker, {
+              className: pickerClassName,
+              locked: { ...PART_LOCKS, role: 'group', 'aria-label': pickerLabel },
+            }))}
         >
           {items
             .filter((_, i) => i % size === 0)
             .map(({ key, thumbnail }, page) => {
               const start = page * size;
               const active = start === index;
+              const label = pageLabel(start);
+              const current = active ? 'true' : undefined;
+              const onClick = () => goTo(start);
+              const className = cn(
+                carouselClassNames.pickerButton,
+                'group inline-flex items-center justify-center',
+                thumbnail !== undefined ? 'rounded-md p-0.5' : 'h-6 min-w-6',
+                focusRing,
+              );
               return (
                 <button
                   key={key}
                   type="button"
-                  aria-label={pageLabel(start)}
-                  aria-current={active ? 'true' : undefined}
-                  onClick={() => goTo(start)}
-                  className={cn(
-                    carouselClassNames.pickerButton,
-                    'group inline-flex items-center justify-center',
-                    thumbnail !== undefined ? 'rounded-md p-0.5' : 'h-6 min-w-6',
-                    focusRing,
-                  )}
+                  aria-label={label}
+                  aria-current={current}
+                  onClick={onClick}
+                  className={className}
+                  {...(pickerButtonPart &&
+                    mergeSlotProps(pickerButtonPart, {
+                      className,
+                      locked: {
+                        ...BUTTON_PART_LOCKS,
+                        'aria-label': label,
+                        'aria-current': current,
+                        onClick,
+                      },
+                    }))}
                 >
-                  {thumbnail !== undefined ? (
-                    renderSlot(
-                      thumbnailSlot(thumbnail),
-                      'img',
-                      cn(
-                        carouselItemClassNames.thumbnail,
-                        'block h-12 w-16 rounded object-cover',
-                        active
-                          ? cn('outline-2 outline-primary', forcedColors.selectedContainer)
-                          : 'opacity-70 group-hover:opacity-100',
-                      ),
-                      { alt: '', draggable: false },
-                    )
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        carouselClassNames.pickerIndicator,
-                        'block h-2 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none',
-                        active
-                          ? cn('w-5 bg-primary', forcedColors.selectedLeaf)
-                          : 'w-2 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
-                      )}
-                    />
-                  )}
+                  {thumbnail !== undefined
+                    ? renderSlot(
+                        thumbnailSlot(thumbnail),
+                        'img',
+                        cn(
+                          carouselItemClassNames.thumbnail,
+                          'block h-12 w-16 rounded object-cover',
+                          active
+                            ? cn('outline-2 outline-primary', forcedColors.selectedContainer)
+                            : 'opacity-70 group-hover:opacity-100',
+                        ),
+                        { alt: '', draggable: false },
+                      )
+                    : pickerIndicator(active)}
                 </button>
               );
             })}

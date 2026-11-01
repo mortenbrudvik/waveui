@@ -27,6 +27,7 @@ import type {
   CalendarProps,
   CardHeaderProps,
   CardProps,
+  CarouselProps,
   CheckboxProps,
   ColorAreaProps,
   ColorPickerHexFieldProps,
@@ -36,6 +37,7 @@ import type {
   CompoundButtonProps,
   DatePickerProps,
   DialogContentProps,
+  DividerProps,
   DrawerHeaderTitleProps,
   DrawerProps,
   DropdownProps,
@@ -45,6 +47,7 @@ import type {
   InfoLabelProps,
   InputProps,
   LabelProps,
+  ListItemProps,
   MenuItemCheckboxProps,
   MenuItemLinkProps,
   MenuItemProps,
@@ -487,6 +490,11 @@ type SlotPropsOwners = {
   // AvatarGroup.Item omits Avatar's parts and declares the name of its overflow row.
   avatarGroupItemClassNames: AvatarGroupItemProps;
   presenceBadgeClassNames: PresenceBadgeProps;
+  // The built-in Previous and Next buttons take the parts; a Carousel.Button takes its own props.
+  carouselClassNames: CarouselProps;
+  listItemClassNames: ListItemProps;
+  // Divider is polymorphic: its keys are in DividerOwnProps.
+  dividerClassNames: DividerProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

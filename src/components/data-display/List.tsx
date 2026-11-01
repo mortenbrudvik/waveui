@@ -10,6 +10,7 @@ import { INTERACTIVE_SELECTOR, isForeignEvent, type ForeignEventOptions } from '
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
 import { CheckIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRingInset, forcedColors } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -222,9 +223,57 @@ export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
    * content that renders nothing, hides it.
    */
   checkmark?: Slot<'span'>;
+  /**
+   * Props for the elements the item draws around its content and its action, by part, merged
+   * into each part's own: your classes after the part's (yours win a conflict), your styles over
+   * its styles, your attributes and handlers added, your ref attached. Every attribute the item
+   * sets on a part is locked. A part takes no `children` (the item draws their content); the
+   * check mark is the `checkmark` slot.
+   *
+   * Each part is a `<span>`, or a `<div role="gridcell">` in a grid (a selectable list with
+   * actions, or `navigationMode="composite"`), and locks, unset where the item sets none, `role`,
+   * `tabIndex`, `data-roving-container` and `data-list-action` (the markers by which the item
+   * finds its action and keeps the action's widgets out of a grid's Tab order) and `hidden`,
+   * `inert` and `aria-hidden`. The item handles its clicks and keys on itself, after your part's
+   * handler: `preventDefault()` in yours skips the item's handling of the event, while the item's
+   * own `onClick` and `onKeyDown` still run, as for any prevented event of its content.
+   */
+  slotProps?: {
+    /**
+     * The element around the item's children (stable class `wave-list-item__content`). Also
+     * locked: `aria-label` unset (it would replace the content in the item's name).
+     */
+    content?: Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
+    /**
+     * The element around `action` (stable class `wave-list-item__action`), drawn while the
+     * action renders content. In a grid it is a focusable cell with `tabIndex={-1}` (locked),
+     * whose widgets the arrow keys reach. Clicks and keys that start in it never activate the
+     * item.
+     */
+    action?: Omit<SlotPart<'span'>, 'ref'> & { ref?: React.Ref<HTMLElement> };
+  };
   /** Ref to the item element: an `<li>`, or a `<div role="row">` in grid mode. */
   ref?: React.Ref<HTMLLIElement | HTMLDivElement>;
 }
+
+/** A part of a list item (`slotProps.content` or `slotProps.action`). */
+type ListItemPart = NonNullable<ListItemProps['slotProps']>['content'];
+
+/**
+ * What both parts of a list item lock unset before their own attributes (each also locks its role):
+ * a tab index (the item decides it), the marker of a roving container (on the action cell it would
+ * keep the action's widgets in a grid's Tab order), the action cell's marker (on the content it
+ * would make the content the action cell) and the hidden state (the parts hold the item's content
+ * and action).
+ */
+const ITEM_PART_LOCKS = {
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  'data-list-action': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
 
 /* ------------------------------------------------------------------ */
 /*  Context                                                            */
@@ -1154,6 +1203,7 @@ export const ListItem = ({
   onAction,
   disabledSelection = false,
   checkmark,
+  slotProps,
   className,
   style,
   children,
@@ -1342,6 +1392,8 @@ export const ListItem = ({
   const Element = (mode === 'grid' ? 'div' : 'li') as React.ElementType;
   const ContentCell = (mode === 'grid' ? 'div' : 'span') as React.ElementType;
   const role = mode === 'grid' ? 'row' : mode === 'listbox' ? 'option' : 'listitem';
+  const contentRole = mode === 'grid' ? 'gridcell' : undefined;
+  const contentClassName = cn(listItemClassNames.content, 'min-w-0 flex-1');
 
   const interactiveProps: Record<string, unknown> = navigable
     ? {
@@ -1414,13 +1466,22 @@ export const ListItem = ({
       {...windowProps}
     >
       <ContentCell
-        role={mode === 'grid' ? 'gridcell' : undefined}
-        className={cn(listItemClassNames.content, 'min-w-0 flex-1')}
+        role={contentRole}
+        className={contentClassName}
+        {...(slotProps?.content &&
+          mergeSlotProps(slotProps.content, {
+            className: contentClassName,
+            locked: { ...ITEM_PART_LOCKS, 'aria-label': undefined, role: contentRole },
+          }))}
       >
         {children}
       </ContentCell>
       {hasAction && (
-        <ListActionCell grid={mode === 'grid'} onRemovedWithFocus={recordActionFocusLoss}>
+        <ListActionCell
+          grid={mode === 'grid'}
+          onRemovedWithFocus={recordActionFocusLoss}
+          part={slotProps?.action}
+        >
           {/* A generator was read once by the check above: render its items. */}
           {materialiseSlotContent(action)}
         </ListActionCell>
@@ -1536,6 +1597,8 @@ interface ListActionCellProps {
   grid: boolean;
   /** Called when the cell is removed while focus is inside it (the cell is still in the document). */
   onRemovedWithFocus: (cell: HTMLElement) => void;
+  /** The item's `slotProps.action`. */
+  part: ListItemPart;
   children: React.ReactNode;
 }
 
@@ -1548,8 +1611,11 @@ interface ListActionCellProps {
  * `grid` never changes for a mounted cell: switching between list and grid semantics changes the
  * List's root element, which remounts the items and their cells.
  */
-function ListActionCell({ grid, onRemovedWithFocus, children }: ListActionCellProps) {
+function ListActionCell({ grid, onRemovedWithFocus, part, children }: ListActionCellProps) {
   const cellRef = React.useRef<HTMLElement | null>(null);
+  // A part's ref joins after the spread, so an inline ref never detaches the cell's own, which the
+  // effects below read.
+  const cellRefs = useMergedRefs(cellRef, part?.ref);
 
   React.useLayoutEffect(() => {
     const cell = cellRef.current;
@@ -1566,13 +1632,21 @@ function ListActionCell({ grid, onRemovedWithFocus, children }: ListActionCellPr
   }, [grid]);
 
   const Cell = (grid ? 'div' : 'span') as React.ElementType;
+  const role = grid ? 'gridcell' : undefined;
+  const tabIndex = grid ? -1 : undefined;
+  const className = cn(listItemClassNames.action, 'ms-2 shrink-0', grid && focusRingInset);
   return (
     <Cell
-      ref={cellRef}
-      role={grid ? 'gridcell' : undefined}
-      tabIndex={grid ? -1 : undefined}
+      role={role}
+      tabIndex={tabIndex}
       data-list-action=""
-      className={cn(listItemClassNames.action, 'ms-2 shrink-0', grid && focusRingInset)}
+      className={className}
+      {...(part &&
+        mergeSlotProps(part, {
+          className,
+          locked: { ...ITEM_PART_LOCKS, role, tabIndex, 'data-list-action': '' },
+        }))}
+      ref={cellRefs}
     >
       {children}
     </Cell>
