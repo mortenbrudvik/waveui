@@ -3106,6 +3106,41 @@ describe('Overflow — slotProps', () => {
     expect(element).toHaveAttribute('data-overflow-button', '');
   });
 
+  it('keeps a Toolbar’s arrow order and its one Tab stop with a marker and a tab index on the wrapper', async () => {
+    layoutWith({ ...FOUR });
+    const user = userEvent.setup();
+    render(
+      <Toolbar aria-label="Formatting">
+        <Overflow
+          data-testid="overflow"
+          overflowButton={moreButton}
+          slotProps={{ overflowButton: { 'data-roving-container': '', tabIndex: 0 } }}
+        >
+          {['a', 'b', 'c', 'd'].map((id) => (
+            <OverflowItem key={id} asChild itemId={id}>
+              <Toolbar.Button data-testid={`item-${id}`}>{id.toUpperCase()}</Toolbar.Button>
+            </OverflowItem>
+          ))}
+        </Overflow>
+      </Toolbar>,
+    );
+    expect(hiddenItems()).toEqual(['c', 'd']);
+    const toolbar = screen.getByRole('toolbar');
+    const [a, b] = [screen.getByTestId('item-a'), screen.getByTestId('item-b')];
+    const more = screen.getByRole('button', { name: '+2' });
+    expect(shownWrapper()).not.toHaveAttribute('tabindex');
+    expect(shownWrapper()).not.toHaveAttribute('data-roving-container');
+    // The button is an item of the toolbar behind its one Tab stop.
+    expect(Array.from(toolbar.querySelectorAll('[tabindex="0"]'))).toEqual([a]);
+    expect(more).toHaveAttribute('tabindex', '-1');
+    act(() => a.focus());
+    await user.keyboard('{ArrowRight}');
+    expect(b).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(more).toHaveFocus();
+    expect(Array.from(toolbar.querySelectorAll('[tabindex="0"]'))).toEqual([more]);
+  });
+
   it('runs your handler after the button’s own, once per click in StrictMode', async () => {
     layoutWith({ ...FOUR });
     const user = userEvent.setup();

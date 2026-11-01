@@ -83,7 +83,9 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
    * Props for the elements the trail draws around its items, by part, merged into each part's
    * own: your classes after the part's (yours win a conflict), your styles over its styles, your
    * attributes and handlers added, your ref attached. Every attribute the trail sets on a part is
-   * locked, no part takes another role, and no part hides what it holds. A part takes no
+   * locked, no part takes another role, a tab index or a roving container's marker (the arrow
+   * keys of `focusMode="arrow"` keep their items and their one Tab stop), and no part hides what
+   * it holds. A part takes no
    * `children` (the trail draws their content); the items take their own props and `divider`
    * fills its own slot. In `focusMode="arrow"` a part's `onKeyDown` runs before the trail's arrow
    * keys, which `preventDefault()` in it skips. Fluent UI's Breadcrumb has no such parts: its list
@@ -94,7 +96,8 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
      * The trail's list (stable class `wave-breadcrumb__list`): an `<ol>`, or with
      * `overflow="auto"` the `role="list"` `<div>` of the `Overflow` it renders, which takes the
      * part's props as its own (your ref attached beside the Overflow's). Locked: no role (`list`
-     * on the Overflow's), and no `hidden`, `inert` or `aria-hidden`, since it holds the items.
+     * on the Overflow's), no tab index or roving container's marker, and no `hidden`, `inert` or
+     * `aria-hidden`, since it holds the items.
      * With `overflow="auto"` the Overflow props the trail sets are locked too (the overflow
      * direction, the button and where it stands, the axis, no hidden items reserved and none
      * kept visible) and so are its `data-orientation`, `data-overflow-direction` and
@@ -105,8 +108,8 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
      * Every `<li>` of the trail, the one that holds the "…" button of `maxDisplayedItems`
      * included (stable class `wave-breadcrumb__list-item`); with `overflow="auto"` the button
      * stands in the Overflow's own wrapper, which this part does not reach. Locked: no role (it
-     * stays a list item), and no `hidden`, `inert`, `aria-hidden` or `data-overflow-hidden`, since
-     * it holds an item. With `overflow="auto"` a list item that does not fit is hidden by the
+     * stays a list item), no tab index or roving container's marker, and no `hidden`, `inert`,
+     * `aria-hidden` or `data-overflow-hidden`, since it holds an item. With `overflow="auto"` a list item that does not fit is hidden by the
      * Overflow (`data-overflow-hidden`, `aria-hidden`, `inert` and an inline `display: none`, all
      * over yours), and your ref is attached beside the Overflow's.
      */
@@ -114,7 +117,8 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
     /**
      * The "…" button that opens the menu of the collapsed items, with `maxDisplayedItems` or
      * `overflow="auto"` (stable class `wave-breadcrumb__overflow-button`). Locked: `type`, its
-     * name (`aria-label`, from `overflowLabel`), no role or tab index, never disabled (no
+     * name (`aria-label`, from `overflowLabel`), no role, tab index or roving container's marker
+     * (it stays an item of the arrow keys), never disabled (no
      * `disabled`, `aria-disabled` or `data-roving-disabled`), and no `hidden`, `inert` or
      * `aria-hidden`. Its menu sets `aria-haspopup`, `aria-expanded` and `aria-controls`, which
      * win over yours, and labels itself with the button's id (yours, when you give one); an
@@ -327,10 +331,12 @@ const OVERFLOW_KEY = '\u0000overflow';
 
 /**
  * What the trail's list and list item parts lock unset: a role (in `focusMode="arrow"` one with
- * the link role would be an item of the arrow keys), their hidden state (they hold the items) and
- * the marker by which the Overflow of `overflow="auto"` tells a hidden list item (it stops
- * measuring an item that carries it). In the order the Overflow writes its hidden state, so a
- * hidden list item keeps its attribute order.
+ * the link role would be an item of the arrow keys), a tab index and a roving container's marker
+ * (the arrow keys' trail has one Tab stop, and a marked element would be one nested item holding
+ * the links), their hidden state (they hold the items) and the marker by which the Overflow of
+ * `overflow="auto"` tells a hidden list item (it stops measuring an item that carries it). The
+ * hidden state first, in the order the Overflow writes it, so a hidden list item keeps its
+ * attribute order.
  */
 const LIST_PART_LOCKS = {
   'aria-hidden': undefined,
@@ -338,16 +344,20 @@ const LIST_PART_LOCKS = {
   'data-overflow-hidden': undefined,
   role: undefined,
   hidden: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
 } as const;
 
 /**
  * What the overflow button part locks besides its name: a button that is never disabled, takes no
- * other role or tab index and is never hidden (it is the only way to the collapsed items).
+ * other role or tab index, is no roving container (it stays an item of the arrow keys) and is
+ * never hidden (it is the only way to the collapsed items).
  */
 const OVERFLOW_BUTTON_LOCKS = {
   type: 'button',
   role: undefined,
   tabIndex: undefined,
+  'data-roving-container': undefined,
   disabled: undefined,
   'aria-disabled': undefined,
   'data-roving-disabled': undefined,

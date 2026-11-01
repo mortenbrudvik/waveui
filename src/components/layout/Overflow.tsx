@@ -117,8 +117,9 @@ export interface OverflowProps extends React.HTMLAttributes<HTMLDivElement> {
      * it, so your classes and styles count in the room the items get; when every item fits again
      * and focus was in it, focus moves to the first item it stood for. Locked: its marker
      * `data-overflow-button`, its `data-overflow-pinned` (only while it covers the end of the
-     * visible items), its `role` (`listitem` in a `role="list"` row, else none), no tab index, and
-     * no `hidden`, `inert` or `aria-hidden`, since it holds the button.
+     * visible items), its `role` (`listitem` in a `role="list"` row, else none), no tab index or
+     * roving container's marker (in a Toolbar the button stays one of its arrow-key items, behind
+     * its one Tab stop), and no `hidden`, `inert` or `aria-hidden`, since it holds the button.
      */
     overflowButton?: SlotPart<'div'>;
   };
@@ -709,6 +710,7 @@ const OverflowRoot = ({
             ...HIDDEN_PART_LOCKS,
             role: buttonRole,
             tabIndex: undefined,
+            'data-roving-container': undefined,
             'data-overflow-button': '',
             'data-overflow-pinned': buttonPinned,
           },

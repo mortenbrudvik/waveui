@@ -2669,9 +2669,16 @@ describe('Breadcrumb — slotProps', () => {
     expect(shownLabels()).toEqual(['Home', '…', 'Page']);
   });
 
-  it('keeps an arrow-key trail’s items: no part becomes one of them', async () => {
+  /** The elements of the trail with a tab index, and the one Tab stop among them. */
+  const tabStopsOf = (nav: HTMLElement) => ({
+    withTabIndex: Array.from(nav.querySelectorAll('[tabindex]')),
+    stops: Array.from(nav.querySelectorAll('[tabindex="0"]')),
+  });
+  /** A part that asks to be an item, a Tab stop and a nested roving container. */
+  const rogue = { role: 'link', tabIndex: 0, 'data-roving-container': '' };
+
+  it('keeps an arrow-key trail’s items and its one Tab stop: no part becomes an item or a nested one', async () => {
     const user = userEvent.setup();
-    const rogue = { role: 'link', tabIndex: 0 };
     render(
       <Crumbs
         maxDisplayedItems={3}
@@ -2679,13 +2686,45 @@ describe('Breadcrumb — slotProps', () => {
         slotProps={{ list: rogue, listItem: rogue, overflowButton: rogue }}
       />,
     );
+    const nav = screen.getByRole('navigation');
     const home = screen.getByRole('link', { name: 'Home' });
+    const more = screen.getByRole('button', { name: 'More items' });
+    const gamma = screen.getByRole('button', { name: 'Gamma' });
+    // The roving hook stamps the items only: one Tab stop, no part with a tab index or a marker.
+    expect(tabStopsOf(nav)).toEqual({ withTabIndex: [home, more, gamma], stops: [home] });
+    expect(nav.querySelectorAll('[data-roving-container]')).toHaveLength(0);
     act(() => home.focus());
     await user.keyboard('{ArrowRight}');
-    expect(screen.getByRole('button', { name: 'More items' })).toHaveFocus();
+    expect(more).toHaveFocus();
     await user.keyboard('{ArrowRight}');
-    expect(screen.getByRole('button', { name: 'Gamma' })).toHaveFocus();
+    expect(gamma).toHaveFocus();
+    expect(tabStopsOf(nav).stops).toEqual([gamma]);
     await user.keyboard('{ArrowLeft}{ArrowLeft}');
+    expect(home).toHaveFocus();
+    expect(tabStopsOf(nav).stops).toEqual([home]);
+  });
+
+  it('keeps the arrow keys and the one Tab stop of an overflow="auto" trail with every part rogue', async () => {
+    const user = userEvent.setup();
+    autoLayout(160);
+    render(
+      <Crumbs
+        overflow="auto"
+        focusMode="arrow"
+        slotProps={{ list: rogue, listItem: rogue, overflowButton: rogue }}
+      />,
+    );
+    expect(shownLabels()).toEqual(['Home', '…', 'Page']);
+    const nav = screen.getByRole('navigation');
+    const home = screen.getByRole('link', { name: 'Home' });
+    const more = screen.getByRole('button', { name: 'More items' });
+    expect(tabStopsOf(nav).stops).toEqual([home]);
+    expect(nav.querySelectorAll('[data-roving-container]')).toHaveLength(0);
+    act(() => home.focus());
+    await user.keyboard('{ArrowRight}');
+    expect(more).toHaveFocus();
+    expect(tabStopsOf(nav).stops).toEqual([more]);
+    await user.keyboard('{ArrowLeft}');
     expect(home).toHaveFocus();
   });
 
