@@ -9,8 +9,9 @@ import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 /*
  * The internal state of the tag family: the TagGroup context its tags read, the host seams
  * TagPicker gives the TagGroup and the Tags it renders, the tag item hooks (value registration and
- * focus after a removal), the held focus of a control disabled while it has focus, and the
- * Delete/Backspace key test. Module-only (never exported from a barrel), and it imports no
+ * focus after a removal), the held focus of a control disabled while it has focus, the
+ * Delete/Backspace key test and what the family's `slotProps` parts lock. Module-only (never
+ * exported from a barrel), and it imports no
  * component, so a module that reads it (Tag) holds no TagGroup or InteractionTag code.
  */
 
@@ -24,6 +25,30 @@ export const TAG_GROUP_SELECTOR = '[data-wave-tag-group]';
 export const TAG_ITEM_SELECTOR = '[data-wave-tag-item]';
 /** Every Tag Dismiss button and InteractionTag Secondary (`data-wave-tag-dismiss`, always rendered). */
 export const TAG_DISMISS_SELECTOR = '[data-wave-tag-dismiss]';
+
+/**
+ * What the text parts of the tag family lock unset (`slotProps` of Tag and InteractionTag.Primary,
+ * and the element around InteractionTag.Secondary's children): a role and a tab index (in a
+ * TagGroup toolbar either makes the part one of the group's controls, or a nested composite that
+ * takes a link of the tag's text out of the arrow order), a name of its own (it would replace the
+ * text in the name the text gives), the roving container marker (the same nesting), the item and
+ * Dismiss markers above (the focus after a removal would take the part for a tag or a Dismiss
+ * control) and the hidden state (the parts hold the tag's text).
+ */
+export const TAG_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'aria-label': undefined,
+  'data-roving-container': undefined,
+  'data-wave-tag-item': undefined,
+  'data-wave-tag-dismiss': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/** The handlers a part does not receive while its control activates nothing (`blockHandlers`). */
+export const BLOCK_CLICK = ['onClick'] as const;
 
 // ---------------------------------------------------------------------------
 // Host seams (frozen, spec §4.1 T-T7)
@@ -67,8 +92,8 @@ export interface TagHostContextValue {
   dismissButtonClassName?: string;
   /**
    * Props merged into the Dismiss button as a `slotProps` part (TagPicker's
-   * `slotProps.removeButton`): its classes last, its handlers first, the button's own attributes
-   * locked.
+   * `slotProps.removeButton`), before the Tag's own `slotProps.dismissButton`: its classes after
+   * the button's, its handlers first, the button's own attributes locked.
    */
   dismissButtonPart?: SlotPart<'button'>;
 }

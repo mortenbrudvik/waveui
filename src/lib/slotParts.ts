@@ -215,6 +215,9 @@ export const SLOT_PROPS_KEYS = {
   ],
   listItemClassNames: ['content', 'action'],
   dividerClassNames: ['line', 'label'],
+  tagClassNames: ['primaryText', 'secondaryText', 'dismissButton'],
+  interactionTagPrimaryClassNames: ['primaryText', 'secondaryText'],
+  interactionTagSecondaryClassNames: ['dismissIcon'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -489,9 +492,6 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
 
 /** The parts no rollout task has covered yet (R7); empty once the rollout is done. */
 export const PENDING_SLOT_PARTS: SlotPartLists = {
-  tagClassNames: ['primaryText', 'secondaryText', 'dismissButton'],
-  interactionTagPrimaryClassNames: ['primaryText', 'secondaryText'],
-  interactionTagSecondaryClassNames: ['dismissIcon'],
   messageBarClassNames: ['body', 'dismissButton'],
   progressBarClassNames: ['bar', 'label'],
   spinnerClassNames: ['spinner', 'label'],

@@ -9,6 +9,8 @@ import { composeStories } from '@storybook/react';
 import * as stories from '../../../../stories/Tag.stories';
 import { Tag } from '../Tag';
 import type { TagOwnProps, TagProps } from '../Tag';
+import { TagGroup } from '../TagGroup';
+import { TagHostContext } from '../TagGroup.context';
 import { Avatar, avatarSizeClasses } from '../Avatar';
 import { Button } from '../../button/Button';
 import type { Slot } from '../../../lib/slot';
@@ -17,6 +19,9 @@ import { tagClassNames } from '../../../lib/classNames';
 import type { TagAppearance, TagShape, TagSize } from '../../../lib/types';
 import {
   asClientReference,
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
@@ -2663,5 +2668,757 @@ describe('Tag stories', () => {
 
     await user.keyboard('{Enter}');
     expect(screen.getByRole('button', { name: 'Dismiss Dismissible tag' })).toBeInTheDocument();
+  });
+});
+
+describe('Tag — slotProps', () => {
+  type TagSlotProps = NonNullable<TagOwnProps['slotProps']>;
+  const EVERY_PART: TagSlotProps = { primaryText: {}, secondaryText: {}, dismissButton: {} };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, tagClassNames.primaryText),
+    ...all(root, tagClassNames.secondaryText),
+    ...all(root, tagClassNames.dismissButton),
+  ];
+  const DISMISS_CLASSES =
+    'wave-tag__dismiss-button relative inline-flex shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-inherit before:absolute disabled:cursor-not-allowed';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A tag with a second line, a disabled one, one with a merged button and a disabled link. */
+  function Tags({ slotProps }: { slotProps?: TagSlotProps }) {
+    return (
+      <>
+        <Tag dismissible secondaryText="Designer" value="k" slotProps={slotProps}>
+          Katri
+        </Tag>
+        <Tag dismissible disabled slotProps={slotProps}>
+          Cherry
+        </Tag>
+        <Tag
+          dismissible
+          dismissIcon={
+            <button type="button" id="merged" title="Remove it" className="my-merged" tabIndex={-1}>
+              Remove
+            </button>
+          }
+          slotProps={slotProps}
+        >
+          Plum
+        </Tag>
+        <Tag as="a" href="#x" disabled secondaryText="Link" slotProps={slotProps}>
+          Link
+        </Tag>
+      </>
+    );
+  }
+
+  // Captured from c2b9673's dist (client and server agree).
+  const BASE_PINS = [
+    '<span class="wave-tag__primary-text inline-flex items-center gap-1 text-caption-1 leading-3.5" id="tag-content-_id0_">',
+    '<span class="wave-tag__primary-text inline-flex items-center gap-1" id="tag-content-_id1_">',
+    '<span class="wave-tag__primary-text inline-flex items-center gap-1" id="tag-content-_id2_">',
+    '<span class="wave-tag__primary-text inline-flex items-center gap-1 text-caption-1 leading-3.5" id="tag-content-_id3_">',
+    '<span class="wave-tag__secondary-text text-caption-2 leading-3">',
+    '<span class="wave-tag__secondary-text text-caption-2 leading-3">',
+    `<button aria-labelledby="tag-dismiss-_id4_ tag-content-_id0_" class="${DISMISS_CLASSES} forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] size-5 before:-inset-0.5 disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:active:bg-muted-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-wave-tag-dismiss="" type="button">`,
+    `<button aria-labelledby="tag-dismiss-_id5_ tag-content-_id1_" class="${DISMISS_CLASSES} aria-disabled:cursor-not-allowed forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] size-5 before:-inset-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-wave-tag-dismiss="" disabled="" type="button">`,
+    `<button aria-labelledby="tag-dismiss-text-_id6_ tag-content-_id2_" class="${DISMISS_CLASSES} forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] size-5 before:-inset-0.5 disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:active:bg-muted-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring my-merged" data-wave-tag-dismiss="" id="merged" tabindex="-1" title="Remove it" type="button">`,
+  ].join('\n');
+
+  /** The development warning of a merged button, asserted once per test. */
+  function expectMergedButtonWarning(warn: { mock: { calls: unknown[][] } }) {
+    expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
+  }
+
+  it('renders the parts of c2b9673 (attributes sorted), on the client and the server', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    for (const slotProps of [undefined, EVERY_PART]) {
+      const view = render(<Tags slotProps={slotProps} />);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Tags slotProps={slotProps} />);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+    expectMergedButtonWarning(warn);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expectInertSlotProps(
+      (slotProps: TagSlotProps | undefined) => <Tags slotProps={slotProps} />,
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: TagSlotProps | undefined) => (
+        <TagGroup aria-label="Fruit" dismissible onDismiss={() => {}}>
+          <Tag value="a" secondaryText="Red" slotProps={slotProps}>
+            Apple
+          </Tag>
+          <Tag value="b" slotProps={slotProps}>
+            <a href="#banana">Banana</a>
+          </Tag>
+          <Tag
+            value="c"
+            dismissIcon={<Button disabledFocusable icon={<CustomIcon />} />}
+            slotProps={slotProps}
+          >
+            Cherry
+          </Tag>
+        </TagGroup>
+      ),
+      EVERY_PART,
+    );
+    // A host's own part (TagPicker's remove buttons) applies with or without yours.
+    expectInertSlotProps(
+      (slotProps: TagSlotProps | undefined) => (
+        <TagHostContext.Provider
+          value={{ dismissName: 'Remove Kiwi', dismissButtonPart: { className: 'host-part' } }}
+        >
+          <Tag dismissible slotProps={slotProps}>
+            Kiwi
+          </Tag>
+        </TagHostContext.Provider>
+      ),
+      EVERY_PART,
+    );
+    expectMergedButtonWarning(warn);
+  });
+
+  it('puts your className, style, data-* and ref on each part', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    render(
+      <Tag
+        dismissible
+        secondaryText="Designer"
+        slotProps={{
+          primaryText: {
+            className: 'my-primary gap-2',
+            style: { opacity: 0.5 },
+            'data-part': 'primaryText',
+            ref: collect,
+          },
+          secondaryText: {
+            className: 'my-secondary leading-4',
+            style: { opacity: 0.5 },
+            'data-part': 'secondaryText',
+            ref: collect,
+          },
+          dismissButton: {
+            className: 'my-dismiss size-6',
+            style: { opacity: 0.5 },
+            'data-part': 'dismissButton',
+            ref: collect,
+          },
+        }}
+      >
+        Katri
+      </Tag>,
+    );
+    for (const [cls, name, mine, conflict] of [
+      [tagClassNames.primaryText, 'primaryText', 'my-primary', 'gap-1'],
+      [tagClassNames.secondaryText, 'secondaryText', 'my-secondary', 'leading-3'],
+      [tagClassNames.dismissButton, 'dismissButton', 'my-dismiss', 'size-5'],
+    ] as const) {
+      const [element] = all(document, cls);
+      expect(element.classList[0]).toBe(cls);
+      expect(element).toHaveClass(mine);
+      // Your class replaces a conflicting one of the part.
+      expect(element).not.toHaveClass(conflict);
+      expect(element).toHaveAttribute('data-part', name);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(refs).toContain(element);
+    }
+    expect(refs).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Dismiss Katri' })).toHaveAttribute(
+      'data-part',
+      'dismissButton',
+    );
+  });
+
+  it('locks the attributes the tag sets and the markers it reads', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const textAttempt = {
+      role: 'button',
+      tabIndex: 0,
+      'aria-label': 'Mine',
+      'data-roving-container': '',
+      'data-wave-tag-item': 'mine',
+      'data-wave-tag-dismiss': 'mine',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as TagSlotProps['primaryText'];
+    const dismissAttempt = {
+      type: 'submit',
+      disabled: true,
+      tabIndex: 0,
+      hidden: true,
+      'aria-hidden': true,
+      'aria-label': 'Mine',
+      'aria-disabled': 'true',
+      'data-disabled': '',
+      'data-disabled-focusable': '',
+      'data-wave-tag-dismiss': 'mine',
+    } as unknown as TagSlotProps['dismissButton'];
+    render(
+      <Tags
+        slotProps={{
+          primaryText: { ...textAttempt, id: 'mine' },
+          secondaryText: textAttempt,
+          dismissButton: dismissAttempt,
+        }}
+      />,
+    );
+    expect(openingTags(...partsOf())).toBe(BASE_PINS);
+    expectMergedButtonWarning(warn);
+  });
+
+  it('adds your ids to the Dismiss button name and lets an id land where the tag sets none', () => {
+    render(
+      <>
+        <span id="kind">fruit</span>
+        <Tag
+          dismissible
+          secondaryText="Stone fruit"
+          slotProps={{
+            secondaryText: { id: 'second-line' },
+            dismissButton: { id: 'dismiss-cherry', 'aria-labelledby': 'kind' },
+          }}
+        >
+          Cherry
+        </Tag>
+      </>,
+    );
+    const button = screen.getByRole('button', { name: 'Dismiss Cherry fruit' });
+    expect(button).toHaveAttribute('id', 'dismiss-cherry');
+    expect(all(document, tagClassNames.secondaryText)[0]).toHaveAttribute('id', 'second-line');
+  });
+
+  /** Filters whose text is a link, in a toolbar TagGroup that removes the dismissed one. */
+  function LinkFilters({ slotProps }: { slotProps?: TagSlotProps }) {
+    const [filters, setFilters] = React.useState(['Red', 'Blue', 'Large']);
+    return (
+      <TagGroup
+        aria-label="Filters"
+        dismissible
+        onDismiss={(value) => setFilters((current) => current.filter((f) => f !== value))}
+      >
+        {filters.map((filter) => (
+          <Tag key={filter} value={filter} slotProps={slotProps}>
+            <a href={`#${filter}`}>{filter}</a>
+          </Tag>
+        ))}
+      </TagGroup>
+    );
+  }
+
+  it("keeps a link in the text in the group's arrow order, and focus after a removal on the Dismiss buttons", async () => {
+    const user = userEvent.setup();
+    const attempt = {
+      role: 'radiogroup',
+      tabIndex: 0,
+      'data-roving-container': '',
+      'data-wave-tag-item': '',
+      'data-wave-tag-dismiss': '',
+      hidden: true,
+      inert: true,
+    } as unknown as TagSlotProps['primaryText'];
+    render(<LinkFilters slotProps={{ primaryText: attempt }} />);
+    const link = (name: string) => screen.getByRole('link', { name });
+    const dismiss = (name: string) => screen.getByRole('button', { name: `Dismiss ${name}` });
+    const group = screen.getByRole('toolbar', { name: 'Filters' });
+    expect(group.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+
+    await user.tab();
+    expect(link('Red')).toHaveFocus();
+    const order: Element[] = [];
+    for (let step = 0; step < 6; step++) {
+      await user.keyboard('{ArrowRight}');
+      order.push(document.activeElement as Element);
+    }
+    expect(order).toEqual([
+      dismiss('Red'),
+      link('Blue'),
+      dismiss('Blue'),
+      link('Large'),
+      dismiss('Large'),
+      link('Red'),
+    ]);
+    expect(group.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+
+    // The removed tag's Dismiss button hands focus to the next tag's Dismiss button (not its
+    // link), and the last one to the previous tag's.
+    act(() => dismiss('Blue').focus());
+    await user.keyboard('{Delete}');
+    await act(async () => {});
+    expect(screen.queryByText('Blue')).toBeNull();
+    expect(dismiss('Large')).toHaveFocus();
+    await user.keyboard('{Delete}');
+    await act(async () => {});
+    expect(screen.queryByText('Large')).toBeNull();
+    expect(dismiss('Red')).toHaveFocus();
+  });
+
+  it('runs your text part handlers before the tag: preventDefault() keeps Delete on a link in the text from dismissing', () => {
+    const order: string[] = [];
+    const onDismiss = vi.fn(() => void order.push('dismiss'));
+    const onKeyDown = vi.fn(() => void order.push('tag'));
+    const ui = (prevent: boolean) => (
+      <Tag
+        dismissible
+        onDismiss={onDismiss}
+        onKeyDown={onKeyDown}
+        slotProps={{
+          primaryText: {
+            onKeyDown: (event) => {
+              order.push('primaryText');
+              if (prevent) event.preventDefault();
+            },
+          },
+        }}
+      >
+        <a href="#cherry">Cherry</a>
+      </Tag>
+    );
+    const { rerender } = render(ui(false));
+    fireEvent.keyDown(screen.getByRole('link', { name: 'Cherry' }), { key: 'Delete' });
+    expect(order).toEqual(['primaryText', 'tag', 'dismiss']);
+    rerender(ui(true));
+    fireEvent.keyDown(screen.getByRole('link', { name: 'Cherry' }), { key: 'Delete' });
+    expect(order).toEqual(['primaryText', 'tag', 'dismiss', 'primaryText', 'tag']);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs your dismissButton onClick first: preventDefault() skips onDismiss and the group', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const ui = (prevent: boolean) => (
+      <TagGroup aria-label="Fruit" onDismiss={() => void order.push('group')}>
+        <Tag
+          value="cherry"
+          dismissible
+          onDismiss={() => void order.push('tag')}
+          slotProps={{
+            dismissButton: {
+              onClick: (event) => {
+                order.push('part');
+                if (prevent) event.preventDefault();
+              },
+              onKeyDown: (event) => {
+                if (prevent) event.preventDefault();
+              },
+            },
+          }}
+        >
+          Cherry
+        </Tag>
+      </TagGroup>
+    );
+    const { rerender } = render(ui(false));
+    const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+    await user.click(button);
+    expect(order).toEqual(['part', 'tag', 'group']);
+    rerender(ui(true));
+    await user.click(button);
+    // Delete dismisses through the button's click, which your onKeyDown keeps from happening.
+    fireEvent.keyDown(button, { key: 'Delete' });
+    expect(order).toEqual(['part', 'tag', 'group', 'part']);
+  });
+
+  it("gives a merged <button> the defaults: your attributes replace its own, the tag's wiring stays locked", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const order: string[] = [];
+    const ui = (prevent: boolean) => (
+      <>
+        <p id="merged-note">Merged note</p>
+        <p id="part-note">Part note</p>
+        <Tag
+          dismissible
+          onDismiss={() => void order.push('onDismiss')}
+          dismissIcon={
+            <button
+              type="button"
+              id="merged"
+              title="Merged"
+              className="merged p-1"
+              data-from="merged"
+              tabIndex={-1}
+              aria-describedby="merged-note"
+              onClick={() => void order.push('merged')}
+            >
+              Remove
+            </button>
+          }
+          slotProps={{
+            dismissButton: {
+              id: 'part',
+              title: 'Part',
+              className: 'part p-2',
+              'data-from': 'part',
+              'aria-describedby': 'part-note',
+              // Locked: tried, and kept at the values the tag and the merged button give.
+              type: 'submit',
+              tabIndex: 0,
+              disabled: true,
+              'aria-label': 'Mine',
+              onClick: (event) => {
+                order.push('part');
+                if (prevent) event.preventDefault();
+              },
+            },
+          }}
+        >
+          Plum
+        </Tag>
+      </>
+    );
+    const { rerender } = render(ui(false));
+    const button = screen.getByRole('button', { name: 'Remove Plum' });
+    expect(button.classList[0]).toBe(tagClassNames.dismissButton);
+    expect(button).toHaveAttribute('id', 'part');
+    expect(button).toHaveAttribute('title', 'Part');
+    expect(button).toHaveAttribute('data-from', 'part');
+    // The merged button's classes, then yours, which win a conflict.
+    expect(button).toHaveClass('merged', 'part', 'p-2');
+    expect(button).not.toHaveClass('p-1');
+    expect(button).toHaveAttribute('aria-describedby', 'merged-note part-note');
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button).toHaveAttribute('tabindex', '-1');
+    expect(button).not.toBeDisabled();
+    expect(button).not.toHaveAttribute('aria-label');
+    fireEvent.click(button);
+    expect(order).toEqual(['part', 'merged', 'onDismiss']);
+    rerender(ui(true));
+    fireEvent.click(button);
+    expect(order).toEqual(['part', 'merged', 'onDismiss', 'part']);
+    expectMergedButtonWarning(warn);
+  });
+
+  it("keeps the type a merged button gives over yours, as it kept it over the tag's", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <Tag
+        dismissible
+        dismissIcon={<button type="reset">Reset</button>}
+        slotProps={{ dismissButton: { type: 'button' } }}
+      >
+        Plum
+      </Tag>,
+    );
+    expect(screen.getByRole('button', { name: 'Reset Plum' })).toHaveAttribute('type', 'reset');
+    expectMergedButtonWarning(warn);
+  });
+
+  it("keeps a merged disabledFocusable Button's state and does not call your onClick", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onClick = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <Tag
+        dismissible
+        onDismiss={onDismiss}
+        dismissIcon={<Button disabledFocusable icon={<CustomIcon />} />}
+        slotProps={{
+          dismissButton: {
+            onClick,
+            'aria-disabled': false,
+            'data-disabled-focusable': undefined,
+            tabIndex: -1,
+          },
+        }}
+      >
+        Cherry
+      </Tag>,
+    );
+    const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAttribute('data-disabled-focusable', '');
+    expect(button).not.toHaveAttribute('tabindex');
+    fireEvent.click(button);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
+    expectMergedButtonWarning(warn);
+  });
+
+  /** A Tag whose `disabled` the test switches, with your Dismiss button part. */
+  function HeldTag({
+    disabled,
+    dismissButton,
+  }: {
+    disabled: boolean;
+    dismissButton: TagSlotProps['dismissButton'];
+  }) {
+    return (
+      <>
+        <Tag dismissible disabled={disabled} slotProps={{ dismissButton }}>
+          Cherry
+        </Tag>
+        <button type="button">After</button>
+      </>
+    );
+  }
+
+  it('calls your dismissButton onClick while the button works, not while it is disabled or held', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const { rerender } = render(<HeldTag disabled={false} dismissButton={{ onClick }} />);
+    const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+    await user.click(button);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    // Disabled while it has focus: held, unavailable but focusable.
+    rerender(<HeldTag disabled dismissButton={{ onClick }} />);
+    expect(button).toHaveAttribute('data-disabled-focusable', '');
+    await user.click(button);
+    await user.keyboard('{Enter}');
+    expect(onClick).toHaveBeenCalledTimes(1);
+    // Natively disabled once focus leaves it.
+    await user.tab();
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('records focus and blur after your onFocus and onBlur, whatever they do', async () => {
+    const user = userEvent.setup();
+    const prevent = (event: React.SyntheticEvent) => event.preventDefault();
+    const dismissButton = { onFocus: prevent, onBlur: prevent };
+    const { rerender } = render(<HeldTag disabled={false} dismissButton={dismissButton} />);
+    const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+    await user.tab();
+    expect(button).toHaveFocus();
+    // The tag knew the button had focus: it holds it, unavailable but focusable.
+    rerender(<HeldTag disabled dismissButton={dismissButton} />);
+    expect(button).toHaveFocus();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    // And it knows focus left: natively disabled.
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+    expect(button).toBeDisabled();
+  });
+
+  it.each([
+    ['a disabled link tag', { as: 'a', href: '#cherry', disabled: true }, 0],
+    ['a disabled button tag', { as: 'button', disabled: true }, 0],
+    ['a disabled span tag, whose onClick runs too', { disabled: true }, 1],
+    ['an enabled link tag', { as: 'a', href: '#cherry' }, 1],
+  ] as const)('calls your text part onClick on %s as the tag calls its own', (_, props, calls) => {
+    const onClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    const primaryText = vi.fn();
+    const secondaryText = vi.fn();
+    render(
+      <Tag
+        {...(props as TagProps<React.ElementType>)}
+        secondaryText="Fruit"
+        onClick={onClick}
+        slotProps={{
+          primaryText: { onClick: primaryText },
+          secondaryText: { onClick: secondaryText },
+        }}
+      >
+        Cherry
+      </Tag>,
+    );
+    fireEvent.click(screen.getByText('Cherry'));
+    fireEvent.click(screen.getByText('Fruit'));
+    expect(primaryText).toHaveBeenCalledTimes(calls);
+    expect(secondaryText).toHaveBeenCalledTimes(calls);
+    expect(onClick).toHaveBeenCalledTimes(2 * calls);
+  });
+
+  it("applies a host's part first and yours after it on a host's Dismiss button", () => {
+    const order: string[] = [];
+    const onDismiss = vi.fn(() => void order.push('onDismiss'));
+    render(
+      <TagHostContext.Provider
+        value={{
+          dismissName: 'Remove Kiwi',
+          dismissButtonPart: {
+            className: 'host-part p-1',
+            'data-from': 'host',
+            onClick: () => void order.push('host'),
+          },
+        }}
+      >
+        <Tag
+          dismissible
+          onDismiss={onDismiss}
+          slotProps={{
+            dismissButton: {
+              className: 'own-part p-2',
+              'data-from': 'own',
+              'aria-label': 'Mine',
+              onClick: () => void order.push('own'),
+            },
+          }}
+        >
+          Kiwi
+        </Tag>
+      </TagHostContext.Provider>,
+    );
+    const button = screen.getByRole('button', { name: 'Remove Kiwi' });
+    expect(button).toHaveClass('host-part', 'own-part', 'p-2');
+    expect(button).not.toHaveClass('p-1');
+    expect(button).toHaveAttribute('data-from', 'own');
+    fireEvent.click(button);
+    expect(order).toEqual(['host', 'own', 'onDismiss']);
+  });
+
+  it('keeps the tag working while new inline refs arrive on every render', async () => {
+    const user = userEvent.setup();
+    const seen: Element[] = [];
+    const onDismiss = vi.fn();
+    function Inline({ dismissible }: { dismissible: boolean }) {
+      return (
+        <Tag
+          dismissible={dismissible}
+          onDismiss={onDismiss}
+          slotProps={{
+            primaryText: { ref: (node) => void (node && seen.push(node)) },
+            dismissButton: { ref: (node) => void (node && seen.push(node)) },
+          }}
+        >
+          <a href="#cherry">Cherry</a>
+        </Tag>
+      );
+    }
+    const { rerender } = render(<Inline dismissible />);
+    rerender(<Inline dismissible />);
+    expect(seen.length).toBeGreaterThan(0);
+    // Delete on the link in the text still reaches the Dismiss button.
+    fireEvent.keyDown(screen.getByRole('link', { name: 'Cherry' }), { key: 'Delete' });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    // The Dismiss button still hands its focus to the link when it goes.
+    await user.click(screen.getByRole('button', { name: 'Dismiss Cherry' }));
+    rerender(<Inline dismissible={false} />);
+    await act(async () => {});
+    expect(screen.getByRole('link', { name: 'Cherry' })).toHaveFocus();
+  });
+
+  it('ignores the parts of a tag that draws no second line and no Dismiss button', () => {
+    const error = vi.spyOn(console, 'error');
+    render(
+      <Tag
+        data-testid="tag"
+        slotProps={{
+          secondaryText: { className: 'my-secondary' },
+          dismissButton: { className: 'my-dismiss' },
+        }}
+      >
+        Cherry
+      </Tag>,
+    );
+    expect(all(document, tagClassNames.secondaryText)).toHaveLength(0);
+    expect(all(document, tagClassNames.dismissButton)).toHaveLength(0);
+    expect(document.querySelector('.my-secondary, .my-dismiss')).toBeNull();
+    expect(screen.getByTestId('tag')).not.toHaveAttribute('slotprops');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const primaryText = vi.fn();
+    const secondaryText = vi.fn();
+    const dismissButton = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <React.StrictMode>
+        <Tag
+          dismissible
+          secondaryText="Fruit"
+          onDismiss={onDismiss}
+          slotProps={{
+            primaryText: { onClick: primaryText },
+            secondaryText: { onClick: secondaryText },
+            dismissButton: { onClick: dismissButton },
+          }}
+        >
+          Cherry
+        </Tag>
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByText('Cherry'));
+    await user.click(screen.getByText('Fruit'));
+    await user.click(screen.getByRole('button', { name: 'Dismiss Cherry' }));
+    expect(primaryText).toHaveBeenCalledTimes(1);
+    expect(secondaryText).toHaveBeenCalledTimes(1);
+    expect(dismissButton).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the parts and the Dismiss button in right-to-left tags', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    renderWithProviders(
+      <Tag
+        dismissible
+        secondaryText="Fruit"
+        onDismiss={onDismiss}
+        slotProps={{
+          primaryText: { className: 'my-primary' },
+          secondaryText: { className: 'my-secondary' },
+          dismissButton: { className: 'my-dismiss' },
+        }}
+      >
+        Cherry
+      </Tag>,
+      { dir: 'rtl' },
+    );
+    expect(all(document, tagClassNames.primaryText)[0]).toHaveClass('my-primary');
+    expect(all(document, tagClassNames.secondaryText)[0]).toHaveClass('my-secondary');
+    const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+    expect(button).toHaveClass('my-dismiss');
+    await user.tab();
+    await user.keyboard('{Backspace}');
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <>
+        <p id="cherry-note">Removed filters can be added again</p>
+        <TagGroup aria-label="Filters" dismissible>
+          <Tag
+            value="cherry"
+            secondaryText="Fruit"
+            slotProps={{
+              primaryText: { className: 'my-primary', lang: 'en' },
+              secondaryText: { className: 'my-secondary' },
+              dismissButton: { className: 'my-dismiss', 'aria-describedby': 'cherry-note' },
+            }}
+          >
+            Cherry
+          </Tag>
+        </TagGroup>
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof TagSlotProps>().toEqualTypeOf<
+      'primaryText' | 'secondaryText' | 'dismissButton'
+    >();
+    expectTypeOf<NonNullable<TagSlotProps['primaryText']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TagSlotProps['secondaryText']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TagSlotProps['dismissButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    // The parts are the same whatever element the tag renders.
+    expectTypeOf<TagProps<'a'>['slotProps']>().toEqualTypeOf<TagOwnProps['slotProps']>();
+    // @ts-expect-error -- the tag draws its text
+    const primary: TagSlotProps = { primaryText: { children: 'x' } };
+    // @ts-expect-error -- `dismissIcon` fills the Dismiss button
+    const dismiss: TagSlotProps = { dismissButton: { children: 'x' } };
+    expect([primary, dismiss]).toHaveLength(2);
   });
 });

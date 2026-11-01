@@ -46,6 +46,8 @@ import type {
   InfoButtonProps,
   InfoLabelProps,
   InputProps,
+  InteractionTagPrimaryProps,
+  InteractionTagSecondaryProps,
   LabelProps,
   ListItemProps,
   MenuItemCheckboxProps,
@@ -77,6 +79,7 @@ import type {
   StepProps,
   SwitchProps,
   TagPickerProps,
+  TagProps,
   TeachingPopoverCarouselNavProps,
   TeachingPopoverProps,
   TimePickerProps,
@@ -495,6 +498,10 @@ type SlotPropsOwners = {
   listItemClassNames: ListItemProps;
   // Divider is polymorphic: its keys are in DividerOwnProps.
   dividerClassNames: DividerProps;
+  // Tag is polymorphic: its keys are in TagOwnProps.
+  tagClassNames: TagProps;
+  interactionTagPrimaryClassNames: InteractionTagPrimaryProps;
+  interactionTagSecondaryClassNames: InteractionTagSecondaryProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

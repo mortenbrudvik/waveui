@@ -13,6 +13,7 @@ import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { TagAppearance, TagShape, TagSize } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -25,6 +26,8 @@ import {
 } from '../button/Button.slots';
 import { AvatarSizeContext } from './Avatar.context';
 import {
+  BLOCK_CLICK,
+  TAG_PART_LOCKS,
   isDismissKey,
   isRepeatedActivation,
   useDismissControlFocus,
@@ -126,6 +129,34 @@ export interface InteractionTagPrimaryProps extends React.ButtonHTMLAttributes<H
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Props for the elements the Primary draws around its text, by part, merged into each part's
+   * own (Fluent UI's `primaryText` and `secondaryText` slot props): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your attributes and handlers
+   * added, your ref attached. Every attribute the Primary sets on a part is locked. A part takes
+   * no `children` (the Primary draws their content); `media` and `icon` are slots of their own.
+   *
+   * Both parts lock, unset, `role`, `tabIndex`, `aria-label` (it would replace the text in the
+   * button's name), `data-roving-container`, the markers by which a TagGroup finds its tags and
+   * their Dismiss controls (`data-wave-tag-item`, `data-wave-tag-dismiss`) and `hidden`, `inert`
+   * and `aria-hidden`. A click on a part is a click on the Primary, after yours:
+   * `preventDefault()` in yours skips the toggle of a selecting TagGroup, while the Primary's own
+   * `onClick` still runs. While the Primary is disabled your `onClick` here is not called, as its
+   * own is not.
+   */
+  slotProps?: {
+    /**
+     * The `<span>` around the Primary's text, its children (stable class
+     * `wave-interaction-tag-primary__primary-text`). Also locked: its `id`, which names the
+     * Secondary with its `dismissLabel` ("Dismiss Cherry").
+     */
+    primaryText?: SlotPart<'span'>;
+    /**
+     * The `<span>` around `secondaryText`, drawn while it renders content (stable class
+     * `wave-interaction-tag-primary__secondary-text`).
+     */
+    secondaryText?: SlotPart<'span'>;
+  };
   ref?: React.Ref<HTMLButtonElement>;
 }
 
@@ -144,6 +175,30 @@ export interface InteractionTagSecondaryProps extends React.ButtonHTMLAttributes
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Props for the glyph the Secondary draws, merged into its own: your classes after its own
+   * (yours win a conflict), your styles over its styles, your attributes and handlers added, your
+   * ref attached. Every attribute the Secondary sets on it is locked. The glyph takes no
+   * `children`: the Secondary's children are its content.
+   */
+  slotProps?: {
+    /**
+     * The glyph (stable class `wave-interaction-tag-secondary__dismiss-icon`): the `<span>` that
+     * wraps the Secondary's children, or, without children, the default dismiss `<svg>`; your ref
+     * receives whichever renders. The span locks its `id` (with a text label among the children it
+     * names the button: "Remove Cherry") and, unset, `role`, `tabIndex`, `aria-label`,
+     * `data-roving-container`, the markers by which a TagGroup finds its tags and their Dismiss
+     * controls (`data-wave-tag-item`, `data-wave-tag-dismiss`) and `hidden`, `inert` and
+     * `aria-hidden`; the svg locks `aria-hidden`, `focusable="false"` and, unset, `role` and
+     * `tabIndex` (it is decorative). A click on it is a click on the Secondary, after yours:
+     * `preventDefault()` in yours skips the dismissal (a TagGroup's `onDismiss(value)`), while
+     * the Secondary's own `onClick` still runs. While the Secondary is disabled your `onClick`
+     * here is not called, as its own is not.
+     */
+    dismissIcon?: Omit<SlotPart<'span'>, 'ref'> & {
+      ref?: React.Ref<HTMLSpanElement | SVGSVGElement>;
+    };
+  };
   ref?: React.Ref<HTMLButtonElement>;
 }
 
@@ -448,6 +503,7 @@ export const InteractionTagPrimary = ({
   secondaryText,
   disabled: disabledProp = false,
   'aria-pressed': ariaPressed,
+  slotProps,
   className,
   children,
   onClick,
@@ -495,13 +551,29 @@ export const InteractionTagPrimary = ({
     secondaryButton.click();
   };
 
+  // The text parts merge only when given, so a Primary without them allocates nothing more; a
+  // disabled Primary calls no click handler, nor do they.
+  const primaryTextPart = slotProps?.primaryText;
+  const secondaryTextPart = slotProps?.secondaryText;
+  const textBlock = disabled ? BLOCK_CLICK : undefined;
+  const primaryTextId = tag.primaryTextId || undefined;
+  const primaryTextClassName = cn(
+    interactionTagPrimaryClassNames.primaryText,
+    hasSecondary && TAG_PRIMARY_TEXT_TWO_LINE_CLASSES,
+  );
+  const secondaryTextClassName = hasSecondary
+    ? cn(interactionTagPrimaryClassNames.secondaryText, TAG_SECONDARY_TEXT_CLASSES)
+    : undefined;
   const primaryText = (
     <span
-      id={tag.primaryTextId || undefined}
-      className={cn(
-        interactionTagPrimaryClassNames.primaryText,
-        hasSecondary && TAG_PRIMARY_TEXT_TWO_LINE_CLASSES,
-      )}
+      id={primaryTextId}
+      className={primaryTextClassName}
+      {...(primaryTextPart &&
+        mergeSlotProps(primaryTextPart, {
+          className: primaryTextClassName,
+          locked: { ...TAG_PART_LOCKS, id: primaryTextId },
+          blockHandlers: textBlock,
+        }))}
     >
       {children}
     </span>
@@ -563,10 +635,13 @@ export const InteractionTagPrimary = ({
           {/* A space between the two texts in the button's name ("Katri Designer"), whatever a
               name computation makes of the column; the column layout never renders it. */}{' '}
           <span
-            className={cn(
-              interactionTagPrimaryClassNames.secondaryText,
-              TAG_SECONDARY_TEXT_CLASSES,
-            )}
+            className={secondaryTextClassName}
+            {...(secondaryTextPart &&
+              mergeSlotProps(secondaryTextPart, {
+                className: secondaryTextClassName,
+                locked: TAG_PART_LOCKS,
+                blockHandlers: textBlock,
+              }))}
           >
             {secondary}
           </span>
@@ -582,6 +657,14 @@ InteractionTagPrimary.displayName = 'InteractionTagPrimary';
 // ---------------------------------------------------------------------------
 // Secondary
 // ---------------------------------------------------------------------------
+
+/** What the default glyph locks (`slotProps.dismissIcon` on the svg): it stays decorative. */
+const GLYPH_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'aria-hidden': true,
+  focusable: 'false',
+} as const;
 
 const BUTTON_CHILD_MESSAGE =
   "InteractionTag.Secondary: its content received a button. A button cannot contain a button: its children became the content of the Dismiss button and its props were dropped. Pass icon content, and handle the dismissal in `onClick` or in the TagGroup's `onDismiss`.";
@@ -600,6 +683,7 @@ export const InteractionTagSecondary = ({
   disabled: disabledProp = false,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
+  slotProps,
   className,
   children,
   onClick,
@@ -677,6 +761,19 @@ export const InteractionTagSecondary = ({
     event.currentTarget.click();
   };
 
+  // The glyph's part merges only when given; a disabled Secondary calls no click handler, nor
+  // does it. The span keeps its label target, the state setter, beside the part's ref.
+  const part = slotProps?.dismissIcon as SlotPart<'span'> | undefined;
+  const glyphBlock = disabled ? BLOCK_CLICK : undefined;
+  const contentClassName = hasContent
+    ? cn(
+        interactionTagSecondaryClassNames.dismissIcon,
+        'inline-flex items-center justify-center',
+        // A text label keeps clear of the divider and the tag's end; a glyph needs no room.
+        hasLabel && INTERACTION_TAG_SECONDARY_LABEL_CLASSES,
+      )
+    : undefined;
+
   return (
     <button
       type="button"
@@ -718,12 +815,14 @@ export const InteractionTagSecondary = ({
         <span
           id={contentId}
           ref={setLabelTarget}
-          className={cn(
-            interactionTagSecondaryClassNames.dismissIcon,
-            'inline-flex items-center justify-center',
-            // A text label keeps clear of the divider and the tag's end; a glyph needs no room.
-            hasLabel && INTERACTION_TAG_SECONDARY_LABEL_CLASSES,
-          )}
+          className={contentClassName}
+          {...(part &&
+            mergeSlotProps(part, {
+              className: contentClassName,
+              ref: setLabelTarget,
+              locked: { ...TAG_PART_LOCKS, id: contentId },
+              blockHandlers: glyphBlock,
+            }))}
         >
           {content}
         </span>
@@ -731,6 +830,12 @@ export const InteractionTagSecondary = ({
         <DismissIcon
           size={TAG_DISMISS_GLYPH_SIZE[size]}
           className={interactionTagSecondaryClassNames.dismissIcon}
+          {...(part &&
+            mergeSlotProps(part, {
+              className: interactionTagSecondaryClassNames.dismissIcon,
+              locked: GLYPH_PART_LOCKS,
+              blockHandlers: glyphBlock,
+            }))}
         />
       )}
     </button>
