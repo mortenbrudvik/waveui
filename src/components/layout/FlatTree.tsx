@@ -72,24 +72,24 @@ export interface FlatTreeProps extends Omit<
   ref?: React.Ref<HTMLDivElement>;
   /**
    * Props for the elements every item draws, by part: each `FlatTree.Item` is rendered by the
-   * tree, never written by hand, so the parts of all of them are given here once. Pass an object
-   * that keeps its identity across renders (defined outside the component, or memoised): the
-   * items read it from a context the tree rebuilds when it changes. Each part is merged into the
-   * part's own props: your classes after the part's (yours win a conflict), your styles over its
-   * styles, your attributes and handlers added, your ref attached (to the part of every rendered
-   * item). Every
-   * attribute an item sets on a part is locked and keeps the item's value, and no part takes a
-   * role, a tab index or the markers by which the tree reads an item (its row and its checkbox),
-   * so a part changes neither the tree's items, its one tab stop nor which clicks an item takes. A
-   * part takes no `children` (the item draws their content: the chevron, the check marks and
-   * what `renderItem` returns); the treeitem elements take no props of yours. Apart from the
-   * checkbox (below), no part carries a handler of the item: an event on a part reaches the item
-   * and the tree after your handler, as one on the content does, and `preventDefault()` in yours
-   * skips their handling of it there too: a click you prevent on the row, the chevron, the radio
-   * or the label neither activates nor expands the item. While an item is disabled (its data's
-   * `disabled`), your `onClick` on its parts is not called, as the item activates on no click.
-   * Fluent UI's FlatTreeItem takes the parts of its TreeItemLayout as slots of their own (`main`
-   * for the label, `expandIcon`, `selector` for the checkbox or radio).
+   * tree, never written by hand, so the parts of all of them are given here once. The items read
+   * the object from the tree's context: an object that keeps its identity across renders (defined
+   * outside the component, or memoised) changes that context only when the tree's state changes.
+   * Each part is merged into the part's own props: your classes after the part's (yours win a
+   * conflict), your styles over its styles, your attributes and handlers added, your ref attached
+   * (to the part of every rendered item). Every attribute an item sets on a part is locked and
+   * keeps the item's value, and no part takes a role, a tab index or the markers by which the tree
+   * reads an item (its row and its checkbox), so a part changes neither the tree's items, its one
+   * tab stop nor which clicks an item takes. A part takes no `children` (the item draws their
+   * content: the chevron, the check marks and what `renderItem` returns); the treeitem elements
+   * take no props of yours. Apart from the checkbox (below), no part carries a handler of the
+   * item: an event on a part reaches the item and the tree after your handler, as one on the
+   * content does, and `preventDefault()` in yours skips their handling of it there too: a click
+   * you prevent on the row, the chevron, the radio or the label neither activates nor expands the
+   * item. While an item is disabled (its data's `disabled`), your `onClick` on its parts is not
+   * called, as the item activates on no click. Fluent UI's FlatTreeItem takes the parts of its
+   * TreeItemLayout as slots of their own (`main` for the label, `expandIcon`, `selector` for the
+   * checkbox or radio).
    */
   slotProps?: {
     /**

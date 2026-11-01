@@ -135,14 +135,16 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
     /**
      * The avatar visual (stable class `wave-avatar__visual`): the circle that shows the image,
      * the icon or the initials and carries the avatar's name. Without a `badge` it is the root
-     * element itself, so the part applies to the root, after the avatar's own props, which win:
-     * its `className` comes before yours, its `style` under yours, its `ref` beside yours, and
-     * your handlers run before its own `on…` props, which `preventDefault()` in yours skips. With
-     * a `badge` it is the `<span>` inside the wrapper, which takes the avatar's own props and
-     * handlers. Locked: the name wiring (`role`, `aria-label`, `aria-hidden`, `aria-description`
-     * and `aria-details`, unset where the avatar sets none), `tabIndex`, `hidden` and `inert`
-     * unset, and without a badge every prop you give the avatar itself and its `data-size`,
-     * `data-shape`, `data-color`, `data-active` and `data-active-appearance`.
+     * element itself, so the part applies to the root, after the avatar's own props, which win,
+     * except that your classes and style keys merge over its own: its `className` comes before
+     * yours, its `style` under yours, its `ref` beside yours, and your handlers run before its
+     * own `on…` props, which `preventDefault()` in yours skips. With a `badge` it is the `<span>`
+     * inside the wrapper, and the wrapper takes the avatar's own props and handlers: your handlers
+     * here run first, as on any content, and `preventDefault()` in them does not skip the avatar's
+     * own `on…` props. Locked: the name wiring (`role`, `aria-label`, `aria-hidden`,
+     * `aria-description` and `aria-details`, unset where the avatar sets none), `tabIndex`,
+     * `hidden` and `inert` unset, and without a badge every prop you give the avatar itself and
+     * its `data-size`, `data-shape`, `data-color`, `data-active` and `data-active-appearance`.
      */
     visual?: SlotPart<'span'>;
   };

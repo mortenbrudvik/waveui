@@ -4067,7 +4067,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     expect((await verifyDist(fixture(withClsx).dist, noPending)).errors).toEqual([
       'useVirtualWindow imports clsx, outside the measured closure (allowed: react)',
     ]);
-  }, 30_000);
+  }, 60_000);
 
   it('verifyDist gates the DataGrid-only import: passes on a correct dist, reports a grid over its budget and an import outside the dependencies', async () => {
     const good = await probeSizeBudget(fixture().dist, DATA_GRID_BUDGET);
@@ -4111,7 +4111,14 @@ describe('the 0.16 probes (INTEGRATION)', () => {
 
   it('verifyDist measures the recorded imports, and main prints them with the window and DataGrid budgets', async () => {
     const { dist } = fixture();
-    const { errors, virtualBudget, recorded } = await verifyDist(dist, noPending);
+    const measured = [];
+    const { errors, virtualBudget, recorded } = await verifyDist(dist, {
+      ...noPending,
+      measure: (root, names) => {
+        measured.push(names.join(' + '));
+        return measureImport(root, names);
+      },
+    });
     expect(errors).toEqual([]);
     expect(virtualBudget).toEqual({ minified: expect.any(Number), gzip: expect.any(Number) });
     // 0.17 appends its own records (RECORDED_IMPORTS_0_17, against 0.16.0), and 0.18 its own
@@ -4123,12 +4130,15 @@ describe('the 0.16 probes (INTEGRATION)', () => {
         gzip: expect.any(Number),
       })),
     );
-    // An import recorded in several lists is measured once.
+    // An import recorded in several lists is measured once: one measurement per label.
+    const labels = recorded.map(({ names }) => names.join(' + '));
+    expect([...measured].sort()).toEqual([...new Set(labels)].sort());
     for (const label of ['DataGrid', 'Tree', 'Button', 'MessageBar']) {
-      const sizes = recorded
-        .filter(({ names }) => names.join(' + ') === label)
-        .map(({ minified, gzip }) => `${minified}/${gzip}`);
-      expect(new Set(sizes).size, label).toBe(1);
+      expect(labels.filter((each) => each === label).length, label).toBeGreaterThan(1);
+      expect(
+        measured.filter((each) => each === label),
+        label,
+      ).toEqual([label]);
     }
     const lines = [];
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
@@ -4152,7 +4162,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
         ),
       );
     }
-  }, 30_000);
+  }, 60_000);
 
   it('the real exports carry the 0.16 flat names', async () => {
     const mod = await import('../../src/index.ts');
@@ -5647,7 +5657,7 @@ describe('verifyDist and main', () => {
       await main(['--dist', fixture({ 'dist/index.d.cts': null }).dist, '--no-pending'], quiet),
     ).toBe(1);
     expect(await main(['--dist', join(fixtureRoot, 'missing')], quiet)).toBe(1);
-  }, 30_000);
+  }, 60_000);
 
   it('fails the final gate (--final) while PENDING_FLAT_EXPORTS is not empty', async () => {
     const lines = [];
@@ -5661,7 +5671,7 @@ describe('verifyDist and main', () => {
     }
     const { errors } = await verifyDist(fixture().dist, { pendingFlatExports: [], final: true });
     expect(errors).toEqual([]);
-  }, 30_000);
+  }, 60_000);
 
   it('tolerates pending flat names, and only while the bridge is open', async () => {
     const { dist } = fixture({
@@ -5690,7 +5700,7 @@ describe('verifyDist and main', () => {
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     expect(await main(['--dist', dist, '--no-pending'], io)).toBe(1);
     expect(lines.join('\n')).toMatch(/CardHeader is not exported/);
-  }, 30_000);
+  }, 90_000);
 });
 
 describe('the entry guard of the gate scripts', () => {

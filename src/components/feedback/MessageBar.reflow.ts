@@ -51,6 +51,8 @@ class MessageBarReflowStore {
    * Drops the text changes not delivered yet. Called in the commit that renders a new layout: text
    * that renders by the layout (`useMessageBarContext`) changed in it, which is no new message, so
    * it must not start the measurement over (each layout would change the text again, without end).
+   * Text an effect changes after that commit is a new message to the observer: computed from the
+   * layout, it starts the measurement over at every change, without end.
    */
   dropTextChanges(): void {
     this.mutations?.takeRecords();

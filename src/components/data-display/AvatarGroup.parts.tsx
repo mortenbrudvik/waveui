@@ -462,5 +462,7 @@ AvatarGroupPopoverImpl.displayName = 'AvatarGroupPopover';
  * children (`AvatarGroup.Item`s, `Avatar`s, text or other elements). Write it as a child of the
  * group to replace the overflow that `max` makes; its `count`, `indicator`, `label`, `open` and
  * `onOpenChange` take over what `max` would have derived. Tab leaves the popup from the button.
+ * Its popup, the popup's list and the list's items take the group's `slotProps.surface`, `list`
+ * and `listItem`, as the built-in overflow's do; the button takes this component's own props.
  */
 export const AvatarGroupPopover = AvatarGroupPopoverImpl;

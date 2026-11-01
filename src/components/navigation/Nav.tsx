@@ -139,10 +139,12 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
      * current page), the value an arrow-key body tracks it by, no role or tab index, no
      * `disabled`, `aria-disabled` or roving container's marker, and no `hidden`, `inert` or
      * `aria-hidden`. An `aria-label` of yours names it instead of the label. Its `onClick`, which
-     * opens or closes the category, is locked and runs after yours: a click whose default is
-     * prevented by then (in yours, or before the click reaches the button) keeps the category as it
-     * is. In an arrow-key body your `onKeyDown` runs before the body's arrow keys, which
-     * `preventDefault()` in yours skips.
+     * opens or closes the category, is locked and runs after yours: `preventDefault()` in yours
+     * keeps the category as it is. A click whose default was prevented before it reached the
+     * button (in label or icon content, or in a capture handler) keeps it too while you give an
+     * `onClick` here or the `label` part is given; otherwise such a click toggles the category,
+     * as without `slotProps`. In an arrow-key body your `onKeyDown` runs before the body's arrow
+     * keys, which `preventDefault()` in yours skips.
      */
     button?: SlotPart<'button'>;
     /**

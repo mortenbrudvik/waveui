@@ -674,8 +674,10 @@ export interface DataGridHeaderCellProps extends React.ThHTMLAttributes<HTMLTabl
      * key and double-click handling: your `onPointerDown`, `onPointerMove`, `onKeyDown`,
      * `onKeyDownCapture` and `onDoubleClick` run first, and `preventDefault()` in them skips the
      * drag, the move, the key and the reset. The end of a drag (`onPointerUp`,
-     * `onPointerCancel`, `onLostPointerCapture`), the release of Enter or Space (`onKeyUp`), the
-     * blur and the measure of the column on focus run after yours whatever they do.
+     * `onPointerCancel`, `onLostPointerCapture`), the blur and the measure of the column on focus
+     * run after yours whatever they do. On the release of a pressed Enter or Space (`onKeyUp`)
+     * the handle always forgets the pressed key after yours, but `preventDefault()` in yours
+     * keeps focus on the handle instead of returning it to the header cell.
      */
     resizeHandle?: SlotPart<'div'>;
   };

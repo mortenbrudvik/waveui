@@ -243,13 +243,14 @@ export interface TagOwnProps {
      * `data-disabled`, `data-disabled-focusable`, the markers by which a TagGroup's arrow keys
      * find their controls (`data-roving-container`, `data-roving-disabled`, `data-roving-value`)
      * and its tags and their Dismiss buttons (`data-wave-tag-item`, `data-wave-tag-dismiss`), and
-     * its click and key handling: your `onClick` runs first,
-     * and `preventDefault()` in it skips the merged button's `onClick`, `onDismiss` and a
-     * TagGroup's `onDismiss(value)`; `preventDefault()` in your `onKeyDown` keeps Delete and
-     * Backspace from dismissing. While the button is disabled, or unavailable but focusable (a
-     * disabled tag's button that keeps its focus, a merged `Button` with `disabledFocusable`),
-     * your `onClick` is not called. The tag records focus and blur after your `onFocus` and
-     * `onBlur`, whatever they do.
+     * its click and key handling: your `onClick` runs first, and `preventDefault()` in it skips
+     * the merged button's `onClick`, `onDismiss` and a TagGroup's `onDismiss(value)`;
+     * `preventDefault()` in your `onKeyDown` keeps Delete and Backspace from dismissing. While the
+     * button is disabled, or unavailable but focusable (a disabled tag's button that keeps its
+     * focus, a merged `Button` with `disabledFocusable`), your `onClick` is not called. The tag
+     * records focus and blur after your `onFocus` and `onBlur`, whatever they do. `title` is not
+     * locked: a `title` of yours replaces a merged button's tooltip, while the button's name stays
+     * the one the tag gives it (its locked `aria-label` or `aria-labelledby`).
      */
     dismissButton?: SlotPart<'button'>;
   };

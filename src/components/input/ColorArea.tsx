@@ -112,7 +112,9 @@ export interface ColorAreaProps extends Omit<
     field?: SlotPart<'div'>;
     /**
      * The `<span>` of the drawn thumb, placed at the value (stable class
-     * `wave-color-area__thumb`). Locked: `aria-hidden`.
+     * `wave-color-area__thumb`). It takes no pointer events, so a press over it lands on the
+     * field and reaches the `field` part's handlers, not this part's (unless a class of yours
+     * gives it pointer events back). Locked: `aria-hidden`.
      */
     thumb?: SlotPart<'span'>;
   };

@@ -25,8 +25,10 @@ export interface TreeItemPersonaLayoutProps extends React.HTMLAttributes<HTMLSpa
    * typeahead text nor the tree's items and tab stop. A part takes no `children` (the layout draws
    * their content); the layout's own element takes its own props. No part carries a handler: an
    * event on a part reaches the item and its tree after your handler, as one on the label does,
-   * and `preventDefault()` in yours skips their handling of it there too. Fluent UI's
-   * TreeItemPersonaLayout gives these parts slots of their own (`media`, `main`, `description`).
+   * and `preventDefault()` in yours skips their handling of it there too: a click you prevent
+   * neither activates nor expands the item, while the `Tree.Item`'s own `onClick` is still
+   * called, as for a prevented click on its label. Fluent UI's TreeItemPersonaLayout gives these
+   * parts slots of their own (`media`, `main`, `description`).
    */
   slotProps?: {
     /**

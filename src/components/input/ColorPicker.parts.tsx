@@ -299,12 +299,16 @@ export interface ColorPickerHexFieldProps extends React.HTMLAttributes<HTMLEleme
    * event, its own `on…` prop included), your ref beside its ref, and your ids added to the
    * input's `aria-labelledby` and `aria-describedby`. Every attribute the field sets on a part
    * is locked and keeps the field's value (set it through the field's own props); you add the
-   * attributes it does not set. A part takes no `children`.
+   * attributes it does not set. A part takes no `children`. The field's root is a `<label>`
+   * around the caption, the input and the error, so a click on the `label` or `errorMessage`
+   * part focuses the input after your handler, as a click on a label does: `preventDefault()` in
+   * your `onClick` there cancels that.
    */
   slotProps?: {
     /**
      * The `<span>` of the visible caption, `labels.hex` (stable class
      * `wave-color-picker-hex-field__label`). It sets no attribute of its own, so none is locked.
+     * A click on it focuses the input, unless your `onClick` prevents the default.
      */
     label?: SlotPart<'span'>;
     /**
@@ -325,7 +329,8 @@ export interface ColorPickerHexFieldProps extends React.HTMLAttributes<HTMLEleme
     /**
      * The `<span>` of the error text, `labels.hexError`, rendered while the typed text is not a
      * hex color (stable class `wave-color-picker-hex-field__error-message`). Locked: `id`, which
-     * the input's `aria-describedby` names.
+     * the input's `aria-describedby` names. A click on it focuses the input, unless your `onClick`
+     * prevents the default.
      */
     errorMessage?: SlotPart<'span'>;
   };

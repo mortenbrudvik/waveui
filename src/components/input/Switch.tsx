@@ -149,11 +149,12 @@ export interface SwitchProps extends Omit<
      * `controlRef` reaches it as well). Locked: `id`, `type`, `role`, `aria-checked`,
      * `disabled`, `tabIndex`, `autoFocus`, the attributes of `disabledFocusable`, the naming and
      * Field attributes routed to it (`aria-label`, `aria-invalid`, `aria-required`,
-     * `aria-errormessage`, `aria-details`, `aria-disabled`), `form` (the switch belongs to the
-     * form of its own `form` prop, as its hidden input does), `hidden` and `aria-hidden` (a
-     * focusable control is never hidden). Your `onClick` runs before the
-     * Switch's `onClick` and its toggle (`preventDefault()` skips both) and is not called under
-     * `disabledFocusable`; your focus and key handlers run before the Switch's.
+     * `aria-errormessage`, `aria-details`, `aria-disabled`), `required` (unset: the hidden input
+     * carries it), `form` (the switch belongs to the form of its own `form` prop, as its hidden
+     * input does), `hidden` and `aria-hidden` (a focusable control is never hidden). Your
+     * `onClick` runs before the Switch's `onClick` and its toggle (`preventDefault()` skips both)
+     * and is not called under `disabledFocusable`; your focus and key handlers run before the
+     * Switch's.
      */
     track?: SlotPart<'button'>;
     /** The thumb `<span>` inside the track (stable class `wave-switch__thumb`). Locked: `aria-hidden`. */

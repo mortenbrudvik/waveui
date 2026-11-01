@@ -186,7 +186,8 @@ export interface UseRadioGroupItemResult {
  *
  * - Name the element (`aria-labelledby` pointing at its title, or `aria-label`) and describe it
  *   (`aria-describedby`) yourself, and draw its checked, disabled and focused looks (from `checked`
- *   and `disabled`, or the ARIA attributes), with a focus indicator a keyboard user can see.
+ *   and `disabled`, or the ARIA attributes), with a focus indicator a keyboard user can see: the
+ *   library's own is the exported `focusRing` class string, which you add with `cn()`.
  * - The content of a radio is presentational: put no link, button or other control inside it.
  * - Compose a handler of your own with the returned one (`composeEventHandlers(yours,
  *   props.onClick)`): `preventDefault()` in yours cancels the selection.

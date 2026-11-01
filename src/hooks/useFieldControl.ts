@@ -207,6 +207,9 @@ export interface FieldContextProviderProps {
  *
  * Without `controlIdAssigned` or `controlIdClaim` in `value`, every control inside without an `id`
  * of its own takes the `controlId`: put one such control inside, or give the others ids.
+ *
+ * The provider passes `value` on as it is: memoise it (`useMemo` over its members) or hoist it out
+ * of the component, since a new object on every render re-renders every control that reads it.
  */
 export function FieldContextProvider({
   value,

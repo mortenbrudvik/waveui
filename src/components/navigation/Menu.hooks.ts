@@ -82,10 +82,13 @@ function toMenuContextValue(
  * of that menu: the arrow keys, Home, End and typeahead move focus to it (typeahead matches its
  * text, or a `data-roving-text` attribute you give it), the mouse pointer focuses it while focus is
  * in the menu, and `aria-disabled="true"` makes the keys skip it. The menu manages its `tabIndex`,
- * so render none. The element activates itself: handle its click, make Enter and Space click it
- * (skip a key whose default was prevented: the menu prevents a Space that continues a typeahead
- * search), and call `close()` after its action. `useMenuListContext` tells it which columns to
- * keep, so its label lines up with the built-in items.
+ * so render none. The element activates itself: handle its click (skip one whose default was
+ * prevented), make Enter and Space click it (only while the element itself has focus, and skip a
+ * key whose default was prevented: the menu prevents a Space that continues a typeahead search),
+ * and call `close()` after its action. While it is disabled, render `aria-disabled="true"` and
+ * ignore its click and keys. Its content is presentational, as a built-in item's: put no link,
+ * button or other control inside it. `useMenuListContext` tells it which columns to keep, so its
+ * label lines up with the built-in items.
  *
  * Must be called inside a `Menu`: outside one it throws in development and, in production, logs
  * once and returns an inert value (closed, not a submenu, `close` does nothing).
@@ -100,12 +103,14 @@ function toMenuContextValue(
  *   return (
  *     <div
  *       role="menuitem"
- *       onClick={() => {
+ *       onClick={(event) => {
+ *         if (event.defaultPrevented) return;
  *         onSelect();
  *         close();
  *       }}
  *       onKeyDown={(event) => {
- *         if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return;
+ *         if (event.defaultPrevented || event.target !== event.currentTarget) return;
+ *         if (event.key !== 'Enter' && event.key !== ' ') return;
  *         event.preventDefault();
  *         event.currentTarget.click();
  *       }}
@@ -160,11 +165,14 @@ const getServerColumns = () => 0;
  * The values follow the built-in items as they render: an item that adds or removes an icon or a
  * check column updates them. They are `false` in the server HTML, and become right once the list
  * has mounted, before the browser paints it. Items of your own do not count: a list whose only
- * icon is yours does not make the built-in items keep the icon column.
+ * icon is yours does not make the built-in items keep the icon column. A static `Menu` nested in
+ * another menu's list is a list of its own: inside it, the values report its own items only.
  *
  * Must be called inside a menu list, `Menu.Popover` or a static `Menu` (in a popup `Menu`, outside
  * its `Menu.Popover`, there is none): outside one it throws in development and, in production,
- * logs once and returns `false` for both.
+ * logs once and returns `false` for both. React context crosses portals, so in a root popup `Menu`
+ * inside a Popover or Dialog opened from another menu's item, a call outside the root menu's own
+ * `Menu.Popover` (in its trigger, say) finds the outer menu's list and reports its columns.
  *
  * Fluent UI's counterpart is `useMenuListContext_unstable(selector)`, whose `hasIcons` and
  * `hasCheckmarks` are props you set on `Menu` or `MenuList`; WaveUI finds them from the items.

@@ -475,8 +475,10 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
      * receives each of them, and an `id` would repeat. Your `onKeyDown` runs first:
      * `preventDefault()` in it skips the component's handling of the key, so Delete and
      * Backspace keep the toast and Escape keeps every toast (the region's own `onKeyDown` still
-     * receives it). The region pauses the timers while the pointer or focus is in it whatever
-     * your handlers do. Locked: `role`, `tabIndex`, its marker `data-wave-toast`,
+     * receives it). The region pauses the timers while the pointer or focus is in it, even when
+     * your handlers call `preventDefault()`; a handler of yours that stops a focus or blur event
+     * from propagating keeps it from the region, as one in a toast's content does, and can leave
+     * the timers paused. Locked: `role`, `tabIndex`, its marker `data-wave-toast`,
      * `data-presence`, `inert` (set while the toast exits), `aria-labelledby` and
      * `aria-describedby` (the toast's status text, title and body: your ids are added after
      * them) and, unset, `hidden` and `aria-hidden`.

@@ -63,9 +63,11 @@ export interface CompoundButtonOwnProps {
    * your classes after the part's (yours win a conflict), your styles over its styles, your
    * handlers and attributes added, your ref attached. Every attribute the CompoundButton sets on
    * a part is locked. A part takes no `children` (the label and `secondaryText` are its content).
-   * While the button is `disabled` or `disabledFocusable`, your `onClick` on a part is not
-   * called, as the button's own is not. A CompoundButton with only an icon draws no part and
-   * ignores them.
+   * No part carries a handler of the button: a click on a part is a click on the button, after
+   * yours, so `preventDefault()` in yours cancels the button's native activation (the submission
+   * of a submit button), while the button's own `onClick` still runs. While the button is
+   * `disabled` or `disabledFocusable`, your `onClick` on a part is not called, as the button's
+   * own is not. A CompoundButton with only an icon draws no part and ignores them.
    */
   slotProps?: {
     /**

@@ -160,10 +160,11 @@ export interface CheckboxProps extends Omit<
      * `role`, `aria-checked`, `disabled`, `tabIndex`, `autoFocus`, the attributes of
      * `disabledFocusable`, the naming and Field attributes routed to it (`aria-label`,
      * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `aria-disabled`),
-     * `form` (the checkbox belongs to the form of its own `form` prop, as its hidden input does),
-     * `hidden` and `aria-hidden` (a focusable control is never hidden). Your `onClick` runs before the Checkbox's `onClick` and its toggle (`preventDefault()`
-     * skips both) and is not called under `disabledFocusable`; your focus and key handlers run
-     * before the Checkbox's.
+     * `required` (unset: the hidden input carries it), `form` (the checkbox belongs to the form
+     * of its own `form` prop, as its hidden input does), `hidden` and `aria-hidden` (a focusable
+     * control is never hidden). Your `onClick` runs before the Checkbox's `onClick` and its
+     * toggle (`preventDefault()` skips both) and is not called under `disabledFocusable`; your
+     * focus and key handlers run before the Checkbox's.
      */
     indicator?: SlotPart<'button'>;
     /**

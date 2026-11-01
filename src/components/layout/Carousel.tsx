@@ -214,10 +214,9 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
    * where the carousel sets none, `role`, `tabIndex`, `data-roving-container` (it would take the
    * slides out of their arrow-key order), `data-carousel-rotation` (the rotation control's marker:
    * focus inside a part that carries it would not pause the rotation) and `hidden`, `inert` and
-   * `aria-hidden`. A
-   * `Carousel.Button` you write replaces the built-in button of its direction and takes its props
-   * directly: `previousButton` and `nextButton` reach only the built-in buttons. The viewport
-   * around the track has no part.
+   * `aria-hidden`. A `Carousel.Button` you write replaces the built-in button of its direction and
+   * takes its props directly: `previousButton` and `nextButton` reach only the built-in buttons.
+   * The viewport around the track has no part.
    */
   slotProps?: {
     /**

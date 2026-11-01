@@ -139,7 +139,9 @@ export interface InteractionTagPrimaryProps extends React.ButtonHTMLAttributes<H
    * Both parts lock, unset, `role`, `tabIndex`, `aria-label` (it would replace the text in the
    * button's name), `data-roving-container`, the markers by which a TagGroup finds its tags and
    * their Dismiss controls (`data-wave-tag-item`, `data-wave-tag-dismiss`) and `hidden`, `inert`
-   * and `aria-hidden`. A click on a part is a click on the Primary, after yours:
+   * and `aria-hidden`. An `aria-labelledby` of yours on a part is joined, not locked: the button
+   * is named by its content, which reads such a part by the ids it points at instead of its
+   * text, so your ids rename the Primary. A click on a part is a click on the Primary, after yours:
    * `preventDefault()` in yours skips the toggle of a selecting TagGroup, while the Primary's own
    * `onClick` still runs. While the Primary is disabled your `onClick` here is not called, as its
    * own is not.

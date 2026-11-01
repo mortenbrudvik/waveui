@@ -726,8 +726,8 @@ export const EXCLUSION_PROBES_0_17 = [
  * an import of only `waveTokens` holds the tuple's marker and that of one of only
  * `createBrandTokens` the brand marker, both in a production build, so the fragments the Dialog
  * probe looks for are found where they are; an import of only `WaveProvider` holds the token core;
- * one of only `Tree` the provider's module (`useDirection` reads its context, which is why the
- * Tree's allowance in {@link RECORDED_IMPORTS_0_17} is larger than `cn`'s).
+ * one of only `Tree` the provider's module (`useDirection` reads its context, so a Tree-only
+ * import carries the context's defaults; its budget is the one of {@link RECORDED_IMPORTS_0_18}).
  */
 export const INCLUSION_PROBES_0_17 = [
   { keep: 'waveTokens', modules: [WAVE_TOKENS_MODULE], substrings: [TOKEN_NAMES_MARKER] },
@@ -3126,11 +3126,12 @@ function sizeBudgetErrors(
  * {@link RECORDED_IMPORTS_0_18} (`recorded`: each record with the `minified` and `gzip` sizes
  * measured, `baseline` `null` for an import new in 0.17; the errors of a record's `budget` join
  * the others; an import recorded in several lists is measured once); `final` closes the pending
- * bridge.
+ * bridge. `measure` measures each recorded import ({@link measureImport}; the tests pass a
+ * wrapper that counts the measurements).
  */
 export async function verifyDist(
   dist,
-  { pendingFlatExports = PENDING_FLAT_EXPORTS, final = false } = {},
+  { pendingFlatExports = PENDING_FLAT_EXPORTS, final = false, measure = measureImport } = {},
 ) {
   const distRoot = resolve(dist);
   if (!existsSync(distRoot) || !statSync(distRoot).isDirectory()) {
@@ -3376,7 +3377,7 @@ export async function verifyDist(
       ...RECORDED_IMPORTS_0_18,
     ]) {
       const label = record.names.join(' + ');
-      if (!sizes.has(label)) sizes.set(label, await measureImport(distRoot, record.names));
+      if (!sizes.has(label)) sizes.set(label, await measure(distRoot, record.names));
       const size = sizes.get(label);
       if (record.budget) errors.push(...sizeBudgetErrors(size, record.budget));
       recorded.push({ ...record, minified: size.minified, gzip: size.gzip });

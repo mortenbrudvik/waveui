@@ -157,7 +157,7 @@ Code that calls one of these props itself must pass `details` in 1.0. Read it as
 |---|---|---|---|
 | `ref` on the root, `controlRef` on the focusable element, `slotProps.<part>.ref` on parts | no change: 1.0 moves no `ref` | 0.18 | no |
 
-**Ref placement.** `ref` stays on a component's root element, the one that receives `className`, also on composite controls whose focusable element sits inside a wrapper (Checkbox, Switch, SearchBox, SpinButton and the pickers). `controlRef` reaches that focusable element, and every part reaches its own element through `slotProps.<part>.ref`. Fluent puts `ref` on the primary element instead; code ported from Fluent passes `controlRef` where it passed `ref` to such a control.
+**Ref placement.** `ref` stays on a component's root element, the one that receives `className`, also on composite controls whose focusable element sits inside a wrapper (Checkbox, Switch, SearchBox, SpinButton and the pickers); Input keeps its `ref` on the `<input>`, also with `contentBefore` or `contentAfter`, where `slotProps.root.ref` reaches its wrapper. `controlRef` reaches the focusable element of those composites, and every part reaches its own element through `slotProps.<part>.ref`. Fluent puts `ref` on the primary element instead; code ported from Fluent passes `controlRef` where it passed `ref` to such a control.
 
 ## Not decided yet
 

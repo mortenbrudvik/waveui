@@ -26,7 +26,11 @@ export interface TagPickerOption {
   secondaryContent?: React.ReactNode;
 }
 
-/** Props of TagPicker.Option: an Option with a visual and a second line. */
+/**
+ * Props of TagPicker.Option: an Option with a visual and a second line. Every prop of Option
+ * applies as on an Option, its `slotProps` included: `indicator` (the checkbox square of a
+ * multi-select list) and `content` (the `<span>` around the visual, the text and the second line).
+ */
 export interface TagPickerOptionProps extends OptionProps {
   /** A visual before the text (an Avatar, an icon). Decorative (`aria-hidden`): the text names the option. */
   media?: Slot<'span'>;

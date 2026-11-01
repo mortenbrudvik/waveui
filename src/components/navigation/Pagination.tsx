@@ -111,10 +111,11 @@ export interface PaginationProps extends Omit<React.HTMLAttributes<HTMLElement>,
      * The Previous button, with `showPreviousNext` (stable class
      * `wave-pagination__previous-button`). Locked: `type`, its name (`aria-label`, from
      * `getItemAriaLabel`), `disabled` (the control's), its click (the page change), no
-     * `aria-current`, no role or tab index, and no `hidden`, `inert` or `aria-hidden`. While it
-     * points at the current page (on the first page) it is unavailable: `aria-disabled` and
-     * `data-disabled`, both locked (unset otherwise), and your `onClick` is not called, as the page
-     * change is not.
+     * `aria-current`, no role or tab index, and no `hidden`, `inert` or `aria-hidden`. The button
+     * has no `aria-labelledby` of its own: one of yours is passed on, not locked, and renames the
+     * button (it comes before `aria-label` in the name). While it points at the current page (on
+     * the first page) it is unavailable: `aria-disabled` and `data-disabled`, both locked (unset
+     * otherwise), and your `onClick` is not called, as the page change is not.
      */
     previousButton?: SlotPart<'button'>;
     /**

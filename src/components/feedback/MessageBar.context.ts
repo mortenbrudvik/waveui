@@ -39,10 +39,11 @@ const INERT_CONTEXT: MessageBarContextValue = { status: 'info', layout: 'singlel
  * (the context object is not public), the same object while neither value changes. The nearest
  * `MessageBar` answers, also in a `MessageBarGroup` (each bar gives its own values).
  *
- * `layout` is the one the bar renders, after `layout="auto"` has measured its text. Render from the
- * values during render, not from an effect: message text that changes with the layout then changes
- * in the commit that renders the layout, which an `'auto'` bar does not take for a new message to
- * measure; text changed later, from an effect, makes it measure again at each change.
+ * `layout` is the one the bar renders, after `layout="auto"` has measured its text. Compute text
+ * that depends on the values during render, never in an effect: message text that changes with the
+ * layout then changes in the commit that renders the layout, which an `'auto'` bar does not take
+ * for a new message to measure. Text an effect sets from the layout makes the bar measure again
+ * after each change, without end.
  *
  * Must be called inside a `MessageBar`: outside one it throws in development and, in production,
  * logs once and returns an inert value (`status: 'info'`, `layout: 'singleline'`).

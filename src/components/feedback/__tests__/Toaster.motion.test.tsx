@@ -599,7 +599,7 @@ describe('Toaster — slotProps', () => {
     expect(onKeyDown).toHaveBeenCalledTimes(3);
   });
 
-  it('pauses the timers while focus or the pointer is in a toast, whatever your handlers do', async () => {
+  it('pauses the timers while focus or the pointer is in a toast, even when your handlers call preventDefault()', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });

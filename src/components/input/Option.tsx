@@ -873,7 +873,9 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
     listProps,
     children,
   } = props;
-  // A picker's `slotProps` parts (module-only, through PickerListboxSurface).
+  // A picker's `slotProps` parts (module-only, through PickerListboxSurface). Read by a cast, so a
+  // JavaScript caller of the public ListboxSurface that passes `parts` reaches them too: harmless,
+  // since the parts merge by the same rules (the list's own and `listProps` stay locked).
   const { parts } = props as ListboxSurfaceProps & { parts?: ListboxSurfaceParts };
 
   // The consumer's list attributes go first, so the listbox's own win; its `onMouseDown` runs

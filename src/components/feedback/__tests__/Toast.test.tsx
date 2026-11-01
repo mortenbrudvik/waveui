@@ -2005,6 +2005,7 @@ describe('Toaster: user interaction under fake timers (feedback-navigation#12)',
   });
 });
 
+// The Toaster's `toast` part (the container) is tested in Toaster.motion.test.tsx, the container's suite.
 describe('Toast — slotProps', () => {
   type ToastSlotProps = NonNullable<ToastProps['slotProps']>;
   const EVERY_PART: ToastSlotProps = { content: {}, dismissButton: {} };

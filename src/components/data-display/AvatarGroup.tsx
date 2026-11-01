@@ -105,7 +105,8 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
      * `aria-modal`, `tabIndex={-1}` (focus moves to it as it opens), `data-state`, `data-side`
      * and `data-align`, `hidden`, `inert` and `aria-hidden` unset, and its position, which wins
      * over your style. Its key handler moves Tab through the popup and closes it when Tab leaves:
-     * `preventDefault()` in your `onKeyDown` skips that, and the browser's Tab applies.
+     * `preventDefault()` in your `onKeyDown` skips that: the popup neither moves focus nor
+     * closes, and focus stays where it is unless your handler moves it.
      */
     surface?: SlotPart<'div'>;
     /** The popup's list (stable class `wave-avatar-group__list`). */

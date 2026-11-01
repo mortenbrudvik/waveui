@@ -1133,8 +1133,10 @@ export interface TeachingPopoverCarouselNavProps extends Omit<
     /**
      * The indicator `<span>` inside every step button, a drawing (stable class
      * `wave-teaching-popover-carousel-nav__indicator`). A click on it is a click on its button,
-     * after your handler: `preventDefault()` in your `onClick` skips the step change. Locked:
-     * `aria-hidden` and, unset, `tabIndex`.
+     * after your handler: `preventDefault()` in your `onClick` skips the step change. While this
+     * part is given, even one with only a class, the step buttons skip every click whose default
+     * was prevented before it reached them, also by a capture listener of your page; without it
+     * every click changes the step. Locked: `aria-hidden` and, unset, `tabIndex`.
      */
     indicator?: SlotPart<'span'>;
   };

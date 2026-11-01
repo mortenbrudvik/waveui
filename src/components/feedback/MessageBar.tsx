@@ -169,6 +169,9 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
      * first, and `preventDefault()` in it skips the component's handling of the event, the merged
      * button's `onClick` and `onDismiss` included. While a merged `Button` with
      * `disabledFocusable` makes the button unavailable but focusable, your `onClick` is not called.
+     * `title` is not locked: where `dismiss` names the button only by a `title` (the button then
+     * has no "Dismiss"), a `title` of yours replaces that name, and an empty one leaves the
+     * button nameless.
      */
     dismissButton?: SlotPart<'button'>;
   };

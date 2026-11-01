@@ -37,10 +37,11 @@ export interface UseDataGridSortResult {
 export interface UseDataGridSelectionResult {
   /**
    * The selected row ids the grid holds: the controlled `selectedItems`, else its own, the same
-   * array while the ids stay the same. With `items`, every selected id, whether its row is
-   * rendered (a `virtualWindow` renders only the rows in view), filtered out or no item at all.
-   * Without `items`, an id whose row is no longer rendered stays until the grid's next change
-   * drops it. Empty in a grid without selection (`selectionMode="none"`).
+   * array while the set of ids stays the same (a controlled `selectedItems` that passes the same
+   * ids in another order keeps the earlier array, in its order). With `items`, every selected id,
+   * whether its row is rendered (a `virtualWindow` renders only the rows in view), filtered out or
+   * no item at all. Without `items`, an id whose row is no longer rendered stays until the grid's
+   * next change drops it. Empty in a grid without selection (`selectionMode="none"`).
    */
   selectedItems: readonly string[];
   /**
@@ -60,7 +61,10 @@ export interface UseDataGridSelectionResult {
    * disabled (`isSelectionDisabled`, or the `disabled` of its selection cell, whether the row is
    * rendered or not) and, in a grid without `items`, for an id no rendered row has. With `items`,
    * any id can be toggled, as the grid keeps ids that are no item. The same function while the
-   * grid's `selectionMode`, and whether it has `items`, stay the same.
+   * grid's `selectionMode`, and whether it has `items`, stay the same. Call it from an event or a
+   * passive effect: in a grid without `items` the rows register in their layout effects, after
+   * those of the cells inside them, so a call from a cell's `useLayoutEffect` on mount finds no row
+   * with the id and does nothing.
    */
   toggle: (id: string, event?: Event) => void;
 }
@@ -110,6 +114,11 @@ export function useDataGridSort(): UseDataGridSortResult {
  * select-all stay in step with it. It is a narrow view of the grid (its context objects and its
  * store are not public), the same object while the selection stays the same. The nearest
  * `DataGrid` answers.
+ *
+ * Every component that calls it renders again on each change of the selection, whichever row
+ * changed: a cell per row that calls it renders in every row on each toggle, so in a grid of many
+ * rendered rows keep its callers few (a footer, a header) or render only the rows in view (a
+ * `virtualWindow`).
  *
  * Must be called inside a `DataGrid`: outside one it throws in development and, in production,
  * logs once and returns an inert value (nothing selected, `toggle` does nothing).
