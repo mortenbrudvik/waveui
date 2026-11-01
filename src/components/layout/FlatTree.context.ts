@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { reportMissingContext } from '../../lib/dev';
 import type { VisibleFlatItem } from '../../lib/flatTree';
+import type { SlotPart } from '../../lib/slotProps';
 import type { CheckState } from '../../lib/treeCascade';
 import type { SelectionMode } from '../../lib/types';
 
@@ -23,6 +24,16 @@ export interface FlatTreeContextValue {
   activate: (row: FlatTreeRow) => void;
   /** Toggles a row's check (multiple mode); `event` becomes `details.event`. */
   toggleChecked: (row: FlatTreeRow, event: Event) => void;
+  /**
+   * The tree's `slotProps`, the parts of every item it renders (typed as the prop is, which a
+   * type test keeps equal); each item merges a part only when it is given.
+   */
+  slotProps?: {
+    row?: SlotPart<'div'>;
+    expandIcon?: SlotPart<'svg'>;
+    indicator?: SlotPart<'span'>;
+    label?: SlotPart<'span'>;
+  };
 }
 
 export const FlatTreeContext = React.createContext<FlatTreeContextValue | null>(null);

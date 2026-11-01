@@ -4,12 +4,13 @@ import { render, screen } from '@testing-library/react';
 import {
   materialiseSlotContent,
   resolveSlot,
+  resolveWiredSlot,
   renderSlot,
   slotRendersContent,
   slotWrapsDefaultContent,
   VOID_ELEMENTS,
 } from '../slot';
-import type { ResolvedSlot, Slot, SlotObject } from '../slot';
+import type { ResolvedSlot, Slot, SlotObject, SlotRenderFunction, SlotRenderProps } from '../slot';
 import type * as Types from '../types';
 import { __resetWarnings } from '../dev';
 import { asClientReference } from '../../test-utils';
@@ -786,6 +787,279 @@ describe('slotWrapsDefaultContent (the default icon of a dismiss slot object)', 
   });
 });
 
+describe('render-function children (P13-01, spec R8)', () => {
+  /** A render function that renders the element it receives, with a test id and a star. */
+  const renderStar = () =>
+    vi.fn((Component: React.ElementType, props: object) =>
+      React.createElement(Component, { ...props, 'data-testid': 'own' }, '★'),
+    );
+
+  function Glyph(props: React.HTMLAttributes<HTMLElement>) {
+    return React.createElement('b', props);
+  }
+
+  it('calls the function with the element type and the merged props, and renders its result in place of the element', () => {
+    const ref = React.createRef<HTMLSpanElement>();
+    const renderFn = renderStar();
+    const { container } = render(
+      renderSlot(
+        { className: 'mine', title: 'Star', 'data-part': 'icon', ref, children: renderFn },
+        'span',
+        'base',
+        { 'aria-hidden': true },
+      )!,
+    );
+    expect(renderFn).toHaveBeenCalledWith('span', {
+      'aria-hidden': true,
+      title: 'Star',
+      'data-part': 'icon',
+      ref,
+      className: 'base mine',
+    });
+    const own = screen.getByTestId('own');
+    // No element of the slot's own around the result: the function's element is the slot.
+    expect(container.firstElementChild).toBe(own);
+    expect(own.tagName).toBe('SPAN');
+    expect(own.className).toBe('base mine');
+    expect(own).toHaveAttribute('aria-hidden', 'true');
+    expect(own).toHaveAttribute('title', 'Star');
+    expect(own).toHaveAttribute('data-part', 'icon');
+    expect(own).toHaveTextContent('★');
+    expect(ref.current).toBe(own);
+  });
+
+  it('passes the element type that `as` names: a tag or a component', () => {
+    const tag = renderStar();
+    render(renderSlot({ as: 'i', children: tag }, 'span')!);
+    expect(tag).toHaveBeenCalledWith('i', {});
+    expect(screen.getByTestId('own').tagName).toBe('I');
+
+    const component = renderStar();
+    render(renderSlot({ as: Glyph, className: 'x', children: component }, 'span', 'base')!);
+    expect(component).toHaveBeenCalledWith(Glyph, { className: 'base x' });
+  });
+
+  it('never passes `as` or the function itself in the props', () => {
+    const renderFn = renderStar();
+    render(renderSlot({ as: 'em', children: renderFn }, 'span')!);
+    const [, props] = renderFn.mock.calls[0];
+    expect(props).not.toHaveProperty('as');
+    expect(props).not.toHaveProperty('children');
+    expect(Object.values(props)).not.toContain(renderFn);
+  });
+
+  it('renders whatever the function returns: text, a list, or nothing', () => {
+    const { container, rerender } = render(
+      React.createElement('div', null, renderSlot({ children: () => 'text' }, 'span', 'base')),
+    );
+    expect(container.firstElementChild!.innerHTML).toBe('text');
+    rerender(
+      React.createElement(
+        'div',
+        null,
+        renderSlot(
+          {
+            children: () => [
+              React.createElement('b', { key: 'b' }, 'B'),
+              React.createElement('i', { key: 'i' }, 'I'),
+            ],
+          },
+          'span',
+        ),
+      ),
+    );
+    expect(container.firstElementChild!.innerHTML).toBe('<b>B</b><i>I</i>');
+    rerender(
+      React.createElement('div', null, renderSlot({ children: () => null }, 'span', 'base')),
+    );
+    expect(container.firstElementChild!.innerHTML).toBe('');
+  });
+
+  it('resolveSlot gives an element type that hands the function the props and children its renderer adds', () => {
+    const renderFn = renderStar();
+    const onClick = vi.fn();
+    const resolved = resolveSlot({ className: 'mine', children: renderFn }, 'span', 'base')!;
+    expect(resolved.children).toBeUndefined();
+    // A component that renders the resolved slot itself, adding its wiring and its default content.
+    render(
+      React.createElement(
+        resolved.Component,
+        { ...resolved.props, 'aria-hidden': 'true', onClick },
+        'default',
+      ),
+    );
+    expect(renderFn).toHaveBeenCalledWith('span', {
+      className: 'base mine',
+      'aria-hidden': 'true',
+      onClick,
+      children: 'default',
+    });
+    // The star replaced the default content: the function rendered its own children.
+    expect(screen.getByTestId('own')).toHaveTextContent('★');
+  });
+
+  it('renders a void element through the function without the void-children warning', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const renderFn = vi.fn((Component: React.ElementType, props: object) =>
+      React.createElement(Component, props),
+    );
+    render(renderSlot<'img'>({ src: 'a.png', alt: 'Ada', children: renderFn }, 'img', 'w-full')!);
+    expect(renderFn).toHaveBeenCalledWith('img', { src: 'a.png', alt: 'Ada', className: 'w-full' });
+    expect(screen.getByRole('img', { name: 'Ada' })).toHaveClass('w-full');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('renders one element in StrictMode (the function may be called more than once)', () => {
+    const renderFn = renderStar();
+    const { container } = render(
+      React.createElement(
+        React.StrictMode,
+        null,
+        React.createElement('div', null, renderSlot({ children: renderFn }, 'span')),
+      ),
+    );
+    expect(container.firstElementChild!.children).toHaveLength(1);
+    expect(renderFn.mock.calls.length).toBeGreaterThanOrEqual(1);
+    for (const call of renderFn.mock.calls) expect(call).toEqual(['span', {}]);
+  });
+
+  describe('slotRendersContent of a render function', () => {
+    it.each<[label: string, render: () => React.ReactNode]>([
+      ['null', () => null],
+      ['undefined', () => undefined],
+      ['false', () => false],
+      ["''", () => ''],
+      ['[]', () => []],
+      ['an empty Fragment', () => React.createElement(React.Fragment)],
+    ])('is false for a function that returns %s', (_label, renderFn) => {
+      expect(slotRendersContent({ children: renderFn })).toBe(false);
+    });
+
+    it.each<[label: string, render: SlotRenderFunction<object>]>([
+      ["'x'", () => 'x'],
+      ['0', () => 0],
+      ['the element it receives', (Component, props) => React.createElement(Component, props)],
+    ])('is true for a function that returns %s', (_label, renderFn) => {
+      expect(slotRendersContent({ children: renderFn })).toBe(true);
+    });
+
+    it('calls the function with the object’s `as` (else a span) and its other attributes', () => {
+      const renderFn = vi.fn(() => null);
+      slotRendersContent({ as: 'i', title: 't', children: renderFn });
+      slotRendersContent({ 'data-x': '1', children: renderFn });
+      expect(renderFn.mock.calls).toEqual([
+        ['i', { title: 't' }],
+        ['span', { 'data-x': '1' }],
+      ]);
+    });
+
+    it('calls no function given bare or nested in content (not a slot object’s children)', () => {
+      const renderFn = vi.fn(() => null);
+      expect(slotRendersContent(renderFn)).toBe(true);
+      expect(slotRendersContent([null, renderFn])).toBe(true);
+      expect(slotRendersContent({ title: 't', children: [renderFn] })).toBe(true);
+      expect(renderFn).not.toHaveBeenCalled();
+    });
+
+    it('calls no `children` function of an object that is no slot object (a portal, a class instance)', () => {
+      const renderFn = vi.fn(() => null);
+      class TreeNode {
+        children = renderFn;
+      }
+      expect(slotRendersContent({ $$typeof: Symbol.for('react.portal'), children: renderFn })).toBe(
+        true,
+      );
+      expect(slotRendersContent(new TreeNode())).toBe(true);
+      expect(renderFn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('slotWrapsDefaultContent of a render function', () => {
+    it.each<[label: string, slot: SlotObject<'span'>]>([
+      ['a span', { className: 'x', children: () => null }],
+      ['another intrinsic tag that renders content', { as: 'i', children: () => 'x' }],
+    ])(
+      'is true for the element resolved from %s: the function receives the default content',
+      (_label, slot) => {
+        const resolved = resolveSlot(slot, 'span')!;
+        expect(slotWrapsDefaultContent(resolved.Component, resolved.props)).toBe(true);
+        // As a renderer passes them: the resolved props with the slot's children.
+        expect(
+          slotWrapsDefaultContent(resolved.Component, {
+            ...resolved.props,
+            children: resolved.children,
+          }),
+        ).toBe(true);
+      },
+    );
+
+    it.each<[label: string, slot: SlotObject<'span'>]>([
+      ['a void tag (img)', { as: 'img', children: () => null }],
+      ['a component (it draws its own glyph)', { as: Glyph, children: () => null }],
+    ])('is false for the element resolved from %s', (_label, slot) => {
+      const resolved = resolveSlot(slot, 'span')!;
+      expect(slotWrapsDefaultContent(resolved.Component, resolved.props)).toBe(false);
+    });
+
+    it('counts unresolved function children as content without calling them', () => {
+      const renderFn = vi.fn(() => null);
+      expect(slotWrapsDefaultContent('span', { children: renderFn })).toBe(false);
+      expect(renderFn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resolveWiredSlot (the dismiss, clear and close slots)', () => {
+    const isButton = (type: unknown) => type === 'button' || type === Glyph;
+    const noop = () => {};
+
+    it('returns a slot without a render function, and null, as given', () => {
+      const resolved = resolveSlot({ as: 'button', className: 'x', children: 'X' }, 'span');
+      expect(resolveWiredSlot(resolved, isButton)).toBe(resolved);
+      expect(resolveWiredSlot(null, isButton)).toBeNull();
+    });
+
+    it('keeps the element of a function that renders content and names no button', () => {
+      const resolved = resolveSlot({ className: 'x', children: renderStar() }, 'span');
+      expect(resolveWiredSlot(resolved, isButton)).toBe(resolved);
+    });
+
+    it.each<[label: string, as: React.ElementType]>([
+      ['"button"', 'button'],
+      ['a button component', Glyph],
+    ])(
+      'gives an object whose `as` is %s its type, attributes and the function’s content for a span',
+      (_label, as) => {
+        const renderFn = vi.fn(() => 'content');
+        const wired = resolveWiredSlot(
+          resolveSlot({ as, onClick: noop, children: renderFn }, 'span'),
+          isButton,
+        )!;
+        expect(wired).toEqual({
+          Component: as,
+          props: { onClick: noop, className: undefined },
+          children: 'content',
+        });
+        expect(renderFn.mock.calls).toEqual([['span', {}]]);
+      },
+    );
+
+    it('leaves out a function that renders nothing, keeping the object’s attributes', () => {
+      const renderFn = vi.fn(() => null);
+      const wired = resolveWiredSlot(
+        resolveSlot({ className: 'x', 'data-part': 'p', children: renderFn }, 'span'),
+        isButton,
+      )!;
+      expect(wired).toEqual({
+        Component: 'span',
+        props: { className: 'x', 'data-part': 'p' },
+        children: undefined,
+      });
+      expect(renderFn.mock.calls).toEqual([['span', { className: 'x', 'data-part': 'p' }]]);
+      expect(slotWrapsDefaultContent(wired.Component, wired.props)).toBe(true);
+    });
+  });
+});
+
 describe('Slot types (table-core#18)', () => {
   it('SlotObject accepts the default element props', () => {
     expectTypeOf<{ src: string; alt: string }>().toMatchTypeOf<SlotObject<'img'>>();
@@ -863,8 +1137,64 @@ describe('Slot types (table-core#18)', () => {
     expect(resolveSlot(dismiss, 'span')!.props).toMatchObject({ type: 'button', disabled: true });
   });
 
+  it('takes a function annotated with the bare SlotRenderFunction in every slot (P13-01)', () => {
+    expectTypeOf<SlotRenderFunction>().toEqualTypeOf<SlotRenderFunction<SlotRenderProps>>();
+    expectTypeOf<SlotObject<'span'>['children']>().toEqualTypeOf<
+      React.ReactNode | SlotRenderFunction | undefined
+    >();
+    const reusable: SlotRenderFunction = (Component, props) =>
+      React.createElement(Component, props);
+    const span: Slot<'span'> = { children: reusable };
+    const img: Slot<'img'> = { alt: '', children: reusable };
+    const dismiss: Slot<'span'> | SlotObject<'button'> = { children: reusable };
+    expect([span, img, dismiss]).toHaveLength(3);
+  });
+
+  it('takes a render function as the children of a slot object, typed for any slot element', () => {
+    type RenderProps = React.HTMLAttributes<HTMLElement> & {
+      [dataAttribute: `data-${string}`]: unknown;
+    };
+    expectTypeOf<SlotObject<'span'>['children']>().toEqualTypeOf<
+      React.ReactNode | SlotRenderFunction<RenderProps> | undefined
+    >();
+    expectTypeOf<SlotObject<'img'>['children']>().toEqualTypeOf<SlotObject<'span'>['children']>();
+    expectTypeOf<SlotRenderFunction<{ as?: string; title?: string }>>().toEqualTypeOf<
+      (
+        Component: React.ElementType<{ as?: string; title?: string }>,
+        props: { title?: string },
+      ) => React.ReactNode
+    >();
+    // The parameters take their types from the slot prop, as an inline arrow function.
+    const slot: Slot<'img'> = {
+      alt: '',
+      children: (Component, props) => {
+        expectTypeOf(props.className).toEqualTypeOf<string | undefined>();
+        expectTypeOf(props.children).toEqualTypeOf<React.ReactNode>();
+        expectTypeOf(props).not.toHaveProperty('as');
+        return React.createElement(Component, props);
+      },
+    };
+    // One function fits every member of a slot union (the dismiss slots).
+    const getDismiss = (): Slot<'span'> | SlotObject<'button'> => ({
+      children: (Component, props) => React.createElement(Component, props),
+    });
+    // The props spread onto any tag, whatever the slot's element.
+    const backdrop: Slot<'div'> = {
+      children: (_Component, props) => React.createElement('div', props),
+    };
+    expect([slot, getDismiss(), backdrop]).toHaveLength(3);
+    // A bare function is no slot value.
+    // @ts-expect-error — a render function goes in a slot object's `children`
+    const bare: Slot<'span'> = () => null;
+    expect(bare).toBeTruthy();
+  });
+
   it('re-exports the slot types from types.ts', () => {
     expectTypeOf<Types.Slot<'img'>>().toEqualTypeOf<Slot<'img'>>();
     expectTypeOf<Types.SlotObject<'img'>>().toEqualTypeOf<SlotObject<'img'>>();
+  });
+
+  it('re-exports SlotRenderFunction from types.ts (P13-01)', () => {
+    expectTypeOf<Types.SlotRenderFunction<object>>().toEqualTypeOf<SlotRenderFunction<object>>();
   });
 });

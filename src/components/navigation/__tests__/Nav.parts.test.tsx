@@ -7,7 +7,7 @@
  */
 import * as React from 'react';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import {
@@ -30,6 +30,7 @@ import type {
   NavDividerProps,
   NavSectionHeaderProps,
 } from '../Nav';
+import { NavDrawer } from '../NavDrawer';
 import {
   dividerClassNames,
   navAppItemClassNames,
@@ -42,8 +43,10 @@ import { disabledStyles, focusRingInset } from '../../../lib/styles';
 import {
   asClientReference,
   createOverlayTestWrapper,
+  expectInertSlotProps,
   expectNoA11yViolations,
   expectThrows,
+  openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
@@ -885,5 +888,418 @@ describe('structure', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(7);
     await expectNoA11yViolations();
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('Nav.SectionHeader, Nav.AppItem and Nav.AppItemStatic — slotProps', () => {
+  type HeaderSlotProps = NonNullable<NavSectionHeaderProps['slotProps']>;
+  type AppSlotProps = NonNullable<NavAppItemOwnProps['slotProps']>;
+  type PlainSlotProps = NonNullable<NavAppItemStaticProps['slotProps']>;
+  /** The parts of each component of {@link Parts}, by component. */
+  interface PartsSlotProps {
+    header?: HeaderSlotProps;
+    app?: AppSlotProps;
+    plain?: PlainSlotProps;
+  }
+  const EVERY_PART: PartsSlotProps = {
+    header: { listItem: {} },
+    app: { listItem: {}, content: {} },
+    plain: { listItem: {}, content: {} },
+  };
+
+  /** A link app item, a button app item, the text one and a section header, with their parts. */
+  function Parts({ parts, disabled }: { parts?: PartsSlotProps; disabled?: boolean }) {
+    return (
+      <Nav>
+        <Nav.AppItem href="#app" icon={<span>C</span>} slotProps={parts?.app}>
+          Contoso link
+        </Nav.AppItem>
+        <Nav.AppItem icon={<span>C</span>} disabled={disabled} slotProps={parts?.app}>
+          Contoso button
+        </Nav.AppItem>
+        <Nav.AppItemStatic icon={<span>C</span>} slotProps={parts?.plain}>
+          Contoso text
+        </Nav.AppItemStatic>
+        <Nav.SectionHeader slotProps={parts?.header}>Section</Nav.SectionHeader>
+      </Nav>
+    );
+  }
+
+  const q = (root: ParentNode, selector: string) =>
+    root.querySelector<HTMLElement>(selector) as HTMLElement;
+  /** Every part of {@link Parts}, by name, in document order. */
+  function partsOf(root: ParentNode = document) {
+    const [linkItem, buttonItem] = Array.from(
+      root.querySelectorAll<HTMLElement>(`.${navAppItemClassNames.listItem}`),
+    );
+    return {
+      linkItem,
+      linkContent: q(linkItem, `.${navAppItemClassNames.content}`),
+      buttonItem,
+      buttonContent: q(buttonItem, `.${navAppItemClassNames.content}`),
+      plainItem: q(root, `.${navAppItemStaticClassNames.listItem}`),
+      plainContent: q(root, `.${navAppItemStaticClassNames.content}`),
+      headerItem: q(root, `.${navSectionHeaderClassNames.listItem}`),
+    };
+  }
+  type PartName = keyof ReturnType<typeof partsOf>;
+  const STABLE: Record<PartName, string> = {
+    linkItem: navAppItemClassNames.listItem,
+    linkContent: navAppItemClassNames.content,
+    buttonItem: navAppItemClassNames.listItem,
+    buttonContent: navAppItemClassNames.content,
+    plainItem: navAppItemStaticClassNames.listItem,
+    plainContent: navAppItemStaticClassNames.content,
+    headerItem: navSectionHeaderClassNames.listItem,
+  };
+  const PART_NAMES = Object.keys(STABLE) as PartName[];
+  const tagsOf = (root: ParentNode = document) => {
+    const parts = partsOf(root);
+    return openingTags(...PART_NAMES.map((name) => parts[name]));
+  };
+
+  // Captured from 73e9b81's dist (client and server agree).
+  const BASE_PINS = [
+    '<li class="wave-nav-app-item__list-item">',
+    '<span class="wave-nav-app-item__content flex-1 text-start">',
+    '<li class="wave-nav-app-item__list-item">',
+    '<span class="wave-nav-app-item__content flex-1 text-start">',
+    '<li class="wave-nav-app-item-static__list-item">',
+    '<span class="wave-nav-app-item-static__content flex-1 text-start">',
+    '<li class="wave-nav-section-header__list-item">',
+  ].join('\n');
+
+  it('renders the parts of 73e9b81 (attributes sorted), on the client and the server', () => {
+    for (const parts of [undefined, EVERY_PART]) {
+      const view = render(<Parts parts={parts} />);
+      expect(tagsOf()).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Parts parts={parts} />);
+      expect(tagsOf(template.content)).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    for (const disabled of [false, true]) {
+      expectInertSlotProps(
+        (slotProps: PartsSlotProps | undefined) => <Parts parts={slotProps} disabled={disabled} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    const mine = (name: string) => ({
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    render(
+      <Parts
+        parts={{
+          header: { listItem: mine('header') },
+          app: { listItem: mine('app-li'), content: mine('app-content') },
+          plain: { listItem: mine('plain-li'), content: mine('plain-content') },
+        }}
+      />,
+    );
+    const MINE: Record<PartName, string> = {
+      linkItem: 'app-li',
+      linkContent: 'app-content',
+      buttonItem: 'app-li',
+      buttonContent: 'app-content',
+      plainItem: 'plain-li',
+      plainContent: 'plain-content',
+      headerItem: 'header',
+    };
+    const parts = partsOf();
+    for (const name of PART_NAMES) {
+      const element = parts[name];
+      expect(element.classList[0]).toBe(STABLE[name]);
+      expect(element.classList[element.classList.length - 1]).toBe(`my-${MINE[name]}`);
+      expect(element).toHaveAttribute('data-part', MINE[name]);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+    }
+    // The roots take none of it: the parts are drawn around or inside them.
+    expect(screen.getByRole('link', { name: 'Contoso link' })).not.toHaveClass('my-app-content');
+    expect(screen.getByRole('heading', { name: 'Section' })).not.toHaveClass('my-header');
+    expect(screen.getByText('Contoso text').parentElement).not.toHaveClass('my-plain-li');
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Parts
+        parts={{
+          app: { content: { className: 'flex-none' } },
+          plain: { content: { className: 'text-end' } },
+        }}
+      />,
+    );
+    const { linkContent, plainContent } = partsOf();
+    expect(linkContent).toHaveClass('flex-none');
+    expect(linkContent).not.toHaveClass('flex-1');
+    expect(plainContent).toHaveClass('text-end');
+    expect(plainContent).not.toHaveClass('text-start');
+  });
+
+  it('attaches your refs to the parts', () => {
+    const refs = {
+      linkItem: React.createRef<HTMLLIElement>(),
+      linkContent: React.createRef<HTMLSpanElement>(),
+      plainItem: React.createRef<HTMLLIElement>(),
+      plainContent: React.createRef<HTMLSpanElement>(),
+      headerItem: React.createRef<HTMLLIElement>(),
+    };
+    render(
+      <Nav>
+        <Nav.AppItem
+          href="#app"
+          slotProps={{ listItem: { ref: refs.linkItem }, content: { ref: refs.linkContent } }}
+        >
+          Contoso link
+        </Nav.AppItem>
+        <Nav.AppItemStatic
+          slotProps={{ listItem: { ref: refs.plainItem }, content: { ref: refs.plainContent } }}
+        >
+          Contoso text
+        </Nav.AppItemStatic>
+        <Nav.SectionHeader slotProps={{ listItem: { ref: refs.headerItem } }}>
+          Section
+        </Nav.SectionHeader>
+      </Nav>,
+    );
+    for (const [name, ref] of Object.entries(refs)) {
+      expect(ref.current).toBe(q(document, `.${STABLE[name as PartName]}`));
+    }
+  });
+
+  it('locks each part’s role, tab index and roving marker, and the app item’s name and hidden state', () => {
+    const attempt: Record<string, unknown> = {
+      role: 'button',
+      tabIndex: 0,
+      'data-roving-container': '',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+      'aria-label': 'Mine',
+    };
+    render(
+      <Parts
+        parts={
+          {
+            header: { listItem: attempt },
+            app: { listItem: attempt, content: attempt },
+            plain: { listItem: attempt, content: attempt },
+          } as PartsSlotProps
+        }
+      />,
+    );
+    const parts = partsOf();
+    for (const name of PART_NAMES) {
+      for (const locked of ['role', 'tabindex', 'data-roving-container']) {
+        expect(parts[name]).not.toHaveAttribute(locked);
+      }
+    }
+    // The app item's parts hold its link or button and its name: never hidden, never renamed.
+    for (const name of ['linkItem', 'linkContent', 'buttonItem', 'buttonContent'] as const) {
+      for (const locked of ['hidden', 'inert', 'aria-hidden']) {
+        expect(parts[name]).not.toHaveAttribute(locked);
+      }
+    }
+    expect(parts.linkContent).not.toHaveAttribute('aria-label');
+    expect(parts.buttonContent).not.toHaveAttribute('aria-label');
+    expect(screen.getByRole('link', { name: 'Contoso link' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Contoso button' })).toBeVisible();
+    // The header's and the text item's list items are yours to hide: they name nothing.
+    expect(parts.headerItem).toHaveAttribute('aria-hidden', 'true');
+    expect(parts.plainContent).toHaveAttribute('aria-hidden', 'true');
+    // Every part stays a plain list item or text: no extra control, every list item one.
+    expect(screen.queryByRole('button', { name: 'Mine' })).toBeNull();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('keeps the arrow order of an arrow-key body: no part becomes an entry or a nested composite', async () => {
+    const user = userEvent.setup();
+    const rogue = { role: 'button', tabIndex: 0 } as const;
+    const composite = { role: 'menu', 'data-roving-container': '' } as const;
+    render(
+      <NavDrawer type="inline" open onOpenChange={() => {}}>
+        <NavDrawer.Body focusMode="arrow">
+          <Nav.AppItem href="#app" slotProps={{ listItem: composite, content: rogue }}>
+            Contoso
+          </Nav.AppItem>
+          <Nav.AppItemStatic slotProps={{ listItem: rogue, content: rogue }}>
+            Contoso text
+          </Nav.AppItemStatic>
+          <Nav.SectionHeader slotProps={{ listItem: rogue }}>Section</Nav.SectionHeader>
+          <Nav.Item value="home">Home</Nav.Item>
+        </NavDrawer.Body>
+      </NavDrawer>,
+    );
+    const app = screen.getByRole('link', { name: 'Contoso' });
+    const home = screen.getByRole('button', { name: 'Home' });
+    act(() => app.focus());
+    await user.keyboard('{ArrowDown}');
+    expect(home).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(app).toHaveFocus();
+  });
+
+  it('runs your content handler before the app item’s own, and not while a button item is disabled', () => {
+    const order: string[] = [];
+    const onContent = vi.fn(() => void order.push('content'));
+    function App({ disabled, href }: { disabled?: boolean; href?: string }) {
+      return (
+        <Nav>
+          <Nav.AppItem
+            {...(href === undefined ? { disabled } : { href, 'aria-disabled': disabled })}
+            onClick={() => void order.push('item')}
+            slotProps={{ content: { onClick: onContent } }}
+          >
+            Contoso
+          </Nav.AppItem>
+        </Nav>
+      );
+    }
+    const { rerender } = render(<App />);
+    fireEvent.click(screen.getByText('Contoso'));
+    expect(order).toEqual(['content', 'item']);
+    rerender(<App disabled />);
+    fireEvent.click(screen.getByText('Contoso'));
+    expect(onContent).toHaveBeenCalledTimes(1);
+    // An aria-disabled link only looks unavailable: it and your handler still run.
+    rerender(<App href="#app" disabled />);
+    fireEvent.click(screen.getByText('Contoso'));
+    expect(order).toEqual(['content', 'item', 'content', 'item']);
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const handlers = {
+      appItem: vi.fn(),
+      appContent: vi.fn(),
+      plainItem: vi.fn(),
+      plainContent: vi.fn(),
+      headerItem: vi.fn(),
+    };
+    render(
+      <React.StrictMode>
+        <Nav>
+          <Nav.AppItem
+            slotProps={{
+              listItem: { onClick: handlers.appItem },
+              content: { onClick: handlers.appContent },
+            }}
+          >
+            Contoso
+          </Nav.AppItem>
+          <Nav.AppItemStatic
+            slotProps={{
+              listItem: { onClick: handlers.plainItem },
+              content: { onClick: handlers.plainContent },
+            }}
+          >
+            Contoso text
+          </Nav.AppItemStatic>
+          <Nav.SectionHeader slotProps={{ listItem: { onClick: handlers.headerItem } }}>
+            Section
+          </Nav.SectionHeader>
+        </Nav>
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByText('Contoso'));
+    await user.click(screen.getByText('Contoso text'));
+    await user.click(screen.getByText('Section'));
+    for (const handler of Object.values(handlers)) expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the part of a header that renders nothing', () => {
+    render(
+      <Nav>
+        <Nav.SectionHeader slotProps={{ listItem: { className: 'my-header' } }}>
+          {''}
+        </Nav.SectionHeader>
+        <Nav.Item value="home">Home</Nav.Item>
+      </Nav>,
+    );
+    expect(document.querySelector('.my-header')).toBeNull();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('applies the parts in RTL', () => {
+    renderWithProviders(
+      <Parts
+        parts={{
+          app: { content: { className: 'my-content' } },
+          header: { listItem: { dir: 'ltr' } },
+        }}
+      />,
+      { dir: 'rtl' },
+    );
+    const { linkContent, headerItem } = partsOf();
+    expect(linkContent).toHaveClass('my-content', 'text-start');
+    expect(headerItem).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    const mine = (name: string) => ({ className: `my-${name}`, title: name });
+    render(
+      <Parts
+        parts={{
+          header: { listItem: mine('header') },
+          app: { listItem: mine('app-li'), content: mine('app-content') },
+          plain: { listItem: mine('plain-li'), content: mine('plain-content') },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof HeaderSlotProps>().toEqualTypeOf<'listItem'>();
+    expectTypeOf<keyof AppSlotProps>().toEqualTypeOf<'listItem' | 'content'>();
+    expectTypeOf<keyof PlainSlotProps>().toEqualTypeOf<'listItem' | 'content'>();
+    expectTypeOf<NonNullable<HeaderSlotProps['listItem']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLIElement> | undefined
+    >();
+    expectTypeOf<NonNullable<AppSlotProps['content']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<PlainSlotProps['listItem']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLIElement> | undefined
+    >();
+    // Every branch of the app item takes the same parts.
+    expectTypeOf<NavAppItemAnchorProps['slotProps']>().toEqualTypeOf<
+      NavAppItemOwnProps['slotProps']
+    >();
+    expectTypeOf<NavAppItemButtonProps['slotProps']>().toEqualTypeOf<
+      NavAppItemOwnProps['slotProps']
+    >();
+    expectTypeOf<NavAppItemDynamicProps['slotProps']>().toEqualTypeOf<
+      NavAppItemOwnProps['slotProps']
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the header renders them
+        <Nav.SectionHeader slotProps={{ listItem: { children: 'Section' } }}>
+          Section
+        </Nav.SectionHeader>
+      )
+    );
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the app item renders them
+        <Nav.AppItem slotProps={{ content: { children: 'Contoso' } }}>Contoso</Nav.AppItem>
+      )
+    );
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the text item renders them
+        <Nav.AppItemStatic slotProps={{ content: { children: 'Contoso' } }}>
+          Contoso
+        </Nav.AppItemStatic>
+      )
+    );
   });
 });

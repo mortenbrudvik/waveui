@@ -4,7 +4,7 @@ import { renderToString } from 'react-dom/server';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Breadcrumb, BreadcrumbItem } from '../Breadcrumb';
-import type { BreadcrumbItemProps } from '../Breadcrumb';
+import type { BreadcrumbItemProps, BreadcrumbProps } from '../Breadcrumb';
 import { Button } from '../../button/Button';
 import { Link } from '../../button/Link';
 import type { Slot } from '../../../lib/types';
@@ -19,8 +19,10 @@ import {
 import {
   asClientReference,
   createOverlayTestWrapper,
+  expectInertSlotProps,
   expectNoA11yViolations,
   installResizeObserverMock,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
@@ -2375,5 +2377,610 @@ describe('Breadcrumb', () => {
         expect(html).not.toContain('More items');
       });
     });
+  });
+});
+
+describe('Breadcrumb — slotProps', () => {
+  type BreadcrumbSlotProps = NonNullable<BreadcrumbProps['slotProps']>;
+  const EVERY_PART: BreadcrumbSlotProps = { list: {}, listItem: {}, overflowButton: {} };
+
+  function Crumbs(props: Partial<BreadcrumbProps>) {
+    return (
+      <Breadcrumb {...props}>
+        <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+        <Breadcrumb.Item href="/a">Alpha</Breadcrumb.Item>
+        <Breadcrumb.Item href="/b">Beta</Breadcrumb.Item>
+        <Breadcrumb.Item onClick={() => {}}>Gamma</Breadcrumb.Item>
+        <Breadcrumb.Item current>Page</Breadcrumb.Item>
+      </Breadcrumb>
+    );
+  }
+
+  const restores: Array<() => void> = [];
+  afterEach(() => {
+    restores.splice(0).forEach((restore) => restore());
+  });
+
+  /**
+   * jsdom has no layout: with `overflow="auto"` the trail is `room` wide, each list item 50 and
+   * the overflow button's wrapper 20 (hidden items measure 0). Without a ResizeObserver the trail
+   * measures again on a window `resize`: `resizeTo(room)` dispatches one.
+   */
+  function autoLayout(room: number) {
+    const layout = {
+      room,
+      resizeTo(next: number) {
+        layout.room = next;
+        act(() => void window.dispatchEvent(new Event('resize')));
+      },
+    };
+    const stub = (proto: object, name: string, get: (el: Element) => number) => {
+      const saved = Object.getOwnPropertyDescriptor(proto, name);
+      Object.defineProperty(proto, name, {
+        configurable: true,
+        get(this: Element) {
+          return get(this);
+        },
+      });
+      restores.push(() => {
+        if (saved) Object.defineProperty(proto, name, saved);
+        else Reflect.deleteProperty(proto, name);
+      });
+    };
+    stub(HTMLElement.prototype, 'offsetWidth', (el) => {
+      if (el.hasAttribute('data-overflow-hidden')) return 0;
+      if (el.hasAttribute('data-overflow-button')) return 20;
+      return el.tagName === 'LI' ? 50 : 0;
+    });
+    stub(Element.prototype, 'clientWidth', (el) =>
+      el.classList.contains(overflowClassNames.root) ? layout.room : 0,
+    );
+    return layout;
+  }
+
+  /** The trail's parts: its list, its list items and its overflow button (when there is one). */
+  function partsOf(root: ParentNode = document) {
+    return {
+      list: root.querySelector<HTMLElement>(`.${breadcrumbClassNames.list}`) as HTMLElement,
+      listItems: Array.from(
+        root.querySelectorAll<HTMLElement>(`.${breadcrumbClassNames.listItem}`),
+      ),
+      button: root.querySelector<HTMLElement>(`.${breadcrumbClassNames.overflowButton}`),
+    };
+  }
+  const tagsOf = (root: ParentNode = document) => {
+    const { list, listItems, button } = partsOf(root);
+    return openingTags(list, ...listItems, ...(button ? [button] : []));
+  };
+  /** The shown list items' text (the hidden ones are `aria-hidden`). */
+  const shownLabels = () => screen.getAllByRole('listitem').map((li) => li.textContent);
+
+  // Captured from 414fe7d's dist (client and server agree).
+  const LINK_CLASSES =
+    'inline-flex cursor-pointer items-center text-primary no-underline not-disabled:not-aria-disabled:hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100';
+  const BASE_BUTTON = `<button aria-expanded="false" aria-haspopup="menu" aria-label="More items" class="wave-breadcrumb__overflow-button ${LINK_CLASSES} rounded px-1" id="wave-menu-trigger-_id0_" type="button">`;
+  const BASE_ITEM = '<li class="wave-breadcrumb__list-item flex items-center gap-1">';
+  const BASE_COLLAPSE = [
+    '<ol class="wave-breadcrumb__list m-0 flex list-none items-center gap-1 p-0 text-body-1">',
+    BASE_ITEM,
+    BASE_ITEM,
+    BASE_ITEM,
+    BASE_ITEM,
+    BASE_BUTTON,
+  ].join('\n');
+  const BASE_AUTO_LIST =
+    '<div class="wave-overflow flex overflow-hidden p-1 items-center wave-breadcrumb__list gap-1 text-body-1" data-button-position="before-hidden" data-orientation="horizontal" data-overflow-direction="start" role="list">';
+  const BASE_AUTO_ITEM =
+    '<li class="wave-overflow-item shrink-0 wave-breadcrumb__list-item flex items-center gap-1">';
+  const BASE_AUTO_HIDDEN =
+    '<li aria-hidden="true" class="wave-overflow-item shrink-0 wave-breadcrumb__list-item flex items-center gap-1" data-overflow-hidden="" inert="" style="display: none;">';
+  const BASE_AUTO_CLIENT = [
+    BASE_AUTO_LIST,
+    BASE_AUTO_ITEM,
+    BASE_AUTO_HIDDEN,
+    BASE_AUTO_HIDDEN,
+    BASE_AUTO_HIDDEN,
+    BASE_AUTO_ITEM,
+    BASE_BUTTON,
+  ].join('\n');
+  const BASE_AUTO_SERVER = [BASE_AUTO_LIST, ...Array(5).fill(BASE_AUTO_ITEM)].join('\n');
+
+  it('renders the parts of 414fe7d (attributes sorted), on the client and the server', () => {
+    for (const slotProps of [undefined, EVERY_PART]) {
+      const view = render(<Crumbs maxDisplayedItems={3} slotProps={slotProps} />);
+      expect(tagsOf()).toBe(BASE_COLLAPSE);
+      view.unmount();
+      for (const [props, pin] of [
+        [{ maxDisplayedItems: 3 }, BASE_COLLAPSE],
+        [{ overflow: 'auto' }, BASE_AUTO_SERVER],
+      ] as const) {
+        const template = document.createElement('template');
+        template.innerHTML = renderToString(<Crumbs {...props} slotProps={slotProps} />);
+        expect(tagsOf(template.content)).toBe(pin);
+      }
+      // overflow="auto": Alpha, Beta and Gamma do not fit in 160.
+      autoLayout(160);
+      const auto = render(<Crumbs overflow="auto" slotProps={slotProps} />);
+      expect(tagsOf()).toBe(BASE_AUTO_CLIENT);
+      auto.unmount();
+      restores.splice(0).forEach((restore) => restore());
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    for (const props of [
+      {},
+      { maxDisplayedItems: 3 },
+      { maxDisplayedItems: 3, focusMode: 'arrow' as const, size: 'large' as const },
+    ]) {
+      expectInertSlotProps(
+        (slotProps: BreadcrumbSlotProps | undefined) => <Crumbs {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+    autoLayout(160);
+    expectInertSlotProps(
+      (slotProps: BreadcrumbSlotProps | undefined) => (
+        <Crumbs overflow="auto" slotProps={slotProps} />
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    const mine = (name: string) => ({
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    const parts = { list: mine('list'), listItem: mine('item'), overflowButton: mine('button') };
+    const check = () => {
+      const { list, listItems, button } = partsOf();
+      const all: Array<[HTMLElement, string, string]> = [
+        [list, breadcrumbClassNames.list, 'list'],
+        ...listItems.map((li): [HTMLElement, string, string] => [
+          li,
+          breadcrumbClassNames.listItem,
+          'item',
+        ]),
+        [button as HTMLElement, breadcrumbClassNames.overflowButton, 'button'],
+      ];
+      for (const [element, stable, name] of all) {
+        // With overflow="auto" the Overflow's own class comes first on the list and list items.
+        expect(element).toHaveClass(stable);
+        expect(element.classList[element.classList.length - 1]).toBe(`my-${name}`);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+      }
+      expect(partsOf().button?.classList[0]).toBe(breadcrumbClassNames.overflowButton);
+    };
+    const view = render(<Crumbs maxDisplayedItems={3} slotProps={parts} />);
+    check();
+    expect(partsOf().list.classList[0]).toBe(breadcrumbClassNames.list);
+    expect(partsOf().listItems[0].classList[0]).toBe(breadcrumbClassNames.listItem);
+    // The landmark and the items take none of it.
+    expect(screen.getByRole('navigation')).not.toHaveClass('my-list');
+    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveClass('my-item');
+    view.unmount();
+    autoLayout(160);
+    render(<Crumbs overflow="auto" slotProps={parts} />);
+    check();
+    expect(partsOf().list).toHaveClass(overflowClassNames.root);
+    expect(partsOf().listItems[0]).toHaveClass(overflowItemClassNames.root);
+    // The Overflow's wrapper of the button is no list item of the trail.
+    expect(document.querySelector(`.${overflowClassNames.overflowButton}`)).not.toHaveClass(
+      'my-item',
+    );
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Crumbs
+        maxDisplayedItems={3}
+        slotProps={{
+          list: { className: 'gap-2' },
+          listItem: { className: 'gap-3' },
+          overflowButton: { className: 'px-2' },
+        }}
+      />,
+    );
+    const { list, listItems, button } = partsOf();
+    expect(list).toHaveClass('gap-2');
+    expect(list).not.toHaveClass('gap-1');
+    expect(listItems[0]).toHaveClass('gap-3');
+    expect(listItems[0]).not.toHaveClass('gap-1');
+    expect(button).toHaveClass('px-2');
+    expect(button).not.toHaveClass('px-1');
+  });
+
+  it('attaches your refs to the parts, the Overflow’s list included', () => {
+    const refs = {
+      list: React.createRef<HTMLElement>(),
+      listItem: React.createRef<HTMLLIElement>(),
+      overflowButton: React.createRef<HTMLButtonElement>(),
+    };
+    const slotProps = {
+      list: { ref: refs.list },
+      listItem: { ref: refs.listItem },
+      overflowButton: { ref: refs.overflowButton },
+    };
+    const view = render(<Crumbs maxDisplayedItems={3} slotProps={slotProps} />);
+    let parts = partsOf();
+    expect(refs.list.current).toBe(parts.list);
+    expect(refs.list.current?.tagName).toBe('OL');
+    // One ref for every list item: the last one rendered.
+    expect(refs.listItem.current).toBe(parts.listItems[parts.listItems.length - 1]);
+    expect(refs.overflowButton.current).toBe(parts.button);
+    view.unmount();
+    autoLayout(160);
+    render(<Crumbs overflow="auto" slotProps={slotProps} />);
+    parts = partsOf();
+    expect(refs.list.current).toBe(parts.list);
+    expect(refs.list.current?.tagName).toBe('DIV');
+    expect(refs.listItem.current).toBe(parts.listItems[parts.listItems.length - 1]);
+    expect(refs.overflowButton.current).toBe(parts.button);
+  });
+
+  it('keeps the trail measuring its list and items with new inline refs on every render', () => {
+    const layout = autoLayout(160);
+    const seen: string[] = [];
+    function Inline({ tick }: { tick: number }) {
+      return (
+        <Crumbs
+          overflow="auto"
+          data-tick={tick}
+          slotProps={{
+            list: { ref: (node: HTMLElement | null) => void (node && seen.push('list')) },
+            listItem: { ref: (node: HTMLLIElement | null) => void (node && seen.push('item')) },
+          }}
+        />
+      );
+    }
+    const { rerender } = render(<Inline tick={0} />);
+    rerender(<Inline tick={1} />);
+    expect(shownLabels()).toEqual(['Home', '…', 'Page']);
+    layout.resizeTo(230);
+    rerender(<Inline tick={2} />);
+    expect(shownLabels()).toEqual(['Home', '…', 'Beta', 'Gamma', 'Page']);
+    layout.resizeTo(300);
+    expect(shownLabels()).toEqual(['Home', 'Alpha', 'Beta', 'Gamma', 'Page']);
+    expect(seen).toContain('list');
+    expect(seen).toContain('item');
+  });
+
+  it('locks the list’s and the list items’ role and hidden state', () => {
+    const attempt = { role: 'link', hidden: true, inert: true, 'aria-hidden': true };
+    const view = render(
+      <Crumbs maxDisplayedItems={3} slotProps={{ list: attempt, listItem: attempt }} />,
+    );
+    const { list, listItems } = partsOf();
+    for (const element of [list, ...listItems]) {
+      for (const name of ['role', 'hidden', 'inert', 'aria-hidden']) {
+        expect(element).not.toHaveAttribute(name);
+      }
+    }
+    expect(screen.getByRole('list')).toBe(list);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.queryByRole('link', { name: /Home.*Page/ })).toBeNull();
+    view.unmount();
+    autoLayout(160);
+    render(<Crumbs overflow="auto" slotProps={{ list: attempt, listItem: attempt }} />);
+    expect(partsOf().list).toHaveAttribute('role', 'list');
+    expect(shownLabels()).toEqual(['Home', '…', 'Page']);
+  });
+
+  /** The elements of the trail with a tab index, and the one Tab stop among them. */
+  const tabStopsOf = (nav: HTMLElement) => ({
+    withTabIndex: Array.from(nav.querySelectorAll('[tabindex]')),
+    stops: Array.from(nav.querySelectorAll('[tabindex="0"]')),
+  });
+  /** A part that asks to be an item, a Tab stop and a nested roving container. */
+  const rogue = { role: 'link', tabIndex: 0, 'data-roving-container': '' };
+
+  it('keeps an arrow-key trail’s items and its one Tab stop: no part becomes an item or a nested one', async () => {
+    const user = userEvent.setup();
+    render(
+      <Crumbs
+        maxDisplayedItems={3}
+        focusMode="arrow"
+        slotProps={{ list: rogue, listItem: rogue, overflowButton: rogue }}
+      />,
+    );
+    const nav = screen.getByRole('navigation');
+    const home = screen.getByRole('link', { name: 'Home' });
+    const more = screen.getByRole('button', { name: 'More items' });
+    const gamma = screen.getByRole('button', { name: 'Gamma' });
+    // The roving hook stamps the items only: one Tab stop, no part with a tab index or a marker.
+    expect(tabStopsOf(nav)).toEqual({ withTabIndex: [home, more, gamma], stops: [home] });
+    expect(nav.querySelectorAll('[data-roving-container]')).toHaveLength(0);
+    act(() => home.focus());
+    await user.keyboard('{ArrowRight}');
+    expect(more).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(gamma).toHaveFocus();
+    expect(tabStopsOf(nav).stops).toEqual([gamma]);
+    await user.keyboard('{ArrowLeft}{ArrowLeft}');
+    expect(home).toHaveFocus();
+    expect(tabStopsOf(nav).stops).toEqual([home]);
+  });
+
+  it('keeps the arrow keys and the one Tab stop of an overflow="auto" trail with every part rogue', async () => {
+    const user = userEvent.setup();
+    autoLayout(160);
+    render(
+      <Crumbs
+        overflow="auto"
+        focusMode="arrow"
+        slotProps={{ list: rogue, listItem: rogue, overflowButton: rogue }}
+      />,
+    );
+    expect(shownLabels()).toEqual(['Home', '…', 'Page']);
+    const nav = screen.getByRole('navigation');
+    const home = screen.getByRole('link', { name: 'Home' });
+    const more = screen.getByRole('button', { name: 'More items' });
+    expect(tabStopsOf(nav).stops).toEqual([home]);
+    expect(nav.querySelectorAll('[data-roving-container]')).toHaveLength(0);
+    act(() => home.focus());
+    await user.keyboard('{ArrowRight}');
+    expect(more).toHaveFocus();
+    expect(tabStopsOf(nav).stops).toEqual([more]);
+    await user.keyboard('{ArrowLeft}');
+    expect(home).toHaveFocus();
+  });
+
+  it('keeps the Overflow of overflow="auto" as the trail sets it', () => {
+    // One middle item fits in 210: the direction decides which.
+    autoLayout(210);
+    const sneaky = {
+      overflowDirection: 'end',
+      buttonPosition: 'end',
+      orientation: 'vertical',
+      minimumVisible: 5,
+      hasHiddenItems: true,
+      overflowButton: () => 'Mine',
+      slotProps: { overflowButton: { className: 'my-wrapper' } },
+      'data-orientation': 'vertical',
+      'data-overflow-direction': 'end',
+      'data-button-position': 'end',
+    } as unknown as BreadcrumbSlotProps['list'];
+    render(<Crumbs overflow="auto" slotProps={{ list: sneaky }} />);
+    const { list } = partsOf();
+    expect(list).toHaveAttribute('data-orientation', 'horizontal');
+    expect(list).toHaveAttribute('data-overflow-direction', 'start');
+    expect(list).toHaveAttribute('data-button-position', 'before-hidden');
+    // Hidden from the start of the trail, the "…" button standing before them.
+    expect(shownLabels()).toEqual(['Home', '…', 'Gamma', 'Page']);
+    expect(screen.getByRole('button', { name: 'More items' })).toBeInTheDocument();
+    expect(document.querySelector('.my-wrapper')).toBeNull();
+    // No button is reserved before the first measurement (the server render).
+    expect(renderToString(<Crumbs overflow="auto" slotProps={{ list: sneaky }} />)).not.toContain(
+      'More items',
+    );
+  });
+
+  it('passes no onOverflowChange of yours to the Overflow of overflow="auto": the trail owns it', () => {
+    const layout = autoLayout(160);
+    const onOverflowChange = vi.fn();
+    const list = { onOverflowChange, title: 'Trail' } as unknown as BreadcrumbSlotProps['list'];
+    render(<Crumbs overflow="auto" slotProps={{ list }} />);
+    expect(shownLabels()).toEqual(['Home', '…', 'Page']);
+    layout.resizeTo(300);
+    expect(shownLabels()).toEqual(['Home', 'Alpha', 'Beta', 'Gamma', 'Page']);
+    // The part's other props still reach the list; the Overflow reported to no handler of yours.
+    expect(partsOf().list).toHaveAttribute('title', 'Trail');
+    expect(onOverflowChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps a shown list item measured: your overflow marker is dropped', () => {
+    autoLayout(160);
+    render(
+      <Crumbs
+        overflow="auto"
+        slotProps={{ listItem: { 'data-overflow-hidden': '' } as BreadcrumbSlotProps['listItem'] }}
+      />,
+    );
+    expect(shownLabels()).toEqual(['Home', '…', 'Page']);
+    const [home] = partsOf().listItems;
+    expect(home).not.toHaveAttribute('data-overflow-hidden');
+  });
+
+  it('locks the overflow button’s type, name, enabled state, role, tab index and hidden state', async () => {
+    const user = userEvent.setup();
+    const attempt = {
+      type: 'submit',
+      'aria-label': 'Mine',
+      disabled: true,
+      'aria-disabled': true,
+      'data-roving-disabled': '',
+      role: 'link',
+      tabIndex: -1,
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+      'aria-expanded': true,
+      'aria-haspopup': 'listbox',
+    } as unknown as BreadcrumbSlotProps['overflowButton'];
+    render(<Crumbs maxDisplayedItems={3} slotProps={{ overflowButton: attempt }} />);
+    const button = screen.getByRole('button', { name: 'More items' });
+    expect(button).toHaveAttribute('type', 'button');
+    for (const name of [
+      'disabled',
+      'aria-disabled',
+      'data-roving-disabled',
+      'role',
+      'tabindex',
+      'hidden',
+      'inert',
+      'aria-hidden',
+    ]) {
+      expect(button).not.toHaveAttribute(name);
+    }
+    // The menu's own state wins.
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).toHaveAttribute('aria-haspopup', 'menu');
+    await user.click(button);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard('{Escape}');
+  });
+
+  it('labels the menu with an id you give the overflow button', async () => {
+    const user = userEvent.setup();
+    render(<Crumbs maxDisplayedItems={3} slotProps={{ overflowButton: { id: 'more-crumbs' } }} />);
+    const button = screen.getByRole('button', { name: 'More items' });
+    expect(button).toHaveAttribute('id', 'more-crumbs');
+    await user.click(button);
+    expect(screen.getByRole('menu')).toHaveAttribute('aria-labelledby', 'more-crumbs');
+    await user.keyboard('{Escape}');
+  });
+
+  it('runs your overflow button handlers before the menu’s: preventDefault() keeps it closed', async () => {
+    const user = userEvent.setup();
+    const prevent = (event: React.SyntheticEvent) => event.preventDefault();
+    const { rerender } = render(
+      <Crumbs
+        maxDisplayedItems={3}
+        slotProps={{ overflowButton: { onClick: prevent, onKeyDown: prevent } }}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'More items' });
+    await user.click(button);
+    expect(screen.queryByRole('menu')).toBeNull();
+    act(() => button.focus());
+    await user.keyboard('{ArrowDown}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    // A handler that prevents nothing leaves the menu working, and runs first.
+    const order: string[] = [];
+    rerender(
+      <Crumbs
+        maxDisplayedItems={3}
+        slotProps={{
+          overflowButton: {
+            onClick: () => void order.push(`part:${String(screen.queryByRole('menu') !== null)}`),
+          },
+        }}
+      />,
+    );
+    await user.click(button);
+    expect(order).toEqual(['part:false']);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+  });
+
+  it('keeps the menu’s focus return with a new inline ref on every render', async () => {
+    const user = userEvent.setup();
+    function Inline({ tick }: { tick: number }) {
+      return (
+        <Crumbs
+          maxDisplayedItems={3}
+          data-tick={tick}
+          slotProps={{ overflowButton: { ref: (node: HTMLButtonElement | null) => void node } }}
+        />
+      );
+    }
+    const { rerender } = render(<Inline tick={0} />);
+    const button = screen.getByRole('button', { name: 'More items' });
+    await user.click(button);
+    rerender(<Inline tick={1} />);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(button).toHaveFocus();
+  });
+
+  it('runs a list item’s key handler before the arrow keys: preventDefault() keeps focus', async () => {
+    const user = userEvent.setup();
+    render(
+      <Crumbs
+        maxDisplayedItems={3}
+        focusMode="arrow"
+        slotProps={{ listItem: { onKeyDown: (event) => event.preventDefault() } }}
+      />,
+    );
+    const home = screen.getByRole('link', { name: 'Home' });
+    act(() => home.focus());
+    await user.keyboard('{ArrowRight}');
+    expect(home).toHaveFocus();
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const handlers = { list: vi.fn(), listItem: vi.fn(), overflowButton: vi.fn() };
+    render(
+      <React.StrictMode>
+        <Crumbs
+          maxDisplayedItems={3}
+          slotProps={{
+            list: { onClick: handlers.list },
+            listItem: { onClick: handlers.listItem },
+            overflowButton: { onClick: handlers.overflowButton },
+          }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('button', { name: 'More items' }));
+    expect(handlers.overflowButton).toHaveBeenCalledTimes(1);
+    expect(handlers.listItem).toHaveBeenCalledTimes(1);
+    expect(handlers.list).toHaveBeenCalledTimes(1);
+    await user.keyboard('{Escape}');
+  });
+
+  it('ignores the overflow button part while nothing is collapsed', () => {
+    render(<Crumbs slotProps={{ overflowButton: { className: 'my-button' } }} />);
+    expect(document.querySelector('.my-button')).toBeNull();
+    expect(screen.getAllByRole('listitem')).toHaveLength(5);
+  });
+
+  it('applies the parts in RTL, the separators still mirrored', () => {
+    renderWithProviders(
+      <Crumbs
+        maxDisplayedItems={3}
+        slotProps={{ listItem: { className: 'my-item' }, overflowButton: { dir: 'ltr' } }}
+      />,
+      { dir: 'rtl' },
+    );
+    const { listItems, button } = partsOf();
+    expect(listItems[1]).toHaveClass('my-item', 'flex');
+    expect(separatorsIn(listItems[1])[0]).toHaveClass('wave-rtl:-scale-x-100');
+    expect(button).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    const mine = (name: string) => ({ className: `my-${name}`, title: name });
+    const parts = { list: mine('list'), listItem: mine('item'), overflowButton: mine('button') };
+    const view = render(<Crumbs maxDisplayedItems={3} slotProps={parts} />);
+    await expectNoA11yViolations();
+    view.unmount();
+    autoLayout(160);
+    render(<Crumbs overflow="auto" slotProps={parts} />);
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof BreadcrumbSlotProps>().toEqualTypeOf<
+      'list' | 'listItem' | 'overflowButton'
+    >();
+    // The list is an <ol>, or the Overflow's <div>.
+    expectTypeOf<NonNullable<BreadcrumbSlotProps['list']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLElement> | undefined
+    >();
+    expectTypeOf<NonNullable<BreadcrumbSlotProps['listItem']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLIElement> | undefined
+    >();
+    expectTypeOf<NonNullable<BreadcrumbSlotProps['overflowButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the trail renders them
+        <Crumbs slotProps={{ list: { children: 'x' } }} />
+      )
+    );
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the trail renders them
+        <Crumbs slotProps={{ overflowButton: { children: 'x' } }} />
+      )
+    );
   });
 });

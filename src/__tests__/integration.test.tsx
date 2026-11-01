@@ -25,6 +25,7 @@ import {
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
+  Badge,
   Button,
   Calendar,
   Card,
@@ -37,6 +38,7 @@ import {
   ColorSwatch,
   Combobox,
   ComboboxOption,
+  CompoundButton,
   DataGrid,
   DataGridBody,
   DataGridCell,
@@ -58,6 +60,7 @@ import {
   DropdownOption,
   EmptySwatch,
   Field,
+  FieldContextProvider,
   FlatTree,
   FlatTreeItem,
   ImageSwatch,
@@ -102,6 +105,7 @@ import {
   Option,
   Overflow,
   OverflowItem,
+  Pagination,
   Popover,
   Portal,
   ProgressBar,
@@ -155,13 +159,24 @@ import {
   createBrandTokens,
   createTableColumn,
   createToaster,
+  getNativeElementProps,
   getTokenStyle,
+  mergeSlotProps,
   textClassNames,
+  useDataGridRowId,
+  useDataGridSelection,
+  useDataGridSort,
+  useFieldContext,
   useFlatTree,
+  useId,
   useListbox,
   useListboxPopup,
+  useMenuContext,
+  useMenuListContext,
   useMergedRefs,
+  useMessageBarContext,
   useOverflowMenu,
+  useRadioGroupItem,
   useTableFeatures,
   useTableSelection,
   useTableSort,
@@ -203,10 +218,13 @@ import {
   type CheckedValuesChangeDetails,
   type DataGridSort,
   type DialogProps,
+  type FieldContextValue,
+  type FieldControlProps,
   type FlatTreeItemData,
   type FlatTreeModel,
   type ListboxItem,
   type MenuProps,
+  type SlotPart,
   type VisibleFlatItem,
   type WaveTokenOverrides,
 } from '../index';
@@ -232,6 +250,16 @@ import * as flatTreeContext from '../components/layout/FlatTree.context';
 import * as tokensCore from '../lib/tokens';
 import * as waveTokensModule from '../lib/waveTokens';
 import * as brandModule from '../lib/brand';
+// The 0.18 modules: their public values reach the barrel, their seams do not, and the two modules
+// that only the tests read reach nothing.
+import * as slotPropsModule from '../lib/slotProps';
+import * as nativePropsModule from '../lib/nativeProps';
+import * as slotPartsModule from '../lib/slotParts';
+import * as deprecationsModule from '../lib/deprecations';
+import * as radioGroupContextModule from '../components/input/RadioGroup.context';
+import * as menuHooksModule from '../components/navigation/Menu.hooks';
+import * as messageBarContextModule from '../components/feedback/MessageBar.context';
+import * as dataGridHooksModule from '../components/table/DataGrid.hooks';
 import {
   asClientReference,
   expectNoA11yViolations,
@@ -366,6 +394,66 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'OverflowDivider',
     ]) {
       expect(barrel[name], name).toBeTypeOf('function');
+    }
+  });
+
+  it('exports the Field provider and hook, never the context object (P13-02, R11, R12)', () => {
+    expect(barrel.FieldContextProvider).toBeTypeOf('function');
+    expect(barrel.useFieldContext).toBeTypeOf('function');
+    expect('FieldContext' in barrel).toBe(false);
+    expect('createFieldControlIdClaim' in barrel).toBe(false);
+  });
+
+  it('never exports fieldLocks, the slotProps locks of a control part (module-only)', () => {
+    expect('fieldLocks' in barrel).toBe(false);
+  });
+
+  it('exports the RadioGroup hooks, never the context object or the item state (P13-02, R11, R13)', () => {
+    expect(barrel.useRadioGroupContext).toBeTypeOf('function');
+    expect(barrel.useRadioGroupItem).toBeTypeOf('function');
+    expect('RadioGroupContext' in barrel).toBe(false);
+    expect('useRadioItemState' in barrel).toBe(false);
+  });
+
+  it('exports the Menu hooks, never the context objects or their values (P13-02, R11, R14)', () => {
+    expect(barrel.useMenuContext).toBeTypeOf('function');
+    expect(barrel.useMenuListContext).toBeTypeOf('function');
+    for (const name of [
+      'MenuContext',
+      'MenuListContext',
+      'MenuListElementContext',
+      'MenuSubmenuTriggerContext',
+      'INERT_MENU_CONTEXT',
+      'INERT_MENU_LIST_CONTEXT',
+      'useOptionalMenuContext',
+    ]) {
+      expect(name in barrel, name).toBe(false);
+    }
+  });
+
+  it('exports the MessageBar hook, never its context objects (P13-02, R11, R15)', () => {
+    expect(barrel.useMessageBarContext).toBeTypeOf('function');
+    for (const name of ['MessageBarContext', 'MessageBarPartContext', 'useMessageBarReflow']) {
+      expect(name in barrel, name).toBe(false);
+    }
+  });
+
+  it('exports the DataGrid hooks, never the context objects, their hooks or the store (P13-02, R11, R16)', () => {
+    for (const name of ['useDataGridSort', 'useDataGridSelection', 'useDataGridRowId']) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+    for (const name of [
+      'DataGridContext',
+      'DataGridSortContext',
+      'DataGridRowContext',
+      'DataGridRowIdContext',
+      'DataGridItemsContext',
+      'useDataGridContext',
+      'useDataGridSortContext',
+      'useDataGridRowContext',
+      'createSelectionStore',
+    ]) {
+      expect(name in barrel, name).toBe(false);
     }
   });
 
@@ -622,6 +710,86 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'tokenVariable',
     ]);
     expect(internal.filter((name) => name in barrel)).toEqual([]);
+  });
+
+  /** The values 0.18 adds to the entry: the part helpers and the public context hooks. */
+  const CUSTOMIZATION_EXPORTS: ReadonlyArray<[string, unknown]> = [
+    ['mergeSlotProps', slotPropsModule.mergeSlotProps],
+    ['getNativeElementProps', nativePropsModule.getNativeElementProps],
+    ['useRadioGroupContext', radioGroupContextModule.useRadioGroupContext],
+    ['useRadioGroupItem', radioGroupContextModule.useRadioGroupItem],
+    ['useMenuContext', menuHooksModule.useMenuContext],
+    ['useMenuListContext', menuHooksModule.useMenuListContext],
+    ['useMessageBarContext', messageBarContextModule.useMessageBarContext],
+    ['useDataGridSort', dataGridHooksModule.useDataGridSort],
+    ['useDataGridSelection', dataGridHooksModule.useDataGridSelection],
+    ['useDataGridRowId', dataGridHooksModule.useDataGridRowId],
+  ];
+
+  it('exports the 0.18 part helpers from their server-safe modules and the context hooks from theirs (P13-01, P13-02)', () => {
+    for (const [name, value] of CUSTOMIZATION_EXPORTS) {
+      expect(barrel[name], name).toBeTypeOf('function');
+      expect(barrel[name], name).toBe(value);
+    }
+    for (const name of ['useFieldContext', 'FieldContextProvider']) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+  });
+
+  it('keeps the 0.18 seams out of the public API: every other value of the new modules, and the seams added to older ones', () => {
+    const publicNames = CUSTOMIZATION_EXPORTS.map(([name]) => name);
+    const internal = [
+      ...Object.keys(slotPropsModule),
+      ...Object.keys(nativePropsModule),
+      ...Object.keys(slotPartsModule),
+      ...Object.keys(deprecationsModule),
+      ...Object.keys(radioGroupContextModule),
+      ...Object.keys(menuHooksModule),
+      ...Object.keys(messageBarContextModule),
+      ...Object.keys(dataGridHooksModule),
+    ].filter((name) => !publicNames.includes(name));
+    expect(internal.sort()).toEqual([
+      'BUTTON_PART_LOCKS',
+      'DEPRECATIONS',
+      'HIDDEN_PART_LOCKS',
+      'MessageBarContext',
+      'NAMED_SLOT_PARTS',
+      'NATIVE_EVENT_NAMES',
+      'NATIVE_GLOBAL_PROPS',
+      'NATIVE_NO_CAPTURE_EVENTS',
+      'NATIVE_TAG_PROPS',
+      'PENDING_SLOT_PARTS',
+      'RadioGroupContext',
+      'SLOT_PART_EXCLUSIONS',
+      'SLOT_PROPS_KEYS',
+      'SLOT_PROPS_ROOT_OWNERS',
+      'composeAfterPart',
+      'lockPositionStyle',
+      'useRadioItemState',
+    ]);
+    // The seams the rollout added to modules that existed before (MODULE_ONLY_NAMES of verify-dist).
+    const seams = [
+      'AVATAR_GROUP_PART_LOCKS',
+      'BLOCK_CLICK',
+      'DataGridSelectAllPartContext',
+      'ID_LIST_KEYS',
+      'MENU_PART_LOCKS',
+      'MenuListElementContext',
+      'NAV_PART_LOCKS',
+      'NAV_SHOWN_PART_LOCKS',
+      'OPTION_STATE_LOCKS',
+      'PickerListboxSurface',
+      'TAG_PART_LOCKS',
+      'TREE_PART_LOCKS',
+      'fieldLocks',
+      'hasRenderFunction',
+      'preventMouseDown',
+      'resolveWiredSlot',
+      'useLegacyMotionWarning',
+      'warnImportantColor',
+      'withoutRenderFunction',
+    ];
+    expect([...internal, ...seams].filter((name) => name in barrel)).toEqual([]);
   });
 
   it('keeps internal helpers out of the public API', () => {
@@ -1517,6 +1685,98 @@ describe('Field with a wrapper component around the control (input-basic#1, inpu
     const inputs = screen.getAllByRole('textbox', { name: 'Price range' });
     expect(inputs).toHaveLength(2);
     for (const input of inputs) expect(input).toHaveAccessibleDescription(/In euros/);
+    await expectNoA11yViolations(document.body);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Field's function child and FieldContextProvider (P13-02, R10, R12)
+// ---------------------------------------------------------------------------
+
+describe('a third-party control in a Field, and a field layout of your own', () => {
+  /**
+   * Stands in for a third-party control: it takes the attributes of its input as `inputProps` and
+   * ignores the others, so Field's merge into an element child cannot reach the input.
+   */
+  function PhoneInput({
+    inputProps,
+  }: {
+    inputProps?: React.InputHTMLAttributes<HTMLInputElement> & FieldControlProps;
+  }) {
+    return (
+      <span className="inline-flex gap-1">
+        <span>+47</span>
+        <input type="tel" {...inputProps} />
+      </span>
+    );
+  }
+
+  it('wires the input of a third-party control through the function child', async () => {
+    render(
+      <Field label="Phone" hint="A mobile number" error="Enter a phone number" required>
+        {(props) => <PhoneInput inputProps={props} />}
+      </Field>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Phone' });
+    expect(input).toHaveAttribute('type', 'tel');
+    expect(screen.getByText('Phone').closest('label')).toHaveAttribute('for', input.id);
+    expect(input).toHaveAccessibleDescription('Enter a phone number A mobile number');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-required', 'true');
+    expect(duplicateIds()).toEqual([]);
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('as an element child, the same control leaves its input unwired (why the function exists)', () => {
+    render(
+      <Field label="Phone" hint="A mobile number">
+        <PhoneInput />
+      </Field>,
+    );
+    const input = screen.getByRole('textbox');
+    expect(input).not.toHaveAccessibleName('Phone');
+    expect(input).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('wires library controls and a control of your own in a field layout of your own (FieldContextProvider)', async () => {
+    const field: FieldContextValue = {
+      controlId: 'quantity',
+      labelId: 'quantity-label',
+      hintId: 'quantity-hint',
+      errorId: 'quantity-error',
+      invalid: true,
+      required: true,
+      hasErrorMessage: true,
+      validationState: 'error',
+      validationMessageId: 'quantity-error',
+    };
+    function StateBadge() {
+      const context = useFieldContext();
+      return <output aria-label="State">{context?.validationState}</output>;
+    }
+    render(
+      <div className="grid grid-cols-2 gap-2">
+        <label id="quantity-label" htmlFor="quantity">
+          Quantity
+        </label>
+        <FieldContextProvider value={field}>
+          <Input error="Repeated error" />
+          <StateBadge />
+        </FieldContextProvider>
+        <p id="quantity-error" role="alert">
+          At most 10
+        </p>
+        <p id="quantity-hint">Whole units</p>
+      </div>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Quantity' });
+    expect(input).toHaveAttribute('id', 'quantity');
+    expect(input).toHaveAccessibleDescription('At most 10 Whole units');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toBeRequired();
+    // `hasErrorMessage`: the layout shows the error, so the Input does not repeat its own.
+    expect(screen.queryByText('Repeated error')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'State' })).toHaveTextContent('error');
     await expectNoA11yViolations(document.body);
   });
 });
@@ -5167,6 +5427,168 @@ describe('compounds composed in a React Server Component', () => {
     );
   }
 
+  // 0.18 (Phase 13): parts, the part helpers and the public contexts across the RSC boundary.
+  // A component that takes `slotProps` is itself the lazy part (its parts arrive as data), and a
+  // render function, a handler or a hook lives in a client component, as the README's RSC section
+  // asks.
+
+  /**
+   * A panel of your own as a Server Component writes it: `mergeSlotProps` merges the parts a page
+   * passes into its own elements (no hook, no client code), next to a lazy Wave component.
+   */
+  function UpdatesPanel({
+    Action,
+    slotProps,
+  }: {
+    Action: typeof Button;
+    slotProps?: { heading?: SlotPart<'h2'>; body?: SlotPart<'p'> };
+  }) {
+    return (
+      <section aria-label="Updates">
+        <h2
+          {...mergeSlotProps(slotProps?.heading, {
+            className: 'updates-heading text-body-1',
+            locked: { role: undefined },
+          })}
+        >
+          Updates
+        </h2>
+        <p {...mergeSlotProps(slotProps?.body, { className: 'updates-body' })}>
+          Three new versions.
+        </p>
+        <Action>Refresh</Action>
+      </section>
+    );
+  }
+
+  interface InboxLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+    /** The number the badge shows. */
+    count: number;
+    /** No attribute: `getNativeElementProps` leaves it out. */
+    tone: 'brand' | 'danger';
+    Count: typeof Badge;
+  }
+  /**
+   * A link of your own as a Server Component writes it: `getNativeElementProps` forwards the
+   * attributes an `<a>` takes and leaves out the link's own props, next to a lazy Badge.
+   */
+  function InboxLink(props: InboxLinkProps) {
+    const { Count } = props;
+    return (
+      <a {...getNativeElementProps('a', props, ['children'])} data-tone={props.tone}>
+        {props.children} <Count appearance="filled">{props.count}</Count>
+      </a>
+    );
+  }
+
+  /** What `useFieldContext` gives where it renders: `null` outside a field (a client component). */
+  function FieldStateText({ label }: { label: string }) {
+    const field = useFieldContext();
+    return (
+      <output aria-label={label}>
+        {field === null ? 'no field' : (field.validationState ?? 'none')}
+      </output>
+    );
+  }
+
+  /** A plain `<input>` in a Field, wired through the function child (a client component). */
+  function PhoneField({ FieldPart }: { FieldPart: typeof Field }) {
+    return (
+      <FieldPart label="Phone" hint="A mobile number" required>
+        {(props) => <input type="tel" {...props} />}
+      </FieldPart>
+    );
+  }
+
+  /** A card of your own in a RadioGroup: `useRadioGroupItem` makes it a radio (client). */
+  function PlanCard({ value, title, note }: { value: string; title: string; note: string }) {
+    const id = useId('plan');
+    const { props, checked } = useRadioGroupItem(value);
+    return (
+      <div
+        {...props}
+        aria-labelledby={`${id}-title`}
+        aria-describedby={`${id}-note`}
+        data-checked={checked ? '' : undefined}
+      >
+        <span id={`${id}-title`}>{title}</span>
+        <span id={`${id}-note`}>{note}</span>
+      </div>
+    );
+  }
+
+  /**
+   * A menu item of your own (client): `useMenuContext` closes the menu after its action and
+   * `useMenuListContext` keeps the list's icon column.
+   */
+  function TemplateMenuItem({ title }: { title: string }) {
+    const { close } = useMenuContext();
+    const { hasIcons } = useMenuListContext();
+    return (
+      <div
+        role="menuitem"
+        onClick={(event) => {
+          if (!event.defaultPrevented) close();
+        }}
+        onKeyDown={(event) => {
+          if (event.defaultPrevented || event.target !== event.currentTarget) return;
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          event.currentTarget.click();
+        }}
+      >
+        {hasIcons && <span aria-hidden="true" data-icon-column="" />}
+        {title}
+      </div>
+    );
+  }
+
+  /** An action of your own in a MessageBar (client): it follows the bar's status and layout. */
+  function StatusAction() {
+    const { status, layout } = useMessageBarContext();
+    return (
+      <Button data-layout-seen={layout}>{status === 'error' ? 'Try again' : 'Refresh'}</Button>
+    );
+  }
+
+  /**
+   * A cell of your own (client): it toggles its row's selection (`useDataGridRowId`,
+   * `useDataGridSelection`) and tells the grid's sort (`useDataGridSort`).
+   */
+  function SelectToggle({ name }: { name: string }) {
+    const rowId = useDataGridRowId();
+    const { isSelected, toggle } = useDataGridSelection();
+    const { sort } = useDataGridSort();
+    if (rowId === undefined) return null;
+    return (
+      <button
+        type="button"
+        aria-pressed={isSelected(rowId)}
+        aria-label={`Select ${name}`}
+        data-sort={sort === null ? 'none' : sort.direction}
+        onClick={(event) => toggle(rowId, event.nativeEvent)}
+      >
+        Select
+      </button>
+    );
+  }
+
+  /** The element of the server HTML (parsed, not rendered) that carries `data-part="name"`. */
+  function partInServerHtml(html: string, name: string): Element {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    const parts = host.querySelectorAll(`[data-part="${name}"]`);
+    expect(parts, name).toHaveLength(1);
+    return parts[0];
+  }
+
+  /** The rendered element that carries `data-part="name"`. */
+  function renderedPart(name: string): Element {
+    const parts = document.querySelectorAll(`[data-part="${name}"]`);
+    expect(parts, name).toHaveLength(1);
+    return parts[0];
+  }
+
   const cases: SsrCase[] = [
     ssrCase({
       name: 'Carousel',
@@ -6671,6 +7093,541 @@ describe('compounds composed in a React Server Component', () => {
           'false',
         );
         expect(within(tree).getAllByRole('treeitem')).toHaveLength(2);
+      },
+    }),
+    // 0.18 (Phase 13): a component with `slotProps` from each category, its parts given as data
+    // by the Server Component; each part keeps the class and attributes on the server, through
+    // hydration and after the interaction.
+    ssrCase({
+      name: 'CompoundButton (slotProps: the primary and secondary text)',
+      parts: { Compound: CompoundButton },
+      tree: ({ Compound }) => (
+        <Compound
+          secondaryText="From a template"
+          slotProps={{
+            primaryText: { className: 'mine-primary', 'data-part': 'primary' },
+            secondaryText: { className: 'mine-secondary', 'data-part': 'secondary' },
+          }}
+        >
+          New file
+        </Compound>
+      ),
+      serverText: 'data-part="secondary"',
+      serverHtml: (html) => {
+        const secondary = partInServerHtml(html, 'secondary');
+        expect(secondary).toHaveClass(
+          Wave.compoundButtonClassNames.secondaryText,
+          'mine-secondary',
+        );
+        expect(partInServerHtml(html, 'primary')).toHaveClass(
+          Wave.compoundButtonClassNames.primaryText,
+          'mine-primary',
+        );
+      },
+      interact: async (user) => {
+        const compound = screen.getByRole('button', { name: /New file/ });
+        expect(renderedPart('secondary')).toHaveClass('mine-secondary');
+        expect(compound).toContainElement(renderedPart('primary') as HTMLElement);
+        await user.tab();
+        expect(compound).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'Switch (slotProps: the track and the label)',
+      parts: { Toggle: Switch },
+      tree: ({ Toggle }) => (
+        <Toggle
+          label="Wi-Fi"
+          defaultChecked
+          slotProps={{
+            track: { className: 'mine-track', 'data-part': 'track' },
+            label: { 'data-part': 'label' },
+          }}
+        />
+      ),
+      serverText: 'data-part="track"',
+      serverHtml: (html) => {
+        expect(partInServerHtml(html, 'track')).toHaveClass(
+          Wave.switchClassNames.track,
+          'mine-track',
+        );
+        expect(partInServerHtml(html, 'label')).toHaveTextContent('Wi-Fi');
+      },
+      interact: async (user) => {
+        const toggle = screen.getByRole('switch', { name: 'Wi-Fi' });
+        expect(toggle).toBeChecked();
+        await user.click(toggle);
+        expect(toggle).not.toBeChecked();
+        expect(renderedPart('track')).toHaveClass('mine-track');
+      },
+    }),
+    ssrCase({
+      name: 'List (slotProps: the content of a selectable item)',
+      parts: { Item: ListItem },
+      tree: ({ Item }) => (
+        <List aria-label="Files" selectable selectionMode="single" defaultSelectedItems={['a']}>
+          <Item
+            value="a"
+            slotProps={{ content: { className: 'mine-content', 'data-part': 'content' } }}
+          >
+            Alpha
+          </Item>
+          <Item value="b">Beta</Item>
+        </List>
+      ),
+      serverText: 'data-part="content"',
+      serverHtml: (html) => {
+        const content = partInServerHtml(html, 'content');
+        expect(content).toHaveClass(Wave.listItemClassNames.content, 'mine-content');
+        expect(content).toHaveTextContent('Alpha');
+      },
+      interact: async (user) => {
+        const alpha = screen.getByRole('option', { name: 'Alpha' });
+        expect(alpha).toHaveAttribute('aria-selected', 'true');
+        await user.click(screen.getByRole('option', { name: 'Beta' }));
+        expect(screen.getByRole('option', { name: 'Beta' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        expect(alpha).toHaveAttribute('aria-selected', 'false');
+        expect(alpha).toContainElement(renderedPart('content') as HTMLElement);
+      },
+    }),
+    ssrCase({
+      name: 'Accordion.Trigger (slotProps: the heading and the expand icon)',
+      parts: { Item: AccordionItem, Trigger: AccordionTrigger, Panel: AccordionPanel },
+      tree: ({ Item, Trigger, Panel }) => (
+        <Accordion>
+          <Item value="q1">
+            <Trigger
+              slotProps={{
+                heading: { 'data-part': 'heading' },
+                expandIcon: { className: 'mine-icon', 'data-part': 'icon' },
+              }}
+            >
+              Question one?
+            </Trigger>
+            <Panel>Answer one.</Panel>
+          </Item>
+        </Accordion>
+      ),
+      serverText: 'data-part="heading"',
+      serverHtml: (html) => {
+        expect(partInServerHtml(html, 'heading')).toHaveClass(
+          Wave.accordionTriggerClassNames.heading,
+        );
+        expect(partInServerHtml(html, 'icon')).toHaveClass(
+          Wave.accordionTriggerClassNames.expandIcon,
+          'mine-icon',
+        );
+      },
+      interact: async (user) => {
+        const trigger = button('Question one?');
+        expect(renderedPart('heading')).toContainElement(trigger);
+        await user.click(trigger);
+        expect(trigger).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByRole('region', { name: 'Question one?' })).toHaveTextContent(
+          'Answer one.',
+        );
+        expect(renderedPart('icon')).toHaveClass('mine-icon');
+      },
+    }),
+    ssrCase({
+      name: 'Pagination (slotProps: the page buttons and the Next button)',
+      parts: { Pages: Pagination },
+      tree: ({ Pages }) => (
+        <Pages
+          aria-label="Pages"
+          totalPages={5}
+          defaultCurrentPage={2}
+          slotProps={{
+            pageButton: { 'data-page-part': '' },
+            nextButton: { className: 'mine-next', 'data-part': 'next' },
+          }}
+        />
+      ),
+      serverText: 'data-part="next"',
+      serverHtml: (html) => {
+        expect(partInServerHtml(html, 'next')).toHaveClass(
+          Wave.paginationClassNames.nextButton,
+          'mine-next',
+        );
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        expect(host.querySelectorAll('[data-page-part]')).toHaveLength(5);
+      },
+      interact: async (user) => {
+        const current = () => document.querySelector('[aria-current="page"]');
+        expect(current()).toHaveTextContent('2');
+        await user.click(renderedPart('next'));
+        expect(current()).toHaveTextContent('3');
+        expect(current()).toHaveAttribute('data-page-part');
+      },
+    }),
+    ssrCase({
+      name: 'ProgressBar (slotProps: the fill and the visible label)',
+      parts: { Progress: ProgressBar },
+      tree: ({ Progress }) => (
+        <Progress
+          value={30}
+          label="Uploading"
+          showLabel
+          slotProps={{
+            bar: { className: 'mine-fill', 'data-part': 'fill' },
+            label: { 'data-part': 'label' },
+          }}
+        />
+      ),
+      serverText: 'data-part="fill"',
+      serverHtml: (html) => {
+        const fill = partInServerHtml(html, 'fill');
+        expect(fill).toHaveClass(Wave.progressBarClassNames.bar, 'mine-fill');
+        expect(partInServerHtml(html, 'label')).toHaveTextContent('Uploading');
+      },
+      interact: async () => {
+        const bar = screen.getByRole('progressbar', { name: 'Uploading' });
+        expect(bar).toHaveAttribute('aria-valuenow', '30');
+        expect(bar).toContainElement(renderedPart('fill') as HTMLElement);
+        expect((renderedPart('fill') as HTMLElement).style.width).toBe('30%');
+      },
+    }),
+    ssrCase({
+      name: 'Drawer (inline; slotProps: the header row)',
+      parts: { Panel: Drawer },
+      tree: ({ Panel }) => (
+        <Panel
+          type="inline"
+          defaultOpen
+          title="Details"
+          slotProps={{ header: { className: 'mine-header', 'data-part': 'header' } }}
+        >
+          <p>Shipping address</p>
+        </Panel>
+      ),
+      serverText: 'Shipping address',
+      serverHtml: (html) => {
+        const header = partInServerHtml(html, 'header');
+        expect(header).toHaveClass(Wave.drawerClassNames.header, 'mine-header');
+        expect(header).toHaveTextContent('Details');
+      },
+      interact: async (user) => {
+        const drawer = screen.getByRole('complementary', { name: 'Details' });
+        expect(drawer).toContainElement(renderedPart('header') as HTMLElement);
+        await user.click(within(renderedPart('header') as HTMLElement).getByRole('button'));
+        expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+      },
+    }),
+    ssrCase({
+      name: 'DataGrid.Header (slotProps: the select-all checkbox)',
+      parts: {
+        Header: DataGridHeader,
+        HeaderCell: DataGridHeaderCell,
+        Body: DataGridBody,
+        Row: DataGridRow,
+        Cell: DataGridCell,
+      },
+      tree: ({ Header, HeaderCell, Body, Row, Cell }) => (
+        <DataGrid aria-label="People" selectionMode="multiple">
+          <Header slotProps={{ selectAllCheckbox: { 'data-part': 'select-all' } }}>
+            <tr>
+              <HeaderCell>Name</HeaderCell>
+            </tr>
+          </Header>
+          <Body>
+            <Row rowId="1">
+              <Cell>Alice</Cell>
+            </Row>
+            <Row rowId="2">
+              <Cell>Bob</Cell>
+            </Row>
+          </Body>
+        </DataGrid>
+      ),
+      serverText: 'data-part="select-all"',
+      serverHtml: (html) => {
+        expect(partInServerHtml(html, 'select-all')).toHaveAttribute('type', 'checkbox');
+      },
+      interact: async (user) => {
+        const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
+        expect(selectAll).toBe(renderedPart('select-all'));
+        await user.click(selectAll);
+        for (const name of ['Alice', 'Bob']) {
+          expect(screen.getByRole('checkbox', { name })).toBeChecked();
+        }
+      },
+    }),
+    // 0.18: the part helpers in a Server Component's own markup, around lazy Wave components.
+    ssrCase({
+      name: 'mergeSlotProps (the parts of a panel a Server Component writes, beside a Button)',
+      parts: { Action: Button },
+      tree: ({ Action }) => (
+        <UpdatesPanel
+          Action={Action}
+          slotProps={{
+            heading: { className: 'text-title-3', role: 'button', 'data-part': 'heading' },
+            body: { 'data-part': 'body', title: 'Release notes' },
+          }}
+        />
+      ),
+      serverText: 'data-part="body"',
+      serverHtml: (html) => {
+        // Your class replaces the component's conflicting one (the type ramp); its role is locked.
+        const heading = partInServerHtml(html, 'heading');
+        expect(heading.getAttribute('class')).toBe('updates-heading text-title-3');
+        expect(heading).not.toHaveAttribute('role');
+        expect(partInServerHtml(html, 'body')).toHaveAttribute('title', 'Release notes');
+      },
+      interact: async (user) => {
+        expect(screen.getByRole('heading', { name: 'Updates' })).toBe(renderedPart('heading'));
+        await user.tab();
+        expect(button('Refresh')).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'getNativeElementProps (a link a Server Component writes, around a Badge)',
+      parts: { Count: Badge },
+      tree: ({ Count }) => (
+        <InboxLink
+          Count={Count}
+          href="#inbox"
+          className="inbox-link"
+          title="Your messages"
+          data-part="link"
+          count={4}
+          tone="danger"
+        >
+          Inbox
+        </InboxLink>
+      ),
+      serverText: 'href="#inbox"',
+      serverHtml: (html) => {
+        const link = partInServerHtml(html, 'link');
+        expect(link).toHaveClass('inbox-link');
+        expect(link).toHaveAttribute('data-tone', 'danger');
+        // The link's own props (`count`, `tone`, the badge) never reach the element.
+        expect(link.getAttributeNames().sort()).toEqual([
+          'class',
+          'data-part',
+          'data-tone',
+          'href',
+          'title',
+        ]);
+      },
+      interact: async (user) => {
+        const link = screen.getByRole('link', { name: 'Inbox 4' });
+        expect(link).toHaveAttribute('href', '#inbox');
+        await user.tab();
+        expect(link).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'useFieldContext (null outside a field, the value of FieldContextProvider inside)',
+      parts: { Provider: FieldContextProvider, Text: Input },
+      tree: ({ Provider, Text }) => (
+        <div>
+          <FieldStateText label="Outside" />
+          <Provider
+            value={{
+              controlId: 'city',
+              labelId: 'city-label',
+              hintId: undefined,
+              errorId: undefined,
+              invalid: false,
+              required: true,
+              hasErrorMessage: false,
+              validationState: 'warning',
+              validationMessageId: 'city-message',
+            }}
+          >
+            <label id="city-label" htmlFor="city">
+              City
+            </label>
+            <Text />
+            <FieldStateText label="Inside" />
+            <p id="city-message">Check the spelling</p>
+          </Provider>
+        </div>
+      ),
+      serverText: 'no field',
+      serverHtml: (html) => {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        expect(Array.from(host.querySelectorAll('output'), (output) => output.textContent)).toEqual(
+          ['no field', 'warning'],
+        );
+      },
+      interact: async (user) => {
+        expect(screen.getByRole('status', { name: 'Outside' })).toHaveTextContent('no field');
+        expect(screen.getByRole('status', { name: 'Inside' })).toHaveTextContent('warning');
+        const city = screen.getByRole('textbox', { name: 'City' });
+        expect(city).toHaveAttribute('id', 'city');
+        expect(city).toHaveAccessibleDescription('Check the spelling');
+        expect(city).toHaveAttribute('aria-required', 'true');
+        await user.type(city, 'Oslo');
+        expect(city).toHaveValue('Oslo');
+      },
+    }),
+    ssrCase({
+      name: 'Field (a function child around a plain input)',
+      parts: { FieldPart: Field },
+      tree: (parts) => <PhoneField {...parts} />,
+      serverText: 'type="tel"',
+      serverHtml: (html) => {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        const input = host.querySelector('input[type="tel"]');
+        expect(input?.id).toBeTruthy();
+        expect(host.querySelector('label')).toHaveAttribute('for', input?.id ?? '');
+      },
+      interact: async (user) => {
+        const phone = screen.getByRole('textbox', { name: 'Phone' });
+        expect(phone).toHaveAttribute('type', 'tel');
+        expect(phone).toHaveAccessibleDescription('A mobile number');
+        expect(phone).toHaveAttribute('aria-required', 'true');
+        await user.click(screen.getByText('Phone'));
+        expect(phone).toHaveFocus();
+        await user.keyboard('555 0100');
+        expect(phone).toHaveValue('555 0100');
+      },
+    }),
+    ssrCase({
+      name: 'RadioGroup (cards of your own on useRadioGroupItem)',
+      parts: { Group: RadioGroup },
+      tree: ({ Group }) => (
+        <Group aria-label="Plan" defaultValue="team">
+          <PlanCard value="solo" title="Solo" note="One seat" />
+          <PlanCard value="team" title="Team" note="Up to ten seats" />
+          <PlanCard value="company" title="Company" note="Every seat" />
+        </Group>
+      ),
+      serverText: 'Up to ten seats',
+      serverHtml: (html) => {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        expect(
+          Array.from(host.querySelectorAll('[role="radio"]'), (radio) =>
+            radio.getAttribute('aria-checked'),
+          ),
+        ).toEqual(['false', 'true', 'false']);
+      },
+      interact: async (user) => {
+        const team = screen.getByRole('radio', { name: 'Team' });
+        expect(team).toBeChecked();
+        expect(team).toHaveAccessibleDescription('Up to ten seats');
+        await user.tab();
+        expect(team).toHaveFocus();
+        await user.keyboard('{ArrowDown}');
+        const company = screen.getByRole('radio', { name: 'Company' });
+        expect(company).toHaveFocus();
+        expect(company).toBeChecked();
+        await user.click(screen.getByRole('radio', { name: 'Solo' }));
+        expect(screen.getByRole('radio', { name: 'Solo' })).toBeChecked();
+        expect(company).not.toBeChecked();
+      },
+    }),
+    ssrCase({
+      name: 'Menu (an item of your own on useMenuContext and useMenuListContext)',
+      parts: { Trigger: MenuTrigger, Popover: MenuPopover, Item: MenuItem },
+      tree: ({ Trigger, Popover: MenuSurface, Item }) => (
+        <Menu>
+          <Trigger>
+            <MenuButton>New</MenuButton>
+          </Trigger>
+          <MenuSurface>
+            <TemplateMenuItem title="Meeting notes" />
+            <Item icon={{ children: '+' }}>Blank document</Item>
+          </MenuSurface>
+        </Menu>
+      ),
+      serverText: 'New',
+      interact: async (user) => {
+        await user.click(button('New'));
+        const notes = menuitem('Meeting notes');
+        // The list has an icon column, which the item of your own keeps.
+        expect(notes.querySelector('[data-icon-column]')).not.toBeNull();
+        await user.click(notes);
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(button('New')).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'MessageBar (an action of your own on useMessageBarContext)',
+      parts: { Title: MessageBarTitle, Actions: MessageBarActions },
+      tree: ({ Title, Actions }) => (
+        <MessageBar status="error" role="region">
+          <Title>Upload failed</Title>The file is too large.
+          <Actions>
+            <StatusAction />
+          </Actions>
+        </MessageBar>
+      ),
+      serverText: 'Try again',
+      interact: async (user) => {
+        const bar = screen.getByRole('region', { name: 'Error: Upload failed' });
+        const action = within(bar).getByRole('button', { name: 'Try again' });
+        expect(action).toHaveAttribute('data-layout-seen', bar.getAttribute('data-layout'));
+        await user.click(action);
+        expect(action).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'DataGrid (a cell of your own on useDataGridRowId, useDataGridSelection and useDataGridSort)',
+      parts: {
+        Header: DataGridHeader,
+        HeaderCell: DataGridHeaderCell,
+        Body: DataGridBody,
+        Row: DataGridRow,
+        Cell: DataGridCell,
+      },
+      tree: ({ Header, HeaderCell, Body, Row, Cell }) => (
+        <DataGrid aria-label="People" selectionMode="multiple" defaultSelectedItems={['2']}>
+          <Header>
+            <tr>
+              <HeaderCell>Name</HeaderCell>
+              <HeaderCell>Pick</HeaderCell>
+            </tr>
+          </Header>
+          <Body>
+            <Row rowId="1">
+              <Cell>Alice</Cell>
+              <Cell>
+                <SelectToggle name="Alice" />
+              </Cell>
+            </Row>
+            <Row rowId="2">
+              <Cell>Bob</Cell>
+              <Cell>
+                <SelectToggle name="Bob" />
+              </Cell>
+            </Row>
+          </Body>
+        </DataGrid>
+      ),
+      serverText: 'aria-label="Select Alice"',
+      serverHtml: (html) => {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        expect(
+          Array.from(host.querySelectorAll('button[aria-pressed]'), (toggle) => [
+            toggle.getAttribute('aria-label'),
+            toggle.getAttribute('aria-pressed'),
+            toggle.getAttribute('data-sort'),
+          ]),
+        ).toEqual([
+          ['Select Alice', 'false', 'none'],
+          ['Select Bob', 'true', 'none'],
+        ]);
+      },
+      interact: async (user) => {
+        const alice = screen.getByRole('button', { name: 'Select Alice' });
+        await user.click(alice);
+        expect(alice).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('checkbox', { name: 'Alice' })).toBeChecked();
+        await user.click(screen.getByRole('checkbox', { name: 'Bob' }));
+        expect(screen.getByRole('button', { name: 'Select Bob' })).toHaveAttribute(
+          'aria-pressed',
+          'false',
+        );
       },
     }),
   ];

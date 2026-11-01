@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { tagPickerClassNames } from '../../lib/classNames';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import type { Slot } from '../../lib/slot';
+import type { SlotPart } from '../../lib/slotProps';
 import type {
   CoreSize,
   InputAppearance,
@@ -303,6 +304,94 @@ export interface TagPickerProps extends Omit<
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements TagPicker generates in its parts, by part, merged into each part's own
+   * (Fluent UI's TagPicker parts take their own props, as `TagPicker.Control`, `TagPicker.Group`,
+   * `TagPicker.Input`, `TagPicker.Button` and `TagPicker.List` do here): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers before its handlers
+   * (`preventDefault()` in yours skips TagPicker's handling of the event), your ref beside its
+   * ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every attribute
+   * TagPicker sets on a part is locked; you add the attributes it does not set. A part takes no
+   * `children`. The parts reach only what TagPicker draws itself: the tags of a `TagPicker.Group`
+   * without children, the end buttons of `TagPicker.Control`, the "+N" chip, the options of a
+   * `TagPicker.List` without children and the create option; a Tag or an option you write takes
+   * its own props. TagPicker puts `slotProps` in the context its parts read, so keep the
+   * object's identity across renders (a constant, or `useMemo`): a new object each render
+   * re-renders every part that reads it.
+   */
+  slotProps?: {
+    /**
+     * Every default tag, the `Tag` root `<span>` that TagPicker renders per selected value in a
+     * `TagPicker.Group` without children (stable class `wave-tag-picker__tag`): your props are
+     * the Tag's props, so the Tag's own rules apply, as on a Tag you write (its handlers run
+     * after yours). A `data-*` attribute you set replaces the Tag's own attribute of that name
+     * (`data-size`, …), and the Tag's look does not follow it. Locked: `value`, `media`, `role`
+     * (a list item) and `hidden` (the single-line layout hides the tags it counts).
+     */
+    tag?: SlotPart<'span'>;
+    /**
+     * The remove `<button>` of every default tag (stable class `wave-tag-picker__remove-button`).
+     * Locked: `type`, `aria-label` (`labels.remove`), `disabled`, `tabIndex`, `hidden`, `inert`,
+     * `aria-hidden` and the attributes of a remove button kept focusable while it is disabled.
+     * Your `onClick` runs before the removal (`preventDefault()` skips it) and is not called
+     * while the button is unavailable.
+     */
+    removeButton?: SlotPart<'button'>;
+    /**
+     * The expand `<button>` of `TagPicker.Control`, rendered while `expandIcon` shows it (stable
+     * class `wave-tag-picker__expand-button`; `expandIcon` is its glyph). Locked: `type`,
+     * `tabIndex` (never a tab stop), `aria-label` (`labels.expand`), `aria-expanded`,
+     * `aria-controls`, `disabled` and `aria-disabled`. Your `onClick` runs before the toggle
+     * (`preventDefault()` skips it).
+     */
+    expandButton?: SlotPart<'button'>;
+    /**
+     * The clear `<button>` of `TagPicker.Control`, rendered with `clearable` while a tag is
+     * selected (stable class `wave-tag-picker__clear-button`). Locked: `type`, `aria-label`
+     * (`labels.clear`), `disabled`, `tabIndex`, `hidden`, `inert`, `aria-hidden` and the
+     * attributes of a button kept focusable while it is disabled. Your `onClick` runs before the
+     * clear (`preventDefault()` skips it) and is not called while the button is unavailable;
+     * the button's focus tracking runs after your `onFocus` and `onBlur`, also when they prevent
+     * the default.
+     */
+    clearButton?: SlotPart<'button'>;
+    /**
+     * Every option TagPicker generates: the options of a `TagPicker.List` without children (a
+     * `TagPicker.Option` per available entry of `options`) and the create option (stable class
+     * `wave-tag-picker__option`): your props are the option's props, so the option's own rules
+     * apply (its `id`, `role` and `aria-selected` win; your handlers run before its own, and
+     * `preventDefault()` in your `onClick` skips the addition). Locked: `value`, `label`,
+     * `data-value`, `media`, `secondaryContent`, `hidden`, the state attributes (`data-active`,
+     * `data-selected`, `aria-disabled`, `data-disabled`) and the position attributes
+     * (`aria-posinset`, `aria-setsize`), also while the option has none.
+     */
+    option?: SlotPart<'li'>;
+    /**
+     * The create option of `allowCreate` (stable class `wave-tag-picker__create-option`),
+     * applied after `option`, which it also carries. Locked as `option`, with `data-create`.
+     */
+    createOption?: SlotPart<'li'>;
+    /**
+     * The "+N" `<span>` of `overflow="count"`, rendered while tags give way to it (stable class
+     * `wave-tag-picker__overflow-count`). Locked: `aria-hidden` (the trigger's description lists
+     * every tag) and `tabIndex` (unset: it is never a tab stop). Your `onMouseDown` runs before
+     * the press that focuses the trigger (`preventDefault()` skips it).
+     */
+    overflowCount?: SlotPart<'span'>;
+    /**
+     * The popup `<div>` of `TagPicker.List`, rendered in a portal while it shows (stable class
+     * `wave-tag-picker__surface`). Locked: `data-side`, `data-align`, `role`, `id`, `hidden`,
+     * `inert` and `aria-hidden`; your `style` merges, but the position, the size limits and the
+     * visibility the positioning sets win.
+     */
+    surface?: SlotPart<'div'>;
+    /**
+     * The "No matches" row of the popup, rendered while typed text matches no option (stable
+     * class `wave-tag-picker__empty-message`). Locked: `aria-hidden` (a status region announces
+     * the text) and `tabIndex` (unset: it is never a tab stop).
+     */
+    emptyMessage?: SlotPart<'div'>;
+  };
 }
 
 /**
@@ -407,6 +496,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     controlRef,
     className,
     ref,
+    slotProps,
     ...rest
   } = props;
 
@@ -890,6 +980,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       overflow,
       collapsed,
       hiddenValues,
+      slotProps,
     }),
     [
       size,
@@ -941,6 +1032,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       overflow,
       collapsed,
       hiddenValues,
+      slotProps,
     ],
   );
 

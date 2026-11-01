@@ -5,10 +5,11 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { LabelPosition, Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
-import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -21,6 +22,9 @@ import { HiddenInput } from '../internal/HiddenInput';
  */
 const onTrack = 'forced-colors:border-[Highlight] forced-colors:bg-[Highlight]';
 const disabledOnTrack = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
+
+/** The handlers a part drops while the switch is unavailable: it does not activate then. */
+const BLOCK_CLICK = ['onClick'] as const;
 
 /** Handlers that run on the `role="switch"` button instead of the root label (C-ROUTING). */
 type SwitchControlHandlers = 'onClick' | 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
@@ -132,6 +136,46 @@ export interface SwitchProps extends Omit<
   controlRef?: React.Ref<HTMLButtonElement>;
   /** Ref to the root `<label>` element. */
   ref?: React.Ref<HTMLLabelElement>;
+  /**
+   * Props for the elements the Switch draws inside its root, by part, merged into each part's
+   * own (Fluent UI's `indicator` and `label` slot props): your classes after the part's (yours
+   * win a conflict), your styles over its styles, your handlers before its handlers
+   * (`preventDefault()` in yours skips the Switch's handling of the event, its own `on…` prop
+   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
+   * `aria-describedby`. Every attribute the Switch sets on a part is locked and keeps the
+   * Switch's value (set it through the Switch's own props); you add the attributes it does not
+   * set. A part takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The `role="switch"` `<button>`, the focusable control (stable class `wave-switch__track`;
+     * `controlRef` reaches it as well). Locked: `id`, `type`, `role`, `aria-checked`,
+     * `disabled`, `tabIndex`, `autoFocus`, the attributes of `disabledFocusable`, the naming and
+     * Field attributes routed to it (`aria-label`, `aria-invalid`, `aria-required`,
+     * `aria-errormessage`, `aria-details`, `aria-disabled`), `required` (unset: the hidden input
+     * carries it), `form` (the switch belongs to the form of its own `form` prop, as its hidden
+     * input does), `hidden`, `inert` and `aria-hidden` (a focusable control is never hidden).
+     * Your `onClick` runs before the Switch's `onClick` and its toggle (`preventDefault()` skips
+     * both) and is not called under `disabledFocusable`; your focus and key handlers run before
+     * the Switch's.
+     */
+    track?: SlotPart<'button'>;
+    /**
+     * The decorative thumb `<span>` inside the track (stable class `wave-switch__thumb`).
+     * Locked: `aria-hidden`, and `tabIndex` (unset: the thumb is never a tab stop). Your
+     * `onClick` is not called while the switch is `disabled` or `disabledFocusable`, as the
+     * switch does not toggle then.
+     */
+    thumb?: SlotPart<'span'>;
+    /**
+     * The `<span>` around the `label` text, rendered only with a `label` (stable class
+     * `wave-switch__label`). Locked: `id`, which names the control, and `aria-label` unset (it
+     * would replace the text in the name). `hidden`, `inert` and `aria-hidden` stay yours: the
+     * control's `aria-labelledby` still reads hidden text. Your `onClick` is not called while the
+     * switch is `disabled` or `disabledFocusable`, as the switch does not toggle then.
+     */
+    label?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -189,6 +233,7 @@ export const Switch = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: SwitchProps) => {
   if (onChange !== undefined) warnDeprecated('Switch', 'onChange', 'onCheckedChange');
@@ -235,21 +280,104 @@ export const Switch = ({
       : fieldProps['aria-labelledby'];
 
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const mergedControlRef = useMergedRefs(buttonRef, controlRef);
+  const mergedControlRef = useMergedRefs(buttonRef, controlRef, slotProps?.track?.ref);
   useFormReset(buttonRef, () => setChecked(defaultChecked), form);
 
   // A size outside the union (from untyped code) renders, and is reported in the data attribute,
   // as the default: TypeScript rejects one, but the value still reaches this render.
   const resolvedSize: SwitchSize = Object.hasOwn(SWITCH_SIZE, size) ? size : 'medium';
   const sizeMetrics = SWITCH_SIZE[resolvedSize];
-  const labelText = hasLabel ? (
-    <span id={labelTextId} className={cn(switchClassNames.label, 'text-body-1 text-foreground')}>
-      {materialiseSlotContent(label)}
-    </span>
-  ) : null;
-  const labelFirst = labelPosition === 'before' || labelPosition === 'above';
   // Focusable-disabled wins over `disabled`: the switch stays focusable but looks and acts disabled.
   const unavailable = disabled || disabledFocusable;
+  // The parts inside the switch do not activate while it is unavailable, as the switch does not.
+  const partBlock = unavailable ? BLOCK_CLICK : undefined;
+  const labelProps = mergeSlotProps(slotProps?.label, {
+    className: cn(switchClassNames.label, 'text-body-1 text-foreground'),
+    // The text names the control through aria-labelledby: an aria-label would replace it.
+    locked: { id: labelTextId, 'aria-label': undefined },
+    blockHandlers: partBlock,
+  });
+  const labelText = hasLabel ? <span {...labelProps}>{materialiseSlotContent(label)}</span> : null;
+  const labelFirst = labelPosition === 'before' || labelPosition === 'above';
+  const trackProps = mergeSlotProps(slotProps?.track, {
+    className: cn(
+      switchClassNames.track,
+      // The whole control is sized in px, like the Checkbox box and the radio circle: the
+      // thumb and its offsets are px, so a track in rem would stop fitting them at any root
+      // font size other than 16px. Medium keeps the 0.7 look, a 40x20 track around a 14px
+      // thumb, a 2px gap on every side. Small is a 32x16 track around a 10px thumb, the same
+      // 2px gap, and a transparent strip behind the track that grows the pointer target to
+      // 24px tall. No padding is assumed here, unlike the native reset that any app button
+      // style overrides (C-NATIVE): the thumb offsets rely on it staying at zero.
+      'relative inline-flex shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none',
+      sizeMetrics.track,
+      // The offset centres the track on the label line beside it; above the label, the
+      // column gap alone separates them.
+      hasLabel && labelPosition !== 'above' && sizeMetrics.offset,
+      focusRing,
+      checked
+        ? cn('border-primary bg-primary', unavailable ? disabledOnTrack : onTrack)
+        : cn(
+            'border-stroke-accessible bg-transparent',
+            unavailable ? forcedColors.disabled : forcedColors.control,
+          ),
+    ),
+    locked: {
+      // The routed naming and Field attributes, set only through the Switch's own props.
+      ...fieldLocks(fieldProps),
+      id: generatedId,
+      type: 'button',
+      ...fieldProps,
+      'aria-labelledby': labelledBy,
+      'aria-errormessage': ariaErrorMessage,
+      'aria-details': ariaDetails,
+      'aria-disabled': ariaDisabled,
+      autoFocus,
+      tabIndex,
+      onFocus,
+      onBlur,
+      onKeyDown,
+      onKeyUp,
+      role: 'switch',
+      'aria-checked': checked,
+      // The control's own: a part's `form` would reset it with another form than its hidden input
+      // submits with, and a focusable control is never hidden.
+      form: undefined,
+      hidden: undefined,
+      inert: undefined,
+      'aria-hidden': undefined,
+      disabled: disabled && !disabledFocusable,
+      ...focusableDisabledProps(disabledFocusable, { reachable: true }),
+      onClick: disabledFocusable
+        ? // Clicks, Space and Enter (which click a button) neither toggle nor reach `onClick`,
+          // and, as a natively disabled control dispatches no click, no ancestor sees them.
+          (event: React.MouseEvent<HTMLButtonElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        : composeEventHandlers(onClick, () => setChecked((prev) => !prev)),
+    },
+    // Under disabledFocusable your click handler is not called, as the Switch's `onClick` is not.
+    blockHandlers: disabledFocusable ? BLOCK_CLICK : undefined,
+  });
+  const thumbProps = mergeSlotProps(slotProps?.thumb, {
+    className: cn(
+      switchClassNames.thumb,
+      'block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
+      sizeMetrics.thumb,
+      checked
+        ? cn(sizeMetrics.on, 'bg-primary-foreground')
+        : cn(sizeMetrics.off, 'bg-stroke-accessible'),
+      unavailable
+        ? 'forced-colors:bg-[GrayText]'
+        : checked
+          ? 'forced-colors:bg-[HighlightText]'
+          : 'forced-colors:bg-[ButtonText]',
+    ),
+    locked: { 'aria-hidden': 'true', tabIndex: undefined },
+    // The thumb sits in the track, which `disabledFocusable` leaves natively enabled.
+    blockHandlers: partBlock,
+  });
 
   return (
     <label
@@ -274,73 +402,12 @@ export const Switch = ({
     >
       {labelFirst && labelText}
       <button
-        id={generatedId}
+        // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
         type="button"
-        {...fieldProps}
-        aria-labelledby={labelledBy}
-        aria-errormessage={ariaErrorMessage}
-        aria-details={ariaDetails}
-        aria-disabled={ariaDisabled}
-        autoFocus={autoFocus}
-        tabIndex={tabIndex}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        onKeyDown={onKeyDown}
-        onKeyUp={onKeyUp}
+        {...trackProps}
         ref={mergedControlRef}
-        role="switch"
-        aria-checked={checked}
-        disabled={disabled && !disabledFocusable}
-        {...focusableDisabledProps(disabledFocusable, { reachable: true })}
-        onClick={
-          disabledFocusable
-            ? // Clicks, Space and Enter (which click a button) neither toggle nor reach `onClick`,
-              // and, as a natively disabled control dispatches no click, no ancestor sees them.
-              (event: React.MouseEvent<HTMLButtonElement>) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }
-            : composeEventHandlers(onClick, () => setChecked((prev) => !prev))
-        }
-        className={cn(
-          switchClassNames.track,
-          // The whole control is sized in px, like the Checkbox box and the radio circle: the
-          // thumb and its offsets are px, so a track in rem would stop fitting them at any root
-          // font size other than 16px. Medium keeps the 0.7 look, a 40x20 track around a 14px
-          // thumb, a 2px gap on every side. Small is a 32x16 track around a 10px thumb, the same
-          // 2px gap, and a transparent strip behind the track that grows the pointer target to
-          // 24px tall. No padding is assumed here, unlike the native reset that any app button
-          // style overrides (C-NATIVE): the thumb offsets rely on it staying at zero.
-          'relative inline-flex shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none',
-          sizeMetrics.track,
-          // The offset centres the track on the label line beside it; above the label, the
-          // column gap alone separates them.
-          hasLabel && labelPosition !== 'above' && sizeMetrics.offset,
-          focusRing,
-          checked
-            ? cn('border-primary bg-primary', unavailable ? disabledOnTrack : onTrack)
-            : cn(
-                'border-stroke-accessible bg-transparent',
-                unavailable ? forcedColors.disabled : forcedColors.control,
-              ),
-        )}
       >
-        <span
-          aria-hidden="true"
-          className={cn(
-            switchClassNames.thumb,
-            'block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
-            sizeMetrics.thumb,
-            checked
-              ? cn(sizeMetrics.on, 'bg-primary-foreground')
-              : cn(sizeMetrics.off, 'bg-stroke-accessible'),
-            unavailable
-              ? 'forced-colors:bg-[GrayText]'
-              : checked
-                ? 'forced-colors:bg-[HighlightText]'
-                : 'forced-colors:bg-[ButtonText]',
-          )}
-        />
+        <span {...thumbProps} />
       </button>
       {!labelFirst && labelText}
       <HiddenInput

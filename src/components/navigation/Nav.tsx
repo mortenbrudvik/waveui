@@ -7,6 +7,7 @@ import {
 } from '../../lib/classNames';
 import type { MotionPreference, MotionSlot, Slot } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 // Aliased: `expandIconMotion` is also Nav.Category's prop.
@@ -17,9 +18,12 @@ import {
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 import { useCollapsePresence } from '../../hooks/useCollapsePresence';
 import { useId } from '../../hooks/useId';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useMotionClasses, useMotionPreference } from '../../hooks/useMotion';
 import { unwrapButtonGlyph } from '../button/Button.slots';
 import {
+  BLOCK_CLICK,
+  NAV_SHOWN_PART_LOCKS,
   NavCategoryValueContext,
   NavRovingContext,
   containsValue,
@@ -116,6 +120,56 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
   children?: React.ReactNode;
   /** Ref to the category's `<li>` element. */
   ref?: React.Ref<HTMLLIElement>;
+  /**
+   * Props for the elements the category draws inside its list item, by part, merged into each
+   * part's own: your classes after the part's (yours win a conflict), your styles over its styles,
+   * your attributes and handlers added, your ref beside its ref. Every attribute the category sets
+   * on a part is locked and keeps the category's value, and no part takes a role, a tab index or a
+   * roving container's marker, so a part changes neither the Nav's entries nor an arrow-key body's
+   * order. A part takes no `children` (the category draws their content); the `<li>` takes the
+   * category's own props, `icon` and `expandIcon` fill their own slots, and the collapse element
+   * around the list is the `motion` slot's. Fluent UI's NavCategoryItem is the toggle button itself
+   * and its NavSubItemGroup the list.
+   */
+  slotProps?: {
+    /**
+     * The toggle `<button>`, which holds the icon, the label and the chevron (stable class
+     * `wave-nav-category__button`). Locked: `type`, `aria-expanded`, `aria-controls` (the list's
+     * id, only while open), `aria-current` and `data-contains-current` (only while closed with the
+     * current page), the value an arrow-key body tracks it by, no role or tab index, no
+     * `disabled`, `aria-disabled` or roving container's marker, and no `hidden`, `inert` or
+     * `aria-hidden`. An `aria-label` of yours names it instead of the label. Its `onClick`, which
+     * opens or closes the category, is locked and runs after yours: `preventDefault()` in yours
+     * keeps the category as it is. A click whose default was prevented before it reached the
+     * button (in label or icon content, or in a capture handler) keeps it too while you give an
+     * `onClick` here or the `label` part is given; otherwise such a click toggles the category,
+     * as without `slotProps`. In an arrow-key body your `onKeyDown` runs before the body's arrow
+     * keys, which `preventDefault()` in yours skips.
+     */
+    button?: SlotPart<'button'>;
+    /**
+     * The `<span>` of `label` inside the toggle button, which names it (stable class
+     * `wave-nav-category__label`). Locked: no `aria-label` (it would replace the label in the
+     * button's name), no role, tab index or roving container's marker, and no `hidden`, `inert`
+     * or `aria-hidden`. An `aria-labelledby` of yours is joined, not locked: its ids rename the
+     * button. It carries no handler of the category: a click on it is a click on the toggle
+     * button, after yours. While this part is given, a click whose default is prevented before it
+     * reaches the button (in yours, in your label or icon content, or in a capture handler) keeps
+     * the category as it is.
+     */
+    label?: SlotPart<'span'>;
+    /**
+     * The `<ul>` of the sub-items, rendered while the category is open and while its list collapses
+     * after a close (stable class `wave-nav-category__list`). Locked: its `id` (the toggle
+     * button's `aria-controls`), no role (it stays a list for its list items), no tab index or
+     * roving container's marker, and no `hidden`, `inert` or `aria-hidden`, since it holds the
+     * sub-items (the collapse element around it hides them while it closes). It carries no
+     * handler of the category: the events of the sub-items reach yours after their own handling
+     * and, in an arrow-key body, before the body's arrow keys, which `preventDefault()` in yours
+     * skips.
+     */
+    list?: SlotPart<'ul'>;
+  };
 }
 
 /**
@@ -159,6 +213,47 @@ export interface NavItemOwnProps {
    * controls here.
    */
   actions?: React.ReactNode;
+  /**
+   * Props for the elements the item draws around and inside its link or button, by part, merged
+   * into each part's own: your classes after the part's (yours win a conflict), your styles over
+   * its styles, your attributes and handlers added, your ref attached. Every attribute the item
+   * sets on a part is locked and keeps the item's value, and no part takes a role, a tab index or
+   * a roving container's marker, so a part changes neither the Nav's entries nor an arrow-key
+   * body's order. A part takes no `children` (the item draws their content); the link or button
+   * takes the item's own props and `icon` fills its own slot. No part carries a handler of the
+   * item. Fluent UI's NavItem is the link or button itself; its SplitNavItem draws the actions.
+   */
+  slotProps?: {
+    /**
+     * The `<li>` that holds the link or button and, with `actions`, the actions beside it (stable
+     * class `wave-nav-item__list-item`); with actions it is the item's row, which draws the
+     * selected look. Locked: no role (it stays a list item), no tab index or roving container's
+     * marker, and no `hidden`, `inert` or `aria-hidden`, since it holds the item. The link or
+     * button and the actions handle their events before yours; in an arrow-key body your
+     * `onKeyDown` runs before the body's arrow keys, which `preventDefault()` in yours skips.
+     */
+    listItem?: SlotPart<'li'>;
+    /**
+     * The `<span>` of the label inside the link or button, which names the item (stable class
+     * `wave-nav-item__content`). Locked: no `aria-label` (it would replace the label in the
+     * item's name), no role, tab index or roving container's marker, and no `hidden`, `inert` or
+     * `aria-hidden`. An `aria-labelledby` of yours is joined, not locked: its ids rename the item.
+     * A click on it is a click on the item, after yours: `preventDefault()` in
+     * yours acts as in the item's `onClick` (a button item is not selected; a link is not
+     * followed and is still selected, as with client-side routing). While the item is `disabled`
+     * your `onClick` here is not called, as the item's own is not.
+     */
+    content?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `actions`, rendered while `actions` renders content (stable class
+     * `wave-nav-item__actions`). Locked: its role (`group`), its name (`aria-labelledby`, the
+     * item; your ids are joined after it), its marker, no tab index or roving container's marker
+     * (each action is a stop of its own) and no `hidden`, `inert` or `aria-hidden`, since it holds
+     * the actions. The actions handle their events before yours; in an arrow-key body your
+     * `onKeyDown` runs before the body's arrow keys, which `preventDefault()` in yours skips.
+     */
+    actions?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -226,9 +321,40 @@ export interface NavItemDynamicProps
 
 /**
  * The props of Nav.SubItem that every branch shares: those of {@link NavItemOwnProps} without
- * `icon`.
+ * `icon`, and `slotProps` without the label's part (a sub-item draws no label span).
  */
-export type NavSubItemOwnProps = Omit<NavItemOwnProps, 'icon'>;
+export type NavSubItemOwnProps = Omit<NavItemOwnProps, 'icon' | 'slotProps'> & {
+  /**
+   * Props for the elements the sub-item draws around its link or button, by part, merged into
+   * each part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref attached. Every attribute the sub-item
+   * sets on a part is locked and keeps the sub-item's value, and no part takes a role, a tab index
+   * or a roving container's marker, so a part changes neither the Nav's entries nor an arrow-key
+   * body's order. A part takes no `children` (the sub-item draws their content); the link or
+   * button takes the sub-item's own props. No part carries a handler of the sub-item. Fluent UI's
+   * NavSubItem is the link or button itself; its SplitNavItem draws the actions.
+   */
+  slotProps?: {
+    /**
+     * The `<li>` that holds the link or button and, with `actions`, the actions beside it (stable
+     * class `wave-nav-sub-item__list-item`); with actions it is the sub-item's row. Locked: no
+     * role (it stays a list item), no tab index or roving container's marker, and no `hidden`,
+     * `inert` or `aria-hidden`, since it holds the sub-item. The link or button and the actions
+     * handle their events before yours; in an arrow-key body your `onKeyDown` runs before the
+     * body's arrow keys, which `preventDefault()` in yours skips.
+     */
+    listItem?: SlotPart<'li'>;
+    /**
+     * The `<span>` of `actions`, rendered while `actions` renders content (stable class
+     * `wave-nav-sub-item__actions`). Locked: its role (`group`), its name (`aria-labelledby`, the
+     * sub-item; your ids are joined after it), its marker, no tab index or roving container's
+     * marker (each action is a stop of its own) and no `hidden`, `inert` or `aria-hidden`, since
+     * it holds the actions. The actions handle their events before yours; in an arrow-key body
+     * your `onKeyDown` runs before the body's arrow keys, which `preventDefault()` in yours skips.
+     */
+    actions?: SlotPart<'span'>;
+  };
+};
 
 /**
  * Nav.SubItem rendered as a link (`href` given): anchor attributes, and handlers typed on
@@ -411,7 +537,8 @@ interface NavEntryClassNames {
  * consumer's attributes; in a plain Nav nothing is added. With `actions` that render content, the
  * list item becomes the row (D121) and holds the link or button, then the actions in a group named
  * by it through `generatedId` (unless the consumer gave an `id`), siblings, never nested (D119);
- * the group's reveal fades unless `motionPreference` is `'none'`.
+ * the group's reveal fades unless `motionPreference` is `'none'`. Each part of `slotProps` is
+ * merged only when given, so an entry without it allocates nothing more.
  */
 function renderNavEntry(
   props: NavEntryProps,
@@ -433,6 +560,7 @@ function renderNavEntry(
     onClick,
     actions,
     ref,
+    slotProps,
     ...rest
   } = props;
   const isSelected = context.value === value;
@@ -458,11 +586,24 @@ function renderNavEntry(
     context.select(value);
   };
 
+  // The parts are merged only when given: a Nav renders many entries.
+  const contentPart = slotProps?.content;
+  const contentClassName = withIcon ? cn(stable.content, 'flex-1 text-start') : undefined;
   const content = (
     <>
       {withIcon && renderIcon(icon, stable.icon)}
       {withIcon ? (
-        <span className={cn(stable.content, 'flex-1 text-start')}>{children}</span>
+        <span
+          className={contentClassName}
+          {...(contentPart &&
+            mergeSlotProps(contentPart, {
+              className: contentClassName,
+              locked: { ...NAV_SHOWN_PART_LOCKS, 'aria-label': undefined },
+              blockHandlers: disabled ? BLOCK_CLICK : undefined,
+            }))}
+        >
+          {children}
+        </span>
       ) : (
         children
       )}
@@ -484,25 +625,46 @@ function renderNavEntry(
         isSelected && classes.rowSelected ? classes.rowSelected : !disabled && rowHoverClasses,
       )
     : stable.listItem;
+  const listItemProps =
+    slotProps?.listItem &&
+    mergeSlotProps(slotProps.listItem, {
+      className: listItemClassName,
+      locked: NAV_SHOWN_PART_LOCKS,
+    });
 
-  const actionsGroup = hasActions ? (
-    <span
-      role="group"
-      aria-labelledby={itemId}
-      data-wave-nav-actions=""
-      className={cn(
-        stable.actions,
-        actionsClasses,
-        motionPreference === 'none' ? undefined : navActionsReveal,
-      )}
-    >
-      {materialiseSlotContent(actions)}
-    </span>
-  ) : null;
+  let actionsGroup: React.ReactElement | null = null;
+  if (hasActions) {
+    const actionsPart = slotProps?.actions;
+    const actionsClassName = cn(
+      stable.actions,
+      actionsClasses,
+      motionPreference === 'none' ? undefined : navActionsReveal,
+    );
+    actionsGroup = (
+      <span
+        role="group"
+        aria-labelledby={itemId}
+        data-wave-nav-actions=""
+        className={actionsClassName}
+        {...(actionsPart &&
+          mergeSlotProps(actionsPart, {
+            className: actionsClassName,
+            locked: {
+              ...NAV_SHOWN_PART_LOCKS,
+              role: 'group',
+              'aria-labelledby': itemId,
+              'data-wave-nav-actions': '',
+            },
+          }))}
+      >
+        {materialiseSlotContent(actions)}
+      </span>
+    );
+  }
 
   if (isLink) {
     return (
-      <li className={listItemClassName}>
+      <li className={listItemClassName} {...listItemProps}>
         <a
           {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
           {...idProps}
@@ -525,7 +687,7 @@ function renderNavEntry(
   // `rel` only belongs on a link: a button item drops it (React types it on every element).
   const { rel, ...buttonRest } = rest;
   return (
-    <li className={listItemClassName}>
+    <li className={listItemClassName} {...listItemProps}>
       <button
         type="button"
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
@@ -584,6 +746,7 @@ const NavCategory = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: NavCategoryProps) => {
   const context = useNavContext('Nav.Category');
@@ -642,6 +805,10 @@ const NavCategory = ({
     partRef: listRef,
     getTrigger: () => buttonRef.current,
   });
+  // A part's ref joins the button's and the list's own after the spread: an inline ref never
+  // detaches them (the collapse moves focus through them, the development check reads the list).
+  const buttonMergedRef = useMergedRefs<HTMLButtonElement>(buttonRef, slotProps?.button?.ref);
+  const listMergedRef = useMergedRefs<HTMLUListElement>(listRef, slotProps?.list?.ref);
 
   // The optional-indicator slot rule (C-SLOTS): `null`/`undefined` keep the chevron, which turns
   // while open; `false` or content that renders nothing hides it; a custom glyph is rendered as
@@ -697,21 +864,70 @@ const NavCategory = ({
     items = parts.filter((part) => !isText(part));
   }
 
+  // The parts are merged only when given, with the attributes the category sets on each (those it
+  // sets only in some states included, as `undefined` otherwise) locked.
+  const buttonPart = slotProps?.button;
+  const labelPart = slotProps?.label;
+  const listPart = slotProps?.list;
+
+  // As in 0.17.1, a click that reaches the button toggles the category whatever prevented its
+  // default before. While the label part is given, a prevented click keeps the category as it is,
+  // so `preventDefault()` in that part (inside the button) acts as in the button part, whose merge
+  // already skips this locked handler on a prevented event.
+  const handleToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!(labelPart && event.defaultPrevented)) toggleCategory(value);
+  };
+  const ariaControls = isOpen ? listId : undefined;
+  const ariaCurrent = containsCurrent ? true : undefined;
+  const containsCurrentMarker = containsCurrent ? '' : undefined;
+  const rovingValue = roving ? `wave-nav-category:${value}` : undefined;
+  const buttonClassName = cn(navCategoryClassNames.button, categoryButtonClasses);
+  const labelClassName = cn(navCategoryClassNames.label, 'flex-1 text-start');
+  const listClassName = isListMounted
+    ? cn(navCategoryClassNames.list, 'm-0 list-none p-0')
+    : undefined;
+
   return (
     <li ref={ref} {...rest} className={cn(navCategoryClassNames.root, className)}>
       <button
-        ref={buttonRef}
         type="button"
         aria-expanded={isOpen}
-        aria-controls={isOpen ? listId : undefined}
-        aria-current={containsCurrent ? true : undefined}
-        data-contains-current={containsCurrent ? '' : undefined}
-        data-roving-value={roving ? `wave-nav-category:${value}` : undefined}
-        onClick={() => toggleCategory(value)}
-        className={cn(navCategoryClassNames.button, categoryButtonClasses)}
+        aria-controls={ariaControls}
+        aria-current={ariaCurrent}
+        data-contains-current={containsCurrentMarker}
+        data-roving-value={rovingValue}
+        onClick={handleToggle}
+        className={buttonClassName}
+        {...(buttonPart &&
+          mergeSlotProps(buttonPart, {
+            className: buttonClassName,
+            locked: {
+              ...NAV_SHOWN_PART_LOCKS,
+              type: 'button',
+              disabled: undefined,
+              'aria-disabled': undefined,
+              'data-roving-disabled': undefined,
+              'aria-expanded': isOpen,
+              'aria-controls': ariaControls,
+              'aria-current': ariaCurrent,
+              'data-contains-current': containsCurrentMarker,
+              'data-roving-value': rovingValue,
+              onClick: handleToggle,
+            },
+          }))}
+        ref={buttonMergedRef}
       >
         {renderIcon(icon, navCategoryClassNames.icon)}
-        <span className={cn(navCategoryClassNames.label, 'flex-1 text-start')}>{buttonLabel}</span>
+        <span
+          className={labelClassName}
+          {...(labelPart &&
+            mergeSlotProps(labelPart, {
+              className: labelClassName,
+              locked: { ...NAV_SHOWN_PART_LOCKS, 'aria-label': undefined },
+            }))}
+        >
+          {buttonLabel}
+        </span>
         {expandIconElement}
       </button>
       {isListMounted && (
@@ -722,9 +938,14 @@ const NavCategory = ({
             className={cn(navCategoryClassNames.collapse, collapseClassName)}
           >
             <ul
-              ref={listRef}
               id={listId}
-              className={cn(navCategoryClassNames.list, 'm-0 list-none p-0')}
+              className={listClassName}
+              {...(listPart &&
+                mergeSlotProps(listPart, {
+                  className: listClassName,
+                  locked: { ...NAV_SHOWN_PART_LOCKS, id: listId },
+                }))}
+              ref={listMergedRef}
             >
               {items}
             </ul>

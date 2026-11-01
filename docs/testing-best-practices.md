@@ -845,6 +845,89 @@ expect(dismissButton('Blue')).toHaveFocus();
 
 The Calendar and DatePicker suites fix the clock with `vi.setSystemTime(NOW)` in a `beforeEach` and undo it with `vi.useRealTimers()` in the `afterEach` (it mocks `Date` without fake timers). They pass `locale="en-US"`, so headings and day names are known, and a fixed `today` where the case is about today (`Calendar` and `DatePicker` take one; a Calendar without it marks no day as today in the server HTML and the hydration render). Compare dates by their local fields (each suite's `fields(date)`, `[year, month, day]`), never by `toISOString()`, so the suites pass in every time zone. The day buttons are named by their full date (`dayButton('Sunday, June 15, 2025')`).
 
+### Testing `slotProps` and the context hooks
+
+Every component that takes `slotProps` has a `describe('<Component> — slotProps', …)` in its own suite (a part of a compound in the part's suite, the Toaster's container in `Toaster.motion.test.tsx`). Four helpers of `src/test-utils.ts` (tested in `test-utils.test.tsx`) pin markup whose attribute order may change:
+
+- **`sortAttributes(markup)`** returns an HTML string (a `renderToString` result), or an element's content, with every element's attributes in alphabetical order, so two renders compare by their attribute sets and values. A part's merged props put the component's class before its locked attributes, so the markup without `slotProps` keeps the attributes of before in another order (ruling AA of the Phase 13 spec).
+- **`normaliseIds(markup)`** names every id React generated (`_r_1f_` in the browser, `_R_0H1_` on the server) `_id0_`, `_id1_`, … in the order it first appears, so a pin of a client render does not depend on how many ids the tests before it generated, and the references between elements stay checked.
+- **`openingTags(...elements)`** gives each element's opening tag, one per line, sorted and with the ids normalised across all of them: a compact pin of a component's parts without their content (icons, options), an open popup's included.
+- **`expectInertSlotProps(ui, everyPart)`** renders `ui(undefined)`, then re-renders the same root with `{}`, with `everyPart` (each part `{}`) and with `undefined` again, comparing the whole document body each time (a part rendered in a portal counts). Pass a `ui` that renders every part (a label, a message, an open popup).
+
+```tsx
+// src/components/input/__tests__/Switch.test.tsx
+describe('Switch — slotProps', () => {
+  const EVERY_PART: NonNullable<SwitchProps['slotProps']> = { track: {}, thumb: {}, label: {} };
+
+  it('renders the markup of before without slotProps', () => {
+    expect(sortAttributes(renderToString(<Switch label="Dark mode" />))).toBe(SWITCH_MARKUP);
+    expectInertSlotProps((slotProps) => <Switch label="Dark mode" slotProps={slotProps} />, EVERY_PART);
+  });
+
+  it("skips the Switch's onClick and the toggle when your onClick prevents the default", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <Switch
+        label="Dark mode"
+        onClick={onClick}
+        slotProps={{ track: { onClick: (event) => event.preventDefault() } }}
+      />,
+    );
+    const track = screen.getByRole('switch', { name: 'Dark mode' });
+    await user.click(track);
+    expect(track).toHaveAttribute('aria-checked', 'false');
+    expect(onClick).not.toHaveBeenCalled();
+  });
+});
+```
+
+The set every component gets:
+
+- **The pin.** Each part's markup without `slotProps`, captured once from the dist of the commit before the parts landed and written as a literal: `sortAttributes(renderToString(…))` for parts in the server HTML, `openingTags(…)` or `normaliseIds(sortAttributes(document.body))` after an open client render for parts in a portal (Portal renders nothing on the server). Change a pin only for an intended markup change.
+- **Inertness.** `expectInertSlotProps` on several configurations that together draw every part (open and closed, disabled, selected, right to left, a kept-mounted surface).
+- **Class, style, `data-*` and ref** on every part: the stable class first (`element.classList[0]`), yours last, a conflicting class of the part replaced, the style merged, and the ref attached beside `ref` and `controlRef`. Read the class from its constant (`switchClassNames.track`), never a literal.
+- **Handlers.** The order (record `['part', 'onClick', 'toggle']`), `preventDefault()` in the part's handler skipping the component's handling and its own `on…` prop, and a StrictMode test that each callback still fires once per interaction.
+- **Locks.** One attempt object per part that tries every locked attribute at once (`id`, `role`, `type`, `tabIndex`, `disabled`, `hidden`, `inert`, `aria-hidden`, the markers), then the component's values asserted (or the pin still matching), and the id lists joined (`aria-labelledby` is the component's ids, then yours). **State-off locks**: an attribute a spread adds only while it is set (`aria-activedescendant` while an option is active, `data-selected`, the `inert` of an exiting surface) needs an explicit `undefined` lock; try it while the state is off, and check that the test fails without the lock.
+- **Must-run work.** A part handler that prevents the default, then the bookkeeping asserted anyway: the tab stop follows the focused cell, a drag ends on pointer up, a held key is forgotten on its release.
+- **Blocked clicks.** A part's `onClick` called while the control is enabled, and with a consumer `aria-disabled` alone, and not called while the control is `disabled` (or unavailable but focusable).
+- **The component's own refs.** A new inline part ref on every render, and the behaviour that reads the component's ref still working (a measurement, a focus return, a registry): the ref merges after the spread exist for this.
+- **Absent parts, RTL, axe and types.** A part of an element the component does not draw is ignored without a warning; directional parts keep their mirrored classes next to yours; axe passes with every part customised; `expectTypeOf` pins each part's ref to its element, and `// @ts-expect-error` proves that a part takes no `children`.
+
+A throwaway mutation run (a script under the git-ignored `coverage/` that removes each lock, each handler composition and each ref merge in turn and runs the suite) is the way to prove that every lock has a test; the Phase 13 tasks ran one per package.
+
+**The completeness gate.** `src/__tests__/slotParts.test.ts` requires every part key of the class-name registry to sit in exactly one list of `src/lib/slotParts.ts`: `SLOT_PROPS_KEYS` (with the owning props type in `SlotPropsOwners`, whose type test requires its `slotProps` to declare exactly those keys), `NAMED_SLOT_PARTS`, or `SLOT_PART_EXCLUSIONS` with a one-line reason. A new part key fails it until it is placed; a type error names the constant and the key.
+
+**The context hooks.** Render a probe component that calls the hook and records each value it returns (the `recorder()` of `DataGrid.hooks.test.tsx`), and test:
+
+- **Outside the component**: in development, [`expectThrows`](#expectthrowsui-message) with the exact message; in production ([Production mode](#production-mode)), the one `console.error` over two renders and the inert value, its keys asserted with `Object.keys(value).sort()`.
+- **The narrow value**: its exact keys, the same object across unrelated renders, a new one when a member changes.
+- **The path through the component**: a hook function acts as the built-in control does (`setSort` calls `onSortChange` once, with `{ event: expect.any(Event) }`; `close()` is the very function an item activation calls; `toggle` reaches a row a window does not render), and the built-in parts follow it.
+- **Server and client references**: the integration suite's Server Component cases render a radio card, a menu item, a MessageBar action and a DataGrid cell of your own around parts given by `asClientReference`, and `verify-dist` proves that an import of only one hook holds no component module.
+
+```tsx
+function MenuProbe({ record }: { record: (value: MenuContextValue) => void }) {
+  record(useMenuContext());
+  return null;
+}
+
+it('throws outside a Menu in development', () => {
+  expectThrows(<MenuProbe record={() => {}} />, '[WaveUI] useMenuContext must be used within Menu');
+});
+
+it('logs once outside a Menu in production and returns the inert value', () => {
+  vi.stubEnv('NODE_ENV', 'production');
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const values: MenuContextValue[] = [];
+  const { rerender } = render(<MenuProbe record={(value) => values.push(value)} />);
+  rerender(<MenuProbe record={(value) => values.push(value)} />);
+  expect(error.mock.calls).toEqual([['[WaveUI] useMenuContext must be used within Menu']]);
+  expect(Object.keys(values[values.length - 1]).sort()).toEqual(['close', 'isSubmenu', 'open']);
+});
+```
+
+`useFieldContext` is optional: assert `null` outside a Field and the provider's value inside a `FieldContextProvider`. Test a Field's function child with a plain `<input {...props} />`: the label names it, the message and the hint describe it, and `aria-invalid` follows the error state.
+
 ## 6. Controlled components and callbacks
 
 - **One call per interaction.** Every stateful component has a StrictMode test that its value callback fires exactly once per interaction.
@@ -1142,6 +1225,8 @@ it('types anchor props when rendered as a link', () => {
 - `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`, Tab from a shown Tooltip or open InfoLabel inside a dialog's focus trap, a Popover inside a `Menu.Item`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)). When a release is built in parallel work packages with disjoint files (see `docs/ROADMAP.md`, "Process per release"), a component's own tests use only the shared foundation and its own files: a stand-in with the same attributes (`renderWithFieldContext` for a Field state, a plain `<button aria-disabled="true">` for a focusable disabled button inside `Menu.Trigger`). Every case that needs the real components of two packages at once goes here, once both have landed: in 0.6, a Toolbar with a `disabledFocusable` Button and its Tooltip, `Menu.Trigger` around a `disabledFocusable` MenuButton and SplitButton, a Field warning around Input, Checkbox, Combobox, ColorPicker and a native `<input>`, ProgressBar in a Field, an alert Dialog with a Toaster, a long form with a sticky `Dialog.Footer`, and a SpinButton in a Dialog and in a Drawer whose typed value a backdrop press commits (the component files keep the same mechanism with a plain `<input onBlur>`). In 0.7 the Menu item kinds were tested through the harness of section 5, and the integration suite holds the real popup menus: checkable items in a submenu sharing the root's `checkedValues`, links closing the chain, a context menu with checkable items and a submenu, a Toolbar with a radio group, an Input, a Combobox and a MenuButton, a Popover or Dialog opened from a menu item (a root menu of its own), an exiting `Menu.Popover` inside a Dialog, and a hover-opened submenu inside a click-opened root.
 - `src/__tests__/public-types.test.ts` — every named type that a public declaration refers to (a prop type, an `extends` base, a parameter or return type) is exported from `src/index.ts`. Export a new component's prop types from the entry; only the structural helpers in its `INTERNAL_HELPERS` list may stay internal, and that list must stay current.
 - `src/__tests__/classNames.test.ts` — the class-name registry: every component-like export of the entry (and every compound member) has a constant or is on `NO_ELEMENT`; every constant follows the formula (`wave-<kebab name>`, `__<kebab part>`, no repeated string, no reserved scope class); every export is exported by the entry with the same value; the registry imports nothing; every value is applied as `<constant>.<key>` in some module of `src/components`, except the entries of `PENDING_CLASS_NAMES`, which a phase fills for the parts its parallel packages add and INTEGRATION empties. `public-types.test.ts` has the same kind of bridge, `PENDING_PUBLIC_TYPES`, for public types that become reachable before the barrels export them.
+- `src/__tests__/slotParts.test.ts` — the completeness gate of the parts: every part key of the class-name registry is a `slotProps` key of its component (`SLOT_PROPS_KEYS`, checked against each owner's `slotProps` type through `SlotPropsOwners`), a named slot or an exclusion with a reason (see [Testing `slotProps` and the context hooks](#testing-slotprops-and-the-context-hooks)).
+- `src/__tests__/deprecations.test.tsx` — the 1.0 inventory (`src/lib/deprecations.ts`): every row is announced in the CHANGELOG section of its version and is a line of a table of `docs/UPGRADING-TO-1.0.md`, every row that warns fires its warning once, and the `warnDeprecated` and `resolveDeprecatedProp` call sites of `src` are the warning rows, so a new alias cannot be added without a row.
 - `src/__tests__/test-utils.test.tsx` — tests of the helpers themselves.
 - `src/styles/__tests__/tokens.test.ts` — every theme declares every token, and every contrast pair of the matrix in `tokensHarness.ts` meets its WCAG threshold (unrounded; see [Tokens: the contrast matrix and brand seeds](#tokens-the-contrast-matrix-and-brand-seeds), with `tokens.brand.test.ts` for generated brand ramps); it also pins `base.css` and the style entries and tests `scripts/build-css.mjs`. It runs in the node environment (`// @vitest-environment node`): it needs no DOM, and under jsdom Vite's client transform could not load the gate scripts.
 

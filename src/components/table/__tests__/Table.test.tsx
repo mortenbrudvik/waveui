@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import {
@@ -19,16 +19,20 @@ import {
 import type {
   TableCellActionsProps,
   TableCellLayoutProps,
+  TableHeaderCellProps,
   TableProps,
   TableSelectionCellCheckedChangeDetails,
   TableSelectionCellProps,
 } from '../Table';
 import { DataGrid } from '../DataGrid';
 import { Avatar } from '../../data-display/Avatar';
+import type { SlotPart } from '../../../lib/slotProps';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
   installResizeObserverMock,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testSystemProps,
@@ -1456,6 +1460,43 @@ describe('Table.CellLayout', () => {
     expect(part('description')).toHaveClass('my-description');
   });
 
+  it('renders media through a slot object’s render function; one that renders nothing is no media (P13-01)', () => {
+    const { rerender } = render(
+      <InCell>
+        <Table.CellLayout
+          data-testid="layout"
+          media={{
+            className: 'my-media',
+            children: (Component, props) => (
+              <Component {...props} data-own="">
+                <svg data-testid="icon" />
+              </Component>
+            ),
+          }}
+        >
+          Alpha
+        </Table.CellLayout>
+      </InCell>,
+    );
+    const media = part('media')!;
+    expect(media.localName).toBe('span');
+    expect(media.classList[0]).toBe(tableCellLayoutClassNames.media);
+    expect(media).toHaveClass('flex', 'shrink-0', 'items-center', 'my-media');
+    expect(media).toHaveAttribute('data-own', '');
+    expect(media).toContainElement(screen.getByTestId('icon'));
+    expect(media.nextElementSibling).toBe(part('content'));
+
+    rerender(
+      <InCell>
+        <Table.CellLayout data-testid="layout" media={{ children: () => null }}>
+          Alpha
+        </Table.CellLayout>
+      </InCell>,
+    );
+    expect(part('media')).toBeNull();
+    expect(part('main')).toHaveTextContent('Alpha');
+  });
+
   it('gives an Avatar in media the fixed 32px box; an Avatar of its own size keeps it', () => {
     render(
       <InCell>
@@ -1738,5 +1779,710 @@ describe('Table cells (P9-05)', () => {
       </Table>,
     );
     await expectNoA11yViolations();
+  });
+});
+
+describe('Table parts — slotProps', () => {
+  type HeaderParts = NonNullable<TableHeaderCellProps['slotProps']>;
+  type SelectionParts = NonNullable<TableSelectionCellProps['slotProps']>;
+  type LayoutParts = NonNullable<TableCellLayoutProps['slotProps']>;
+  interface Parts {
+    header?: HeaderParts;
+    selection?: SelectionParts;
+    layout?: LayoutParts;
+  }
+  const EVERY_PART: Required<Parts> = {
+    header: { button: {} },
+    selection: { control: {} },
+    layout: { content: {}, main: {} },
+  };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, tableHeaderCellClassNames.button),
+    ...all(root, tableSelectionCellClassNames.control),
+    ...all(root, tableCellLayoutClassNames.content),
+    ...all(root, tableCellLayoutClassNames.main),
+  ];
+  const control = (name: string) => screen.getByRole('checkbox', { name });
+  /** The body row's control, named by its first cell. */
+  const rowControl = () => all(document, tableSelectionCellClassNames.control)[1];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A header with a select-all, a sortable and a plain header cell, and one row. */
+  function Files({
+    parts,
+    onSortClick,
+    onCheckedChange,
+    onChange,
+    onKeyDown,
+    controlRef,
+  }: {
+    parts?: Parts;
+    onSortClick?: TableHeaderCellProps['onSortClick'];
+    onCheckedChange?: TableSelectionCellProps['onCheckedChange'];
+    onChange?: TableSelectionCellProps['onChange'];
+    onKeyDown?: TableSelectionCellProps['onKeyDown'];
+    controlRef?: React.Ref<HTMLInputElement>;
+  }) {
+    return (
+      <Table aria-label="Files">
+        <Table.Header>
+          <tr>
+            <Table.SelectionCell
+              checked="mixed"
+              aria-label="Select all files"
+              slotProps={parts?.selection}
+            />
+            <Table.HeaderCell
+              sortable
+              sortDirection="ascending"
+              onSortClick={onSortClick}
+              slotProps={parts?.header}
+            >
+              Name
+            </Table.HeaderCell>
+            <Table.HeaderCell slotProps={parts?.header}>Size</Table.HeaderCell>
+          </tr>
+        </Table.Header>
+        <Table.Body>
+          <Table.Row>
+            <Table.SelectionCell
+              aria-labelledby="file-budget"
+              name="files"
+              value="budget"
+              onCheckedChange={onCheckedChange}
+              onChange={onChange}
+              onKeyDown={onKeyDown}
+              controlRef={controlRef}
+              slotProps={parts?.selection}
+            />
+            <Table.Cell id="file-budget">
+              <Table.CellLayout description="Spreadsheet" slotProps={parts?.layout}>
+                Budget
+              </Table.CellLayout>
+            </Table.Cell>
+            <Table.Cell>2 MB</Table.Cell>
+          </Table.Row>
+        </Table.Body>
+      </Table>
+    );
+  }
+
+  // Captured from 6f6b500's dist (client and server agree).
+  const FOCUS =
+    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
+  const CONTROL = `accent-primary cursor-pointer disabled:cursor-not-allowed ${FOCUS}`;
+  const BASE_PINS = [
+    `<button class="wave-table-header-cell__button inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider ${FOCUS}" type="button">`,
+    `<input aria-label="Select all files" class="wave-table-selection-cell__control ${CONTROL}" type="checkbox">`,
+    `<input aria-labelledby="file-budget" class="wave-table-selection-cell__control ${CONTROL}" name="files" type="checkbox" value="budget">`,
+    '<div class="wave-table-cell-layout__content flex flex-col">',
+    '<span class="wave-table-cell-layout__main">',
+  ].join('\n');
+
+  it('renders the parts of 6f6b500 (attributes sorted), on the client and the server', () => {
+    for (const parts of [undefined, EVERY_PART]) {
+      const view = render(<Files parts={parts} />);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Files parts={parts} />);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps((slotProps: Parts | undefined) => <Files parts={slotProps} />, EVERY_PART);
+    expectInertSlotProps(
+      (slotProps: HeaderParts | undefined) => (
+        <Table>
+          <Table.Header>
+            <tr>
+              <Table.HeaderCell
+                sortable
+                sortDirection="descending"
+                sortIcon={<span>v</span>}
+                aside={<button type="button">Filter</button>}
+                slotProps={slotProps}
+              >
+                Name
+              </Table.HeaderCell>
+              <Table.HeaderCell sortable slotProps={slotProps}>
+                Kind
+              </Table.HeaderCell>
+            </tr>
+          </Table.Header>
+        </Table>
+      ),
+      EVERY_PART.header,
+    );
+    expectInertSlotProps(
+      (slotProps: SelectionParts | undefined) => (
+        <Table>
+          <Table.Body>
+            <Table.Row>
+              <Table.SelectionCell
+                type="radio"
+                name="pick"
+                disabled
+                aria-label="Pick one"
+                slotProps={slotProps}
+              />
+              <Table.SelectionCell
+                subtle
+                id="sel"
+                form="f"
+                required
+                aria-label="Pick two"
+                aria-describedby="hint"
+                tabIndex={-1}
+                slotProps={slotProps}
+              />
+              <Table.SelectionCell invisible aria-label="Pick three" slotProps={slotProps} />
+            </Table.Row>
+          </Table.Body>
+        </Table>
+      ),
+      EVERY_PART.selection,
+    );
+    expectInertSlotProps(
+      (slotProps: LayoutParts | undefined) => (
+        <div>
+          <Table.CellLayout
+            media={<Avatar name="Ann Lee" />}
+            description="Designer"
+            appearance="primary"
+            truncate
+            slotProps={slotProps}
+          >
+            Ann Lee
+          </Table.CellLayout>
+          <Table.CellLayout description="Only a description" slotProps={slotProps} />
+          <Table.CellLayout media={<Avatar name="Bo Ek" />} slotProps={slotProps} />
+        </div>
+      ),
+      EVERY_PART.layout,
+    );
+  });
+
+  it('puts your className, style, data-* and ref on each part', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    const part = (name: string, cls: string) => ({
+      className: cls,
+      style: { opacity: 0.5 },
+      'data-part': name,
+      ref: collect,
+    });
+    render(
+      <Files
+        parts={{
+          header: { button: part('button', 'my-button px-2') },
+          selection: { control: part('control', 'my-control cursor-default') },
+          layout: {
+            content: part('content', 'my-content flex-row'),
+            main: part('main', 'my-main'),
+          },
+        }}
+      />,
+    );
+    for (const [cls, name, conflict, count] of [
+      [tableHeaderCellClassNames.button, 'button', 'px-4', 1],
+      [tableSelectionCellClassNames.control, 'control', 'cursor-pointer', 2],
+      [tableCellLayoutClassNames.content, 'content', 'flex-col', 1],
+      [tableCellLayoutClassNames.main, 'main', undefined, 1],
+    ] as const) {
+      const elements = all(document, cls);
+      expect(elements).toHaveLength(count);
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(cls);
+        expect(element).toHaveClass(`my-${name}`);
+        // Your class replaces a conflicting one of the part.
+        if (conflict) expect(element).not.toHaveClass(conflict);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+        expect(refs).toContain(element);
+      }
+    }
+    expect(refs).toHaveLength(5);
+    expect(screen.getAllByRole('columnheader')[1]).not.toHaveAttribute('data-part');
+  });
+
+  it('locks the attributes each part sets and the markers a grid reads', () => {
+    const error = vi.spyOn(console, 'error');
+    const hiddenState = { hidden: true, inert: true, 'aria-hidden': true };
+    const markers = { 'data-roving-container': '', 'data-grid-auxiliary': '' };
+    const button = {
+      ...hiddenState,
+      ...markers,
+      type: 'submit',
+      role: 'link',
+      tabIndex: 0,
+      disabled: true,
+      contentEditable: true,
+    } as unknown as HeaderParts['button'];
+    const controlAttempt = {
+      ...hiddenState,
+      ...markers,
+      type: 'text',
+      role: 'switch',
+      checked: true,
+      defaultChecked: true,
+      defaultValue: 'mine',
+      value: 'mine',
+      'aria-checked': 'true',
+      id: 'mine',
+      name: 'mine',
+      form: 'mine',
+      disabled: true,
+      required: true,
+      tabIndex: 0,
+      autoFocus: true,
+      'aria-label': 'Mine',
+      'aria-invalid': true,
+      'aria-required': true,
+    } as unknown as SelectionParts['control'];
+    const text = {
+      ...hiddenState,
+      role: 'toolbar',
+      tabIndex: 0,
+      contentEditable: true,
+      'aria-label': 'Mine',
+      'data-roving-container': '',
+    } as unknown as LayoutParts['content'];
+    render(
+      <Files
+        parts={{
+          header: { button },
+          selection: { control: controlAttempt },
+          layout: { content: text, main: text as LayoutParts['main'] },
+        }}
+      />,
+    );
+    expect(openingTags(...partsOf())).toBe(BASE_PINS);
+    expect(control('Select all files')).not.toHaveFocus();
+    // No controlled-and-uncontrolled warning: the defaults are locked unset.
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('keeps the selection controls out of text entry: your contentEditable stays unset', () => {
+    const attempt = { contentEditable: true } as unknown as SelectionParts['control'];
+    render(<Files parts={{ selection: { control: attempt } }} />);
+    expect(openingTags(...partsOf())).toBe(BASE_PINS);
+    for (const element of all(document, tableSelectionCellClassNames.control)) {
+      expect(element).not.toHaveAttribute('contenteditable');
+    }
+  });
+
+  it('adds your ids to the control’s aria-labelledby and aria-describedby', () => {
+    render(
+      <>
+        <span id="kind">Spreadsheet</span>
+        <span id="hint">Selected files are shared</span>
+        <Files
+          parts={{
+            selection: { control: { 'aria-labelledby': 'kind', 'aria-describedby': 'hint' } },
+          }}
+        />
+      </>,
+    );
+    const row = rowControl();
+    expect(row).toHaveAttribute('aria-labelledby', 'file-budget kind');
+    expect(row).toHaveAttribute('aria-describedby', 'hint');
+    expect(row).toHaveAccessibleDescription('Selected files are shared');
+    // The select-all's own name stays; a labelledby list names it before the label.
+    const selectAll = control('Spreadsheet');
+    expect(selectAll).toHaveAttribute('aria-label', 'Select all files');
+    expect(selectAll).toHaveAttribute('aria-labelledby', 'kind');
+  });
+
+  it('runs your sort button onClick before onSortClick: preventDefault() skips it', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onSortClick = vi.fn(() => void order.push('sort'));
+    const ui = (prevent: boolean) => (
+      <Files
+        onSortClick={onSortClick}
+        parts={{
+          header: {
+            button: {
+              onClick: (event) => {
+                order.push('part');
+                if (prevent) event.preventDefault();
+              },
+            },
+          },
+        }}
+      />
+    );
+    const { rerender } = render(ui(false));
+    await user.click(screen.getByRole('button', { name: /Name/ }));
+    expect(order).toEqual(['part', 'sort']);
+    expect(onSortClick).toHaveBeenCalledWith(expect.objectContaining({ type: 'click' }));
+    rerender(ui(true));
+    await user.click(screen.getByRole('button', { name: /Name/ }));
+    await user.keyboard('{Enter}');
+    expect(order).toEqual(['part', 'sort', 'part', 'part']);
+  });
+
+  it('runs your control onChange first: preventDefault() cancels the change, the cell’s onChange and onCheckedChange included', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onChange = vi.fn(() => void order.push('cell'));
+    const onCheckedChange = vi.fn(() => void order.push('checked'));
+    const ui = (prevent: boolean) => (
+      <Files
+        onChange={onChange}
+        onCheckedChange={onCheckedChange}
+        parts={{
+          selection: {
+            control: {
+              onChange: (event) => {
+                order.push('part');
+                if (prevent) event.preventDefault();
+              },
+            },
+          },
+        }}
+      />
+    );
+    // A browser restores the checkedness of a cancelled click; jsdom toggles it back after React
+    // restored it, so each case gets a render of its own and only the calls are asserted.
+    const view = render(ui(true));
+    await user.click(rowControl());
+    expect(order).toEqual(['part']);
+    expect(onCheckedChange).not.toHaveBeenCalled();
+    view.unmount();
+    render(ui(false));
+    await user.click(rowControl());
+    expect(order).toEqual(['part', 'part', 'cell', 'checked']);
+    expect(onCheckedChange).toHaveBeenCalledWith(true, { event: expect.any(Event) });
+    expect(rowControl()).toBeChecked();
+  });
+
+  it('runs your control key handler before the cell’s onKeyDown: preventDefault() skips it', () => {
+    const order: string[] = [];
+    const onKeyDown = vi.fn(() => void order.push('cell'));
+    const ui = (prevent: boolean) => (
+      <Files
+        onKeyDown={onKeyDown}
+        parts={{
+          selection: {
+            control: {
+              onKeyDown: (event) => {
+                order.push('part');
+                if (prevent) event.preventDefault();
+              },
+            },
+          },
+        }}
+      />
+    );
+    const { rerender } = render(ui(false));
+    fireEvent.keyDown(rowControl(), { key: 'a' });
+    rerender(ui(true));
+    fireEvent.keyDown(rowControl(), { key: 'a' });
+    expect(order).toEqual(['part', 'cell', 'part']);
+  });
+
+  it('keeps a mixed select-all mixed with a part and an inline ref; a prevented change reports nothing', async () => {
+    const user = userEvent.setup();
+    const seen: Element[] = [];
+    const onCheckedChange = vi.fn();
+    const ui = (prevent: boolean) => (
+      <Table>
+        <Table.Header>
+          <tr>
+            <Table.SelectionCell
+              checked="mixed"
+              aria-label="Select all"
+              onCheckedChange={onCheckedChange}
+              slotProps={{
+                control: {
+                  ref: (node) => void (node && seen.push(node)),
+                  onChange: (event) => void (prevent && event.preventDefault()),
+                },
+              }}
+            />
+          </tr>
+        </Table.Header>
+      </Table>
+    );
+    const { rerender } = render(ui(false));
+    rerender(ui(false));
+    const selectAll = control('Select all') as HTMLInputElement;
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((node) => node === selectAll)).toBe(true);
+    expect(selectAll.indeterminate).toBe(true);
+    // A parent that keeps the state mixed: the flag comes back after the change.
+    await user.click(selectAll);
+    expect(onCheckedChange).toHaveBeenCalledWith(true, { event: expect.any(Event) });
+    expect(selectAll.indeterminate).toBe(true);
+    rerender(ui(true));
+    await user.click(selectAll);
+    expect(onCheckedChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls no click handler of a disabled control, and yours on an enabled one', () => {
+    const onClick = vi.fn();
+    const ui = (disabled: boolean) => (
+      <Table>
+        <Table.Body>
+          <Table.Row>
+            <Table.SelectionCell
+              aria-label="Pick"
+              disabled={disabled}
+              slotProps={{ control: { onClick } }}
+            />
+          </Table.Row>
+        </Table.Body>
+      </Table>
+    );
+    const { rerender } = render(ui(true));
+    fireEvent.click(control('Pick'));
+    expect(onClick).not.toHaveBeenCalled();
+    rerender(ui(false));
+    fireEvent.click(control('Pick'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps controlRef and the form reset working while a new inline part ref arrives on every render', async () => {
+    const user = userEvent.setup();
+    const controlRef = React.createRef<HTMLInputElement>();
+    const seen: Element[] = [];
+    const ui = () => (
+      <form aria-label="Share">
+        <Table>
+          <Table.Body>
+            <Table.Row>
+              <Table.SelectionCell
+                aria-label="Share budget"
+                name="files"
+                controlRef={controlRef}
+                slotProps={{ control: { ref: (node) => void (node && seen.push(node)) } }}
+              />
+            </Table.Row>
+          </Table.Body>
+        </Table>
+      </form>
+    );
+    const { rerender } = render(ui());
+    rerender(ui());
+    const share = control('Share budget');
+    expect(controlRef.current).toBe(share);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((node) => node === share)).toBe(true);
+    await user.click(share);
+    expect(share).toBeChecked();
+    act(() => (screen.getByRole('form', { name: 'Share' }) as HTMLFormElement).reset());
+    expect(share).not.toBeChecked();
+  });
+
+  it('ignores the parts a cell does not draw', () => {
+    const error = vi.spyOn(console, 'error');
+    render(
+      <Table>
+        <Table.Header>
+          <tr>
+            <Table.HeaderCell slotProps={{ button: { className: 'my-button' } }}>
+              Name
+            </Table.HeaderCell>
+          </tr>
+        </Table.Header>
+        <Table.Body>
+          <Table.Row>
+            <Table.Cell>
+              <Table.CellLayout
+                media={<Avatar name="Ann Lee" />}
+                slotProps={{ content: { className: 'my-content' }, main: { className: 'my-main' } }}
+              />
+            </Table.Cell>
+          </Table.Row>
+        </Table.Body>
+      </Table>,
+    );
+    expect(partsOf()).toEqual([]);
+    expect(document.querySelector('.my-button, .my-content, .my-main')).toBeNull();
+    expect(screen.getByRole('columnheader')).not.toHaveAttribute('slotprops');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('keeps a layout’s parts out of a grid’s navigation: one tab stop and the arrow order', async () => {
+    const user = userEvent.setup();
+    const error = vi.spyOn(console, 'error');
+    const attempt = {
+      role: 'toolbar',
+      tabIndex: 0,
+      contentEditable: true,
+      'data-roving-container': '',
+      'aria-label': 'Mine',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as LayoutParts['content'];
+    const parts = { content: attempt, main: attempt as LayoutParts['main'] };
+    render(
+      <DataGrid aria-label="Docs">
+        <DataGrid.Body>
+          {['Alpha', 'Beta'].map((name) => (
+            <DataGrid.Row key={name}>
+              <DataGrid.Cell>
+                <Table.CellLayout description="Doc" slotProps={parts}>
+                  {name}
+                </Table.CellLayout>
+              </DataGrid.Cell>
+              <DataGrid.Cell>{name} size</DataGrid.Cell>
+            </DataGrid.Row>
+          ))}
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    const grid = screen.getByRole('grid', { name: 'Docs' });
+    const cells = screen.getAllByRole('gridcell');
+    for (const part of partsOf()) {
+      for (const name of [
+        'role',
+        'tabindex',
+        'contenteditable',
+        'data-roving-container',
+        'aria-label',
+        'hidden',
+        'inert',
+        'aria-hidden',
+      ]) {
+        expect(part).not.toHaveAttribute(name);
+      }
+    }
+    expect(grid.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    expect(cells[0]).toHaveAttribute('tabindex', '0');
+    act(() => cells[0].focus());
+    for (const [key, index] of [
+      ['{ArrowRight}', 1],
+      ['{ArrowDown}', 3],
+      ['{ArrowLeft}', 2],
+    ] as const) {
+      await user.keyboard(key);
+      expect(cells[index]).toHaveFocus();
+      expect(grid.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    }
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('keeps a click on a layout’s text a row click of a grid that selects on row click', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const attempt = {
+      role: 'button',
+      tabIndex: 0,
+      contentEditable: true,
+    } as unknown as LayoutParts['content'];
+    render(
+      <DataGrid
+        aria-label="Docs"
+        selectionMode="multiple"
+        selectOnRowClick
+        onSelectedItemsChange={onSelectedItemsChange}
+      >
+        <DataGrid.Body>
+          <DataGrid.Row rowId="a">
+            <DataGrid.Cell>
+              <Table.CellLayout
+                description="Doc"
+                slotProps={{ content: attempt, main: attempt as LayoutParts['main'] }}
+              >
+                Alpha
+              </Table.CellLayout>
+            </DataGrid.Cell>
+          </DataGrid.Row>
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    await user.click(screen.getByText('Alpha'));
+    await user.click(screen.getByText('Doc'));
+    expect(onSelectedItemsChange.mock.calls).toEqual([
+      [['a'], { event: expect.any(Event) }],
+      [[], { event: expect.any(Event) }],
+    ]);
+  });
+
+  it('calls each part handler once per activation in StrictMode', async () => {
+    const user = userEvent.setup();
+    const button = vi.fn();
+    const change = vi.fn();
+    const onSortClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <Files
+          onSortClick={onSortClick}
+          parts={{
+            header: { button: { onClick: button } },
+            selection: { control: { onChange: change } },
+          }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('button', { name: /Name/ }));
+    await user.click(rowControl());
+    expect(button).toHaveBeenCalledTimes(1);
+    expect(onSortClick).toHaveBeenCalledTimes(1);
+    expect(change).toHaveBeenCalledTimes(1);
+  });
+
+  it('works in right-to-left tables', async () => {
+    const user = userEvent.setup();
+    const onSortClick = vi.fn();
+    renderWithProviders(
+      <Files
+        onSortClick={onSortClick}
+        parts={{
+          header: { button: { className: 'my-button' } },
+          layout: { content: { className: 'my-content' } },
+        }}
+      />,
+      { dir: 'rtl' },
+    );
+    const button = screen.getByRole('button', { name: /Name/ });
+    expect(button).toHaveClass('my-button', 'text-start');
+    await user.click(button);
+    expect(onSortClick).toHaveBeenCalledTimes(1);
+    expect(all(document, tableCellLayoutClassNames.content)[0]).toHaveClass('my-content');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <>
+        <span id="sort-hint">Sorts the files</span>
+        <Files
+          parts={{
+            header: { button: { 'aria-describedby': 'sort-hint' } },
+            selection: { control: { className: 'my-control', title: 'Select' } },
+            layout: { content: { className: 'my-content' }, main: { className: 'my-main' } },
+          }}
+        />
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof HeaderParts>().toEqualTypeOf<'button'>();
+    expectTypeOf<keyof SelectionParts>().toEqualTypeOf<'control'>();
+    expectTypeOf<keyof LayoutParts>().toEqualTypeOf<'content' | 'main'>();
+    expectTypeOf<HeaderParts['button']>().toEqualTypeOf<SlotPart<'button'> | undefined>();
+    expectTypeOf<SelectionParts['control']>().toEqualTypeOf<SlotPart<'input'> | undefined>();
+    expectTypeOf<LayoutParts['content']>().toEqualTypeOf<SlotPart<'div'> | undefined>();
+    expectTypeOf<LayoutParts['main']>().toEqualTypeOf<SlotPart<'span'> | undefined>();
+    expectTypeOf<NonNullable<SelectionParts['control']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    // @ts-expect-error -- the header cell draws its children into the button
+    const button: HeaderParts = { button: { children: 'x' } };
+    // @ts-expect-error -- the layout draws its text
+    const main: LayoutParts = { main: { children: 'x' } };
+    expect([button, main]).toHaveLength(2);
   });
 });

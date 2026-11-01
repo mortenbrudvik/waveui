@@ -1,3 +1,4 @@
+import { warnOnce } from '../../lib/dev';
 import type { BadgeColor } from '../../lib/types';
 
 /** Theme-token classes of one Badge color. */
@@ -83,3 +84,27 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
     dotBorder: 'border-border',
   },
 };
+
+/**
+ * The development warning for `color="important"`, whose meaning changes in 1.0 (neutral, high
+ * emphasis). It is a change of meaning, not a removal, so it has its own message instead of
+ * `warnDeprecated`'s. Call it from an effect (C-DEV); it warns once per component. A production
+ * bundle drops its body (the mode check is written out for the bundler to replace).
+ *
+ * @param name - The component that was given the color.
+ */
+export function warnImportantColor(name: 'Badge' | 'CounterBadge'): void {
+  // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
+  // production bundle then drops the warning, its text and the `lib/dev` import. Without a bundler
+  // and without `process` (an unbundled import in a browser), the read throws and it is skipped.
+  try {
+    if (process.env.NODE_ENV !== 'production') {
+      warnOnce(
+        `${name}:color:important`,
+        `${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.`,
+      );
+    }
+  } catch {
+    // No `process`: see above.
+  }
+}

@@ -9,6 +9,7 @@ import { getInitials } from '../../lib/initials';
 import { PersonIcon } from '../../lib/icons';
 import type { Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { AvatarBadgeSizeContext, AvatarSizeContext } from './Avatar.context';
 import { AvatarGroupContext } from './AvatarGroup.context';
 import { avatarColorClasses, resolveAvatarColor, type AvatarColor } from './Avatar.colors';
@@ -120,6 +121,65 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
   decorative?: boolean;
   /** Ref to the root `<span>`: the avatar itself, or the badge wrapper when `badge` is set. */
   ref?: React.Ref<HTMLSpanElement>;
+  /**
+   * Props for the element the avatar draws, by part, merged into the part's own: your classes
+   * after the part's (yours win a conflict), your styles over its styles, your attributes and
+   * handlers added (yours run first), your ref beside its ref, and your ids added to its
+   * `aria-labelledby` and `aria-describedby`. Every attribute the avatar sets on the part is
+   * locked and keeps the avatar's value (set it through the avatar's own props, which win over
+   * these); you add the attributes it does not set. A part takes no `children` (the avatar draws
+   * its image, icon or initials); the image, the icon, the initials and the badge are slots of
+   * their own.
+   */
+  slotProps?: {
+    /**
+     * The avatar visual (stable class `wave-avatar__visual`): the circle that shows the image,
+     * the icon or the initials and carries the avatar's name. Without a `badge` it is the root
+     * element itself, so the part applies to the root, after the avatar's own props, which win,
+     * except that your classes and style keys merge over its own: its `className` comes before
+     * yours, its `style` under yours, its `ref` beside yours, and your handlers run before its
+     * own `on…` props, which `preventDefault()` in yours skips. With a `badge` it is the `<span>`
+     * inside the wrapper, and the wrapper takes the avatar's own props and handlers: your handlers
+     * here run first, as on any content, and `preventDefault()` in them does not skip the avatar's
+     * own `on…` props. Locked: the name wiring (`role`, `aria-label`, `aria-hidden`,
+     * `aria-description` and `aria-details`, unset where the avatar sets none), `tabIndex`,
+     * `hidden` and `inert` unset, and without a badge every prop you give the avatar itself and
+     * its `data-size`, `data-shape`, `data-color`, `data-active` and `data-active-appearance`.
+     */
+    visual?: SlotPart<'span'>;
+  };
+}
+
+/**
+ * What the visual part locks unset, before the attributes the avatar sets on it: the name wiring
+ * the avatar sets in some modes only, a tab stop and the hidden state (it carries the name).
+ */
+const VISUAL_PART_LOCKS = {
+  role: undefined,
+  'aria-label': undefined,
+  'aria-hidden': undefined,
+  'aria-description': undefined,
+  'aria-details': undefined,
+  tabIndex: undefined,
+  hidden: undefined,
+  inert: undefined,
+} as const;
+
+/**
+ * The merged props of the visual part: `attributes` are what the avatar sets on the element (the
+ * name wiring, and without a badge the state and the avatar's own props), all locked but `style`,
+ * which a part style is merged over.
+ */
+function visualPartProps(
+  part: SlotPart<'span'>,
+  className: string,
+  { style, ...attributes }: React.HTMLAttributes<HTMLSpanElement>,
+): Record<string, unknown> {
+  return mergeSlotProps(part, {
+    className,
+    style,
+    locked: { ...VISUAL_PART_LOCKS, ...attributes },
+  });
 }
 
 /**
@@ -191,13 +251,13 @@ type ImageKey = readonly [type: unknown, key: unknown, src: unknown, srcSet: unk
 
 function getImageKey(
   imageSlot: unknown,
-  slotProps: ImageSlotProps | undefined,
+  imageProps: ImageSlotProps | undefined,
   src: string | undefined,
 ): ImageKey {
   if (imageSlot === undefined) return [undefined, undefined, src || undefined, undefined];
   if (typeof imageSlot === 'string') return [undefined, undefined, imageSlot, undefined];
   const element = React.isValidElement(imageSlot) ? imageSlot : undefined;
-  return [element?.type, element?.key, slotProps?.src, slotProps?.srcSet];
+  return [element?.type, element?.key, imageProps?.src, imageProps?.srcSet];
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -266,6 +326,7 @@ export const Avatar = ({
   'aria-describedby': ariaDescribedBy,
   'aria-description': ariaDescription,
   'aria-details': ariaDetails,
+  slotProps,
   ...rest
 }: AvatarProps) => {
   // The media box of a surrounding Tag or InteractionTag, for an Avatar without its own `size`.
@@ -274,8 +335,8 @@ export const Avatar = ({
     image === null || image === undefined || typeof image === 'boolean' || image === ''
       ? undefined
       : image;
-  const slotProps = readSlotProps(imageSlot);
-  const imageKey = getImageKey(imageSlot, slotProps, src);
+  const imageProps = readSlotProps(imageSlot);
+  const imageKey = getImageKey(imageSlot, imageProps, src);
 
   // Load failure of the current image; a new image is tried again (C-HOOKS: adjust state during
   // render on prop change).
@@ -315,7 +376,6 @@ export const Avatar = ({
       active = false;
     };
   }, []);
-  const rootVisualRef = useMergedRefs(ref, visualRef);
 
   const hasConsumerName = ariaLabel !== undefined || ariaLabelledBy !== undefined;
   // A consumer role goes to the visual span together with the name (data-display#19), so the
@@ -330,7 +390,7 @@ export const Avatar = ({
   // The alt text the image renders with: an element or object slot's own `alt` wins over ours. An
   // `alt` that is `undefined` (an optional `alt: user.photoAlt`, a wrapper forwarding `alt={alt}`)
   // or `null` is not given, so ours applies (the slot's own value would otherwise override it).
-  const ownAlt = slotProps?.alt;
+  const ownAlt = imageProps?.alt;
   const hasOwnAlt = ownAlt !== undefined && ownAlt !== null;
   const renderedAlt: unknown = hasOwnAlt ? ownAlt : imageAlt;
 
@@ -370,13 +430,13 @@ export const Avatar = ({
       // `aria-details` win over the avatar's.
       const overrides: SlotOverrides = {
         onError: composeEventHandlers(
-          slotProps?.onError as ImageErrorHandler | undefined,
+          imageProps?.onError as ImageErrorHandler | undefined,
           handleError,
         ),
       };
       if (!hasOwnAlt) overrides.alt = imageAlt;
       if (imageIsNamed) {
-        const ownIds = slotProps?.['aria-describedby'];
+        const ownIds = imageProps?.['aria-describedby'];
         overrides['aria-describedby'] = joinIds(
           ariaDescribedBy,
           typeof ownIds === 'string' ? ownIds : undefined,
@@ -384,7 +444,7 @@ export const Avatar = ({
       }
       const slot = React.isValidElement(imageSlot)
         ? React.cloneElement(imageSlot as React.ReactElement<SlotOverrides>, overrides)
-        : slotProps
+        : imageProps
           ? { ...(imageSlot as object), ...overrides }
           : imageSlot;
       imageNode = renderSlot(slot as Slot<'img'>, 'img', cn(avatarClassNames.image, IMAGE_CLASS), {
@@ -481,6 +541,10 @@ export const Avatar = ({
       ? renderSlot(badge, 'span', cn(avatarClassNames.badge, 'absolute bottom-0 end-0 inline-flex'))
       : null;
   const hasBadge = badgeNode !== null;
+  // The visual's refs: the avatar's `ref` too without a badge (the visual is the root then), and
+  // a part's ref beside them, so an inline one never detaches the avatar's.
+  const visualPart = slotProps?.visual;
+  const visualRefs = useMergedRefs(hasBadge ? undefined : ref, visualRef, visualPart?.ref);
 
   // An own `size` wins; without one, the box of a surrounding tag's media, else medium. With a
   // badge the visual is sized, not the wrapper.
@@ -506,13 +570,17 @@ export const Avatar = ({
   );
 
   if (!hasBadge) {
+    // One element: the root is the visual, so the part applies to it after the avatar's props.
+    const rootClassName = cn(avatarClassNames.root, visualClassName, className);
     return (
       <span
-        ref={rootVisualRef}
         {...a11yProps}
         {...stateProps}
         {...rest}
-        className={cn(avatarClassNames.root, visualClassName, className)}
+        className={rootClassName}
+        {...(visualPart &&
+          visualPartProps(visualPart, rootClassName, { ...a11yProps, ...stateProps, ...rest }))}
+        ref={visualRefs}
       >
         {content}
       </span>
@@ -526,7 +594,12 @@ export const Avatar = ({
       {...rest}
       className={cn(avatarClassNames.root, 'relative inline-flex shrink-0', className)}
     >
-      <span ref={visualRef} {...a11yProps} className={visualClassName}>
+      <span
+        {...a11yProps}
+        className={visualClassName}
+        {...(visualPart && visualPartProps(visualPart, visualClassName, a11yProps))}
+        ref={visualRefs}
+      >
         {content}
       </span>
       <AvatarBadgeSizeContext.Provider value={avatarBadgeSize(pixels)}>

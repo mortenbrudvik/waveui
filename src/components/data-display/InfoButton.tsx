@@ -5,6 +5,7 @@ import { infoButtonClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getFirstTabbable } from '../../lib/focus';
 import { InfoIcon } from '../../lib/icons';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
 import { popupMotion } from '../../lib/motion';
 import type { CoreSize, MotionSlot } from '../../lib/types';
@@ -68,6 +69,37 @@ export interface InfoButtonProps extends Omit<
   motion?: MotionSlot | null;
   /** Ref to the button. */
   ref?: React.Ref<HTMLButtonElement>;
+  /**
+   * Props for the elements the InfoButton draws besides the button, by part, merged into each
+   * part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref beside its ref. Every attribute the
+   * InfoButton sets on a part is locked and keeps its value; you add the attributes it does not
+   * set. A part takes no `children`. The button is the root and takes your props directly.
+   * Fluent UI's InfoButton is a Popover: its `info` slot is the surface, as here.
+   */
+  slotProps?: {
+    /**
+     * The note `<div role="note">`, rendered in a portal while it shows (stable class
+     * `wave-info-button__info`), which holds the beak and `info`; `motion` gives it its motion
+     * classes, before yours. Your `onKeyDown` runs before the note's Tab order
+     * (`preventDefault()` skips it, as it does in `info`); the hover bookkeeping runs after your
+     * `onPointerEnter` and `onPointerLeave`, also when they prevent the default. Locked: `id`
+     * (the button's `aria-controls`), `role`, `aria-labelledby` (your ids are added after the
+     * note's own), its marker `data-wave-infolabel-surface`, `data-state`, `data-presence`,
+     * `inert`, `data-side` and `data-align`, and, unset, `hidden` and `aria-hidden`; your `style`
+     * merges, but the position the positioning sets wins.
+     */
+    info?: SlotPart<'div'>;
+    /**
+     * The `<div>` of the beak, the rotated square on the note's edge that faces the button
+     * (stable class `wave-info-button__beak`). The positioning places it, and your ref is
+     * attached beside the InfoButton's. Locked: `aria-hidden` (it is a drawing), its marker
+     * `data-wave-popover-arrow`, `tabIndex` (unset) and the keys of its style that the
+     * positioning sets (`position`, `left`, `top` and the offset of the edge it sits on), which
+     * win over yours.
+     */
+    beak?: SlotPart<'div'>;
+  };
 }
 
 /** Why the note is open: a click pins it; keyboard focus owns it; hover opens it transiently. */
@@ -183,6 +215,7 @@ export const InfoButton = ({
   onPointerMove,
   onPointerLeave,
   ref,
+  slotProps,
   ...rest
 }: InfoButtonProps) => {
   // A size from untyped code renders, and reports, the default.
@@ -389,7 +422,77 @@ export const InfoButton = ({
     setButtonElement,
     setReference,
   );
-  const noteRefs = useMergedRefs<HTMLDivElement>(noteRef, setNote, setFloating, presenceRef);
+  // The positioning, the presence core and the focus work measure the note, and the positioning
+  // the beak: a part's ref goes beside theirs, never in their place.
+  const noteRefs = useMergedRefs<HTMLDivElement>(
+    noteRef,
+    setNote,
+    setFloating,
+    presenceRef,
+    slotProps?.info?.ref,
+  );
+  const beakRef = useMergedRefs<HTMLDivElement>(arrowRef, slotProps?.beak?.ref);
+
+  // The note's props are merged only while it is mounted. The presence attributes are present
+  // only in some phases: the keys they may add are locked unset before them.
+  let renderedNote: React.ReactNode = null;
+  if (isMounted) {
+    const noteProps = mergeSlotProps(slotProps?.info, {
+      className: cn(
+        infoButtonClassNames.info,
+        noteClassName,
+        'w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
+        motionClassName,
+      ),
+      locked: {
+        id: noteId,
+        role: 'note',
+        'aria-labelledby': ariaLabelledBy || id,
+        'data-wave-infolabel-surface': '',
+        'data-state': open ? 'open' : 'closed',
+        hidden: undefined,
+        inert: undefined,
+        'aria-hidden': undefined,
+        ...presenceProps,
+        'data-side': floatingProps['data-side'],
+        'data-align': floatingProps['data-align'],
+        onKeyDown: onNoteKeyDown,
+      },
+    });
+    const beak = mergeSlotProps(slotProps?.beak, {
+      className: infoButtonClassNames.beak,
+      locked: { 'aria-hidden': 'true', 'data-wave-popover-arrow': '', tabIndex: undefined },
+    });
+    renderedNote = (
+      <Portal layerId={layerId}>
+        <div
+          {...noteProps}
+          ref={noteRefs}
+          style={lockPositionStyle(noteProps.style, floatingProps.style)}
+          // Bookkeeping of where the pointer is (the hover intent's state): it runs also when a
+          // part's handlers prevent the default.
+          onPointerEnter={composeEventHandlers(
+            noteProps.onPointerEnter as React.PointerEventHandler<HTMLDivElement> | undefined,
+            hoverSurfaceHandlers.onPointerEnter,
+            { checkDefaultPrevented: false },
+          )}
+          onPointerLeave={composeEventHandlers(
+            noteProps.onPointerLeave as React.PointerEventHandler<HTMLDivElement> | undefined,
+            hoverSurfaceHandlers.onPointerLeave,
+            { checkDefaultPrevented: false },
+          )}
+        >
+          <PopoverBeak
+            {...beak}
+            ref={beakRef}
+            side={side}
+            style={lockPositionStyle(beak.style, arrowStyles)}
+          />
+          <div id={infoId}>{info}</div>
+        </div>
+      </Portal>
+    );
+  }
 
   return (
     <>
@@ -436,38 +539,7 @@ export const InfoButton = ({
       <span id={isMounted ? undefined : infoId} hidden>
         {isMounted ? null : info}
       </span>
-      {isMounted && (
-        <Portal layerId={layerId}>
-          <div
-            ref={noteRefs}
-            id={noteId}
-            role="note"
-            aria-labelledby={ariaLabelledBy || id}
-            data-wave-infolabel-surface=""
-            data-state={open ? 'open' : 'closed'}
-            {...presenceProps}
-            {...floatingProps}
-            onKeyDown={onNoteKeyDown}
-            onPointerEnter={hoverSurfaceHandlers.onPointerEnter}
-            onPointerLeave={hoverSurfaceHandlers.onPointerLeave}
-            className={cn(
-              infoButtonClassNames.info,
-              noteClassName,
-              'w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
-              motionClassName,
-            )}
-          >
-            <PopoverBeak
-              ref={arrowRef}
-              side={side}
-              style={arrowStyles}
-              data-wave-popover-arrow=""
-              className={infoButtonClassNames.beak}
-            />
-            <div id={infoId}>{info}</div>
-          </div>
-        </Portal>
-      )}
+      {renderedNote}
     </>
   );
 };

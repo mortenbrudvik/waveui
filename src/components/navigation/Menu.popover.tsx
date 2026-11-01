@@ -21,14 +21,19 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { createHoverIntentGroup, type HoverIntentGroup } from '../../hooks/useHoverIntent';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { useMotionClasses } from '../../hooks/useMotion';
+import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { getTriggerFocusTarget, useTriggerFocusRef } from '../../hooks/useTriggerElement';
 import { Portal, PortalDepthContext } from '../portal/Portal';
-import { MenuListContext, useCheckableRegistry, useMenuContext } from './Menu.context';
+import {
+  MenuListContext,
+  MenuListElementContext,
+  useCheckableRegistry,
+  useMenuContext,
+} from './Menu.context';
 import type { MenuContextValue, MenuListContextValue } from './Menu.context';
 import {
   MENU_ITEM_SELECTOR,
@@ -75,7 +80,8 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * the default classes with yours (see `MotionSlot`), also under a `WaveProvider` with
    * `motion="none"`, which otherwise turns the default off. A `className` that holds
    * `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default motion,
-   * your classes animate the surface. Fluent's `Menu` `surfaceMotion`.
+   * your classes animate the surface; development builds log a warning once, and the rule is
+   * removed in 1.0, so pass `motion` instead. Fluent's `Menu` `surfaceMotion`.
    * @default the fade and slide above
    */
   motion?: MotionSlot | null;
@@ -247,6 +253,7 @@ export const MenuPopover = ({
   const { isMounted, ref: presenceRef, presenceProps } = usePresence(open, { appear: true });
   // The motion classes (a `className` with presence variants keeps 0.14's own motion, D19).
   const motionClassName = useMotionClasses(motion, popupMotion, className);
+  useLegacyMotionWarning('Menu.Popover', motion, className);
 
   const {
     setReference,
@@ -509,7 +516,9 @@ export const MenuPopover = ({
           onContextMenu={composeEventHandlers(onContextMenu, contextSurfaceHandlers.onContextMenu)}
           className={cn(menuPopoverClassNames.root, menuPopoverClasses, motionClassName, className)}
         >
-          {children}
+          <MenuListElementContext.Provider value={surface}>
+            {children}
+          </MenuListElementContext.Provider>
         </div>
       </MenuListContext.Provider>
     </Portal>

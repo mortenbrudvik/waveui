@@ -1,15 +1,23 @@
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FlatTree, FlatTreeItem } from '../FlatTree';
 import type { FlatTreeItemProps, FlatTreeProps } from '../FlatTree';
+import type { FlatTreeContextValue } from '../FlatTree.context';
 import { useFlatTree, type FlatTreeModel, type UseFlatTreeOptions } from '../useFlatTree';
 import type { FlatTreeItemData } from '../../../lib/flatTree';
 import type { CheckState } from '../../../lib/treeCascade';
 import { flatTreeClassNames, flatTreeItemClassNames } from '../../../lib/classNames';
 import * as Wave from '../../../index';
-import { expectNoA11yViolations, expectThrows, renderWithProviders } from '../../../test-utils';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  expectThrows,
+  openingTags,
+  renderWithProviders,
+} from '../../../test-utils';
 
 /**
  * docs        Documents
@@ -688,5 +696,470 @@ describe('FlatTree', () => {
       />,
     );
     await expectNoA11yViolations();
+  });
+});
+
+describe('FlatTree — slotProps', () => {
+  type TreeSlotProps = NonNullable<FlatTreeProps['slotProps']>;
+  const EVERY_PART: TreeSlotProps = { row: {}, expandIcon: {}, indicator: {}, label: {} };
+  const NAMES = ['row', 'expandIcon', 'indicator', 'label'] as const;
+  const part = (el: Element, name: (typeof NAMES)[number]) =>
+    el.querySelector<HTMLElement>(`.${flatTreeItemClassNames[name]}`) as HTMLElement;
+  /** Every part of an item, in the order of {@link NAMES}. */
+  const partsOf = (el: Element) => NAMES.map((name) => part(el, name));
+
+  // Captured from ce1620c's dist (client and server agree).
+  const BASE_PINS = [
+    '<div class="wave-flat-tree-item__row box-border flex items-center gap-1.5 rounded px-2 py-1 cursor-pointer hover:bg-subtle-hover" data-flat-tree-row="">',
+    '<svg aria-hidden="true" class="wave-flat-tree-item__expand-icon shrink-0 transition-transform motion-reduce:transition-none rotate-90" data-wave-icon="chevron-right" fill="currentColor" focusable="false" height="12" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+    '<span aria-checked="true" aria-labelledby="flat-tree-item-label-_id0_" class="wave-flat-tree-item__indicator relative inline-flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none before:absolute before:-inset-1 border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" data-flat-tree-checkbox="" role="checkbox" tabindex="-1">',
+    '<span class="wave-flat-tree-item__label min-w-0 truncate" id="flat-tree-item-label-_id0_">',
+  ].join('\n');
+  const RADIO_PIN =
+    '<span aria-hidden="true" class="wave-flat-tree-item__indicator inline-flex size-4 shrink-0 items-center justify-center rounded-full transition-colors motion-reduce:transition-none border-2 border-primary forced-colors:border-[Highlight]">';
+
+  const DOCS: FlatTreeItemData[] = [
+    { value: 'docs', label: 'Documents' },
+    { value: 'report', parentValue: 'docs', label: 'Report' },
+  ];
+  /** Documents (expanded) › Report, with checkboxes or radios. */
+  function Pinned({ mode, slotProps }: { mode: 'multiple' | 'single'; slotProps?: TreeSlotProps }) {
+    return (
+      <Files
+        items={DOCS}
+        options={{
+          defaultExpandedItems: ['docs'],
+          selectionMode: mode,
+          defaultCheckedItems: mode === 'multiple' ? ['report'] : undefined,
+        }}
+        {...(mode === 'single' ? { selected: 'docs' } : {})}
+        slotProps={slotProps}
+      />
+    );
+  }
+
+  const MIXED: FlatTreeItemData[] = [
+    { value: 'a', label: 'Alpha' },
+    { value: 'b', label: 'Beta', disabled: true },
+    { value: 'c', label: 'Gamma', itemType: 'branch' },
+    { value: 'd', label: 'Delta', itemType: 'branch', disabled: true },
+  ];
+
+  it('renders the parts of ce1620c (attributes sorted), on the client and the server', () => {
+    const { unmount } = render(<Pinned mode="multiple" />);
+    expect(openingTags(...partsOf(item('Documents')))).toBe(BASE_PINS);
+    unmount();
+    render(<Pinned mode="single" />);
+    expect(openingTags(part(item('Documents'), 'indicator'))).toBe(RADIO_PIN);
+    for (const [mode, pins] of [
+      ['multiple', BASE_PINS],
+      ['single', RADIO_PIN],
+    ] as const) {
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Pinned mode={mode} slotProps={EVERY_PART} />);
+      const docs = template.content.querySelector('[role="treeitem"]') as Element;
+      expect(openingTags(...(mode === 'single' ? [part(docs, 'indicator')] : partsOf(docs)))).toBe(
+        pins,
+      );
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: FilesProps[] = [
+      { options: { defaultExpandedItems: ['docs', 'work'] }, selected: 'report', current: 'work' },
+      {
+        options: {
+          defaultExpandedItems: ['docs', 'work'],
+          selectionMode: 'multiple',
+          defaultCheckedItems: ['report'],
+        },
+      },
+      { items: MIXED, options: { selectionMode: 'single' }, selected: 'a' },
+      { items: MIXED, options: { selectionMode: 'multiple', defaultCheckedItems: ['b'] } },
+      { renderItem: (row) => <strong>{row.item.label}</strong> },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps((slotProps) => <Files {...props} slotProps={slotProps} />, EVERY_PART);
+    }
+  });
+
+  it('puts your className, style and data-* on the parts of every item, after their own classes', () => {
+    const slotProps = Object.fromEntries(
+      NAMES.map((name) => [
+        name,
+        { className: `my-${name}`, style: { opacity: 0.5 }, 'data-part': name },
+      ]),
+    ) as TreeSlotProps;
+    render(
+      <Files
+        options={{ defaultExpandedItems: ['docs'], selectionMode: 'multiple' }}
+        slotProps={slotProps}
+      />,
+    );
+    for (const el of treeitems()) {
+      NAMES.forEach((name) => {
+        const element = part(el, name);
+        // A leaf draws no chevron.
+        if (name === 'expandIcon' && !el.hasAttribute('aria-expanded')) {
+          expect(element).toBeNull();
+          return;
+        }
+        expect(element.classList[0]).toBe(flatTreeItemClassNames[name]);
+        expect(element.classList[element.classList.length - 1]).toBe(`my-${name}`);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+      });
+    }
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Pinned
+        mode="multiple"
+        slotProps={{
+          row: { className: 'px-4' },
+          expandIcon: { className: 'shrink' },
+          indicator: { className: 'size-5' },
+          label: { className: 'min-w-8' },
+        }}
+      />,
+    );
+    const [row, chevron, box, text] = partsOf(item('Documents'));
+    expect(row).toHaveClass('px-4');
+    expect(row).not.toHaveClass('px-2');
+    expect(chevron).toHaveClass('shrink');
+    expect(chevron).not.toHaveClass('shrink-0');
+    expect(box).toHaveClass('size-5');
+    expect(box).not.toHaveClass('size-4');
+    expect(text).toHaveClass('min-w-8');
+    expect(text).not.toHaveClass('min-w-0');
+  });
+
+  it('attaches your ref to the part of every rendered item', () => {
+    const rows = new Set<Element>();
+    const labels = new Set<Element>();
+    render(
+      <Files
+        options={{ defaultExpandedItems: ['docs'] }}
+        slotProps={{
+          row: { ref: (el: HTMLDivElement | null) => void (el && rows.add(el)) },
+          label: { ref: (el: HTMLSpanElement | null) => void (el && labels.add(el)) },
+        }}
+      />,
+    );
+    expect([...rows]).toEqual(treeitems().map((el) => part(el, 'row')));
+    expect([...labels]).toEqual(treeitems().map((el) => part(el, 'label')));
+  });
+
+  it('locks each part’s role, ids, names, state, tab index, markers and hidden state', () => {
+    const attempt = {
+      id: 'mine',
+      role: 'treeitem',
+      tabIndex: 0,
+      hidden: true,
+      inert: true,
+      'aria-hidden': false,
+      'aria-label': 'Mine',
+      'aria-checked': false,
+      'aria-disabled': true,
+      focusable: 'true' as const,
+      'data-flat-tree-row': 'x',
+      'data-flat-tree-checkbox': 'x',
+    };
+    render(
+      <>
+        <span id="extra">Extra</span>
+        <Files
+          items={MIXED}
+          options={{ selectionMode: 'multiple', defaultCheckedItems: ['c'] }}
+          slotProps={{
+            row: { ...attempt, id: 'my-row' },
+            expandIcon: { ...attempt, id: undefined },
+            indicator: { ...attempt, id: 'my-box', 'aria-labelledby': 'extra' },
+            label: attempt,
+          }}
+        />
+      </>,
+    );
+    const gamma = item('Gamma');
+    const [row, chevron, box, text] = partsOf(gamma);
+    // Markers: each part keeps its own, and takes none of the others.
+    expect(row).toHaveAttribute('data-flat-tree-row', '');
+    expect(box).toHaveAttribute('data-flat-tree-checkbox', '');
+    for (const element of [chevron, text]) {
+      expect(element).not.toHaveAttribute('data-flat-tree-row');
+      expect(element).not.toHaveAttribute('data-flat-tree-checkbox');
+    }
+    expect(row).not.toHaveAttribute('data-flat-tree-checkbox');
+    expect(box).not.toHaveAttribute('data-flat-tree-row');
+    // No role or tab index but the checkbox's own; no hidden state on what holds the name.
+    expect(row).not.toHaveAttribute('role');
+    expect(chevron).not.toHaveAttribute('role');
+    expect(text).not.toHaveAttribute('role');
+    expect(box).toHaveAttribute('role', 'checkbox');
+    for (const element of [row, chevron, text]) expect(element).not.toHaveAttribute('tabindex');
+    expect(box).toHaveAttribute('tabindex', '-1');
+    for (const element of [row, box, text]) {
+      for (const hiding of ['hidden', 'inert', 'aria-hidden']) {
+        expect(element).not.toHaveAttribute(hiding);
+      }
+    }
+    // The chevron stays a hidden drawing.
+    expect(chevron).toHaveAttribute('aria-hidden', 'true');
+    expect(chevron).toHaveAttribute('focusable', 'false');
+    // The checkbox: its state (an enabled item's checkbox is not aria-disabled), name joined.
+    expect(box).toHaveAttribute('aria-checked', 'true');
+    expect(box).not.toHaveAttribute('aria-disabled');
+    expect(box).toHaveAttribute('aria-labelledby', `${text.id} extra`);
+    expect(part(item('Beta'), 'indicator')).toHaveAttribute('aria-disabled', 'true');
+    // The label: its id names the item, with no name of its own.
+    expect(text.id).toMatch(/^flat-tree-item-label-/);
+    expect(text).not.toHaveAttribute('aria-label');
+    expect(gamma).toHaveAccessibleName('Gamma');
+    expect(treeitems()).toHaveLength(MIXED.length);
+  });
+
+  it('locks the radio: hidden from assistive technology, with no role or tab index', () => {
+    render(
+      <Pinned
+        mode="single"
+        slotProps={{
+          indicator: {
+            'aria-hidden': false,
+            role: 'radio',
+            tabIndex: 0,
+            'data-flat-tree-checkbox': '',
+          },
+        }}
+      />,
+    );
+    const radio = part(item('Documents'), 'indicator');
+    expect(radio).toHaveAttribute('aria-hidden', 'true');
+    expect(radio).not.toHaveAttribute('role');
+    expect(radio).not.toHaveAttribute('tabindex');
+    expect(radio).not.toHaveAttribute('data-flat-tree-checkbox');
+    expect(screen.queryByRole('radio')).toBeNull();
+  });
+
+  it('keeps the item’s own clicks: a part cannot pass for the checkbox', async () => {
+    const user = userEvent.setup();
+    const onItemSelect = vi.fn();
+    render(
+      <Files
+        items={MIXED}
+        onItemSelect={onItemSelect}
+        slotProps={{ label: { 'data-flat-tree-checkbox': '' } }}
+      />,
+    );
+    await user.click(part(item('Gamma'), 'label'));
+    expect(onItemSelect).toHaveBeenCalledWith('c');
+    expect(item('Gamma')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('keeps the tree’s one tab stop: no part takes a tab index', async () => {
+    const user = userEvent.setup();
+    const stop = { tabIndex: 0 };
+    render(
+      <>
+        <Files
+          items={MIXED}
+          options={{ selectionMode: 'single' }}
+          selected="a"
+          slotProps={{ row: stop, expandIcon: stop, indicator: stop, label: stop }}
+        />
+        <button type="button">After</button>
+      </>,
+    );
+    await user.tab();
+    expect(item('Alpha')).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+  });
+
+  it('runs a part’s click first: preventDefault() on the row, chevron, radio or label activates nothing', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onItemSelect = vi.fn();
+    const prevent = (name: string) => ({
+      onClick: (event: React.MouseEvent) => {
+        order.push(name);
+        event.preventDefault();
+      },
+    });
+    const { rerender } = render(
+      <Files
+        items={MIXED}
+        options={{ selectionMode: 'single' }}
+        selected={null}
+        onItemSelect={onItemSelect}
+        slotProps={{
+          row: prevent('row'),
+          expandIcon: prevent('expandIcon'),
+          indicator: prevent('indicator'),
+          label: prevent('label'),
+        }}
+      />,
+    );
+    const gamma = item('Gamma');
+    for (const element of partsOf(gamma)) await user.click(element);
+    expect(order).toEqual(['row', 'expandIcon', 'row', 'indicator', 'row', 'label', 'row']);
+    expect(onItemSelect).not.toHaveBeenCalled();
+    expect(gamma).toHaveAttribute('aria-expanded', 'false');
+    // Without preventDefault the click activates and expands the branch as before.
+    rerender(
+      <Files
+        items={MIXED}
+        options={{ selectionMode: 'single' }}
+        selected={null}
+        onItemSelect={onItemSelect}
+        slotProps={{ expandIcon: { onClick: () => void order.push('mine') } }}
+      />,
+    );
+    await user.click(part(item('Gamma'), 'expandIcon'));
+    expect(order.at(-1)).toBe('mine');
+    expect(onItemSelect).toHaveBeenCalledWith('c');
+    expect(item('Gamma')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('runs the checkbox’s handlers after yours: preventDefault() skips the toggle and the focus move', async () => {
+    const user = userEvent.setup();
+    const onCheckedItemsChange = vi.fn();
+    const onBox = vi.fn();
+    function Checks({ prevent }: { prevent: boolean }) {
+      const handle = (event: React.MouseEvent) => {
+        onBox(event.type);
+        if (prevent) event.preventDefault();
+      };
+      return (
+        <Files
+          items={MIXED}
+          options={{ selectionMode: 'multiple', onCheckedItemsChange }}
+          slotProps={{ indicator: { onClick: handle, onMouseDown: handle } }}
+        />
+      );
+    }
+    const { rerender } = render(<Checks prevent />);
+    await user.click(part(item('Alpha'), 'indicator'));
+    expect(onBox.mock.calls).toEqual([['mousedown'], ['click']]);
+    expect(onCheckedItemsChange).not.toHaveBeenCalled();
+    expect(item('Alpha')).not.toHaveFocus();
+    expect(item('Alpha')).toHaveAttribute('aria-checked', 'false');
+    rerender(<Checks prevent={false} />);
+    await user.click(part(item('Alpha'), 'indicator'));
+    expect(onCheckedItemsChange).toHaveBeenCalledWith(
+      ['a'],
+      expect.objectContaining({ value: 'a', checked: true }),
+    );
+    expect(item('Alpha')).toHaveFocus();
+    expect(item('Alpha')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('calls no click handler of a part of a disabled item, and calls them on an enabled one', async () => {
+    const handlers = { row: vi.fn(), expandIcon: vi.fn(), indicator: vi.fn(), label: vi.fn() };
+    const slotProps = Object.fromEntries(
+      NAMES.map((name) => [name, { onClick: handlers[name] }]),
+    ) as TreeSlotProps;
+    render(<Files items={MIXED} options={{ selectionMode: 'multiple' }} slotProps={slotProps} />);
+    // Delta: a disabled branch (chevron, checkbox, label, row).
+    for (const element of partsOf(item('Delta'))) fireEvent.click(element);
+    for (const handler of Object.values(handlers)) expect(handler).not.toHaveBeenCalled();
+    // Gamma: an enabled branch; a click on an inner part reaches the row's part too.
+    for (const element of partsOf(item('Gamma'))) fireEvent.click(element);
+    expect(handlers.row).toHaveBeenCalledTimes(4);
+    expect(handlers.expandIcon).toHaveBeenCalledTimes(1);
+    expect(handlers.indicator).toHaveBeenCalledTimes(1);
+    expect(handlers.label).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls your part handlers once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const handlers = { expandIcon: vi.fn(), indicator: vi.fn(), label: vi.fn() };
+    render(
+      <React.StrictMode>
+        <Pinned
+          mode="multiple"
+          slotProps={{
+            expandIcon: { onClick: handlers.expandIcon },
+            indicator: { onClick: handlers.indicator },
+            label: { onClick: handlers.label },
+          }}
+        />
+      </React.StrictMode>,
+    );
+    const docs = item('Documents');
+    await user.click(part(docs, 'indicator'));
+    await user.click(part(docs, 'label'));
+    await user.click(part(docs, 'expandIcon'));
+    for (const handler of Object.values(handlers)) expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the parts an item does not draw: no checkbox or radio, no chevron on a leaf', () => {
+    render(
+      <Files
+        items={MIXED}
+        slotProps={{
+          expandIcon: { className: 'my-chevron' },
+          indicator: { className: 'my-indicator' },
+        }}
+      />,
+    );
+    expect(document.querySelector('.my-indicator')).toBeNull();
+    expect(document.querySelectorAll('.my-chevron')).toHaveLength(2);
+    expect(part(item('Alpha'), 'expandIcon')).toBeNull();
+  });
+
+  it('keeps the tree and treeitem elements their own: slotProps reaches neither', () => {
+    render(<Files slotProps={{ root: { className: 'my-root' } } as unknown as TreeSlotProps} />);
+    expect(tree()).not.toHaveAttribute('slotprops');
+    expect(document.querySelector('.my-root')).toBeNull();
+    for (const el of treeitems()) expect(el.className).not.toMatch(/\bmy-/);
+  });
+
+  it('mirrors the collapsed chevron with your class in RTL', () => {
+    renderWithProviders(
+      <Files items={MIXED} slotProps={{ expandIcon: { className: 'my-chevron' } }} />,
+      { dir: 'rtl' },
+    );
+    expect(part(item('Gamma'), 'expandIcon')).toHaveClass('wave-rtl:-scale-x-100', 'my-chevron');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Files
+        items={MIXED}
+        options={{ selectionMode: 'multiple' }}
+        slotProps={{
+          row: { className: 'my-row', title: 'Row' },
+          expandIcon: { className: 'my-chevron' },
+          indicator: { className: 'my-indicator', title: 'Check' },
+          label: { className: 'my-label' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof TreeSlotProps>().toEqualTypeOf<
+      'row' | 'expandIcon' | 'indicator' | 'label'
+    >();
+    expectTypeOf<NonNullable<TreeSlotProps['row']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TreeSlotProps['expandIcon']>['ref']>().toEqualTypeOf<
+      React.Ref<SVGSVGElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TreeSlotProps['indicator']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TreeSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // The items' context carries the same parts.
+    expectTypeOf<FlatTreeContextValue['slotProps']>().toEqualTypeOf<FlatTreeProps['slotProps']>();
+    // FlatTree.Item is the tree's own row: it takes no parts of its own.
+    expectTypeOf<FlatTreeItemProps>().not.toHaveProperty('slotProps');
+    // @ts-expect-error -- a part takes no children: the item draws them
+    void (<Files slotProps={{ label: { children: 'Label' } }} />);
   });
 });

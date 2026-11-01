@@ -10,6 +10,7 @@ import {
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import type { Slot, SlotObject } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { BackdropAppearance, FocusMode, ModalType, MotionSlot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -29,6 +30,7 @@ import type {
 import { DrawerPanel, useDrawerOpen } from '../overlays/Drawer.panel';
 import { scrollSeparatorClasses, useScrollState } from '../overlays/Drawer.scroll';
 import {
+  NAV_SHOWN_PART_LOCKS,
   NavContext,
   NavRovingContext,
   useNavListChildCheck,
@@ -183,7 +185,8 @@ export interface NavDrawerProps
    * the element around an inline drawer's panel (`wave-nav-drawer__collapse`), whose phases the
    * drawer waits for. A `className` that holds `data-[presence=…]` classes while `motion` is unset
    * keeps 0.14's behaviour: no default motion, your classes animate the panel, and the drawer
-   * waits for the panel's motion (inline too, not the element around it). Fluent's
+   * waits for the panel's motion (inline too, not the element around it); development builds log
+   * a warning once, and the rule is removed in 1.0, so pass `motion` instead. Fluent's
    * `OverlayDrawer` and `InlineDrawer` `surfaceMotion`.
    * @default the slide (overlay) or the collapse (inline) above
    */
@@ -211,6 +214,27 @@ export interface NavDrawerProps
   children?: React.ReactNode;
   /** Ref to the panel: the `role="dialog"` element of an overlay drawer, the panel element of an inline one. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the element the drawer draws inside its panel, by part, merged into its own: your
+   * classes after its classes (yours win a conflict), your styles, attributes and handlers added,
+   * your ref beside its ref, and your ids added after its own to `aria-labelledby` and
+   * `aria-describedby`. Every other attribute it sets is locked and keeps the drawer's value. A
+   * part takes no `children`. No part carries a handler of the drawer: yours run as those of the
+   * content do, before the drawer's own handling of the event, which `preventDefault()` in yours
+   * skips as it does in the content (an Escape you prevent keeps an overlay open). The panel
+   * takes the NavDrawer's own props and the backdrop is the `backdrop` slot. Fluent UI has no
+   * such part: its `NavDrawer` is the landmark itself.
+   */
+  slotProps?: {
+    /**
+     * The `<nav>` landmark around `NavDrawer.Header`, `NavDrawer.Body` and `NavDrawer.Footer`
+     * (stable class `wave-nav-drawer__nav`). Locked: its name, the drawer's `aria-label` (unset
+     * while `aria-labelledby` names it; an `aria-labelledby` of yours names it instead of the
+     * `aria-label`), no role (it stays the navigation landmark), no tab index or roving
+     * container's marker, and `hidden`, `inert` and `aria-hidden`, unset (it holds the items).
+     */
+    nav?: SlotPart<'nav'>;
+  };
 }
 
 /** Properties for the NavDrawerHeader sub-component. */
@@ -240,6 +264,25 @@ export interface NavDrawerBodyProps extends React.HTMLAttributes<HTMLDivElement>
   children?: React.ReactNode;
   /** Ref to the scrolling body element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the list inside the body, merged into its own: your classes after its classes
+   * (yours win a conflict), your styles, attributes and handlers added, your ref beside its ref.
+   * It takes no `children` (they are this component's). No handler of the body sits on the list:
+   * its keys and focus are the body's, so yours run first, and `preventDefault()` in your
+   * `onKeyDown` skips the arrow keys of `focusMode="arrow"`, as it does in an item. The body
+   * takes the component's own props. Fluent UI has no such part: its `NavDrawerBody` holds the
+   * items itself.
+   */
+  slotProps?: {
+    /**
+     * The `<ul>` of the items (stable class `wave-nav-drawer-body__list`). Locked: no role (it
+     * stays a list for its list items), no tab index and no roving container's marker (with
+     * `focusMode="arrow"`, a role or a tab index would make the list an entry of the arrow order,
+     * and a composite role or the marker a nested composite that takes the items out of it), and
+     * `hidden`, `inert` and `aria-hidden`, unset (it holds the items).
+     */
+    list?: SlotPart<'ul'>;
+  };
 }
 
 /** Properties for the NavDrawerFooter sub-component. */
@@ -248,6 +291,21 @@ export interface NavDrawerFooterProps extends React.HTMLAttributes<HTMLDivElemen
   children?: React.ReactNode;
   /** Ref to the footer element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the list inside the footer, merged into its own: your classes after its classes
+   * (yours win a conflict), your styles, attributes and handlers added, your ref beside its ref.
+   * It takes no `children` (they are this component's) and carries no handler of the footer. The
+   * footer takes the component's own props. Fluent UI has no such part: its `NavDrawerFooter`
+   * holds the items itself.
+   */
+  slotProps?: {
+    /**
+     * The `<ul>` of the items (stable class `wave-nav-drawer-footer__list`). Locked: no role (it
+     * stays a list for its list items), no tab index (it would add a Tab stop) and no roving
+     * container's marker, and `hidden`, `inert` and `aria-hidden`, unset (it holds the items).
+     */
+    list?: SlotPart<'ul'>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +376,7 @@ const NavDrawerRoot = ({
   id,
   children,
   ref,
+  slotProps,
   ...rest
 }: NavDrawerProps) => {
   const [openState, requestOpen] = useModalOpenState(openProp, defaultOpen, onOpenChange);
@@ -365,6 +424,7 @@ const NavDrawerRoot = ({
 
   // Development only: after every commit, a list item outside the Body's and Footer's lists.
   const navRef = React.useRef<HTMLElement>(null);
+  const navMergedRef = useMergedRefs<HTMLElement>(navRef, slotProps?.nav?.ref);
   React.useEffect(() => {
     if (!isDev || hasWarned(LOOSE_ITEMS_WARNING_KEY)) return;
     const nav = navRef.current;
@@ -406,9 +466,11 @@ const NavDrawerRoot = ({
       ref={ref as React.Ref<HTMLElement> | undefined}
     >
       <nav
-        ref={navRef}
-        {...nameProps}
-        className={cn(navDrawerClassNames.nav, 'flex min-h-0 flex-1 flex-col')}
+        {...mergeSlotProps(slotProps?.nav, {
+          className: cn(navDrawerClassNames.nav, 'flex min-h-0 flex-1 flex-col'),
+          locked: { ...NAV_SHOWN_PART_LOCKS, ...nameProps },
+        })}
+        ref={navMergedRef}
       >
         {children}
       </nav>
@@ -466,6 +528,7 @@ export const NavDrawerBody = ({
   onFocus,
   children,
   ref,
+  slotProps,
   ...rest
 }: NavDrawerBodyProps) => {
   const { scrollState, registerBody } = useNavDrawerLayout('NavDrawer.Body');
@@ -511,6 +574,7 @@ export const NavDrawerBody = ({
   );
   // Development only: every child of the list is an <li> (`NavDrawer.Body:list-child`).
   const listRef = React.useRef<HTMLUListElement>(null);
+  const listMergedRef = useMergedRefs<HTMLUListElement>(listRef, slotProps?.list?.ref);
   useNavListChildCheck(listRef, 'NavDrawer.Body', 'items');
 
   return (
@@ -527,7 +591,13 @@ export const NavDrawerBody = ({
       className={cn(navDrawerBodyClassNames.root, 'min-h-0 flex-1 overflow-y-auto py-2', className)}
     >
       <NavRovingContext.Provider value={arrow ? roving : null}>
-        <ul ref={listRef} className={cn(navDrawerBodyClassNames.list, 'm-0 list-none p-0')}>
+        <ul
+          {...mergeSlotProps(slotProps?.list, {
+            className: cn(navDrawerBodyClassNames.list, 'm-0 list-none p-0'),
+            locked: NAV_SHOWN_PART_LOCKS,
+          })}
+          ref={listMergedRef}
+        >
           {children}
         </ul>
       </NavRovingContext.Provider>
@@ -540,10 +610,17 @@ NavDrawerBody.displayName = 'NavDrawerBody';
  * The list pinned below a NavDrawer's body (Settings, Help): Nav parts as the items of its list,
  * each a Tab stop. Its line above shows while more of the body is below.
  */
-export const NavDrawerFooter = ({ className, children, ref, ...rest }: NavDrawerFooterProps) => {
+export const NavDrawerFooter = ({
+  className,
+  children,
+  ref,
+  slotProps,
+  ...rest
+}: NavDrawerFooterProps) => {
   const { scrollState } = useNavDrawerLayout('NavDrawer.Footer');
   // Development only: every child of the list is an <li> (`NavDrawer.Footer:list-child`).
   const listRef = React.useRef<HTMLUListElement>(null);
+  const listMergedRef = useMergedRefs<HTMLUListElement>(listRef, slotProps?.list?.ref);
   useNavListChildCheck(listRef, 'NavDrawer.Footer', 'items');
   return (
     <div
@@ -557,7 +634,13 @@ export const NavDrawerFooter = ({ className, children, ref, ...rest }: NavDrawer
         className,
       )}
     >
-      <ul ref={listRef} className={cn(navDrawerFooterClassNames.list, 'm-0 list-none p-0')}>
+      <ul
+        {...mergeSlotProps(slotProps?.list, {
+          className: cn(navDrawerFooterClassNames.list, 'm-0 list-none p-0'),
+          locked: NAV_SHOWN_PART_LOCKS,
+        })}
+        ref={listMergedRef}
+      >
         {children}
       </ul>
     </div>

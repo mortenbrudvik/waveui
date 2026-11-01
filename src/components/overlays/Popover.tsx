@@ -4,6 +4,7 @@ import { popoverContentClassNames } from '../../lib/classNames';
 import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { popupMotion } from '../../lib/motion';
 import { slotRendersContent } from '../../lib/slot';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusElement, getFirstTabbable, isConnectedAndFocusable } from '../../lib/focus';
 import type {
@@ -206,6 +207,34 @@ export interface PopoverContentProps extends Omit<React.HTMLAttributes<HTMLDivEl
   motion?: MotionSlot | null;
   /** Ref to the popover surface. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the surface draws besides your content, by part, merged into each
+   * part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref beside its ref. Every attribute the
+   * popover sets on a part is locked and keeps the popover's value; you add the attributes it
+   * does not set. A part takes no `children`. No part carries a handler of the popover: yours
+   * run as those of the content do, before the popover's own handling of the event, which
+   * `preventDefault()` in yours skips as it does in the content (an Escape you prevent keeps the
+   * popover open). The surface takes the Content's own props. Fluent UI has no such parts: its
+   * `PopoverSurface` draws the beak only with `withArrow`, and has no title.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` of the beak, the rotated square on the edge that faces the trigger (stable
+     * class `wave-popover-content__beak`). The positioning places it, and your ref is attached
+     * beside the popover's. Locked: `aria-hidden` (it is a drawing), `tabIndex` (unset: a drawing
+     * is never a tab stop), its marker `data-wave-popover-arrow`, and the keys of its style that
+     * the positioning sets (`position`, `left`, `top` and the offset of the edge it sits on),
+     * which win over yours.
+     */
+    beak?: SlotPart<'div'>;
+    /**
+     * The `<h2>` heading of `title`, rendered while `title` renders content (stable class
+     * `wave-popover-content__title`). Locked: `id`, which the surface's `aria-labelledby` names
+     * (unless you pass `aria-label` or `aria-labelledby`).
+     */
+    title?: SlotPart<'h2'>;
+  };
 }
 
 interface PopoverContextValue {
@@ -904,6 +933,7 @@ export const PopoverContent = ({
   onPointerLeave,
   motion,
   ref,
+  slotProps,
   ...rest
 }: PopoverContentProps) => {
   const {
@@ -933,6 +963,8 @@ export const PopoverContent = ({
   const { isMounted, ref: presenceRef, presenceProps } = usePresence(open, { appear: true });
   const motionClassName = useMotionClasses(motion, popupMotion);
   const elementRef = useMergedRefs<HTMLDivElement>(ref, surfaceElementRef, presenceRef);
+  // The positioning measures the beak: a part's ref goes beside its ref, never in its place.
+  const beakRef = useMergedRefs<HTMLDivElement>(arrowRef, slotProps?.beak?.ref);
   const hasTitle = slotRendersContent(title);
   const unnamed = ariaLabelledBy === undefined && !ariaLabel && !hasTitle;
   // A context region is no popover button, and its whole text is no name: in context mode the
@@ -1014,8 +1046,10 @@ export const PopoverContent = ({
     <>
       {hasTitle && (
         <h2
-          id={titleId}
-          className={cn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold')}
+          {...mergeSlotProps(slotProps?.title, {
+            className: cn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold'),
+            locked: { id: titleId },
+          })}
         >
           {title}
         </h2>
@@ -1023,6 +1057,10 @@ export const PopoverContent = ({
       {children}
     </>
   );
+  const beak = mergeSlotProps(slotProps?.beak, {
+    className: popoverContentClassNames.beak,
+    locked: { 'aria-hidden': 'true', 'data-wave-popover-arrow': '', tabIndex: undefined },
+  });
 
   return (
     <Portal layerId={layerId}>
@@ -1055,11 +1093,10 @@ export const PopoverContent = ({
         )}
       >
         <PopoverBeak
-          ref={arrowRef}
+          {...beak}
+          ref={beakRef}
           side={placedSide}
-          style={arrowStyles}
-          data-wave-popover-arrow=""
-          className={popoverContentClassNames.beak}
+          style={lockPositionStyle(beak.style, arrowStyles)}
         />
         {fitViewport ? (
           // The beak sits half outside the border, so the scroller is inside it: the viewport

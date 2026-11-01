@@ -18,8 +18,11 @@ import { colorAreaClassNames } from '../../../lib/classNames';
 import { hsvToHex } from '../../../lib/color';
 import type { HsvColor } from '../../../lib/types';
 import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
   mockMatchMedia,
   mockRect,
+  openingTags,
   renderWithProviders,
   testSystemProps,
 } from '../../../test-utils';
@@ -803,5 +806,307 @@ describe('ColorArea', () => {
     // @ts-expect-error a color part is rounded or square
     const circular = <ColorArea shape="circular" />;
     expect(circular).toBeTruthy();
+  });
+});
+
+describe('ColorArea — slotProps', () => {
+  type ColorAreaSlotProps = NonNullable<ColorAreaProps['slotProps']>;
+  const EVERY_PART: ColorAreaSlotProps = { field: {}, thumb: {} };
+  const fieldOf = (root: ParentNode) =>
+    root.querySelector<HTMLElement>(`.${colorAreaClassNames.field}`) as HTMLElement;
+  const thumbOf = (root: ParentNode) =>
+    root.querySelector<HTMLElement>(`.${colorAreaClassNames.thumb}`) as HTMLElement;
+  const PRESS = { pointerId: 1, button: 0, isPrimary: true, clientX: 50, clientY: 25 };
+  const CAPTURE_METHODS = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'];
+  let saved: Array<[string, PropertyDescriptor | undefined]> = [];
+
+  beforeEach(() => {
+    // jsdom has no pointer capture: a stand-in that remembers the captured pointer ids.
+    const captured = new WeakMap<Element, Set<number>>();
+    saved = CAPTURE_METHODS.map((name) => [
+      name,
+      Object.getOwnPropertyDescriptor(Element.prototype, name),
+    ]);
+    Object.defineProperties(Element.prototype, {
+      setPointerCapture: {
+        configurable: true,
+        writable: true,
+        value(this: Element, pointerId: number) {
+          captured.set(this, (captured.get(this) ?? new Set<number>()).add(pointerId));
+        },
+      },
+      releasePointerCapture: {
+        configurable: true,
+        writable: true,
+        value(this: Element, pointerId: number) {
+          captured.get(this)?.delete(pointerId);
+        },
+      },
+      hasPointerCapture: {
+        configurable: true,
+        writable: true,
+        value(this: Element, pointerId: number) {
+          return captured.get(this)?.has(pointerId) ?? false;
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(Element.prototype, name, descriptor);
+      else Reflect.deleteProperty(Element.prototype, name);
+    }
+  });
+
+  it('renders the parts of 1f67a85 on the server and in the client (attributes sorted)', () => {
+    // Captured from the dist of 1f67a85: the merged props may put the class before the locked
+    // attributes.
+    const pin = [
+      '<div aria-hidden="true" class="wave-color-area__field absolute inset-0 rounded-[inherit] bg-(image:--wave-color-area-gradient) wave-rtl:-scale-x-100 forced-colors:forced-color-adjust-none">',
+      '<span aria-hidden="true" class="wave-color-area__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] start-(--wave-color-area-x) bottom-(--wave-color-area-y) -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2 group-has-[:focus-visible]/color-area:ring-2 group-has-[:focus-visible]/color-area:ring-background forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas] group-has-[:focus-visible]/color-area:outline-2 group-has-[:focus-visible]/color-area:outline-offset-2 group-has-[:focus-visible]/color-area:outline-ring forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]">',
+    ].join('\n');
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<ColorArea aria-label="Accent" defaultValue={DARK_BLUE} />);
+    expect(openingTags(fieldOf(template.content), thumbOf(template.content))).toBe(pin);
+    render(<ColorArea aria-label="Accent" defaultValue={DARK_BLUE} shape="square" />);
+    expect(openingTags(fieldOf(document), thumbOf(document))).toBe(pin);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: ColorAreaProps[] = [
+      { 'aria-label': 'Accent', defaultValue: DARK_BLUE },
+      { 'aria-label': 'Accent', disabled: true, shape: 'square', name: 'accent', required: true },
+      { 'aria-labelledby': 'name', 'aria-invalid': true, 'aria-errormessage': 'error' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <ColorArea {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    render(
+      <ColorArea
+        aria-label="Accent"
+        slotProps={{
+          field: { className: 'my-field', style: { opacity: 0.5 }, 'data-part': 'field' },
+          thumb: { className: 'my-thumb', style: { opacity: 0.25 }, 'data-part': 'thumb' },
+        }}
+      />,
+    );
+    const root = group();
+    for (const [element, stable, own, mine, part, opacity] of [
+      [fieldOf(root), colorAreaClassNames.field, 'inset-0', 'my-field', 'field', '0.5'],
+      [thumbOf(root), colorAreaClassNames.thumb, 'size-6', 'my-thumb', 'thumb', '0.25'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', part);
+      expect(element).toHaveStyle({ opacity });
+    }
+  });
+
+  it('lets your class replace a conflicting class of the part', () => {
+    render(<ColorArea aria-label="Accent" slotProps={{ field: { className: 'rounded-none' } }} />);
+    const field = fieldOf(group());
+    expect(field).toHaveClass('rounded-none');
+    expect(field).not.toHaveClass('rounded-[inherit]');
+  });
+
+  it('keeps both parts hidden from assistive technology, and adds your other attributes', () => {
+    render(
+      <ColorArea
+        aria-label="Accent"
+        slotProps={{
+          field: { 'aria-hidden': false, title: 'Field' },
+          thumb: { 'aria-hidden': false, title: 'Thumb' },
+        }}
+      />,
+    );
+    const root = group();
+    expect(fieldOf(root)).toHaveAttribute('aria-hidden', 'true');
+    expect(fieldOf(root)).toHaveAttribute('title', 'Field');
+    expect(thumbOf(root)).toHaveAttribute('aria-hidden', 'true');
+    expect(thumbOf(root)).toHaveAttribute('title', 'Thumb');
+  });
+
+  it('keeps both drawings out of the tab order: a part sets no tabIndex on them', () => {
+    render(
+      <ColorArea
+        aria-label="Accent"
+        slotProps={{ field: { tabIndex: 0 }, thumb: { tabIndex: 0 } }}
+      />,
+    );
+    const root = group();
+    expect(fieldOf(root)).not.toHaveAttribute('tabindex');
+    expect(thumbOf(root)).not.toHaveAttribute('tabindex');
+  });
+
+  it('attaches your refs to the parts; the area still measures a press against the field', () => {
+    const field = React.createRef<HTMLDivElement>();
+    const thumb = React.createRef<HTMLSpanElement>();
+    const controlRef = React.createRef<HTMLInputElement>();
+    const onValueChange = vi.fn();
+    render(
+      <ColorArea
+        aria-label="Accent"
+        defaultValue={MIDDLE}
+        onValueChange={onValueChange}
+        controlRef={controlRef}
+        slotProps={{ field: { ref: field }, thumb: { ref: thumb } }}
+      />,
+    );
+    const root = group();
+    expect(field.current).toBe(fieldOf(root));
+    expect(thumb.current).toBe(thumbOf(root));
+    expect(controlRef.current).toBe(saturationInput());
+    mockRect(field.current as Element, { left: 0, top: 0, width: 200, height: 100 });
+    fireEvent.pointerDown(root, PRESS);
+    expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 0.25, v: 0.75 });
+  });
+
+  it('keeps measuring the field while you pass a new inline ref on every render', () => {
+    const elements: Array<HTMLDivElement | null> = [];
+    const onValueChange = vi.fn();
+    const ui = () => (
+      <ColorArea
+        aria-label="Accent"
+        defaultValue={MIDDLE}
+        onValueChange={onValueChange}
+        slotProps={{ field: { ref: (element) => void elements.push(element) } }}
+      />
+    );
+    const { rerender } = render(ui());
+    rerender(ui());
+    const root = group();
+    expect(elements.at(-1)).toBe(fieldOf(root));
+    mockRect(fieldOf(root), { left: 0, top: 0, width: 200, height: 100 });
+    fireEvent.pointerDown(root, PRESS);
+    expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 0.25, v: 0.75 });
+  });
+
+  it('runs your field onPointerDown first, then the area’s onPointerDown and the press', () => {
+    const order: string[] = [];
+    render(
+      <ColorArea
+        aria-label="Accent"
+        defaultValue={MIDDLE}
+        onPointerDown={() => order.push('onPointerDown')}
+        onValueChange={() => order.push('press')}
+        slotProps={{ field: { onPointerDown: () => order.push('part') } }}
+      />,
+    );
+    const root = group();
+    mockRect(fieldOf(root), { left: 0, top: 0, width: 200, height: 100 });
+    fireEvent.pointerDown(fieldOf(root), PRESS);
+    expect(order).toEqual(['part', 'onPointerDown', 'press']);
+    expect(root.hasPointerCapture(1)).toBe(true);
+    expect(saturationInput()).toHaveFocus();
+  });
+
+  it('starts no drag when your part onPointerDown prevents the default', () => {
+    const onPointerDown = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <ColorArea
+        aria-label="Accent"
+        defaultValue={MIDDLE}
+        onPointerDown={onPointerDown}
+        onValueChange={onValueChange}
+        slotProps={{ field: { onPointerDown: (event) => event.preventDefault() } }}
+      />,
+    );
+    const root = group();
+    mockRect(fieldOf(root), { left: 0, top: 0, width: 200, height: 100 });
+    // The field, not the thumb: the drawn thumb takes no pointer events, so a press lands on the
+    // field under it. The area's own prop on its root still runs; the press is cancelled as a
+    // whole.
+    fireEvent.pointerDown(fieldOf(root), PRESS);
+    expect(onPointerDown).toHaveBeenCalledTimes(1);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(root.hasPointerCapture(1)).toBe(false);
+    expect(saturationInput()).not.toHaveFocus();
+    fireEvent.pointerMove(root, { pointerId: 1, clientX: 150, clientY: 50 });
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('calls your part handler and onValueChange once per press in StrictMode', () => {
+    const onPointerDown = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <ColorArea
+          aria-label="Accent"
+          defaultValue={MIDDLE}
+          onValueChange={onValueChange}
+          slotProps={{ field: { onPointerDown } }}
+        />
+      </React.StrictMode>,
+    );
+    const root = group();
+    mockRect(fieldOf(root), { left: 0, top: 0, width: 200, height: 100 });
+    fireEvent.pointerDown(fieldOf(root), PRESS);
+    expect(onPointerDown).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('mirrors a press on the field under dir="rtl" and keeps the mirrored class next to yours', () => {
+    const onValueChange = vi.fn();
+    renderWithProviders(
+      <ColorArea
+        aria-label="Accent"
+        defaultValue={MIDDLE}
+        onValueChange={onValueChange}
+        slotProps={{ field: { className: 'my-field' } }}
+      />,
+      { dir: 'rtl' },
+    );
+    const field = fieldOf(group());
+    expect(field).toHaveClass('wave-rtl:-scale-x-100', 'my-field');
+    mockRect(field, { left: 0, top: 0, width: 200, height: 100 });
+    fireEvent.pointerDown(field, PRESS);
+    expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 0.75, v: 0.75 });
+  });
+
+  it('reaches the parts of an area bound to a ColorPicker', () => {
+    render(
+      <PickerHarness>
+        <ColorArea
+          slotProps={{ field: { className: 'my-field' }, thumb: { className: 'my-thumb' } }}
+        />
+      </PickerHarness>,
+    );
+    const root = group('Saturation and brightness');
+    expect(fieldOf(root)).toHaveClass('my-field');
+    expect(thumbOf(root)).toHaveClass('my-thumb');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <ColorArea
+        aria-label="Accent"
+        slotProps={{
+          field: { className: 'my-field', title: 'Field' },
+          thumb: { className: 'my-thumb' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof ColorAreaSlotProps>().toEqualTypeOf<'field' | 'thumb'>();
+    expectTypeOf<NonNullable<ColorAreaSlotProps['field']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ColorAreaSlotProps['thumb']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the area draws them
+    void (<ColorArea slotProps={{ field: { children: 'Field' } }} />);
   });
 });

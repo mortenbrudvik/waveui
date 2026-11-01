@@ -10,7 +10,13 @@
 export { cn } from './lib/cn';
 export type * from './lib/types';
 export { resolveSlot, renderSlot } from './lib/slot';
-export type { Slot, SlotObject, ResolvedSlot } from './lib/slot';
+export type {
+  Slot,
+  SlotObject,
+  SlotRenderFunction,
+  SlotRenderProps,
+  ResolvedSlot,
+} from './lib/slot';
 export { composeEventHandlers } from './lib/composeEventHandlers';
 export { mergeRefs } from './lib/mergeRefs';
 export type { DismissReason, LayerKind } from './lib/layers';
@@ -54,8 +60,9 @@ export type {
 } from './hooks/useRovingTabIndex';
 export { useMergedRefs } from './hooks/useMergedRefs';
 export { useIsClient } from './hooks/useIsClient';
-export { useFieldControl } from './hooks/useFieldControl';
+export { useFieldControl, useFieldContext, FieldContextProvider } from './hooks/useFieldControl';
 export type {
+  FieldContextProviderProps,
   FieldContextValue,
   FieldControlIdClaim,
   FieldControlProps,
@@ -166,3 +173,11 @@ export * from './components/feedback';
 export * from './components/overlays';
 export * from './components/table';
 export * from './components/motion';
+
+// Native props of a custom slot component (Fluent UI's `getIntrinsicElementProps`).
+export { getNativeElementProps } from './lib/nativeProps';
+export type { NativeElementProps } from './lib/nativeProps';
+
+// Structural parts (`slotProps`): last, so the modules it imports keep their order in a bundle.
+export { mergeSlotProps } from './lib/slotProps';
+export type { SlotPart, SlotPartOwn, SlotPartWithRef } from './lib/slotProps';

@@ -1,8 +1,8 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, MessageBar } from '../src';
-import type { MessageBarProps } from '../src';
+import { Button, MessageBar, useMessageBarContext } from '../src';
+import type { MessageBarContextValue, MessageBarProps } from '../src';
 
 const meta = {
   title: 'Components/Feedback/MessageBar',
@@ -214,4 +214,57 @@ export const RegionNotice: Story = {
       </>
     ),
   },
+};
+
+/** What the action of the story below says in a bar of each status. */
+const STATUS_ACTION_LABELS: Record<MessageBarContextValue['status'], string> = {
+  info: 'Learn more',
+  success: 'View details',
+  warning: 'Review',
+  error: 'Try again',
+};
+
+/**
+ * An action of your own that follows its bar through `useMessageBarContext`: its label and
+ * appearance by the bar's status, its size by the layout the bar renders.
+ */
+function StatusAction({ onAction }: { onAction?: () => void }) {
+  const { status, layout } = useMessageBarContext();
+  return (
+    <Button
+      size={layout === 'multiline' ? 'medium' : 'small'}
+      appearance={status === 'error' || status === 'warning' ? 'primary' : 'outline'}
+      onClick={onAction}
+    >
+      {STATUS_ACTION_LABELS[status]}
+    </Button>
+  );
+}
+
+/**
+ * An action of your own built on `useMessageBarContext`. It reads the bar's `status` ("Try again"
+ * in an error bar, "Review" in a warning bar, both primary; "Learn more" and "View details"
+ * outlined) and the layout the bar renders (a small button on the text's row, a medium one on a row
+ * of its own). Change `status`, or narrow the container (drag its lower corner) until the actions
+ * move under the text.
+ */
+export const StatusAwareAction: Story = {
+  name: 'Status-aware action',
+  args: {
+    status: 'error',
+    children: (
+      <>
+        <MessageBar.Title>Sync failed</MessageBar.Title>Your last three changes were not saved to
+        the server.
+        <MessageBar.Actions>
+          <StatusAction onAction={fn()} />
+        </MessageBar.Actions>
+      </>
+    ),
+  },
+  render: (args) => (
+    <div className="w-[720px] min-w-[240px] max-w-full resize-x overflow-hidden p-1">
+      <MessageBar {...args} />
+    </div>
+  ),
 };

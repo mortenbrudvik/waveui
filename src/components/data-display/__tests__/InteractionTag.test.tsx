@@ -23,9 +23,12 @@ import { focusRing, forcedColors } from '../../../lib/styles';
 import type { TagAppearance, TagShape, TagSize } from '../../../lib/types';
 import {
   asClientReference,
+  expectInertSlotProps,
+  expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
   findDanglingIdRefsInHtml,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
@@ -1203,5 +1206,528 @@ describe('InteractionTag', () => {
       <InteractionTag key="5" value={1} />,
     ];
     expect(elements).toHaveLength(5);
+  });
+});
+
+describe('InteractionTag — slotProps', () => {
+  type PrimarySlotProps = NonNullable<InteractionTagPrimaryProps['slotProps']>;
+  type SecondarySlotProps = NonNullable<InteractionTagSecondaryProps['slotProps']>;
+  const EVERY_PRIMARY_PART: PrimarySlotProps = { primaryText: {}, secondaryText: {} };
+  const EVERY_SECONDARY_PART: SecondarySlotProps = { dismissIcon: {} };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, interactionTagPrimaryClassNames.primaryText),
+    ...all(root, interactionTagPrimaryClassNames.secondaryText),
+    ...all(root, interactionTagSecondaryClassNames.dismissIcon),
+  ];
+
+  /**
+   * A tag with a second line and the default glyph (`glyph` reaches its Secondary), a disabled one
+   * with a text label and one with icon children (`label` reaches their Secondaries).
+   */
+  function Tags({
+    primary: primaryParts,
+    glyph,
+    label = glyph,
+  }: {
+    primary?: PrimarySlotProps;
+    glyph?: SecondarySlotProps;
+    label?: SecondarySlotProps;
+  }) {
+    return (
+      <>
+        <InteractionTag value="c">
+          <InteractionTag.Primary secondaryText="Fruit" slotProps={primaryParts}>
+            Cherry
+          </InteractionTag.Primary>
+          <InteractionTag.Secondary slotProps={glyph} />
+        </InteractionTag>
+        <InteractionTag value="d" disabled>
+          <InteractionTag.Primary slotProps={primaryParts}>Date</InteractionTag.Primary>
+          <InteractionTag.Secondary slotProps={label}>Remove</InteractionTag.Secondary>
+        </InteractionTag>
+        <InteractionTag value="e">
+          <InteractionTag.Secondary slotProps={label}>
+            <span aria-hidden="true">x</span>
+          </InteractionTag.Secondary>
+        </InteractionTag>
+      </>
+    );
+  }
+
+  // Captured from c2b9673's dist (client and server agree).
+  const BASE_PINS = [
+    '<span class="wave-interaction-tag-primary__primary-text text-caption-1 leading-3.5" id="interaction-tag-text-_id0_">',
+    '<span class="wave-interaction-tag-primary__primary-text" id="interaction-tag-text-_id1_">',
+    '<span class="wave-interaction-tag-primary__secondary-text text-caption-2 leading-3">',
+    '<svg aria-hidden="true" class="wave-interaction-tag-secondary__dismiss-icon" data-wave-icon="dismiss" fill="currentColor" focusable="false" height="12" viewBox="0 0 20 20" width="12" xmlns="http://www.w3.org/2000/svg">',
+    '<span class="wave-interaction-tag-secondary__dismiss-icon inline-flex items-center justify-center px-1.5" id="interaction-tag-dismiss-content-_id2_">',
+    '<span class="wave-interaction-tag-secondary__dismiss-icon inline-flex items-center justify-center" id="interaction-tag-dismiss-content-_id3_">',
+  ].join('\n');
+
+  it('renders the parts of c2b9673 (attributes sorted), on the client and the server', () => {
+    for (const [primaryParts, secondaryParts] of [
+      [undefined, undefined],
+      [EVERY_PRIMARY_PART, EVERY_SECONDARY_PART],
+    ] as const) {
+      const ui = <Tags primary={primaryParts} glyph={secondaryParts} />;
+      const view = render(ui);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(ui);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps(
+      (slotProps: PrimarySlotProps | undefined) => <Tags primary={slotProps} />,
+      EVERY_PRIMARY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: SecondarySlotProps | undefined) => <Tags glyph={slotProps} />,
+      EVERY_SECONDARY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: PrimarySlotProps | undefined) => (
+        <TagGroup aria-label="Fruit" value={['plum']} onDismiss={() => {}}>
+          <InteractionTag value="plum">
+            <InteractionTag.Primary secondaryText="Stone fruit" slotProps={slotProps}>
+              Plum
+            </InteractionTag.Primary>
+            <InteractionTag.Secondary />
+          </InteractionTag>
+        </TagGroup>
+      ),
+      EVERY_PRIMARY_PART,
+    );
+  });
+
+  it('puts your className, style, data-* and ref on each part', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    render(
+      <>
+        <InteractionTag>
+          <InteractionTag.Primary
+            secondaryText="Fruit"
+            slotProps={{
+              primaryText: {
+                className: 'my-primary',
+                style: { opacity: 0.5 },
+                'data-part': 'primaryText',
+                ref: collect,
+              },
+              secondaryText: {
+                className: 'my-secondary leading-4',
+                style: { opacity: 0.5 },
+                'data-part': 'secondaryText',
+                ref: collect,
+              },
+            }}
+          >
+            Cherry
+          </InteractionTag.Primary>
+          <InteractionTag.Secondary
+            slotProps={{
+              dismissIcon: {
+                className: 'my-glyph',
+                style: { opacity: 0.5 },
+                'data-part': 'dismissIcon',
+                ref: collect,
+              },
+            }}
+          />
+        </InteractionTag>
+        <InteractionTag>
+          <InteractionTag.Primary>Plum</InteractionTag.Primary>
+          <InteractionTag.Secondary
+            slotProps={{
+              dismissIcon: {
+                className: 'my-glyph items-start',
+                style: { opacity: 0.5 },
+                'data-part': 'dismissIcon',
+                ref: collect,
+              },
+            }}
+          >
+            Remove
+          </InteractionTag.Secondary>
+        </InteractionTag>
+      </>,
+    );
+    const [primaryText] = all(document, interactionTagPrimaryClassNames.primaryText);
+    const [secondaryText] = all(document, interactionTagPrimaryClassNames.secondaryText);
+    const [svg, span] = all(document, interactionTagSecondaryClassNames.dismissIcon);
+    expect(svg.localName).toBe('svg');
+    expect(span.localName).toBe('span');
+    for (const [element, cls, name, mine] of [
+      [primaryText, interactionTagPrimaryClassNames.primaryText, 'primaryText', 'my-primary'],
+      [
+        secondaryText,
+        interactionTagPrimaryClassNames.secondaryText,
+        'secondaryText',
+        'my-secondary',
+      ],
+      [svg, interactionTagSecondaryClassNames.dismissIcon, 'dismissIcon', 'my-glyph'],
+      [span, interactionTagSecondaryClassNames.dismissIcon, 'dismissIcon', 'my-glyph'],
+    ] as const) {
+      expect(element.classList[0]).toBe(cls);
+      expect(element).toHaveClass(mine);
+      expect(element).toHaveAttribute('data-part', name);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(refs).toContain(element);
+    }
+    // Your class replaces a conflicting one of the part.
+    expect(secondaryText).not.toHaveClass('leading-3');
+    expect(span).not.toHaveClass('items-center');
+    expect(refs).toHaveLength(4);
+  });
+
+  it('locks the attributes the tag sets and the markers it reads', () => {
+    const textAttempt = {
+      role: 'button',
+      tabIndex: 0,
+      'aria-label': 'Mine',
+      'data-roving-container': '',
+      'data-wave-tag-item': 'mine',
+      'data-wave-tag-dismiss': 'mine',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as PrimarySlotProps['primaryText'];
+    const glyphAttempt = {
+      role: 'img',
+      tabIndex: 0,
+      'aria-hidden': false,
+      focusable: 'true',
+    } as unknown as SecondarySlotProps['dismissIcon'];
+    render(
+      <Tags
+        primary={{ primaryText: { ...textAttempt, id: 'mine' }, secondaryText: textAttempt }}
+        glyph={{ dismissIcon: glyphAttempt }}
+        label={{ dismissIcon: { ...textAttempt, id: 'mine-too' } }}
+      />,
+    );
+    expect(openingTags(...partsOf())).toBe(BASE_PINS);
+    expect(secondary('Remove Date')).toBeInTheDocument();
+  });
+
+  /** InteractionTags in a toolbar TagGroup that removes the dismissed one. */
+  function Fruits({ slotProps }: { slotProps?: PrimarySlotProps }) {
+    const [fruits, setFruits] = React.useState(['Cherry', 'Plum', 'Fig']);
+    return (
+      <TagGroup
+        aria-label="Fruit"
+        onDismiss={(value) => setFruits((current) => current.filter((f) => f !== value))}
+      >
+        {fruits.map((fruit) => (
+          <InteractionTag key={fruit} value={fruit}>
+            <InteractionTag.Primary slotProps={slotProps}>{fruit}</InteractionTag.Primary>
+            <InteractionTag.Secondary />
+          </InteractionTag>
+        ))}
+      </TagGroup>
+    );
+  }
+
+  it("keeps the group's arrow order, and focus after a removal on the Dismiss buttons", async () => {
+    const user = userEvent.setup();
+    const attempt = {
+      tabIndex: 0,
+      'data-wave-tag-item': '',
+      'data-wave-tag-dismiss': '',
+    } as unknown as PrimarySlotProps['primaryText'];
+    render(<Fruits slotProps={{ primaryText: attempt, secondaryText: attempt }} />);
+    const group = screen.getByRole('toolbar', { name: 'Fruit' });
+    expect(group.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    await user.tab();
+    expect(primary('Cherry')).toHaveFocus();
+    const order: Element[] = [];
+    for (let step = 0; step < 6; step++) {
+      await user.keyboard('{ArrowRight}');
+      order.push(document.activeElement as Element);
+    }
+    expect(order).toEqual([
+      secondary('Dismiss Cherry'),
+      primary('Plum'),
+      secondary('Dismiss Plum'),
+      primary('Fig'),
+      secondary('Dismiss Fig'),
+      primary('Cherry'),
+    ]);
+    // The removed tag's Secondary hands focus to the next tag's Secondary, not its Primary.
+    act(() => secondary('Dismiss Plum').focus());
+    await user.keyboard('{Delete}');
+    await act(async () => {});
+    expect(screen.queryByText('Plum')).toBeNull();
+    expect(secondary('Dismiss Fig')).toHaveFocus();
+  });
+
+  it('runs your part handlers before the buttons: preventDefault() skips the toggle and the dismissal', () => {
+    const order: string[] = [];
+    const ui = (prevent: boolean) => (
+      <TagGroup
+        aria-label="Fruit"
+        defaultValue={[]}
+        onValueChange={(value) => void order.push(`select ${value.join()}`)}
+        onDismiss={() => void order.push('group')}
+      >
+        <InteractionTag value="cherry">
+          <InteractionTag.Primary
+            onClick={() => void order.push('primary')}
+            slotProps={{
+              primaryText: {
+                onClick: (event) => {
+                  order.push('primaryText');
+                  if (prevent) event.preventDefault();
+                },
+              },
+            }}
+          >
+            Cherry
+          </InteractionTag.Primary>
+          <InteractionTag.Secondary
+            onClick={() => void order.push('secondary')}
+            slotProps={{
+              dismissIcon: {
+                onClick: (event) => {
+                  order.push('dismissIcon');
+                  if (prevent) event.preventDefault();
+                },
+              },
+            }}
+          />
+        </InteractionTag>
+      </TagGroup>
+    );
+    const { rerender } = render(ui(false));
+    const glyph = () => all(document, interactionTagSecondaryClassNames.dismissIcon)[0];
+    fireEvent.click(screen.getByText('Cherry'));
+    fireEvent.click(glyph());
+    // The dismissal reports the value, then takes it out of the selection.
+    expect(order).toEqual([
+      'primaryText',
+      'primary',
+      'select cherry',
+      'dismissIcon',
+      'secondary',
+      'group',
+      'select ',
+    ]);
+    order.length = 0;
+    rerender(ui(true));
+    fireEvent.click(screen.getByText('Cherry'));
+    fireEvent.click(glyph());
+    expect(order).toEqual(['primaryText', 'primary', 'dismissIcon', 'secondary']);
+  });
+
+  it.each([
+    ['a disabled', { disabled: true }, 0],
+    ['an enabled', {}, 1],
+  ] as const)(
+    'calls your part onClick on %s tag as its buttons call their own',
+    (_, props, calls) => {
+      const parts = {
+        primaryText: vi.fn(),
+        secondaryText: vi.fn(),
+        dismissIcon: vi.fn(),
+        label: vi.fn(),
+      };
+      render(
+        <>
+          <InteractionTag {...props}>
+            <InteractionTag.Primary
+              secondaryText="Fruit"
+              slotProps={{
+                primaryText: { onClick: parts.primaryText },
+                secondaryText: { onClick: parts.secondaryText },
+              }}
+            >
+              Cherry
+            </InteractionTag.Primary>
+            <InteractionTag.Secondary slotProps={{ dismissIcon: { onClick: parts.dismissIcon } }} />
+          </InteractionTag>
+          <InteractionTag {...props}>
+            <InteractionTag.Primary>Plum</InteractionTag.Primary>
+            <InteractionTag.Secondary slotProps={{ dismissIcon: { onClick: parts.label } }}>
+              Remove
+            </InteractionTag.Secondary>
+          </InteractionTag>
+        </>,
+      );
+      fireEvent.click(screen.getByText('Cherry'));
+      fireEvent.click(screen.getByText('Fruit'));
+      for (const glyph of all(document, interactionTagSecondaryClassNames.dismissIcon)) {
+        fireEvent.click(glyph);
+      }
+      for (const handler of Object.values(parts)) expect(handler).toHaveBeenCalledTimes(calls);
+    },
+  );
+
+  it('does not call your part onClick on buttons held unavailable while they keep focus', async () => {
+    const user = userEvent.setup();
+    const primaryText = vi.fn();
+    const dismissIcon = vi.fn();
+    const ui = (disabled: boolean) => (
+      <InteractionTag disabled={disabled}>
+        <InteractionTag.Primary slotProps={{ primaryText: { onClick: primaryText } }}>
+          Cherry
+        </InteractionTag.Primary>
+        <InteractionTag.Secondary slotProps={{ dismissIcon: { onClick: dismissIcon } }} />
+      </InteractionTag>
+    );
+    const { rerender } = render(ui(false));
+    await user.tab();
+    expect(primary()).toHaveFocus();
+    rerender(ui(true));
+    expect(primary()).toHaveAttribute('data-disabled-focusable', '');
+    fireEvent.click(screen.getByText('Cherry'));
+    expect(primaryText).not.toHaveBeenCalled();
+    expect(secondary()).toBeDisabled();
+    fireEvent.click(all(document, interactionTagSecondaryClassNames.dismissIcon)[0]);
+    expect(dismissIcon).not.toHaveBeenCalled();
+  });
+
+  it('keeps naming the Secondary by its children while a new inline ref arrives on every render', async () => {
+    const setTextRef = React.createRef<(text: string) => void>();
+    function LateText({ ref }: { ref: React.Ref<(text: string) => void> }) {
+      const [text, setText] = React.useState('');
+      React.useImperativeHandle(ref, () => setText, []);
+      return <>{text}</>;
+    }
+    const seen: Element[] = [];
+    function Plum() {
+      return (
+        <InteractionTag>
+          <InteractionTag.Primary>Plum</InteractionTag.Primary>
+          <InteractionTag.Secondary
+            slotProps={{ dismissIcon: { ref: (node) => void (node && seen.push(node)) } }}
+          >
+            <Glyph />
+            <LateText ref={setTextRef} />
+          </InteractionTag.Secondary>
+        </InteractionTag>
+      );
+    }
+    const { rerender } = render(<Plum />);
+    rerender(<Plum />);
+    const plum = secondary('Dismiss Plum');
+    expect(seen.length).toBeGreaterThan(0);
+    expect(
+      seen.every(
+        (node) => node === all(document, interactionTagSecondaryClassNames.dismissIcon)[0],
+      ),
+    ).toBe(true);
+    act(() => setTextRef.current?.('Delete'));
+    await waitFor(() => expect(plum).toHaveAccessibleName('Delete Plum'));
+  });
+
+  it('ignores the parts a Primary without a second line does not draw', () => {
+    const error = vi.spyOn(console, 'error');
+    render(
+      <InteractionTag>
+        <InteractionTag.Primary slotProps={{ secondaryText: { className: 'my-secondary' } }}>
+          Cherry
+        </InteractionTag.Primary>
+      </InteractionTag>,
+    );
+    expect(all(document, interactionTagPrimaryClassNames.secondaryText)).toHaveLength(0);
+    expect(document.querySelector('.my-secondary')).toBeNull();
+    expect(primary()).not.toHaveAttribute('slotprops');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const primaryText = vi.fn();
+    const dismissIcon = vi.fn();
+    const onClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <InteractionTag>
+          <InteractionTag.Primary slotProps={{ primaryText: { onClick: primaryText } }}>
+            Cherry
+          </InteractionTag.Primary>
+          <InteractionTag.Secondary
+            onClick={onClick}
+            slotProps={{ dismissIcon: { onClick: dismissIcon } }}
+          >
+            Remove
+          </InteractionTag.Secondary>
+        </InteractionTag>
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByText('Cherry'));
+    await user.click(screen.getByText('Remove'));
+    expect(primaryText).toHaveBeenCalledTimes(1);
+    expect(dismissIcon).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the parts and the mirrored arrow keys of a right-to-left group', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <TagGroup aria-label="Fruit">
+        <InteractionTag value="cherry">
+          <InteractionTag.Primary slotProps={{ primaryText: { className: 'my-primary' } }}>
+            Cherry
+          </InteractionTag.Primary>
+          <InteractionTag.Secondary slotProps={{ dismissIcon: { className: 'my-glyph' } }} />
+        </InteractionTag>
+      </TagGroup>,
+      { dir: 'rtl' },
+    );
+    expect(all(document, interactionTagPrimaryClassNames.primaryText)[0]).toHaveClass('my-primary');
+    expect(all(document, interactionTagSecondaryClassNames.dismissIcon)[0]).toHaveClass('my-glyph');
+    await user.tab();
+    await user.keyboard('{ArrowLeft}');
+    expect(secondary()).toHaveFocus();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <>
+        <p id="fruit-note">Selected fruit is shown first</p>
+        <TagGroup aria-label="Fruit" defaultValue={['cherry']}>
+          <InteractionTag value="cherry">
+            <InteractionTag.Primary
+              secondaryText="Stone fruit"
+              slotProps={{
+                primaryText: { className: 'my-primary', lang: 'en' },
+                secondaryText: { className: 'my-secondary', 'aria-describedby': 'fruit-note' },
+              }}
+            >
+              Cherry
+            </InteractionTag.Primary>
+            <InteractionTag.Secondary slotProps={{ dismissIcon: { className: 'my-glyph' } }}>
+              Remove
+            </InteractionTag.Secondary>
+          </InteractionTag>
+        </TagGroup>
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof PrimarySlotProps>().toEqualTypeOf<'primaryText' | 'secondaryText'>();
+    expectTypeOf<keyof SecondarySlotProps>().toEqualTypeOf<'dismissIcon'>();
+    expectTypeOf<NonNullable<PrimarySlotProps['primaryText']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<PrimarySlotProps['secondaryText']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<SecondarySlotProps['dismissIcon']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement | SVGSVGElement> | undefined
+    >();
+    // @ts-expect-error -- the Primary draws its text
+    const text: PrimarySlotProps = { primaryText: { children: 'x' } };
+    // @ts-expect-error -- the Secondary's children are the glyph's content
+    const glyph: SecondarySlotProps = { dismissIcon: { children: 'x' } };
+    expect([text, glyph]).toHaveLength(2);
   });
 });

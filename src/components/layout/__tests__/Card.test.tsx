@@ -3,6 +3,7 @@ import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { cardClassNames, cardHeaderClassNames } from '../../../lib/classNames';
 import { FOCUSABLE_SELECTOR } from '../../../lib/focus';
 import { renderToString } from 'react-dom/server';
 import { Card, CardBody, CardFooter, CardHeader, CardPreview } from '../Card';
@@ -17,7 +18,9 @@ import type {
 import {
   asClientReference,
   axe,
+  expectInertSlotProps,
   expectNoA11yViolations,
+  openingTags,
   testCompoundExposure,
   testComposedHandler,
   testSystemProps,
@@ -903,9 +906,10 @@ describe('Card', () => {
         | 'orientation'
         | 'checkbox'
         | 'floatingAction'
+        | 'slotProps'
       >();
       expectTypeOf<keyof CardHeaderOwnProps>().toEqualTypeOf<
-        'title' | 'subtitle' | 'image' | 'action'
+        'title' | 'subtitle' | 'image' | 'action' | 'slotProps'
       >();
       expectTypeOf<CardHeaderProps['title']>().toEqualTypeOf<React.ReactNode>();
     });
@@ -1288,6 +1292,42 @@ describe('Card composition', () => {
       expect(box).toHaveAttribute('type', 'checkbox');
     });
 
+    it('drops the children of a checkbox slot object: an `<input>` takes none (P13-01)', () => {
+      const error = vi.spyOn(console, 'error');
+      const renderFn = vi.fn(() => null);
+      const { rerender } = render(
+        <Card
+          selectionControl="checkbox"
+          onSelect={() => {}}
+          selectLabel="Pick"
+          checkbox={
+            { className: 'custom-box', children: 'text' } as unknown as CardProps['checkbox']
+          }
+        >
+          x
+        </Card>,
+      );
+      expect(screen.getByRole('checkbox', { name: 'Pick' })).toHaveClass('custom-box');
+      rerender(
+        <Card
+          selectionControl="checkbox"
+          onSelect={() => {}}
+          selectLabel="Pick"
+          checkbox={
+            { className: 'custom-box', children: renderFn } as unknown as CardProps['checkbox']
+          }
+        >
+          x
+        </Card>,
+      );
+      expect(screen.getByRole('checkbox', { name: 'Pick' })).toHaveClass('custom-box');
+      expect(renderFn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+      // @ts-expect-error — the checkbox object takes no children
+      const typed: CardProps['checkbox'] = { children: 'text' };
+      expect(typed).toBeDefined();
+    });
+
     it('checkbox={null} removes the built-in control, with no role on the card and no warning', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
@@ -1393,5 +1433,322 @@ describe('Card composition', () => {
       );
       await expectNoA11yViolations(container);
     });
+  });
+});
+
+describe('Card and Card.Header — slotProps', () => {
+  type CardSlotProps = NonNullable<CardProps['slotProps']>;
+  type HeaderSlotProps = NonNullable<CardHeaderProps['slotProps']>;
+  const HEADER_PARTS: HeaderSlotProps = { text: {}, title: {}, subtitle: {} };
+  const noop = () => {};
+
+  /**
+   * A selected card in the default mode, whose header has no image or action (no text column),
+   * and a selected checkbox card, whose header has both (and names the checkbox by its title).
+   */
+  function Cards({
+    card,
+    header,
+    onSelect = noop,
+    onClick,
+  }: {
+    card?: CardSlotProps;
+    header?: HeaderSlotProps;
+    onSelect?: () => void;
+    onClick?: React.MouseEventHandler<HTMLElement>;
+  }) {
+    return (
+      <>
+        <Card selected onSelect={onSelect} onClick={onClick} slotProps={card}>
+          <Card.Header title="Plan" subtitle="Monthly" slotProps={header} />
+        </Card>
+        <Card selected onSelect={noop} selectionControl="checkbox" slotProps={card}>
+          <Card.Header
+            title="Pro"
+            subtitle="Yearly"
+            image={<span>I</span>}
+            action={<button type="button">More</button>}
+            slotProps={header}
+          />
+        </Card>
+      </>
+    );
+  }
+  const all = <E extends Element = HTMLElement>(root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<E>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, cardClassNames.checkmark),
+    ...all(root, cardHeaderClassNames.text),
+    ...all(root, cardHeaderClassNames.title),
+    ...all(root, cardHeaderClassNames.subtitle),
+  ];
+
+  // Captured from 112d7f8's dist (client and server agree).
+  const BASE_PINS = [
+    '<svg aria-hidden="true" class="wave-card__checkmark absolute end-2 top-2 text-primary" data-wave-icon="check" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+    '<div class="wave-card-header__text">',
+    '<div class="wave-card-header__title text-subtitle-1">',
+    '<div class="wave-card-header__title text-subtitle-1" id="card-title-_id0_">',
+    '<div class="wave-card-header__subtitle text-caption-1 text-muted-foreground">',
+    '<div class="wave-card-header__subtitle text-caption-1 text-muted-foreground">',
+  ].join('\n');
+
+  it('renders the parts of 112d7f8 (attributes sorted), on the client and the server', () => {
+    for (const [card, header] of [
+      [undefined, undefined],
+      [{ checkmark: {} }, HEADER_PARTS],
+    ] as const) {
+      const view = render(<Cards card={card} header={header} />);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Cards card={card} header={header} />);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps((card: CardSlotProps | undefined) => <Cards card={card} />, {
+      checkmark: {},
+    });
+    expectInertSlotProps(
+      (header: HeaderSlotProps | undefined) => <Cards header={header} />,
+      HEADER_PARTS,
+    );
+  });
+
+  it('puts your className, style, data-* and ref on each part', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    render(
+      <Cards
+        card={{
+          checkmark: {
+            className: 'my-checkmark top-4',
+            style: { opacity: 0.5 },
+            'data-part': 'checkmark',
+            ref: collect,
+          },
+        }}
+        header={{
+          text: {
+            className: 'my-text',
+            style: { opacity: 0.5 },
+            'data-part': 'text',
+            ref: collect,
+          },
+          title: {
+            className: 'my-title text-body-1',
+            style: { opacity: 0.5 },
+            'data-part': 'title',
+            ref: collect,
+          },
+          subtitle: {
+            className: 'my-subtitle text-foreground',
+            style: { opacity: 0.5 },
+            'data-part': 'subtitle',
+            ref: collect,
+          },
+        }}
+      />,
+    );
+    for (const [cls, name, conflict, count] of [
+      [cardClassNames.checkmark, 'checkmark', 'top-2', 1],
+      [cardHeaderClassNames.text, 'text', undefined, 1],
+      [cardHeaderClassNames.title, 'title', 'text-subtitle-1', 2],
+      [cardHeaderClassNames.subtitle, 'subtitle', 'text-muted-foreground', 2],
+    ] as const) {
+      const elements = all<Element>(document, cls);
+      expect(elements).toHaveLength(count);
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(cls);
+        expect(element).toHaveClass(`my-${name}`);
+        // Your class replaces a conflicting one of the part.
+        if (conflict) expect(element).not.toHaveClass(conflict);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+        expect(refs).toContain(element);
+      }
+    }
+    expect(refs).toHaveLength(6);
+    // The roots take none of it.
+    for (const root of all(document, cardClassNames.root)) {
+      expect(root).not.toHaveAttribute('data-part');
+    }
+  });
+
+  it('keeps the check glyph decorative, and the selection on the card', () => {
+    const attempt = {
+      role: 'img',
+      tabIndex: 0,
+      'aria-hidden': false,
+      focusable: 'true',
+    } as unknown as CardSlotProps['checkmark'];
+    render(<Cards card={{ checkmark: attempt }} />);
+    const [checkmark] = all(document, cardClassNames.checkmark);
+    expect(checkmark).toHaveAttribute('aria-hidden', 'true');
+    expect(checkmark).toHaveAttribute('focusable', 'false');
+    expect(checkmark).not.toHaveAttribute('role');
+    expect(checkmark).not.toHaveAttribute('tabindex');
+    expect(screen.getByRole('button', { name: 'Plan Monthly' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('runs your glyph handler before the card: preventDefault() skips onSelect, the card onClick still runs', () => {
+    const order: string[] = [];
+    const onSelect = vi.fn(() => void order.push('select'));
+    const onClick = vi.fn(() => void order.push('card'));
+    const { rerender } = render(
+      <Cards
+        onSelect={onSelect}
+        onClick={onClick}
+        card={{ checkmark: { onClick: () => void order.push('glyph') } }}
+      />,
+    );
+    const [checkmark] = all(document, cardClassNames.checkmark);
+    fireEvent.click(checkmark);
+    expect(order).toEqual(['glyph', 'card', 'select']);
+    rerender(
+      <Cards
+        onSelect={onSelect}
+        onClick={onClick}
+        card={{ checkmark: { onClick: (event) => event.preventDefault() } }}
+      />,
+    );
+    fireEvent.click(checkmark);
+    expect(onClick).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const checkmark = vi.fn();
+    const title = vi.fn();
+    render(
+      <React.StrictMode>
+        <Cards
+          onSelect={onSelect}
+          card={{ checkmark: { onClick: checkmark } }}
+          header={{ title: { onClick: title } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(all(document, cardClassNames.checkmark)[0]);
+    await user.click(screen.getByText('Plan'));
+    expect(checkmark).toHaveBeenCalledTimes(1);
+    expect(title).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a part the card or the header does not draw', () => {
+    const checkmark = { className: 'my-checkmark' };
+    const { rerender } = render(
+      <Card slotProps={{ checkmark }}>
+        <Card.Header title="Plan" slotProps={{ text: { className: 'my-text' }, subtitle: {} }} />
+      </Card>,
+    );
+    // Not selected: no glyph; no image or action: no text column; no subtitle.
+    expect(all(document, cardClassNames.checkmark)).toHaveLength(0);
+    expect(all(document, cardHeaderClassNames.text)).toHaveLength(0);
+    expect(all(document, cardHeaderClassNames.subtitle)).toHaveLength(0);
+    expect(document.querySelector('.my-text')).toBeNull();
+    // A checkbox card shows the checkbox instead of the glyph.
+    rerender(
+      <Card selected onSelect={() => {}} selectionControl="checkbox" slotProps={{ checkmark }}>
+        <Card.Header title="Plan" />
+      </Card>,
+    );
+    expect(all(document, cardClassNames.checkmark)).toHaveLength(0);
+    expect(screen.getByRole('checkbox', { name: 'Plan' })).toBeChecked();
+  });
+
+  it('locks the role, name and hidden state of the text parts, and the title id in a checkbox card', () => {
+    const attempt = {
+      role: 'heading',
+      id: 'mine',
+      'aria-label': 'Replaced',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as HeaderSlotProps['title'];
+    render(<Cards header={{ text: attempt, title: attempt, subtitle: attempt }} />);
+    for (const cls of [
+      cardHeaderClassNames.text,
+      cardHeaderClassNames.title,
+      cardHeaderClassNames.subtitle,
+    ]) {
+      for (const element of all(document, cls)) {
+        for (const name of ['role', 'aria-label', 'hidden', 'inert', 'aria-hidden']) {
+          expect(element).not.toHaveAttribute(name);
+        }
+      }
+    }
+    // The title of the checkbox card keeps the id its checkbox names.
+    const checkbox = screen.getByRole('checkbox', { name: 'Pro' });
+    const titles = all(document, cardHeaderClassNames.title);
+    expect(checkbox).toHaveAttribute('aria-labelledby', titles[1].id);
+    expect(titles[1].id).not.toBe('mine');
+    expect(screen.getByRole('button', { name: 'Plan Monthly' })).toBeInTheDocument();
+  });
+
+  it('gives the title your id where no checkbox names it', () => {
+    render(
+      <Card>
+        <Card.Header title="Plan" slotProps={{ title: { id: 'plan-title' } }} />
+      </Card>,
+    );
+    expect(all(document, cardHeaderClassNames.title)[0]).toHaveAttribute('id', 'plan-title');
+  });
+
+  it('adds your ids to the aria-describedby of a text part', () => {
+    render(
+      <>
+        <span id="note">Note</span>
+        <Card>
+          <Card.Header title="Plan" slotProps={{ title: { 'aria-describedby': 'note' } }} />
+        </Card>
+      </>,
+    );
+    expect(all(document, cardHeaderClassNames.title)[0]).toHaveAttribute(
+      'aria-describedby',
+      'note',
+    );
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Cards
+        card={{ checkmark: { className: 'my-checkmark' } }}
+        header={{
+          text: { className: 'my-text' },
+          title: { className: 'my-title', lang: 'en' },
+          subtitle: { className: 'my-subtitle' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof CardSlotProps>().toEqualTypeOf<'checkmark'>();
+    expectTypeOf<keyof HeaderSlotProps>().toEqualTypeOf<'text' | 'title' | 'subtitle'>();
+    expectTypeOf<NonNullable<CardSlotProps['checkmark']>['ref']>().toEqualTypeOf<
+      React.Ref<SVGSVGElement> | undefined
+    >();
+    expectTypeOf<NonNullable<HeaderSlotProps['title']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<CardProps<'a'>['slotProps']>().toEqualTypeOf<CardOwnProps['slotProps']>();
+    expectTypeOf<CardHeaderProps<'h3'>['slotProps']>().toEqualTypeOf<
+      CardHeaderOwnProps['slotProps']
+    >();
+    // @ts-expect-error -- the header draws the content of the title
+    const header: HeaderSlotProps = { title: { children: 'x' } };
+    // @ts-expect-error -- the card draws the glyph
+    const card: CardSlotProps = { checkmark: { children: 'x' } };
+    expect([header, card]).toHaveLength(2);
   });
 });

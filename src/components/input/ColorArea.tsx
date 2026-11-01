@@ -5,6 +5,7 @@ import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { isOwnEvent } from '../../lib/events';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { ColorPickerShape, HsvColor } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -91,6 +92,32 @@ export interface ColorAreaProps extends Omit<
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the root `role="group"` element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the area draws inside its root, by part, merged into each part's own
+   * (Fluent UI's `thumb` slot prop; Fluent draws its field on the root): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers and attributes
+   * added, your ref beside its ref. Every attribute the area sets on a part is locked. A part
+   * takes no `children`. Both parts are drawn only: the two range inputs are the sliders, reached
+   * through the area's own props and `controlRef`. The area handles the pointer and the keys on
+   * its root, so an event on a part reaches your handler first: `preventDefault()` in your
+   * `onPointerDown` cancels that press (the thumb stays, no drag starts), while the area's own
+   * `onPointerDown`, a prop of its root, still runs.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` that draws the color field, the gradient a press or a drag is measured against
+     * (stable class `wave-color-area__field`). Locked: `aria-hidden`, which keeps the drawing
+     * out of the accessibility tree, and `tabIndex` (unset: a drawing is never a tab stop).
+     */
+    field?: SlotPart<'div'>;
+    /**
+     * The `<span>` of the drawn thumb, placed at the value (stable class
+     * `wave-color-area__thumb`). It takes no pointer events, so a press over it lands on the
+     * field and reaches the `field` part's handlers, not this part's (unless a class of yours
+     * gives it pointer events back). Locked: `aria-hidden`, and `tabIndex` (unset).
+     */
+    thumb?: SlotPart<'span'>;
+  };
 }
 
 /** The two axes: saturation (x) and brightness (y, the `value` channel). */
@@ -151,6 +178,7 @@ export const ColorArea = ({
   onPointerDown,
   onPointerMove,
   ref,
+  slotProps,
   ...rest
 }: ColorAreaProps) => {
   const part = useColorPartState({ value, defaultValue, onValueChange, disabled });
@@ -188,6 +216,7 @@ export const ColorArea = ({
   const brightnessRef = React.useRef<HTMLInputElement>(null);
   const mergedRootRef = useMergedRefs(ref, rootRef);
   const mergedSaturationRef = useMergedRefs(saturationRef, controlRef);
+  const mergedFieldRef = useMergedRefs(fieldRef, slotProps?.field?.ref);
   /** The last `focusToken` this component already moved focus for (read/written in the effect only). */
   const handledFocusTokenRef = React.useRef(0);
 
@@ -403,21 +432,26 @@ export const ColorArea = ({
       onPointerMove={handlePointerMove}
     >
       <div
-        ref={fieldRef}
-        aria-hidden="true"
-        className={cn(
-          colorAreaClassNames.field,
-          'absolute inset-0 rounded-[inherit] bg-(image:--wave-color-area-gradient) wave-rtl:-scale-x-100 forced-colors:forced-color-adjust-none',
-        )}
+        {...mergeSlotProps(slotProps?.field, {
+          className: cn(
+            colorAreaClassNames.field,
+            'absolute inset-0 rounded-[inherit] bg-(image:--wave-color-area-gradient) wave-rtl:-scale-x-100 forced-colors:forced-color-adjust-none',
+          ),
+          locked: { 'aria-hidden': 'true', tabIndex: undefined },
+        })}
+        // The pointer is measured against the field: a part's inline ref never detaches it.
+        ref={mergedFieldRef}
       />
       <span
-        aria-hidden="true"
-        className={cn(
-          colorAreaClassNames.thumb,
-          COLOR_THUMB_CLASSES,
-          'start-(--wave-color-area-x) bottom-(--wave-color-area-y) -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2',
-          'group-has-[:focus-visible]/color-area:ring-2 group-has-[:focus-visible]/color-area:ring-background forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas] group-has-[:focus-visible]/color-area:outline-2 group-has-[:focus-visible]/color-area:outline-offset-2 group-has-[:focus-visible]/color-area:outline-ring forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]',
-        )}
+        {...mergeSlotProps(slotProps?.thumb, {
+          className: cn(
+            colorAreaClassNames.thumb,
+            COLOR_THUMB_CLASSES,
+            'start-(--wave-color-area-x) bottom-(--wave-color-area-y) -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2',
+            'group-has-[:focus-visible]/color-area:ring-2 group-has-[:focus-visible]/color-area:ring-background forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas] group-has-[:focus-visible]/color-area:outline-2 group-has-[:focus-visible]/color-area:outline-offset-2 group-has-[:focus-visible]/color-area:outline-ring forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]',
+          ),
+          locked: { 'aria-hidden': 'true', tabIndex: undefined },
+        })}
       />
       <input
         {...inputProps('saturation')}

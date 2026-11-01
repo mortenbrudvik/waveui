@@ -2,7 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { badgeClassNames, counterBadgeClassNames } from '../../lib/classNames';
 import type { BadgeColor } from '../../lib/types';
-import { badgeColorClasses } from './Badge.colors';
+import { badgeColorClasses, warnImportantColor } from './Badge.colors';
 
 /** Properties for the CounterBadge component. */
 export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -23,8 +23,9 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
   /**
    * Semantic color, from Badge's palette: `brand`, `danger`, `important`, `informative`, `severe`,
    * `subtle`, `success`, `warning`. `important` follows Badge (see `BadgeProps.color`): it renders
-   * the severe (orange) colors in 0.x and becomes a neutral high-emphasis color in 1.0. A value
-   * outside the palette (from untyped code) renders as `brand`.
+   * the severe (orange) colors in 0.x and becomes a neutral high-emphasis color in 1.0; development
+   * builds log a warning once (pass `severe` to keep the orange look). A value outside the palette
+   * (from untyped code) renders as `brand`.
    * @default 'brand'
    */
   color?: BadgeColor;
@@ -77,6 +78,13 @@ export const CounterBadge = ({
   ref,
   ...props
 }: CounterBadgeProps) => {
+  const rendersBadge = dot || (count >= 0 && (count !== 0 || showZero));
+
+  // C-DEV: `important` changes meaning in 1.0; only a badge that draws is affected.
+  React.useEffect(() => {
+    if (color === 'important' && rendersBadge) warnImportantColor('CounterBadge');
+  }, [color, rendersBadge]);
+
   if (!dot && (count < 0 || (count === 0 && !showZero))) return null;
 
   // Before 0.6 `color` was the span's HTML attribute (any string): a value outside the palette

@@ -14,12 +14,16 @@ import {
 import { Option, OptionGroup } from '../Combobox';
 import {
   asClientReference,
+  expectInertSlotProps,
+  expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
   testSystemProps,
 } from '../../../test-utils';
+import { dropdownClassNames } from '../../../lib/classNames';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { __getAnnouncerText, __resetAnnouncer } from '../../../hooks/useAnnounce';
@@ -2078,5 +2082,486 @@ describe('Dropdown', () => {
       expect(root).toHaveAttribute('data-size', 'small');
       expect(root).toHaveAttribute('data-appearance', 'underline');
     });
+  });
+});
+
+describe('Dropdown — slotProps', () => {
+  type DropdownSlotProps = NonNullable<DropdownProps['slotProps']>;
+  const EVERY_PART: DropdownSlotProps = {
+    button: {},
+    value: {},
+    clearButton: {},
+    listbox: {},
+    surface: {},
+  };
+  const part = (name: string) => document.querySelector<HTMLElement>(`.${name}`);
+  const TWO = [
+    <Option key="a" value="a">
+      Apple
+    </Option>,
+    <Option key="b" value="b">
+      Banana
+    </Option>,
+  ];
+
+  it('renders the 0.17.1 parts without slotProps (opening tags, attributes sorted)', async () => {
+    // Captured from b8941ef, an open client render: the merged props may put the class before
+    // the locked attributes.
+    render(
+      <Dropdown aria-label="Fruit" defaultOpen defaultValue="a" clearable>
+        {TWO}
+      </Dropdown>,
+    );
+    await act(async () => {});
+    const { button, value, clearButton, listbox, surface } = dropdownClassNames;
+    expect(
+      openingTags(...[button, value, clearButton, listbox, surface].map((name) => part(name)!)),
+    ).toBe(
+      [
+        '<button aria-activedescendant="dropdown-listbox-_id0_-opt-0" aria-controls="dropdown-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Fruit" class="wave-dropdown__button relative flex w-full items-center justify-between py-0 text-start h-8 px-3 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground pe-14 focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" role="combobox" type="button">',
+        '<span class="wave-dropdown__value truncate">',
+        '<button aria-label="Clear selection" class="wave-dropdown__clear-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+        '<ul aria-label="Fruit" class="wave-listbox-surface__list min-h-0 max-h-60 overflow-auto wave-dropdown__listbox" id="dropdown-listbox-_id0_" role="listbox" tabindex="-1">',
+        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-dropdown__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: DropdownProps[] = [
+      { 'aria-label': 'Fruit', defaultOpen: true, defaultValue: 'a', clearable: true },
+      { 'aria-label': 'Fruit' },
+      {
+        id: 'own',
+        'aria-label': 'Fruit',
+        'aria-describedby': 'hint',
+        'aria-invalid': true,
+        required: true,
+        name: 'fruit',
+        disabled: true,
+        clearable: true,
+        defaultValue: 'b',
+      },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <Dropdown {...props} slotProps={slotProps}>
+            {TWO}
+          </Dropdown>
+        ),
+        EVERY_PART,
+      );
+    }
+    expectInertSlotProps(
+      (slotProps) => (
+        <Dropdown
+          aria-label="Fruit"
+          multiselect
+          defaultOpen
+          defaultValue={['a']}
+          items={[
+            { value: 'a', label: 'Apple' },
+            { value: 'b', label: 'Banana' },
+          ]}
+          slotProps={slotProps}
+        />
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', async () => {
+    const mine = (name: string) => ({
+      className: `my-${name}`,
+      style: { opacity: 0.5 },
+      'data-part': name,
+    });
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        defaultOpen
+        defaultValue="a"
+        clearable
+        slotProps={{
+          button: mine('button'),
+          value: mine('value'),
+          clearButton: mine('clearButton'),
+          listbox: mine('listbox'),
+          surface: mine('surface'),
+        }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    await act(async () => {});
+    const { button, value, clearButton, listbox, surface } = dropdownClassNames;
+    for (const [element, first, own, name] of [
+      [part(button), button, button, 'button'],
+      [part(value), value, value, 'value'],
+      [part(clearButton), clearButton, clearButton, 'clearButton'],
+      [part(listbox), 'wave-listbox-surface__list', listbox, 'listbox'],
+      [part(surface), 'wave-listbox-surface', surface, 'surface'],
+    ] as const) {
+      expect(element).toHaveClass(first, own, `my-${name}`);
+      expect(element!.classList[0]).toBe(first);
+      expect(element!.classList[element!.classList.length - 1]).toBe(`my-${name}`);
+      expect(element).toHaveAttribute('data-part', name);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+    }
+  });
+
+  it('lets your class replace a conflicting class of the part', () => {
+    render(
+      <Dropdown aria-label="Fruit" slotProps={{ value: { className: 'text-error' } }}>
+        {TWO}
+      </Dropdown>,
+    );
+    // The placeholder's muted colour gives way to yours.
+    const value = part(dropdownClassNames.value);
+    expect(value).toHaveClass('text-error');
+    expect(value).not.toHaveClass('text-muted-foreground');
+  });
+
+  it('attaches your refs to the parts, beside controlRef and the positioning', async () => {
+    const refs = {
+      button: React.createRef<HTMLButtonElement>(),
+      value: React.createRef<HTMLSpanElement>(),
+      clearButton: React.createRef<HTMLButtonElement>(),
+      listbox: React.createRef<HTMLUListElement>(),
+      surface: React.createRef<HTMLDivElement>(),
+    };
+    const controlRef = React.createRef<HTMLButtonElement>();
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        defaultOpen
+        defaultValue="a"
+        clearable
+        controlRef={controlRef}
+        slotProps={{
+          button: { ref: refs.button },
+          value: { ref: refs.value },
+          clearButton: { ref: refs.clearButton },
+          listbox: { ref: refs.listbox },
+          surface: { ref: refs.surface },
+        }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    await act(async () => {});
+    const combobox = screen.getByRole('combobox', { name: 'Fruit' });
+    expect(refs.button.current).toBe(combobox);
+    expect(controlRef.current).toBe(combobox);
+    expect(refs.value.current).toBe(part(dropdownClassNames.value));
+    expect(refs.clearButton.current).toBe(screen.getByRole('button', { name: 'Clear selection' }));
+    expect(refs.listbox.current).toBe(screen.getByRole('listbox', { name: 'Fruit' }));
+    expect(refs.surface.current).toBe(part(dropdownClassNames.surface));
+    expect(refs.surface.current).toHaveStyle({ position: 'fixed' });
+  });
+
+  it("runs your button handlers first; preventDefault() skips the Dropdown's toggle and keys", async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onOpenChange = vi.fn();
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        onOpenChange={onOpenChange}
+        onKeyDown={() => order.push('onKeyDown')}
+        slotProps={{
+          button: {
+            onClick: (event) => {
+              order.push('part click');
+              event.preventDefault();
+            },
+            onKeyDown: (event) => {
+              order.push('part key');
+              event.preventDefault();
+            },
+          },
+        }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    const combobox = screen.getByRole('combobox', { name: 'Fruit' });
+    await user.click(combobox);
+    await user.keyboard('{ArrowDown}');
+    expect(order).toEqual(['part click', 'part key']);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(combobox).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('runs your button onClick before the toggle, once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Dropdown
+          aria-label="Fruit"
+          onOpenChange={onOpenChange}
+          slotProps={{ button: { onClick } }}
+        >
+          {TWO}
+        </Dropdown>
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Fruit' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it('runs your clearButton onClick before the clear; preventDefault() skips it', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const { rerender } = render(
+      <Dropdown
+        aria-label="Fruit"
+        defaultValue="a"
+        clearable
+        onValueChange={onValueChange}
+        slotProps={{ clearButton: { onClick: (event) => event.preventDefault() } }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+    expect(onValueChange).not.toHaveBeenCalled();
+    const onClick = vi.fn();
+    rerender(
+      <Dropdown
+        aria-label="Fruit"
+        defaultValue="a"
+        clearable
+        onValueChange={onValueChange}
+        slotProps={{ clearButton: { onClick } }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith('');
+    expect(screen.getByRole('combobox', { name: 'Fruit' })).toHaveFocus();
+  });
+
+  it('keeps the locked attributes of the button and the clear button', () => {
+    render(
+      <>
+        <span id="extra">Extra</span>
+        <Dropdown
+          id="own"
+          aria-label="Fruit"
+          defaultValue="a"
+          clearable
+          disabled
+          slotProps={{
+            button: {
+              id: 'mine',
+              type: 'submit',
+              role: 'button',
+              disabled: false,
+              tabIndex: 3,
+              name: 'mine',
+              form: 'elsewhere',
+              hidden: true,
+              'aria-hidden': true,
+              'aria-label': 'Other',
+              'aria-expanded': true,
+              'aria-describedby': 'extra',
+            },
+            clearButton: {
+              type: 'submit',
+              disabled: false,
+              tabIndex: -1,
+              hidden: true,
+              'aria-hidden': true,
+              'aria-label': 'Other',
+              'aria-disabled': true,
+            },
+          }}
+        >
+          {TWO}
+        </Dropdown>
+      </>,
+    );
+    const button = screen.getByRole('combobox', { name: 'Fruit' });
+    expect(button).toHaveAttribute('id', 'own');
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button).toBeDisabled();
+    expect(button).not.toHaveAttribute('tabindex');
+    expect(button).not.toHaveAttribute('name');
+    expect(button).not.toHaveAttribute('form');
+    expect(button).not.toHaveAttribute('hidden');
+    expect(button).not.toHaveAttribute('aria-hidden');
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).toHaveAttribute('aria-describedby', 'extra');
+    const clear = screen.getByRole('button', { name: 'Clear selection' });
+    expect(clear).toHaveAttribute('type', 'button');
+    expect(clear).toBeDisabled();
+    expect(clear).not.toHaveAttribute('tabindex');
+    expect(clear).not.toHaveAttribute('hidden');
+    expect(clear).not.toHaveAttribute('aria-hidden');
+    expect(clear).not.toHaveAttribute('aria-disabled');
+  });
+
+  it.each([
+    ['enabled', false, 1],
+    ['disabled', true, 0],
+  ] as const)('calls your value onClick only while the Dropdown is %s', (_, disabled, calls) => {
+    const onClick = vi.fn();
+    render(
+      <Dropdown aria-label="Fruit" disabled={disabled} slotProps={{ value: { onClick } }}>
+        {TWO}
+      </Dropdown>,
+    );
+    const button = screen.getByRole('combobox', { name: 'Fruit' });
+    fireEvent.click(button.querySelector(`.${dropdownClassNames.value}`) as HTMLElement);
+    expect(onClick).toHaveBeenCalledTimes(calls);
+  });
+
+  it('keeps the button and the clear button reachable: a part sets no inert on them', () => {
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        defaultValue="a"
+        clearable
+        slotProps={{ button: { inert: true }, clearButton: { inert: true } }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    expect(screen.getByRole('combobox', { name: 'Fruit' })).not.toHaveAttribute('inert');
+    expect(screen.getByRole('button', { name: 'Clear selection' })).not.toHaveAttribute('inert');
+  });
+
+  it('submits only the hidden input and resets with its own form: the button part takes no name or form', () => {
+    render(
+      <>
+        <form aria-label="Order">
+          <Dropdown
+            aria-label="Fruit"
+            name="fruit"
+            defaultValue="a"
+            slotProps={{ button: { name: 'typed', value: 'x', form: 'elsewhere' } }}
+          >
+            {TWO}
+          </Dropdown>
+        </form>
+        <form id="elsewhere" aria-label="Elsewhere" />
+      </>,
+    );
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    expect([...new FormData(form).entries()]).toEqual([['fruit', 'a']]);
+  });
+
+  it('keeps the locked attributes of the listbox and the surface; the position wins your style', async () => {
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        defaultOpen
+        slotProps={{
+          listbox: { id: 'mine', role: 'menu', hidden: true, 'aria-label': 'Other' },
+          surface: { role: 'dialog', hidden: true, style: { left: 40, zIndex: 3 } },
+        }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    await act(async () => {});
+    const list = screen.getByRole('listbox', { name: 'Fruit' });
+    expect(list.id).toMatch(/^dropdown-listbox-/);
+    expect(list).not.toHaveAttribute('hidden');
+    const surface = part(dropdownClassNames.surface)!;
+    expect(surface).not.toHaveAttribute('role');
+    expect(surface).not.toHaveAttribute('hidden');
+    expect(surface).toHaveStyle({ left: '0px', zIndex: '3' });
+  });
+
+  it('ignores the parts the Dropdown does not render', () => {
+    const clearButton = React.createRef<HTMLButtonElement>();
+    const surface = React.createRef<HTMLDivElement>();
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        slotProps={{
+          clearButton: { ref: clearButton, className: 'my-part' },
+          surface: { ref: surface, className: 'my-part' },
+        }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    expect(screen.getByRole('combobox', { name: 'Fruit' })).toBeInTheDocument();
+    expect(clearButton.current).toBeNull();
+    expect(surface.current).toBeNull();
+    expect(document.querySelector('.my-part')).toBeNull();
+  });
+
+  it('keeps the active descendant its own while closed, and adds no autocomplete to the button', () => {
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        slotProps={{
+          button: { 'aria-activedescendant': 'bogus', 'aria-autocomplete': 'list' },
+          listbox: { 'aria-activedescendant': 'bogus', 'aria-multiselectable': true },
+        }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    const button = screen.getByRole('combobox', { name: 'Fruit' });
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).not.toHaveAttribute('aria-activedescendant');
+    expect(button).not.toHaveAttribute('aria-autocomplete');
+    const list = screen.getByRole('listbox', { hidden: true });
+    expect(list).not.toHaveAttribute('aria-activedescendant');
+    expect(list).not.toHaveAttribute('aria-multiselectable');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Dropdown
+        aria-label="Fruit"
+        defaultOpen
+        defaultValue="a"
+        clearable
+        slotProps={{
+          button: { className: 'my-button', title: 'Pick a fruit' },
+          value: { className: 'my-value' },
+          clearButton: { className: 'my-clear' },
+          listbox: { className: 'my-list' },
+          surface: { className: 'my-surface' },
+        }}
+      >
+        {TWO}
+      </Dropdown>,
+    );
+    await act(async () => {});
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof DropdownSlotProps>().toEqualTypeOf<
+      'button' | 'value' | 'clearButton' | 'listbox' | 'surface'
+    >();
+    expectTypeOf<NonNullable<DropdownSlotProps['button']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<DropdownSlotProps['value']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<DropdownSlotProps['listbox']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLUListElement> | undefined
+    >();
+    expectTypeOf<NonNullable<DropdownSlotProps['surface']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the Dropdown draws its content
+    void (<Dropdown slotProps={{ value: { children: 'Other' } }} />);
   });
 });

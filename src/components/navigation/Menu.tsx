@@ -20,6 +20,8 @@ export type {
 export type { MenuItemLinkProps, MenuItemLinkOwnProps } from './Menu.link';
 export type { MenuGroupProps, MenuGroupHeaderProps } from './Menu.group';
 export type { MenuSplitGroupProps } from './Menu.splitGroup';
+export { useMenuContext, useMenuListContext } from './Menu.hooks';
+export type { MenuContextValue, MenuListContextValue } from './Menu.hooks';
 
 /**
  * A menu of actions (`role="menu"`), in one of two forms:
@@ -74,6 +76,11 @@ export type { MenuSplitGroupProps } from './Menu.splitGroup';
  * warning). A popup menu renders no root element, so `className`, `ref` and other DOM props on
  * `Menu` are ignored (development warning): put them on `Menu.Popover`. Items rendered in a popup
  * menu outside `Menu.Popover` have no `role="menu"` parent (development warning).
+ *
+ * **Items of your own**: an element with `role="menuitem"` among the items is an item of the menu
+ * (arrow keys, typeahead and the pointer reach it). `useMenuContext` gives it `close()`, which
+ * closes the menu as a built-in item does, and `useMenuListContext` the icon and check columns
+ * that line its label up with the others.
  *
  * Sub-components are also exported under flat names (`MenuItem`, `MenuDivider`, `MenuTrigger`,
  * `MenuPopover`, `MenuItemCheckbox`, `MenuItemRadio`, `MenuItemSwitch`, `MenuItemLink`,

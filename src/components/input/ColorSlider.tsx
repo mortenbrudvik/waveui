@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getDirection } from '../../lib/direction';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { ColorPickerShape, HsvColor, Orientation } from '../../lib/types';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -109,6 +110,29 @@ export interface ColorSliderProps extends Omit<
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the root element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the slider draws inside its root, by part, merged into each part's
+   * own (Fluent UI's `rail` and `thumb` slot props): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers and attributes added, your ref
+   * attached. Every attribute the slider sets on a part is locked. A part takes no `children`.
+   * Both parts are drawn only: the slider itself is the invisible range input over them, which
+   * takes the pointer and the keys and is reached through the slider's own props and
+   * `controlRef`, so a part receives no press of its own.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` that draws the gradient rail (stable class `wave-color-slider__rail`).
+     * Locked: `aria-hidden`, which keeps the drawing out of the accessibility tree, and
+     * `tabIndex` (unset: a drawing is never a tab stop).
+     */
+    rail?: SlotPart<'div'>;
+    /**
+     * The `<span>` of the drawn thumb, placed at the value inside a box hidden from assistive
+     * technology (stable class `wave-color-slider__thumb`). It sets no attribute of its own, so
+     * none is locked.
+     */
+    thumb?: SlotPart<'span'>;
+  };
 }
 
 const DEFAULT_LABELS = { hue: 'Hue', saturation: 'Saturation', brightness: 'Brightness' } as const;
@@ -159,6 +183,7 @@ export const ColorSlider = ({
   onKeyDown,
   onKeyUp,
   ref,
+  slotProps,
   ...rest
 }: ColorSliderProps) => {
   const part = useColorPartState({ value, defaultValue, onValueChange, disabled });
@@ -266,14 +291,16 @@ export const ColorSlider = ({
       ref={ref}
     >
       <div
-        aria-hidden="true"
-        className={cn(
-          colorSliderClassNames.rail,
-          'rounded-full forced-colors:forced-color-adjust-none',
-          RAIL_GRADIENT,
-          vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
-          resolvedShape === 'square' && 'rounded-none',
-        )}
+        {...mergeSlotProps(slotProps?.rail, {
+          className: cn(
+            colorSliderClassNames.rail,
+            'rounded-full forced-colors:forced-color-adjust-none',
+            RAIL_GRADIENT,
+            vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
+            resolvedShape === 'square' && 'rounded-none',
+          ),
+          locked: { 'aria-hidden': 'true', tabIndex: undefined },
+        })}
       />
       <input
         type="range"
@@ -300,12 +327,14 @@ export const ColorSlider = ({
       />
       <span aria-hidden="true" className={vertical ? THUMB_TRACK_VERTICAL : THUMB_TRACK_HORIZONTAL}>
         <span
-          className={cn(
-            colorSliderClassNames.thumb,
-            COLOR_THUMB_CLASSES,
-            vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
-            'group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]',
-          )}
+          {...mergeSlotProps(slotProps?.thumb, {
+            className: cn(
+              colorSliderClassNames.thumb,
+              COLOR_THUMB_CLASSES,
+              vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
+              'group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]',
+            ),
+          })}
         />
       </span>
       {!picker && (

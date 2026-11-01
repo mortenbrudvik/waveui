@@ -1,10 +1,14 @@
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Switch } from '../Switch';
 import type { SwitchLabelPosition, SwitchProps } from '../Switch';
+import { switchClassNames } from '../../../lib/classNames';
 import {
+  expectInertSlotProps,
+  sortAttributes,
   expectNoA11yViolations,
   renderWithProviders,
   testComposedHandler,
@@ -980,5 +984,382 @@ describe('Switch — types', () => {
     expectTypeOf<SwitchProps['onCheckedChange']>().toEqualTypeOf<
       ((checked: boolean) => void) | undefined
     >();
+  });
+});
+
+describe('Switch — slotProps', () => {
+  type SwitchSlotProps = NonNullable<SwitchProps['slotProps']>;
+  const EVERY_PART: SwitchSlotProps = { track: {}, thumb: {}, label: {} };
+
+  it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
+    // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    expect(
+      sortAttributes(
+        renderToString(<Switch label="Dark mode" defaultChecked aria-describedby="hint" />),
+      ),
+    ).toBe(
+      [
+        '<label class="wave-switch relative inline-flex items-start gap-2 select-none cursor-pointer" data-label-position="after" data-size="medium">',
+        '<button aria-checked="true" aria-describedby="hint" aria-labelledby="switch-label-_R_0H1_" class="wave-switch__track relative inline-flex shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none h-[20px] w-[40px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-primary bg-primary forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" id="switch-_R_0_" role="switch" type="button">',
+        '<span aria-hidden="true" class="wave-switch__thumb block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none h-[14px] w-[14px] translate-x-[22px] wave-rtl:-translate-x-[22px] bg-primary-foreground forced-colors:bg-[HighlightText]">',
+        '</span>',
+        '</button>',
+        '<span class="wave-switch__label text-body-1 text-foreground" id="switch-label-_R_0H1_">Dark mode',
+        '</span>',
+        '</label>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: SwitchProps[] = [
+      { label: 'Dark mode' },
+      { label: 'Dark mode', labelPosition: 'before', defaultChecked: true },
+      { label: 'Dark mode', disabledFocusable: true, size: 'small', 'aria-describedby': 'd' },
+      { 'aria-label': 'Dark mode', disabled: true, id: 'own', tabIndex: 0 },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps((slotProps) => <Switch {...props} slotProps={slotProps} />, EVERY_PART);
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
+    render(
+      <Switch
+        label="Dark mode"
+        slotProps={{
+          track: { className: 'my-track', style: { width: 50 }, 'data-part': 'track' },
+          thumb: { className: 'my-thumb', style: { opacity: 0.5 }, 'data-part': 'thumb' },
+          label: { className: 'my-label', style: { color: 'red' }, 'data-part': 'label' },
+        }}
+      />,
+    );
+    const track = screen.getByRole('switch', { name: 'Dark mode' });
+    const thumb = getThumb(track);
+    const label = screen.getByText('Dark mode');
+    for (const [element, stable, own, mine, part] of [
+      [track, switchClassNames.track, 'rounded-full', 'my-track', 'track'],
+      [thumb, switchClassNames.thumb, 'block', 'my-thumb', 'thumb'],
+      [label, switchClassNames.label, 'text-body-1', 'my-label', 'label'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', part);
+    }
+    expect(track).toHaveStyle({ width: '50px' });
+    expect(thumb).toHaveStyle({ opacity: '0.5' });
+    expect(label).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+  });
+
+  it('lets your class replace a conflicting class of the part', () => {
+    render(<Switch label="Dark mode" slotProps={{ track: { className: 'rounded-none' } }} />);
+    const track = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(track).toHaveClass('rounded-none');
+    expect(track).not.toHaveClass('rounded-full');
+  });
+
+  it('attaches your refs to the parts, beside controlRef and ref', () => {
+    const track = React.createRef<HTMLButtonElement>();
+    const thumb = React.createRef<HTMLSpanElement>();
+    const label = React.createRef<HTMLSpanElement>();
+    const controlRef = React.createRef<HTMLButtonElement>();
+    const ref = React.createRef<HTMLLabelElement>();
+    render(
+      <Switch
+        ref={ref}
+        label="Dark mode"
+        controlRef={controlRef}
+        slotProps={{ track: { ref: track }, thumb: { ref: thumb }, label: { ref: label } }}
+      />,
+    );
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(track.current).toBe(control);
+    expect(controlRef.current).toBe(control);
+    expect(thumb.current).toBe(getThumb(control));
+    expect(label.current).toBe(screen.getByText('Dark mode'));
+    expect(ref.current).toBe(control.closest('label'));
+  });
+
+  it("runs your track onClick first, then the Switch's onClick and the toggle", async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <Switch
+        label="Dark mode"
+        onClick={() => order.push('onClick')}
+        onCheckedChange={() => order.push('toggle')}
+        slotProps={{ track: { onClick: () => order.push('part') } }}
+      />,
+    );
+    await user.click(screen.getByRole('switch', { name: 'Dark mode' }));
+    expect(order).toEqual(['part', 'onClick', 'toggle']);
+  });
+
+  it("skips the Switch's onClick and the toggle when your track onClick prevents the default", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onCheckedChange = vi.fn();
+    render(
+      <Switch
+        label="Dark mode"
+        onClick={onClick}
+        onCheckedChange={onCheckedChange}
+        slotProps={{ track: { onClick: (event) => event.preventDefault() } }}
+      />,
+    );
+    const track = screen.getByRole('switch', { name: 'Dark mode' });
+    await user.click(track);
+    expect(track).toHaveAttribute('aria-checked', 'false');
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onCheckedChange).not.toHaveBeenCalled();
+  });
+
+  it('calls your onClick and onCheckedChange once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onCheckedChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Switch
+          label="Dark mode"
+          onCheckedChange={onCheckedChange}
+          slotProps={{ track: { onClick } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('switch', { name: 'Dark mode' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onCheckedChange).toHaveBeenCalledTimes(1);
+    expect(onCheckedChange).toHaveBeenCalledWith(true);
+  });
+
+  it('runs your focus and key handlers before the Switch ones', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <Switch
+        label="Dark mode"
+        onFocus={() => order.push('onFocus')}
+        onKeyDown={() => order.push('onKeyDown')}
+        slotProps={{
+          track: {
+            onFocus: () => order.push('part focus'),
+            onKeyDown: () => order.push('part key'),
+          },
+        }}
+      />,
+    );
+    await user.tab();
+    await user.keyboard('a');
+    expect(order).toEqual(['part focus', 'onFocus', 'part key', 'onKeyDown']);
+  });
+
+  it('does not call your track onClick under disabledFocusable, nor toggle (StrictMode)', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onCheckedChange = vi.fn();
+    const onFocus = vi.fn();
+    render(
+      <React.StrictMode>
+        <Switch
+          label="Dark mode"
+          disabledFocusable
+          onCheckedChange={onCheckedChange}
+          slotProps={{ track: { onClick, onFocus } }}
+        />
+      </React.StrictMode>,
+    );
+    const track = screen.getByRole('switch', { name: 'Dark mode' });
+    await user.click(track);
+    await user.keyboard(' ');
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onCheckedChange).not.toHaveBeenCalled();
+    expect(track).toHaveAttribute('aria-checked', 'false');
+    // Its other handlers still run, as the Switch's own do.
+    expect(onFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the locked attributes of the track; your ids join its aria-labelledby and aria-describedby', () => {
+    render(
+      <>
+        <span id="extra-name">Extra</span>
+        <span id="extra-description">More</span>
+        <span id="own-description">Own</span>
+        <Switch
+          label="Dark mode"
+          disabled
+          aria-describedby="own-description"
+          slotProps={{
+            track: {
+              id: 'mine',
+              role: 'checkbox',
+              type: 'submit',
+              tabIndex: 3,
+              disabled: false,
+              autoFocus: true,
+              'aria-label': 'Other',
+              'aria-invalid': true,
+              'aria-checked': 'mixed',
+              'aria-labelledby': 'extra-name',
+              'aria-describedby': 'extra-description',
+            },
+          }}
+        />
+      </>,
+    );
+    const track = screen.getByRole('switch', { name: 'Dark mode Extra' });
+    const labelId = screen.getByText('Dark mode').id;
+    expect(track.id).toMatch(/^switch-/);
+    expect(track).toHaveAttribute('type', 'button');
+    expect(track).not.toHaveAttribute('tabindex');
+    expect(track).toBeDisabled();
+    expect(track).not.toHaveFocus();
+    expect(track).toHaveAttribute('aria-checked', 'false');
+    expect(track).not.toHaveAttribute('aria-label');
+    expect(track).not.toHaveAttribute('aria-invalid');
+    expect(track).toHaveAttribute('aria-labelledby', `${labelId} extra-name`);
+    expect(track).toHaveAttribute('aria-describedby', 'own-description extra-description');
+  });
+
+  it('keeps the thumb decorative and the label id that names the control', () => {
+    render(
+      <Switch
+        label="Dark mode"
+        slotProps={{ thumb: { 'aria-hidden': false }, label: { id: 'mine' } }}
+      />,
+    );
+    const track = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(getThumb(track)).toHaveAttribute('aria-hidden', 'true');
+    const label = screen.getByText('Dark mode');
+    expect(label.id).not.toBe('mine');
+    expect(track).toHaveAttribute('aria-labelledby', label.id);
+  });
+
+  it('adds the attributes the Switch does not set, such as a title', () => {
+    render(<Switch label="Dark mode" slotProps={{ track: { title: 'Toggle the theme' } }} />);
+    expect(screen.getByRole('switch', { name: 'Dark mode' })).toHaveAttribute(
+      'title',
+      'Toggle the theme',
+    );
+  });
+
+  it('ignores the label part without a label', () => {
+    const label = React.createRef<HTMLSpanElement>();
+    render(
+      <Switch
+        aria-label="Dark mode"
+        slotProps={{ label: { ref: label, className: 'my-label' } }}
+      />,
+    );
+    expect(screen.getByRole('switch', { name: 'Dark mode' })).toBeInTheDocument();
+    expect(label.current).toBeNull();
+    expect(document.querySelector('.my-label')).toBeNull();
+  });
+
+  it('keeps the mirrored thumb classes under dir="rtl" next to yours', () => {
+    renderWithProviders(
+      <Switch label="Dark mode" slotProps={{ thumb: { className: 'my-thumb' } }} />,
+      { dir: 'rtl' },
+    );
+    expect(getThumb(screen.getByRole('switch', { name: 'Dark mode' }))).toHaveClass(
+      'translate-x-[2px]',
+      'wave-rtl:-translate-x-[2px]',
+      'my-thumb',
+    );
+  });
+
+  it('keeps its form and visibility: a part sets no form, hidden or aria-hidden on the switch', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <form aria-label="Settings">
+          <Switch
+            label="Dark mode"
+            name="dark"
+            slotProps={{ track: { form: 'elsewhere', hidden: true, 'aria-hidden': true } }}
+          />
+        </form>
+        <form id="elsewhere" aria-label="Elsewhere" />
+      </>,
+    );
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(control).not.toHaveAttribute('form');
+    expect(control).not.toHaveAttribute('hidden');
+    expect(control).not.toHaveAttribute('aria-hidden');
+    // It resets with the form it is in, the one its hidden input submits with.
+    await user.click(control);
+    const form = screen.getByRole('form', { name: 'Settings' }) as HTMLFormElement;
+    expect([...new FormData(form).keys()]).toEqual(['dark']);
+    act(() => form.reset());
+    expect(control).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it.each([
+    ['enabled', {}, 1],
+    ['disabled', { disabled: true }, 0],
+    ['disabledFocusable', { disabledFocusable: true }, 0],
+  ] as const)(
+    'calls your label and thumb onClick only while the switch is enabled (%s)',
+    (_, state, calls) => {
+      const labelClick = vi.fn();
+      const thumbClick = vi.fn();
+      render(
+        <Switch
+          label="Dark mode"
+          {...state}
+          slotProps={{ label: { onClick: labelClick }, thumb: { onClick: thumbClick } }}
+        />,
+      );
+      const track = screen.getByRole('switch', { name: 'Dark mode' });
+      fireEvent.click(screen.getByText('Dark mode'));
+      fireEvent.click(getThumb(track));
+      expect(labelClick).toHaveBeenCalledTimes(calls);
+      expect(thumbClick).toHaveBeenCalledTimes(calls);
+    },
+  );
+
+  it('keeps the label text naming the switch: a part sets no aria-label on it', () => {
+    render(<Switch label="Dark mode" slotProps={{ label: { 'aria-label': 'Other' } }} />);
+    expect(screen.getByText('Dark mode')).not.toHaveAttribute('aria-label');
+    expect(screen.getByRole('switch')).toHaveAccessibleName('Dark mode');
+  });
+
+  it('keeps the thumb out of the tab order and the track reachable: no tabIndex or inert from a part', () => {
+    render(
+      <Switch label="Dark mode" slotProps={{ thumb: { tabIndex: 0 }, track: { inert: true } }} />,
+    );
+    const track = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(getThumb(track)).not.toHaveAttribute('tabindex');
+    expect(track).not.toHaveAttribute('inert');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Switch
+        label="Dark mode"
+        slotProps={{
+          track: { className: 'my-track', title: 'Theme' },
+          thumb: { className: 'my-thumb' },
+          label: { className: 'my-label' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof SwitchSlotProps>().toEqualTypeOf<'track' | 'thumb' | 'label'>();
+    expectTypeOf<NonNullable<SwitchSlotProps['track']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<SwitchSlotProps['thumb']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<SwitchSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the Switch draws its content
+    void (<Switch slotProps={{ label: { children: 'Other' } }} />);
   });
 });

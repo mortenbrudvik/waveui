@@ -2,9 +2,12 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { navClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp, warnDeprecated, warnOnce } from '../../lib/dev';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
 import {
+  NAV_SHOWN_PART_LOCKS,
   NavContext,
   createCategoryStore,
   findCategoriesContaining,
@@ -60,6 +63,22 @@ export interface NavProps extends Omit<React.HTMLAttributes<HTMLElement>, 'defau
   currentCategory?: string;
   /** Ref to the `<nav>` element. */
   ref?: React.Ref<HTMLElement>;
+  /**
+   * Props for the list the Nav draws inside its landmark, merged into its own: your classes after
+   * its classes (yours win a conflict), your styles, attributes and handlers added, your ref beside
+   * its ref. Every attribute it sets is locked and keeps the Nav's value. A part takes no
+   * `children` (they are the Nav's). No handler of the Nav sits on the list: the events of the
+   * items reach yours after their own handling. The `<nav>` takes the Nav's own props. Fluent UI
+   * has no such part: its `Nav` holds the items itself.
+   */
+  slotProps?: {
+    /**
+     * The `<ul>` of the items (stable class `wave-nav__list`). Locked: no role (it stays a list
+     * for its list items), no tab index and no roving container's marker, and no `hidden`, `inert`
+     * or `aria-hidden`, since it holds the items.
+     */
+    list?: SlotPart<'ul'>;
+  };
 }
 
 /** What useNavRootState reads: the root's props with Nav's deprecated aliases already resolved. */
@@ -207,6 +226,7 @@ export const NavRoot = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: NavProps) => {
   const controlledValue = resolveDeprecatedProp(
@@ -240,6 +260,8 @@ export const NavRoot = ({
   });
   // Development only: every child of the list is an <li> (`Nav:list-child`).
   const listRef = React.useRef<HTMLUListElement>(null);
+  // A part's ref joins the list's own after the spread: an inline ref never detaches it.
+  const listMergedRef = useMergedRefs<HTMLUListElement>(listRef, slotProps?.list?.ref);
   useNavListChildCheck(listRef, 'Nav', 'items');
 
   return (
@@ -254,7 +276,13 @@ export const NavRoot = ({
           className,
         )}
       >
-        <ul ref={listRef} className={cn(navClassNames.list, 'm-0 list-none p-0')}>
+        <ul
+          {...mergeSlotProps(slotProps?.list, {
+            className: cn(navClassNames.list, 'm-0 list-none p-0'),
+            locked: NAV_SHOWN_PART_LOCKS,
+          })}
+          ref={listMergedRef}
+        >
           {children}
         </ul>
       </nav>

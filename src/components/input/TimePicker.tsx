@@ -7,6 +7,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import {
   disabledStyles,
   focusRing,
@@ -21,11 +22,18 @@ import {
 import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
-import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { useEventCallback } from '../../hooks/useEventCallback';
+import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
-import { ListboxContext, useListbox, useListboxOption } from '../../hooks/useListbox';
+import {
+  ListboxContext,
+  OPTION_STATE_LOCKS,
+  preventMouseDown,
+  useListbox,
+  useListboxOption,
+} from '../../hooks/useListbox';
 import type { ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
@@ -57,34 +65,55 @@ import type { RoutedHandlers } from './routedHandlers';
 const OPTION_CLASSES =
   'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold';
 
+const CHECK_ICON_CLASSES = cn(
+  timePickerClassNames.checkIcon,
+  'flex h-4 w-4 shrink-0 items-center justify-center',
+);
+
 interface TimePickerOptionProps {
   value: string;
   label: string;
+  /** TimePicker's `slotProps.option`. */
+  part: SlotPart<'li'> | undefined;
+  /** TimePicker's `slotProps.checkIcon`. */
+  checkIconPart: SlotPart<'span'> | undefined;
 }
 
 /**
  * One time option. Memoized: it re-renders only when its own active/selected state changes (read
- * from the listbox store), so moving the highlight renders two options, not the whole list.
+ * from the listbox store), so moving the highlight renders two options, not the whole list. The
+ * parts' props are merged only when given: an option renders often.
  */
 const TimePickerOption = React.memo(function TimePickerOption({
   value,
   label,
+  part,
+  checkIconPart,
 }: TimePickerOptionProps) {
-  const { selected, optionProps } = useListboxOption<HTMLLIElement>({ value, label });
+  const { selected, optionProps } = useListboxOption<HTMLLIElement>({ value, label }, part?.ref);
+  const { ref: optionRef, style: optionStyle, ...optionAttributes } = optionProps;
+  const className = cn(
+    timePickerClassNames.option,
+    OPTION_CLASSES,
+    selected && forcedColors.selectedContainer,
+  );
   return (
     <li
-      {...optionProps}
-      className={cn(
-        timePickerClassNames.option,
-        OPTION_CLASSES,
-        selected && forcedColors.selectedContainer,
-      )}
+      {...optionAttributes}
+      style={optionStyle}
+      className={className}
+      {...(part &&
+        mergeSlotProps(part, {
+          className,
+          style: optionStyle,
+          // The state attributes the option renders only while set stay its own when unset.
+          locked: { ...OPTION_STATE_LOCKS, ...optionAttributes },
+        }))}
+      ref={optionRef}
     >
       <span
-        className={cn(
-          timePickerClassNames.checkIcon,
-          'flex h-4 w-4 shrink-0 items-center justify-center',
-        )}
+        className={CHECK_ICON_CLASSES}
+        {...(checkIconPart && mergeSlotProps(checkIconPart, { className: CHECK_ICON_CLASSES }))}
       >
         {selected ? <CheckIcon size={12} /> : null}
       </span>
@@ -294,6 +323,89 @@ export interface TimePickerProps extends Omit<
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the root element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the TimePicker draws, by part, merged into each part's own (Fluent UI's
+   * `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the part's
+   * (yours win a conflict), your styles over its styles, your handlers before its handlers
+   * (`preventDefault()` in yours skips the TimePicker's handling of the event, its own `on…` prop
+   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
+   * `aria-describedby`. Every attribute the TimePicker sets on a part is locked and keeps the
+   * TimePicker's value (set it through its own props); you add the attributes it does not set. A
+   * part takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The `<input role="combobox">`, the focusable control (stable class
+     * `wave-time-picker__input`; `controlRef` reaches it as well). Locked: `type`, `role`,
+     * `value` (and, unset, `defaultValue`: the TimePicker controls the text), `id`, the naming,
+     * Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`, `aria-expanded`,
+     * `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`,
+     * `aria-errormessage`, `aria-details`), `disabled`, `readOnly`, `placeholder`, every text
+     * input prop routed to it (`autoComplete`, `maxLength`, `tabIndex`, …), `name`, `form` and
+     * `required` (the value is submitted by the TimePicker's hidden input), `hidden`, `inert`
+     * and `aria-hidden` (a focusable control is never hidden). Your handlers run before the
+     * TimePicker's: `preventDefault()` in your `onChange` ignores the typed text, in your
+     * `onKeyDown` skips the picker's keys, in your `onBlur` keeps the typed text uncommitted.
+     */
+    input?: SlotPart<'input'>;
+    /**
+     * The clear `<button>`, rendered with `clearable` while a time is selected (stable class
+     * `wave-time-picker__clear-button`). Locked: `type`, `aria-label` (`labels.clear`),
+     * `disabled`, `tabIndex`, `aria-disabled`, `hidden`, `inert` and `aria-hidden`. Your
+     * `onClick` runs before the clear (`preventDefault()` skips it).
+     */
+    clearButton?: SlotPart<'button'>;
+    /**
+     * The expand `<button>` at the end of the input, rendered while `expandIcon` shows it (stable
+     * class `wave-time-picker__expand-button`; `expandIcon` is its glyph). Locked: `type`,
+     * `tabIndex` (never a tab stop), `aria-label` (`labels.expand`), `aria-expanded`,
+     * `aria-controls`, `disabled` and `aria-disabled`. Your `onClick` runs before the toggle
+     * (`preventDefault()` skips it).
+     */
+    expandButton?: SlotPart<'button'>;
+    /**
+     * The `<p role="alert">` that describes rejected text, rendered while the TimePicker shows its
+     * own error (stable class `wave-time-picker__error-message`). Locked: `id`, which describes
+     * the input, and `role`.
+     */
+    errorMessage?: SlotPart<'p'>;
+    /**
+     * The `<ul role="listbox">` of times, in the popup while it shows and hidden in place
+     * otherwise (stable class `wave-time-picker__listbox`). Locked: `id`, `role`, `tabIndex`,
+     * `hidden`, `inert`, `aria-hidden`, `aria-multiselectable`, `aria-activedescendant` and
+     * `aria-label`; your `aria-labelledby` ids join the list's name.
+     */
+    listbox?: SlotPart<'ul'>;
+    /**
+     * Every `<li role="option">` of a time (stable class `wave-time-picker__option`). Locked:
+     * `id`, `role`, `aria-selected`, `hidden`, the state attributes (`data-active`,
+     * `data-selected`, `aria-disabled`, `data-disabled`) and the position attributes
+     * (`aria-posinset`, `aria-setsize`), also while the option has none. Your `onClick` runs
+     * before the selection (`preventDefault()` skips it).
+     * Keep the object's identity across renders (a constant, or `useMemo`): the options skip
+     * re-rendering only while it stays the same.
+     */
+    option?: SlotPart<'li'>;
+    /**
+     * The `<span>` of every option that holds the check glyph while the time is selected (stable
+     * class `wave-time-picker__check-icon`). Keep its identity across renders, as `option`'s.
+     */
+    checkIcon?: SlotPart<'span'>;
+    /**
+     * The popup `<div>` around the list or the status row, rendered in a portal while the list
+     * is open (stable class `wave-time-picker__surface`). Locked: `data-state`, `data-presence`
+     * (unset: it mounts open), `data-side`, `data-align`, `role`, `id`, `hidden`, `inert` and
+     * `aria-hidden`; your `style` merges, but the position, the size limits and the visibility
+     * the positioning sets win.
+     */
+    surface?: SlotPart<'div'>;
+    /**
+     * The status row of the open popup while no time is listed ("No matching times", "No times
+     * available"; stable class `wave-time-picker__empty-message`). Locked: `aria-hidden` (a
+     * status region announces the text) and `tabIndex` (unset: it is never a tab stop).
+     */
+    emptyMessage?: SlotPart<'div'>;
+  };
 }
 
 function displayTime(value: string, format: '12h' | '24h'): string {
@@ -406,6 +518,7 @@ export const TimePicker = (props: TimePickerProps) => {
     controlRef,
     className,
     ref,
+    slotProps,
     ...rest
   } = props;
 
@@ -638,7 +751,7 @@ export const TimePicker = (props: TimePickerProps) => {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
   const rootRefs = useMergedRefs<HTMLDivElement>(ref, rootRef);
-  const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef);
+  const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef, slotProps?.input?.ref);
 
   const { layerId } = useDismiss({
     open,
@@ -655,7 +768,11 @@ export const TimePicker = (props: TimePickerProps) => {
     align: 'start',
     ...resolvePositioning(positioning, { matchReferenceWidth: true, fitViewport: true }),
   });
-  const surfaceRefs = useMergedRefs<HTMLDivElement>(surfaceRef, setFloating);
+  const surfaceRefs = useMergedRefs<HTMLDivElement>(
+    surfaceRef,
+    setFloating,
+    slotProps?.surface?.ref,
+  );
 
   /* ---- forms and Field ------------------------------------------- */
 
@@ -773,28 +890,44 @@ export const TimePicker = (props: TimePickerProps) => {
     inputRef.current?.focus();
   };
 
-  const handleClear = () => {
+  // An event callback, so the part props merged during render hold no function that reads a ref.
+  const handleClear = useEventCallback(() => {
     if (!interactive) return;
     commitValue('');
     inputRef.current?.focus();
-  };
+  });
 
   /* ---- render ---------------------------------------------------- */
 
   const listboxLabelledBy = joinIds(ariaLabelledBy, field?.labelId);
   const renderListbox = (hidden: boolean) => (
     <ul
-      {...lb.getListboxProps()}
-      aria-labelledby={listboxLabelledBy}
-      aria-label={listboxLabelledBy ? undefined : (ariaLabel ?? labels?.list ?? 'Times')}
-      hidden={hidden || undefined}
-      className={cn(
-        timePickerClassNames.listbox,
-        'max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden',
-      )}
+      {...mergeSlotProps(slotProps?.listbox, {
+        className: cn(
+          timePickerClassNames.listbox,
+          'max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden',
+        ),
+        locked: {
+          inert: undefined,
+          'aria-hidden': undefined,
+          // The list props carry these only while set: a part sets neither.
+          'aria-activedescendant': undefined,
+          'aria-multiselectable': undefined,
+          ...lb.getListboxProps(),
+          'aria-labelledby': listboxLabelledBy,
+          'aria-label': listboxLabelledBy ? undefined : (ariaLabel ?? labels?.list ?? 'Times'),
+          hidden: hidden || undefined,
+        },
+      })}
     >
       {lb.items.map((item) => (
-        <TimePickerOption key={item.value} value={item.value} label={item.label} />
+        <TimePickerOption
+          key={item.value}
+          value={item.value}
+          label={item.label}
+          part={slotProps?.option}
+          checkIconPart={slotProps?.checkIcon}
+        />
       ))}
     </ul>
   );
@@ -817,6 +950,28 @@ export const TimePicker = (props: TimePickerProps) => {
   // while options exist; the open list is mounted only while something matches.
   const listboxMounted = open ? hasMatches : allOptions.length > 0;
 
+  const { style: positionStyle, ...placement } = floatingProps;
+  const surfaceProps = mergeSlotProps(slotProps?.surface, {
+    className: cn(
+      timePickerClassNames.surface,
+      'flex flex-col overflow-hidden rounded border border-border bg-background shadow-8',
+    ),
+    locked: {
+      ...placement,
+      'data-state': 'open',
+      // No presence phase: the list mounts open (a part cannot pretend otherwise).
+      'data-presence': undefined,
+      role: undefined,
+      id: undefined,
+      hidden: undefined,
+      inert: undefined,
+      'aria-hidden': undefined,
+    },
+  });
+  // A part's style merges, but the position, the size limits and the visibility the positioning
+  // sets win.
+  const surfaceStyle = lockPositionStyle(surfaceProps.style, positionStyle);
+
   return (
     <ListboxContext.Provider value={lb.context}>
       <div
@@ -828,61 +983,95 @@ export const TimePicker = (props: TimePickerProps) => {
       >
         <div ref={setReference} className="relative flex items-center">
           <input
+            {...mergeSlotProps(slotProps?.input, {
+              className: cn(
+                timePickerClassNames.input,
+                inputHeightClasses[size],
+                'w-full',
+                inputPaddingClasses[size],
+                inputTextClasses[size],
+                inputAppearanceClasses[appearance],
+                'text-foreground placeholder:text-muted-foreground',
+                inputFocus,
+                disabledStyles,
+                invalidLook && inputInvalid,
+                pickerEndPadding(Number(showClear) + Number(showExpand), size),
+              ),
+              locked: {
+                type: 'text',
+                // The combobox props carry these only while set (an active option): a part sets
+                // neither.
+                'aria-activedescendant': undefined,
+                'aria-autocomplete': undefined,
+                ...lb.getComboboxProps(),
+                'aria-controls': listboxMounted ? lb.listboxId : undefined,
+                ...fieldProps,
+                // The routed naming and Field attributes, set only through the TimePicker's own
+                // props.
+                ...fieldLocks(fieldProps),
+                'aria-errormessage': ariaErrorMessage,
+                'aria-details': ariaDetails,
+                value: draft ?? displayLabel,
+                // Controlled: a part's default value would only make React warn.
+                defaultValue: undefined,
+                onChange: handleInputChange,
+                onClick: handleInputClick,
+                onFocus,
+                onBlur: handleBlur,
+                onKeyDown: handleKeyDown,
+                onKeyUp: handleKeyUp,
+                placeholder,
+                disabled,
+                readOnly,
+                autoComplete,
+                autoCapitalize,
+                autoCorrect,
+                maxLength,
+                enterKeyHint,
+                inputMode,
+                spellCheck,
+                autoFocus,
+                tabIndex,
+                // The control's own: the hidden input submits the value, and a focusable control
+                // is never hidden.
+                name: undefined,
+                form: undefined,
+                hidden: undefined,
+                inert: undefined,
+                'aria-hidden': undefined,
+              },
+            })}
             ref={inputRefs}
-            type="text"
-            {...lb.getComboboxProps()}
-            aria-controls={listboxMounted ? lb.listboxId : undefined}
-            {...fieldProps}
-            aria-errormessage={ariaErrorMessage}
-            aria-details={ariaDetails}
-            value={draft ?? displayLabel}
-            onChange={handleInputChange}
-            onClick={handleInputClick}
-            onFocus={onFocus}
-            onBlur={handleBlur}
-            onKeyDown={handleKeyDown}
-            onKeyUp={handleKeyUp}
-            placeholder={placeholder}
-            disabled={disabled}
-            readOnly={readOnly}
-            autoComplete={autoComplete}
-            autoCapitalize={autoCapitalize}
-            autoCorrect={autoCorrect}
-            maxLength={maxLength}
-            enterKeyHint={enterKeyHint}
-            inputMode={inputMode}
-            spellCheck={spellCheck}
-            autoFocus={autoFocus}
-            tabIndex={tabIndex}
-            className={cn(
-              timePickerClassNames.input,
-              inputHeightClasses[size],
-              'w-full',
-              inputPaddingClasses[size],
-              inputTextClasses[size],
-              inputAppearanceClasses[appearance],
-              'text-foreground placeholder:text-muted-foreground',
-              inputFocus,
-              disabledStyles,
-              invalidLook && inputInvalid,
-              pickerEndPadding(Number(showClear) + Number(showExpand), size),
-            )}
           />
           {showClear && (
             <button
+              // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot
+              // change it).
               type="button"
-              aria-label={labels?.clear ?? 'Clear time'}
-              disabled={disabled}
-              // Keeps focus (and an open list) on the input while the pointer clears it.
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={handleClear}
-              className={cn(
-                timePickerClassNames.clearButton,
-                pickerIconButtonClasses(size, appearance),
-                pickerButtonOffset(size, showExpand ? 2 : 1),
-                focusRing,
-                disabledStyles,
-              )}
+              {...mergeSlotProps(slotProps?.clearButton, {
+                className: cn(
+                  timePickerClassNames.clearButton,
+                  pickerIconButtonClasses(size, appearance),
+                  pickerButtonOffset(size, showExpand ? 2 : 1),
+                  focusRing,
+                  disabledStyles,
+                ),
+                locked: {
+                  type: 'button',
+                  'aria-label': labels?.clear ?? 'Clear time',
+                  disabled,
+                  tabIndex: undefined,
+                  'aria-disabled': undefined,
+                  'data-disabled': undefined,
+                  'data-disabled-focusable': undefined,
+                  hidden: undefined,
+                  inert: undefined,
+                  'aria-hidden': undefined,
+                  // Keeps focus (and an open list) on the input while the pointer clears it.
+                  onMouseDown: preventMouseDown,
+                  onClick: handleClear,
+                },
+              })}
             >
               <DismissIcon size={pickerGlyphSize(size, 'icon')} />
             </button>
@@ -900,14 +1089,16 @@ export const TimePicker = (props: TimePickerProps) => {
               appearance={appearance}
               className={timePickerClassNames.expandButton}
               iconClassName={timePickerClassNames.expandIcon}
+              part={slotProps?.expandButton}
             />
           )}
         </div>
         {showOwnError && (
           <p
-            id={errorId}
-            role="alert"
-            className={cn(timePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error')}
+            {...mergeSlotProps(slotProps?.errorMessage, {
+              className: cn(timePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error'),
+              locked: { id: errorId, role: 'alert' },
+            })}
           >
             {errorMessage}
           </p>
@@ -927,24 +1118,18 @@ export const TimePicker = (props: TimePickerProps) => {
         />
         {open && (
           <Portal layerId={layerId}>
-            <div
-              ref={surfaceRefs}
-              {...floatingProps}
-              data-state="open"
-              className={cn(
-                timePickerClassNames.surface,
-                'flex flex-col overflow-hidden rounded border border-border bg-background shadow-8',
-              )}
-            >
+            <div {...surfaceProps} style={surfaceStyle} ref={surfaceRefs}>
               {hasMatches ? (
                 renderListbox(false)
               ) : (
                 <div
-                  aria-hidden="true"
-                  className={cn(
-                    timePickerClassNames.emptyMessage,
-                    'px-3 py-1.5 text-body-1 text-muted-foreground',
-                  )}
+                  {...mergeSlotProps(slotProps?.emptyMessage, {
+                    className: cn(
+                      timePickerClassNames.emptyMessage,
+                      'px-3 py-1.5 text-body-1 text-muted-foreground',
+                    ),
+                    locked: { 'aria-hidden': 'true', tabIndex: undefined },
+                  })}
                 >
                   {statusMessage}
                 </div>

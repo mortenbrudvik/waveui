@@ -16,7 +16,8 @@ import { useDismiss } from '../../../hooks/useDismiss';
 import { useRestoreFocus } from '../../../hooks/useRestoreFocus';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
-import type { ModalType } from '../../../lib/types';
+import type { ModalType, Slot } from '../../../lib/types';
+import { Button } from '../../button/Button';
 import { expectNoA11yViolations, renderWithProviders } from '../../../test-utils';
 
 /*
@@ -1037,6 +1038,46 @@ describe('Drawer backdrop, closeButton and titleAction (P6-06 D93–D95, D98)', 
         </Drawer>,
       );
       expect(button('Close settings')).toContainElement(screen.getByTestId('glyph'));
+    });
+
+    it('merges a Button slot object whose children are a render function, never nesting a button (P13-01)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        render(
+          <Drawer
+            defaultOpen
+            title="Filters"
+            onOpenChange={onOpenChange}
+            closeButton={
+              {
+                as: Button,
+                children: (Component: React.ElementType, props: object) => (
+                  <Component {...props}>Done</Component>
+                ),
+              } as Slot<'span'>
+            }
+          >
+            Body
+          </Drawer>,
+        );
+        const done = button('Done');
+        expect(done).toHaveClass(drawerClassNames.closeButton);
+        expect(done.querySelector('button')).toBeNull();
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] Drawer: `closeButton` received a slot object that renders a button; its props were merged into the built-in Close button (buttons cannot be nested). Pass icon content instead, e.g. `closeButton={<CloseIcon />}`.',
+          ],
+        ]);
+        await user.click(done);
+        expect(onOpenChange).toHaveBeenCalledWith(
+          false,
+          expect.objectContaining({ reason: 'close-button' }),
+        );
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it('merges a button with a text label, named by its text, with a warning', async () => {

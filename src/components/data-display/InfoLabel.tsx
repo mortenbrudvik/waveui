@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { infoLabelClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp } from '../../lib/dev';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { MotionSlot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { markFieldLabel } from '../input/fieldLabel';
@@ -43,6 +44,46 @@ export interface InfoLabelProps
   motion?: MotionSlot | null;
   /** Ref to the root `<span>`. */
   ref?: React.Ref<HTMLSpanElement>;
+  /**
+   * Props for the elements the InfoLabel draws besides its root, by part, merged into each part's
+   * own: your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref beside its ref. Every attribute the InfoLabel sets on
+   * a part is locked and keeps its value (its own props routed there win); you add the
+   * attributes it does not set. A part takes no `children`. The InfoLabel renders a `Label` and
+   * an `InfoButton`: `label` and `infoButton` are their props, so their own rules apply, and
+   * `info` is the InfoButton's `info` part (the InfoButton's beak is not a part here). Fluent UI's
+   * InfoLabel has `label` and `infoButton` slots, and its `info` prop reaches the InfoButton's
+   * `info` slot, the note.
+   */
+  slotProps?: {
+    /**
+     * The `<label>` of the label text, a `Label` (stable class `wave-info-label__label`). Your
+     * handlers run as on a label of yours. Locked: `id` (the button's name points at it),
+     * `htmlFor` and the Label props the InfoLabel passes on (`required`, `size`, `weight`,
+     * `disabled`).
+     */
+    label?: SlotPart<'label'>;
+    /**
+     * The info `<button>`, the root of an `InfoButton` (stable class
+     * `wave-info-label__info-button`): your props are the InfoButton's, so its rules apply (your
+     * handlers run before its own; `preventDefault()` in yours skips its handling of the event,
+     * its press and focus bookkeeping aside, as with an InfoButton you render). Locked: `id`,
+     * `type` (a button), `aria-label` (`infoButtonLabel`), `aria-labelledby` (your ids are added
+     * after the label's and the button's), `disabled` and `aria-haspopup` (unset), `tabIndex`,
+     * `hidden`, `inert` and `aria-hidden` (unset), and the InfoButton props the InfoLabel passes on
+     * (`info`, `size`, `openOnHover`, `motion` and the InfoButton's own `slotProps`, which carry
+     * `info` below: one passed on through this part is ignored). A `data-*` attribute you set
+     * replaces the InfoButton's own of that name (`data-size`), and its look does not follow it.
+     */
+    infoButton?: SlotPart<'button'>;
+    /**
+     * The InfoButton's note `<div role="note">`, rendered in a portal while it shows (stable
+     * classes `wave-info-button__info` and `wave-info-label__info`): the InfoButton's `info`
+     * part, with its locks and handler rules. The `motion` prop gives it its motion classes,
+     * before yours.
+     */
+    info?: SlotPart<'div'>;
+  };
 }
 
 /**
@@ -81,6 +122,7 @@ export const InfoLabel = ({
   disabled,
   className,
   ref,
+  slotProps,
   ...rest
 }: InfoLabelProps) => {
   const content = resolveDeprecatedProp('InfoLabel', children, label, 'label', 'children');
@@ -100,26 +142,37 @@ export const InfoLabel = ({
       {...rest}
     >
       <Label
-        className={infoLabelClassNames.label}
-        id={labelId}
-        htmlFor={htmlFor}
-        required={required}
-        size={size}
-        weight={weight}
-        disabled={disabled}
+        {...mergeSlotProps(slotProps?.label, {
+          className: infoLabelClassNames.label,
+          locked: { id: labelId, htmlFor, required, size, weight, disabled },
+        })}
       >
         {content}
       </Label>
       <InfoNoteClassContext.Provider value={noteClass}>
+        {/* The `infoButton` part is the InfoButton's own props; the `info` part reaches its note
+            as the InfoButton's `info` part, which wins over one passed on through `infoButton`. */}
         <InfoButton
-          id={buttonId}
-          className={infoLabelClassNames.infoButton}
+          {...mergeSlotProps(slotProps?.infoButton, {
+            className: infoLabelClassNames.infoButton,
+            locked: {
+              id: buttonId,
+              type: undefined,
+              disabled: undefined,
+              tabIndex: undefined,
+              hidden: undefined,
+              inert: undefined,
+              'aria-hidden': undefined,
+              'aria-haspopup': undefined,
+              'aria-label': infoButtonLabel,
+              'aria-labelledby': `${labelId} ${buttonId}`,
+            },
+          })}
           info={info}
           size={size}
           openOnHover={openOnHover}
           motion={motion}
-          aria-label={infoButtonLabel}
-          aria-labelledby={`${labelId} ${buttonId}`}
+          slotProps={slotProps?.info && { info: slotProps.info }}
         />
       </InfoNoteClassContext.Provider>
     </span>

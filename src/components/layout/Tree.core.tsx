@@ -11,6 +11,12 @@ import { isHiddenInput } from '../../lib/focus';
 import { CheckIcon, ChevronRightIcon, SubtractIcon } from '../../lib/icons';
 import type { MotionSlot, SelectionMode } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
+import {
+  composeAfterPart,
+  HIDDEN_PART_LOCKS,
+  mergeSlotProps,
+  type SlotPart,
+} from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import { useCollapsePresence } from '../../hooks/useCollapsePresence';
 import { useControllable } from '../../hooks/useControllable';
@@ -19,6 +25,7 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { isHiddenByCss, useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import {
+  TREE_PART_LOCKS,
   TreeCheckForcedContext,
   TreeContext,
   TreeItemContext,
@@ -521,6 +528,84 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
   leaf?: boolean;
   /** Ref to the `role="treeitem"` element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the item draws, by part, merged into each part's own: your classes
+   * after the part's (yours win a conflict), your styles over its styles, your attributes and
+   * handlers added, your ref attached. Every attribute the item sets on a part is locked and keeps
+   * the item's value, and no part takes a role, a tab index or the markers by which the tree reads
+   * an item (its row, label, checkbox, aside and actions, a persona layout's name, a roving
+   * container), so a part changes neither the tree's items, its one tab stop, its typeahead nor
+   * which clicks and keys an item takes. A part takes no `children` (the item draws their
+   * content); the treeitem element itself takes the item's own props, and each nested `Tree.Item`
+   * takes its own `slotProps`. Apart from the checkbox and the actions (below), no part carries a
+   * handler of the item: an event on a part reaches the item and its tree after your handler, as
+   * one on the label does, and `preventDefault()` in yours skips their handling of it there too.
+   * A click you prevent on the row, the label, the aside or the radio neither activates nor
+   * expands the item, while the item's `onClick` is still called, as for a prevented click on the
+   * label. Fluent UI's TreeItemLayout gives most of these parts slots of their own (`main` for the
+   * label, `aside`, `actions`, `selector` for the checkbox or radio).
+   */
+  slotProps?: {
+    /**
+     * The `<div>` of the item's row, which holds the chevron, the checkbox or radio, the icons,
+     * the label, the aside and the actions, and draws the focus ring and the selected look
+     * (stable class `wave-tree-item__row`). Locked: its marker (the item's clicks, its focus ring
+     * and the reveal of its actions find the row by it), no role or tab index, the tree's other
+     * markers, and no `hidden`, `inert` or `aria-hidden`, since it holds the item's name and its
+     * actions.
+     */
+    row?: SlotPart<'div'>;
+    /**
+     * The checkbox `<span>` of a `selectionMode="multiple"` tree, or the radio `<span>` of a
+     * `"single"` one, before the icon (stable class `wave-tree-item__indicator`); absent with
+     * `selectionMode="none"`. Locked on the checkbox: its role, `aria-checked`, its name
+     * (`aria-labelledby`, the item's name; your ids are joined after it), its tab index (-1: it
+     * never takes focus) and marker, no `hidden`, `inert` or `aria-hidden`, and its handlers: a
+     * press focuses the item instead, a click toggles the check, and `preventDefault()` in your
+     * `onMouseDown` or `onClick` skips that handling. Locked on the radio: `aria-hidden` (the
+     * item's `aria-selected` carries the state), no role or tab index; a click on it is a click on
+     * the row.
+     */
+    indicator?: SlotPart<'span'>;
+    /**
+     * The `<span>` of the label (the item's content other than its nested items), which names the
+     * item (stable class `wave-tree-item__label`). Locked: its `id` (the item's
+     * `aria-labelledby`), its marker and the item's `data-roving-text` (typeahead reads the label
+     * through them), no `aria-label` (it would replace the label's text in the item's name), no
+     * role or tab index, the tree's other markers, and no `hidden`, `inert` or `aria-hidden`.
+     */
+    label?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `aside`, rendered while `aside` renders content, which describes the item
+     * (stable class `wave-tree-item__aside`). Locked: its `id` (the item's `aria-describedby`),
+     * its marker (it gives way to the actions by it), no `aria-label`, no role or tab index, the
+     * tree's other markers, and no `hidden`, `inert` or `aria-hidden`.
+     */
+    aside?: SlotPart<'span'>;
+    /**
+     * The toolbar `<span>` of `actions`, rendered while `actions` renders content (stable class
+     * `wave-tree-item__actions`). Locked: its role (`toolbar`), its name (`aria-labelledby`, the
+     * item's name; your ids are joined after it), `aria-orientation`, its markers (the item's
+     * clicks and keys tell its actions apart by them, the tree's arrow keys leave them to the
+     * actions, and a surface an action opened keeps them shown while it holds focus), no tab
+     * index (the actions themselves hold the tab stops), the tree's other markers, and no
+     * `hidden`, `inert` or `aria-hidden`. Its `onKeyDown` (the arrow keys between the actions and,
+     * with `navigationMode="treegrid"`, back to the item) is locked: `preventDefault()` in yours
+     * skips it. Its focus and blur bookkeeping (which action holds the tab stop, and whether
+     * focus is in a surface an action opened) always runs, after your `onFocus` and `onBlur`.
+     */
+    actions?: SlotPart<'span'>;
+    /**
+     * The `role="group"` `<div>` of the nested items, rendered while the item is expanded and
+     * while it collapses, inside the element the Tree's `motion` collapses (stable class
+     * `wave-tree-item__group`). Locked: its role, no tab index, the tree's markers, and no
+     * `hidden`, `inert` or `aria-hidden`, since it holds the nested items. It carries no handler
+     * of the item: the clicks and keys of the nested items reach your handler after their own
+     * handling and before the tree's, so `preventDefault()` in yours skips the tree's handling of
+     * them (its arrow keys and typeahead), as a nested item's own handler would.
+     */
+    group?: SlotPart<'div'>;
+  };
 }
 
 /**
@@ -575,6 +660,16 @@ function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
   return target?.closest?.('[data-tree-row]')?.parentElement === event.currentTarget;
 }
 
+/**
+ * The checkbox never takes focus (APG: focus stays on tree items): a press on it focuses its item
+ * instead, the treeitem its row sits in (the row is the checkbox's parent and the treeitem's
+ * child, `isOwnClick`'s rule). Found from the event, so a part can take it as its own handler.
+ */
+function keepFocusOnItem(event: React.MouseEvent<HTMLSpanElement>): void {
+  event.preventDefault();
+  event.currentTarget.closest('[data-tree-row]')?.parentElement?.focus({ preventScroll: true });
+}
+
 interface TreeItemActionsProps {
   /** Id of the element that names the item. */
   labelledBy: string;
@@ -587,6 +682,8 @@ interface TreeItemActionsProps {
   navigationMode: 'tree' | 'treegrid';
   /** Moves focus back to the item. */
   onReturn: () => void;
+  /** The item's `slotProps.actions`, merged only when given. */
+  part: SlotPart<'span'> | undefined;
   children: React.ReactNode;
 }
 
@@ -601,6 +698,7 @@ const TreeItemActions = ({
   tabStop,
   navigationMode,
   onReturn,
+  part,
   children,
 }: TreeItemActionsProps) => {
   const treegrid = navigationMode === 'treegrid';
@@ -676,6 +774,16 @@ const TreeItemActions = ({
     }
   };
 
+  // A part's ref joins the roving container's after the spread, so an inline ref never detaches
+  // the container (which would hand its stamped tab stops back).
+  const toolbarRef = useMergedRefs<HTMLSpanElement>(rovingRef, part?.ref);
+  const focusInPopup = popupFocus === null ? undefined : '';
+  const className = cn(
+    treeItemClassNames.actions,
+    'inline-flex items-center gap-1',
+    ACTIONS_VISIBILITY,
+  );
+
   return (
     <span
       role="toolbar"
@@ -683,16 +791,28 @@ const TreeItemActions = ({
       aria-orientation="horizontal"
       data-tree-actions=""
       data-roving-container=""
-      ref={rovingRef}
-      data-focus-in-popup={popupFocus === null ? undefined : ''}
+      data-focus-in-popup={focusInPopup}
       onKeyDown={handleToolbarKeyDown}
-      onFocus={handleToolbarFocus}
-      onBlur={handleToolbarBlur}
-      className={cn(
-        treeItemClassNames.actions,
-        'inline-flex items-center gap-1',
-        ACTIONS_VISIBILITY,
-      )}
+      className={className}
+      {...(part &&
+        mergeSlotProps(part, {
+          className,
+          locked: {
+            ...TREE_PART_LOCKS,
+            ...HIDDEN_PART_LOCKS,
+            role: 'toolbar',
+            'aria-labelledby': labelledBy,
+            'aria-orientation': 'horizontal',
+            'data-tree-actions': '',
+            'data-roving-container': '',
+            'data-focus-in-popup': focusInPopup,
+            onKeyDown: handleToolbarKeyDown,
+          },
+        }))}
+      // Bookkeeping that follows focus whatever a part's handlers do: after them, never skipped.
+      onFocus={composeAfterPart(part?.onFocus, handleToolbarFocus)}
+      onBlur={composeAfterPart(part?.onBlur, handleToolbarBlur)}
+      ref={toolbarRef}
     >
       {children}
     </span>
@@ -755,6 +875,7 @@ export const TreeItem = ({
   onFocus,
   onBlur,
   ref,
+  slotProps,
   ...props
 }: TreeItemProps) => {
   const { 'data-roving-text': typeaheadText, ...rest } = props as typeof props & {
@@ -840,6 +961,8 @@ export const TreeItem = ({
     partRef: groupRef,
     getTrigger: () => itemRef.current,
   });
+  // A group part's ref joins the group's own after the spread: an inline ref never detaches it.
+  const groupPartRef = useMergedRefs<HTMLDivElement>(groupRef, slotProps?.group?.ref);
 
   // The optional-indicator slot rule (C-SLOTS): `null`/`undefined` keep the chevron, `false` or
   // content that renders nothing hides it (the spacer keeps the column), and a custom glyph is
@@ -988,27 +1111,19 @@ export const TreeItem = ({
     }
   });
 
-  // The checkbox never takes focus (APG: focus stays on tree items): a press on it focuses its
-  // item instead, and its click toggles the check without activating the item.
-  const keepFocusOnItem = (event: React.MouseEvent<HTMLSpanElement>) => {
-    event.preventDefault();
-    itemRef.current?.focus({ preventScroll: true });
-  };
+  // The checkbox never takes focus (`keepFocusOnItem`), and its click toggles the check without
+  // activating the item.
   const handleCheckboxClick = (event: React.MouseEvent<HTMLSpanElement>) => {
     ctx.toggleChecked(value, event.nativeEvent);
   };
 
-  const checkbox =
-    checkState === undefined ? null : (
-      <span
-        role="checkbox"
-        aria-checked={checkState === 'mixed' ? 'mixed' : checkState === 'checked'}
-        aria-labelledby={nameId}
-        tabIndex={-1}
-        data-tree-checkbox=""
-        onMouseDown={keepFocusOnItem}
-        onClick={handleCheckboxClick}
-        className={cn(
+  // The parts are merged only when given: a tree renders many items.
+  const indicatorPart = slotProps?.indicator;
+  const ariaChecked = checkState === 'mixed' ? 'mixed' : checkState === 'checked';
+  const checkboxClasses =
+    checkState === undefined
+      ? undefined
+      : cn(
           treeItemClassNames.indicator,
           // Checkbox's box: 16px inside a 24px target (the pseudo-element), WCAG 2.5.8.
           'relative inline-flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none',
@@ -1016,7 +1131,33 @@ export const TreeItem = ({
           checkState === 'unchecked'
             ? cn('border-stroke-accessible bg-transparent', forcedColors.control)
             : 'border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]',
-        )}
+        );
+  const checkbox =
+    checkState === undefined ? null : (
+      <span
+        role="checkbox"
+        aria-checked={ariaChecked}
+        aria-labelledby={nameId}
+        tabIndex={-1}
+        data-tree-checkbox=""
+        onMouseDown={keepFocusOnItem}
+        onClick={handleCheckboxClick}
+        className={checkboxClasses}
+        {...(indicatorPart &&
+          mergeSlotProps(indicatorPart, {
+            className: checkboxClasses,
+            locked: {
+              ...TREE_PART_LOCKS,
+              ...HIDDEN_PART_LOCKS,
+              role: 'checkbox',
+              'aria-checked': ariaChecked,
+              'aria-labelledby': nameId,
+              tabIndex: -1,
+              'data-tree-checkbox': '',
+              onMouseDown: keepFocusOnItem,
+              onClick: handleCheckboxClick,
+            },
+          }))}
       >
         {checkState === 'mixed' ? (
           <SubtractIcon size={12} className={forcedColors.selectedLeaf} />
@@ -1028,17 +1169,26 @@ export const TreeItem = ({
 
   // Single mode: a decorative radio (the treeitem's aria-selected carries the state). A click on
   // it is a click on the row, so it activates the item.
-  const radio =
-    ctx.selectionMode === 'single' ? (
-      <span
-        aria-hidden="true"
-        className={cn(
+  const radioClasses =
+    ctx.selectionMode === 'single'
+      ? cn(
           treeItemClassNames.indicator,
           'inline-flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors motion-reduce:transition-none',
           isSelected
             ? 'border-2 border-primary forced-colors:border-[Highlight]'
             : cn('border-stroke-accessible', forcedColors.control),
-        )}
+        )
+      : undefined;
+  const radio =
+    ctx.selectionMode === 'single' ? (
+      <span
+        aria-hidden="true"
+        className={radioClasses}
+        {...(indicatorPart &&
+          mergeSlotProps(indicatorPart, {
+            className: radioClasses,
+            locked: { ...TREE_PART_LOCKS, 'aria-hidden': true },
+          }))}
       >
         {isSelected && (
           <span className={cn('block size-2 rounded-full bg-primary', forcedColors.selectedLeaf)} />
@@ -1050,6 +1200,27 @@ export const TreeItem = ({
 
   // Items in this item's group are checked when the list checks this item or an ancestor.
   const groupListed = ancestorListed || (multiple && ctx.checked.has(value));
+
+  const rowClasses = cn(
+    treeItemClassNames.row,
+    'flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-subtle-hover',
+    hasActions && 'group/row',
+    isSelected && cn('bg-subtle-selected font-semibold', forcedColors.selectedContainer),
+  );
+  // The label shrinks (and truncates) when the row has content after it.
+  const labelClasses = cn(
+    treeItemClassNames.label,
+    'truncate',
+    (iconAfterNode || hasAside || hasActions) && 'min-w-0',
+  );
+  const asideClasses = hasAside
+    ? cn(
+        treeItemClassNames.aside,
+        'inline-flex items-center text-caption-1 text-muted-foreground',
+        hasActions && ASIDE_OFF_WITH_ACTIONS,
+      )
+    : undefined;
+  const groupClasses = isGroupMounted ? cn(treeItemClassNames.group, 'ps-4') : undefined;
 
   return (
     <div
@@ -1082,13 +1253,7 @@ export const TreeItem = ({
       )}
       aria-expanded={hasChildren ? isExpanded : undefined}
       // From the checked list, after the rest props, so a consumer cannot contradict it.
-      aria-checked={
-        checkState === undefined
-          ? undefined
-          : checkState === 'mixed'
-            ? 'mixed'
-            : checkState === 'checked'
-      }
+      aria-checked={checkState === undefined ? undefined : ariaChecked}
       tabIndex={ctx.getTabIndex(value)}
       data-roving-value={value}
       data-selected={isSelected ? '' : undefined}
@@ -1105,12 +1270,12 @@ export const TreeItem = ({
     >
       <div
         data-tree-row=""
-        className={cn(
-          treeItemClassNames.row,
-          'flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-subtle-hover',
-          hasActions && 'group/row',
-          isSelected && cn('bg-subtle-selected font-semibold', forcedColors.selectedContainer),
-        )}
+        className={rowClasses}
+        {...(slotProps?.row &&
+          mergeSlotProps(slotProps.row, {
+            className: rowClasses,
+            locked: { ...TREE_PART_LOCKS, ...HIDDEN_PART_LOCKS, 'data-tree-row': '' },
+          }))}
       >
         {chevron}
         {indicator}
@@ -1119,12 +1284,19 @@ export const TreeItem = ({
           id={labelId}
           data-tree-label=""
           data-roving-text={typeaheadText}
-          // The label shrinks (and truncates) when the row has content after it.
-          className={cn(
-            treeItemClassNames.label,
-            'truncate',
-            (iconAfterNode || hasAside || hasActions) && 'min-w-0',
-          )}
+          className={labelClasses}
+          {...(slotProps?.label &&
+            mergeSlotProps(slotProps.label, {
+              className: labelClasses,
+              locked: {
+                ...TREE_PART_LOCKS,
+                ...HIDDEN_PART_LOCKS,
+                id: labelId,
+                'aria-label': undefined,
+                'data-tree-label': '',
+                'data-roving-text': typeaheadText,
+              },
+            }))}
         >
           <TreeCheckForcedContext.Provider value={false}>
             <TreeLabelContext.Provider value>
@@ -1147,11 +1319,18 @@ export const TreeItem = ({
               <span
                 id={asideId}
                 data-tree-aside=""
-                className={cn(
-                  treeItemClassNames.aside,
-                  'inline-flex items-center text-caption-1 text-muted-foreground',
-                  hasActions && ASIDE_OFF_WITH_ACTIONS,
-                )}
+                className={asideClasses}
+                {...(slotProps?.aside &&
+                  mergeSlotProps(slotProps.aside, {
+                    className: asideClasses,
+                    locked: {
+                      ...TREE_PART_LOCKS,
+                      ...HIDDEN_PART_LOCKS,
+                      id: asideId,
+                      'aria-label': undefined,
+                      'data-tree-aside': '',
+                    },
+                  }))}
               >
                 {materialiseSlotContent(aside)}
               </span>
@@ -1166,6 +1345,7 @@ export const TreeItem = ({
                 }
                 navigationMode={ctx.navigationMode}
                 onReturn={() => ctx.focusValue(value)}
+                part={slotProps?.actions}
               >
                 {materialiseSlotContent(actions)}
               </TreeItemActions>
@@ -1182,7 +1362,16 @@ export const TreeItem = ({
                 {...collapsePresenceProps}
                 className={cn(treeItemClassNames.collapse, collapseClassName)}
               >
-                <div ref={groupRef} role="group" className={cn(treeItemClassNames.group, 'ps-4')}>
+                <div
+                  role="group"
+                  className={groupClasses}
+                  {...(slotProps?.group &&
+                    mergeSlotProps(slotProps.group, {
+                      className: groupClasses,
+                      locked: { ...TREE_PART_LOCKS, ...HIDDEN_PART_LOCKS, role: 'group' },
+                    }))}
+                  ref={groupPartRef}
+                >
                   {nestedItems}
                 </div>
               </div>

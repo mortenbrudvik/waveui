@@ -1142,6 +1142,99 @@ export function expectThrows(ui: React.ReactElement, message: string): void {
 }
 
 /**
+ * Markup with every element's attributes in alphabetical order, so two renders compare by their
+ * attribute sets and values whatever order the attributes were written in. `markup` is an HTML
+ * string (a `renderToString` result) or an element, whose content is taken (`innerHTML`); the
+ * result is the normalised HTML of that content. Text, comments and element order are kept.
+ *
+ * The `slotProps` rollout uses it: a part's merged props put the component's class before its
+ * locked attributes, so the markup without `slotProps` has the attributes of 0.17.1 in another
+ * order, and each component's test pins its 0.17.1 markup sorted this way.
+ *
+ * @example
+ * expect(sortAttributes(renderToString(<Switch label="On" />))).toBe(SWITCH_0_17_MARKUP);
+ */
+export function sortAttributes(markup: string | Element): string {
+  const template = document.createElement('template');
+  template.innerHTML = typeof markup === 'string' ? markup : markup.innerHTML;
+  for (const element of template.content.querySelectorAll('*')) {
+    const attributes = Array.from(element.attributes, ({ name, value }) => [name, value] as const);
+    attributes.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    for (const [name] of attributes) element.removeAttribute(name);
+    for (const [name, value] of attributes) element.setAttribute(name, value);
+  }
+  return template.innerHTML;
+}
+
+/**
+ * Markup with every id React generated (`useId`: `_r_1f_` in the browser, `_R_0H1_` on the
+ * server) replaced by `_id0_`, `_id1_`, … in the order each first appears, so a pin of a client
+ * render does not depend on how many ids the tests before it generated (the browser's counter
+ * runs across a test file). The same id gets the same name everywhere in the markup, so the
+ * references between elements stay checked. Use it with {@link sortAttributes} on an open
+ * overlay's `document.body`.
+ *
+ * @example
+ * expect(normaliseIds(sortAttributes(document.body))).toBe(OPEN_COMBOBOX_MARKUP);
+ */
+export function normaliseIds(markup: string): string {
+  const names = new Map<string, string>();
+  return markup.replace(/_[rR]_[0-9A-Za-z]+_/g, (id) => {
+    let name = names.get(id);
+    if (name === undefined) names.set(id, (name = `_id${names.size}_`));
+    return name;
+  });
+}
+
+/**
+ * The opening tag of each element, one per line, its attributes in alphabetical order
+ * ({@link sortAttributes}) and the generated ids normalised across all of them
+ * ({@link normaliseIds}, so an `aria-controls` and the `id` it names agree). A compact pin of a
+ * component's parts without their content (icons, options), an open popup's included.
+ *
+ * @example
+ * expect(openingTags(input, listbox)).toBe(['<input …>', '<ul …>'].join('\n'));
+ */
+export function openingTags(...elements: Element[]): string {
+  const tags = elements.map((element) => {
+    const markup = sortAttributes((element.cloneNode(false) as Element).outerHTML);
+    const closing = `</${element.localName}>`;
+    return markup.endsWith(closing) ? markup.slice(0, -closing.length) : markup;
+  });
+  return normaliseIds(tags.join('\n'));
+}
+
+/**
+ * Asserts that a component's `slotProps` changes no markup while it carries nothing: renders
+ * `ui(undefined)`, then re-renders the same root with `{}`, with `everyPart` (each part `{}`) and
+ * with `undefined` again, comparing the whole document body (`baseElement.innerHTML`, so a part
+ * rendered in a portal counts) with the first render each time. One root keeps the generated ids,
+ * so the strings compare as they are. Pass a `ui` that renders every part (a label, a message, an
+ * open popup, …); the root is unmounted at the end. An overlay's parts are pinned against 0.17.1
+ * after an open client render, since `renderToString` holds no portal: with
+ * `sortAttributes(document.body)`, or part by part with {@link openingTags}.
+ *
+ * @example
+ * expectInertSlotProps((slotProps) => <Switch label="On" slotProps={slotProps} />, {
+ *   track: {},
+ *   thumb: {},
+ *   label: {},
+ * });
+ */
+export function expectInertSlotProps<S extends object>(
+  ui: (slotProps: S | undefined) => React.ReactElement,
+  everyPart: S,
+): void {
+  const { baseElement, rerender, unmount } = render(ui(undefined));
+  const markup = baseElement.innerHTML;
+  for (const slotProps of [{} as S, everyPart, undefined]) {
+    rerender(ui(slotProps));
+    expect(baseElement.innerHTML).toBe(markup);
+  }
+  unmount();
+}
+
+/**
  * Creates a wrapper that renders `Root` with `rootProps` around its children — for rendering an
  * overlay's sub-components in isolation. `rootProps` are `Root`'s props without `children` (the
  * wrapper supplies them); a discriminated-union props type keeps its variants

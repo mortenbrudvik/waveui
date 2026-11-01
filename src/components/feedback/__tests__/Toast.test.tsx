@@ -10,8 +10,10 @@ import { useModalIsolation } from '../../../hooks/useModalIsolation';
 import { toastClassNames, toastTitleClassNames } from '../../../lib/classNames';
 import { Portal } from '../../portal/Portal';
 import {
+  expectInertSlotProps,
   expectNoA11yViolations,
   installResizeObserverMock,
+  openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
@@ -2000,5 +2002,356 @@ describe('Toaster: user interaction under fake timers (feedback-navigation#12)',
     await user.unhover(toast);
     advance(5000);
     expect(getToasts()).toHaveLength(0);
+  });
+});
+
+// The Toaster's `toast` part (the container) is tested in Toaster.motion.test.tsx, the container's suite.
+describe('Toast — slotProps', () => {
+  type ToastSlotProps = NonNullable<ToastProps['slotProps']>;
+  const EVERY_PART: ToastSlotProps = { content: {}, dismissButton: {} };
+  const content = () =>
+    document.querySelector<HTMLElement>('.' + toastClassNames.content) as HTMLElement;
+  const dismissButton = () => screen.getByRole('button', { name: 'Dismiss' });
+
+  it('renders the parts of 3fafbe0 (attributes sorted)', () => {
+    // Captured from 3fafbe0's server render: the merged props may put the class before the locked
+    // attributes.
+    const host = document.createElement('div');
+    host.innerHTML = renderToString(
+      <Toast status="success" onDismiss={() => {}}>
+        <Toast.Title action={<a href="#undo">Undo</a>}>Saved</Toast.Title>
+        <Toast.Body subtitle="2 files">Done.</Toast.Body>
+      </Toast>,
+    );
+    expect(
+      openingTags(
+        host.querySelector('.' + toastClassNames.content) as Element,
+        host.querySelector('.' + toastClassNames.dismissButton) as Element,
+      ),
+    ).toBe(
+      [
+        '<div class="wave-toast__content min-w-0 flex-1">',
+        '<button aria-label="Dismiss" class="wave-toast__dismiss-button inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-subtle-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const onDismiss = () => {};
+    const cases: Array<Partial<ToastProps>> = [
+      { title: 'Saved', children: 'Your changes were saved.' },
+      { status: 'error', onDismiss, dismissLabel: 'Close', children: 'Failed' },
+      { icon: null, statusLabel: '', title: 'Quiet' },
+      { className: 'mine', id: 'own', role: 'log', 'aria-live': 'off', onDismiss },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps((slotProps) => <Toast {...props} slotProps={slotProps} />, EVERY_PART);
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its own classes', () => {
+    render(
+      <Toast
+        title="Saved"
+        onDismiss={() => {}}
+        data-testid="toast"
+        slotProps={{
+          content: { className: 'my-content', style: { opacity: 0.5 }, 'data-part': 'content' },
+          dismissButton: {
+            className: 'my-dismiss',
+            style: { margin: '2px' },
+            'data-part': 'dismiss',
+          },
+        }}
+      />,
+    );
+    const column = content();
+    expect(column.classList[0]).toBe(toastClassNames.content);
+    expect(column).toHaveClass('min-w-0', 'flex-1', 'my-content');
+    expect(column.classList[column.classList.length - 1]).toBe('my-content');
+    expect(column).toHaveAttribute('data-part', 'content');
+    expect(column).toHaveStyle({ opacity: '0.5' });
+    const button = dismissButton();
+    expect(button.classList[0]).toBe(toastClassNames.dismissButton);
+    expect(button).toHaveClass('p-1', 'my-dismiss');
+    expect(button.classList[button.classList.length - 1]).toBe('my-dismiss');
+    expect(button).toHaveAttribute('data-part', 'dismiss');
+    expect(button).toHaveStyle({ margin: '2px' });
+    // The root takes none of it, and no `slotProps` attribute.
+    expect(screen.getByTestId('toast')).not.toHaveAttribute('data-part');
+    expect(document.querySelector('[slotprops]')).toBeNull();
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Toast
+        title="Saved"
+        onDismiss={() => {}}
+        slotProps={{ content: { className: 'flex-none' }, dismissButton: { className: 'p-2' } }}
+      />,
+    );
+    expect(content()).toHaveClass('flex-none');
+    expect(content()).not.toHaveClass('flex-1');
+    expect(dismissButton()).toHaveClass('p-2');
+    expect(dismissButton()).not.toHaveClass('p-1');
+  });
+
+  it('attaches your refs to the parts', () => {
+    const contentRef = React.createRef<HTMLDivElement>();
+    const buttonRef = React.createRef<HTMLButtonElement>();
+    render(
+      <Toast
+        title="Saved"
+        onDismiss={() => {}}
+        slotProps={{ content: { ref: contentRef }, dismissButton: { ref: buttonRef } }}
+      />,
+    );
+    expect(contentRef.current).toBe(content());
+    expect(buttonRef.current).toBe(dismissButton());
+  });
+
+  it('keeps the text column reachable: its hidden state is locked unset', () => {
+    render(
+      <Toast
+        title="Saved"
+        slotProps={{
+          content: { hidden: true, inert: true, 'aria-hidden': true, title: 'Message' },
+        }}
+      />,
+    );
+    for (const name of ['hidden', 'inert', 'aria-hidden']) {
+      expect(content(), name).not.toHaveAttribute(name);
+    }
+    expect(content()).toHaveAttribute('title', 'Message');
+    expect(screen.getByRole('status')).toHaveTextContent(/^Info:\s*Saved$/);
+  });
+
+  it('locks the Dismiss button’s type, name, disabled state, tab stop and hidden state', () => {
+    render(
+      <Toast
+        title="Saved"
+        onDismiss={() => {}}
+        dismissLabel="Close"
+        slotProps={{
+          dismissButton: {
+            type: 'submit',
+            'aria-label': 'Other',
+            disabled: true,
+            tabIndex: -1,
+            hidden: true,
+            inert: true,
+            'aria-hidden': true,
+            title: 'Close the notice',
+          },
+        }}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Close' });
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button).toHaveAttribute('aria-label', 'Close');
+    expect(button).toBeEnabled();
+    for (const name of ['disabled', 'tabindex', 'hidden', 'inert', 'aria-hidden']) {
+      expect(button, name).not.toHaveAttribute(name);
+    }
+    expect(button).toHaveAttribute('title', 'Close the notice');
+  });
+
+  it('keeps the Dismiss button a button: a part sets no role on it', () => {
+    render(
+      <Toast title="Saved" onDismiss={() => {}} slotProps={{ dismissButton: { role: 'link' } }} />,
+    );
+    expect(screen.getByRole('button', { name: 'Dismiss' })).not.toHaveAttribute('role');
+  });
+
+  it('runs your Dismiss button handler first; preventDefault() skips onDismiss', async () => {
+    const user = userEvent.setup();
+    const calls: string[] = [];
+    const onDismiss = vi.fn(() => calls.push('onDismiss'));
+    const ui = (onClick: React.MouseEventHandler<HTMLButtonElement>) => (
+      <Toast title="Saved" onDismiss={onDismiss} slotProps={{ dismissButton: { onClick } }} />
+    );
+    const { rerender } = render(ui(() => calls.push('part')));
+    await user.click(dismissButton());
+    expect(calls).toEqual(['part', 'onDismiss']);
+    rerender(
+      ui((event) => {
+        calls.push('prevented');
+        event.preventDefault();
+      }),
+    );
+    await user.click(dismissButton());
+    expect(calls).toEqual(['part', 'onDismiss', 'prevented']);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a dispatched toast when your Dismiss button handler prevents the default', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    const { controller } = renderToaster();
+    const dispatchSaved = (onClick: React.MouseEventHandler<HTMLButtonElement>) =>
+      act(() => {
+        controller().dispatchToast(
+          <Toast onDismiss={onDismiss} slotProps={{ dismissButton: { onClick } }}>
+            <Toast.Title>Saved</Toast.Title>
+          </Toast>,
+          { toastId: 'saved', timeout: 0 },
+        );
+      });
+    dispatchSaved((event) => event.preventDefault());
+    await user.click(within(getViewport()).getByRole('button', { name: 'Dismiss' }));
+    expect(getToasts()).toHaveLength(1);
+    expect(onDismiss).not.toHaveBeenCalled();
+    dispatchSaved(() => {});
+    await user.click(within(getViewport()).getByRole('button', { name: 'Dismiss' }));
+    expect(getToasts()).toHaveLength(0);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs your text column handlers as your content’s: a prevented Delete keeps the toast', () => {
+    const { controller } = renderToaster();
+    const dispatchSaved = (onKeyDown: React.KeyboardEventHandler<HTMLDivElement>) =>
+      act(() => {
+        controller().dispatchToast(
+          <Toast slotProps={{ content: { onKeyDown } }}>
+            <Toast.Title>Saved</Toast.Title>
+          </Toast>,
+          { toastId: 'saved', timeout: 0 },
+        );
+      });
+    const onKeyDown = vi.fn((event: React.KeyboardEvent) => event.preventDefault());
+    dispatchSaved(onKeyDown);
+    fireEvent.keyDown(content(), { key: 'Delete' });
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    expect(getToasts()).toHaveLength(1);
+    dispatchSaved(() => {});
+    fireEvent.keyDown(content(), { key: 'Delete' });
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('keeps the Toaster’s view of the Dismiss button with a new inline ref on every render', () => {
+    vi.useFakeTimers();
+    try {
+      const elements: Array<HTMLButtonElement | null> = [];
+      const { controller } = renderToaster();
+      // A replacement renders the Toast again, with a new inline ref; the Dismiss button is still
+      // no action, so the default timeout applies.
+      for (const title of ['Saving', 'Saved']) {
+        act(() => {
+          controller().dispatchToast(
+            <Toast slotProps={{ dismissButton: { ref: (element) => void elements.push(element) } }}>
+              <Toast.Title>{title}</Toast.Title>
+            </Toast>,
+            { toastId: 'save' },
+          );
+        });
+      }
+      const button = within(getViewport()).getByRole('button', { name: 'Dismiss' });
+      expect(elements.at(-1)).toBe(button);
+      advance(4900);
+      expect(getToasts()).toHaveLength(1);
+      advance(200);
+      expect(getToasts()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('calls your part handlers and onDismiss once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onContentClick = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <React.StrictMode>
+        <Toast
+          title="Saved"
+          onDismiss={onDismiss}
+          slotProps={{ content: { onClick: onContentClick }, dismissButton: { onClick } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByText('Saved'));
+    expect(onContentClick).toHaveBeenCalledTimes(1);
+    await user.click(dismissButton());
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the Dismiss button part while there is no Dismiss button', () => {
+    render(
+      <Toast
+        title="Saved"
+        data-testid="toast"
+        slotProps={{ dismissButton: { className: 'my-dismiss' } }}
+      />,
+    );
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(document.querySelector('.my-dismiss')).toBeNull();
+    expect(screen.getByTestId('toast')).not.toHaveAttribute('slotprops');
+  });
+
+  it('does not reach a Toast.Close element, which is your own', () => {
+    const { controller } = renderToaster();
+    act(() => {
+      controller().dispatchToast(
+        <Toast slotProps={{ dismissButton: { className: 'my-dismiss' } }}>
+          <Toast.Title>Saved</Toast.Title>
+          <Toast.Close>
+            <button type="button">Got it</button>
+          </Toast.Close>
+        </Toast>,
+        { timeout: 0 },
+      );
+    });
+    const viewport = within(getViewport());
+    expect(viewport.getByRole('button', { name: 'Got it' })).not.toHaveClass('my-dismiss');
+    expect(viewport.getByRole('button', { name: 'Dismiss' })).toHaveClass('my-dismiss');
+  });
+
+  it('puts your classes on the parts under RTL, the logical border kept', () => {
+    renderWithProviders(
+      <Toast
+        title="Saved"
+        onDismiss={() => {}}
+        data-testid="toast"
+        slotProps={{
+          content: { className: 'my-content' },
+          dismissButton: { className: 'my-dismiss' },
+        }}
+      />,
+      { dir: 'rtl' },
+    );
+    expect(screen.getByTestId('toast').closest('[dir]')).toHaveAttribute('dir', 'rtl');
+    expect(screen.getByTestId('toast')).toHaveClass('border-s-4', 'border-s-info');
+    expect(content()).toHaveClass(toastClassNames.content, 'my-content');
+    expect(dismissButton()).toHaveClass(toastClassNames.dismissButton, 'my-dismiss');
+  });
+
+  it('has no accessibility violations with the parts customised', async () => {
+    render(
+      <Toast
+        title="Saved"
+        onDismiss={() => {}}
+        slotProps={{
+          content: { className: 'my-content' },
+          dismissButton: { className: 'my-dismiss', title: 'Dismiss the notice' },
+        }}
+      >
+        Your changes were saved.
+      </Toast>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types the parts for their elements, and takes no children', () => {
+    expectTypeOf<keyof ToastSlotProps>().toEqualTypeOf<'content' | 'dismissButton'>();
+    expectTypeOf<NonNullable<ToastSlotProps['content']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ToastSlotProps['dismissButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the Toast owns the column's content
+    void (<Toast title="Saved" slotProps={{ content: { children: 'Other' } }} />);
   });
 });

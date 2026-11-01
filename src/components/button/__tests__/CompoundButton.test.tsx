@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { CompoundButton } from '../CompoundButton';
 import type { CompoundButtonOwnProps, CompoundButtonProps } from '../CompoundButton';
 import { Button } from '../Button';
@@ -11,6 +12,10 @@ import {
   testFocusEvents,
   testNoImplicitSubmit,
   renderWithProviders,
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  sortAttributes,
 } from '../../../test-utils';
 import type { Appearance, IconPosition, Size, Slot } from '../../../lib/types';
 
@@ -538,11 +543,344 @@ describe('CompoundButton', () => {
         | 'disabledFocusable'
         | 'icon'
         | 'iconPosition'
+        | 'slotProps'
       >();
       expectTypeOf<CompoundButtonProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
       expectTypeOf<CompoundButtonProps<'a'>['iconPosition']>().toEqualTypeOf<
         IconPosition | undefined
       >();
     });
+  });
+});
+
+describe('CompoundButton — slotProps', () => {
+  type CompoundButtonSlotProps = NonNullable<CompoundButtonProps['slotProps']>;
+  const EVERY_PART: CompoundButtonSlotProps = {
+    contentContainer: {},
+    primaryText: {},
+    secondaryText: {},
+  };
+  const partsOf = (button: HTMLElement) =>
+    [
+      compoundButtonClassNames.contentContainer,
+      compoundButtonClassNames.primaryText,
+      compoundButtonClassNames.secondaryText,
+    ].map((name) => button.querySelector<HTMLElement>(`.${name}`));
+
+  it('renders the markup of 1f67a85 on the server (attributes sorted)', () => {
+    // Captured from the dist of 1f67a85: the merged props may put the class before the locked
+    // attributes.
+    expect(
+      sortAttributes(
+        renderToString(
+          <CompoundButton icon="★" secondaryText="Opens your email client">
+            Send mail
+          </CompoundButton>,
+        ),
+      ),
+    ).toBe(
+      [
+        '<button class="wave-button inline-flex rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-compound-button h-auto items-center justify-start gap-3 text-start py-2" type="button">',
+        '<span aria-hidden="true" class="wave-button__icon wave-compound-button__icon inline-flex shrink-0 items-center justify-center [&amp;>svg]:size-full size-10">★</span>',
+        '<span class="wave-compound-button__content-container flex min-w-0 flex-col items-start" data-wave-compound-content="">',
+        '<span class="wave-compound-button__primary-text font-bold">Send mail</span>',
+        '<span class="wave-compound-button__secondary-text text-caption-1 font-normal text-muted-foreground">Opens your email client</span>',
+        '</span>',
+        '</button>',
+      ].join(''),
+    );
+    expect(
+      sortAttributes(
+        renderToString(
+          <CompoundButton appearance="primary" iconPosition="after" icon="★" size="small">
+            Send mail
+          </CompoundButton>,
+        ),
+      ),
+    ).toBe(
+      [
+        '<button class="wave-button inline-flex rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-w-24 px-2 text-caption-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed wave-compound-button h-auto items-center justify-start gap-3 text-start py-1" type="button">',
+        '<span class="wave-compound-button__content-container flex min-w-0 flex-col items-start" data-wave-compound-content="">',
+        '<span class="wave-compound-button__primary-text font-bold">Send mail</span>',
+        '</span>',
+        '<span aria-hidden="true" class="wave-button__icon wave-compound-button__icon inline-flex shrink-0 items-center justify-center [&amp;>svg]:size-full size-8">★</span>',
+        '</button>',
+      ].join(''),
+    );
+    expect(sortAttributes(renderToString(<CompoundButton icon="★" aria-label="Star" />))).toBe(
+      [
+        '<button aria-label="Star" class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 w-8 px-0 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-compound-button" type="button">',
+        '<span aria-hidden="true" class="wave-button__icon inline-flex shrink-0 items-center wave-compound-button__icon">★</span>',
+        '</button>',
+      ].join(''),
+    );
+  });
+
+  it('renders the parts of 1f67a85 in the client (attributes sorted)', () => {
+    // Captured from the dist of 1f67a85.
+    render(
+      <CompoundButton appearance="primary" secondaryText="Free for 30 days" as="a" href="/x">
+        Create account
+      </CompoundButton>,
+    );
+    const parts = partsOf(
+      screen.getByRole('link', { name: /^Create account\s*Free for 30 days$/ }),
+    );
+    expect(openingTags(...(parts as HTMLElement[]))).toBe(
+      [
+        '<span class="wave-compound-button__content-container flex min-w-0 flex-col items-start" data-wave-compound-content="">',
+        '<span class="wave-compound-button__primary-text font-bold">',
+        '<span class="wave-compound-button__secondary-text text-caption-1 font-normal text-primary-foreground">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: CompoundButtonProps<React.ElementType>[] = [
+      { children: 'Send mail', secondaryText: 'Opens your email client', icon: <MailIcon /> },
+      { children: 'Send mail', iconPosition: 'after', appearance: 'primary', size: 'large' },
+      { children: 'Send mail', secondaryText: 'Later', disabledFocusable: true },
+      { children: 'Send mail', secondaryText: 'Later', disabled: true, as: 'a', href: '/x' },
+      { icon: <MailIcon />, 'aria-label': 'Mail' },
+      { secondaryText: 'Only the second line' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <CompoundButton {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style, data-* and ref on each part, after its stable class and own classes', () => {
+    const refs = [
+      React.createRef<HTMLSpanElement>(),
+      React.createRef<HTMLSpanElement>(),
+      React.createRef<HTMLSpanElement>(),
+    ] as const;
+    render(
+      <CompoundButton
+        secondaryText="Opens your email client"
+        slotProps={{
+          contentContainer: {
+            ref: refs[0],
+            className: 'my-content',
+            style: { gap: '2px' },
+            'data-part': 'content',
+          },
+          primaryText: {
+            ref: refs[1],
+            className: 'my-primary',
+            style: { color: 'red' },
+            'data-part': 'primary',
+          },
+          secondaryText: {
+            ref: refs[2],
+            className: 'my-secondary',
+            style: { color: 'blue' },
+            'data-part': 'secondary',
+          },
+        }}
+      >
+        Send mail
+      </CompoundButton>,
+    );
+    const button = screen.getByRole('button', { name: /^Send mail\s*Opens your email client$/ });
+    const parts = partsOf(button);
+    for (const [index, [stable, own, mine, part]] of [
+      [compoundButtonClassNames.contentContainer, 'flex-col', 'my-content', 'content'],
+      [compoundButtonClassNames.primaryText, 'font-bold', 'my-primary', 'primary'],
+      [compoundButtonClassNames.secondaryText, 'text-caption-1', 'my-secondary', 'secondary'],
+    ].entries()) {
+      const element = parts[index] as HTMLElement;
+      expect(refs[index].current).toBe(element);
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', part);
+    }
+    expect(parts[0]).toHaveStyle({ gap: '2px' });
+    expect(parts[1]).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+    expect(parts[2]).toHaveStyle({ color: 'rgb(0, 0, 255)' });
+    expect(contentWrapper(button)).toBe(parts[0]);
+  });
+
+  it('lets your class replace a conflicting class of the part', () => {
+    render(
+      <CompoundButton slotProps={{ primaryText: { className: 'font-normal' } }}>
+        Send mail
+      </CompoundButton>,
+    );
+    const primary = partsOf(screen.getByRole('button', { name: 'Send mail' }))[1];
+    expect(primary).toHaveClass('font-normal');
+    expect(primary).not.toHaveClass('font-bold');
+  });
+
+  it('keeps the marker of the text column, and adds the attributes it does not set', () => {
+    render(
+      <CompoundButton
+        secondaryText="Later"
+        slotProps={{
+          contentContainer: { 'data-wave-compound-content': 'mine', title: 'Text' },
+          secondaryText: { id: 'second-line' },
+        }}
+      >
+        Send mail
+      </CompoundButton>,
+    );
+    const button = screen.getByRole('button', { name: /^Send mail\s*Later$/ });
+    const [content, , secondary] = partsOf(button);
+    expect(content).toHaveAttribute('data-wave-compound-content', '');
+    expect(content).toHaveAttribute('title', 'Text');
+    expect(secondary).toHaveAttribute('id', 'second-line');
+  });
+
+  it('keeps the text naming the button: no aria-label or hidden state from the text parts', () => {
+    const NAME_PART = {
+      'aria-label': 'Other',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as const;
+    render(
+      <CompoundButton
+        secondaryText="Later"
+        slotProps={{ primaryText: NAME_PART, secondaryText: NAME_PART }}
+      >
+        Send mail
+      </CompoundButton>,
+    );
+    const button = screen.getByRole('button', { name: /^Send mail\s*Later$/ });
+    const [, primary, secondary] = partsOf(button);
+    for (const element of [primary, secondary]) {
+      for (const attribute of ['aria-label', 'hidden', 'inert', 'aria-hidden']) {
+        expect(element).not.toHaveAttribute(attribute);
+      }
+    }
+  });
+
+  it("runs your part's onClick first, then the button's onClick (StrictMode: once each)", async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <React.StrictMode>
+        <CompoundButton
+          secondaryText="Later"
+          onClick={() => order.push('button')}
+          slotProps={{
+            contentContainer: { onClick: () => order.push('content') },
+            primaryText: { onClick: () => order.push('primary') },
+          }}
+        >
+          Send mail
+        </CompoundButton>
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByText('Send mail'));
+    expect(order).toEqual(['primary', 'content', 'button']);
+  });
+
+  it.each([
+    ['disabled', { disabled: true }],
+    ['disabledFocusable', { disabledFocusable: true }],
+    ['disabled as a link', { disabled: true, as: 'a', href: '/x' }],
+  ] as const)('does not call your onClick on a part while the button is %s', (_name, props) => {
+    const onClick = vi.fn();
+    const onButtonClick = vi.fn();
+    const onPointerEnter = vi.fn();
+    render(
+      <CompoundButton
+        {...props}
+        secondaryText="Later"
+        onClick={onButtonClick}
+        slotProps={{
+          contentContainer: { onClick },
+          primaryText: { onClick, onPointerEnter },
+          secondaryText: { onClick },
+        }}
+      >
+        Send mail
+      </CompoundButton>,
+    );
+    fireEvent.click(screen.getByText('Send mail'));
+    fireEvent.click(screen.getByText('Later'));
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onButtonClick).not.toHaveBeenCalled();
+    // Its other handlers still run.
+    fireEvent.pointerEnter(screen.getByText('Send mail'));
+    expect(onPointerEnter).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the parts of an icon-only button, and the second line without secondaryText', () => {
+    const content = React.createRef<HTMLSpanElement>();
+    const secondary = React.createRef<HTMLSpanElement>();
+    const slotProps: CompoundButtonSlotProps = {
+      contentContainer: { ref: content, className: 'my-content' },
+      secondaryText: { ref: secondary, className: 'my-secondary' },
+    };
+    const { unmount } = render(
+      <CompoundButton icon={<MailIcon />} aria-label="Mail" slotProps={slotProps} />,
+    );
+    const button = screen.getByRole('button', { name: 'Mail' });
+    expect(button).not.toHaveAttribute('slotprops');
+    expect(button.querySelector('.my-content')).toBeNull();
+    expect(content.current).toBeNull();
+    unmount();
+    render(<CompoundButton slotProps={slotProps}>Send mail</CompoundButton>);
+    expect(content.current).toBe(screen.getByText('Send mail').parentElement);
+    expect(secondary.current).toBeNull();
+    expect(document.querySelector('.my-secondary')).toBeNull();
+  });
+
+  it('reaches the parts of a CompoundButton rendered as a link', () => {
+    render(
+      <CompoundButton
+        as="a"
+        href="/signup"
+        secondaryText="Free for 30 days"
+        slotProps={{ primaryText: { className: 'my-primary' } }}
+      >
+        Create account
+      </CompoundButton>,
+    );
+    const link = screen.getByRole('link', { name: /^Create account\s*Free for 30 days$/ });
+    expect(partsOf(link)[1]).toHaveClass('my-primary');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <CompoundButton
+        icon={<MailIcon />}
+        secondaryText="Opens your email client"
+        slotProps={{
+          contentContainer: { className: 'my-content' },
+          primaryText: { className: 'my-primary' },
+          secondaryText: { className: 'my-secondary', title: 'Opens a new window' },
+        }}
+      >
+        Send mail
+      </CompoundButton>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, for any `as`, and takes no children', () => {
+    expectTypeOf<keyof CompoundButtonSlotProps>().toEqualTypeOf<
+      'contentContainer' | 'primaryText' | 'secondaryText'
+    >();
+    expectTypeOf<CompoundButtonProps<'a'>['slotProps']>().toEqualTypeOf<
+      CompoundButtonProps['slotProps']
+    >();
+    expectTypeOf<NonNullable<CompoundButtonSlotProps['contentContainer']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<CompoundButtonSlotProps['primaryText']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<CompoundButtonSlotProps['secondaryText']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: `children` and `secondaryText` are its content
+    void (<CompoundButton slotProps={{ primaryText: { children: 'Other' } }}>Send</CompoundButton>);
   });
 });

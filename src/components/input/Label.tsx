@@ -3,6 +3,7 @@ import { cn } from '../../lib/cn';
 import { labelClassNames } from '../../lib/classNames';
 import { markFieldLabel } from './fieldLabel';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { CoreSize, TextWeight } from '../../lib/types';
 
 /** Properties for the Label component. */
@@ -27,6 +28,21 @@ export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> 
   weight?: TextWeight;
   /** Ref to the `<label>` element. */
   ref?: React.Ref<HTMLLabelElement>;
+  /**
+   * Props for the elements the Label draws inside its root, by part, merged into each part's
+   * own (Fluent UI's `required` slot prop): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers and attributes added, your ref
+   * attached. Every attribute the Label sets on a part is locked. A part takes no `children`
+   * (the `required` prop gives the indicator its content).
+   */
+  slotProps?: {
+    /**
+     * The `<span>` of the required indicator, rendered while `required` shows one (stable class
+     * `wave-label__required`). Locked: `aria-hidden`, which keeps it out of the label's name,
+     * and `tabIndex` (unset: a decorative element is never a tab stop).
+     */
+    required?: SlotPart<'span'>;
+  };
 }
 
 const sizeMap: Record<CoreSize, string> = {
@@ -59,8 +75,13 @@ export const Label = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: LabelProps) => {
+  const requiredProps = mergeSlotProps(slotProps?.required, {
+    className: cn(labelClassNames.required, 'ms-1 text-error'),
+    locked: { 'aria-hidden': 'true', tabIndex: undefined },
+  });
   return (
     <label
       ref={ref}
@@ -75,13 +96,9 @@ export const Label = ({
     >
       {children}
       {required === true ? (
-        <span className={cn(labelClassNames.required, 'ms-1 text-error')} aria-hidden="true">
-          *
-        </span>
+        <span {...requiredProps}>*</span>
       ) : required !== false && slotRendersContent(required) ? (
-        <span className={cn(labelClassNames.required, 'ms-1 text-error')} aria-hidden="true">
-          {materialiseSlotContent(required)}
-        </span>
+        <span {...requiredProps}>{materialiseSlotContent(required)}</span>
       ) : null}
     </label>
   );

@@ -29,6 +29,7 @@ import {
   type TeachingPopoverTitleProps,
   type TeachingPopoverTriggerChildProps,
 } from '../TeachingPopover';
+import type { TeachingPopoverContextValue } from '../TeachingPopover.context';
 import { Button } from '../../button/Button';
 import {
   buttonClassNames,
@@ -51,11 +52,13 @@ import { getOpenLayers, subscribeLayers } from '../../../lib/layers';
 import { FOCUSABLE_SELECTOR } from '../../../lib/focus';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
   installResizeObserverMock,
   mockRect,
+  openingTags,
   renderWithProviders,
   testCompoundExposure,
   testComposedHandler,
@@ -1331,6 +1334,44 @@ describe('TeachingPopover', () => {
       expect(ok).toHaveClass(teachingPopoverClassNames.primaryButton);
       await user.click(ok);
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('ignores a render function as an action’s children, with one warning; the action stays a wired Button (P13-01)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const onFinish = vi.fn();
+      const renderAction = vi.fn(() => <b>never</b>);
+      const action = { as: 'span', 'aria-label': 'Got it', children: renderAction };
+      render(
+        <React.StrictMode>
+          <TeachingPopover
+            steps={tip}
+            onFinish={onFinish}
+            primaryAction={action as unknown as TeachingPopoverAction}
+          />
+        </React.StrictMode>,
+      );
+      const gotIt = screen.getByRole('button', { name: 'Got it' });
+      // Rendered as without the function: a span that is still a Wave Button, with its wiring.
+      expect(gotIt.tagName).toBe('SPAN');
+      expect(gotIt).toHaveClass(buttonClassNames.root, teachingPopoverClassNames.primaryButton);
+      expect(gotIt).toHaveAttribute('tabindex', '0');
+      expect(gotIt).toBeEmptyDOMElement();
+      expect(renderAction).not.toHaveBeenCalled();
+      await user.click(gotIt);
+      expect(onFinish).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TeachingPopover: a `primaryAction` or `secondaryAction` slot object took a render function as `children`; it was ignored, since an action always renders as a Wave Button. Pass the label as `children`, or change the element with `as`.',
+        ],
+      ]);
+    });
+
+    it('types an action’s children as its label: a render function is a type error (P13-01)', () => {
+      expectTypeOf<{ children: React.ReactNode }>().toMatchTypeOf<TeachingPopoverAction>();
+      // @ts-expect-error — an action takes no render function
+      const action: TeachingPopoverAction = { children: () => null };
+      expect(action).toBeDefined();
     });
 
     it.each(['Enter', ' '])(
@@ -4184,5 +4225,1272 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
       expect(onFinish).toHaveBeenCalledTimes(1);
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('TeachingPopover — slotProps', () => {
+  type TeachingSlotProps = NonNullable<TeachingPopoverProps['slotProps']>;
+  const EVERY_PART: TeachingSlotProps = {
+    beak: {},
+    closeButton: {},
+    dot: {},
+    backButton: {},
+    nextButton: {},
+  };
+  const MERGE_WARNING =
+    '[WaveUI] TeachingPopover.Header: `dismissButton` received a button element; its props were merged into the built-in Close button (buttons cannot be nested). Pass icon content instead, e.g. `dismissButton={<CloseIcon />}`.';
+  const html = document.documentElement;
+  const rect = {
+    x: 200,
+    y: 100,
+    width: 100,
+    height: 20,
+    top: 100,
+    right: 300,
+    bottom: 120,
+    left: 200,
+  };
+  const target = { getBoundingClientRect: () => rect };
+  const all = (className: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>('.' + className));
+  const beak = () => all(teachingPopoverClassNames.beak)[0];
+  const close = () => all(teachingPopoverClassNames.closeButton)[0];
+  const back = () => all(teachingPopoverClassNames.backButton)[0];
+  const next = () => all(teachingPopoverClassNames.nextButton)[0];
+
+  function viewport() {
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(html, 'clientWidth');
+    Reflect.deleteProperty(html, 'clientHeight');
+  });
+
+  /** Waits for an anchored surface to be placed. */
+  async function placed() {
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(dialog.style.transform).not.toBe(''));
+  }
+
+  /**
+   * {@link expectInertSlotProps} for a surface placed or settled after its render: the same root
+   * re-rendered with `{}`, every part `{}` and `undefined`, the whole body compared each time.
+   */
+  async function expectInertSettled(
+    ui: (slotProps?: TeachingSlotProps) => React.ReactElement,
+    anchored = false,
+  ) {
+    const { baseElement, rerender, unmount } = render(ui());
+    if (anchored) await placed();
+    await act(async () => {});
+    const markup = baseElement.innerHTML;
+    for (const slotProps of [{}, EVERY_PART, undefined]) {
+      rerender(ui(slotProps));
+      await act(async () => {});
+      expect(baseElement.innerHTML).toBe(markup);
+    }
+    unmount();
+  }
+
+  /** Boxes by `data-testid` (jsdom has no layout); the target is the virtual `rect`. */
+  function mockLayout(boxes: Record<string, { width: number; height: number }>) {
+    viewport();
+    const boxOf = (el: Element) => boxes[el.getAttribute('data-testid') ?? ''];
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const { width, height } = boxOf(this) ?? { width: 0, height: 0 };
+      const full = { x: 0, y: 0, left: 0, top: 0, width, height, right: width, bottom: height };
+      return { ...full, toJSON: () => full } as DOMRect;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return boxOf(this)?.width ?? 0;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return boxOf(this)?.height ?? 0;
+    });
+  }
+
+  /** The parts form: a Surface with the Header and the footer of `footer`. */
+  function PartsForm({
+    footer = <TeachingPopover.Footer />,
+    ...props
+  }: Partial<TeachingPopoverProps> & { footer?: React.ReactNode }) {
+    return (
+      <TeachingPopover steps={steps} {...props}>
+        <TeachingPopover.Surface>
+          <TeachingPopover.Header />
+          <TeachingPopover.Title />
+          {footer}
+        </TeachingPopover.Surface>
+      </TeachingPopover>
+    );
+  }
+
+  describe('markup without slotProps', () => {
+    it('renders the parts of a98c113 in an anchored steps form (attributes sorted)', async () => {
+      // Captured from a98c113: the merged props may put the class before the locked attributes.
+      viewport();
+      render(<TeachingPopover steps={steps} target={target} />);
+      await placed();
+      expect(openingTags(beak(), close(), ...dots(), back(), next())).toBe(
+        [
+          '<div aria-hidden="true" class="size-2 rotate-45 border-inherit bg-inherit border-t border-l wave-teaching-popover__beak" data-wave-teaching-popover-arrow="" style="position: absolute; top: calc(var(--wave-popup-arrow-size, 8px) / -2); left: 0px;">',
+          '<button aria-label="Close" class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-6 w-6 px-0 text-caption-1 border border-transparent bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__close-button absolute end-3 top-3" type="button">',
+          '<span aria-current="step" class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-4 bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<span class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<span class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<button aria-disabled="true" class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed cursor-not-allowed opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:text-[GrayText] forced-colors:border-[GrayText] wave-teaching-popover__back-button" data-disabled="" type="button">',
+          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed wave-teaching-popover__next-button" type="button">',
+        ].join('\n'),
+      );
+    });
+
+    it('renders the parts of a98c113 in the parts form, with a CarouselNav (attributes sorted)', async () => {
+      render(
+        <TeachingPopover steps={steps} activeStep={1}>
+          <TeachingPopover.Surface>
+            <TeachingPopover.Header />
+            <TeachingPopover.Carousel>
+              <TeachingPopover.Title />
+              <TeachingPopover.Body />
+              <TeachingPopover.CarouselFooter initialStepText="Not now">
+                <TeachingPopover.CarouselNav />
+              </TeachingPopover.CarouselFooter>
+            </TeachingPopover.Carousel>
+          </TeachingPopover.Surface>
+        </TeachingPopover>,
+      );
+      await act(async () => {});
+      expect(
+        openingTags(
+          close(),
+          ...all(teachingPopoverCarouselNavClassNames.button),
+          ...all(teachingPopoverCarouselNavClassNames.indicator),
+          back(),
+          next(),
+        ),
+      ).toBe(
+        [
+          '<button aria-label="Close" class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-6 w-6 px-0 text-caption-1 border border-transparent bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__close-button absolute end-3 top-3" type="button">',
+          '<button aria-label="Step 1 of 3" class="wave-teaching-popover-carousel-nav__button group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
+          '<button aria-current="step" aria-label="Step 2 of 3" class="wave-teaching-popover-carousel-nav__button group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
+          '<button aria-label="Step 3 of 3" class="wave-teaching-popover-carousel-nav__button group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
+          '<span aria-hidden="true" class="wave-teaching-popover-carousel-nav__indicator block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none">',
+          '<span aria-hidden="true" class="wave-teaching-popover-carousel-nav__indicator block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-4 bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none">',
+          '<span aria-hidden="true" class="wave-teaching-popover-carousel-nav__indicator block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none">',
+          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__back-button" type="button">',
+          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed wave-teaching-popover__next-button" type="button">',
+        ].join('\n'),
+      );
+    });
+
+    it('renders the parts of a98c113 in a first-step carousel footer (attributes sorted)', async () => {
+      render(
+        <TeachingPopover steps={steps}>
+          <TeachingPopover.Surface>
+            <TeachingPopover.Carousel>
+              <TeachingPopover.CarouselFooter initialStepText="Not now" />
+            </TeachingPopover.Carousel>
+          </TeachingPopover.Surface>
+        </TeachingPopover>,
+      );
+      await act(async () => {});
+      expect(openingTags(...dots(), back(), next())).toBe(
+        [
+          '<span aria-current="step" class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-4 bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<span class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<span class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__back-button" type="button">',
+          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed wave-teaching-popover__next-button" type="button">',
+        ].join('\n'),
+      );
+    });
+
+    it('renders the same markup without slotProps, with {} and with every part empty', async () => {
+      expectInertSlotProps(
+        (slotProps) => <TeachingPopover steps={steps} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+      expectInertSlotProps(
+        (slotProps) => (
+          <TeachingPopover
+            steps={[{ title: 'Tip', body: 'Press Ctrl+K.' }]}
+            footerLayout="vertical"
+            slotProps={slotProps}
+          />
+        ),
+        EVERY_PART,
+      );
+      expectInertSlotProps(
+        (slotProps) => (
+          <TeachingPopover
+            steps={steps}
+            activeStep={1}
+            primaryAction={{ children: 'Go' }}
+            secondaryAction={<Button>Skip</Button>}
+            slotProps={slotProps}
+          />
+        ),
+        EVERY_PART,
+      );
+      viewport();
+      await expectInertSettled(
+        (slotProps) => (
+          <TeachingPopover steps={steps} activeStep={1} target={target} slotProps={slotProps} />
+        ),
+        true,
+      );
+      await expectInertSettled(
+        (slotProps) => (
+          <TeachingPopover steps={steps} defaultOpen slotProps={slotProps}>
+            <TeachingPopover.Trigger>
+              <button type="button">Tour</button>
+            </TeachingPopover.Trigger>
+          </TeachingPopover>
+        ),
+        true,
+      );
+      await expectInertSettled((slotProps) => (
+        <TeachingPopover steps={steps} activeStep={2} slotProps={slotProps}>
+          <TeachingPopover.Surface>
+            <TeachingPopover.Header dismissButton={<svg data-testid="x" />}>
+              Tip
+            </TeachingPopover.Header>
+            <TeachingPopover.Carousel>
+              <TeachingPopover.CarouselFooter layout="centered" finalStepText="Got it" />
+            </TeachingPopover.Carousel>
+          </TeachingPopover.Surface>
+        </TeachingPopover>
+      ));
+    });
+
+    it('renders the same markup with a merged dismissButton without slotProps and with every part empty', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await expectInertSettled((slotProps) => <PartsForm slotProps={slotProps} footer={null} />);
+      await expectInertSettled((slotProps) => (
+        <TeachingPopover steps={steps} slotProps={slotProps}>
+          <TeachingPopover.Surface>
+            <TeachingPopover.Header
+              dismissButton={
+                <button type="submit" tabIndex={-1} className="mine" style={{ zIndex: 2 }}>
+                  Shut
+                </button>
+              }
+            />
+          </TeachingPopover.Surface>
+        </TeachingPopover>
+      ));
+      expect(warn.mock.calls).toEqual([[MERGE_WARNING]]);
+    });
+  });
+
+  describe('every part', () => {
+    it('puts your className, style and data-* on each part, after its own classes', async () => {
+      viewport();
+      render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          target={target}
+          slotProps={{
+            beak: { className: 'my-beak', style: { opacity: 0.1 }, 'data-part': 'beak' },
+            closeButton: { className: 'my-close', style: { opacity: 0.2 }, 'data-part': 'close' },
+            dot: { className: 'my-dot', style: { opacity: 0.3 }, 'data-part': 'dot' },
+            backButton: { className: 'my-back', style: { opacity: 0.4 }, 'data-part': 'back' },
+            nextButton: { className: 'my-next', style: { opacity: 0.5 }, 'data-part': 'next' },
+          }}
+        />,
+      );
+      await placed();
+      for (const [elements, stable, mine, data, opacity] of [
+        [[beak()], teachingPopoverClassNames.beak, 'my-beak', 'beak', '0.1'],
+        [[close()], teachingPopoverClassNames.closeButton, 'my-close', 'close', '0.2'],
+        [dots(), teachingPopoverClassNames.dot, 'my-dot', 'dot', '0.3'],
+        [[back()], teachingPopoverClassNames.backButton, 'my-back', 'back', '0.4'],
+        [[next()], teachingPopoverClassNames.nextButton, 'my-next', 'next', '0.5'],
+      ] as const) {
+        expect(elements.length).toBeGreaterThan(0);
+        for (const element of elements) {
+          expect(element).toHaveClass(stable, mine);
+          expect(element.classList[element.classList.length - 1]).toBe(mine);
+          expect(element).toHaveAttribute('data-part', data);
+          expect(element).toHaveStyle({ opacity });
+        }
+      }
+      expect(dots()).toHaveLength(3);
+      // The surface takes none of it, and no `slotProps` attribute.
+      expect(screen.getByRole('dialog')).not.toHaveAttribute('data-part');
+      expect(document.querySelector('[slotprops]')).toBeNull();
+    });
+
+    it('lets your class replace a conflicting class of a part', async () => {
+      viewport();
+      render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          target={target}
+          slotProps={{
+            beak: { className: 'size-3' },
+            closeButton: { className: 'end-2' },
+            dot: { className: 'h-2' },
+            backButton: { className: 'min-w-16' },
+            nextButton: { className: 'min-w-32' },
+          }}
+        />,
+      );
+      await placed();
+      expect(beak()).toHaveClass('size-3');
+      expect(beak()).not.toHaveClass('size-2');
+      expect(close()).toHaveClass('end-2');
+      expect(close()).not.toHaveClass('end-3');
+      for (const dot of dots()) {
+        expect(dot).toHaveClass('h-2');
+        expect(dot).not.toHaveClass('h-1.5');
+      }
+      expect(back()).toHaveClass('min-w-16');
+      expect(back()).not.toHaveClass('min-w-24');
+      expect(next()).toHaveClass('min-w-32');
+      expect(next()).not.toHaveClass('min-w-24');
+    });
+
+    it('attaches your refs to the parts, each dot included', async () => {
+      viewport();
+      const beakRef = React.createRef<HTMLDivElement>();
+      const closeRef = React.createRef<HTMLButtonElement>();
+      const backRef = React.createRef<HTMLButtonElement>();
+      const nextRef = React.createRef<HTMLButtonElement>();
+      const dotElements: Array<HTMLSpanElement | null> = [];
+      render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          target={target}
+          slotProps={{
+            beak: { ref: beakRef },
+            closeButton: { ref: closeRef },
+            dot: { ref: (element) => void dotElements.push(element) },
+            backButton: { ref: backRef },
+            nextButton: { ref: nextRef },
+          }}
+        />,
+      );
+      await placed();
+      expect(beakRef.current).toBe(beak());
+      expect(closeRef.current).toBe(close());
+      expect(backRef.current).toBe(back());
+      expect(nextRef.current).toBe(next());
+      for (const dot of dots()) expect(dotElements).toContain(dot);
+    });
+
+    it('reaches the parts in the parts form too, with no warning about the surface props', async () => {
+      const warn = vi.spyOn(console, 'warn');
+      viewport();
+      render(
+        <PartsForm
+          defaultActiveStep={1}
+          target={target}
+          slotProps={{
+            beak: { className: 'my-beak' },
+            closeButton: { className: 'my-close' },
+            dot: { className: 'my-dot' },
+            backButton: { className: 'my-back' },
+            nextButton: { className: 'my-next' },
+          }}
+        />,
+      );
+      await placed();
+      expect(beak()).toHaveClass('my-beak');
+      expect(close()).toHaveClass('my-close');
+      for (const dot of dots()) expect(dot).toHaveClass('my-dot');
+      expect(back()).toHaveClass('my-back');
+      expect(next()).toHaveClass('my-next');
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('reaches the dots and the buttons of a CarouselFooter', async () => {
+      render(
+        <PartsForm
+          slotProps={{
+            dot: { className: 'my-dot' },
+            backButton: { className: 'my-back' },
+            nextButton: { className: 'my-next' },
+          }}
+          footer={
+            <TeachingPopover.Carousel>
+              <TeachingPopover.CarouselFooter initialStepText="Not now" />
+            </TeachingPopover.Carousel>
+          }
+        />,
+      );
+      await act(async () => {});
+      expect(dots()).toHaveLength(3);
+      for (const dot of dots()) expect(dot).toHaveClass('my-dot');
+      expect(screen.getByRole('button', { name: 'Not now' })).toBe(back());
+      expect(back()).toHaveClass('my-back');
+      expect(next()).toHaveClass('my-next');
+    });
+
+    it('ignores the parts that are not rendered', async () => {
+      const { unmount } = render(
+        <TeachingPopover
+          steps={[{ title: 'Tip', body: 'Press Ctrl+K.' }]}
+          primaryAction={{ children: 'Go' }}
+          slotProps={{
+            beak: { className: 'my-beak' },
+            backButton: { className: 'my-back' },
+            nextButton: { className: 'my-next' },
+          }}
+        />,
+      );
+      // No target (no beak), a single step (no Back), and a primary action in place of Next.
+      expect(screen.getByRole('button', { name: 'Go' })).not.toHaveClass('my-next');
+      expect(document.querySelector('.my-beak, .my-back, .my-next')).toBeNull();
+      unmount();
+      render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          secondaryAction={{ children: 'Skip' }}
+          slotProps={{ backButton: { className: 'my-back' }, dot: { className: 'my-dot' } }}
+        >
+          <TeachingPopover.Surface>
+            <TeachingPopover.Header dismissButton={null} />
+            <TeachingPopover.Title />
+            <TeachingPopover.Footer />
+            <TeachingPopover.Carousel>
+              <TeachingPopover.CarouselFooter>
+                <TeachingPopover.CarouselPageCount />
+              </TeachingPopover.CarouselFooter>
+            </TeachingPopover.Carousel>
+          </TeachingPopover.Surface>
+        </TeachingPopover>,
+      );
+      await act(async () => {});
+      expect(close()).toBeUndefined();
+      expect(screen.getAllByRole('button', { name: 'Skip' })[0]).not.toHaveClass('my-back');
+      expect(document.querySelector('.my-back')).toBeNull();
+      // The Footer's dots only: the CarouselFooter shows its page count.
+      expect(document.querySelectorAll('.my-dot')).toHaveLength(3);
+    });
+
+    it('calls your part handlers once per click in StrictMode', async () => {
+      viewport();
+      const onBeak = vi.fn();
+      const onDot = vi.fn();
+      const onBack = vi.fn();
+      const onNext = vi.fn();
+      const onClose = vi.fn();
+      render(
+        <React.StrictMode>
+          <TeachingPopover
+            steps={steps}
+            defaultActiveStep={1}
+            target={target}
+            slotProps={{
+              beak: { onClick: onBeak },
+              dot: { onClick: onDot },
+              backButton: { onClick: onBack },
+              nextButton: { onClick: onNext },
+              closeButton: { onClick: onClose },
+            }}
+          />
+        </React.StrictMode>,
+      );
+      await placed();
+      fireEvent.click(beak());
+      fireEvent.click(dots()[0]);
+      fireEvent.click(back());
+      await act(async () => {});
+      fireEvent.click(next());
+      await act(async () => {});
+      fireEvent.click(close());
+      await act(async () => {});
+      for (const handler of [onBeak, onDot, onBack, onNext, onClose]) {
+        expect(handler).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('has no accessibility violations with every part customised', async () => {
+      viewport();
+      render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          target={target}
+          slotProps={{
+            beak: { className: 'my-beak' },
+            closeButton: { className: 'my-close', title: 'Close the tour' },
+            dot: { className: 'my-dot' },
+            backButton: { className: 'my-back' },
+            nextButton: { className: 'my-next' },
+          }}
+        />,
+      );
+      await placed();
+      await expectNoA11yViolations();
+    });
+
+    it('types each part for its element, and takes no children', () => {
+      expectTypeOf<keyof TeachingSlotProps>().toEqualTypeOf<
+        'beak' | 'closeButton' | 'dot' | 'backButton' | 'nextButton'
+      >();
+      expectTypeOf<NonNullable<TeachingSlotProps['beak']>['ref']>().toEqualTypeOf<
+        React.Ref<HTMLDivElement> | undefined
+      >();
+      expectTypeOf<NonNullable<TeachingSlotProps['dot']>['ref']>().toEqualTypeOf<
+        React.Ref<HTMLSpanElement> | undefined
+      >();
+      for (const key of ['closeButton', 'backButton', 'nextButton'] as const) {
+        void key;
+        expectTypeOf<NonNullable<TeachingSlotProps[typeof key]>['ref']>().toEqualTypeOf<
+          React.Ref<HTMLButtonElement> | undefined
+        >();
+      }
+      // The context carries the same type (the context module imports nothing of the root).
+      expectTypeOf<TeachingPopoverContextValue['slotProps']>().toEqualTypeOf<
+        TeachingPopoverProps['slotProps']
+      >();
+      // @ts-expect-error -- a part takes no children: the labels are the popover's
+      void (<TeachingPopover steps={steps} slotProps={{ nextButton: { children: 'Go' } }} />);
+    });
+  });
+
+  describe('beak', () => {
+    it('locks its hidden state, its marker, its tab stop and the position keys of its style', async () => {
+      viewport();
+      render(
+        <TeachingPopover
+          steps={steps}
+          target={target}
+          slotProps={{
+            beak: {
+              'aria-hidden': false,
+              'data-wave-teaching-popover-arrow': 'mine',
+              tabIndex: 0,
+              style: { position: 'static', top: '1px', left: '2px', opacity: 0.5 },
+              title: 'Beak',
+            },
+          }}
+        />,
+      );
+      await placed();
+      expect(beak()).toHaveAttribute('aria-hidden', 'true');
+      expect(beak()).toHaveAttribute('data-wave-teaching-popover-arrow', '');
+      expect(beak()).not.toHaveAttribute('tabindex');
+      expect(beak()).toHaveAttribute('title', 'Beak');
+      expect(beak().style.position).toBe('absolute');
+      expect(beak().style.top).toBe('calc(var(--wave-popup-arrow-size, 8px) / -2)');
+      expect(beak().style.left).toBe('0px');
+      expect(beak()).toHaveStyle({ opacity: '0.5' });
+    });
+
+    it('keeps placing the beak while you pass a new inline ref on every render', async () => {
+      mockLayout({
+        surface: { width: 320, height: 200 },
+        beak: { width: 8, height: 8 },
+      });
+      const elements: Array<HTMLDivElement | null> = [];
+      const ui = () => (
+        <TeachingPopover
+          steps={steps}
+          target={target}
+          data-testid="surface"
+          slotProps={{
+            beak: { 'data-testid': 'beak', ref: (element) => void elements.push(element) },
+          }}
+        />
+      );
+      const { rerender } = render(ui());
+      rerender(ui());
+      rerender(ui());
+      expect(elements.at(-1)).toBe(beak());
+      // Below the target, centred: x = 250 - 320 / 2 = 90; the beak at 250 - 90 - 8 / 2 = 156.
+      await waitFor(() =>
+        expect(screen.getByRole('dialog').style.transform).toBe('translate(90px, 132px)'),
+      );
+      await waitFor(() => expect(beak().style.left).toBe('156px'));
+    });
+
+    it('mirrors the beak with your class in RTL', async () => {
+      viewport();
+      renderWithProviders(
+        <TeachingPopover
+          steps={steps}
+          side="start"
+          target={{
+            getBoundingClientRect: () => ({ ...rect, x: 600, left: 600, right: 700 }),
+          }}
+          slotProps={{ beak: { className: 'my-beak' } }}
+        />,
+        { dir: 'rtl' },
+      );
+      await waitFor(() => expect(screen.getByRole('dialog')).toHaveAttribute('data-side', 'right'));
+      expect(beak()).toHaveClass('border-b', 'border-l', 'my-beak');
+    });
+  });
+
+  describe('closeButton', () => {
+    it('runs your onClick before the dismissal: preventDefault() keeps the popover open', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const onClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+      const { rerender } = render(
+        <TeachingPopover
+          steps={steps}
+          onOpenChange={onOpenChange}
+          slotProps={{ closeButton: { onClick } }}
+        />,
+      );
+      await user.click(close());
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      rerender(
+        <TeachingPopover
+          steps={steps}
+          onOpenChange={onOpenChange}
+          slotProps={{ closeButton: { onClick: () => {} } }}
+        />,
+      );
+      await user.click(close());
+      expect(onOpenChange.mock.calls).toEqual([[false]]);
+    });
+
+    it('locks its type, name, disabled and hidden state and tab stop; your ids are added', () => {
+      render(
+        <>
+          <span id="extra">The tour</span>
+          <TeachingPopover
+            steps={steps}
+            slotProps={{
+              closeButton: {
+                type: 'submit',
+                'aria-label': 'Other',
+                'aria-labelledby': 'extra',
+                disabled: true,
+                tabIndex: -1,
+                hidden: true,
+                inert: true,
+                'aria-hidden': true,
+                'aria-disabled': true,
+                'data-disabled': '',
+                'data-disabled-focusable': '',
+                title: 'Close the tour',
+              },
+            }}
+          />
+        </>,
+      );
+      const el = close();
+      expect(el).toHaveAttribute('type', 'button');
+      expect(el).toHaveAttribute('aria-label', 'Close');
+      expect(el).toHaveAttribute('aria-labelledby', 'extra');
+      for (const name of [
+        'disabled',
+        'tabindex',
+        'hidden',
+        'inert',
+        'aria-hidden',
+        'aria-disabled',
+        'data-disabled',
+        'data-disabled-focusable',
+      ]) {
+        expect(el, name).not.toHaveAttribute(name);
+      }
+      expect(el).toHaveAttribute('title', 'Close the tour');
+    });
+
+    it('applies after a merged dismissButton: yours replace its attributes, its locked values stay', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const order: string[] = [];
+      render(
+        <TeachingPopover
+          steps={steps}
+          onDismiss={() => order.push('dismiss')}
+          slotProps={{
+            closeButton: {
+              className: 'part-class',
+              style: { opacity: 0.25 },
+              'data-x': 'part',
+              title: 'Part',
+              type: 'button',
+              tabIndex: 0,
+              onClick: () => order.push('part'),
+            },
+          }}
+        >
+          <TeachingPopover.Surface>
+            <TeachingPopover.Header
+              dismissButton={
+                <button
+                  type="submit"
+                  tabIndex={-1}
+                  className="slot-class"
+                  style={{ opacity: 0.5, zIndex: 2 }}
+                  data-x="slot"
+                  data-y="slot"
+                  title="Slot"
+                  onClick={() => order.push('slot')}
+                >
+                  Shut
+                </button>
+              }
+            />
+            <TeachingPopover.Title />
+          </TeachingPopover.Surface>
+        </TeachingPopover>,
+      );
+      const el = screen.getByRole('button', { name: 'Shut' });
+      expect(el).toBe(close());
+      expect(el).toHaveClass('slot-class', 'part-class');
+      expect(el.classList[el.classList.length - 1]).toBe('part-class');
+      expect(el).toHaveStyle({ opacity: '0.25', zIndex: '2' });
+      expect(el).toHaveAttribute('data-x', 'part');
+      expect(el).toHaveAttribute('data-y', 'slot');
+      expect(el).toHaveAttribute('title', 'Part');
+      // The type and the tab stop the merged button gives stay.
+      expect(el).toHaveAttribute('type', 'submit');
+      expect(el).toHaveAttribute('tabindex', '-1');
+      await user.click(el);
+      expect(order).toEqual(['part', 'slot', 'dismiss']);
+      expect(warn.mock.calls).toEqual([[MERGE_WARNING]]);
+    });
+
+    it('calls no click handler of yours while a merged disabledFocusable Button keeps it unavailable', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onOpenChange = vi.fn();
+      render(
+        <TeachingPopover
+          steps={steps}
+          onOpenChange={onOpenChange}
+          slotProps={{
+            closeButton: { onClick, 'aria-disabled': false, 'data-disabled-focusable': undefined },
+          }}
+        >
+          <TeachingPopover.Surface>
+            <TeachingPopover.Header
+              dismissButton={<Button disabledFocusable aria-label="Close tip" icon={<svg />} />}
+            />
+            <TeachingPopover.Title />
+          </TeachingPopover.Surface>
+        </TeachingPopover>,
+      );
+      const el = screen.getByRole('button', { name: 'Close tip' });
+      expect(el).toHaveAttribute('aria-disabled', 'true');
+      expect(el).toHaveAttribute('data-disabled-focusable');
+      await user.click(el);
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(warn.mock.calls).toEqual([[MERGE_WARNING]]);
+    });
+
+    it('keeps the name, the disabled state and the ids a merged button gives; yours are added', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <>
+          <span id="slot-note">Slot note</span>
+          <span id="part-note">Part note</span>
+          <TeachingPopover
+            steps={steps}
+            slotProps={{
+              closeButton: {
+                'aria-label': 'Other',
+                'aria-describedby': 'part-note',
+                disabled: false,
+                hidden: true,
+              },
+            }}
+          >
+            <TeachingPopover.Surface>
+              <TeachingPopover.Header
+                dismissButton={
+                  <button
+                    type="button"
+                    aria-label="Hide the tip"
+                    aria-describedby="slot-note"
+                    disabled
+                  >
+                    <svg />
+                  </button>
+                }
+              />
+              <TeachingPopover.Title />
+            </TeachingPopover.Surface>
+          </TeachingPopover>
+        </>,
+      );
+      const el = close();
+      expect(el).toHaveAccessibleName('Hide the tip');
+      expect(el).toBeDisabled();
+      expect(el).not.toHaveAttribute('hidden');
+      expect(el).toHaveAttribute('aria-describedby', 'slot-note part-note');
+      expect(warn.mock.calls).toEqual([[MERGE_WARNING]]);
+    });
+
+    it('runs yours before the handlers of a slot object, whose name stays', async () => {
+      const user = userEvent.setup();
+      const order: string[] = [];
+      render(
+        <TeachingPopover
+          steps={steps}
+          onDismiss={() => order.push('dismiss')}
+          slotProps={{ closeButton: { 'aria-label': 'Other', onClick: () => order.push('part') } }}
+        >
+          <TeachingPopover.Surface>
+            <TeachingPopover.Header
+              dismissButton={{
+                'aria-label': 'Hide the tip',
+                onClick: () => order.push('slot'),
+                children: <svg data-testid="glyph" />,
+              }}
+            />
+            <TeachingPopover.Title />
+          </TeachingPopover.Surface>
+        </TeachingPopover>,
+      );
+      const el = screen.getByRole('button', { name: 'Hide the tip' });
+      expect(el).toBe(close());
+      expect(el).toContainElement(screen.getByTestId('glyph'));
+      await user.click(el);
+      expect(order).toEqual(['part', 'slot', 'dismiss']);
+    });
+  });
+
+  describe('dot', () => {
+    it('locks its marker, its step state, its hidden state and its tab stop', () => {
+      render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          slotProps={{
+            dot: {
+              'data-wave-teaching-popover-dot': 'mine',
+              'aria-current': 'page',
+              'aria-hidden': true,
+              tabIndex: 0,
+              title: 'Dot',
+            },
+          }}
+        />,
+      );
+      const [first, current, last] = dots();
+      expect(current).toHaveAttribute('aria-current', 'step');
+      // The other dots have no step state: yours is locked unset there too.
+      expect(first).not.toHaveAttribute('aria-current');
+      expect(last).not.toHaveAttribute('aria-current');
+      for (const dot of dots()) {
+        expect(dot).toHaveAttribute('data-wave-teaching-popover-dot', '');
+        expect(dot).not.toHaveAttribute('aria-hidden');
+        expect(dot).not.toHaveAttribute('tabindex');
+        expect(dot).toHaveAttribute('title', 'Dot');
+      }
+    });
+  });
+
+  describe('backButton', () => {
+    it('runs your onClick before Back: preventDefault() keeps the step', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      const onClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+      const { rerender } = render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          onStepChange={onStepChange}
+          slotProps={{ backButton: { onClick } }}
+        />,
+      );
+      await user.click(back());
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onStepChange).not.toHaveBeenCalled();
+      expect(heading()).toHaveTextContent(/^Features/);
+      rerender(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          onStepChange={onStepChange}
+          slotProps={{ backButton: { onClick: () => {} } }}
+        />,
+      );
+      await user.click(back());
+      expect(onStepChange.mock.calls).toEqual([[0]]);
+    });
+
+    it('calls no click handler of yours on the first step, where Back is unavailable', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onStepChange = vi.fn();
+      render(
+        <TeachingPopover
+          steps={steps}
+          onStepChange={onStepChange}
+          slotProps={{ backButton: { onClick, 'aria-disabled': false } }}
+        />,
+      );
+      expect(back()).toHaveAttribute('aria-disabled', 'true');
+      expect(back()).toHaveAttribute('data-disabled', '');
+      await user.click(back());
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onStepChange).not.toHaveBeenCalled();
+      // On the next step your handler runs again.
+      await user.click(next());
+      await user.click(back());
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('locks its type, disabled states, hidden state and tab stop, also while available', () => {
+      render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          slotProps={{
+            backButton: {
+              type: 'submit',
+              disabled: true,
+              tabIndex: -1,
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+              'aria-disabled': true,
+              'data-disabled': '',
+              'data-disabled-focusable': '',
+              disabledFocusable: true,
+              title: 'Previous step',
+            } as never,
+          }}
+        />,
+      );
+      const el = back();
+      expect(el).toHaveAttribute('type', 'button');
+      for (const name of [
+        'disabled',
+        'tabindex',
+        'hidden',
+        'inert',
+        'aria-hidden',
+        'aria-disabled',
+        'data-disabled',
+        'data-disabled-focusable',
+      ]) {
+        expect(el, name).not.toHaveAttribute(name);
+      }
+      expect(el).toHaveAttribute('title', 'Previous step');
+    });
+
+    it('runs your onClick before the dismissal of initialStepText: preventDefault() keeps it open', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      const onClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+      render(
+        <PartsForm
+          onDismiss={onDismiss}
+          slotProps={{ backButton: { onClick } }}
+          footer={
+            <TeachingPopover.Carousel>
+              <TeachingPopover.CarouselFooter initialStepText="Not now" />
+            </TeachingPopover.Carousel>
+          }
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Not now' }));
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onDismiss).not.toHaveBeenCalled();
+      onClick.mockImplementation(() => {});
+      await user.click(screen.getByRole('button', { name: 'Not now' }));
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('nextButton', () => {
+    it('runs your onClick before Next and Done: preventDefault() keeps the step and the tour', async () => {
+      const user = userEvent.setup();
+      const onStepChange = vi.fn();
+      const onFinish = vi.fn();
+      const onClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+      render(
+        <TeachingPopover
+          steps={steps}
+          defaultActiveStep={1}
+          onStepChange={onStepChange}
+          onFinish={onFinish}
+          slotProps={{ nextButton: { onClick } }}
+        />,
+      );
+      await user.click(next());
+      expect(onStepChange).not.toHaveBeenCalled();
+      onClick.mockImplementation(() => {});
+      await user.click(next());
+      expect(onStepChange.mock.calls).toEqual([[2]]);
+      onClick.mockImplementation((event: React.MouseEvent) => event.preventDefault());
+      await user.click(screen.getByRole('button', { name: 'Done' }));
+      expect(onFinish).not.toHaveBeenCalled();
+      onClick.mockImplementation(() => {});
+      await user.click(screen.getByRole('button', { name: 'Done' }));
+      expect(onFinish).toHaveBeenCalledTimes(1);
+      expect(onClick).toHaveBeenCalledTimes(4);
+    });
+
+    it('locks its type, its primary look, its disabled states, hidden state and tab stop', () => {
+      render(
+        <TeachingPopover
+          steps={steps}
+          slotProps={{
+            nextButton: {
+              type: 'submit',
+              disabled: true,
+              tabIndex: -1,
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+              'aria-disabled': true,
+              'data-disabled': '',
+              'data-disabled-focusable': '',
+              appearance: 'outline',
+              disabledFocusable: true,
+              title: 'Next step',
+            } as never,
+          }}
+        />,
+      );
+      const el = next();
+      expect(el).toHaveAttribute('type', 'button');
+      expect(el).toHaveClass('bg-primary', 'text-primary-foreground');
+      for (const name of [
+        'disabled',
+        'tabindex',
+        'hidden',
+        'inert',
+        'aria-hidden',
+        'aria-disabled',
+        'data-disabled',
+        'data-disabled-focusable',
+        'appearance',
+      ]) {
+        expect(el, name).not.toHaveAttribute(name);
+      }
+      expect(el).toHaveAttribute('title', 'Next step');
+    });
+  });
+});
+
+describe('TeachingPopover.CarouselNav — slotProps', () => {
+  type NavSlotProps = NonNullable<TeachingPopoverCarouselNavProps['slotProps']>;
+  const buttons = () =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>('.' + teachingPopoverCarouselNavClassNames.button),
+    );
+  const indicators = () =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>('.' + teachingPopoverCarouselNavClassNames.indicator),
+    );
+
+  function Nav({
+    slotProps,
+    ...props
+  }: Partial<TeachingPopoverProps> & { slotProps?: NavSlotProps }) {
+    return (
+      <TeachingPopover steps={steps} defaultActiveStep={1} {...props}>
+        <TeachingPopover.Surface>
+          <TeachingPopover.Title />
+          <TeachingPopover.CarouselNav slotProps={slotProps} />
+        </TeachingPopover.Surface>
+      </TeachingPopover>
+    );
+  }
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps((slotProps) => <Nav slotProps={slotProps} />, {
+      button: {},
+      indicator: {},
+    });
+  });
+
+  it('puts your className, style and data-* on every button and indicator', () => {
+    render(
+      <Nav
+        slotProps={{
+          button: { className: 'my-button', style: { opacity: 0.5 }, 'data-part': 'button' },
+          indicator: { className: 'my-indicator', style: { opacity: 0.25 }, 'data-part': 'dot' },
+        }}
+      />,
+    );
+    expect(buttons()).toHaveLength(3);
+    expect(indicators()).toHaveLength(3);
+    for (const [elements, stable, mine, data, opacity] of [
+      [buttons(), teachingPopoverCarouselNavClassNames.button, 'my-button', 'button', '0.5'],
+      [indicators(), teachingPopoverCarouselNavClassNames.indicator, 'my-indicator', 'dot', '0.25'],
+    ] as const) {
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(stable);
+        expect(element.classList[element.classList.length - 1]).toBe(mine);
+        expect(element).toHaveAttribute('data-part', data);
+        expect(element).toHaveStyle({ opacity });
+      }
+    }
+    expect(screen.getByRole('group', { name: 'Choose step' })).not.toHaveAttribute('data-part');
+  });
+
+  it('lets your class replace a conflicting class of a part', () => {
+    render(
+      <Nav slotProps={{ button: { className: 'min-w-8' }, indicator: { className: 'h-2' } }} />,
+    );
+    for (const button of buttons()) {
+      expect(button).toHaveClass('min-w-8');
+      expect(button).not.toHaveClass('min-w-6');
+    }
+    for (const indicator of indicators()) {
+      expect(indicator).toHaveClass('h-2');
+      expect(indicator).not.toHaveClass('h-1.5');
+    }
+  });
+
+  it('locks the buttons’ type, name and step state, and their disabled and hidden state', () => {
+    render(
+      <Nav
+        slotProps={{
+          button: {
+            type: 'submit',
+            'aria-label': 'Other',
+            'aria-current': 'page',
+            disabled: true,
+            tabIndex: -1,
+            hidden: true,
+            inert: true,
+            'aria-hidden': true,
+            'aria-disabled': true,
+            'data-disabled': '',
+            'data-disabled-focusable': '',
+            title: 'Step',
+          },
+          indicator: { 'aria-hidden': false, tabIndex: 0 },
+        }}
+      />,
+    );
+    buttons().forEach((button, index) => {
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).toHaveAttribute('aria-label', `Step ${index + 1} of 3`);
+      if (index === 1) expect(button).toHaveAttribute('aria-current', 'step');
+      else expect(button).not.toHaveAttribute('aria-current');
+      for (const name of [
+        'disabled',
+        'tabindex',
+        'hidden',
+        'inert',
+        'aria-hidden',
+        'aria-disabled',
+        'data-disabled',
+        'data-disabled-focusable',
+      ]) {
+        expect(button, name).not.toHaveAttribute(name);
+      }
+      expect(button).toHaveAttribute('title', 'Step');
+    });
+    for (const indicator of indicators()) {
+      expect(indicator).toHaveAttribute('aria-hidden', 'true');
+      expect(indicator).not.toHaveAttribute('tabindex');
+    }
+  });
+
+  it('runs your button onClick before the step change: preventDefault() skips it', async () => {
+    const user = userEvent.setup();
+    const onStepChange = vi.fn();
+    const onClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    render(<Nav onStepChange={onStepChange} slotProps={{ button: { onClick } }} />);
+    await user.click(screen.getByRole('button', { name: 'Step 3 of 3' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onStepChange).not.toHaveBeenCalled();
+    onClick.mockImplementation(() => {});
+    await user.click(screen.getByRole('button', { name: 'Step 3 of 3' }));
+    expect(onStepChange.mock.calls).toEqual([[2]]);
+  });
+
+  it('runs your indicator onClick first: preventDefault() skips the step change of its button', async () => {
+    const user = userEvent.setup();
+    const onStepChange = vi.fn();
+    const onClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    render(<Nav onStepChange={onStepChange} slotProps={{ indicator: { onClick } }} />);
+    await user.click(indicators()[2]);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onStepChange).not.toHaveBeenCalled();
+    onClick.mockImplementation(() => {});
+    await user.click(indicators()[2]);
+    expect(onStepChange.mock.calls).toEqual([[2]]);
+  });
+
+  it('changes the step on a click whose default something else prevented, without an indicator part, as before parts existed', async () => {
+    const user = userEvent.setup();
+    const onStepChange = vi.fn();
+    // A capture listener of the document prevents the default of every click before React sees it.
+    const prevent = (event: Event) => event.preventDefault();
+    document.addEventListener('click', prevent, true);
+    onTestFinished(() => document.removeEventListener('click', prevent, true));
+    const { rerender } = render(<Nav onStepChange={onStepChange} />);
+    await user.click(screen.getByRole('button', { name: 'Step 3 of 3' }));
+    expect(onStepChange.mock.calls).toEqual([[2]]);
+    // Only the indicator part's own click decides: with the part given, a prevented click shows no
+    // step, whoever prevented it.
+    rerender(<Nav onStepChange={onStepChange} slotProps={{ indicator: { title: 'Dot' } }} />);
+    await user.click(screen.getByRole('button', { name: 'Step 1 of 3' }));
+    expect(onStepChange.mock.calls).toEqual([[2]]);
+  });
+
+  it('attaches your refs to every button and indicator', () => {
+    const buttonElements: Array<HTMLButtonElement | null> = [];
+    const indicatorElements: Array<HTMLSpanElement | null> = [];
+    render(
+      <Nav
+        slotProps={{
+          button: { ref: (element) => void buttonElements.push(element) },
+          indicator: { ref: (element) => void indicatorElements.push(element) },
+        }}
+      />,
+    );
+    for (const button of buttons()) expect(buttonElements).toContain(button);
+    for (const indicator of indicators()) expect(indicatorElements).toContain(indicator);
+  });
+
+  it('calls your part handlers once per click in StrictMode', () => {
+    const onButton = vi.fn();
+    const onIndicator = vi.fn();
+    render(
+      <React.StrictMode>
+        <Nav slotProps={{ button: { onClick: onButton }, indicator: { onClick: onIndicator } }} />
+      </React.StrictMode>,
+    );
+    fireEvent.click(indicators()[0]);
+    expect(onIndicator).toHaveBeenCalledTimes(1);
+    expect(onButton).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Nav
+        slotProps={{ button: { className: 'my-button' }, indicator: { className: 'my-dot' } }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof NavSlotProps>().toEqualTypeOf<'button' | 'indicator'>();
+    expectTypeOf<NonNullable<NavSlotProps['button']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<NavSlotProps['indicator']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: the indicator is the nav's drawing
+    void (<TeachingPopover.CarouselNav slotProps={{ indicator: { children: '•' } }} />);
   });
 });

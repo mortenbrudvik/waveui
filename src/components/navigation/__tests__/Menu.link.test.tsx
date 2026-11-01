@@ -4,9 +4,16 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MenuItemLink } from '../Menu.link';
 import type { MenuItemLinkOwnProps, MenuItemLinkProps } from '../Menu.link';
+import { renderToString } from 'react-dom/server';
 import { MenuItem } from '../Menu.items';
 import { INERT_MENU_CONTEXT, MenuContext } from '../Menu.context';
-import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
+import { menuItemClassNames, menuItemLinkClassNames } from '../../../lib/classNames';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  testSystemProps,
+} from '../../../test-utils';
 import { MenuListHarness, renderInMenuList } from './menuHarness';
 
 afterEach(() => {
@@ -423,5 +430,388 @@ describe('types', () => {
     // @ts-expect-error -- the router link requires `to`
     const missingTo = <MenuItemLink as={RouterLink}>Settings</MenuItemLink>;
     expect([withRouter, unknownProp, missingTo]).toHaveLength(3);
+  });
+});
+
+describe('Menu.ItemLink — slotProps', () => {
+  type LinkSlotProps = NonNullable<MenuItemLinkOwnProps['slotProps']>;
+  const EVERY_PART: LinkSlotProps = { content: {}, shortcut: {} };
+  const content = (row: Element) =>
+    row.querySelector<HTMLElement>('.' + menuItemLinkClassNames.content) as HTMLElement;
+  const shortcut = (row: Element) =>
+    row.querySelector<HTMLElement>('.' + menuItemLinkClassNames.shortcut) as HTMLElement;
+  /** The link whose name starts with `label` (a shortcut's text follows the label in the name). */
+  const named = (label: string) => screen.getByRole('menuitem', { name: new RegExp(`^${label}`) });
+
+  interface RouterLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+    to: string;
+    ref?: React.Ref<HTMLAnchorElement>;
+  }
+  const RouterLink = ({ to, ...rest }: RouterLinkProps) => <a {...rest} href={to} />;
+
+  // Captured from 4a08890 (client and server agree): the merged props may put the class before the
+  // locked attributes.
+  const BASE_PINS = [
+    '<span class="wave-menu-item__content wave-menu-item-link__content flex-1">',
+    '<span class="wave-menu-item__shortcut wave-menu-item-link__shortcut ms-4 text-caption-1 text-muted-foreground" dir="auto">',
+  ].join('\n');
+
+  function PinnedLink({ slotProps }: { slotProps?: LinkSlotProps }) {
+    return (
+      <MenuListHarness isStatic>
+        <MenuItemLink href="#help" shortcut="F1" slotProps={slotProps}>
+          Help
+        </MenuItemLink>
+      </MenuListHarness>
+    );
+  }
+
+  it('renders the parts of 4a08890 (attributes sorted), on the client and the server', () => {
+    render(<PinnedLink />);
+    const link = document.querySelector('a') as HTMLElement;
+    expect(openingTags(content(link), shortcut(link))).toBe(BASE_PINS);
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<PinnedLink slotProps={EVERY_PART} />);
+    const serverLink = template.content.querySelector('a') as HTMLElement;
+    expect(openingTags(content(serverLink), shortcut(serverLink))).toBe(BASE_PINS);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: Array<(slotProps: LinkSlotProps | undefined) => React.ReactElement> = [
+      (slotProps) => (
+        <MenuItemLink href="#help" shortcut="F1" icon={{ children: 'H' }} slotProps={slotProps}>
+          Help
+        </MenuItemLink>
+      ),
+      (slotProps) => (
+        <MenuItemLink href="#off" disabled shortcut="F2" slotProps={slotProps}>
+          Off
+        </MenuItemLink>
+      ),
+      (slotProps) => (
+        <MenuItemLink as={RouterLink} to="/billing" slotProps={slotProps}>
+          <b>Billing</b>
+        </MenuItemLink>
+      ),
+      (slotProps) => (
+        <MenuItemLink href="#docs" data-roving-text="Docs" slotProps={slotProps}>
+          <i>Documentation</i>
+        </MenuItemLink>
+      ),
+    ];
+    for (const ui of cases) {
+      expectInertSlotProps(
+        (slotProps) => <MenuListHarness>{ui(slotProps)}</MenuListHarness>,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style, data-* and ref on each part, after its own classes', () => {
+    const contentRef = React.createRef<HTMLSpanElement>();
+    const shortcutRef = React.createRef<HTMLSpanElement>();
+    renderInMenuList(
+      <MenuItemLink
+        href="#help"
+        shortcut="F1"
+        slotProps={{
+          content: {
+            className: 'my-content flex-none',
+            style: { opacity: 0.5 },
+            'data-part': 'content',
+            ref: contentRef,
+          },
+          shortcut: {
+            className: 'my-shortcut ms-2',
+            style: { opacity: 0.25 },
+            'data-part': 'shortcut',
+            ref: shortcutRef,
+          },
+        }}
+      >
+        Help
+      </MenuItemLink>,
+    );
+    const link = named('Help');
+    for (const [element, base, own, mine, replaced, data, opacity, ref] of [
+      [
+        content(link),
+        menuItemClassNames.content,
+        menuItemLinkClassNames.content,
+        'my-content',
+        'flex-1',
+        'content',
+        '0.5',
+        contentRef,
+      ],
+      [
+        shortcut(link),
+        menuItemClassNames.shortcut,
+        menuItemLinkClassNames.shortcut,
+        'my-shortcut',
+        'ms-4',
+        'shortcut',
+        '0.25',
+        shortcutRef,
+      ],
+    ] as const) {
+      expect(Array.from(element.classList).slice(0, 2)).toEqual([base, own]);
+      expect(element).toHaveClass(mine);
+      expect(element).not.toHaveClass(replaced);
+      expect(element).toHaveAttribute('data-part', data);
+      expect(element).toHaveStyle({ opacity });
+      expect(ref.current).toBe(element);
+    }
+  });
+
+  it('reaches the parts inside a router link (`as`)', () => {
+    const linkRef = React.createRef<HTMLAnchorElement>();
+    renderInMenuList(
+      <MenuItemLink
+        as={RouterLink}
+        to="/billing"
+        ref={linkRef}
+        shortcut="Ctrl+B"
+        slotProps={{ content: { className: 'my-content' }, shortcut: { className: 'my-shortcut' } }}
+      >
+        Billing
+      </MenuItemLink>,
+    );
+    const link = named('Billing');
+    expect(link).toBe(linkRef.current);
+    expect(link).toHaveAttribute('href', '/billing');
+    expect(content(link)).toHaveClass('my-content');
+    expect(shortcut(link)).toHaveClass('my-shortcut');
+  });
+
+  it('locks the shortcut’s direction, gives no part a role, and keeps typeahead on the label', async () => {
+    const user = userEvent.setup();
+    renderInMenuList(
+      <>
+        <MenuItemLink
+          href="#about"
+          shortcut="Ctrl+,"
+          slotProps={{
+            content: { role: 'menuitem', 'data-menu-label': 'x', tabIndex: 0 },
+            shortcut: { dir: 'ltr', role: 'note', 'data-menu-label': '', tabIndex: 0 },
+          }}
+        >
+          About
+        </MenuItemLink>
+        <MenuItem>Cherry</MenuItem>
+      </>,
+    );
+    const about = named('About');
+    expect(content(about)).not.toHaveAttribute('role');
+    expect(content(about)).not.toHaveAttribute('data-menu-label');
+    expect(shortcut(about)).toHaveAttribute('dir', 'auto');
+    expect(shortcut(about)).not.toHaveAttribute('role');
+    expect(shortcut(about)).not.toHaveAttribute('data-menu-label');
+    expect(content(about)).not.toHaveAttribute('tabindex');
+    expect(shortcut(about)).not.toHaveAttribute('tabindex');
+    expect(screen.getAllByRole('menuitem')).toHaveLength(2);
+    await user.tab();
+    await user.keyboard('{End}');
+    expect(screen.getByRole('menuitem', { name: 'Cherry' })).toHaveFocus();
+    await user.keyboard('a');
+    expect(about).toHaveFocus();
+  });
+
+  it('keeps the label naming the link: no aria-label, hidden state or roving container from a part', () => {
+    renderInMenuList(
+      <MenuItemLink
+        href="#docs"
+        slotProps={{
+          content: {
+            'aria-label': 'Other',
+            hidden: true,
+            inert: true,
+            'aria-hidden': true,
+            'data-roving-container': '',
+          },
+        }}
+      >
+        Docs
+      </MenuItemLink>,
+    );
+    const row = named('Docs');
+    expect(row).toHaveAccessibleName('Docs');
+    for (const attribute of [
+      'aria-label',
+      'hidden',
+      'inert',
+      'aria-hidden',
+      'data-roving-container',
+    ]) {
+      expect(content(row)).not.toHaveAttribute(attribute);
+    }
+  });
+
+  it('runs a part’s handler first: a prevented click calls onClick but neither navigates nor closes', async () => {
+    const user = userEvent.setup();
+    const prevented = recordClicks();
+    const order: string[] = [];
+    const onClick = vi.fn(() => void order.push('link'));
+    const { closeFromItem, rerender } = renderInMenuList(
+      <MenuItemLink
+        href="#help"
+        shortcut="F1"
+        onClick={onClick}
+        slotProps={{
+          content: {
+            onClick: (event) => {
+              order.push('content');
+              event.preventDefault();
+            },
+          },
+        }}
+      >
+        Help
+      </MenuItemLink>,
+    );
+    await user.click(content(named('Help')));
+    expect(order).toEqual(['content', 'link']);
+    expect(prevented).toEqual([true]);
+    expect(closeFromItem).not.toHaveBeenCalled();
+    rerender(
+      <MenuItemLink
+        href="#help"
+        shortcut="F1"
+        onClick={onClick}
+        slotProps={{ shortcut: { onClick: () => void order.push('shortcut') } }}
+      >
+        Help
+      </MenuItemLink>,
+    );
+    await user.click(shortcut(named('Help')));
+    expect(order).toEqual(['content', 'link', 'shortcut', 'link']);
+    expect(prevented).toEqual([true, false]);
+    expect(closeFromItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls no click handler of a part while the link is disabled, as it calls no onClick', async () => {
+    const prevented = recordClicks();
+    const onContent = vi.fn();
+    const onShortcut = vi.fn();
+    const onClick = vi.fn();
+    const ui = (props: { disabled?: boolean; 'aria-disabled'?: boolean }) => (
+      <MenuItemLink
+        href="#help"
+        shortcut="F1"
+        onClick={onClick}
+        {...props}
+        slotProps={{ content: { onClick: onContent }, shortcut: { onClick: onShortcut } }}
+      >
+        Help
+      </MenuItemLink>
+    );
+    const { closeFromItem, rerender } = renderInMenuList(ui({ disabled: true }));
+    fireEvent.click(content(named('Help')));
+    fireEvent.click(shortcut(named('Help')));
+    expect(onContent).not.toHaveBeenCalled();
+    expect(onShortcut).not.toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
+    expect(closeFromItem).not.toHaveBeenCalled();
+    // The disabled link cancels its own click.
+    expect(prevented).toEqual([true, true]);
+    // Enabled, and with a consumer aria-disabled alone, the link and its parts run.
+    for (const [props, calls] of [
+      [{}, 1],
+      [{ 'aria-disabled': true }, 2],
+    ] as const) {
+      rerender(ui(props));
+      await act(async () => {});
+      fireEvent.click(content(named('Help')));
+      fireEvent.click(shortcut(named('Help')));
+      expect(onContent).toHaveBeenCalledTimes(calls);
+      expect(onShortcut).toHaveBeenCalledTimes(calls);
+    }
+    expect(onClick).toHaveBeenCalledTimes(4);
+    expect(closeFromItem).toHaveBeenCalledTimes(4);
+  });
+
+  it('calls your part handlers once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    recordClicks();
+    const onContent = vi.fn();
+    const onShortcut = vi.fn();
+    renderInMenuList(
+      <MenuItemLink
+        href="#help"
+        shortcut="F1"
+        slotProps={{ content: { onClick: onContent }, shortcut: { onClick: onShortcut } }}
+      >
+        Help
+      </MenuItemLink>,
+      { isStatic: true, renderOptions: { wrapper: React.StrictMode } },
+    );
+    await user.click(content(named('Help')));
+    await user.click(shortcut(named('Help')));
+    expect(onContent).toHaveBeenCalledTimes(1);
+    expect(onShortcut).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the shortcut part without a shortcut, and never reaches the link element', () => {
+    renderInMenuList(
+      <MenuItemLink
+        href="#help"
+        slotProps={
+          { shortcut: { className: 'my-shortcut' }, root: { className: 'my-root' } } as never
+        }
+      >
+        Help
+      </MenuItemLink>,
+    );
+    const link = screen.getByRole('menuitem', { name: 'Help' });
+    expect(link.querySelector('.' + menuItemLinkClassNames.shortcut)).toBeNull();
+    expect(document.querySelector('.my-shortcut, .my-root')).toBeNull();
+    expect(link).not.toHaveAttribute('slotprops');
+  });
+
+  it('keeps the shortcut’s own direction with your class in RTL', () => {
+    renderInMenuList(
+      <MenuItemLink
+        href="#prefs"
+        shortcut="Ctrl+,"
+        slotProps={{ shortcut: { className: 'my-shortcut' } }}
+      >
+        Preferences
+      </MenuItemLink>,
+      { dir: 'rtl' },
+    );
+    const link = named('Preferences');
+    expect(link.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+    expect(shortcut(link)).toHaveAttribute('dir', 'auto');
+    expect(shortcut(link)).toHaveClass('my-shortcut', 'ms-4');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    renderInMenuList(
+      <MenuItemLink
+        href="#help"
+        shortcut="F1"
+        slotProps={{ content: { title: 'Open the help' }, shortcut: { className: 'my-shortcut' } }}
+      >
+        Help
+      </MenuItemLink>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('declares slotProps among its own props, typed for each part’s element', () => {
+    expectTypeOf<keyof LinkSlotProps>().toEqualTypeOf<'content' | 'shortcut'>();
+    expectTypeOf<MenuItemLinkProps<typeof RouterLink>['slotProps']>().toEqualTypeOf<
+      MenuItemLinkOwnProps['slotProps']
+    >();
+    expectTypeOf<NonNullable<LinkSlotProps['content']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    const withChildren = (
+      // @ts-expect-error -- a part takes no children: the item draws them
+      <MenuItemLink href="#" slotProps={{ content: { children: 'x' } }}>
+        Help
+      </MenuItemLink>
+    );
+    expect(withChildren).toBeDefined();
   });
 });

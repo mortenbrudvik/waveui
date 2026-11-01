@@ -2,15 +2,21 @@ import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { AlphaSlider } from '../AlphaSlider';
 import { ColorArea } from '../ColorArea';
 import { ColorPicker, type ColorPickerProps } from '../ColorPicker';
 import { ColorSlider } from '../ColorSlider';
 import { Field } from '../Field';
-import { alphaSliderClassNames } from '../../../lib/classNames';
+import { alphaSliderClassNames, colorPickerClassNames } from '../../../lib/classNames';
 import { inputInvalid } from '../../../lib/styles';
 import type { ColorPickerShape } from '../../../lib/types';
-import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  testSystemProps,
+} from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
 const hexInput = () => screen.getByRole('textbox', { name: 'Hex color value' });
@@ -1315,5 +1321,177 @@ describe('ColorPicker — the color parts bind to it (D21)', () => {
     act(() => hueSlider().focus());
     await user.keyboard('{ArrowRight}');
     expect(onHue.mock.calls).toEqual([[{ h: 1, s: 1, v: 1 }]]);
+  });
+});
+
+describe('ColorPicker — slotProps', () => {
+  type ColorPickerSlotProps = NonNullable<ColorPickerProps['slotProps']>;
+  const EVERY_PART: ColorPickerSlotProps = { opacityLabel: {}, opacityValue: {} };
+  const opacityLabel = (root: ParentNode = document) =>
+    root.querySelector<HTMLElement>(`.${colorPickerClassNames.opacityLabel}`);
+  const opacityValue = (root: ParentNode = document) =>
+    root.querySelector<HTMLElement>(`.${colorPickerClassNames.opacityValue}`);
+
+  it('renders the parts of 1f67a85 on the server and in the client (attributes sorted)', () => {
+    // Captured from the dist of 1f67a85.
+    const pin = [
+      '<span class="wave-color-picker__opacity-label w-14 text-caption-1 text-muted-foreground">',
+      '<span class="wave-color-picker__opacity-value w-10 text-end text-caption-1 text-muted-foreground">',
+    ].join('\n');
+    const ui = <ColorPicker aria-label="Accent" showOpacity defaultValue="#0f6cbd80" />;
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(ui);
+    expect(
+      openingTags(
+        opacityLabel(template.content) as HTMLElement,
+        opacityValue(template.content) as HTMLElement,
+      ),
+    ).toBe(pin);
+    render(ui);
+    expect(openingTags(opacityLabel() as HTMLElement, opacityValue() as HTMLElement)).toBe(pin);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: ColorPickerProps[] = [
+      { 'aria-label': 'Accent', showOpacity: true, defaultValue: '#0f6cbd80', name: 'accent' },
+      { 'aria-label': 'Accent', shape: 'square' },
+      {
+        'aria-label': 'Accent',
+        showOpacity: true,
+        children: <ColorPicker.HexField />,
+      },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => <ColorPicker {...props} slotProps={slotProps} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style, data-*, handlers and ref on each part of the opacity row', () => {
+    const labelRef = React.createRef<HTMLSpanElement>();
+    const valueRef = React.createRef<HTMLSpanElement>();
+    const onClick = vi.fn();
+    render(
+      <ColorPicker
+        aria-label="Accent"
+        showOpacity
+        defaultValue="#0f6cbd80"
+        slotProps={{
+          opacityLabel: {
+            ref: labelRef,
+            className: 'my-label',
+            style: { color: 'red' },
+            'data-part': 'label',
+            id: 'opacity-caption',
+            onClick,
+          },
+          opacityValue: {
+            ref: valueRef,
+            className: 'my-value',
+            style: { color: 'blue' },
+            'data-part': 'value',
+            'aria-live': 'polite',
+          },
+        }}
+      />,
+    );
+    const label = screen.getByText('Opacity');
+    const value = screen.getByText('50%');
+    expect(labelRef.current).toBe(label);
+    expect(valueRef.current).toBe(value);
+    for (const [element, stable, own, mine, part] of [
+      [label, colorPickerClassNames.opacityLabel, 'w-14', 'my-label', 'label'],
+      [value, colorPickerClassNames.opacityValue, 'text-end', 'my-value', 'value'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, 'text-caption-1', mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', part);
+    }
+    expect(label).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+    expect(value).toHaveStyle({ color: 'rgb(0, 0, 255)' });
+    // The parts set no attribute of their own: you add any.
+    expect(label).toHaveAttribute('id', 'opacity-caption');
+    expect(value).toHaveAttribute('aria-live', 'polite');
+    fireEvent.click(label);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets your class replace a conflicting class of the part', () => {
+    render(
+      <ColorPicker
+        aria-label="Accent"
+        showOpacity
+        slotProps={{ opacityLabel: { className: 'w-20' } }}
+      />,
+    );
+    const label = screen.getByText('Opacity');
+    expect(label).toHaveClass('w-20');
+    expect(label).not.toHaveClass('w-14');
+  });
+
+  it('ignores the parts without showOpacity and with children, and never forwards them', () => {
+    const labelRef = React.createRef<HTMLSpanElement>();
+    const valueRef = React.createRef<HTMLSpanElement>();
+    const slotProps: ColorPickerSlotProps = {
+      opacityLabel: { ref: labelRef, className: 'my-label' },
+      opacityValue: { ref: valueRef, className: 'my-value' },
+    };
+    const { unmount } = render(<ColorPicker aria-label="Accent" slotProps={slotProps} />);
+    expect(opacityLabel()).toBeNull();
+    unmount();
+    render(
+      <ColorPicker aria-label="Accent" showOpacity slotProps={slotProps}>
+        <AlphaSlider />
+      </ColorPicker>,
+    );
+    expect(screen.getByRole('group', { name: 'Accent' })).not.toHaveAttribute('slotprops');
+    expect(opacityLabel()).toBeNull();
+    expect(labelRef.current).toBeNull();
+    expect(valueRef.current).toBeNull();
+    expect(document.querySelector('.my-label, .my-value')).toBeNull();
+  });
+
+  it('follows the opacity in its value part', async () => {
+    const user = userEvent.setup();
+    render(
+      <ColorPicker
+        aria-label="Accent"
+        showOpacity
+        defaultValue="#0f6cbd80"
+        slotProps={{ opacityValue: { className: 'my-value' } }}
+      />,
+    );
+    act(() => opacitySlider().focus());
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByText('51%')).toHaveClass('my-value');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <ColorPicker
+        aria-label="Accent"
+        showOpacity
+        slotProps={{
+          opacityLabel: { className: 'my-label' },
+          opacityValue: { className: 'my-value', title: 'Opacity in percent' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof ColorPickerSlotProps>().toEqualTypeOf<'opacityLabel' | 'opacityValue'>();
+    expectTypeOf<NonNullable<ColorPickerSlotProps['opacityLabel']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ColorPickerSlotProps['opacityValue']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: `labels.opacity` gives the caption its text
+    void (<ColorPicker slotProps={{ opacityLabel: { children: 'Alpha' } }} />);
   });
 });

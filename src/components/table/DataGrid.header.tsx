@@ -13,6 +13,7 @@ import {
   DataGridHeaderRowHintContext,
   DataGridHeaderSlotsContext,
   DataGridSectionContext,
+  DataGridSelectAllPartContext,
   createHeaderSlotRegistry,
   useDataGridContext,
   useDataGridSortContext,
@@ -75,6 +76,7 @@ function DataGridSelectionHeaderCell({
 }: DataGridSelectionHeaderCellProps) {
   const { store, toggleAll, selectAllLabel, selectionHeaderLabel, subtleSelection } =
     useDataGridContext('DataGrid.Header');
+  const selectAllPart = React.useContext(DataGridSelectAllPartContext);
   const state = React.useSyncExternalStore(
     store.subscribeSelectAll,
     store.getSelectAllState,
@@ -124,6 +126,7 @@ function DataGridSelectionHeaderCell({
           reveal="grid"
           onChange={(event) => toggleAll(event.nativeEvent)}
           className={dataGridHeaderClassNames.selectAllCheckbox}
+          part={selectAllPart}
         />
       ) : (
         <span className="sr-only">{selectionHeaderLabel}</span>
@@ -269,7 +272,13 @@ function withSelectionHeaderSlots(
  * In a grid with a `virtualWindow` the header stays at the top of the grid's scroll wrapper while
  * the rows scroll under it, and each header row carries its `aria-rowindex`.
  */
-export const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHeaderProps) => {
+export const DataGridHeader = ({
+  slotProps,
+  children,
+  className,
+  ref,
+  ...rest
+}: DataGridHeaderProps) => {
   const { selectionMode } = useDataGridContext('DataGrid.Header');
   const windowed = React.useContext(DataGridWindowContext) !== null;
   const [thead, setThead] = React.useState<HTMLTableSectionElement | null>(null);
@@ -314,22 +323,24 @@ export const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHe
   return (
     <DataGridSectionContext.Provider value="header">
       <DataGridHeaderSlotsContext.Provider value={slots}>
-        <thead
-          ref={mergedRef}
-          className={cn(
-            dataGridHeaderClassNames.root,
-            'bg-card',
-            // While a column resize handle drags, the header cells ignore the pointer.
-            'in-data-[resizing]:pointer-events-none',
-            // A windowed grid scrolls in its wrapper: the header stays at its top, over the rows
-            // (on the section: a header cell is positioned for its resize handle).
-            windowed && 'sticky top-0 z-1',
-            className,
-          )}
-          {...rest}
-        >
-          {content}
-        </thead>
+        <DataGridSelectAllPartContext.Provider value={slotProps?.selectAllCheckbox}>
+          <thead
+            ref={mergedRef}
+            className={cn(
+              dataGridHeaderClassNames.root,
+              'bg-card',
+              // While a column resize handle drags, the header cells ignore the pointer.
+              'in-data-[resizing]:pointer-events-none',
+              // A windowed grid scrolls in its wrapper: the header stays at its top, over the
+              // rows (on the section: a header cell is positioned for its resize handle).
+              windowed && 'sticky top-0 z-1',
+              className,
+            )}
+            {...rest}
+          >
+            {content}
+          </thead>
+        </DataGridSelectAllPartContext.Provider>
       </DataGridHeaderSlotsContext.Provider>
     </DataGridSectionContext.Provider>
   );
@@ -352,6 +363,7 @@ export const DataGridHeaderCell = ({
   columnId,
   sortable = false,
   sortIcon,
+  slotProps,
   children,
   className,
   onClick,
@@ -437,6 +449,7 @@ export const DataGridHeaderCell = ({
           sortIcon={sortIcon}
           className={dataGridHeaderCellClassNames.button}
           iconClassName={dataGridHeaderCellClassNames.sortIcon}
+          part={slotProps?.button}
         >
           {children}
         </TableSortButton>
@@ -446,7 +459,11 @@ export const DataGridHeaderCell = ({
         </span>
       )}
       {resizeColumnId !== undefined && resize !== null && (
-        <DataGridColumnResizeHandle columnId={resizeColumnId} context={resize} />
+        <DataGridColumnResizeHandle
+          columnId={resizeColumnId}
+          context={resize}
+          part={slotProps?.resizeHandle}
+        />
       )}
     </th>
   );

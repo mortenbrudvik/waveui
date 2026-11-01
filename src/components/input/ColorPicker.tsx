@@ -5,6 +5,7 @@ import { hexToHsv, hsvToHex } from '../../lib/color';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getFirstTabbable } from '../../lib/focus';
 import { slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { ColorPickerShape, HsvColor } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -122,6 +123,27 @@ export interface ColorPickerProps extends Omit<
   form?: string;
   /** Ref to the root `role="group"` element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the picker draws itself, by part, merged into each part's own: your
+   * classes after the part's (yours win a conflict), your styles over its styles, your handlers
+   * and attributes added, your ref attached. A part takes no `children`. The parts carry no
+   * attribute of their own, so none is locked. Both are drawn only by the default layout with
+   * `showOpacity` and are ignored with `children`; the color area, the sliders, the hex field
+   * and the swatches of the default layout are components of their own, whose props it does not
+   * pass on (write your own layout to reach them).
+   */
+  slotProps?: {
+    /**
+     * The `<span>` of the opacity row's caption, `labels.opacity` (stable class
+     * `wave-color-picker__opacity-label`).
+     */
+    opacityLabel?: SlotPart<'span'>;
+    /**
+     * The `<span>` of the opacity row's percentage (stable class
+     * `wave-color-picker__opacity-value`).
+     */
+    opacityValue?: SlotPart<'span'>;
+  };
 }
 
 const DEFAULT_PRESETS: readonly ColorPickerPreset[] = [
@@ -209,6 +231,7 @@ const ColorPickerRoot = ({
   'aria-errormessage': ariaErrorMessage,
   children,
   ref,
+  slotProps,
   ...rest
 }: ColorPickerProps) => {
   if (onChange !== undefined) warnDeprecated('ColorPicker', 'onChange', 'onValueChange');
@@ -410,19 +433,23 @@ const ColorPickerRoot = ({
               {showOpacity && (
                 <div className="flex items-center gap-2">
                   <span
-                    className={cn(
-                      colorPickerClassNames.opacityLabel,
-                      'w-14 text-caption-1 text-muted-foreground',
-                    )}
+                    {...mergeSlotProps(slotProps?.opacityLabel, {
+                      className: cn(
+                        colorPickerClassNames.opacityLabel,
+                        'w-14 text-caption-1 text-muted-foreground',
+                      ),
+                    })}
                   >
                     {strings.opacity}
                   </span>
                   <AlphaSlider className="min-w-0 flex-1" />
                   <span
-                    className={cn(
-                      colorPickerClassNames.opacityValue,
-                      'w-10 text-end text-caption-1 text-muted-foreground',
-                    )}
+                    {...mergeSlotProps(slotProps?.opacityValue, {
+                      className: cn(
+                        colorPickerClassNames.opacityValue,
+                        'w-10 text-end text-caption-1 text-muted-foreground',
+                      ),
+                    })}
                   >
                     {opacity}%
                   </span>

@@ -15,7 +15,8 @@ import {
 import { focusRing, forcedColors } from '../../lib/styles';
 import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
-import type { Slot, SlotObject } from '../../lib/slot';
+import type { Slot, SlotObject, SlotRenderFunction } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TagAppearance, TagShape, TagSize } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -30,7 +31,9 @@ import {
 } from '../button/Button.slots';
 import { AvatarSizeContext } from './Avatar.context';
 import {
+  BLOCK_CLICK,
   TAG_GROUP_SELECTOR,
+  TAG_PART_LOCKS,
   TagHostContext,
   isDismissKey,
   isRepeatedActivation,
@@ -185,6 +188,9 @@ export interface TagOwnProps {
    * `{ className: 'text-error' }`. A slot object that renders a component or a void element
    * (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the
    * icon itself: no default icon is added. Only takes effect with `dismissible`.
+   *
+   * `slotProps.dismissButton` reaches the same button; its attributes replace those of a merged
+   * button (see there).
    */
   dismissIcon?: Slot<'span'> | SlotObject<'button'>;
   /**
@@ -196,6 +202,59 @@ export interface TagOwnProps {
    * @default 'Dismiss'
    */
   dismissLabel?: string;
+  /**
+   * Props for the elements the tag draws around its text and for its Dismiss button, by part,
+   * merged into each part's own (Fluent UI's `primaryText` and `secondaryText` slot props): your
+   * classes after the part's (yours win a conflict), your styles over its styles, your handlers
+   * before its handlers, your ids added to its `aria-labelledby` and `aria-describedby`, and your
+   * ref beside its ref. Every attribute the tag sets on a part is locked and keeps the tag's value;
+   * you add the attributes it does not set. A part takes no `children`: the tag draws the text,
+   * and `dismissIcon` fills the Dismiss button. `media` and `icon` are slots of their own.
+   *
+   * The two text parts lock, unset, `role`, `tabIndex`, `aria-label` (it would replace the text in
+   * a name), `data-roving-container` (it would take a link in the text out of a TagGroup's arrow
+   * order), the markers by which a TagGroup finds its tags and their Dismiss buttons
+   * (`data-wave-tag-item`, `data-wave-tag-dismiss`) and `hidden`, `inert` and `aria-hidden`. They
+   * carry no handler of the tag: an event on a text part reaches the tag after yours, so
+   * `preventDefault()` in yours skips the tag's handling of it (Delete and Backspace on a link in
+   * the text no longer dismiss), while the tag's own `on…` props still run. A disabled link or
+   * button tag activates nothing, and your `onClick` on its text parts is not called either.
+   */
+  slotProps?: {
+    /**
+     * The `<span>` around the tag's text, its children (stable class `wave-tag__primary-text`).
+     * Also locked: its `id`, which names the Dismiss button with `dismissLabel` ("Dismiss
+     * Cherry").
+     */
+    primaryText?: SlotPart<'span'>;
+    /**
+     * The `<span>` around `secondaryText`, the second line, drawn while it renders content
+     * (stable class `wave-tag__secondary-text`).
+     */
+    secondaryText?: SlotPart<'span'>;
+    /**
+     * The Dismiss `<button>`, drawn while the tag is `dismissible` (stable class
+     * `wave-tag__dismiss-button`; `dismissIcon` fills its content). A `<button>` or `Button`
+     * passed as `dismissIcon` reaches this button too: its attributes are the defaults these props
+     * replace (yours win), its classes come before yours and its handlers run after yours. Locked,
+     * at the values the tag and that button give together (unset unless that button sets them):
+     * `type`, `role`, `disabled`, `tabIndex`, `hidden`, `inert`, `aria-hidden`, the name
+     * (`aria-label`, and `aria-labelledby`, to which your ids are added), `aria-disabled`,
+     * `data-disabled`, `data-disabled-focusable`, the markers by which a TagGroup's arrow keys
+     * find their controls (`data-roving-container`, `data-roving-disabled`, `data-roving-value`)
+     * and its tags and their Dismiss buttons (`data-wave-tag-item`, `data-wave-tag-dismiss`), and
+     * its click and key handling: your `onClick` runs first, and `preventDefault()` in it skips
+     * the merged button's `onClick`, `onDismiss` and a TagGroup's `onDismiss(value)`;
+     * `preventDefault()` in your `onKeyDown` keeps Delete and Backspace from dismissing. While the
+     * button is disabled, or unavailable but focusable (a disabled tag's button that keeps its
+     * focus, a merged `Button` with `disabledFocusable`), your `onClick` is not called. The tag
+     * records focus and blur after your `onFocus` and `onBlur`, also when they prevent the
+     * default. `title` is not locked: a `title` of yours replaces a merged button's tooltip,
+     * while the button's name stays the one the tag gives it (its locked `aria-label` or
+     * `aria-labelledby`).
+     */
+    dismissButton?: SlotPart<'button'>;
+  };
 }
 
 /**
@@ -318,9 +377,17 @@ function defaultDismissContent(glyphSize: number, className?: string): React.Rea
  * @param glyphSize The size (px) of the default glyph, by the tag's size.
  */
 function resolveDismissSlot(
-  slot: TagOwnProps['dismissIcon'],
+  dismissIcon: TagOwnProps['dismissIcon'],
   glyphSize: number,
 ): ResolvedDismissSlot {
+  // A render function that renders nothing leaves the default glyph and the object's other
+  // attributes (C-SLOTS): the slot is the object without it.
+  const slot =
+    isPlainObject(dismissIcon) &&
+    typeof dismissIcon.children === 'function' &&
+    !slotRendersContent(dismissIcon)
+      ? ({ ...dismissIcon, children: undefined } as TagOwnProps['dismissIcon'])
+      : dismissIcon;
   if (!slotRendersContent(slot)) {
     return {
       buttonProps: null,
@@ -418,19 +485,35 @@ function resolveDismissSlot(
     // `iconPosition="after"`).
     // The dismiss icon part is the merged Button's icon element when there is one, else the
     // element this slot object renders (a default glyph inside it stays without the part class).
+    // A render function is no content of its own: it stays, and receives what the element would
+    // hold (the default glyph, or a merged Button's icon) as its `children` prop (C-SLOTS).
+    const render = contentProps.children;
+    const isRender = typeof render === 'function';
+    const receive = (content: React.ReactNode) =>
+      isRender
+        ? (Component: React.ElementType, props: object) =>
+            (render as SlotRenderFunction<object>)(Component, { ...props, children: content })
+        : content;
     const hasButtonIcon = slotRendersContent(ownProps.icon);
     if (hasButtonIcon) {
-      contentProps.children = placeButtonIcon(
-        renderSlot(
-          ownProps.icon as Slot<'span'>,
-          'span',
-          cn(tagClassNames.dismissIcon, iconClassName),
+      contentProps.children = receive(
+        placeButtonIcon(
+          renderSlot(
+            ownProps.icon as Slot<'span'>,
+            'span',
+            cn(tagClassNames.dismissIcon, iconClassName),
+          ),
+          isRender ? undefined : materialiseSlotContent(contentProps.children),
+          ownProps.iconPosition,
         ),
-        materialiseSlotContent(contentProps.children),
-        ownProps.iconPosition,
       );
-    } else if (slotWrapsDefaultContent(contentProps.as ?? 'span', contentProps)) {
-      contentProps.children = defaultDismissContent(glyphSize);
+    } else if (
+      slotWrapsDefaultContent(
+        contentProps.as ?? 'span',
+        isRender ? { ...contentProps, children: undefined } : contentProps,
+      )
+    ) {
+      contentProps.children = receive(defaultDismissContent(glyphSize));
     }
     return {
       buttonProps: isButtonObject || Object.keys(buttonProps).length > 0 ? buttonProps : null,
@@ -502,6 +585,35 @@ const NATIVELY_DISABLED_PROPS = {
   'data-disabled-focusable': undefined,
 };
 
+/**
+ * The Dismiss button's attributes that its parts cannot change, at the values the Tag and a merged
+ * `dismissIcon` button give together (each key present, so it stays unset while neither sets it):
+ * the role, the tab stop, the visibility and the disabled state, the markers a TagGroup toolbar's
+ * roving tab stop reads (in one, the button is a control of the group: a nested composite, a
+ * skipped item or a value of its own would break its arrow order and its one Tab stop) and the tag
+ * item marker (the focus after a removal would take the button for a tag), then the Tag's own
+ * attributes and handlers. The merged button's other attributes are the parts' defaults.
+ */
+const DISMISS_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+  disabled: undefined,
+  'aria-disabled': undefined,
+  'data-disabled': undefined,
+  'data-disabled-focusable': undefined,
+  'data-roving-container': undefined,
+  'data-roving-disabled': undefined,
+  'data-roving-value': undefined,
+  'data-wave-tag-item': undefined,
+  type: undefined,
+  'data-wave-tag-dismiss': undefined,
+  onKeyDown: undefined,
+  onClick: undefined,
+};
+
 type FocusHandler = (event: React.FocusEvent<HTMLElement>) => void;
 
 /** Whether `value` is a key of `table` (an untyped value outside a union falls back). */
@@ -543,6 +655,10 @@ interface TagDismissButtonProps {
   dismissName: string | undefined;
   /** Receives the button, so the tag's root can click it (Delete on a link in the tag's text). */
   buttonRef: React.Ref<HTMLButtonElement>;
+  /** A host's part props for the button (`TagHostContext`: TagPicker's `slotProps.removeButton`). */
+  hostPart: SlotPart<'button'> | undefined;
+  /** The Tag's `slotProps.dismissButton`, applied after the host's part. */
+  part: SlotPart<'button'> | undefined;
 }
 
 /**
@@ -560,12 +676,20 @@ function TagDismissButton({
   contentId,
   dismissName,
   buttonRef,
+  hostPart,
+  part,
 }: TagDismissButtonProps) {
   const dismissLabelId = useId('tag-dismiss');
   const dismissTextId = useId('tag-dismiss-text');
-  const { ref: slotRef, ...ownProps } = buttonProps;
+  const { ref: slotRef, className, style, ...attributes } = buttonProps;
   const ownRef = React.useRef<HTMLButtonElement>(null);
-  const mergedRef = useMergedRefs(ownRef, buttonRef, slotRef as React.Ref<HTMLButtonElement>);
+  const mergedRef = useMergedRefs(
+    ownRef,
+    buttonRef,
+    slotRef as React.Ref<HTMLButtonElement>,
+    hostPart?.ref,
+    part?.ref,
+  );
   // Unmounting while it has focus (`dismissible` turning `false`), the button hands focus to its
   // tag's own control (a link in the text), else, in a TagGroup, to the next tag (D35).
   useDismissControlFocus(ownRef);
@@ -601,20 +725,41 @@ function TagDismissButton({
   // A host's name (TagPicker's `labels.remove`) is the whole name: no hidden label text joins the
   // tag's own text content.
   const named = dismissName !== undefined;
+  // The parts (a host's, TagPicker's `slotProps.removeButton`, then the Tag's own
+  // `slotProps.dismissButton`): their classes last, their handlers first. The Tag's attributes,
+  // the tab stop, visibility, disabled state and name are locked at the values the Tag and a
+  // merged `dismissIcon` button give together; the merged button's other attributes are defaults
+  // a part replaces (SearchBox's rule). No click of a part runs while the button is disabled or
+  // unavailable but focusable.
+  const locked: UnknownProps = { ...DISMISS_LOCKS };
+  const defaults: UnknownProps = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    (Object.hasOwn(locked, key) ? locked : defaults)[key] = value;
+  }
+  const props = mergeSlotProps([hostPart, part], {
+    className: className as string | undefined,
+    style: style as React.CSSProperties | undefined,
+    defaults,
+    locked: Object.assign(locked, {
+      type: (locked.type as 'button' | 'submit' | 'reset' | undefined) ?? 'button',
+      ...stateProps,
+      'aria-label': named ? dismissName : undefined,
+      'aria-labelledby': named
+        ? undefined
+        : `${namedByContent ? dismissTextId : dismissLabelId} ${contentId}`,
+    }),
+    blockHandlers: stateProps && BLOCK_CLICK,
+  });
   return (
     <button
-      {...ownProps}
+      // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
+      type="button"
+      {...props}
       ref={mergedRef}
-      type={(ownProps.type as 'button' | 'submit' | 'reset' | undefined) ?? 'button'}
-      {...stateProps}
-      aria-label={named ? dismissName : undefined}
-      aria-labelledby={
-        named ? undefined : `${namedByContent ? dismissTextId : dismissLabelId} ${contentId}`
-      }
-      onFocus={composeEventHandlers(ownProps.onFocus as FocusHandler | undefined, hold.onFocus, {
+      onFocus={composeEventHandlers(props.onFocus as FocusHandler | undefined, hold.onFocus, {
         checkDefaultPrevented: false,
       })}
-      onBlur={composeEventHandlers(ownProps.onBlur as FocusHandler | undefined, hold.onBlur, {
+      onBlur={composeEventHandlers(props.onBlur as FocusHandler | undefined, hold.onBlur, {
         checkDefaultPrevented: false,
       })}
     >
@@ -729,6 +874,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     onDismiss,
     dismissIcon,
     dismissLabel = 'Dismiss',
+    slotProps,
     className,
     children,
     role,
@@ -747,6 +893,9 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   const rootRef = React.useRef<HTMLElement>(null);
   const mergedRef = useMergedRefs<HTMLElement>(rootRef, ref);
   const primaryTextRef = React.useRef<HTMLSpanElement>(null);
+  // The root's key handler reads the text element, so a part's ref joins it (never detaching it).
+  const primaryTextPart = slotProps?.primaryText;
+  const primaryTextRefs = useMergedRefs(primaryTextRef, primaryTextPart?.ref);
   const dismissButtonRef = React.useRef<HTMLButtonElement>(null);
 
   // The tag's own look, else its TagGroup's, else the 0.10 look.
@@ -776,8 +925,11 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   const isLinkRoot = Component === 'a';
   const linkDisabled = isLinkRoot && disabled;
   const isButtonRoot = Component === 'button';
-  const rootHold = useHeldFocus((isLinkRoot || isButtonRoot) && disabled);
+  const inactiveRoot = (isLinkRoot || isButtonRoot) && disabled;
+  const rootHold = useHeldFocus(inactiveRoot);
   const buttonRootHeld = isButtonRoot && rootHold.held;
+  // A disabled link or button root calls no click handler: nor do the parts of its text.
+  const textBlock = inactiveRoot ? BLOCK_CLICK : undefined;
 
   const {
     buttonProps: slotButtonProps,
@@ -958,19 +1110,31 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     ? mergeProps(ownButtonProps, slotButtonProps)
     : ownButtonProps;
 
+  // The text parts merge only when given, so a tag without them allocates nothing more.
+  const primaryTextClassName = cn(
+    tagClassNames.primaryText,
+    'inline-flex items-center gap-1',
+    hasSecondary && TAG_PRIMARY_TEXT_TWO_LINE_CLASSES,
+  );
   const primaryText = (
     <span
       id={contentId}
-      ref={primaryTextRef}
-      className={cn(
-        tagClassNames.primaryText,
-        'inline-flex items-center gap-1',
-        hasSecondary && TAG_PRIMARY_TEXT_TWO_LINE_CLASSES,
-      )}
+      className={primaryTextClassName}
+      {...(primaryTextPart &&
+        mergeSlotProps(primaryTextPart, {
+          className: primaryTextClassName,
+          locked: { ...TAG_PART_LOCKS, id: contentId },
+          blockHandlers: textBlock,
+        }))}
+      ref={primaryTextRefs}
     >
       {children}
     </span>
   );
+  const secondaryTextPart = slotProps?.secondaryText;
+  const secondaryTextClassName = hasSecondary
+    ? cn(tagClassNames.secondaryText, TAG_SECONDARY_TEXT_CLASSES)
+    : undefined;
 
   return (
     <Component
@@ -1016,7 +1180,15 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       {hasSecondary ? (
         <span className={TAG_TEXT_COLUMN_CLASSES}>
           {primaryText}
-          <span className={cn(tagClassNames.secondaryText, TAG_SECONDARY_TEXT_CLASSES)}>
+          <span
+            className={secondaryTextClassName}
+            {...(secondaryTextPart &&
+              mergeSlotProps(secondaryTextPart, {
+                className: secondaryTextClassName,
+                locked: TAG_PART_LOCKS,
+                blockHandlers: textBlock,
+              }))}
+          >
             {secondary}
           </span>
         </span>
@@ -1035,6 +1207,8 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
           contentId={contentId}
           dismissName={host?.dismissName}
           buttonRef={dismissButtonRef}
+          hostPart={host?.dismissButtonPart}
+          part={slotProps?.dismissButton}
         />
       )}
     </Component>

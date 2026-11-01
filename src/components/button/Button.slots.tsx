@@ -124,7 +124,7 @@ export function withPartClass(
 export type UnwrappedButton = 'a button element' | 'a slot object that renders a button';
 
 /** Whether `value` is a slot object (`{ as, children, … }`) that renders a `<button>` or `Button`. */
-function isButtonSlotObject(value: unknown): value is { children?: React.ReactNode } {
+function isButtonSlotObject(value: unknown): value is Pick<SlotObject<'span'>, 'children'> {
   if (typeof value !== 'object' || value === null || React.isValidElement(value)) return false;
   if (Symbol.iterator in value || !('as' in value)) return false;
   const { as } = value as { as?: unknown };
@@ -135,9 +135,10 @@ function isButtonSlotObject(value: unknown): value is { children?: React.ReactNo
  * A glyph slot's value with a button unwrapped. A glyph inside a wired button is decorative and a
  * button cannot contain a button (C-SLOTS), so for a `<button>` or `Button` element, or a slot
  * object whose `as` is `'button'` or `Button`, the glyph is its `children` and its props are
- * dropped; any other value is the glyph as given. `button` says what was unwrapped (`null`:
- * nothing), so the component can warn once from an effect. A `Button` written in a Server
- * Component (a lazy client reference) is unwrapped too.
+ * dropped (a render function as the object's `children` stays one: the glyph is the slot object
+ * `{ children }`, so the function renders the glyph element); any other value is the glyph as
+ * given. `button` says what was unwrapped (`null`: nothing), so the component can warn once from
+ * an effect. A `Button` written in a Server Component (a lazy client reference) is unwrapped too.
  *
  * @example
  * const { glyph, button } = unwrapButtonGlyph(menuIcon);
@@ -152,7 +153,11 @@ export function unwrapButtonGlyph(slot: Slot<'span'> | undefined): {
     return { glyph: node.props.children, button: 'a button element' };
   }
   if (isButtonSlotObject(slot)) {
-    return { glyph: slot.children, button: 'a slot object that renders a button' };
+    const { children } = slot;
+    return {
+      glyph: typeof children === 'function' ? { children } : children,
+      button: 'a slot object that renders a button',
+    };
   }
   return { glyph: slot, button: null };
 }

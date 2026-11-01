@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { WaveDir } from '../components/provider/WaveProvider';
-import { isDev, warnOnce } from '../lib/dev';
+import { isDev, warnDeprecated, warnOnce } from '../lib/dev';
 import { getArrowIntent, getDirection } from '../lib/direction';
 import { getFirstTabbable, isHiddenInput } from '../lib/focus';
 import { setRef } from '../lib/mergeRefs';
@@ -927,9 +927,10 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  *   <button role="radio" data-roving-value="a" tabIndex={getTabIndex('a')} />
  * </div>
  *
- * The 0.4 call shape `useRovingTabIndex(containerRef, options)` still works: pass the container's
- * ref object and attach `handleKeyDown` (and ideally `handleFocus`, and with `typeahead`
- * `handleKeyDownCapture` as `onKeyDownCapture`) yourself.
+ * The 0.4 call shape `useRovingTabIndex(containerRef, options)` still works until 1.0 (deprecated,
+ * with a development warning): pass the container's ref object and attach `handleKeyDown` (and
+ * ideally `handleFocus`, and with `typeahead` `handleKeyDownCapture` as `onKeyDownCapture`)
+ * yourself. Prefer `useRovingTabIndex(options)` and spread `containerProps`.
  *
  * @param options - See {@link UseRovingTabIndexOptions}.
  * @returns See {@link UseRovingTabIndexResult}.
@@ -980,6 +981,27 @@ export function useRovingTabIndex(
     if (legacyRef) store.setContainer(legacyRef.current);
     store.stamp();
   });
+
+  // C-DEV: the 0.4 call shape is removed in 1.0.
+  const positional = legacyRef !== undefined;
+  React.useEffect(() => {
+    if (!positional) return;
+    // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
+    // production bundle then drops the warning and its text. Without a bundler and without
+    // `process` (an unbundled import in a browser), the read throws and it is skipped.
+    try {
+      if (process.env.NODE_ENV !== 'production') {
+        warnDeprecated(
+          'useRovingTabIndex',
+          'useRovingTabIndex(containerRef, options)',
+          'useRovingTabIndex(options)',
+          'Attach the returned `containerProps` to the container.',
+        );
+      }
+    } catch {
+      // No `process`: see above.
+    }
+  }, [positional]);
 
   // C-DEV: `resolveOwn` treats a selector the browser rejects as "no items" (it runs during render,
   // where it must not throw), so the developer hears about it here.

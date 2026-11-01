@@ -4,20 +4,87 @@ import { cn } from './cn';
 import { warnOnce } from './dev';
 
 /**
+ * The props a {@link SlotRenderFunction} of a slot object receives, as typed: the attributes that
+ * every HTML element has and `data-*` attributes, whatever the slot's element, so one function
+ * fits each slot (and each member of a slot union such as `Slot<'span'> | SlotObject<'button'>`)
+ * and its props spread onto any tag. The `ref` and the element's own attributes (an image's `src`)
+ * arrive too, untyped, and spread with them.
+ */
+export type SlotRenderProps = React.HTMLAttributes<HTMLElement> & {
+  [dataAttribute: `data-${string}`]: unknown;
+};
+
+/**
+ * A render function as the `children` of a slot object (the escape hatch of Fluent UI's slots,
+ * `children: (Component, props) => ReactNode`): it renders the slot in place of the slot's element.
+ *
+ * - `Component` is the element type the slot renders: the object's `as`, else the slot's default
+ *   element (`'span'` for most slots).
+ * - `props` are every prop that element receives: the component's default attributes (the
+ *   `aria-hidden` of an icon), the object's own attributes, the merged `className`, the object's
+ *   `ref`, what the component adds when it renders the element (the backdrop's press handler and
+ *   presence attributes), and `children` where the component puts content inside the element:
+ *   the default glyph of a dismiss, clear or close slot, since a render function is no content of
+ *   its own. Never `as`.
+ * - What it returns renders where the element would have. `(Component, props) => <Component
+ *   {...props} />` renders what the object without the function renders; dropping `props` drops
+ *   the component's wiring (its classes, `aria-hidden`, handlers, `ref`).
+ *
+ * Annotate a function of your own with the bare type (`const icon: SlotRenderFunction = …`), which
+ * fits every slot: a type argument makes another function type, which a slot does not take.
+ *
+ * In the slots that render inside a component's own button (dismiss, clear, close and glyph slots)
+ * that button stays and the function renders the content inside it:
+ * - a function that renders nothing at the check below leaves the default glyph, with the
+ *   object's other attributes (an empty dismiss button is never left);
+ * - a slot object whose `as` names a button (a `<button>` or a Wave `Button`) is merged into the
+ *   component's button or unwrapped, as the slot's rules say, with their warning: the function
+ *   then renders the content, a span (in the dismiss and close slots it receives `'span'` and no
+ *   props), so no button ever nests in a button.
+ *
+ * It must be pure and call no hooks: one render can call it more than once (StrictMode, and the
+ * check whether the slot renders anything, which calls it with the object's `as`, else `'span'`,
+ * and the object's own attributes). A function that renders nothing at that check is a slot that
+ * renders nothing for the rules that read it: an optional indicator is left out, a required
+ * indicator keeps its default glyph (with a development warning), a status icon shows none.
+ *
+ * A render function is code, which cannot cross from a Server Component into WaveUI's client
+ * components (functions are not serializable): write the slot in a client component.
+ *
+ * @example
+ * <Button icon={{ children: (Component, props) => <Component {...props}><MyIcon /></Component> }}>
+ *   Save
+ * </Button>
+ *
+ * @typeParam Props - The props of the slot's element; slot objects take the default,
+ *   {@link SlotRenderProps}.
+ */
+export type SlotRenderFunction<Props = SlotRenderProps> = (
+  Component: React.ElementType<Props>,
+  props: Omit<Props, 'as'>,
+) => React.ReactNode;
+
+/**
  * Object form of a Slot: full control over the rendered element.
  *
  * - `as` renders a different element or component than the slot's default (any element type).
  * - Every attribute of the default element `T` is accepted and forwarded (`{ src, alt }` for an
  *   `'img'` slot, `aria-label`/`title`/handlers for a `'span'` slot), plus `data-*` attributes.
  * - `className` is merged after the component's base classes, so it wins conflicts.
+ * - `children` is the content of the element, or a {@link SlotRenderFunction} that renders the
+ *   slot in place of the element.
  *
  * @typeParam T - The slot's default element type.
  */
 export type SlotObject<T extends React.ElementType = 'span'> = {
   /** Render a different element or component instead of the slot's default. */
   as?: React.ElementType;
-  /** Content to render inside the slot element (ignored for void elements such as `img`). */
-  children?: React.ReactNode;
+  /**
+   * Content to render inside the slot element (ignored for void elements such as `img`), or a
+   * {@link SlotRenderFunction} that renders the slot in place of the element, its `props` typed
+   * as {@link SlotRenderProps}.
+   */
+  children?: React.ReactNode | SlotRenderFunction;
   /** Class name(s) merged after the component's base classes (yours win). */
   className?: string;
   /** Inline styles for the slot element. */
@@ -77,27 +144,43 @@ export const VOID_ELEMENTS: ReadonlySet<string> = new Set([
 
 type UnknownProps = Record<string, unknown>;
 
-function isPlainObject(value: object): boolean {
-  const proto: unknown = Object.getPrototypeOf(value);
-  return proto === null || proto === Object.prototype || Object.getPrototypeOf(proto) === null;
+/** The prop that carries a render function and its element type to {@link SlotRender}. */
+const RENDER_KEY = '$slot';
+
+/** The props of {@link SlotRender}: the element's props and the render function with its type. */
+interface SlotHostProps {
+  [RENDER_KEY]: [
+    render: (type: unknown, props: UnknownProps) => React.ReactNode,
+    type: React.ElementType,
+  ];
+  [prop: string]: unknown;
 }
 
 /**
- * A slot object is a plain object that is not a React element, not a React internal object
- * (`$$typeof`: portals, lazy nodes), not an iterable (arrays, Sets, generators) and not a thenable.
- * Everything else is content and renders as children of the default element.
+ * The element type that {@link resolveSlot} gives a slot object whose `children` are a render
+ * function: it renders what the function returns for the slot's element type and the props it
+ * receives, those of the resolved slot and whatever its renderer adds (`children` included).
+ */
+const SlotRender = ({ [RENDER_KEY]: [render, type], ...props }: SlotHostProps) =>
+  render(type, props);
+
+/**
+ * A slot object is a plain object that is not a React element or another React internal object
+ * (`$$typeof`: elements, portals, lazy nodes), not an iterable (arrays, Sets, generators) and not
+ * a thenable. Everything else is content and renders as children of the default element.
  */
 function isSlotObject(value: unknown): value is UnknownProps {
-  if (typeof value !== 'object' || value === null) return false;
-  if (React.isValidElement(value)) return false;
-  if ('$$typeof' in value) return false;
-  if (Symbol.iterator in value) return false;
-  if (typeof (value as { then?: unknown }).then === 'function') return false;
-  return isPlainObject(value);
-}
-
-function isVoidTag(tag: React.ElementType): boolean {
-  return typeof tag === 'string' && VOID_ELEMENTS.has(tag);
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    '$$typeof' in value ||
+    Symbol.iterator in value ||
+    typeof (value as { then?: unknown }).then === 'function'
+  ) {
+    return false;
+  }
+  const proto: unknown = Object.getPrototypeOf(value);
+  return !proto || proto === Object.prototype || !Object.getPrototypeOf(proto);
 }
 
 /**
@@ -109,9 +192,10 @@ const materialisedIterators = new WeakMap<object, React.ReactNode[]>();
 
 /** Whether `value` is a one-shot iterator (a generator): iterating it returns itself. */
 function isOneShotIterator(value: object): boolean {
-  if (Array.isArray(value) || !(Symbol.iterator in value)) return false;
-  const iterable = value as Iterable<unknown>;
-  return (iterable[Symbol.iterator]() as unknown) === iterable;
+  return (
+    Symbol.iterator in value &&
+    ((value as Iterable<unknown>)[Symbol.iterator]() as unknown) === value
+  );
 }
 
 /**
@@ -119,13 +203,21 @@ function isOneShotIterator(value: object): boolean {
  * nothing, and so does a Fragment, array or other iterable (Set, generator) whose content, at any
  * depth, is all of those. Dropping such content from a void element is silent (a conditional
  * `children: cond && x`, or a list mapped to nothing). A top-level generator is read through
- * {@link normaliseContent} (materialised once, so checking it does not consume it); a generator
- * nested in a collection or a Fragment is rendered by React as it is, so it is not read and counts
- * as content.
+ * {@link materialiseSlotContent} (materialised once, so checking it does not consume it); a
+ * generator nested in a collection or a Fragment is rendered by React as it is, so it is not read
+ * and counts as content. A slot object whose `children` are a render function counts by what the
+ * function returns (see {@link slotRendersContent}), checked as nested content.
  */
-function rendersContent(node: unknown, visiting: Set<object>, nested: boolean): boolean {
+function rendersContent(node: unknown, visiting: Set<object>, nested?: boolean): boolean {
   if (node === undefined || node === null || typeof node === 'boolean' || node === '') {
     return false;
+  }
+  if (isSlotObject(node) && typeof node.children === 'function') {
+    return rendersContent(
+      SlotRender(resolveSlot(node as Slot)!.props as SlotHostProps),
+      visiting,
+      true,
+    );
   }
   if (typeof node !== 'object') return true;
   if (React.isValidElement(node)) {
@@ -138,7 +230,7 @@ function rendersContent(node: unknown, visiting: Set<object>, nested: boolean): 
   if (visiting.has(node)) return false;
   visiting.add(node);
   try {
-    for (const item of normaliseContent(node) as Iterable<unknown>) {
+    for (const item of materialiseSlotContent(node) as Iterable<unknown>) {
       if (rendersContent(item, visiting, true)) return true;
     }
     return false;
@@ -159,6 +251,12 @@ function rendersContent(node: unknown, visiting: Set<object>, nested: boolean): 
  * (they always render their element), promises, and a generator nested in a collection or a
  * Fragment (not read, so React still renders its items).
  *
+ * A slot object whose `children` are a {@link SlotRenderFunction} renders content when what the
+ * function returns does: it is called once with the object's `as` (else `'span'`) and its other
+ * attributes, so `{ children: () => null }` renders nothing. Such an object is checked wherever
+ * it is, an item of a collection included (`[{ children: fn }]`); a function given bare, or as an
+ * item of a collection itself (`[fn]`), is not called and counts as content.
+ *
  * A top-level generator is materialised once and cached, so checking it does not consume it:
  * render the checked value through `renderSlot`/`resolveSlot`, or, when you render it yourself,
  * through {@link materialiseSlotContent}. Never warns. Call it during render: a client reference
@@ -170,7 +268,7 @@ function rendersContent(node: unknown, visiting: Set<object>, nested: boolean): 
  * @param slot A slot value or any React node.
  */
 export function slotRendersContent(slot: unknown): boolean {
-  return rendersContent(slot, new Set(), false);
+  return rendersContent(slot, new Set());
 }
 
 /**
@@ -186,7 +284,17 @@ export function slotRendersContent(slot: unknown): boolean {
  * @param content A slot value or any React node.
  */
 export function materialiseSlotContent(content: unknown): React.ReactNode {
-  return normaliseContent(content);
+  if (typeof content === 'object' && content !== null && isOneShotIterator(content)) {
+    let cached = materialisedIterators.get(content);
+    if (!cached) {
+      materialisedIterators.set(
+        content,
+        (cached = Array.from(content as Iterable<React.ReactNode>)),
+      );
+    }
+    return cached;
+  }
+  return content as React.ReactNode;
 }
 
 /**
@@ -199,32 +307,54 @@ export function materialiseSlotContent(content: unknown): React.ReactNode {
  * ({@link slotRendersContent}). A component (an icon that draws its own glyph), a void tag and
  * markup of its own are the content themselves: `false`.
  *
- * @param type  The element type the slot object renders (its `as`, else the slot's default tag).
- * @param props The slot object's props; `children` and `dangerouslySetInnerHTML` are read.
+ * A render function is no content of its own: for the element that {@link resolveSlot} resolves
+ * an object with one to, the answer is that for the element type the function receives, so the
+ * function receives the default content as its `children` prop. Unresolved `children` that are a
+ * function are not called and count as content: resolve the object first, or leave them out of
+ * `props` (Tag's `dismissIcon` does).
+ *
+ * @param type  The element type the slot object renders (its `as`, else the slot's default tag),
+ *              or the `Component` that `resolveSlot` resolved it to.
+ * @param props The slot object's props, or the resolved props; `children` and
+ *              `dangerouslySetInnerHTML` are read.
  */
 export function slotWrapsDefaultContent(
   type: unknown,
   props: { children?: unknown; dangerouslySetInnerHTML?: unknown },
 ): boolean {
+  type = (props as Partial<SlotHostProps>)[RENDER_KEY]?.[1] ?? type;
   if (typeof type !== 'string' || VOID_ELEMENTS.has(type)) return false;
   return props.dangerouslySetInnerHTML == null && !slotRendersContent(props.children);
 }
 
-function normaliseContent(slot: unknown): React.ReactNode {
-  if (typeof slot === 'object' && slot !== null && isOneShotIterator(slot)) {
-    const iterable = slot as Iterable<React.ReactNode>;
-    let cached = materialisedIterators.get(iterable);
-    if (!cached) {
-      cached = Array.from(iterable);
-      materialisedIterators.set(iterable, cached);
-    }
-    return cached;
-  }
-  return slot as React.ReactNode;
-}
-
-function describeTag(tag: React.ElementType): string {
-  return typeof tag === 'string' ? `<${tag}>` : 'a void element';
+/**
+ * The rules of the slots that render inside a component's own button (the dismiss, clear and close
+ * slots) for a slot object with a {@link SlotRenderFunction}, applied to what {@link resolveSlot}
+ * resolved it to; any other `resolved` is returned as given:
+ * - when `isButton` accepts the element type the function receives (the object's `as` names a
+ *   button), the triple has that type, the object's attributes and, as its children, what the
+ *   function returns for `'span'` and no props: the component merges it into its own button as it
+ *   merges such an object with content, so nothing nests a button;
+ * - when the function renders nothing (called with the type and the object's attributes), the
+ *   triple has the type and the attributes and no children: the object without the function,
+ *   which keeps the default glyph inside its element;
+ * - otherwise the function renders the content element, `resolved` as given.
+ *
+ * @param resolved The slot as `resolveSlot` resolved it.
+ * @param isButton Whether an element type is a button (`'button'`, Wave's `Button`).
+ */
+export function resolveWiredSlot(
+  resolved: ResolvedSlot | null,
+  isButton: (type: unknown) => boolean,
+): ResolvedSlot | null {
+  const render = (resolved?.props as Partial<SlotHostProps> | undefined)?.[RENDER_KEY];
+  if (!render) return resolved;
+  const [fn, type] = render;
+  const { [RENDER_KEY]: _render, ...props } = resolved!.props;
+  if (isButton(type)) return { Component: type, props, children: fn('span', {}) };
+  return rendersContent(fn(type, props), new Set(), true)
+    ? resolved
+    : { Component: type, props, children: undefined };
 }
 
 /** `cn(base, own)`, or `undefined` when there are no classes, so no empty `class=""` renders. */
@@ -242,6 +372,10 @@ function mergeClassName(baseClassName: string | undefined, className: unknown): 
  *   element is void its `children` are always dropped, with a development warning only if they
  *   would have rendered (not for `null`, `undefined`, booleans or `''`, nor for a Fragment,
  *   array, Set or generator made only of those, at any depth).
+ * - A slot object whose `children` are a {@link SlotRenderFunction} resolves to an internal
+ *   element type that renders the function's result, with those props (they also carry the
+ *   function and the element type it receives) and no `children`: render it as you would the
+ *   element, adding your own props and content, and the function receives all of them.
  * - With a **void** default tag (`area`, `base`, `br`, `col`, `embed`, `hr`, `img`, `input`,
  *   `link`, `meta`, `param`, `source`, `track`, `wbr`) a ReactElement slot resolves to the
  *   element itself (its type and props, `defaultProps` underneath, className merged). A Fragment
@@ -273,57 +407,57 @@ export function resolveSlot<T extends React.ElementType = 'span'>(
 
   if (isSlotObject(slot)) {
     const { as: slotAs, children, className, ...rest } = slot;
-    const Component = (slotAs as React.ElementType | undefined) ?? tag;
-    let content = normaliseContent(children);
-    if (isVoidTag(Component)) {
+    let Component = (slotAs as React.ElementType | undefined) ?? tag;
+    const props: UnknownProps = {
+      ...defaults,
+      ...rest,
+      className: mergeClassName(baseClassName, className),
+    };
+    let content = materialiseSlotContent(children);
+    if (typeof children === 'function') {
+      // The function renders the slot in place of its element (SlotRender).
+      props[RENDER_KEY] = [children, Component];
+      Component = SlotRender;
+      content = undefined;
+    } else if (VOID_ELEMENTS.has(Component as string)) {
       // A void element never receives children (React throws for any non-null value, even
       // `false` or `[]`); warn only when the dropped children would have rendered something.
       if (slotRendersContent(content)) {
         warnOnce(
-          `slot:void-children:${String(Component)}`,
-          `A slot rendered as ${describeTag(Component)} cannot have children; its \`children\` were ignored.`,
+          `slot:void-children:${Component as string}`,
+          `A slot rendered as <${Component as string}> cannot have children; its \`children\` were ignored.`,
         );
       }
       content = undefined;
     }
-    return {
-      Component,
-      props: {
-        ...defaults,
-        ...rest,
-        className: mergeClassName(baseClassName, className),
-      },
-      children: content,
-    };
+    return { Component, props, children: content };
   }
 
-  if (isVoidTag(tag)) {
-    if (React.isValidElement(slot) && slot.type !== React.Fragment) {
-      const { children, className, ...elementProps } = slot.props as UnknownProps;
-      return {
-        Component: slot.type as React.ElementType,
-        props: {
-          ...defaults,
-          ...elementProps,
-          className: mergeClassName(baseClassName, className),
-        },
-        children: children as React.ReactNode,
-      };
-    }
+  if (VOID_ELEMENTS.has(tag as string)) {
     if (React.isValidElement(slot)) {
+      if (slot.type !== React.Fragment) {
+        const { children, className, ...elementProps } = slot.props as UnknownProps;
+        return {
+          Component: slot.type as React.ElementType,
+          props: {
+            ...defaults,
+            ...elementProps,
+            className: mergeClassName(baseClassName, className),
+          },
+          children: children as React.ReactNode,
+        };
+      }
       // An empty Fragment (`<></>`) renders nothing: an empty slot, no warning.
       if (slotRendersContent(slot)) {
         warnOnce(
-          `slot:void-fragment:${String(tag)}`,
-          `A Fragment cannot stand in for ${describeTag(tag)} (a void element): it cannot take the slot's className or attributes. Pass the element itself or an object slot instead; the slot was not rendered.`,
+          `slot:void-fragment:${tag as string}`,
+          `A Fragment cannot stand in for <${tag as string}> (a void element): it cannot take the slot's className or attributes. Pass the element itself or an object slot instead; the slot was not rendered.`,
         );
       }
-      return null;
-    }
-    if (slotRendersContent(slot)) {
+    } else if (slotRendersContent(slot)) {
       warnOnce(
-        `slot:void-content:${String(tag)}`,
-        `Slot content cannot be rendered inside ${describeTag(tag)} (a void element). Pass an element or an object slot instead; the slot was not rendered.`,
+        `slot:void-content:${tag as string}`,
+        `Slot content cannot be rendered inside <${tag as string}> (a void element). Pass an element or an object slot instead; the slot was not rendered.`,
       );
     }
     return null;
@@ -335,7 +469,7 @@ export function resolveSlot<T extends React.ElementType = 'span'>(
       ...defaults,
       className: baseClassName || undefined,
     },
-    children: normaliseContent(slot),
+    children: materialiseSlotContent(slot),
   };
 }
 
@@ -364,7 +498,5 @@ export function renderSlot<T extends React.ElementType = 'span'>(
   if (!resolved) return null;
 
   const { Component, props, children } = resolved;
-  return children === undefined
-    ? React.createElement(Component, props)
-    : React.createElement(Component, props, children);
+  return React.createElement(Component, props, ...(children === undefined ? [] : [children]));
 }

@@ -6,7 +6,7 @@ import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { Toast, Toaster, ToastBody, ToastClose, ToastFooter, ToastTitle } from '../Toast';
-import type { ToastController, ToastProps } from '../Toast';
+import type { ToastBodyProps, ToastController, ToastProps, ToastTitleProps } from '../Toast';
 import { Button } from '../../button/Button';
 import type { Slot } from '../../../lib/slot';
 import {
@@ -18,11 +18,13 @@ import {
 } from '../../../lib/classNames';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
   mockAnimations,
   mockMatchMedia,
+  openingTags,
   testCompoundExposure,
   testSystemProps,
 } from '../../../test-utils';
@@ -710,5 +712,336 @@ describe('presence (P3-02, D29)', () => {
       await motion.finishAll();
     });
     expect(getToasts()).toHaveLength(0);
+  });
+});
+
+describe('ToastTitle — slotProps', () => {
+  type TitleSlotProps = NonNullable<ToastTitleProps['slotProps']>;
+  const label = () =>
+    document.querySelector<HTMLElement>('.' + toastTitleClassNames.label) as HTMLElement;
+
+  it('renders the title text of 3fafbe0 (attributes sorted)', () => {
+    // Captured from 3fafbe0's server render: the merged props may put the class first.
+    const host = document.createElement('div');
+    host.innerHTML = renderToString(
+      <Toast>
+        <Toast.Title action={<a href="#undo">Undo</a>}>Saved</Toast.Title>
+      </Toast>,
+    );
+    expect(openingTags(host.querySelector('.' + toastTitleClassNames.label) as Element)).toBe(
+      '<span class="wave-toast-title__label min-w-0 flex-1 text-body-2 font-semibold text-foreground" id="wave-toast-title-_id0_">',
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with the part empty', () => {
+    const cases: Array<Partial<ToastTitleProps>> = [
+      {},
+      { action: <a href="#undo">Undo</a>, className: 'mine', id: 'own' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <Toast>
+            <Toast.Title {...props} slotProps={slotProps}>
+              Saved
+            </Toast.Title>
+          </Toast>
+        ),
+        { label: {} },
+      );
+    }
+  });
+
+  it('puts your className, style, data-* and ref on the title text, after its own classes', () => {
+    const ref = React.createRef<HTMLSpanElement>();
+    render(
+      <Toast>
+        <Toast.Title
+          data-testid="row"
+          slotProps={{
+            label: {
+              className: 'my-label',
+              style: { letterSpacing: '1px' },
+              'data-part': 'label',
+              ref,
+            },
+          }}
+        >
+          Saved
+        </Toast.Title>
+      </Toast>,
+    );
+    const text = label();
+    expect(text.classList[0]).toBe(toastTitleClassNames.label);
+    expect(text).toHaveClass('font-semibold', 'my-label');
+    expect(text.classList[text.classList.length - 1]).toBe('my-label');
+    expect(text).toHaveAttribute('data-part', 'label');
+    expect(text).toHaveStyle({ letterSpacing: '1px' });
+    expect(ref.current).toBe(text);
+    // The row takes none of it, and no `slotProps` attribute.
+    expect(screen.getByTestId('row')).not.toHaveAttribute('data-part');
+    expect(document.querySelector('[slotprops]')).toBeNull();
+  });
+
+  it('lets your class replace a conflicting class of the title text', () => {
+    render(
+      <Toast>
+        <Toast.Title slotProps={{ label: { className: 'font-bold' } }}>Saved</Toast.Title>
+      </Toast>,
+    );
+    expect(label()).toHaveClass('font-bold');
+    expect(label()).not.toHaveClass('font-semibold');
+  });
+
+  it('keeps the title text the toast’s name: its id, name and hidden state are locked', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast status="success">
+        <Toast.Title
+          slotProps={{
+            label: {
+              id: 'mine',
+              'aria-label': 'Other',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+              title: 'Title',
+            },
+          }}
+        >
+          Saved
+        </Toast.Title>
+      </Toast>,
+      { timeout: 0 },
+    );
+    const [container] = getToasts();
+    expect(container).toHaveAccessibleName('Success: Saved');
+    expect(label().id).toMatch(/^wave-toast-title-/);
+    for (const name of ['aria-label', 'hidden', 'inert', 'aria-hidden']) {
+      expect(label(), name).not.toHaveAttribute(name);
+    }
+    expect(label()).toHaveAttribute('title', 'Title');
+    expect(getLiveRegion('polite')).toHaveTextContent(/^Success: Saved$/);
+    expect(findDanglingIdRefs()).toEqual([]);
+  });
+
+  it('keeps the Toaster’s view of the title text with a new inline ref on every render', () => {
+    const elements: Array<HTMLSpanElement | null> = [];
+    const { dispatchContent } = renderToaster();
+    // A replacement renders the title again, with a new inline ref. The Toaster still reads the
+    // title first and the title's action last.
+    for (const body of ['Saving.', 'Done.']) {
+      dispatchContent(
+        <Toast status="success">
+          <Toast.Title
+            action={<a href="#undo">Undo</a>}
+            slotProps={{ label: { ref: (element) => void elements.push(element) } }}
+          >
+            Saved
+          </Toast.Title>
+          <Toast.Body>{body}</Toast.Body>
+        </Toast>,
+        { toastId: 'save', timeout: 0 },
+      );
+    }
+    expect(elements.at(-1)).toBe(label());
+    expect(getLiveRegion('polite')).toHaveTextContent(/^Success: Saved Done\. Undo$/);
+  });
+
+  it('runs your handler on the title text once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <Toast>
+          <Toast.Title slotProps={{ label: { onClick } }}>Saved</Toast.Title>
+        </Toast>
+      </React.StrictMode>,
+    );
+    await user.click(label());
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no accessibility violations with the part customised', async () => {
+    render(
+      <Toast onDismiss={() => {}}>
+        <Toast.Title slotProps={{ label: { className: 'my-label', title: 'Title' } }}>
+          Saved
+        </Toast.Title>
+      </Toast>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof TitleSlotProps>().toEqualTypeOf<'label'>();
+    expectTypeOf<NonNullable<TitleSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: your children are the title text
+    void (<ToastTitle slotProps={{ label: { children: 'Other' } }}>Saved</ToastTitle>);
+  });
+});
+
+describe('ToastBody — slotProps', () => {
+  type BodySlotProps = NonNullable<ToastBodyProps['slotProps']>;
+  const subtitle = () =>
+    document.querySelector<HTMLElement>('.' + toastBodyClassNames.subtitle) as HTMLElement;
+
+  it('renders the subtitle of 3fafbe0 (attributes sorted)', () => {
+    // Captured from 3fafbe0's server render: the merged props may put the class first.
+    const host = document.createElement('div');
+    host.innerHTML = renderToString(
+      <Toast>
+        <Toast.Body subtitle="2 files">Done.</Toast.Body>
+      </Toast>,
+    );
+    expect(openingTags(host.querySelector('.' + toastBodyClassNames.subtitle) as Element)).toBe(
+      '<div class="wave-toast-body__subtitle mt-1 text-caption-1 text-muted-foreground">',
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with the part empty', () => {
+    const cases: Array<Partial<ToastBodyProps>> = [
+      { subtitle: '2 files' },
+      { subtitle: <strong>2 files</strong>, id: 'own-body', className: 'mine' },
+      {},
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <Toast>
+            <Toast.Body {...props} slotProps={slotProps}>
+              Done.
+            </Toast.Body>
+          </Toast>
+        ),
+        { subtitle: {} },
+      );
+    }
+  });
+
+  it('puts your className, style, data-* and ref on the subtitle, after its own classes', () => {
+    const ref = React.createRef<HTMLDivElement>();
+    render(
+      <Toast>
+        <Toast.Body
+          data-testid="body"
+          subtitle="2 files"
+          slotProps={{
+            subtitle: {
+              className: 'my-subtitle',
+              style: { letterSpacing: '1px' },
+              'data-part': 'subtitle',
+              ref,
+            },
+          }}
+        >
+          Done.
+        </Toast.Body>
+      </Toast>,
+    );
+    const line = subtitle();
+    expect(line.classList[0]).toBe(toastBodyClassNames.subtitle);
+    expect(line).toHaveClass('text-caption-1', 'my-subtitle');
+    expect(line.classList[line.classList.length - 1]).toBe('my-subtitle');
+    expect(line).toHaveAttribute('data-part', 'subtitle');
+    expect(line).toHaveStyle({ letterSpacing: '1px' });
+    expect(ref.current).toBe(line);
+    // The body takes none of it, and no `slotProps` attribute.
+    expect(screen.getByTestId('body')).not.toHaveAttribute('data-part');
+    expect(document.querySelector('[slotprops]')).toBeNull();
+  });
+
+  it('lets your class replace a conflicting class of the subtitle', () => {
+    render(
+      <Toast>
+        <Toast.Body subtitle="2 files" slotProps={{ subtitle: { className: 'mt-2' } }}>
+          Done.
+        </Toast.Body>
+      </Toast>,
+    );
+    expect(subtitle()).toHaveClass('mt-2');
+    expect(subtitle()).not.toHaveClass('mt-1');
+  });
+
+  it('keeps the subtitle in the toast’s description: its name and hidden state are locked', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast status="success">
+        <Toast.Title>Saved</Toast.Title>
+        <Toast.Body
+          subtitle="2 files"
+          slotProps={{
+            subtitle: {
+              'aria-label': 'Other',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+              title: 'Subtitle',
+            },
+          }}
+        >
+          Done.
+        </Toast.Body>
+      </Toast>,
+      { timeout: 0 },
+    );
+    const [container] = getToasts();
+    expect(container).toHaveAccessibleDescription('Done. 2 files');
+    for (const name of ['aria-label', 'hidden', 'inert', 'aria-hidden']) {
+      expect(subtitle(), name).not.toHaveAttribute(name);
+    }
+    expect(subtitle()).toHaveAttribute('title', 'Subtitle');
+    expect(getLiveRegion('polite')).toHaveTextContent(/^Success: Saved Done\. 2 files$/);
+  });
+
+  it('ignores the part while there is no subtitle', () => {
+    render(
+      <Toast>
+        <Toast.Body data-testid="body" slotProps={{ subtitle: { className: 'my-subtitle' } }}>
+          Done.
+        </Toast.Body>
+      </Toast>,
+    );
+    expect(document.querySelector('.' + toastBodyClassNames.subtitle)).toBeNull();
+    expect(document.querySelector('.my-subtitle')).toBeNull();
+    expect(screen.getByTestId('body')).not.toHaveAttribute('slotprops');
+  });
+
+  it('runs your handler on the subtitle once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <Toast>
+          <Toast.Body subtitle="2 files" slotProps={{ subtitle: { onClick } }}>
+            Done.
+          </Toast.Body>
+        </Toast>
+      </React.StrictMode>,
+    );
+    await user.click(subtitle());
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no accessibility violations with the part customised', async () => {
+    render(
+      <Toast title="Saved">
+        <Toast.Body subtitle="2 files" slotProps={{ subtitle: { className: 'my-subtitle' } }}>
+          Done.
+        </Toast.Body>
+      </Toast>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof BodySlotProps>().toEqualTypeOf<'subtitle'>();
+    expectTypeOf<NonNullable<BodySlotProps['subtitle']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: `subtitle` is the line's content
+    void (<ToastBody slotProps={{ subtitle: { children: 'Other' } }}>Done.</ToastBody>);
   });
 });

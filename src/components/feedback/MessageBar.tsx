@@ -11,15 +11,18 @@ import {
   materialiseSlotContent,
   renderSlot,
   resolveSlot,
+  resolveWiredSlot,
   slotRendersContent,
   slotWrapsDefaultContent,
 } from '../../lib/slot';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
 import type { Status, Slot, SlotObject } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
 import { useMessageBarReflow } from './MessageBar.reflow';
+import { MessageBarContext, type MessageBarContextValue } from './MessageBar.context';
 import {
   BUTTON_OWN_PROP_KEYS,
   MERGED_DISABLED_FOCUSABLE_PROPS,
@@ -108,6 +111,9 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * with button props) is **deprecated**: its button props (`type` included), `className` and
    * `style` are merged the same way, and a Wave Button's own props apply as for the element form.
    * Pass icon content instead, e.g. `dismiss={<CloseIcon />}`.
+   *
+   * `slotProps.dismissButton` reaches the same button; its attributes replace those of a merged
+   * button (see there).
    */
   dismiss?: Slot<'span'> | SlotObject<'button'>;
   /**
@@ -127,6 +133,50 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the element the bar draws around your message and for its Dismiss button, by part,
+   * merged into each part's own (Fluent UI writes the text as a `MessageBarBody` and the Dismiss
+   * button as the `containerAction` slot of its `MessageBarActions`): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers before its handlers,
+   * your ids added to its `aria-labelledby` and `aria-describedby`, and your ref beside its ref.
+   * Every attribute the bar sets on a part is locked and keeps the bar's value; you add the
+   * attributes it does not set. A part takes no `children`: your children fill the text column,
+   * and `dismiss` fills the Dismiss button. `icon` is a slot of its own.
+   */
+  slotProps?: {
+    /**
+     * The text column `<div>` (stable class `wave-message-bar__body`): the visually hidden status
+     * text, the title and your message, in that order. With `layout="auto"` and actions the bar
+     * measures this element to choose its layout, also while you pass a ref; while it measures one
+     * row the column keeps its text on one line, so a class of yours that sets how the text wraps
+     * replaces that, and the actions then stay on the text's row. It carries no handler of the bar:
+     * an event on it bubbles as one on your message does. Locked, unset: `hidden`, `inert` and
+     * `aria-hidden`, so the message stays announced and the links in it reachable, and `role` and
+     * `aria-live`, so the column adds no role or live region of its own (the bar's role says how
+     * the message is announced).
+     */
+    body?: SlotPart<'div'>;
+    /**
+     * The Dismiss `<button>`, rendered while the bar has `onDismiss` or `dismiss` content (stable
+     * class `wave-message-bar__dismiss-button`; `dismiss` fills its content). A `<button>` or
+     * `Button` passed as `dismiss`, or the deprecated button object, reaches this button too: its
+     * attributes are the defaults these props replace (yours win), its classes come before yours
+     * and its handlers run after yours. Locked, at the values the bar and that button give
+     * together: `type`, `disabled`, `tabIndex`, `hidden`, `aria-hidden`, `inert`, `role`,
+     * `contentEditable`, the name (`aria-label`, "Dismiss" unless `dismiss` names the button, and
+     * `aria-labelledby`, to which your ids are added, and which then names it), `aria-disabled`,
+     * `data-disabled`, `data-disabled-focusable`, the markers a roving container reads
+     * (`data-roving-container`, `data-roving-disabled`, `data-roving-value`), so the button keeps
+     * its place in the arrow order of a toolbar it sits in, and the click: your `onClick` runs
+     * first, and `preventDefault()` in it skips the component's handling of the event, the merged
+     * button's `onClick` and `onDismiss` included. While a merged `Button` with
+     * `disabledFocusable` makes the button unavailable but focusable, your `onClick` is not called.
+     * `title` is not locked: where `dismiss` names the button only by a `title` (the button then
+     * has no "Dismiss"), a `title` of yours replaces that name, and an empty one leaves the
+     * button nameless.
+     */
+    dismissButton?: SlotPart<'button'>;
+  };
 }
 
 const tintClasses: Record<Status, string> = {
@@ -165,6 +215,36 @@ const BUTTON_ONLY_KEYS: ReadonlySet<string> = new Set([
 const NAMING_KEYS: ReadonlySet<string> = new Set(['aria-label', 'aria-labelledby', 'title']);
 
 const HANDLER_KEY = /^on[A-Z]/;
+
+/**
+ * The Dismiss button's attributes that `slotProps.dismissButton` cannot change, at the values the
+ * bar and a merged `dismiss` button give together (each key present, so it stays unset while
+ * neither sets it): its type, tab stop, visibility, role, editing, name and disabled state, the
+ * markers a roving container reads, and its click. The merged button's other attributes are the
+ * part's defaults.
+ */
+const DISMISS_LOCKS = {
+  type: undefined,
+  disabled: undefined,
+  tabIndex: undefined,
+  hidden: undefined,
+  'aria-hidden': undefined,
+  inert: undefined,
+  role: undefined,
+  contentEditable: undefined,
+  'aria-label': undefined,
+  'aria-labelledby': undefined,
+  'aria-disabled': undefined,
+  'data-disabled': undefined,
+  'data-disabled-focusable': undefined,
+  'data-roving-container': undefined,
+  'data-roving-disabled': undefined,
+  'data-roving-value': undefined,
+  onClick: undefined,
+};
+
+/** The handlers a part does not receive while its button activates nothing (`blockHandlers`). */
+const BLOCK_CLICK = ['onClick'] as const;
 
 const dismissContentClassName = 'inline-flex items-center justify-center';
 
@@ -305,7 +385,8 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
 
   // Everything else is classified by the slot system (F2): shorthand content resolves to the
   // default `span` with no attributes; a slot object resolves to its element and attributes.
-  const resolved = resolveSlot(dismiss as Slot<'span'>, 'span');
+  // A render function is merged with a button `as`, or dropped when it renders nothing.
+  const resolved = resolveWiredSlot(resolveSlot(dismiss as Slot<'span'>, 'span'), isButtonType);
   if (!resolved) return defaultDismiss();
   const { Component, props, children } = resolved;
   const asButton = isButtonType(Component);
@@ -382,6 +463,7 @@ const MessageBarRoot = ({
   layout = 'auto',
   children,
   className,
+  slotProps,
   ref,
   ...rest
 }: MessageBarProps) => {
@@ -444,14 +526,16 @@ const MessageBarRoot = ({
     () => literalTextLabel,
   );
   const namedByContent = checksContent && contentHasTextLabel;
+  const dismissPart = slotProps?.dismissButton;
   const dismissRef = useMergedRefs<HTMLButtonElement>(
     slotRef as React.Ref<HTMLButtonElement> | undefined,
     checksContent ? setLabelTarget : undefined,
+    dismissPart?.ref,
   );
 
   let renderedDismiss: React.ReactNode = null;
   if (dismissParts) {
-    const buttonProps = mergeProps(
+    const buttonProps: UnknownProps = mergeProps(
       {
         'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_DISMISS_LABEL,
         onClick: () => onDismiss?.(),
@@ -466,17 +550,35 @@ const MessageBarRoot = ({
         ),
       },
       slotButtonProps,
-    ) as React.ComponentPropsWithoutRef<'button'>;
+    );
+    // `type` is "button" unless the slot sets one (`null`, from JavaScript callers, means the
+    // default too, so the button never submits an enclosing form by accident). A merged
+    // `disabledFocusable` Button makes it unavailable but focusable (last: it wins).
+    buttonProps.type ??= 'button';
+    if (dismissParts.disabledFocusable) Object.assign(buttonProps, MERGED_DISABLED_FOCUSABLE_PROPS);
+    // The part (merged only when given): the attributes a merged `dismiss` button adds are its
+    // defaults, so it replaces them; the bar's wiring, sorted by DISMISS_LOCKS, stays locked at
+    // the values the two give together. Unavailable but focusable, the button calls no click
+    // handler, the part's included.
+    let dismissProps = buttonProps;
+    if (dismissPart) {
+      const { className: dismissClassName, style: dismissStyle, ...attributes } = buttonProps;
+      const locked: UnknownProps = { ...DISMISS_LOCKS };
+      const defaults: UnknownProps = {};
+      for (const [key, value] of Object.entries(attributes)) {
+        (Object.hasOwn(locked, key) ? locked : defaults)[key] = value;
+      }
+      dismissProps = mergeSlotProps(dismissPart, {
+        className: dismissClassName as string | undefined,
+        style: dismissStyle as React.CSSProperties | undefined,
+        defaults,
+        locked,
+        blockHandlers: dismissParts.disabledFocusable ? BLOCK_CLICK : undefined,
+      });
+    }
     renderedDismiss = (
-      // `type` is "button" unless the slot sets one (`null`, from JavaScript callers, means the
-      // default too, so the button never submits an enclosing form by accident). A merged
-      // `disabledFocusable` Button makes it unavailable but focusable (spread last: it wins).
-      <button
-        {...buttonProps}
-        ref={dismissRef}
-        type={buttonProps.type ?? 'button'}
-        {...(dismissParts.disabledFocusable ? MERGED_DISABLED_FOCUSABLE_PROPS : undefined)}
-      >
+      // The literal marks C-BUTTON-TYPE; the props hold the resolved type, which wins.
+      <button type="button" {...dismissProps} ref={dismissRef}>
         {dismissParts.content}
       </button>
     );
@@ -530,17 +632,35 @@ const MessageBarRoot = ({
   // While it measures one row, the text column does not wrap, so text that does not fit overflows
   // the column (never cut off) and the measurement sees it.
   const unwrapped = measuring && resolvedLayout === 'singleline';
+  // What `useMessageBarContext` reads anywhere in the bar (C-MEMO).
+  const contextValue = React.useMemo<MessageBarContextValue>(
+    () => ({ status, layout: resolvedLayout }),
+    [status, resolvedLayout],
+  );
 
   // The text column: the severity text, the title (and a space, so the two never run together),
-  // then the body in its order.
+  // then the body in its order. The reflow measures it through the state its ref sets, which a
+  // part's ref joins (never detaching it); the part merges only when given.
+  const bodyPart = slotProps?.body;
+  const bodyRef = useMergedRefs<HTMLDivElement>(
+    measuring ? setTextElement : undefined,
+    bodyPart?.ref,
+  );
+  const bodyClassName = cn(
+    messageBarClassNames.body,
+    'min-w-0 flex-1 text-body-1',
+    unwrapped && 'whitespace-nowrap',
+  );
   const text = (
     <div
-      ref={measuring ? setTextElement : undefined}
-      className={cn(
-        messageBarClassNames.body,
-        'min-w-0 flex-1 text-body-1',
-        unwrapped && 'whitespace-nowrap',
-      )}
+      className={bodyClassName}
+      {...(bodyPart &&
+        mergeSlotProps(bodyPart, {
+          className: bodyClassName,
+          // The bar's role says how the message is announced: no role or live region of its own.
+          locked: { role: undefined, 'aria-live': undefined, ...HIDDEN_PART_LOCKS },
+        }))}
+      ref={bodyRef}
     >
       <StatusText id={namedByTitle && statusText ? statusTextId : undefined} label={statusText} />
       {title && (
@@ -576,28 +696,30 @@ const MessageBarRoot = ({
         className,
       )}
     >
-      <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
-        {renderedIcon}
-        {hasActions ? (
-          // A layout wrapper (not a part): the text column and the actions, in this DOM order.
-          <div
-            className={cn(
-              'flex min-w-0 flex-1 gap-x-3 gap-y-2',
-              resolvedLayout === 'multiline' ? 'flex-col' : 'items-start',
-            )}
-          >
-            {text}
-            <MessageBarPartContext.Provider value={ACTIONS_PLACEMENT}>
-              {actions.map(({ key, element }) => (
-                <React.Fragment key={key}>{element}</React.Fragment>
-              ))}
-            </MessageBarPartContext.Provider>
-          </div>
-        ) : (
-          text
-        )}
-        {renderedDismiss}
-      </MessageBarPartContext.Provider>
+      <MessageBarContext.Provider value={contextValue}>
+        <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
+          {renderedIcon}
+          {hasActions ? (
+            // A layout wrapper (not a part): the text column and the actions, in this DOM order.
+            <div
+              className={cn(
+                'flex min-w-0 flex-1 gap-x-3 gap-y-2',
+                resolvedLayout === 'multiline' ? 'flex-col' : 'items-start',
+              )}
+            >
+              {text}
+              <MessageBarPartContext.Provider value={ACTIONS_PLACEMENT}>
+                {actions.map(({ key, element }) => (
+                  <React.Fragment key={key}>{element}</React.Fragment>
+                ))}
+              </MessageBarPartContext.Provider>
+            </div>
+          ) : (
+            text
+          )}
+          {renderedDismiss}
+        </MessageBarPartContext.Provider>
+      </MessageBarContext.Provider>
     </div>
   );
 };
@@ -618,6 +740,9 @@ MessageBarRoot.displayName = 'MessageBar';
  * - The dismiss button is always the MessageBar's own `<button>` wired to `onDismiss`
  *   (`type="button"` unless a merged button slot sets its own `type`); the `dismiss` slot only
  *   replaces its content (see {@link MessageBarProps.dismiss}).
+ * - Content of your own anywhere in the bar (an action that follows it, for example) reads the
+ *   bar's status and the layout it renders, after `layout="auto"` has measured, through
+ *   `useMessageBarContext`.
  *
  * React Server Components cannot dot into a client module: import the flat names
  * `MessageBarTitle` and `MessageBarActions` there; `MessageBar.Title` and `MessageBar.Actions`
@@ -639,3 +764,5 @@ export const MessageBar = /* @__PURE__ */ Object.assign(MessageBarRoot, {
 
 export { MessageBarTitle, MessageBarActions };
 export type { MessageBarTitleProps, MessageBarActionsProps } from './MessageBar.parts';
+export { useMessageBarContext } from './MessageBar.context';
+export type { MessageBarContextValue } from './MessageBar.context';

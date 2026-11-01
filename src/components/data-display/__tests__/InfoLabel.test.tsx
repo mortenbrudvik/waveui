@@ -1,10 +1,24 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import * as React from 'react';
+import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { InfoLabel } from '../InfoLabel';
-import { expectNoA11yViolations, testNoImplicitSubmit, testSystemProps } from '../../../test-utils';
+import { InfoLabel, type InfoLabelProps } from '../InfoLabel';
+import { InfoButton, type InfoButtonProps } from '../InfoButton';
+import {
+  infoButtonClassNames,
+  infoLabelClassNames,
+  labelClassNames,
+} from '../../../lib/classNames';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  normaliseIds,
+  sortAttributes,
+  testNoImplicitSubmit,
+  testSystemProps,
+} from '../../../test-utils';
 
 const INFO = 'Use at least 8 characters.';
 
@@ -488,5 +502,422 @@ describe('InfoLabel', () => {
         error.mockRestore();
       }
     });
+  });
+});
+
+describe('InfoLabel — slotProps', () => {
+  type InfoLabelSlotProps = NonNullable<InfoLabelProps['slotProps']>;
+  const EVERY_PART: InfoLabelSlotProps = { label: {}, infoButton: {}, info: {} };
+  const label = () => screen.getByText('Password').closest('label') as HTMLLabelElement;
+  /** The InfoLabel's info button: the first button (a note's own come after it, in a portal). */
+  const button = () => screen.getAllByRole('button')[0];
+  const note = () =>
+    document.querySelector<HTMLElement>('.' + infoLabelClassNames.info) as HTMLElement;
+
+  /** Opens the note with a click on the info button. */
+  async function open() {
+    fireEvent.click(button());
+    await act(async () => {});
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders the open label of a98c113 (attributes sorted)', async () => {
+    // Captured from a98c113: the merged props may put the class before the locked attributes.
+    render(<InfoLabel info="Use at least 8 characters.">Password</InfoLabel>);
+    await open();
+    expect(normaliseIds(sortAttributes(document.body))).toBe(
+      [
+        '<div>',
+        '<span class="wave-info-label inline-flex items-center gap-0">',
+        '<label class="wave-label text-foreground text-body-1 wave-info-label__label" id="info-label-_id0_">Password',
+        '</label>',
+        '<button aria-controls="info-note-_id1_" aria-describedby="info-_id2_" aria-expanded="true" aria-label="Information" aria-labelledby="info-label-_id0_ info-label-button-_id3_" class="wave-info-button inline-flex size-6 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground -my-0.5 not-disabled:not-aria-disabled:hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring wave-info-label__info-button" data-size="medium" id="info-label-button-_id3_" type="button">',
+        '<svg aria-hidden="true" data-wave-icon="info" fill="currentColor" focusable="false" height="16" viewBox="0 0 20 20" width="16" xmlns="http://www.w3.org/2000/svg">',
+        '<path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm.5 5v1h-1V7h1Zm0 3v4h-1v-4h1Z" fill-rule="evenodd">',
+        '</path>',
+        '</svg>',
+        '</button>',
+        '<span hidden="">',
+        '</span>',
+        '</span>',
+        '</div>',
+        '<div class="wave-portal" data-layer="overlay" data-wave-portal="" dir="ltr" style="position: relative; z-index: calc(var(--wave-z-overlay, 1000) + 0);">',
+        '<div aria-labelledby="info-label-_id0_ info-label-button-_id3_" class="wave-info-button__info wave-info-label__info w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16 transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-faster data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[side=top]:data-[presence=entering]:starting:translate-y-1 data-[side=top]:data-[presence=exiting]:translate-y-1 data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 data-[side=bottom]:data-[presence=exiting]:-translate-y-1 data-[side=left]:data-[presence=entering]:starting:translate-x-1 data-[side=left]:data-[presence=exiting]:translate-x-1 data-[side=right]:data-[presence=entering]:starting:-translate-x-1 data-[side=right]:data-[presence=exiting]:-translate-x-1" data-align="center" data-presence="entered" data-side="top" data-state="open" data-wave-infolabel-surface="" id="info-note-_id1_" role="note" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, -8px);">',
+        '<div aria-hidden="true" class="size-2 rotate-45 border-inherit bg-inherit border-b border-r wave-info-button__beak" data-wave-popover-arrow="" style="position: absolute; bottom: calc(var(--wave-popup-arrow-size, 8px) / -2); left: -1px;">',
+        '</div>',
+        '<div id="info-_id2_">Use at least 8 characters.',
+        '</div>',
+        '</div>',
+        '</div>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', async () => {
+    const cases: Array<Partial<InfoLabelProps>> = [
+      {},
+      {
+        required: true,
+        disabled: true,
+        size: 'large',
+        weight: 'semibold',
+        htmlFor: 'pw',
+        id: 'own',
+        infoButtonLabel: 'Hint',
+        openOnHover: false,
+        motion: null,
+      },
+    ];
+    for (const props of cases) {
+      const ui = (slotProps?: InfoLabelSlotProps) => (
+        <InfoLabel info="Use 8." {...props} slotProps={slotProps}>
+          Password
+        </InfoLabel>
+      );
+      expectInertSlotProps(ui, EVERY_PART);
+      // And open: the note, with the same root (one set of ids).
+      const { baseElement, rerender, unmount } = render(ui());
+      await open();
+      const markup = baseElement.innerHTML;
+      expect(note()).not.toBeNull();
+      for (const slotProps of [{}, EVERY_PART, undefined]) {
+        rerender(ui(slotProps));
+        await act(async () => {});
+        expect(baseElement.innerHTML).toBe(markup);
+      }
+      unmount();
+    }
+  });
+
+  it('puts your className, style and data-* on each part, after its own classes', async () => {
+    render(
+      <InfoLabel
+        info={INFO}
+        slotProps={{
+          label: { className: 'my-label', style: { opacity: 0.5 }, 'data-part': 'label' },
+          infoButton: { className: 'my-button', style: { opacity: 0.25 }, 'data-part': 'button' },
+          info: { className: 'my-note', style: { opacity: 0.75 }, 'data-part': 'info' },
+        }}
+      >
+        Password
+      </InfoLabel>,
+    );
+    await open();
+    for (const [element, stables, mine, data, opacity] of [
+      [label(), [labelClassNames.root, infoLabelClassNames.label], 'my-label', 'label', '0.5'],
+      [
+        button(),
+        [infoButtonClassNames.root, infoLabelClassNames.infoButton],
+        'my-button',
+        'button',
+        '0.25',
+      ],
+      [note(), [infoButtonClassNames.info, infoLabelClassNames.info], 'my-note', 'info', '0.75'],
+    ] as const) {
+      expect(element).toHaveClass(...stables, mine);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', data);
+      expect(element).toHaveStyle({ opacity });
+    }
+    // The root takes none of it, and no `slotProps` attribute.
+    expect(label().parentElement).not.toHaveAttribute('data-part');
+    expect(document.querySelector('[slotprops]')).toBeNull();
+  });
+
+  it('lets your class replace a conflicting class of a part', async () => {
+    render(
+      <InfoLabel
+        info={INFO}
+        slotProps={{
+          label: { className: 'text-body-2' },
+          infoButton: { className: 'size-8' },
+          info: { className: 'px-4' },
+        }}
+      >
+        Password
+      </InfoLabel>,
+    );
+    await open();
+    expect(label()).toHaveClass('text-body-2');
+    expect(label()).not.toHaveClass('text-body-1');
+    expect(button()).toHaveClass('size-8');
+    expect(button()).not.toHaveClass('size-6');
+    expect(note()).toHaveClass('px-4');
+    expect(note()).not.toHaveClass('px-3');
+  });
+
+  it('locks the label’s id and htmlFor: the button keeps its name', () => {
+    render(
+      <InfoLabel info={INFO} htmlFor="pw" slotProps={{ label: { id: 'mine', htmlFor: 'other' } }}>
+        Password
+      </InfoLabel>,
+    );
+    expect(label().id).not.toBe('mine');
+    expect(label()).toHaveAttribute('for', 'pw');
+    expect(button()).toHaveAccessibleName('Password Information');
+  });
+
+  it('locks the info button’s id, type, name, disabled and hidden state and tab stop', () => {
+    render(
+      <>
+        <span id="extra">More</span>
+        <InfoLabel
+          info={INFO}
+          slotProps={{
+            infoButton: {
+              id: 'mine',
+              type: 'submit',
+              'aria-label': 'Other',
+              'aria-labelledby': 'extra',
+              'aria-haspopup': 'dialog',
+              disabled: true,
+              tabIndex: -1,
+              hidden: true,
+              'aria-hidden': true,
+              title: 'More information',
+            },
+          }}
+        >
+          Password
+        </InfoLabel>
+      </>,
+    );
+    const el = button();
+    expect(el.id).not.toBe('mine');
+    expect(el).toHaveAttribute('type', 'button');
+    expect(el).toHaveAttribute('aria-label', 'Information');
+    // Your ids come after the label's and the button's own.
+    expect(el).toHaveAttribute('aria-labelledby', `${label().id} ${el.id} extra`);
+    expect(el).toHaveAccessibleName('Password Information More');
+    for (const name of ['aria-haspopup', 'disabled', 'tabindex', 'hidden', 'aria-hidden']) {
+      expect(el, name).not.toHaveAttribute(name);
+    }
+    expect(el).toHaveAttribute('title', 'More information');
+  });
+
+  it('keeps the info button reachable: a part sets no inert on it', () => {
+    render(
+      <InfoLabel info={INFO} slotProps={{ infoButton: { inert: true } }}>
+        Password
+      </InfoLabel>,
+    );
+    expect(button()).not.toHaveAttribute('inert');
+  });
+
+  it('keeps the props it passes on to its InfoButton over yours from untyped code', async () => {
+    render(
+      <InfoLabel
+        info={INFO}
+        size="medium"
+        slotProps={{
+          infoButton: {
+            info: 'Other',
+            size: 'large',
+            openOnHover: false,
+            motion: null,
+          } as never,
+        }}
+      >
+        Password
+      </InfoLabel>,
+    );
+    expect(button()).toHaveAccessibleDescription(INFO);
+    expect(button().querySelector('svg')).toHaveAttribute('width', '16');
+    await open();
+    expect(note()).toHaveTextContent(INFO);
+  });
+
+  it('lets your data-* replace the InfoButton’s own of that name, its look unchanged', () => {
+    render(
+      <InfoLabel info={INFO} slotProps={{ infoButton: { 'data-size': 'large' } }}>
+        Password
+      </InfoLabel>,
+    );
+    expect(button()).toHaveAttribute('data-size', 'large');
+    expect(button().querySelector('svg')).toHaveAttribute('width', '16');
+  });
+
+  it('takes the info part as its InfoButton’s, over one passed on through infoButton', async () => {
+    render(
+      <InfoLabel
+        info={INFO}
+        slotProps={{
+          infoButton: { slotProps: { info: { 'data-nested': '' } } } as never,
+          info: { 'data-label': '' },
+        }}
+      >
+        Password
+      </InfoLabel>,
+    );
+    await open();
+    expect(note()).toHaveAttribute('data-label');
+    expect(note()).not.toHaveAttribute('data-nested');
+  });
+
+  it('ignores a slotProps passed on through infoButton without an info part', async () => {
+    render(
+      <InfoLabel
+        info={INFO}
+        slotProps={{ infoButton: { slotProps: { info: { 'data-nested': '' } } } as never }}
+      >
+        Password
+      </InfoLabel>,
+    );
+    await open();
+    expect(note()).not.toHaveAttribute('data-nested');
+  });
+
+  it('reaches only its own note: an InfoButton inside info keeps its own', async () => {
+    render(
+      <InfoLabel
+        info={<InfoButton info="Inner note" aria-label="Inner" openOnHover={false} />}
+        openOnHover={false}
+        slotProps={{ info: { 'data-label': '' } }}
+      >
+        Password
+      </InfoLabel>,
+    );
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Inner' }));
+    await act(async () => {});
+    const notes = screen.getAllByRole('note');
+    expect(notes).toHaveLength(2);
+    const inner = notes.find((el) => el.textContent === 'Inner note');
+    expect(inner).not.toHaveAttribute('data-label');
+    expect(inner).not.toHaveClass(infoLabelClassNames.info);
+    expect(note()).toHaveAttribute('data-label');
+  });
+
+  it('locks the note as the InfoButton does', async () => {
+    render(
+      <InfoLabel
+        info={INFO}
+        slotProps={{ info: { id: 'mine', role: 'dialog', hidden: true, 'aria-hidden': true } }}
+      >
+        Password
+      </InfoLabel>,
+    );
+    await open();
+    const el = screen.getByRole('note');
+    expect(el).toBe(note());
+    expect(el.id).not.toBe('mine');
+    expect(button()).toHaveAttribute('aria-controls', el.id);
+    expect(el).not.toHaveAttribute('hidden');
+    expect(el).not.toHaveAttribute('aria-hidden');
+    expect(el).toHaveAccessibleName('Password Information');
+  });
+
+  it('attaches your refs to the parts', async () => {
+    const labelRef = React.createRef<HTMLLabelElement>();
+    const buttonRef = React.createRef<HTMLButtonElement>();
+    const infoRef = React.createRef<HTMLDivElement>();
+    render(
+      <InfoLabel
+        info={INFO}
+        slotProps={{
+          label: { ref: labelRef },
+          infoButton: { ref: buttonRef },
+          info: { ref: infoRef },
+        }}
+      >
+        Password
+      </InfoLabel>,
+    );
+    expect(labelRef.current).toBe(label());
+    expect(buttonRef.current).toBe(button());
+    await open();
+    expect(infoRef.current).toBe(note());
+  });
+
+  it('runs your button handlers first: preventDefault() in your onClick keeps the note closed', async () => {
+    const onClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    const { rerender } = render(
+      <InfoLabel info={INFO} openOnHover={false} slotProps={{ infoButton: { onClick } }}>
+        Password
+      </InfoLabel>,
+    );
+    await open();
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('note')).toBeNull();
+    rerender(
+      <InfoLabel info={INFO} openOnHover={false} slotProps={{ infoButton: { onClick: () => {} } }}>
+        Password
+      </InfoLabel>,
+    );
+    await open();
+    expect(screen.getByRole('note')).toBeInTheDocument();
+  });
+
+  it('calls your part handlers once per click in StrictMode', async () => {
+    const onLabelClick = vi.fn();
+    const onButtonClick = vi.fn();
+    const onInfoClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <InfoLabel
+          info={INFO}
+          openOnHover={false}
+          slotProps={{
+            label: { onClick: onLabelClick },
+            infoButton: { onClick: onButtonClick },
+            info: { onClick: onInfoClick },
+          }}
+        >
+          Password
+        </InfoLabel>
+      </React.StrictMode>,
+    );
+    fireEvent.click(label());
+    await open();
+    fireEvent.click(note());
+    expect(onLabelClick).toHaveBeenCalledTimes(1);
+    expect(onButtonClick).toHaveBeenCalledTimes(1);
+    expect(onInfoClick).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('note')).toBeInTheDocument();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <InfoLabel
+        info={INFO}
+        slotProps={{
+          label: { className: 'my-label' },
+          infoButton: { className: 'my-button' },
+          info: { className: 'my-note' },
+        }}
+      >
+        Password
+      </InfoLabel>,
+    );
+    await open();
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof InfoLabelSlotProps>().toEqualTypeOf<'label' | 'infoButton' | 'info'>();
+    expectTypeOf<NonNullable<InfoLabelSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLabelElement> | undefined
+    >();
+    expectTypeOf<NonNullable<InfoLabelSlotProps['infoButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NonNullable<InfoLabelSlotProps['info']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // The `info` part is the InfoButton's: the same type.
+    expectTypeOf<InfoLabelSlotProps['info']>().toEqualTypeOf<
+      NonNullable<InfoButtonProps['slotProps']>['info']
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the label text is the InfoLabel's
+        <InfoLabel info="x" slotProps={{ label: { children: 'Other' } }}>
+          Password
+        </InfoLabel>
+      )
+    );
   });
 });

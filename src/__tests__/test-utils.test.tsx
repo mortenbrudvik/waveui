@@ -30,6 +30,7 @@ import {
   axe,
   createOverlayTestWrapper,
   DISPLAY_NAME_ALIASES,
+  expectInertSlotProps,
   expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
@@ -41,8 +42,11 @@ import {
   mockMatchMedia,
   mockRect,
   motionClasses,
+  normaliseIds,
+  openingTags,
   renderWithProviders,
   resetMatchMediaMock,
+  sortAttributes,
   testA11y,
   testClassName,
   testComposedHandler,
@@ -1865,6 +1869,164 @@ describe('expectThrows', () => {
     expect(console.error).toBe(original);
     expect(() => expectThrows(<Throws message="[WaveUI] Other" />, MESSAGE)).toThrow();
     expect(console.error).toBe(original);
+  });
+});
+
+describe('sortAttributes', () => {
+  it('puts the attributes of every element in alphabetical order, keeping their values', () => {
+    expect(
+      sortAttributes(
+        '<label id="l" class="a b"><span data-x="1" aria-hidden="true">*</span></label>',
+      ),
+    ).toBe('<label class="a b" id="l"><span aria-hidden="true" data-x="1">*</span></label>');
+  });
+
+  it('gives the same string for the same attributes written in another order', () => {
+    const one = renderToString(<input type="text" className="c" id="i" readOnly />);
+    const other = renderToString(<input readOnly id="i" className="c" type="text" />);
+    expect(one).not.toBe(other);
+    expect(sortAttributes(one)).toBe(sortAttributes(other));
+  });
+
+  it('keeps a difference in an attribute set or value', () => {
+    expect(sortAttributes('<p id="a" class="x"></p>')).not.toBe(
+      sortAttributes('<p class="x" id="b"></p>'),
+    );
+    expect(sortAttributes('<p class="x"></p>')).not.toBe(
+      sortAttributes('<p class="x" hidden></p>'),
+    );
+  });
+
+  it('keeps text, comments and element order, and reads the content of an element', () => {
+    const container = document.createElement('div');
+    container.innerHTML = '<b z="1" a="2">one<!-- --></b><i>two</i>';
+    expect(sortAttributes(container)).toBe('<b a="2" z="1">one<!-- --></b><i>two</i>');
+    // The element itself is not changed.
+    expect(container.innerHTML).toBe('<b z="1" a="2">one<!-- --></b><i>two</i>');
+  });
+});
+
+describe('normaliseIds', () => {
+  function Labelled() {
+    const id = React.useId();
+    const other = React.useId();
+    return (
+      <p aria-labelledby={id} aria-describedby={other}>
+        <span id={id}>Name</span>
+        <span id={`prefix-${other}`}>Other</span>
+      </p>
+    );
+  }
+
+  it('names each generated id by its first appearance, the same id the same way', () => {
+    expect(
+      normaliseIds('<p aria-labelledby="_r_7_"><b id="_r_7_"></b><i id="x-_r_1a_"></i></p>'),
+    ).toBe('<p aria-labelledby="_id0_"><b id="_id0_"></b><i id="x-_id1_"></i></p>');
+    expect(normaliseIds('<p id="_R_0H1_"></p><p id="_R_0_"></p>')).toBe(
+      '<p id="_id0_"></p><p id="_id1_"></p>',
+    );
+  });
+
+  it('gives the same string for two client renders, whatever ids came before', () => {
+    const first = render(<Labelled />);
+    const markup = first.container.innerHTML;
+    first.unmount();
+    const second = render(<Labelled />);
+    expect(second.container.innerHTML).not.toBe(markup);
+    expect(normaliseIds(second.container.innerHTML)).toBe(normaliseIds(markup));
+  });
+
+  it('keeps every other text', () => {
+    expect(normaliseIds('<p id="r_1" class="_r_ x">_r_</p>')).toBe(
+      '<p id="r_1" class="_r_ x">_r_</p>',
+    );
+  });
+});
+
+describe('openingTags', () => {
+  it('gives each element its opening tag, attributes sorted, one per line', () => {
+    const container = document.createElement('div');
+    container.innerHTML =
+      '<label id="l" class="a"><input type="text" class="i"><b z="1" a="2">text</b></label>';
+    const [label, input, bold] = Array.from(container.querySelectorAll('*'));
+    expect(openingTags(label, input, bold)).toBe(
+      ['<label class="a" id="l">', '<input class="i" type="text">', '<b a="2" z="1">'].join('\n'),
+    );
+  });
+
+  it('normalises the generated ids across the elements', () => {
+    function Wired() {
+      const id = React.useId();
+      return (
+        <>
+          <input aria-controls={`list-${id}`} />
+          <ul id={`list-${id}`} />
+        </>
+      );
+    }
+    const { container } = render(<Wired />);
+    expect(openingTags(...Array.from(container.children))).toBe(
+      ['<input aria-controls="list-_id0_">', '<ul id="list-_id0_">'].join('\n'),
+    );
+  });
+});
+
+describe('expectInertSlotProps', () => {
+  type Parts = { inner?: { className?: string } };
+  /** Draws its part with the part's class; `leaky` also marks the root while `slotProps` is set. */
+  function Probe({ slotProps, leaky = false }: { slotProps?: Parts; leaky?: boolean }) {
+    return (
+      <div data-parts={leaky && slotProps ? Object.keys(slotProps).length : undefined}>
+        <span className={['inner', slotProps?.inner?.className].filter(Boolean).join(' ')}>
+          {React.useId()}
+        </span>
+      </div>
+    );
+  }
+
+  it('passes for a part that changes nothing while it is empty, keeping the generated ids', () => {
+    expectInertSlotProps((slotProps) => <Probe slotProps={slotProps} />, { inner: {} });
+    // The root is unmounted at the end.
+    expect(document.querySelector('.inner')).toBeNull();
+  });
+
+  it('fails when an empty slotProps changes the markup', () => {
+    expect(() =>
+      expectInertSlotProps((slotProps) => <Probe slotProps={slotProps} leaky />, { inner: {} }),
+    ).toThrow(/expected '.*' to be '.*'/);
+    cleanup();
+  });
+
+  it('fails when an empty slotProps changes a part rendered in a portal (outside the container)', () => {
+    function Popup({ slotProps }: { slotProps?: Parts }) {
+      return (
+        <div>
+          {createPortal(
+            <span className="popup-part" data-parts={slotProps ? 'given' : undefined} />,
+            document.body,
+          )}
+        </div>
+      );
+    }
+    // The container alone does not change: a comparison of it would pass.
+    const { container, rerender } = render(<Popup />);
+    const inside = container.innerHTML;
+    rerender(<Popup slotProps={{}} />);
+    expect(container.innerHTML).toBe(inside);
+    cleanup();
+    expect(() =>
+      expectInertSlotProps((slotProps) => <Popup slotProps={slotProps} />, { inner: {} }),
+    ).toThrow(/Object.is equality/);
+    cleanup();
+  });
+
+  it('fails when everyPart is not empty', () => {
+    expect(() =>
+      expectInertSlotProps((slotProps) => <Probe slotProps={slotProps} />, {
+        inner: { className: 'mine' },
+      }),
+    ).toThrow(/mine/);
+    cleanup();
   });
 });
 

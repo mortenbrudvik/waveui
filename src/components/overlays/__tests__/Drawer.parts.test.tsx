@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -9,6 +9,7 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerHeaderTitle,
+  type DrawerHeaderTitleProps,
   type DrawerPosition,
   type DrawerProps,
   type DrawerSize,
@@ -27,7 +28,9 @@ import { focusRingInset } from '../../../lib/styles';
 import {
   asClientReference,
   createOverlayTestWrapper,
+  expectInertSlotProps,
   expectNoA11yViolations,
+  openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
@@ -1009,5 +1012,146 @@ describe('Drawer parts: accessibility', () => {
     );
     expect(screen.getAllByRole('navigation', { hidden: true })).toHaveLength(2);
     await expectNoA11yViolations();
+  });
+});
+
+describe('Drawer.HeaderTitle — slotProps', () => {
+  type HeaderTitleSlotProps = NonNullable<DrawerHeaderTitleProps['slotProps']>;
+  const EVERY_PART: HeaderTitleSlotProps = { heading: {} };
+  const headingOf = (root: ParentNode) =>
+    root.querySelector<HTMLElement>(`.${drawerHeaderTitleClassNames.heading}`) as HTMLElement;
+
+  /** An open drawer whose header holds one title row of `props`. */
+  function Titled({
+    drawerProps,
+    ...props
+  }: Partial<DrawerHeaderTitleProps> & { drawerProps?: Partial<DrawerProps> }) {
+    return (
+      <Drawer open onOpenChange={() => {}} {...drawerProps}>
+        <Drawer.Header>
+          <Drawer.HeaderTitle {...props}>Settings</Drawer.HeaderTitle>
+        </Drawer.Header>
+        Body
+      </Drawer>
+    );
+  }
+
+  it('renders the heading of 234b990, overlay and inline, server and client (attributes sorted)', () => {
+    // Captured from 234b990: the merged props may put the class before the locked attributes.
+    const h2 =
+      '<h2 class="wave-drawer-header-title__heading min-w-0 flex-1 text-subtitle-1 font-semibold text-foreground" id="wave-modal-title-_id0_">';
+    const h3 =
+      '<h3 class="wave-drawer-header-title__heading min-w-0 flex-1 text-subtitle-1 font-semibold text-foreground" id="wave-modal-title-_id0_">';
+    const inline = <Titled headingLevel={3} drawerProps={{ type: 'inline' }} />;
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(inline);
+    expect(openingTags(headingOf(template.content))).toBe(h3);
+    const { unmount } = render(inline);
+    expect(openingTags(headingOf(document))).toBe(h3);
+    unmount();
+    render(<Titled />);
+    expect(openingTags(headingOf(document))).toBe(h2);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: Array<Partial<DrawerHeaderTitleProps> & { drawerProps?: Partial<DrawerProps> }> = [
+      {},
+      { headingLevel: 3, id: 'heading', drawerProps: { type: 'inline' } },
+      { action: <button type="button">Pin</button>, className: 'row' },
+      { drawerProps: { type: 'inline', open: false, unmountOnClose: false } },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps((slotProps) => <Titled {...props} slotProps={slotProps} />, EVERY_PART);
+    }
+  });
+
+  it('puts your className, style and data-* on the heading, after its classes', () => {
+    render(
+      <Titled
+        slotProps={{
+          heading: { className: 'my-heading', style: { opacity: 0.5 }, 'data-part': 'heading' },
+        }}
+      />,
+    );
+    const heading = screen.getByRole('heading', { name: 'Settings' });
+    expect(heading).toHaveClass(drawerHeaderTitleClassNames.heading, 'flex-1', 'my-heading');
+    expect(heading.classList[0]).toBe(drawerHeaderTitleClassNames.heading);
+    expect(heading.classList[heading.classList.length - 1]).toBe('my-heading');
+    expect(heading).toHaveAttribute('data-part', 'heading');
+    expect(heading).toHaveStyle({ opacity: '0.5' });
+  });
+
+  it('lets your class replace a conflicting class of the heading', () => {
+    render(<Titled slotProps={{ heading: { className: 'font-bold' } }} />);
+    const heading = screen.getByRole('heading', { name: 'Settings' });
+    expect(heading).toHaveClass('font-bold');
+    expect(heading).not.toHaveClass('font-semibold');
+  });
+
+  it('locks the heading’s id, which names the drawer; the component’s own id sets it', () => {
+    const { unmount } = render(<Titled slotProps={{ heading: { id: 'mine', title: 'T' } }} />);
+    let heading = screen.getByRole('heading', { name: 'Settings' });
+    expect(heading.id).not.toBe('mine');
+    expect(heading).toHaveAttribute('title', 'T');
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', heading.id);
+    unmount();
+    render(<Titled id="own" slotProps={{ heading: { id: 'mine' } }} />);
+    heading = screen.getByRole('heading', { name: 'Settings' });
+    expect(heading).toHaveAttribute('id', 'own');
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toHaveAttribute(
+      'aria-labelledby',
+      'own',
+    );
+  });
+
+  it('attaches your ref to the heading; it still names the drawer with a new inline ref on every render', () => {
+    const ref = React.createRef<HTMLHeadingElement>();
+    const { unmount } = render(<Titled slotProps={{ heading: { ref } }} />);
+    expect(ref.current).toBe(screen.getByRole('heading', { name: 'Settings' }));
+    unmount();
+    const elements: Array<HTMLHeadingElement | null> = [];
+    const ui = () => (
+      <Titled slotProps={{ heading: { ref: (element) => void elements.push(element) } }} />
+    );
+    const { rerender } = render(ui());
+    rerender(ui());
+    rerender(ui());
+    const heading = screen.getByRole('heading', { name: 'Settings' });
+    expect(elements.at(-1)).toBe(heading);
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toHaveAttribute(
+      'aria-labelledby',
+      heading.id,
+    );
+  });
+
+  it('calls your heading handler once per click in StrictMode', () => {
+    const onClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <Titled slotProps={{ heading: { onClick } }} />
+      </React.StrictMode>,
+    );
+    fireEvent.click(screen.getByRole('heading', { name: 'Settings' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no accessibility violations with the heading customised', async () => {
+    render(<Titled slotProps={{ heading: { className: 'my-heading', title: 'Settings' } }} />);
+    await expectNoA11yViolations();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof HeaderTitleSlotProps>().toEqualTypeOf<'heading'>();
+    expectTypeOf<NonNullable<HeaderTitleSlotProps['heading']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLHeadingElement> | undefined
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: they are the component's
+        <Drawer.HeaderTitle slotProps={{ heading: { children: 'Title' } }}>
+          Title
+        </Drawer.HeaderTitle>
+      )
+    );
   });
 });

@@ -1,12 +1,16 @@
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Input, type InputProps } from '../Input';
+import { inputClassNames } from '../../../lib/classNames';
 import {
   testSystemProps,
   testFocusEvents,
   renderWithProviders,
+  expectInertSlotProps,
+  sortAttributes,
   expectNoA11yViolations,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
@@ -554,5 +558,414 @@ describe('htmlSize and the numeric size (Phase 4 D10)', () => {
     expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
     // @ts-expect-error not a size
     render(<Input aria-label="Name" size="huge" />);
+  });
+});
+
+describe('Input — slotProps', () => {
+  type InputSlotProps = NonNullable<InputProps['slotProps']>;
+  const EVERY_PART: InputSlotProps = { root: {}, input: {} };
+
+  it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
+    // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    expect(
+      sortAttributes(
+        renderToString(
+          <Input aria-label="Name" placeholder="p" style={{ width: 10 }} error="Wrong" />,
+        ),
+      ),
+    ).toBe(
+      [
+        '<input aria-describedby="error-_R_0_" aria-errormessage="error-_R_0_" aria-invalid="true" aria-label="Name" class="wave-input wave-input__input h-8 w-full px-3 text-body-1 rounded border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 border-destructive" data-appearance="outline" data-size="medium" placeholder="p" style="width:10px">',
+        '<span class="wave-input__error-message mt-1 block text-caption-1 text-error" id="error-_R_0_" role="alert">Wrong',
+        '</span>',
+      ].join(''),
+    );
+    expect(
+      sortAttributes(
+        renderToString(<Input aria-label="Name" contentBefore="@" style={{ width: 10 }} />),
+      ),
+    ).toBe(
+      [
+        '<span class="wave-input inline-flex w-full items-center h-8 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground focus-within:border-b-2 focus-within:border-b-primary" data-appearance="outline" data-size="medium" style="width:10px">',
+        '<span class="wave-input__content-before shrink-0 ps-2">@',
+        '</span>',
+        '<input aria-label="Name" class="wave-input__input h-full w-full min-w-0 bg-transparent px-2 text-body-1 text-foreground placeholder:text-muted-foreground focus:outline-hidden disabled:cursor-not-allowed">',
+        '</span>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: InputProps[] = [
+      { 'aria-label': 'Name' },
+      {
+        'aria-label': 'Name',
+        placeholder: 'p',
+        style: { width: 10 },
+        className: 'c',
+        type: 'email',
+      },
+      { 'aria-label': 'Name', error: 'Wrong', size: 'small', appearance: 'underline' },
+      { 'aria-label': 'Name', disabled: true, readOnly: true, required: true, htmlSize: 20 },
+      { 'aria-label': 'Name', contentBefore: '@' },
+      {
+        'aria-label': 'Name',
+        contentAfter: '!',
+        hidden: true,
+        style: { width: 10 },
+        className: 'c',
+      },
+      { 'aria-label': 'Name', contentBefore: '@', error: 'Wrong', disabled: true },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps((slotProps) => <Input {...props} slotProps={slotProps} />, EVERY_PART);
+    }
+  });
+
+  describe('without content slots: root and input are one <input>', () => {
+    it('applies the root part, then the input part, after the Input classes', () => {
+      render(
+        <Input
+          aria-label="Name"
+          className="mine"
+          slotProps={{
+            root: { className: 'root-part', style: { width: 10, color: 'red' }, title: 'Root' },
+            input: { className: 'input-part', style: { width: 20 }, title: 'Input' },
+          }}
+        />,
+      );
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      expect(input.className).toMatch(
+        /^wave-input wave-input__input .* mine root-part input-part$/,
+      );
+      expect(input).toHaveStyle({ width: '20px', color: 'rgb(255, 0, 0)' });
+      expect(input).toHaveAttribute('title', 'Input');
+    });
+
+    it('attaches the root and input refs to the input, beside ref', () => {
+      const root = React.createRef<HTMLElement>();
+      const inputRef = React.createRef<HTMLInputElement>();
+      const ref = React.createRef<HTMLInputElement>();
+      render(
+        <Input
+          ref={ref}
+          aria-label="Name"
+          slotProps={{ root: { ref: root }, input: { ref: inputRef } }}
+        />,
+      );
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      expect(root.current).toBe(input);
+      expect(inputRef.current).toBe(input);
+      expect(ref.current).toBe(input);
+    });
+
+    it("merges your style over the Input's own style", () => {
+      render(
+        <Input
+          aria-label="Name"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{ input: { style: { width: 20 } } }}
+        />,
+      );
+      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveStyle({
+        color: 'rgb(255, 0, 0)',
+        width: '20px',
+      });
+    });
+  });
+
+  describe('with content slots: root is the wrapper', () => {
+    it('puts the root part on the wrapper and the input part on the input', () => {
+      const root = React.createRef<HTMLElement>();
+      const inputRef = React.createRef<HTMLInputElement>();
+      render(
+        <Input
+          aria-label="Name"
+          contentBefore="@"
+          style={{ width: 100 }}
+          slotProps={{
+            root: { ref: root, className: 'my-root', style: { color: 'red' }, 'data-part': 'root' },
+            input: { ref: inputRef, className: 'my-input', 'data-part': 'input' },
+          }}
+        />,
+      );
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      const wrapper = input.parentElement as HTMLElement;
+      expect(root.current).toBe(wrapper);
+      expect(inputRef.current).toBe(input);
+      expect(wrapper).toHaveClass(inputClassNames.root, 'my-root');
+      expect(wrapper.classList[0]).toBe(inputClassNames.root);
+      expect(wrapper.classList[wrapper.classList.length - 1]).toBe('my-root');
+      expect(wrapper).toHaveStyle({ width: '100px', color: 'rgb(255, 0, 0)' });
+      expect(wrapper).toHaveAttribute('data-part', 'root');
+      expect(input).toHaveClass(inputClassNames.input, 'my-input');
+      expect(input.classList[input.classList.length - 1]).toBe('my-input');
+      expect(input).toHaveAttribute('data-part', 'input');
+      expect(input).not.toHaveClass('my-root');
+    });
+
+    it('keeps the locked attributes of the wrapper', () => {
+      render(
+        <Input
+          aria-label="Name"
+          contentBefore="@"
+          size="small"
+          slotProps={{ root: { hidden: true, 'data-size': 'large', 'data-appearance': 'x' } }}
+        />,
+      );
+      const wrapper = screen.getByRole('textbox', { name: 'Name' }).parentElement;
+      expect(wrapper).not.toHaveAttribute('hidden');
+      expect(wrapper).toHaveAttribute('data-size', 'small');
+      expect(wrapper).toHaveAttribute('data-appearance', 'outline');
+    });
+  });
+
+  it("runs your onChange first, then the Input's onChange and onValueChange", async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <Input
+        aria-label="Name"
+        onChange={() => order.push('onChange')}
+        onValueChange={() => order.push('onValueChange')}
+        slotProps={{ input: { onChange: () => order.push('part') } }}
+      />,
+    );
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'a');
+    expect(order).toEqual(['part', 'onChange', 'onValueChange']);
+  });
+
+  it("skips the Input's change handlers when your onChange prevents the default", async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Input
+        aria-label="Name"
+        onValueChange={onValueChange}
+        slotProps={{ root: { onChange: (event) => event.preventDefault() } }}
+      />,
+    );
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'a');
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('calls onValueChange once per change in StrictMode with a part handler', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const onChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Input
+          aria-label="Name"
+          onValueChange={onValueChange}
+          slotProps={{ input: { onChange } }}
+        />
+      </React.StrictMode>,
+    );
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'a');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith('a');
+  });
+
+  it('keeps the locked attributes of the input, and the props you give the Input win', () => {
+    renderWithFieldContext(
+      <Input
+        placeholder="From the Input"
+        error="Wrong"
+        slotProps={{
+          input: {
+            id: 'mine',
+            'aria-label': 'Other',
+            'aria-invalid': false,
+            'aria-required': false,
+            'aria-errormessage': 'other',
+            required: false,
+            disabled: true,
+            readOnly: true,
+            size: 3,
+            placeholder: 'From the part',
+            'data-size': 'large',
+          },
+        }}
+      />,
+      { required: true },
+    );
+    const input = screen.getByRole('textbox', { name: FIELD_TEST_TEXT.label });
+    expect(input.id).toBe(FIELD_TEST_IDS.controlId);
+    expect(input).not.toHaveAttribute('aria-label');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-required', 'true');
+    expect(input).toBeRequired();
+    expect(input).not.toBeDisabled();
+    expect(input).not.toHaveAttribute('readonly');
+    expect(input).not.toHaveAttribute('size');
+    expect(input).toHaveAttribute('placeholder', 'From the Input');
+    expect(input).toHaveAttribute('data-size', 'medium');
+    expect(input.getAttribute('aria-errormessage')).toBe(
+      screen.getByRole('alert').getAttribute('id'),
+    );
+  });
+
+  it('keeps a controlled Input’s value its own: no part’s defaultValue reaches the input', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const own = { value: 'Own', onChange: () => {} };
+      render(
+        <>
+          <Input aria-label="Input" {...own} slotProps={{ input: { defaultValue: 'Part' } }} />
+          <Input aria-label="Root" {...own} slotProps={{ root: { defaultValue: 'Part' } }} />
+          <Input
+            aria-label="Wrapped"
+            contentBefore="@"
+            {...own}
+            slotProps={{ input: { defaultValue: 'Part' } }}
+          />
+        </>,
+      );
+      for (const name of ['Input', 'Root', 'Wrapped']) {
+        expect(screen.getByRole('textbox', { name })).toHaveValue('Own');
+      }
+      // No warning of an input both controlled and uncontrolled: the parts' defaults are unset.
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('keeps an uncontrolled Input uncontrolled: no part’s value reaches the input', async () => {
+    const user = userEvent.setup();
+    const part = { value: 'Part' };
+    render(
+      <>
+        <Input aria-label="Input" defaultValue="Own" slotProps={{ input: part }} />
+        <Input
+          aria-label="Root"
+          defaultValue="Own"
+          // The root part is typed for the wrapper, which takes no value: from untyped code.
+          slotProps={{ root: part as unknown as InputSlotProps['root'] }}
+        />
+        <Input
+          aria-label="Wrapped"
+          contentBefore="@"
+          defaultValue="Own"
+          slotProps={{ input: part }}
+        />
+      </>,
+    );
+    for (const name of ['Input', 'Root', 'Wrapped']) {
+      const input = screen.getByRole('textbox', { name });
+      expect(input).toHaveValue('Own');
+      await user.type(input, '!');
+      expect(input).toHaveValue('Own!');
+    }
+  });
+
+  it('adds the attributes the Input does not set, and joins your ids to its description', () => {
+    render(
+      <>
+        <span id="extra">Extra</span>
+        <Input
+          aria-label="Name"
+          error="Wrong"
+          slotProps={{
+            input: { placeholder: 'From the part', 'aria-describedby': 'extra', type: 'email' },
+          }}
+        />
+      </>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    expect(input).toHaveAttribute('placeholder', 'From the part');
+    expect(input).toHaveAttribute('type', 'email');
+    expect(input).toHaveAttribute('aria-describedby', `${screen.getByRole('alert').id} extra`);
+  });
+
+  it.each([
+    ['one <input>', {}],
+    ['a wrapper', { contentBefore: '@' }],
+  ] as const)('takes hidden from the Input itself in %s, never from a part', (_, shape) => {
+    const { rerender } = render(
+      <Input
+        aria-label="Name"
+        {...shape}
+        slotProps={{ root: { hidden: true }, input: { hidden: true, 'aria-hidden': true } }}
+      />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    const field = input.closest(`.${inputClassNames.root}`) as HTMLElement;
+    expect(field).not.toHaveAttribute('hidden');
+    expect(input).not.toHaveAttribute('hidden');
+    expect(input).not.toHaveAttribute('aria-hidden');
+    rerender(<Input aria-label="Name" {...shape} hidden slotProps={{ root: { hidden: false } }} />);
+    expect(field).toHaveAttribute('hidden');
+  });
+
+  it.each([
+    ['one <input>', {}],
+    ['a wrapper', { contentBefore: '@' }],
+  ] as const)('takes inert from the Input itself in %s, never from a part', (_, shape) => {
+    const { rerender } = render(
+      <Input
+        aria-label="Name"
+        {...shape}
+        slotProps={{ root: { inert: true, 'aria-hidden': true }, input: { inert: true } }}
+      />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    const field = input.closest(`.${inputClassNames.root}`) as HTMLElement;
+    expect(field).not.toHaveAttribute('inert');
+    expect(field).not.toHaveAttribute('aria-hidden');
+    expect(input).not.toHaveAttribute('inert');
+    rerender(<Input aria-label="Name" {...shape} inert />);
+    expect(screen.getByRole('textbox', { name: 'Name', hidden: true })).toHaveAttribute('inert');
+  });
+
+  it.each([
+    ['enabled', false, 1],
+    ['disabled', true, 0],
+  ] as const)('calls your wrapper onClick only while the Input is %s', (_, disabled, calls) => {
+    const onClick = vi.fn();
+    render(
+      <Input
+        aria-label="Name"
+        contentBefore="@"
+        disabled={disabled}
+        slotProps={{ root: { onClick } }}
+      />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    fireEvent.click(input.closest(`.${inputClassNames.root}`) as HTMLElement);
+    expect(onClick).toHaveBeenCalledTimes(calls);
+  });
+
+  it('has no accessibility violations with both shapes customised', async () => {
+    render(
+      <>
+        <Input
+          aria-label="One"
+          slotProps={{ root: { className: 'r' }, input: { className: 'i' } }}
+        />
+        <Input
+          aria-label="Two"
+          contentBefore="@"
+          slotProps={{ root: { className: 'r' }, input: { className: 'i' } }}
+        />
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof InputSlotProps>().toEqualTypeOf<'root' | 'input'>();
+    expectTypeOf<NonNullable<InputSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLElement> | undefined
+    >();
+    expectTypeOf<NonNullable<InputSlotProps['input']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<NonNullable<InputSlotProps['input']>>().toHaveProperty('placeholder');
+    expectTypeOf<NonNullable<InputSlotProps['root']>>().not.toHaveProperty('placeholder');
+    // @ts-expect-error -- a part takes no children
+    void (<Input slotProps={{ root: { children: 'x' } }} />);
   });
 });

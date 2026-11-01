@@ -12,6 +12,7 @@ import {
   STATE_ARIA,
   unwrapFragment,
 } from '../../lib/renderTrigger';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { MotionSlot, PopupAlign, PopupPositioningOptions, PopupSide } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
@@ -118,6 +119,28 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
   children: React.ReactElement;
   /** Ref to the wrapper `<span>` (the positioning anchor). */
   ref?: React.Ref<HTMLSpanElement>;
+  /**
+   * Props for the element the Tooltip draws besides your child, by part, merged into the part's
+   * own: your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref beside its ref. Every attribute the Tooltip sets on
+   * the part is locked and keeps the Tooltip's value; you add the attributes it does not set. A
+   * part takes no `children`. The part is Fluent UI's `content` slot, whose element is the
+   * surface: here `content` takes the text, and `slotProps.content` the element's props.
+   */
+  slotProps?: {
+    /**
+     * The surface `<span>` that shows `content` in a portal while the tooltip is shown (stable
+     * class `wave-tooltip__content`): a copy of the hidden description, hidden from assistive
+     * technology; `motion` gives it its motion classes, before yours. It carries no handler of
+     * the Tooltip: the Tooltip follows the pointer on it from the wrapper, through the component
+     * tree, after yours, so `preventDefault()` in your `onMouseLeave` keeps the tooltip shown, as
+     * it would in the content. Locked: `aria-hidden`, its marker `data-wave-tooltip-surface`,
+     * `data-state`, `data-presence`, `inert`, `data-side` and `data-align`, and, unset, `role`,
+     * `id`, `hidden` and `tabIndex`; your `style` merges, but the position the positioning sets
+     * wins.
+     */
+    content?: SlotPart<'span'>;
+  };
 }
 
 const VARIANT_APPEARANCE: Record<'dark' | 'light', TooltipAppearance> = {
@@ -347,6 +370,7 @@ export const Tooltip = ({
   onFocus,
   onBlur,
   ref,
+  slotProps,
   ...rest
 }: TooltipProps) => {
   const appearance =
@@ -382,7 +406,13 @@ export const Tooltip = ({
     ...resolvePositioning(positioning, { offset: 8 }),
   });
   const wrapperElementRef = useMergedRefs<HTMLSpanElement>(ref, wrapperRef, setReference);
-  const surfaceElementRef = useMergedRefs<HTMLSpanElement>(surfaceRef, setFloating, presenceRef);
+  // The positioning and the presence core measure the surface: a part's ref goes beside theirs.
+  const surfaceElementRef = useMergedRefs<HTMLSpanElement>(
+    surfaceRef,
+    setFloating,
+    presenceRef,
+    slotProps?.content?.ref,
+  );
 
   // Timer handlers are event callbacks (stable, latest state): they are composed with the
   // consumer's handlers during render but only run from events and timers.
@@ -467,6 +497,44 @@ export const Tooltip = ({
   const child = renderTrigger(target, triggerProps, { componentName: 'Tooltip' });
   useRelationshipTarget(wrapperRef, tooltipId, relationship, childIsFallback);
 
+  // The surface's props are merged only while it is mounted. The presence attributes are present
+  // only in some phases: the keys they may add are locked unset before them.
+  let surface: React.ReactNode = null;
+  if (isMounted) {
+    const surfaceProps = mergeSlotProps(slotProps?.content, {
+      className: cn(
+        tooltipClassNames.content,
+        surfaceClasses,
+        appearanceClasses[appearance],
+        motionClassName,
+      ),
+      locked: {
+        role: undefined,
+        id: undefined,
+        tabIndex: undefined,
+        hidden: undefined,
+        inert: undefined,
+        'aria-hidden': 'true',
+        'data-wave-tooltip-surface': '',
+        'data-state': visible ? 'open' : 'closed',
+        ...presenceProps,
+        'data-side': floatingProps['data-side'],
+        'data-align': floatingProps['data-align'],
+      },
+    });
+    surface = (
+      <Portal layer="tooltip">
+        <span
+          {...surfaceProps}
+          ref={surfaceElementRef}
+          style={lockPositionStyle(surfaceProps.style, floatingProps.style)}
+        >
+          {content}
+        </span>
+      </Portal>
+    );
+  }
+
   return (
     <span
       ref={wrapperElementRef}
@@ -485,26 +553,7 @@ export const Tooltip = ({
       <span id={tooltipId} role="tooltip" hidden>
         {content}
       </span>
-      {isMounted && (
-        <Portal layer="tooltip">
-          <span
-            ref={surfaceElementRef}
-            aria-hidden="true"
-            data-wave-tooltip-surface=""
-            data-state={visible ? 'open' : 'closed'}
-            {...presenceProps}
-            {...floatingProps}
-            className={cn(
-              tooltipClassNames.content,
-              surfaceClasses,
-              appearanceClasses[appearance],
-              motionClassName,
-            )}
-          >
-            {content}
-          </span>
-        </Portal>
-      )}
+      {surface}
     </span>
   );
 };

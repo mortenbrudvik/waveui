@@ -1,18 +1,34 @@
 import * as React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toast, Toaster } from '../Toast';
-import type { ToastController, ToastPosition } from '../Toast';
-import { toastClassNames, toasterClassNames } from '../../../lib/classNames';
+import type { ToastController, ToastPosition, ToasterProps } from '../Toast';
+import {
+  toastBodyClassNames,
+  toastClassNames,
+  toasterClassNames,
+  toastTitleClassNames,
+} from '../../../lib/classNames';
 import { toastMotion, toastStructure } from '../../../lib/motion';
 import type { MotionSlot } from '../../../lib/types';
 import {
+  expectNoA11yViolations,
   findDanglingIdRefs,
   honourInert,
   mockAnimations,
   mockMatchMedia,
   motionClasses,
+  openingTags,
   renderWithProviders,
 } from '../../../test-utils';
 import { ControllerProbe, advance, getToasts, getViewport, renderToaster } from './toasterHarness';
@@ -400,5 +416,302 @@ describe('motion slot (D5, the slot table on the container)', () => {
     setProps({});
     expect(container).toHaveClass(...motionClasses(toastMotion.bottom));
     expect(container).not.toHaveClass('my-motion');
+  });
+});
+
+describe('Toaster — slotProps', () => {
+  type ToasterSlotProps = NonNullable<ToasterProps['slotProps']>;
+  const altShiftN = (event: KeyboardEvent) =>
+    event.altKey && event.shiftKey && event.code === 'KeyN';
+  const saved = (
+    <Toast status="success" onDismiss={() => {}}>
+      <Toast.Title action={<a href="#undo">Undo</a>}>Saved</Toast.Title>
+      <Toast.Body subtitle="2 files">Done.</Toast.Body>
+    </Toast>
+  );
+  const part = (name: string) => document.querySelector('.' + name) as Element;
+
+  it('renders the container and the parts of a dispatched toast of 3fafbe0 (attributes sorted)', () => {
+    // Captured from 3fafbe0: the merged props may put the class before the locked attributes.
+    const { dispatchContent } = renderToaster();
+    dispatchContent(saved, { timeout: 0 });
+    const [container] = getToasts();
+    expect(
+      openingTags(
+        container,
+        part(toastClassNames.content),
+        part(toastClassNames.dismissButton),
+        part(toastTitleClassNames.label),
+        part(toastBodyClassNames.subtitle),
+      ),
+    ).toBe(
+      [
+        '<div aria-describedby="wave-toast-body-_id0_" aria-labelledby="wave-toast-status-_id1_ wave-toast-title-_id2_" class="wave-toaster__toast rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] not-data-[presence=entered]:overflow-hidden transition-[grid-template-rows,margin-bottom,opacity,translate] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-easy-ease data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:translate-y-2 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0" data-presence="entered" data-wave-toast="" role="group" tabindex="-1">',
+        '<div class="wave-toast__content min-w-0 flex-1">',
+        '<button aria-label="Dismiss" class="wave-toast__dismiss-button inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-subtle-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
+        '<span class="wave-toast-title__label min-w-0 flex-1 text-body-2 font-semibold text-foreground" id="wave-toast-title-_id2_">',
+        '<div class="wave-toast-body__subtitle mt-1 text-caption-1 text-muted-foreground">',
+      ].join('\n'),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with the part empty', () => {
+    const cases: Array<Partial<ToasterProps>> = [
+      {},
+      { position: 'top-start', motion: null, className: 'mine' },
+    ];
+    for (const props of cases) {
+      const { dispatch, dispatchContent, setProps, baseElement, unmount } = renderToaster(props);
+      dispatch({ title: 'One', body: 'First', timeout: 0 });
+      dispatchContent(saved, { timeout: 0 });
+      dispatchContent(<p>Connection lost</p>, { status: 'warning', timeout: 0 });
+      const markup = baseElement.innerHTML;
+      for (const slotProps of [{}, { toast: {} }, undefined]) {
+        setProps({ ...props, slotProps });
+        expect(baseElement.innerHTML).toBe(markup);
+      }
+      unmount();
+    }
+  });
+
+  it('puts your className, style, data-* and ref on every toast’s container, after its motion', () => {
+    const elements: HTMLDivElement[] = [];
+    const ref = (element: HTMLDivElement | null) => {
+      if (element) elements.push(element);
+    };
+    const { dispatch } = renderToaster({
+      slotProps: {
+        toast: { className: 'my-toast', style: { opacity: 0.5 }, 'data-part': 'toast', ref },
+      },
+    });
+    dispatch({ title: 'One', timeout: 0 });
+    dispatch({ title: 'Two', timeout: 0 });
+    const toasts = getToasts();
+    expect(toasts).toHaveLength(2);
+    for (const container of toasts) {
+      expect(container.classList[0]).toBe(toasterClassNames.toast);
+      expect(container).toHaveClass(
+        ...motionClasses(toastStructure),
+        ...motionClasses(toastMotion.bottom),
+        'my-toast',
+      );
+      expect(container.classList[container.classList.length - 1]).toBe('my-toast');
+      expect(container).toHaveAttribute('data-part', 'toast');
+      expect(container).toHaveStyle({ opacity: '0.5' });
+      expect(elements).toContain(container);
+    }
+    // The region, its live regions and the content elements take none of it.
+    const viewport = getViewport();
+    expect(viewport).not.toHaveClass('my-toast');
+    expect(viewport.querySelectorAll('[data-part]')).toHaveLength(2);
+    for (const region of Array.from(viewport.querySelectorAll('[aria-live]'))) {
+      expect(region).not.toHaveClass('my-toast');
+    }
+    expect(document.querySelector('[slotprops]')).toBeNull();
+  });
+
+  it('lets your class replace a conflicting class of the container', () => {
+    const { dispatch } = renderToaster({ slotProps: { toast: { className: 'rounded-lg' } } });
+    dispatch({ title: 'One', timeout: 0 });
+    const [container] = getToasts();
+    expect(container).toHaveClass('rounded-lg');
+    expect(container).not.toHaveClass('rounded');
+  });
+
+  it('locks the container’s role, tab stop, marker, phase, name, description and hidden state', () => {
+    const { dispatchContent } = renderToaster(
+      {
+        slotProps: {
+          toast: {
+            role: 'alert',
+            tabIndex: 0,
+            'data-wave-toast': 'mine',
+            'data-presence': 'exiting',
+            'aria-labelledby': 'extra',
+            'aria-describedby': 'extra',
+            hidden: true,
+            inert: true,
+            'aria-hidden': true,
+            title: 'Notice',
+          },
+        },
+      },
+      { app: <span id="extra">More</span> },
+    );
+    dispatchContent(saved, { timeout: 0 });
+    const [container] = getToasts();
+    expect(container).toHaveAttribute('role', 'group');
+    expect(container).toHaveAttribute('tabindex', '-1');
+    expect(container).toHaveAttribute('data-wave-toast', '');
+    expect(container).toHaveAttribute('data-presence', 'entered');
+    // Set by no state of a shown toast, so locked unset: the presence core adds `inert` only
+    // while the toast exits.
+    for (const name of ['hidden', 'inert', 'aria-hidden']) {
+      expect(container, name).not.toHaveAttribute(name);
+    }
+    // Your ids are added after the toast's own.
+    expect(container.getAttribute('aria-labelledby')).toMatch(
+      /^wave-toast-status-\S+ wave-toast-title-\S+ extra$/,
+    );
+    expect(container.getAttribute('aria-describedby')).toMatch(/^wave-toast-body-\S+ extra$/);
+    expect(container).toHaveAccessibleName('Success: Saved More');
+    expect(container).toHaveAccessibleDescription('Done. 2 files More');
+    expect(container).toHaveAttribute('title', 'Notice');
+    expect(findDanglingIdRefs()).toEqual([]);
+  });
+
+  it('keeps the exiting phase over yours: inert while the toast exits', async () => {
+    mockMatchMedia({ '(prefers-reduced-motion: reduce)': false });
+    const motion = mockAnimations({ animated: isToast });
+    const { dispatch, dismiss } = renderToaster({
+      slotProps: { toast: { inert: false, 'data-presence': 'entered' } },
+    });
+    const id = dispatch({ title: 'One', timeout: 0 });
+    await finish(motion);
+    dismiss(id);
+    const [container] = getToasts();
+    expect(container).toHaveAttribute('data-presence', 'exiting');
+    expect(container).toHaveAttribute('inert');
+    await finish(motion);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('runs your onKeyDown first: preventDefault() keeps the toast on Delete, every toast on Escape', () => {
+    const onKeyDown = vi.fn((event: React.KeyboardEvent) => {
+      if (event.key !== 'Backspace') event.preventDefault();
+    });
+    const onRegionKeyDown = vi.fn();
+    const { dispatch } = renderToaster({
+      onKeyDown: onRegionKeyDown,
+      slotProps: { toast: { onKeyDown } },
+    });
+    dispatch({ title: 'One', timeout: 0 });
+    dispatch({ title: 'Two', timeout: 0 });
+    const [first] = getToasts();
+    fireEvent.keyDown(first, { key: 'Delete' });
+    expect(getToasts()).toHaveLength(2);
+    fireEvent.keyDown(first, { key: 'Escape' });
+    expect(getToasts()).toHaveLength(2);
+    // The region's own handler still receives the keys.
+    expect(onRegionKeyDown).toHaveBeenCalledTimes(2);
+    fireEvent.keyDown(first, { key: 'Backspace' });
+    expect(getToasts()).toHaveLength(1);
+    expect(onKeyDown).toHaveBeenCalledTimes(3);
+  });
+
+  it('pauses the timers while focus or the pointer is in a toast, even when your handlers call preventDefault()', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const prevent = (event: React.SyntheticEvent) => event.preventDefault();
+      const { dispatch } = renderToaster({
+        slotProps: {
+          toast: {
+            onFocus: prevent,
+            onBlur: prevent,
+            onPointerEnter: prevent,
+            onPointerOver: prevent,
+            onPointerLeave: prevent,
+          },
+        },
+      });
+      dispatch({ title: 'One', timeout: 1000 });
+      const [container] = getToasts();
+      act(() => container.focus());
+      advance(5000);
+      expect(getToasts()).toHaveLength(1);
+      act(() => container.blur());
+      await user.hover(container);
+      advance(5000);
+      expect(getToasts()).toHaveLength(1);
+      await user.unhover(container);
+      advance(1100);
+      expect(getToasts()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps every container registered with a new inline ref on every render', () => {
+    const elements: Array<HTMLDivElement | null> = [];
+    const props = (): Partial<ToasterProps> => ({
+      shortcuts: { focus: altShiftN },
+      slotProps: { toast: { ref: (element) => void elements.push(element) } },
+    });
+    const { dispatch, setProps } = renderToaster(props());
+    dispatch({ title: 'One', timeout: 0 });
+    dispatch({ title: 'Two', timeout: 0 });
+    setProps(props());
+    setProps(props());
+    const toasts = getToasts();
+    expect(elements.at(-1)).toBe(toasts[1]);
+    // The focus shortcut finds the newest toast's container through the Toaster's own ref.
+    fireEvent.keyDown(document.body, { key: 'N', code: 'KeyN', altKey: true, shiftKey: true });
+    expect(toasts[1]).toHaveFocus();
+  });
+
+  it('calls your part handlers once per event in StrictMode', () => {
+    const onClick = vi.fn();
+    const onKeyDown = vi.fn();
+    const controllerRef = React.createRef<ToastController>();
+    render(
+      <React.StrictMode>
+        <Toaster slotProps={{ toast: { onClick, onKeyDown } }}>
+          <ControllerProbe ref={controllerRef} />
+        </Toaster>
+      </React.StrictMode>,
+    );
+    act(() => {
+      controllerRef.current?.dispatchToast({ title: 'One', timeout: 0 });
+    });
+    const [container] = getToasts();
+    fireEvent.click(container);
+    fireEvent.keyDown(container, { key: 'a' });
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws nothing for the part before a toast is dispatched', () => {
+    renderToaster({ slotProps: { toast: { className: 'my-toast' } } });
+    expect(getToasts()).toEqual([]);
+    expect(document.querySelector('.my-toast')).toBeNull();
+    expect(getViewport()).not.toHaveAttribute('slotprops');
+  });
+
+  it('puts your class on the containers of a Toaster under RTL', () => {
+    const controllerRef = React.createRef<ToastController>();
+    renderWithProviders(
+      <Toaster position="top-end" slotProps={{ toast: { className: 'my-toast' } }}>
+        <ControllerProbe ref={controllerRef} />
+      </Toaster>,
+      { dir: 'rtl' },
+    );
+    act(() => {
+      controllerRef.current?.dispatchToast({ title: 'One', timeout: 0 });
+    });
+    expect(getViewport().closest('[dir]')).toHaveAttribute('dir', 'rtl');
+    const [container] = getToasts();
+    expect(container).toHaveClass(
+      toasterClassNames.toast,
+      ...motionClasses(toastMotion.top),
+      'my-toast',
+    );
+  });
+
+  it('has no accessibility violations with the part customised', async () => {
+    const { dispatchContent } = renderToaster({
+      slotProps: { toast: { className: 'my-toast', title: 'Notice' } },
+    });
+    dispatchContent(saved, { timeout: 0 });
+    await expectNoA11yViolations();
+  });
+
+  it('types the part for its element, and takes no children', () => {
+    expectTypeOf<keyof ToasterSlotProps>().toEqualTypeOf<'toast'>();
+    expectTypeOf<NonNullable<ToasterSlotProps['toast']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: each container holds its toast
+    void (<Toaster slotProps={{ toast: { children: 'Other' } }} />);
   });
 });

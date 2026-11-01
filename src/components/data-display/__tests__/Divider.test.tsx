@@ -1,10 +1,20 @@
-import { describe, it, expect, expectTypeOf } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Divider } from '../Divider';
 import type { DividerOwnProps, DividerProps } from '../Divider';
+import { dividerClassNames } from '../../../lib/classNames';
 import type { Orientation } from '../../../lib/types';
-import { renderWithProviders, testSystemProps } from '../../../test-utils';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  normaliseIds,
+  openingTags,
+  renderWithProviders,
+  testSystemProps,
+} from '../../../test-utils';
 
 describe('Divider', () => {
   testSystemProps(Divider, {
@@ -222,5 +232,229 @@ describe('Divider', () => {
       }
       expectTypeOf<SectionDividerProps>().toHaveProperty('orientation');
     });
+  });
+});
+
+describe('Divider — slotProps', () => {
+  type DividerSlotProps = NonNullable<DividerOwnProps['slotProps']>;
+  const EVERY_PART: DividerSlotProps = { line: {}, label: {} };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, dividerClassNames.line),
+    ...all(root, dividerClassNames.label),
+  ];
+
+  /** A labelled divider of each orientation. */
+  function Dividers({ slotProps }: { slotProps?: DividerSlotProps }) {
+    return (
+      <>
+        <Divider slotProps={slotProps}>OR</Divider>
+        <Divider orientation="vertical" slotProps={slotProps}>
+          AND
+        </Divider>
+      </>
+    );
+  }
+
+  // Captured from ee05cf8's dist (client and server agree).
+  const BASE_PINS = [
+    '<div aria-hidden="true" class="wave-divider__line h-0 min-w-2 flex-1 border-t border-border">',
+    '<div aria-hidden="true" class="wave-divider__line h-0 min-w-2 flex-1 border-t border-border">',
+    '<div aria-hidden="true" class="wave-divider__line w-0 min-h-2 flex-1 border-s border-border">',
+    '<div aria-hidden="true" class="wave-divider__line w-0 min-h-2 flex-1 border-s border-border">',
+    '<span class="wave-divider__label shrink-0 text-caption-1 text-muted-foreground" id="divider-label-_id0_">',
+    '<span class="wave-divider__label shrink-0 text-caption-1 text-muted-foreground" id="divider-label-_id1_">',
+  ].join('\n');
+
+  it('renders the parts of ee05cf8 (attributes sorted), on the client and the server', () => {
+    for (const slotProps of [undefined, EVERY_PART]) {
+      const view = render(<Dividers slotProps={slotProps} />);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Dividers slotProps={slotProps} />);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps(
+      (slotProps: DividerSlotProps | undefined) => <Dividers slotProps={slotProps} />,
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: DividerSlotProps | undefined) => (
+        <Divider as="li" aria-label="Named" aria-labelledby="other" slotProps={slotProps}>
+          <b>{0}</b>
+        </Divider>
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('keeps the attribute order of ee05cf8 with every part empty', () => {
+    const markup = (slotProps?: DividerSlotProps) => {
+      const { container, unmount } = render(<Dividers slotProps={slotProps} />);
+      const html = normaliseIds(container.innerHTML);
+      unmount();
+      return html;
+    };
+    expect(markup(EVERY_PART)).toBe(markup());
+  });
+
+  it('puts your className, style, data-* and ref on each part, the line props on both lines', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    render(
+      <Divider
+        slotProps={{
+          line: {
+            className: 'my-line border-dashed min-w-4',
+            style: { opacity: 0.5 },
+            'data-part': 'line',
+            ref: collect,
+          },
+          label: {
+            className: 'my-label text-body-1',
+            style: { opacity: 0.5 },
+            'data-part': 'label',
+            ref: collect,
+          },
+        }}
+      >
+        OR
+      </Divider>,
+    );
+    for (const [cls, name, conflict, count] of [
+      [dividerClassNames.line, 'line', 'min-w-2', 2],
+      [dividerClassNames.label, 'label', 'text-caption-1', 1],
+    ] as const) {
+      const elements = all(document, cls);
+      expect(elements).toHaveLength(count);
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(cls);
+        expect(element).toHaveClass(`my-${name}`);
+        // Your class replaces a conflicting one of the part.
+        expect(element).not.toHaveClass(conflict);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+        expect(refs).toContain(element);
+      }
+    }
+    expect(refs).toHaveLength(3);
+    expect(screen.getByRole('separator')).not.toHaveAttribute('data-part');
+  });
+
+  it('locks the decorative lines and the label the separator is named by', () => {
+    const hiddenState = { hidden: true, inert: true, 'aria-hidden': true };
+    render(
+      <Dividers
+        slotProps={
+          {
+            line: { role: 'presentation', tabIndex: 0, 'aria-hidden': false },
+            label: { ...hiddenState, id: 'mine', role: 'heading', 'aria-label': 'Mine' },
+          } as unknown as DividerSlotProps
+        }
+      />,
+    );
+    expect(openingTags(...partsOf())).toBe(BASE_PINS);
+    expect(screen.getByRole('separator', { name: 'OR' })).toBeInTheDocument();
+    expect(screen.getByRole('separator', { name: 'AND' })).toBeInTheDocument();
+  });
+
+  it('adds your ids to the aria-describedby of the label', () => {
+    render(
+      <>
+        <span id="note">Note</span>
+        <Divider slotProps={{ label: { 'aria-describedby': 'note' } }}>OR</Divider>
+      </>,
+    );
+    expect(all(document, dividerClassNames.label)[0]).toHaveAttribute('aria-describedby', 'note');
+  });
+
+  it('runs your label handler; the divider has no handler of its own', () => {
+    const onClick = vi.fn();
+    const label = vi.fn();
+    render(
+      <Divider onClick={onClick} slotProps={{ label: { onClick: label } }}>
+        OR
+      </Divider>,
+    );
+    fireEvent.click(screen.getByText('OR'));
+    expect(label).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const label = vi.fn();
+    const line = vi.fn();
+    render(
+      <React.StrictMode>
+        <Divider slotProps={{ label: { onClick: label }, line: { onClick: line } }}>OR</Divider>
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByText('OR'));
+    await user.click(all(document, dividerClassNames.line)[0]);
+    expect(label).toHaveBeenCalledTimes(1);
+    expect(line).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws no part without a label, and passes no slotProps to the element', () => {
+    const error = vi.spyOn(console, 'error');
+    try {
+      render(
+        <>
+          <Divider slotProps={EVERY_PART} />
+          <Divider orientation="vertical" slotProps={EVERY_PART} />
+          <Divider slotProps={EVERY_PART}>{''}</Divider>
+        </>,
+      );
+      expect(partsOf()).toHaveLength(0);
+      for (const separator of screen.getAllByRole('separator')) {
+        expect(separator).not.toHaveAttribute('slotprops');
+      }
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('keeps the logical lines of a right-to-left vertical divider', () => {
+    renderWithProviders(
+      <Divider orientation="vertical" slotProps={{ line: { className: 'my-line' } }}>
+        AND
+      </Divider>,
+      { dir: 'rtl' },
+    );
+    for (const line of all(document, dividerClassNames.line)) {
+      expect(line).toHaveClass('my-line', 'border-s');
+    }
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Divider
+        slotProps={{ line: { className: 'my-line' }, label: { className: 'my-label', lang: 'en' } }}
+      >
+        OR
+      </Divider>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element on every element type, and takes no children', () => {
+    expectTypeOf<keyof DividerSlotProps>().toEqualTypeOf<'line' | 'label'>();
+    expectTypeOf<NonNullable<DividerSlotProps['line']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<DividerSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<DividerProps<'li'>['slotProps']>().toEqualTypeOf<DividerOwnProps['slotProps']>();
+    // @ts-expect-error -- the label's content is the divider's children
+    const label: DividerSlotProps = { label: { children: 'x' } };
+    expect([label]).toHaveLength(1);
   });
 });

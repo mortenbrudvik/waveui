@@ -5,9 +5,10 @@ import { hasWarned, isDev, reportMissingContext, warnOnce } from '../../lib/dev'
 /*
  * The contexts of a Nav root (Nav, NavDrawer) and its parts: the root's state (`NavContext`), the
  * category a sub-item renders in and the roving bookkeeping of an arrow-key body; the category
- * store; the part markers and the children walks that find the current page; the development check
- * of a Nav list's children; and the link-only attributes mask of the button items. Internal; it
- * imports no component, so a root reaches the parts through their markers, never through an import.
+ * store; the locks of the parts' `slotProps`; the part markers and the children walks that find the
+ * current page; the development check of a Nav list's children; and the link-only attributes mask of
+ * the button items. Internal; it imports no component, so a root reaches the parts through their
+ * markers, never through an import.
  */
 
 // ---------------------------------------------------------------------------
@@ -162,6 +163,47 @@ export interface NavRovingContextValue {
  */
 export const NavRovingContext = React.createContext<NavRovingContextValue | null>(null);
 NavRovingContext.displayName = 'NavRovingContext';
+
+// ---------------------------------------------------------------------------
+// slotProps locks
+// ---------------------------------------------------------------------------
+
+/**
+ * What every `slotProps` part of a Nav root and its parts locks unset (module-only): a role, a tab
+ * index and the marker of a roving container. A role or a tab index on a part would add an entry
+ * to an arrow-key body (it moves through buttons, links and elements with a tab index or the
+ * button role) or a tab stop to a Nav, and a composite role or the marker would make a part a
+ * nested composite, whose entries leave the body's arrow order; a list and its list items also keep
+ * the list's own roles. Spread it first in a part's `locked` object; a part with a role of its own
+ * sets it after the spread.
+ */
+export const NAV_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+} as const;
+
+/**
+ * {@link NAV_PART_LOCKS} and `lib/slotProps`' hidden locks (`hidden`, `inert` and `aria-hidden`
+ * unset), written out so that an import that does not use it drops it (module-only): the locks of
+ * a part that holds an entry, a control or a name (a list, a list item, a toggle, a label span, the
+ * actions), which must stay shown and reachable. A part with attributes of its own spreads it
+ * first (a label span adds `aria-label` unset: its link or button takes its name from its text).
+ */
+export const NAV_SHOWN_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/**
+ * The `blockHandlers` of a part inside a link or button that does not activate while disabled
+ * (module-only): your click handler of the part is not called there, as the item's own is not.
+ */
+export const BLOCK_CLICK = ['onClick'] as const;
 
 // ---------------------------------------------------------------------------
 // Part markers and the children walks

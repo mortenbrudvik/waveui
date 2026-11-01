@@ -14,6 +14,7 @@ import {
   type LayerRecord,
 } from '../../lib/layers';
 import { toastMotion, toastStructure } from '../../lib/motion';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
 import { bindToasterHandle, isToastOptions } from '../../lib/toaster';
 import type { ToasterHandle } from '../../lib/toaster';
@@ -458,7 +459,47 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
   motion?: MotionSlot | null;
   /** Ref to the toast region (the portaled `<div role="region">`). */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the element the Toaster draws around each toast, by part, merged into the part's
+   * own: your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref beside its refs. Every attribute the Toaster sets on
+   * the part is locked and keeps the Toaster's value; you add the attributes it does not set. A
+   * part takes no `children`. The region takes the Toaster's own props, and its live regions are
+   * no part.
+   */
+  slotProps?: {
+    /**
+     * The `role="group"` container of each toast (stable class `wave-toaster__toast`): the
+     * element the focus shortcut and Delete act on, and the one `motion` animates (its motion
+     * classes come before yours). The same props reach every toast's container: your ref
+     * receives each of them, and an `id` would repeat. Your `onKeyDown` runs first:
+     * `preventDefault()` in it skips the component's handling of the key, so Delete and
+     * Backspace keep the toast and Escape keeps every toast (the region's own `onKeyDown` still
+     * receives it). The region pauses the timers while the pointer or focus is in it, even when
+     * your handlers call `preventDefault()`; a handler of yours that stops a focus or blur event
+     * from propagating keeps it from the region, as one in a toast's content does, and can leave
+     * the timers paused. Locked: `role`, `tabIndex`, its marker `data-wave-toast`,
+     * `data-presence`, `inert` (set while the toast exits), `aria-labelledby` and
+     * `aria-describedby` (the toast's status text, title and body: your ids are added after
+     * them) and, unset, `hidden` and `aria-hidden`.
+     */
+    toast?: SlotPart<'div'>;
+  };
 }
+
+/**
+ * What the `toast` part locks besides its name, description and key handler: the container's role,
+ * tab stop and marker, and unset the hidden state, which the presence core sets only while a toast
+ * exits (its attributes follow the part's).
+ */
+const TOAST_PART_LOCKS = {
+  role: 'group',
+  tabIndex: -1,
+  'data-wave-toast': '',
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
 
 /**
  * Corner placement. The margin on the toasts' side is `--wave-toaster-offset`, and the margin on
@@ -603,6 +644,8 @@ interface ToastContainerProps {
   registerContainer: (id: string, node: HTMLElement | null) => void;
   /** The container's motion classes: the Toaster's `motion`, resolved for the stack's edge. */
   motionClassName: string;
+  /** The Toaster's `slotProps.toast`, merged only when given. */
+  part: SlotPart<'div'> | undefined;
 }
 
 function isTitlePart(
@@ -807,6 +850,7 @@ function ToastContainer({
   announce,
   registerContainer,
   motionClassName,
+  part,
 }: ToastContainerProps) {
   const { id, dismissed } = entry;
   // Mounted through the presence core (D29): a dismissed toast exits, `inert`, and is removed when
@@ -830,7 +874,8 @@ function ToastContainer({
     },
     [id, registerContainer],
   );
-  const mergedRef = useMergedRefs<HTMLDivElement>(attach, presenceRef);
+  // The part's ref goes beside the registration and the presence core's.
+  const mergedRef = useMergedRefs<HTMLDivElement>(attach, presenceRef, part?.ref);
   // Focus leaves a dismissed toast in its dismissing commit: `enabled` flipping to `false` moves it
   // in the layout phase, while the inert node is still there; a toast removed with the Toaster
   // moves it after the unmount.
@@ -948,17 +993,35 @@ function ToastContainer({
   };
 
   if (!isMounted) return null;
+  const labelledBy = joinIds(severityId, titlePart?.id);
+  const className = cn(
+    toasterClassNames.toast,
+    'rounded',
+    focusRing,
+    toastStructure,
+    motionClassName,
+  );
   return (
     <div
-      ref={mergedRef}
       role="group"
       tabIndex={-1}
       data-wave-toast=""
-      aria-labelledby={joinIds(severityId, titlePart?.id)}
+      aria-labelledby={labelledBy}
       aria-describedby={bodyPart?.id}
-      className={cn(toasterClassNames.toast, 'rounded', focusRing, toastStructure, motionClassName)}
-      {...presenceProps}
+      className={className}
       onKeyDown={handleKeyDown}
+      {...(part &&
+        mergeSlotProps(part, {
+          className,
+          locked: {
+            ...TOAST_PART_LOCKS,
+            'aria-labelledby': labelledBy,
+            'aria-describedby': bodyPart?.id,
+            onKeyDown: handleKeyDown,
+          },
+        }))}
+      {...presenceProps}
+      ref={mergedRef}
     >
       {/* The one grid item (the content may be several elements), clipped while it moves. */}
       <div className={toasterClassNames.toastContent}>
@@ -1040,6 +1103,7 @@ export const Toaster = ({
   shortcuts,
   toaster: handle,
   motion,
+  slotProps,
   className,
   style,
   children,
@@ -1545,6 +1609,7 @@ export const Toaster = ({
               announce={announce}
               registerContainer={registerContainer}
               motionClassName={motionClassName}
+              part={slotProps?.toast}
             />
           ))}
         </div>

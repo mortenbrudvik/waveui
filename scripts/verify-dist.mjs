@@ -79,9 +79,9 @@
  *     {@link DATA_SCALE_MODULES} and one of only `Tree` none but the moved cascade
  *     ({@link EXCLUSION_PROBES_0_16}, with the positive controls of {@link INCLUSION_PROBES_0_16});
  *     the closure of `useVirtualWindow`, minified, stays within {@link VIRTUAL_BUDGET} and imports
- *     nothing but `react`, and that of `DataGrid` within {@link DATA_GRID_BUDGET}. The CLI prints
- *     the measured sizes, and those of the imports of {@link RECORDED_IMPORTS} (DataGrid-only,
- *     Tree-only, Button-only, MessageBar-only) against 0.15.0;
+ *     nothing but `react`, and that of `DataGrid` within {@link DATA_GRID_BUDGET} (re-set in
+ *     0.18). The CLI prints the measured sizes, and those of the imports of {@link
+ *     RECORDED_IMPORTS} (DataGrid-only, Tree-only, Button-only, MessageBar-only) against 0.15.0;
  *   - 0.17 (spec §10): an import of only `createBrandTokens` holds the brand generator and no
  *     names tuple, component or React module, and none of the development contrast check of a
  *     full ramp; one of only `waveTokens` the tuple and the token core, and no brand generator,
@@ -91,11 +91,30 @@
  *     fragment of their code: no token name, no brand warning key), one of only `Button` or only
  *     `MessageBar` none of {@link TOKEN_MODULES} and not the provider
  *     ({@link EXCLUSION_PROBES_0_17}, with the positive controls of {@link INCLUSION_PROBES_0_17});
- *     the imports of {@link RECORDED_IMPORTS_0_17} stay within their budgets
- *     (createBrandTokens-only and waveTokens-only 3 KiB gzip; Button-only, MessageBar-only,
- *     Tree-only, Dialog-only and WaveProvider + Dialog within their allowances over 0.16.0), which
- *     the CLI prints with the 0.16.0 sizes; no JavaScript, CSS or declaration file of dist names a
- *     chart library of the stories ({@link DEV_ONLY_LIBRARIES}, R14).
+ *     the imports of {@link RECORDED_IMPORTS_0_17} are printed with the 0.16.0 sizes, and
+ *     createBrandTokens-only and waveTokens-only stay within their 3 KiB gzip budgets; no
+ *     JavaScript, CSS or declaration file of dist names a chart library of the stories
+ *     ({@link DEV_ONLY_LIBRARIES}, R14);
+ *   - 0.18 (Phase 13, spec §5, R23): an import of only `getNativeElementProps` or only
+ *     `mergeSlotProps` holds its server-safe module (the latter with the helpers it merges with)
+ *     and no component, hook or React module; an import of only one of the public context hooks
+ *     (`useFieldContext`, `FieldContextProvider` and the RadioGroup, Menu, MessageBar and DataGrid
+ *     hooks) holds its context module, as far as the hook needs it, and no other component or
+ *     hook module, so no Dialog or Menu popover code ({@link HOOK_PROBES_0_18}); an import of
+ *     only `Button` holds none of {@link CUSTOMIZATION_MODULES} (Button has no part: of the
+ *     phase's code it holds only the render-function children of `lib/slot`), one of only
+ *     `Dialog` none but `lib/slotProps` (no DataGrid hook), and one of only `DataGrid` not its
+ *     hooks ({@link EXCLUSION_PROBES_0_18}, with the positive controls of {@link
+ *     INCLUSION_PROBES_0_18}); no module that only the tests read is in dist ({@link
+ *     TEST_ONLY_MODULES}); `dist/lib/slotProps.*` and `dist/lib/nativeProps.*` work on the
+ *     server, and `dist/index.*` exports `mergeSlotProps` and `getNativeElementProps` from them;
+ *     the imports of {@link RECORDED_IMPORTS_0_18} stay within their budgets, each the size
+ *     measured at the end of the phase plus {@link BUDGET_MARGIN_0_18}, which the CLI prints
+ *     with the 0.17.1 sizes. Growth of the release over 0.17.1, in bytes minified and gzip:
+ *     Button-only -143 and -1, MessageBar-only +2,363 and +877, Tree-only +3,056 and +1,039,
+ *     Dialog-only +1,749 and +680, `WaveProvider` with `Dialog` +1,744 and +680, DataGrid-only
+ *     +3,209 and +1,207 (the budgets' basis, measured at `e7833a7`: MessageBar-only +2,327 and
+ *     +864, Tree-only +3,060 and +1,028, DataGrid-only +3,213 and +1,202).
  *
  * Every probe and size bundles as a consumer's production build: `process.env.NODE_ENV` is defined
  * as `"production"` whatever this process has (Vitest runs with `test`), so development-only code
@@ -201,7 +220,8 @@ const TOASTER_INCLUDE_KEEP = 'Toaster';
 
 /**
  * The server-safe modules of 0.8 that a Server Component reaches through the entry (spec D18,
- * D33), with the token modules of 0.17 (spec §10, R16): each must exist, and pass its check in
+ * D33), with the token modules of 0.17 (spec §10, R16) and the part helpers of 0.18 (spec §3.1,
+ * §3.3: `mergeSlotProps`, `getNativeElementProps`): each must exist, and pass its check in
  * {@link serverProbeSource}.
  */
 const SERVER_SAFE_MODULES = [
@@ -211,6 +231,10 @@ const SERVER_SAFE_MODULES = [
   'lib/color.cjs',
   'lib/date.mjs',
   'lib/date.cjs',
+  'lib/nativeProps.mjs',
+  'lib/nativeProps.cjs',
+  'lib/slotProps.mjs',
+  'lib/slotProps.cjs',
   'lib/toaster.mjs',
   'lib/toaster.cjs',
   'lib/tokens.mjs',
@@ -580,33 +604,32 @@ export const VIRTUAL_BUDGET = {
 };
 
 /**
- * The DataGrid-only budget (spec §11): the import grows by the selection core, the column sizing
- * and the window support, so its size was measured first, for 0.16.0 (69,592 bytes minified,
- * 23,545 gzip), and the budget is that plus 25 %; raise it only deliberately. The closure imports
- * nothing but the package's own dependencies and peers (every component reaches `clsx` and
+ * The DataGrid-only budget: the import grew in 0.16 by the selection core, the column sizing and
+ * the window support, so its size was measured first, for 0.16.0 (69,592 bytes minified, 23,545
+ * gzip), and the budget was that plus 25 % (86,990 and 29,431). Phase 13 re-set it, as the other
+ * budgets of {@link RECORDED_IMPORTS_0_18} (spec R23): the size measured at the end of the phase
+ * (73,310 and 24,921) plus {@link BUDGET_MARGIN_0_18}; raise it only deliberately. The closure
+ * imports nothing but the package's own dependencies and peers (every component reaches `clsx` and
  * `tailwind-merge` through `cn`; the grid uses `react-dom`), so a new dependency fails it.
  */
 export const DATA_GRID_BUDGET = {
   names: ['DataGrid'],
-  maxMinifiedBytes: 86990,
-  maxGzipBytes: 29431,
+  maxMinifiedBytes: 73822,
+  maxGzipBytes: 25113,
   allowedExternals: ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'],
 };
 
 /**
  * Imports whose size verify-dist measures and prints against their size in the published 0.15.0
- * package (minified and gzip bytes, bare imports external; spec §11, recorded in §16). The
- * DataGrid-only import also has a `budget` ({@link DATA_GRID_BUDGET}); the others are printed for
- * drift only: in 0.16 a Tree-only import changed only by the moved cascade (R20), and Button-only
- * and MessageBar-only imports were as in 0.15.0 (0.17 budgets all three against 0.16.0 in
- * {@link RECORDED_IMPORTS_0_17}).
+ * package (minified and gzip bytes, bare imports external; spec §11, recorded in §16), for drift
+ * only: in 0.16 a Tree-only import changed only by the moved cascade (R20), and Button-only and
+ * MessageBar-only imports were as in 0.15.0. 0.17 budgeted all three against 0.16.0 ({@link
+ * RECORDED_IMPORTS_0_17}), and 0.18 budgets them and the DataGrid-only import, which had its
+ * budget here until then ({@link DATA_GRID_BUDGET}), against 0.17.1 ({@link
+ * RECORDED_IMPORTS_0_18}).
  */
 export const RECORDED_IMPORTS = [
-  {
-    names: ['DataGrid'],
-    baseline: { version: '0.15.0', minified: 48403, gzip: 16520 },
-    budget: DATA_GRID_BUDGET,
-  },
+  { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
   { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
   { names: ['Button'], baseline: { version: '0.15.0', minified: 11195, gzip: 3855 } },
   { names: ['MessageBar'], baseline: { version: '0.15.0', minified: 26831, gzip: 9312 } },
@@ -642,8 +665,9 @@ const BRAND_CHECK_MARKER = 'createBrandTokens:contrast';
 
 /**
  * The key prefix of the provider's `tokens` warnings: since 0.17.1 their effect reads
- * `process.env.NODE_ENV`, so a production bundle drops them and their text, which holds the
- * `WaveProvider` + `Dialog` budget of {@link RECORDED_IMPORTS_0_17}.
+ * `process.env.NODE_ENV`, so a production bundle drops them and their text, which held the
+ * `WaveProvider` + `Dialog` budget of {@link RECORDED_IMPORTS_0_17} (now in {@link
+ * RECORDED_IMPORTS_0_18}).
  */
 const PROVIDER_WARNING_MARKER = 'WaveProvider:tokens:';
 
@@ -704,8 +728,8 @@ export const EXCLUSION_PROBES_0_17 = [
  * an import of only `waveTokens` holds the tuple's marker and that of one of only
  * `createBrandTokens` the brand marker, both in a production build, so the fragments the Dialog
  * probe looks for are found where they are; an import of only `WaveProvider` holds the token core;
- * one of only `Tree` the provider's module (`useDirection` reads its context, which is why the
- * Tree's allowance in {@link RECORDED_IMPORTS_0_17} is larger than `cn`'s).
+ * one of only `Tree` the provider's module (`useDirection` reads its context, so a Tree-only
+ * import carries the context's defaults; its budget is the one of {@link RECORDED_IMPORTS_0_18}).
  */
 export const INCLUSION_PROBES_0_17 = [
   { keep: 'waveTokens', modules: [WAVE_TOKENS_MODULE], substrings: [TOKEN_NAMES_MARKER] },
@@ -737,17 +761,167 @@ export const WAVE_TOKENS_BUDGET = {
   allowedExternals: [],
 };
 
+/** The part helper of 0.18 (`src/lib/slotProps.ts`, server-safe): `mergeSlotProps`. */
+const SLOT_PROPS_MODULE = 'lib/slotProps.mjs';
+/** The native-props helper of 0.18 (`src/lib/nativeProps.ts`, server-safe). */
+const NATIVE_PROPS_MODULE = 'lib/nativeProps.mjs';
+/** Field's context, `useFieldContext` and `FieldContextProvider` (and `useFieldControl`). */
+const FIELD_CONTROL_MODULE = 'hooks/useFieldControl.mjs';
+/** The context of a RadioGroup and its public hooks (0.18). */
+const RADIO_GROUP_CONTEXT_MODULE = 'components/input/RadioGroup.context.mjs';
+/** The public hooks of a Menu (0.18), on the Menu's context module. */
+const MENU_HOOKS_MODULE = 'components/navigation/Menu.hooks.mjs';
+const MENU_CONTEXT_MODULE = 'components/navigation/Menu.context.mjs';
+/** The context of a MessageBar and its public hook (0.18). */
+const MESSAGE_BAR_CONTEXT_MODULE = 'components/feedback/MessageBar.context.mjs';
+/** The public hooks of a DataGrid (0.18), on the DataGrid's contexts (and its selection store). */
+const DATA_GRID_HOOKS_MODULE = 'components/table/DataGrid.hooks.mjs';
+const DATA_GRID_CONTEXT_MODULE = 'components/table/DataGrid.context.mjs';
+const DATA_GRID_STORE_MODULE = 'components/table/DataGrid.store.mjs';
+
+/**
+ * The modules of the 0.18 customization surface (spec §3, §4) that a component without parts or
+ * public context never needs: the two helpers and the modules of the public context hooks. An
+ * import of only `Button` holds none of them ({@link EXCLUSION_PROBES_0_18}). Sorted.
+ */
+export const CUSTOMIZATION_MODULES = [
+  'components/feedback/MessageBar.context.mjs',
+  'components/input/RadioGroup.context.mjs',
+  'components/navigation/Menu.hooks.mjs',
+  'components/table/DataGrid.hooks.mjs',
+  'hooks/useFieldControl.mjs',
+  'lib/nativeProps.mjs',
+  'lib/slotProps.mjs',
+];
+
+/** No component and no hook module (a probe's `modules` may still name one it needs). */
+const NO_COMPONENT_OR_HOOK = ['components/', 'hooks/'];
+/** The packages of popup code: a portal and the positioning library. */
+const POPUP_PACKAGES = ['react-dom', '@floating-ui/react-dom'];
+
+/**
+ * The helper and hook probes of 0.18 (spec §5): an import of only `getNativeElementProps` or only
+ * `mergeSlotProps`, server-safe helpers, holds its own module (the latter with `cn` and the
+ * helpers it merges with) and no component, hook or React module; an import of only one of the
+ * public context hooks holds its context module, as far as the hook needs it (the Menu hooks the
+ * Menu's context, the DataGrid hooks the grid's contexts, the selection hook also the selection
+ * store of the inert context a missing provider gives in production), and no other component or
+ * hook module, neither the component it belongs to nor any Dialog or Menu popover code (no
+ * presence core, no positioning, no `react-dom`).
+ */
+export const HOOK_PROBES_0_18 = [
+  ...[
+    ['getNativeElementProps', NATIVE_PROPS_MODULE],
+    ['mergeSlotProps', SLOT_PROPS_MODULE],
+  ].map(([keep, module]) => ({
+    keep,
+    modules: [module],
+    dropModules: [],
+    dropPrefixes: NO_COMPONENT_OR_HOOK,
+    dropExternals: REACT_PACKAGES,
+  })),
+  ...[
+    ['useFieldContext', [FIELD_CONTROL_MODULE], 'components/input/Field.mjs'],
+    ['FieldContextProvider', [FIELD_CONTROL_MODULE], 'components/input/Field.mjs'],
+    ['useRadioGroupContext', [RADIO_GROUP_CONTEXT_MODULE], 'components/input/RadioGroup.mjs'],
+    ['useRadioGroupItem', [RADIO_GROUP_CONTEXT_MODULE], 'components/input/RadioGroup.mjs'],
+    ['useMenuContext', [MENU_HOOKS_MODULE, MENU_CONTEXT_MODULE], 'components/navigation/Menu.mjs'],
+    [
+      'useMenuListContext',
+      [MENU_HOOKS_MODULE, MENU_CONTEXT_MODULE],
+      'components/navigation/Menu.mjs',
+    ],
+    ['useMessageBarContext', [MESSAGE_BAR_CONTEXT_MODULE], 'components/feedback/MessageBar.mjs'],
+    [
+      'useDataGridSort',
+      [DATA_GRID_HOOKS_MODULE, DATA_GRID_CONTEXT_MODULE],
+      'components/table/DataGrid.mjs',
+    ],
+    [
+      'useDataGridSelection',
+      [DATA_GRID_HOOKS_MODULE, DATA_GRID_CONTEXT_MODULE, DATA_GRID_STORE_MODULE],
+      'components/table/DataGrid.mjs',
+    ],
+    [
+      'useDataGridRowId',
+      [DATA_GRID_HOOKS_MODULE, DATA_GRID_CONTEXT_MODULE],
+      'components/table/DataGrid.mjs',
+    ],
+  ].map(([keep, modules, component]) => ({
+    keep,
+    modules,
+    dropModules: [component, PRESENCE_MODULE, 'hooks/usePopupPosition.mjs'],
+    dropPrefixes: NO_COMPONENT_OR_HOOK,
+    dropExternals: POPUP_PACKAGES,
+  })),
+];
+
+/**
+ * The exclusion probes of 0.18 (spec §5): an import of only `Button`, which has no part, holds
+ * none of {@link CUSTOMIZATION_MODULES} (of the phase's code it holds only the render-function
+ * children of `lib/slot`); one of only `Dialog`, whose surface has parts, holds the part helper and
+ * none of the other modules, so no DataGrid hook; one of only `DataGrid` holds its contexts but not
+ * its public hooks, which only a cell of yours imports.
+ */
+export const EXCLUSION_PROBES_0_18 = [
+  { keep: 'Button', drop: null, dropModules: CUSTOMIZATION_MODULES },
+  {
+    keep: 'Dialog',
+    drop: 'DataGrid',
+    dropModules: CUSTOMIZATION_MODULES.filter((path) => path !== SLOT_PROPS_MODULE),
+  },
+  { keep: 'DataGrid', drop: null, dropModules: [DATA_GRID_HOOKS_MODULE, NATIVE_PROPS_MODULE] },
+];
+
+/**
+ * The inclusion probes of 0.18: the positive controls of {@link EXCLUSION_PROBES_0_18} (the hook
+ * probes of {@link HOOK_PROBES_0_18} are those of the hook modules). A Dialog holds the part
+ * helper; a MessageBar the helper and the context its hook reads.
+ */
+export const INCLUSION_PROBES_0_18 = [
+  { keep: 'Dialog', modules: [SLOT_PROPS_MODULE] },
+  { keep: 'MessageBar', modules: [MESSAGE_BAR_CONTEXT_MODULE, SLOT_PROPS_MODULE] },
+];
+
+/**
+ * Modules of `src/lib` that only the tests read, so the package holds no file of theirs (0.18):
+ * the completeness gate's lists of the parts (`lib/slotParts`) and the inventory of the 1.0
+ * removals (`lib/deprecations`). No module of the package imports them ({@link
+ * checkTestOnlyModules}); their names are also on {@link MODULE_ONLY_NAMES}, so neither roll-up
+ * exports one as a type.
+ */
+export const TEST_ONLY_MODULES = ['lib/deprecations', 'lib/slotParts'];
+
 /** The externals of a component's closure: `cn`'s two dependencies and React. */
 const COMPONENT_EXTERNALS = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
 /** The externals of a closure with a Portal, which also imports `react-dom`. */
 const PORTAL_EXTERNALS = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
 
 /**
- * The 0.17 budgets (spec §10, with the build's rulings, which correct it for Tree and add the
+ * The sizes of the imports of {@link RECORDED_IMPORTS_0_18} in the published 0.17.1 package, as
+ * the CHANGELOG's Size tables give them (0.17.1 changed only the provider, so the others keep
+ * their 0.17.0 sizes), measured as {@link measureImport} measures: the base the 0.18 growth is
+ * printed against.
+ */
+export const BASELINES_0_17_1 = {
+  Button: { minified: 11222, gzip: 3866 },
+  MessageBar: { minified: 26858, gzip: 9324 },
+  Tree: { minified: 47327, gzip: 16232 },
+  Dialog: { minified: 70850, gzip: 23786 },
+  'WaveProvider + Dialog': { minified: 73403, gzip: 24778 },
+  DataGrid: { minified: 70097, gzip: 23719 },
+};
+
+/**
+ * The 0.17 records (spec §10, with the build's rulings, which correct it for Tree and add the
  * provider with a Dialog), measured as {@link measureImport} measures and printed against the size
  * in the published 0.16.0 package where the import had one (`baseline: null` for the new ones),
- * both measured with this release's build tools, as {@link RECORDED_IMPORTS} measures 0.15.0. Each
- * budget is the 0.16.0 size plus its allowance, in bytes minified and gzip:
+ * both measured with this release's build tools, as {@link RECORDED_IMPORTS} measures 0.15.0.
+ * `createBrandTokens` and `waveTokens` keep their 3 KiB gzip budgets ({@link BRAND_TOKENS_BUDGET},
+ * {@link WAVE_TOKENS_BUDGET}): no module of Phase 13 is in their closures. The five component
+ * imports are printed for drift only since 0.18, which budgets them against 0.17.1 ({@link
+ * RECORDED_IMPORTS_0_18}); in 0.17 each budget was the 0.16.0 size plus its allowance, in bytes
+ * minified and gzip:
  *   - `Button` and `MessageBar`: +64 and +32, for `cn`, which recognises the two new font families
  *     (R13); otherwise byte for byte 0.16.0's;
  *   - `Tree`: +128 and +64, `cn`'s allowance and the provider's context, which Tree reads for its
@@ -755,64 +929,116 @@ const PORTAL_EXTERNALS = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'ta
  *   - `Dialog` without the provider component: +1 KiB and +0.4 KiB (1,024 and 409), the Portal's
  *     token style and the context;
  *   - `WaveProvider` with `Dialog`: +1.5 KiB and +0.7 KiB (1,536 and 716), the provider's token
- *     handling (`lib/tokens`) too;
- *   - `createBrandTokens` and `waveTokens`: new, 3 KiB gzip ({@link BRAND_TOKENS_BUDGET}, {@link
- *     WAVE_TOKENS_BUDGET}).
- * A KiB fraction is rounded down, so no budget is above the spec's figure, and each closure
- * imports only the externals it has.
+ *     handling (`lib/tokens`) too.
+ * A KiB fraction was rounded down, so no budget was above the spec's figure.
  */
 export const RECORDED_IMPORTS_0_17 = [
   { names: ['createBrandTokens'], baseline: null, budget: BRAND_TOKENS_BUDGET },
   { names: ['waveTokens'], baseline: null, budget: WAVE_TOKENS_BUDGET },
+  { names: ['Button'], baseline: { version: '0.16.0', minified: 11195, gzip: 3855 } },
+  { names: ['MessageBar'], baseline: { version: '0.16.0', minified: 26831, gzip: 9312 } },
+  { names: ['Tree'], baseline: { version: '0.16.0', minified: 47248, gzip: 16196 } },
+  { names: ['Dialog'], baseline: { version: '0.16.0', minified: 70721, gzip: 23723 } },
+  {
+    names: ['WaveProvider', 'Dialog'],
+    baseline: { version: '0.16.0', minified: 71884, gzip: 24127 },
+  },
+];
+
+/**
+ * The margin of a 0.18 budget over the size measured at the end of Phase 13, in bytes minified
+ * and gzip (spec R23): about 1 % of the larger imports, so a later change that adds bytes to one of
+ * them re-sets its budget deliberately, and none can grow unnoticed.
+ */
+export const BUDGET_MARGIN_0_18 = { minified: 512, gzip: 192 };
+
+/**
+ * The 0.18 records (spec §5, R23): every recorded import whose closure holds a module that Phase
+ * 13 added or changed (`lib/slot`'s render-function children, which nearly every component holds;
+ * `lib/slotProps` and the parts of the components that have them; the context modules of the
+ * public hooks). Each holds its size in the published 0.17.1 package (`baseline`, from {@link
+ * BASELINES_0_17_1}), the size measured at the end of the phase (`measured`: `measureImport` on
+ * the build of the last rollout commit with the integration package's changes, which move no
+ * byte of these imports) and its `budget`, that size plus {@link BUDGET_MARGIN_0_18}. The interim
+ * allowance of the phase (the 0.17.1 size plus 4 KiB minified and 1.5 KiB gzip) ends here. The
+ * CLI prints each import against 0.17.1. Growth over 0.17.1, in bytes minified and gzip, of the
+ * release (of the `measured` basis at `e7833a7`, where the final lock fixes moved it):
+ *   - `Button`: -143 and -1. Button has no part, so it holds no `lib/slotProps`; the
+ *     render-function children of `lib/slot` were paid for by compacting that module;
+ *   - `MessageBar`: +2,363 and +877 (+2,327 and +864), the `slotProps` helper, the body and
+ *     dismiss button parts and the context of `useMessageBarContext`;
+ *   - `Tree`: +3,056 and +1,039 (+3,060 and +1,028), the helper and the six parts of each item
+ *     and its persona row;
+ *   - `Dialog`: +1,749 and +680, the helper, the title actions and body parts, and the part that
+ *     the shared close button takes for TeachingPopover;
+ *   - `WaveProvider` with `Dialog`: +1,744 and +680, the same;
+ *   - `DataGrid`: +3,209 and +1,207 (+3,213 and +1,202), the helper and the parts of the header
+ *     cell, the resize handle and the selection controls ({@link DATA_GRID_BUDGET}, which was
+ *     the 0.16.0 size plus 25 % until then).
+ * The budgets of `createBrandTokens`, `waveTokens`, `useVirtualWindow` and the presence core stay
+ * as they were: no module of Phase 13 is in their closures.
+ */
+export const RECORDED_IMPORTS_0_18 = [
   {
     names: ['Button'],
-    baseline: { version: '0.16.0', minified: 11195, gzip: 3855 },
+    baseline: { version: '0.17.1', ...BASELINES_0_17_1.Button },
+    measured: { minified: 11079, gzip: 3865 },
     budget: {
       names: ['Button'],
-      maxMinifiedBytes: 11259,
-      maxGzipBytes: 3887,
+      maxMinifiedBytes: 11591,
+      maxGzipBytes: 4057,
       allowedExternals: COMPONENT_EXTERNALS,
     },
   },
   {
     names: ['MessageBar'],
-    baseline: { version: '0.16.0', minified: 26831, gzip: 9312 },
+    baseline: { version: '0.17.1', ...BASELINES_0_17_1.MessageBar },
+    measured: { minified: 29185, gzip: 10188 },
     budget: {
       names: ['MessageBar'],
-      maxMinifiedBytes: 26895,
-      maxGzipBytes: 9344,
+      maxMinifiedBytes: 29697,
+      maxGzipBytes: 10380,
       allowedExternals: COMPONENT_EXTERNALS,
     },
   },
   {
     names: ['Tree'],
-    baseline: { version: '0.16.0', minified: 47248, gzip: 16196 },
+    baseline: { version: '0.17.1', ...BASELINES_0_17_1.Tree },
+    measured: { minified: 50387, gzip: 17260 },
     budget: {
       names: ['Tree'],
-      maxMinifiedBytes: 47376,
-      maxGzipBytes: 16260,
+      maxMinifiedBytes: 50899,
+      maxGzipBytes: 17452,
       allowedExternals: COMPONENT_EXTERNALS,
     },
   },
   {
     names: ['Dialog'],
-    baseline: { version: '0.16.0', minified: 70721, gzip: 23723 },
+    baseline: { version: '0.17.1', ...BASELINES_0_17_1.Dialog },
+    measured: { minified: 72599, gzip: 24466 },
     budget: {
       names: ['Dialog'],
-      maxMinifiedBytes: 71745,
-      maxGzipBytes: 24132,
+      maxMinifiedBytes: 73111,
+      maxGzipBytes: 24658,
       allowedExternals: PORTAL_EXTERNALS,
     },
   },
   {
     names: ['WaveProvider', 'Dialog'],
-    baseline: { version: '0.16.0', minified: 71884, gzip: 24127 },
+    baseline: { version: '0.17.1', ...BASELINES_0_17_1['WaveProvider + Dialog'] },
+    measured: { minified: 75147, gzip: 25458 },
     budget: {
       names: ['WaveProvider', 'Dialog'],
-      maxMinifiedBytes: 73420,
-      maxGzipBytes: 24843,
+      maxMinifiedBytes: 75659,
+      maxGzipBytes: 25650,
       allowedExternals: PORTAL_EXTERNALS,
     },
+  },
+  {
+    names: ['DataGrid'],
+    baseline: { version: '0.17.1', ...BASELINES_0_17_1.DataGrid },
+    measured: { minified: 73310, gzip: 24921 },
+    budget: DATA_GRID_BUDGET,
   },
 ];
 
@@ -870,21 +1096,34 @@ export const INCLUSION_PROBES_0_11 = [
  * token core's conversion, collection and merge (`tokenVariable`, `collectTokenStyle`,
  * `mergeTokenOverrides`) and its type-level twin `TokenVariable`, the names tuple
  * `WAVE_TOKEN_NAMES`, and the brand generator's default ramp, rounding sides, contrast table and
- * check. The roll-up declares `TokenVariable` and `WAVE_TOKEN_NAMES` without exporting them (the
- * exported `waveTokens` and `WaveTokenName` refer to them), which the check accepts.
- * `verify-dist.test.mjs` reads the groups from the sources (those of 0.16 and 0.17 with the
+ * check; since 0.18 (Phase 13) the seams of the customization surface: the locks and helpers of
+ * the parts (`HIDDEN_PART_LOCKS`, `composeAfterPart`, the locks of each component family, …),
+ * the lists of `getNativeElementProps`, the context objects and item state behind the public
+ * hooks (`RadioGroupContext`, `MessageBarContext`, `MenuListElementContext`, …), the slot seams
+ * of render-function children (`resolveWiredSlot`), and every export of the two modules that
+ * only the tests read ({@link TEST_ONLY_MODULES}), so neither roll-up exports one as a type. The
+ * roll-up declares `TokenVariable` and `WAVE_TOKEN_NAMES` without exporting them (the exported
+ * `waveTokens` and `WaveTokenName` refer to them), which the check accepts.
+ * `verify-dist.test.mjs` reads the groups from the sources (those of 0.16, 0.17 and 0.18 with the
  * TypeScript compiler, against the entry), so a new one cannot be missed. Sorted.
  */
 export const MODULE_ONLY_NAMES = [
+  'AVATAR_GROUP_PART_LOCKS',
   'AvatarSizeContext',
   'AvatarSizeContextValue',
+  'BLOCK_CLICK',
   'BRAND_CONTRAST_PAIRS',
+  'BUTTON_PART_LOCKS',
+  'CalendarDayGridParts',
+  'CalendarViewParts',
+  'ClassNameConstant',
   'CreateOptionKnown',
   'DEFAULT_BRAND_RAMP',
   'DEFAULT_COLUMN_WIDTH',
   'DEFAULT_MIN_COLUMN_WIDTH',
   'DEFAULT_SELECTION_HEADER_LABEL',
   'DEFAULT_SELECT_ALL_LABEL',
+  'DEPRECATIONS',
   'DataGridColumnResizeHandle',
   'DataGridColumnSizing',
   'DataGridContext',
@@ -904,6 +1143,7 @@ export const MODULE_ONLY_NAMES = [
   'DataGridRowIdContext',
   'DataGridSection',
   'DataGridSectionContext',
+  'DataGridSelectAllPartContext',
   'DataGridSelectionHeaderSlot',
   'DataGridSortContext',
   'DataGridSortContextValue',
@@ -913,6 +1153,8 @@ export const MODULE_ONLY_NAMES = [
   'DataGridWindowRow',
   'DataGridWindowRowContext',
   'DataGridWindowState',
+  'Deprecation',
+  'DeprecationKind',
   'DrawerCloseButton',
   'DrawerCloseButtonProps',
   'DrawerContext',
@@ -935,8 +1177,10 @@ export const MODULE_ONLY_NAMES = [
   'FocusWithin',
   'ForeignEventOptions',
   'GroupVisibilityRecord',
+  'HIDDEN_PART_LOCKS',
   'HeaderSlotRegistry',
   'HeldFocus',
+  'ID_LIST_KEYS',
   'INTERACTIVE_SELECTOR',
   'InteractionTagContext',
   'ItemMeta',
@@ -944,11 +1188,22 @@ export const MODULE_ONLY_NAMES = [
   'ListboxItemsState',
   'ListboxOptionPosition',
   'ListboxOptionPositionContext',
+  'ListboxSurfaceParts',
+  'MENU_PART_LOCKS',
+  'MenuListElementContext',
+  'MessageBarContext',
   'ModalBackdrop',
   'ModalBackdropProps',
   'ModalBackdropSlot',
   'ModalCloseButton',
   'ModalCloseButtonProps',
+  'NAMED_SLOT_PARTS',
+  'NATIVE_EVENT_NAMES',
+  'NATIVE_GLOBAL_PROPS',
+  'NATIVE_NO_CAPTURE_EVENTS',
+  'NATIVE_TAG_PROPS',
+  'NAV_PART_LOCKS',
+  'NAV_SHOWN_PART_LOCKS',
   'NO_GROUPS',
   'NO_IDS',
   'NavCategoryStore',
@@ -964,24 +1219,40 @@ export const MODULE_ONLY_NAMES = [
   'NavRovingContext',
   'NavRovingContextValue',
   'NavValueKind',
+  'OPTION_STATE_LOCKS',
   'OverflowStore',
+  'PENDING_SLOT_PARTS',
+  'PickerListboxSurface',
   'PresenceGroupEntry',
   'ROUNDS_DARKER',
+  'RadioGroupContext',
+  'RadioGroupItemsContextValue',
+  'RadioItemState',
   'ResolvedTagPickerLabels',
   'SELECTION_CELL_CLASSES',
   'SELECTION_COLUMN_WIDTH',
+  'SLOT_PART_EXCLUSIONS',
+  'SLOT_PROPS_KEYS',
+  'SLOT_PROPS_ROOT_OWNERS',
   'ScrollOffsetInput',
+  'SelectionSnapshot',
   'SelectionStore',
   'SelectionUniverse',
+  'SlotPartExclusion',
+  'SlotPartKey',
+  'SlotPartLists',
   'SortArrowDownIcon',
   'SortArrowUpIcon',
   'StoreConfig',
   'TAG_DISMISS_SELECTOR',
   'TAG_GROUP_SELECTOR',
   'TAG_ITEM_SELECTOR',
+  'TAG_PART_LOCKS',
   'TOOLBAR_ITEM_SELECTOR',
+  'TREE_PART_LOCKS',
   'TableFeaturePluginImplementation',
   'TablePartKind',
+  'TableResizeHandlePartProps',
   'TableSelectionControl',
   'TableSelectionControlProps',
   'TableSortButton',
@@ -1033,6 +1304,7 @@ export const MODULE_ONLY_NAMES = [
   'collapseMotion',
   'collapseStructure',
   'collectTokenStyle',
+  'composeAfterPart',
   'computeCheckStates',
   'computeVirtualLayout',
   'containsValue',
@@ -1048,6 +1320,7 @@ export const MODULE_ONLY_NAMES = [
   'drawerMotion',
   'endsTextSelection',
   'expandIconMotion',
+  'fieldLocks',
   'findCategoriesContaining',
   'findExactMatch',
   'flatTreeForest',
@@ -1056,6 +1329,7 @@ export const MODULE_ONLY_NAMES = [
   'getTablePartKind',
   'getWindowNavigationModel',
   'hasIsolatingModalBelow',
+  'hasRenderFunction',
   'hasResizeObserver',
   'initialColumnWidth',
   'inlineDrawerMotion',
@@ -1066,6 +1340,7 @@ export const MODULE_ONLY_NAMES = [
   'isRepeatedActivation',
   'isSelectionCellElement',
   'isTextEntryElement',
+  'lockPositionStyle',
   'markNavPart',
   'markTablePart',
   'mergeTokenOverrides',
@@ -1075,6 +1350,7 @@ export const MODULE_ONLY_NAMES = [
   'navActionsRevealMotion',
   'ownsArrowKeys',
   'popupMotion',
+  'preventMouseDown',
   'progressIndeterminateMotion',
   'renderListboxItem',
   'renderListboxItems',
@@ -1082,6 +1358,7 @@ export const MODULE_ONLY_NAMES = [
   'renderWindowRows',
   'resolveColumnWidths',
   'resolveMotion',
+  'resolveWiredSlot',
   'returnFocusToGridCell',
   'sameIds',
   'scrollOffsetForIndex',
@@ -1115,6 +1392,7 @@ export const MODULE_ONLY_NAMES = [
   'useFocusWithin',
   'useHeldFocus',
   'useItemsAndChildrenWarning',
+  'useLegacyMotionWarning',
   'useModalOpener',
   'useMotionClasses',
   'useMotionPreference',
@@ -1123,6 +1401,7 @@ export const MODULE_ONLY_NAMES = [
   'useNavRootState',
   'useNavValue',
   'usePresenceGroup',
+  'useRadioItemState',
   'useRecordCategory',
   'useScrollState',
   'useShownListScroll',
@@ -1135,6 +1414,8 @@ export const MODULE_ONLY_NAMES = [
   'useToolbarNavigation',
   'usesLegacyMotion',
   'visibleFlatItems',
+  'warnImportantColor',
+  'withoutRenderFunction',
 ];
 
 /**
@@ -1628,6 +1909,24 @@ export function checkDevOnlyLibraries(dist, names = DEV_ONLY_LIBRARIES) {
 }
 
 /**
+ * No file of `dist` belongs to a module of `modules` (default {@link TEST_ONLY_MODULES}; 0.18), a
+ * module that only the tests read: neither its code nor its source map. The build preserves
+ * modules, so a module of the package that imports one would ship it as its own file.
+ */
+export function checkTestOnlyModules(dist, modules = TEST_ONLY_MODULES) {
+  const files = listFiles(dist).sort();
+  const errors = [];
+  for (const module of modules) {
+    for (const path of files.filter((file) => fold(file).startsWith(fold(`${module}.`)))) {
+      errors.push(
+        `${path} is in dist: ${module} is read by the tests only (no module of the package may import it)`,
+      );
+    }
+  }
+  return errors;
+}
+
+/**
  * `path` without the Windows namespace prefix (`\\?\C:\…`, `\\?\UNC\server\…`) that
  * `mkdirSync(…, { recursive: true })` returns on Windows, so it compares with plain paths.
  */
@@ -1905,8 +2204,42 @@ const check = (path, m) => {
       );
     }
   }
+  if (/^lib\\/slotProps\\.[cm]?js$/.test(path)) {
+    if (typeof m.mergeSlotProps !== 'function') throw new Error('mergeSlotProps is not exported');
+    // The part's attributes, the locked ones over them, and the component's class (without a
+    // class of the part it calls no cn, so a broken lib/cn is reported alone).
+    const merged = m.mergeSlotProps(
+      { title: 'Yours', role: 'button' },
+      { className: 'part', locked: { role: 'status' } },
+    );
+    if (!merged || merged.className !== 'part' || merged.title !== 'Yours' || merged.role !== 'status') {
+      throw new Error(
+        "mergeSlotProps({ title: 'Yours', role: 'button' }, { className: 'part', locked: { role: " +
+          "'status' } }) returned " + JSON.stringify(merged),
+      );
+    }
+  }
+  if (/^lib\\/nativeProps\\.[cm]?js$/.test(path)) {
+    if (typeof m.getNativeElementProps !== 'function') {
+      throw new Error('getNativeElementProps is not exported');
+    }
+    // A button's attributes, a DOM event and data-*, not a component's own props or excluded names.
+    const handler = () => {};
+    const props = m.getNativeElementProps(
+      'button',
+      { id: 'save', disabled: true, onClick: handler, onValueChange: handler, tone: 'brand', 'data-x': '1' },
+      ['id'],
+    );
+    const keys = props ? Object.keys(props).sort() : [];
+    if (keys.join() !== 'data-x,disabled,onClick' || props.onClick !== handler) {
+      throw new Error(
+        "getNativeElementProps('button', { id, disabled, onClick, onValueChange, tone, data-x }, ['id']) kept " +
+          JSON.stringify(keys),
+      );
+    }
+  }
   if (/^index\\.[cm]?js$/.test(path)) {
-    for (const name of ['hsvToHex', 'hexToHsv', 'createToaster', 'addDays', 'getTokenStyle', 'createBrandTokens']) {
+    for (const name of ['hsvToHex', 'hexToHsv', 'createToaster', 'addDays', 'getTokenStyle', 'createBrandTokens', 'mergeSlotProps', 'getNativeElementProps']) {
       if (typeof m[name] !== 'function') throw new Error(name + ' is not exported');
       if (m[name].$$typeof === Symbol.for('react.client.reference')) {
         throw new Error(name + ' is a client reference (re-exported from a "use client" module)');
@@ -2650,10 +2983,11 @@ export async function probeIncludes(dist, { keep, modules, strings = [], substri
  * `modules` missing from the bundle, each of `dropModules` in it (a listed module that does not
  * exist in `dist` is an error: the probe would pass vacuously), each other module of the bundle
  * under one of the `dropPrefixes` (dist directories such as `components/`; a prefix that no module
- * of `dist` is under is an error for the same reason), each of `dropExternals` that the bundle
- * imports, and each of `dropSubstrings` that the code of its minified bundle holds (fragments of
- * code that a production build drops, such as a development check's warning keys; a fragment that
- * no JavaScript module of `dist` holds is an error, for the same reason).
+ * of `dist` is under is an error for the same reason; the `modules` themselves may be under one: a
+ * context hook needs its context module, and nothing else there), each of `dropExternals` that the
+ * bundle imports, and each of `dropSubstrings` that the code of its minified bundle holds
+ * (fragments of code that a production build drops, such as a development check's warning keys; a
+ * fragment that no JavaScript module of `dist` holds is an error, for the same reason).
  */
 export async function probeHook(
   dist,
@@ -2689,12 +3023,13 @@ export async function probeHook(
       errors.push(`${path} is not in the bundle of an import of only ${keep}`);
   }
   const listed = new Set(dropModules.map(fold));
+  const required = new Set(modules.map(fold));
   for (const path of dropModules) {
     if (included.has(fold(path)))
       errors.push(`${path} is in the bundle of an import of only ${keep}`);
   }
   for (const path of bundled) {
-    if (listed.has(fold(path))) continue;
+    if (listed.has(fold(path)) || required.has(fold(path))) continue;
     const prefix = dropPrefixes.find((candidate) => fold(path).startsWith(fold(candidate)));
     if (prefix !== undefined) {
       errors.push(
@@ -2758,11 +3093,16 @@ export async function measureImport(dist, names) {
  * exceeded, and an error for each external id not in `allowedExternals` (a dependency outside the
  * measurement, such as tailwind-merge through `cn`, would hide its size).
  */
-export async function probeSizeBudget(
-  dist,
+export async function probeSizeBudget(dist, budget) {
+  const size = await measureImport(dist, budget.names);
+  return { ...size, errors: sizeBudgetErrors(size, budget) };
+}
+
+/** The errors of an import measured by {@link measureImport} against `budget` ({@link probeSizeBudget}). */
+function sizeBudgetErrors(
+  { minified, gzip, externals },
   { names, maxMinifiedBytes, maxGzipBytes, allowedExternals },
 ) {
-  const { minified, gzip, externals } = await measureImport(dist, names);
   const label = names.join(' + ');
   const errors = [];
   if (minified > maxMinifiedBytes) {
@@ -2778,7 +3118,7 @@ export async function probeSizeBudget(
       );
     }
   }
-  return { minified, gzip, externals, errors };
+  return errors;
 }
 
 /**
@@ -2786,14 +3126,16 @@ export async function probeSizeBudget(
  * the flat names still pending and the listed components that are no compound yet (see
  * {@link PENDING_FLAT_EXPORTS}), the measured sizes of the presence core (`budget`) and of the
  * window (`virtualBudget`; minified and gzip bytes, `null` when the probe failed), and the
- * measured sizes of {@link RECORDED_IMPORTS} and then of {@link RECORDED_IMPORTS_0_17}
- * (`recorded`: `{ names, minified, gzip, baseline }` each, `baseline` `null` for an import new in
- * 0.17, and its `budget` where it has one, whose errors join the others); `final` closes the
- * pending bridge.
+ * measured sizes of {@link RECORDED_IMPORTS}, then of {@link RECORDED_IMPORTS_0_17} and then of
+ * {@link RECORDED_IMPORTS_0_18} (`recorded`: each record with the `minified` and `gzip` sizes
+ * measured, `baseline` `null` for an import new in 0.17; the errors of a record's `budget` join
+ * the others; an import recorded in several lists is measured once); `final` closes the pending
+ * bridge. `measure` measures each recorded import ({@link measureImport}; the tests pass a
+ * wrapper that counts the measurements).
  */
 export async function verifyDist(
   dist,
-  { pendingFlatExports = PENDING_FLAT_EXPORTS, final = false } = {},
+  { pendingFlatExports = PENDING_FLAT_EXPORTS, final = false, measure = measureImport } = {},
 ) {
   const distRoot = resolve(dist);
   if (!existsSync(distRoot) || !statSync(distRoot).isDirectory()) {
@@ -2811,6 +3153,7 @@ export async function verifyDist(
     ...checkDirectives(distRoot),
     ...checkImports(distRoot, pkg),
     ...checkDevOnlyLibraries(distRoot),
+    ...checkTestOnlyModules(distRoot),
   ];
   try {
     errors.push(...(await checkServerImport(distRoot)));
@@ -2895,6 +3238,11 @@ export async function verifyDist(
     for (const probe of EXCLUSION_PROBES_0_17) {
       errors.push(...(await probeTreeShaking(distRoot, probe)));
     }
+    // 0.18 (spec §5): a Button holds none of the customization modules, a Dialog only the part
+    // helper (no DataGrid hook), a DataGrid not its public hooks.
+    for (const probe of EXCLUSION_PROBES_0_18) {
+      errors.push(...(await probeTreeShaking(distRoot, probe)));
+    }
   } catch (error) {
     errors.push(`tree-shaking probe failed: ${error.message}`);
   }
@@ -2934,6 +3282,13 @@ export async function verifyDist(
     errors.push(`0.17 helper probe failed: ${error.message}`);
   }
   try {
+    for (const probe of HOOK_PROBES_0_18) {
+      errors.push(...(await probeHook(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.18 hook probe failed: ${error.message}`);
+  }
+  try {
     for (const probe of INCLUSION_PROBES_0_11) {
       errors.push(...(await probeIncludes(distRoot, probe)));
     }
@@ -2953,6 +3308,13 @@ export async function verifyDist(
     }
   } catch (error) {
     errors.push(`0.17 include probe failed: ${error.message}`);
+  }
+  try {
+    for (const probe of INCLUSION_PROBES_0_18) {
+      errors.push(...(await probeIncludes(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.18 include probe failed: ${error.message}`);
   }
   try {
     errors.push(
@@ -3011,22 +3373,18 @@ export async function verifyDist(
   }
   const recorded = [];
   try {
-    for (const { names, baseline, budget: importBudget } of [
+    // Button-only, Tree-only and MessageBar-only are recorded in all three lists: one build each.
+    const sizes = new Map();
+    for (const record of [
       ...RECORDED_IMPORTS,
       ...RECORDED_IMPORTS_0_17,
+      ...RECORDED_IMPORTS_0_18,
     ]) {
-      if (importBudget) {
-        const {
-          minified,
-          gzip,
-          errors: budgetErrors,
-        } = await probeSizeBudget(distRoot, importBudget);
-        errors.push(...budgetErrors);
-        recorded.push({ names, minified, gzip, baseline, budget: importBudget });
-      } else {
-        const { minified, gzip } = await measureImport(distRoot, names);
-        recorded.push({ names, minified, gzip, baseline });
-      }
+      const label = record.names.join(' + ');
+      if (!sizes.has(label)) sizes.set(label, await measure(distRoot, record.names));
+      const size = sizes.get(label);
+      if (record.budget) errors.push(...sizeBudgetErrors(size, record.budget));
+      recorded.push({ ...record, minified: size.minified, gzip: size.gzip });
     }
   } catch (error) {
     errors.push(`recorded size measurement failed: ${error.message}`);

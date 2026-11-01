@@ -1,6 +1,8 @@
 import * as React from 'react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { Field, type FieldProps } from '../Field';
 import { Checkbox } from '../Checkbox';
 import { Input } from '../Input';
@@ -18,10 +20,14 @@ import {
   type FieldContextValue,
   type FieldControlProps,
 } from '../../../hooks/useFieldControl';
+import { fieldClassNames } from '../../../lib/classNames';
 import type { Orientation, Slot, ValidationState } from '../../../lib/types';
 import {
+  expectInertSlotProps,
+  sortAttributes,
   testSystemProps,
   expectNoA11yViolations,
+  findDanglingIdRefsInHtml,
   renderWithProviders,
   asClientReference,
 } from '../../../test-utils';
@@ -64,6 +70,31 @@ function messageElement(text: string): HTMLElement {
   const element = screen.getByText(text).closest('p');
   if (!element) throw new Error(`no <p> around "${text}"`);
   return element;
+}
+
+/** The Field's own `<label>`, found by its text. */
+function fieldLabel(text: string): HTMLLabelElement {
+  const element = screen.getByText(text).closest('label');
+  if (!element) throw new Error(`no <label> around "${text}"`);
+  return element;
+}
+
+/** The ids that more than one element of the document carries. */
+function duplicateIds(): string[] {
+  const ids = Array.from(document.querySelectorAll('[id]'), (element) => element.id);
+  return ids.filter((id, index) => ids.indexOf(id) !== index);
+}
+
+/** A function child that records the props of every call and renders `<input {...props} />`. */
+function recordingChild(
+  renderControl: (props: FieldControlProps) => React.ReactNode = (props) => <input {...props} />,
+) {
+  const calls: FieldControlProps[] = [];
+  const child = (props: FieldControlProps) => {
+    calls.push(props);
+    return renderControl(props);
+  };
+  return { calls, child };
 }
 
 describe('Field', () => {
@@ -1928,5 +1959,623 @@ describe('Field', () => {
       );
       await expectNoA11yViolations();
     });
+  });
+
+  describe('a function child (P13-02, R10)', () => {
+    it('is called with the five props: both label wirings, the message and hint ids, aria-invalid and aria-required', () => {
+      const { calls, child } = recordingChild();
+      render(
+        <Field label="Email" hint="Your work address" error="Enter an email" required>
+          {child}
+        </Field>,
+      );
+      const label = fieldLabel('Email');
+      expect(label.htmlFor).toMatch(/^field-/);
+      expect(calls.at(-1)).toStrictEqual({
+        id: label.htmlFor,
+        'aria-labelledby': label.id,
+        'aria-describedby': `${messageElement('Enter an email').id} ${messageElement('Your work address').id}`,
+        'aria-invalid': true,
+        'aria-required': true,
+      });
+    });
+
+    it('passes only the keys that have a value', () => {
+      const bare = recordingChild();
+      const labelled = recordingChild();
+      render(
+        <>
+          <Field>{bare.child}</Field>
+          <Field label="Name">{labelled.child}</Field>
+        </>,
+      );
+      expect(bare.calls.at(-1)).toStrictEqual({ id: expect.stringMatching(/^field-/) });
+      const label = fieldLabel('Name');
+      expect(labelled.calls.at(-1)).toStrictEqual({
+        id: label.htmlFor,
+        'aria-labelledby': label.id,
+      });
+    });
+
+    it('labels, describes and invalidates a plain <input> the function renders', async () => {
+      render(
+        <Field label="Email" hint="Your work address" error="Enter an email">
+          {(props) => <input type="email" {...props} />}
+        </Field>,
+      );
+      const input = screen.getByLabelText('Email');
+      expect(input).toBe(screen.getByRole('textbox', { name: 'Email' }));
+      expect(input).toHaveAccessibleDescription('Enter an email Your work address');
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      await expectNoA11yViolations();
+    });
+
+    it('marks a required plain <input> aria-required only: the function decides on native required', async () => {
+      render(
+        <Field label="Email" required>
+          {(props) => <input type="email" {...props} />}
+        </Field>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Email' });
+      expect(input).toHaveAttribute('aria-required', 'true');
+      expect(input).not.toHaveAttribute('required');
+      await expectNoA11yViolations();
+    });
+
+    it.each(['warning', 'success', 'none'] as const)(
+      'validationState="%s": described by the message, not invalid',
+      (validationState) => {
+        const { calls, child } = recordingChild();
+        render(
+          <Field label="Name" validationState={validationState} validationMessage="Checked">
+            {child}
+          </Field>,
+        );
+        const label = fieldLabel('Name');
+        expect(calls.at(-1)).toStrictEqual({
+          id: label.htmlFor,
+          'aria-labelledby': label.id,
+          'aria-describedby': messageElement('Checked').id,
+        });
+        const input = screen.getByRole('textbox', { name: 'Name' });
+        expect(input).toHaveAccessibleDescription('Checked');
+        expect(input).not.toHaveAttribute('aria-invalid');
+      },
+    );
+
+    it('validationState="error" without a message: aria-invalid and no description', () => {
+      const { calls, child } = recordingChild();
+      render(
+        <Field label="Name" validationState="error">
+          {child}
+        </Field>,
+      );
+      const label = fieldLabel('Name');
+      expect(calls.at(-1)).toStrictEqual({
+        id: label.htmlFor,
+        'aria-labelledby': label.id,
+        'aria-invalid': true,
+      });
+    });
+
+    it('takes the Field htmlFor, else the htmlFor of a Label element, as the id', () => {
+      const own = recordingChild();
+      const element = recordingChild();
+      render(
+        <>
+          <Field label="Own" htmlFor="own-control">
+            {own.child}
+          </Field>
+          <Field label={<Label htmlFor="label-control">From the label</Label>}>
+            {element.child}
+          </Field>
+        </>,
+      );
+      expect(own.calls.at(-1)?.id).toBe('own-control');
+      expect(element.calls.at(-1)?.id).toBe('label-control');
+      expect(screen.getByRole('textbox', { name: 'Own' })).toHaveAttribute('id', 'own-control');
+      expect(screen.getByRole('textbox', { name: 'From the label' })).toHaveAttribute(
+        'id',
+        'label-control',
+      );
+    });
+
+    it('names a widget that a <label for> cannot reach through aria-labelledby', () => {
+      render(
+        <Field label="Size" error="Pick a size" required>
+          {(props) => (
+            <div role="radiogroup" tabIndex={0} {...props}>
+              <span>Small</span>
+            </div>
+          )}
+        </Field>,
+      );
+      const group = screen.getByRole('radiogroup', { name: 'Size' });
+      expect(group).toHaveAccessibleDescription('Pick a size');
+      expect(group).toHaveAttribute('aria-invalid', 'true');
+      expect(group).toHaveAttribute('aria-required', 'true');
+    });
+
+    it('renders what the function returns as it is: nothing merged, no multiple-children warning', () => {
+      const warn = vi.spyOn(console, 'warn');
+      try {
+        render(
+          <Field label="Code" hint="Hint" error="Wrong code" required>
+            {() => (
+              <>
+                <input id="own" aria-label="Own name" data-testid="own" />
+                <input aria-label="Second" data-testid="second" />
+              </>
+            )}
+          </Field>,
+        );
+        const own = screen.getByTestId('own');
+        const second = screen.getByTestId('second');
+        expect(own).toHaveAttribute('id', 'own');
+        expect(second).not.toHaveAttribute('id');
+        for (const attr of [
+          'aria-labelledby',
+          'aria-describedby',
+          'aria-invalid',
+          'aria-required',
+          'required',
+        ]) {
+          expect(own, attr).not.toHaveAttribute(attr);
+          expect(second, attr).not.toHaveAttribute(attr);
+        }
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('leaves element children on the merge path: label-for naming only, no aria-labelledby', () => {
+      render(
+        <>
+          <Field label="Element" hint="Hint">
+            <input />
+          </Field>
+          <Field label="Function" hint="Hint">
+            {(props) => <input {...props} />}
+          </Field>
+        </>,
+      );
+      const element = screen.getByRole('textbox', { name: 'Element' });
+      expect(fieldLabel('Element')).toHaveAttribute('for', element.id);
+      expect(element).not.toHaveAttribute('aria-labelledby');
+      const fromFunction = screen.getByRole('textbox', { name: 'Function' });
+      expect(fieldLabel('Function')).toHaveAttribute('for', fromFunction.id);
+      expect(fromFunction).toHaveAttribute('aria-labelledby', fieldLabel('Function').id);
+      for (const input of [element, fromFunction])
+        expect(input).toHaveAccessibleDescription('Hint');
+    });
+
+    it('a library control that receives the props takes the control id, described once', () => {
+      render(
+        <Field label="Email" hint="Hint" error="Enter an email">
+          {(props) => <Input {...props} />}
+        </Field>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Email' });
+      expect(fieldLabel('Email')).toHaveAttribute('for', input.id);
+      expect(input.getAttribute('aria-describedby')?.split(' ')).toEqual([
+        messageElement('Enter an email').id,
+        messageElement('Hint').id,
+      ]);
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+    });
+
+    it("holds the control id for the function's control: a library control in the result without an id gets its own (the claim rule)", async () => {
+      let assigned: boolean | undefined;
+      function Probe() {
+        assigned = useFieldContext()?.controlIdAssigned;
+        return null;
+      }
+      render(
+        <Field label="Price range" hint="In euros">
+          {(props) => (
+            <div>
+              <input {...props} data-testid="min" />
+              <Input data-testid="max" />
+              <Probe />
+            </div>
+          )}
+        </Field>,
+      );
+      const min = screen.getByTestId('min');
+      const max = screen.getByTestId('max');
+      expect(fieldLabel('Price range')).toHaveAttribute('for', min.id);
+      expect(max.id).not.toBe(min.id);
+      expect(max).toHaveAttribute('aria-labelledby', fieldLabel('Price range').id);
+      for (const input of [min, max]) {
+        expect(input).toHaveAccessibleName('Price range');
+        expect(input).toHaveAccessibleDescription('In euros');
+      }
+      expect(assigned).toBe(true);
+      expect(duplicateIds()).toEqual([]);
+      await expectNoA11yViolations();
+    });
+
+    it('StrictMode: every call receives the same props, and the wiring holds', () => {
+      const { calls, child } = recordingChild();
+      render(
+        <React.StrictMode>
+          <Field label="Email" hint="Hint" required>
+            {child}
+          </Field>
+        </React.StrictMode>,
+      );
+      expect(calls.length).toBeGreaterThan(0);
+      for (const props of calls) expect(props).toStrictEqual(calls[0]);
+      const input = screen.getByRole('textbox', { name: 'Email' });
+      expect(input).toHaveAttribute('id', calls[0]?.id);
+      expect(input).toHaveAccessibleDescription('Hint');
+      expect(input).toHaveAttribute('aria-required', 'true');
+    });
+
+    it('server render: the markup carries the wiring, and hydration keeps it', async () => {
+      const ui = (
+        <Field label="Email" hint="Hint" error="Enter an email" required>
+          {(props) => <input type="email" {...props} />}
+        </Field>
+      );
+      const html = renderToString(ui);
+      expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+      const container = document.createElement('div');
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        container.innerHTML = html;
+        document.body.appendChild(container);
+        const input = container.querySelector('input');
+        const label = container.querySelector('label');
+        expect(input).toHaveAttribute('id', label?.htmlFor);
+        expect(input).toHaveAttribute('aria-labelledby', label?.id);
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+        expect(input).toHaveAttribute('aria-required', 'true');
+        const serverAttributes = input?.outerHTML;
+        await act(async () => {
+          root = hydrateRoot(container, ui);
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(container.querySelector('input')).toBe(input);
+        expect(input?.outerHTML).toBe(serverAttributes);
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+        error.mockRestore();
+      }
+    });
+
+    it('types the function child as Fluent does: (props: FieldControlProps) => ReactNode', () => {
+      expectTypeOf<FieldProps['children']>().toEqualTypeOf<
+        React.ReactNode | ((props: FieldControlProps) => React.ReactNode)
+      >();
+      void (
+        <Field label="Typed">
+          {(props) => {
+            expectTypeOf(props).toEqualTypeOf<FieldControlProps>();
+            return <input {...props} />;
+          }}
+        </Field>
+      );
+      // @ts-expect-error -- the function receives the props object
+      void (<Field>{(props: string) => props}</Field>);
+    });
+  });
+
+  describe('useFieldContext (P13-02, R12)', () => {
+    it("returns null outside a Field and the Field's value inside, without a warning", () => {
+      const warn = vi.spyOn(console, 'warn');
+      const error = vi.spyOn(console, 'error');
+      try {
+        const seen: Record<string, FieldContextValue | null> = {};
+        function Probe({ name }: { name: string }) {
+          seen[name] = useFieldContext();
+          return null;
+        }
+        render(
+          <>
+            <Probe name="outside" />
+            <Field label="Name" hint="Hint" required>
+              {(props) => (
+                <>
+                  <input {...props} />
+                  <Probe name="inside" />
+                </>
+              )}
+            </Field>
+          </>,
+        );
+        expect(seen.outside).toBeNull();
+        const input = screen.getByRole('textbox', { name: 'Name' });
+        expect(seen.inside).toMatchObject({
+          controlId: input.id,
+          labelId: fieldLabel('Name').id,
+          hintId: messageElement('Hint').id,
+          invalid: false,
+          required: true,
+          validationState: 'none',
+          controlIdAssigned: true,
+        });
+        expect(warn).not.toHaveBeenCalled();
+        expect(error).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        error.mockRestore();
+      }
+    });
+  });
+});
+
+describe('Field — slotProps', () => {
+  type FieldSlotProps = NonNullable<FieldProps['slotProps']>;
+  const EVERY_PART: FieldSlotProps = { label: {}, required: {}, validationMessage: {}, hint: {} };
+
+  it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
+    // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    expect(
+      sortAttributes(
+        renderToString(
+          <Field label="Name" required error="Wrong" hint="Hint">
+            <Input />
+          </Field>,
+        ),
+      ),
+    ).toBe(
+      [
+        '<div class="wave-field flex flex-col" data-orientation="vertical" data-size="medium" data-validation-state="error">',
+        '<label class="wave-field__label mb-1 font-semibold text-foreground text-body-1" for="field-_R_0_" id="field-_R_0_-label">Name',
+        '<span aria-hidden="true" class="wave-field__required ms-0.5 text-error">*',
+        '</span>',
+        '</label>',
+        '<input aria-describedby="field-_R_0_-error field-_R_0_-hint" aria-invalid="true" aria-required="true" class="wave-input wave-input__input h-8 w-full px-3 text-body-1 rounded border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 border-destructive" data-appearance="outline" data-size="medium" id="field-_R_0_" required="">',
+        '<p class="wave-field__validation-message mt-1 flex items-start gap-1 text-caption-1 text-error" data-validation-state="error" id="field-_R_0_-error" role="alert">',
+        '<span aria-hidden="true" class="wave-field__validation-message-icon mt-0.5 inline-flex shrink-0">',
+        '<svg aria-hidden="true" data-wave-icon="error" fill="currentColor" focusable="false" height="12" viewBox="0 0 20 20" width="12" xmlns="http://www.w3.org/2000/svg">',
+        '<path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm.5 5v4h-1V7h1Zm0 6v1h-1v-1h1Z" fill-rule="evenodd">',
+        '</path>',
+        '</svg>',
+        '</span>',
+        '<span>Wrong',
+        '</span>',
+        '</p>',
+        '<p class="wave-field__hint mt-1 text-caption-1 text-muted-foreground" id="field-_R_0_-hint">Hint',
+        '</p>',
+        '</div>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const cases: Omit<FieldProps, 'children'>[] = [
+      { label: 'Name', hint: 'Hint', required: true },
+      { label: 'Name', error: 'Wrong', hint: 'Hint' },
+      { label: 'Name', validationState: 'warning', validationMessage: 'Careful' },
+      {
+        label: 'Name',
+        validationState: 'success',
+        validationMessage: 'Fine',
+        orientation: 'horizontal',
+        size: 'large',
+      },
+      { label: <Label>Name</Label>, required: true, hint: 'Hint' },
+    ];
+    for (const props of cases) {
+      expectInertSlotProps(
+        (slotProps) => (
+          <Field {...props} slotProps={slotProps}>
+            <Input />
+          </Field>
+        ),
+        EVERY_PART,
+      );
+    }
+    expectInertSlotProps(
+      (slotProps) => (
+        <Field label="Name" hint="Hint" slotProps={slotProps}>
+          {(props) => <input {...props} />}
+        </Field>
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('puts your className, style, data-* and ref on each part, after its stable class and own classes', () => {
+    const label = React.createRef<HTMLLabelElement>();
+    const required = React.createRef<HTMLSpanElement>();
+    const message = React.createRef<HTMLParagraphElement>();
+    const hint = React.createRef<HTMLParagraphElement>();
+    render(
+      <Field
+        label="Name"
+        required
+        error="Wrong"
+        hint="Hint"
+        slotProps={{
+          label: { ref: label, className: 'my-label', style: { color: 'red' }, 'data-part': 'l' },
+          required: { ref: required, className: 'my-mark', 'data-part': 'r' },
+          validationMessage: { ref: message, className: 'my-message', 'data-part': 'm' },
+          hint: { ref: hint, className: 'my-hint', style: { color: 'blue' }, 'data-part': 'h' },
+        }}
+      >
+        <Input />
+      </Field>,
+    );
+    for (const [ref, stable, own, mine, part] of [
+      [label, fieldClassNames.label, 'font-semibold', 'my-label', 'l'],
+      [required, fieldClassNames.required, 'text-error', 'my-mark', 'r'],
+      [message, fieldClassNames.validationMessage, 'text-caption-1', 'my-message', 'm'],
+      [hint, fieldClassNames.hint, 'text-muted-foreground', 'my-hint', 'h'],
+    ] as const) {
+      const element = ref.current as HTMLElement;
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[0]).toBe(stable);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', part);
+    }
+    expect(label.current?.tagName).toBe('LABEL');
+    expect(label.current).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+    expect(required.current).toHaveTextContent('*');
+    expect(message.current).toHaveTextContent('Wrong');
+    expect(hint.current).toHaveTextContent('Hint');
+    expect(hint.current).toHaveStyle({ color: 'rgb(0, 0, 255)' });
+  });
+
+  it('keeps the locked ids the control points at, the message role and state, and the decorative asterisk', () => {
+    render(
+      <Field
+        label="Name"
+        required
+        validationState="warning"
+        validationMessage="Careful"
+        hint="Hint"
+        slotProps={{
+          label: { id: 'my-label', htmlFor: 'elsewhere' },
+          required: { 'aria-hidden': false },
+          validationMessage: { id: 'my-message', role: 'status', 'data-validation-state': 'x' },
+          hint: { id: 'my-hint' },
+        }}
+      >
+        <Input />
+      </Field>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    const label = screen.getByText('Name').closest('label') as HTMLLabelElement;
+    expect(label.id).not.toBe('my-label');
+    expect(label.htmlFor).toBe(input.id);
+    expect(screen.getByText('*')).toHaveAttribute('aria-hidden', 'true');
+    const message = screen.getByRole('alert');
+    expect(message).toHaveTextContent('Careful');
+    expect(message).toHaveAttribute('data-validation-state', 'warning');
+    const hint = screen.getByText('Hint');
+    expect(message.id).not.toBe('my-message');
+    expect(hint.id).not.toBe('my-hint');
+    expect(input).toHaveAttribute('aria-describedby', `${message.id} ${hint.id}`);
+  });
+
+  it('keeps the asterisk out of the tab order: a part sets no tabIndex on it', () => {
+    render(
+      <Field label="Name" required slotProps={{ required: { tabIndex: 0 } }}>
+        <Input />
+      </Field>,
+    );
+    expect(screen.getByText('*')).not.toHaveAttribute('tabindex');
+  });
+
+  it('runs your handlers on the parts', () => {
+    const onClick = vi.fn();
+    render(
+      <Field label="Name" hint="Hint" slotProps={{ hint: { onClick } }}>
+        <Input />
+      </Field>,
+    );
+    act(() => screen.getByText('Hint').click());
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the label and required parts for a Label element, which takes its own props', () => {
+    const label = React.createRef<HTMLLabelElement>();
+    const required = React.createRef<HTMLSpanElement>();
+    render(
+      <Field
+        label={<Label slotProps={{ required: { className: 'from-label' } }}>Name</Label>}
+        required
+        slotProps={{ label: { ref: label, className: 'from-field' }, required: { ref: required } }}
+      >
+        <Input />
+      </Field>,
+    );
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument();
+    expect(label.current).toBeNull();
+    expect(required.current).toBeNull();
+    expect(document.querySelector('.from-field')).toBeNull();
+    expect(screen.getByText('*')).toHaveClass('from-label');
+  });
+
+  it('ignores the parts it does not render', () => {
+    const message = React.createRef<HTMLParagraphElement>();
+    const hint = React.createRef<HTMLParagraphElement>();
+    const required = React.createRef<HTMLSpanElement>();
+    render(
+      <Field
+        label="Name"
+        slotProps={{
+          validationMessage: { ref: message },
+          hint: { ref: hint },
+          required: { ref: required },
+        }}
+      >
+        <Input />
+      </Field>,
+    );
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument();
+    expect(message.current).toBeNull();
+    expect(hint.current).toBeNull();
+    expect(required.current).toBeNull();
+  });
+
+  it('keeps the function child path: the props reach your control, the parts take yours', () => {
+    render(
+      <Field label="Name" hint="Hint" slotProps={{ hint: { className: 'my-hint' } }}>
+        {(props) => <input {...props} />}
+      </Field>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    const hint = screen.getByText('Hint');
+    expect(hint).toHaveClass('my-hint');
+    expect(input).toHaveAttribute('aria-describedby', hint.id);
+  });
+
+  it('merges the label part with the start column under dir="rtl"', () => {
+    renderWithProviders(
+      <Field label="Name" orientation="horizontal" slotProps={{ label: { className: 'my-label' } }}>
+        <Input />
+      </Field>,
+      { dir: 'rtl' },
+    );
+    expect(screen.getByText('Name')).toHaveClass('basis-1/3', 'my-label');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Field
+        label="Name"
+        required
+        error="Wrong"
+        hint="Hint"
+        slotProps={{
+          label: { className: 'a' },
+          required: { className: 'b' },
+          validationMessage: { className: 'c' },
+          hint: { className: 'd' },
+        }}
+      >
+        <Input />
+      </Field>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof FieldSlotProps>().toEqualTypeOf<
+      'label' | 'required' | 'validationMessage' | 'hint'
+    >();
+    expectTypeOf<NonNullable<FieldSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLabelElement> | undefined
+    >();
+    expectTypeOf<NonNullable<FieldSlotProps['hint']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLParagraphElement> | undefined
+    >();
+    expectTypeOf<NonNullable<FieldSlotProps['label']>>().toHaveProperty('htmlFor');
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: `hint` gives the hint its content
+        <Field slotProps={{ hint: { children: 'Other' } }}>
+          <Input />
+        </Field>
+      )
+    );
   });
 });

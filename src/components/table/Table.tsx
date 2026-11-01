@@ -16,6 +16,8 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
+import { mergeSlotProps } from '../../lib/slotProps';
+import type { SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -94,6 +96,26 @@ export interface TableHeaderCellProps extends React.ThHTMLAttributes<HTMLTableCe
    * nothing.
    */
   aside?: Slot<'span'>;
+  /**
+   * Props for the element the header cell draws around its content, by part, merged into the
+   * part's own (Fluent UI's `button` slot prop): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers before its handlers, your ids added to
+   * its `aria-labelledby` and `aria-describedby`, and your ref on the element. Every attribute the
+   * cell sets on the part is locked and keeps the cell's value; you add the attributes it does not
+   * set. A part takes no `children`: the cell's children fill it, and `sortIcon` and `aside` are
+   * slots of their own.
+   */
+  slotProps?: {
+    /**
+     * The sort `<button>` of a `sortable` header, around the content and the direction glyph
+     * (stable class `wave-table-header-cell__button`); a header that is not sortable draws none.
+     * Locked: `type` and its click handler (your `onClick` runs first, and `preventDefault()` in
+     * it skips `onSortClick`), and unset `role`, `tabIndex`, `disabled`, `contentEditable`,
+     * `hidden`, `inert`, `aria-hidden` and the markers a grid's keyboard navigation reads
+     * (`data-roving-container`, `data-grid-auxiliary`). The direction is the cell's `aria-sort`.
+     */
+    button?: SlotPart<'button'>;
+  };
   /** Header cell content. */
   children: React.ReactNode;
   /** Ref to the `<th>` element. */
@@ -210,6 +232,32 @@ export interface TableSelectionCellProps extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Keyup handler of the control. */
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
+  /**
+   * Props for the control inside the cell, by part, merged into the part's own (Fluent UI's
+   * `checkboxIndicator` and `radioIndicator` slot props stand for it): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers before its
+   * handlers, your ids added to its `aria-labelledby` and `aria-describedby`, and your ref beside
+   * its ref. Every attribute the cell sets on the control is locked and keeps the cell's value
+   * (set it through the cell's own props); you add the attributes it does not set. A part takes
+   * no `children`.
+   */
+  slotProps?: {
+    /**
+     * The `<input type="checkbox">` or `<input type="radio">`, the focusable control (stable
+     * class `wave-table-selection-cell__control`; `controlRef` reaches it as well). Locked:
+     * `type` and the checked state (with `defaultChecked`, `defaultValue` and `aria-checked`
+     * unset: the control is controlled and natively checked), every prop the cell routes to it
+     * (`id`, `name`, `value`, `form`, `disabled`, `required`, `autoFocus`, `tabIndex`, the
+     * naming and other ARIA attributes, the focus and key handlers), and unset `role`,
+     * `contentEditable`, `hidden`, `inert`, `aria-hidden` and the markers a grid's keyboard
+     * navigation reads (`data-roving-container`, `data-grid-auxiliary`). Your handlers run
+     * before the cell's: `preventDefault()` in your `onChange` cancels the change, its own
+     * `onChange` and `onCheckedChange` included, and in your `onFocus`, `onBlur`, `onKeyDown` or
+     * `onKeyUp` it skips the cell's prop of that event. A disabled control is natively disabled
+     * and calls no click handler, yours included.
+     */
+    control?: SlotPart<'input'>;
+  };
   /** Ref to the `<input>` element. */
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the `<td>` element. */
@@ -238,6 +286,32 @@ export interface TableCellLayoutProps extends React.HTMLAttributes<HTMLDivElemen
    * row. Rendered as `data-appearance` while set.
    */
   appearance?: 'primary';
+  /**
+   * Props for the elements the layout draws around its text, by part, merged into each part's
+   * own (Fluent UI's `wrapper` and `main` slot props): your classes after the part's (yours win
+   * a conflict), your styles over its styles, your handlers and attributes added, and your ref
+   * on the element. A part takes no `children`: the layout draws the text, and `media` and
+   * `description` are slots of their own.
+   *
+   * Each part locks, unset, `role`, `tabIndex` and `contentEditable` (each would make the text a
+   * widget of a grid cell, which then takes another focus target), `aria-label` (it would replace
+   * the text where the cell names something, such as a DataGrid row's selection control),
+   * `data-roving-container` (it would make the cell's content a nested composite of a grid) and
+   * `hidden`, `inert` and `aria-hidden`. The layout handles no event: an event on a part reaches
+   * the cell after yours.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` around the main text and the description, drawn while either renders content
+     * (stable class `wave-table-cell-layout__content`).
+     */
+    content?: SlotPart<'div'>;
+    /**
+     * The `<span>` around the main text, the children, drawn while they render content (stable
+     * class `wave-table-cell-layout__main`).
+     */
+    main?: SlotPart<'span'>;
+  };
   /** The main text. */
   children?: React.ReactNode;
   /** Ref to the layout `<div>`. */
@@ -395,6 +469,7 @@ const TableHeaderCell = ({
   onSortClick,
   sortIcon,
   aside,
+  slotProps,
   children,
   className,
   ref,
@@ -424,6 +499,7 @@ const TableHeaderCell = ({
           className={tableHeaderCellClassNames.button}
           iconClassName={tableHeaderCellClassNames.sortIcon}
           onClick={onSortClick}
+          part={slotProps?.button}
         >
           {children}
         </TableSortButton>
@@ -555,6 +631,7 @@ const TableSelectionCell = ({
   onBlur,
   onKeyDown,
   onKeyUp,
+  slotProps,
   controlRef,
   className,
   ref,
@@ -651,6 +728,7 @@ const TableSelectionCell = ({
           changeChecked(event.currentTarget.checked, event.nativeEvent),
         )}
         className={tableSelectionCellClassNames.control}
+        part={slotProps?.control}
       />
     </td>
   );
@@ -667,6 +745,23 @@ const CELL_LAYOUT_MEDIA_CLASSES = {
 } as const;
 
 /**
+ * What both parts of a cell layout lock unset (it sets no attribute of its own on them): a role,
+ * a tab index and `contentEditable` (each makes the text a widget of a grid cell), a name (it
+ * would replace the text where the cell names something), the marker of a nested composite of a
+ * grid and the hidden state.
+ */
+const CELL_LAYOUT_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  contentEditable: undefined,
+  'aria-label': undefined,
+  'data-roving-container': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/**
  * Lays out a cell's content: `media` (an icon or an Avatar), then the main text (children) with
  * an optional `description` under it. `truncate` keeps both lines to one line each with an
  * ellipsis; `appearance="primary"` draws the main text semibold, for the cell that names the row.
@@ -676,6 +771,7 @@ const TableCellLayout = ({
   description,
   truncate = false,
   appearance,
+  slotProps,
   children,
   className,
   ref,
@@ -685,6 +781,16 @@ const TableCellLayout = ({
   const hasMain = slotRendersContent(children);
   const hasDescription = slotRendersContent(description);
   const primary = appearance === 'primary';
+  const contentClassName = cn(
+    tableCellLayoutClassNames.content,
+    'flex flex-col',
+    truncate && 'min-w-0 overflow-x-hidden',
+  );
+  const mainClassName = cn(
+    tableCellLayoutClassNames.main,
+    truncate && 'truncate',
+    primary && 'font-semibold',
+  );
   return (
     <div
       ref={ref}
@@ -713,19 +819,21 @@ const TableCellLayout = ({
       )}
       {(hasMain || hasDescription) && (
         <div
-          className={cn(
-            tableCellLayoutClassNames.content,
-            'flex flex-col',
-            truncate && 'min-w-0 overflow-x-hidden',
-          )}
+          className={contentClassName}
+          {...(slotProps?.content &&
+            mergeSlotProps(slotProps.content, {
+              className: contentClassName,
+              locked: CELL_LAYOUT_PART_LOCKS,
+            }))}
         >
           {hasMain && (
             <span
-              className={cn(
-                tableCellLayoutClassNames.main,
-                truncate && 'truncate',
-                primary && 'font-semibold',
-              )}
+              className={mainClassName}
+              {...(slotProps?.main &&
+                mergeSlotProps(slotProps.main, {
+                  className: mainClassName,
+                  locked: CELL_LAYOUT_PART_LOCKS,
+                }))}
             >
               {materialiseSlotContent(children)}
             </span>

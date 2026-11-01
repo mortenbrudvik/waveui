@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { accordionTriggerClassNames } from '../../../lib/classNames';
 import {
   Accordion,
   AccordionItem,
@@ -18,7 +19,9 @@ import { Tooltip } from '../../overlays/Tooltip';
 import type { SelectionMode } from '../../../lib/types';
 import {
   asClientReference,
+  expectInertSlotProps,
   expectNoA11yViolations,
+  openingTags,
   testSystemProps,
   testCompoundExposure,
   testComposedHandler,
@@ -1207,5 +1210,250 @@ describe('Accordion - content still loading inside its own Suspense', () => {
     const html = renderToString(wrappedTrigger(LazyWrapper));
     expect(html).toContain('Loading question');
     expect(html).toContain('Question two?');
+  });
+});
+
+describe('Accordion.Trigger — slotProps', () => {
+  type TriggerSlotProps = NonNullable<AccordionTriggerProps['slotProps']>;
+  const EVERY_PART: TriggerSlotProps = { heading: {}, expandIcon: {} };
+
+  /**
+   * An open item whose Trigger draws its own heading, and a closed one (at level 4) whose disabled
+   * Trigger sits in a wrapper, so the Item draws the heading around the wrapper.
+   */
+  function Sections({
+    parts,
+    onClick,
+    betaLevel = 4,
+    ...props
+  }: Partial<AccordionSingleProps> & {
+    parts?: TriggerSlotProps;
+    onClick?: React.MouseEventHandler<HTMLButtonElement>;
+    betaLevel?: AccordionSingleProps['headingLevel'];
+  }) {
+    return (
+      <Accordion defaultOpenItem="a" headingLevel={2} {...props}>
+        <Accordion.Item value="a">
+          <Accordion.Trigger onClick={onClick} slotProps={parts}>
+            Alpha
+          </Accordion.Trigger>
+          <Accordion.Panel>Panel A</Accordion.Panel>
+        </Accordion.Item>
+        <Accordion.Item value="b" headingLevel={betaLevel}>
+          <WrapperStandIn>
+            <Accordion.Trigger disabled slotProps={parts}>
+              Beta
+            </Accordion.Trigger>
+          </WrapperStandIn>
+          <Accordion.Panel>Panel B</Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+    );
+  }
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, accordionTriggerClassNames.heading),
+    ...all(root, accordionTriggerClassNames.expandIcon),
+  ];
+
+  // Captured from 414fe7d's dist (client and server agree).
+  const ICON =
+    'data-wave-icon="chevron-down" fill="currentColor" focusable="false" height="16" viewBox="0 0 12 12" width="16" xmlns="http://www.w3.org/2000/svg"';
+  const ICON_CLASSES =
+    'wave-accordion-trigger__expand-icon shrink-0 transition-transform motion-reduce:transition-none';
+  const BASE_PINS = [
+    '<h2 class="wave-accordion-trigger__heading m-0 grid">',
+    '<h4 class="wave-accordion-trigger__heading m-0 grid">',
+    `<svg aria-hidden="true" class="${ICON_CLASSES} rotate-180" ${ICON}>`,
+    `<svg aria-hidden="true" class="${ICON_CLASSES}" ${ICON}>`,
+  ].join('\n');
+
+  it('renders the parts of 414fe7d (attributes sorted), on the client and the server', () => {
+    for (const parts of [undefined, EVERY_PART]) {
+      const view = render(<Sections parts={parts} />);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Sections parts={parts} />);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    for (const props of [{}, { defaultOpenItem: null, headingLevel: 5 as const }]) {
+      expectInertSlotProps(
+        (parts: TriggerSlotProps | undefined) => <Sections {...props} parts={parts} />,
+        EVERY_PART,
+      );
+    }
+  });
+
+  it('puts your className, style, data-* and ref on each part, the Item’s heading included', () => {
+    const headingRefs: Array<HTMLHeadingElement | null> = [];
+    const iconRefs: Array<SVGSVGElement | null> = [];
+    render(
+      <Sections
+        parts={{
+          heading: {
+            className: 'my-heading m-2',
+            style: { opacity: 0.5 },
+            'data-part': 'heading',
+            ref: (node: HTMLHeadingElement | null) => void (node && headingRefs.push(node)),
+          },
+          expandIcon: {
+            className: 'my-icon shrink',
+            style: { opacity: 0.5 },
+            'data-part': 'icon',
+            ref: (node: SVGSVGElement | null) => void (node && iconRefs.push(node)),
+          },
+        }}
+      />,
+    );
+    const headings = all(document, accordionTriggerClassNames.heading);
+    const icons = all(document, accordionTriggerClassNames.expandIcon);
+    expect(headings.map((heading) => heading.tagName)).toEqual(['H2', 'H4']);
+    for (const [elements, stable, name, conflict] of [
+      [headings, accordionTriggerClassNames.heading, 'heading', 'm-0'],
+      [icons, accordionTriggerClassNames.expandIcon, 'icon', 'shrink-0'],
+    ] as const) {
+      expect(elements).toHaveLength(2);
+      for (const element of elements) {
+        expect(element.classList[0]).toBe(stable);
+        expect(element).toHaveClass(`my-${name}`);
+        // Your class replaces a conflicting one of the part.
+        expect(element).not.toHaveClass(conflict);
+        expect(element).toHaveAttribute('data-part', name);
+        expect(element).toHaveStyle({ opacity: '0.5' });
+      }
+    }
+    expect(headingRefs).toEqual(headings);
+    expect(iconRefs).toEqual(icons);
+    // The button takes none of it.
+    expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveClass('my-heading');
+  });
+
+  it('locks the heading’s role, level and hidden state', () => {
+    const attempt = {
+      role: 'presentation',
+      'aria-level': 6,
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as TriggerSlotProps['heading'];
+    render(<Sections parts={{ heading: attempt }} />);
+    expect(screen.getByRole('heading', { level: 2, name: 'Alpha' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 4, name: 'Beta' })).toBeInTheDocument();
+    for (const heading of all(document, accordionTriggerClassNames.heading)) {
+      for (const name of ['role', 'aria-level', 'hidden', 'inert', 'aria-hidden']) {
+        expect(heading).not.toHaveAttribute(name);
+      }
+    }
+    expect(screen.getByRole('button', { name: 'Alpha' })).toBeVisible();
+  });
+
+  it('keeps the chevron decorative', () => {
+    const attempt = {
+      role: 'img',
+      tabIndex: 0,
+      'aria-hidden': false,
+      focusable: 'true',
+    } as unknown as TriggerSlotProps['expandIcon'];
+    render(<Sections parts={{ expandIcon: attempt }} />);
+    for (const icon of all(document, accordionTriggerClassNames.expandIcon)) {
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+      expect(icon).toHaveAttribute('focusable', 'false');
+      expect(icon).not.toHaveAttribute('role');
+      expect(icon).not.toHaveAttribute('tabindex');
+    }
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAccessibleName('Alpha');
+  });
+
+  it('runs your chevron handler before the toggle: preventDefault() keeps the item, the Trigger’s onClick still runs', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <Sections
+        onClick={onClick}
+        parts={{ expandIcon: { onClick: (event) => event.preventDefault() } }}
+      />,
+    );
+    const alpha = screen.getByRole('button', { name: 'Alpha' });
+    await user.click(all(alpha, accordionTriggerClassNames.expandIcon)[0]);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(alpha).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('runs the chevron’s and the heading’s handlers in the order of the click', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    render(
+      <Sections
+        onClick={() => void order.push('trigger')}
+        parts={{
+          expandIcon: { onClick: () => void order.push('icon') },
+          heading: { onClick: () => void order.push('heading') },
+        }}
+      />,
+    );
+    const alpha = screen.getByRole('button', { name: 'Alpha' });
+    await user.click(all(alpha, accordionTriggerClassNames.expandIcon)[0]);
+    expect(order).toEqual(['icon', 'trigger', 'heading']);
+    expect(alpha).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('calls no click handler of the chevron of a disabled Trigger', () => {
+    const onClick = vi.fn();
+    render(<Sections parts={{ expandIcon: { onClick } }} />);
+    const [alphaIcon, betaIcon] = all(document, accordionTriggerClassNames.expandIcon);
+    fireEvent.click(betaIcon);
+    expect(onClick).not.toHaveBeenCalled();
+    fireEvent.click(alphaIcon);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls each part handler once per click in StrictMode', async () => {
+    const user = userEvent.setup();
+    const heading = vi.fn();
+    const expandIcon = vi.fn();
+    render(
+      <React.StrictMode>
+        <Sections parts={{ heading: { onClick: heading }, expandIcon: { onClick: expandIcon } }} />
+      </React.StrictMode>,
+    );
+    const alpha = screen.getByRole('button', { name: 'Alpha' });
+    await user.click(all(alpha, accordionTriggerClassNames.expandIcon)[0]);
+    expect(expandIcon).toHaveBeenCalledTimes(1);
+    expect(heading).toHaveBeenCalledTimes(1);
+    expect(alpha).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <Sections
+        betaLevel={3}
+        parts={{
+          heading: { className: 'my-heading', title: 'Heading' },
+          expandIcon: { className: 'my-icon' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof TriggerSlotProps>().toEqualTypeOf<'heading' | 'expandIcon'>();
+    expectTypeOf<NonNullable<TriggerSlotProps['heading']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLHeadingElement> | undefined
+    >();
+    expectTypeOf<NonNullable<TriggerSlotProps['expandIcon']>['ref']>().toEqualTypeOf<
+      React.Ref<SVGSVGElement> | undefined
+    >();
+    void (
+      (
+        // @ts-expect-error -- a part takes no children: the Trigger renders them
+        <Accordion.Trigger slotProps={{ heading: { children: 'x' } }}>A</Accordion.Trigger>
+      )
+    );
   });
 });

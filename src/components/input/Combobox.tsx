@@ -6,6 +6,7 @@ import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { isFocused } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import {
   disabledStyles,
   focusRing,
@@ -19,9 +20,14 @@ import {
 import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
-import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
-import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
+import {
+  collectOptionLabels,
+  preventMouseDown,
+  useListbox,
+  type ListboxItem,
+} from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { HiddenInput } from '../internal/HiddenInput';
@@ -30,9 +36,9 @@ import { insertedText, replacedText } from './Combobox.text';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import {
-  ListboxSurface,
   Option,
   OptionGroup,
+  PickerListboxSurface,
   useListboxPopup,
   type ListboxOptionRenderState,
 } from './Option';
@@ -356,6 +362,68 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the Combobox draws, by part, merged into each part's own (Fluent UI's
+   * `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the part's
+   * (yours win a conflict), your styles over its styles, your handlers before its handlers
+   * (`preventDefault()` in yours skips the Combobox's handling of the event, its own `on…` prop
+   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
+   * `aria-describedby`. Every attribute the Combobox sets on a part is locked and keeps the
+   * Combobox's value (set it through its own props); you add the attributes it does not set. A
+   * part takes no `children`. The options are `Option`s, which take their own props.
+   */
+  slotProps?: {
+    /**
+     * The `<input role="combobox">`, the focusable control (stable class `wave-combobox__input`;
+     * `controlRef` reaches it as well). Locked: `type`, `role`, `value` (and, unset,
+     * `defaultValue`: the Combobox controls the text), `id`, the naming, Field and listbox wiring
+     * (`aria-label`, `aria-invalid`, `aria-required`, `aria-expanded`, `aria-controls`,
+     * `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`, `aria-errormessage`,
+     * `aria-details`), `disabled`, `readOnly`, `placeholder`, every text input prop routed to it
+     * (`autoComplete`, `maxLength`, `tabIndex`, …), `name`, `form` and `required` (the value is
+     * submitted by the Combobox's hidden input), `hidden`, `inert` and `aria-hidden` (a
+     * focusable control is never hidden). Your handlers run before the Combobox's:
+     * `preventDefault()` in your `onChange` ignores the typed text, in your `onKeyDown` skips the
+     * listbox keys; the typed text is still dropped on blur, also when your `onBlur` prevents the
+     * default.
+     */
+    input?: SlotPart<'input'>;
+    /**
+     * The clear `<button>`, rendered with `clearable` while a value is selected (stable class
+     * `wave-combobox__clear-button`). Locked: `type`, `aria-label` (`labels.clear`), `disabled`,
+     * `tabIndex`, `aria-disabled`, `hidden`, `inert` and `aria-hidden`. Your `onClick` runs
+     * before the clear (`preventDefault()` skips it).
+     */
+    clearButton?: SlotPart<'button'>;
+    /**
+     * The expand `<button>` at the end of the input, rendered while `expandIcon` shows it (stable
+     * class `wave-combobox__expand-button`; `expandIcon` is its glyph). Locked: `type`,
+     * `tabIndex` (never a tab stop), `aria-label` (`labels.expand`), `aria-expanded`,
+     * `aria-controls`, `disabled` and `aria-disabled`. Your `onClick` runs before the toggle
+     * (`preventDefault()` skips it).
+     */
+    expandButton?: SlotPart<'button'>;
+    /**
+     * The `<ul role="listbox">`, in the popup while it shows and hidden in place otherwise
+     * (stable class `wave-combobox__listbox`). Locked: `id`, `role`, `tabIndex`, `hidden`,
+     * `inert`, `aria-hidden`, `aria-multiselectable`, `aria-activedescendant` and `aria-label`;
+     * your `aria-labelledby` ids join the list's name.
+     */
+    listbox?: SlotPart<'ul'>;
+    /**
+     * The popup `<div>` around the list or the "No matches" message, rendered in a portal while
+     * it shows (stable class `wave-combobox__surface`). Locked: `data-side`, `data-align`, `role`,
+     * `id`, `hidden`, `inert` and `aria-hidden`; your `style` merges, but the position, the size
+     * limits and the visibility the positioning sets win.
+     */
+    surface?: SlotPart<'div'>;
+    /**
+     * The "No matches" row of the popup, rendered while typed text matches no option (stable
+     * class `wave-combobox__empty-message`). Locked: `aria-hidden` (a status region announces
+     * the text) and `tabIndex` (unset: it is never a tab stop).
+     */
+    emptyMessage?: SlotPart<'div'>;
+  };
 }
 
 /** The Combobox component's type: a multi-select signature, then the single-select one. */
@@ -451,6 +519,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     className,
     children,
     ref,
+    slotProps,
     ...rest
   } = props;
 
@@ -735,7 +804,12 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   });
 
   const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
-  const inputMergedRef = useMergedRefs<HTMLInputElement>(inputRef, controlRef, setReference);
+  const inputMergedRef = useMergedRefs<HTMLInputElement>(
+    inputRef,
+    controlRef,
+    setReference,
+    slotProps?.input?.ref,
+  );
   // The window scrolls the shown list only, which mounts with the popup (C-POPUPS: the window
   // holds it in state); the closed list in place is another, hidden element.
   const listScrollRef = useMergedRefs<HTMLUListElement>(
@@ -764,17 +838,19 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   // the mouseup of the press that focused the input is prevented (only that one: a later press in
   // the focused input places the caret as usual). The ref is written in handlers only (C-HOOKS).
   const pointerFocusRef = React.useRef(false);
-  const handleMouseDown = (event: React.MouseEvent<HTMLInputElement>) => {
+  // The input's handlers that read a ref are event callbacks (stable, reading the latest render),
+  // so the part props merged during render hold no function that reads a ref.
+  const handleMouseDown = useEventCallback((event: React.MouseEvent<HTMLInputElement>) => {
     pointerFocusRef.current = showingLabels && !isFocused(event.currentTarget);
-  };
+  });
   const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
     if (showingLabels) event.currentTarget.select();
   };
-  const handleMouseUp = (event: React.MouseEvent<HTMLInputElement>) => {
+  const handleMouseUp = useEventCallback((event: React.MouseEvent<HTMLInputElement>) => {
     if (!pointerFocusRef.current) return;
     pointerFocusRef.current = false;
     event.preventDefault();
-  };
+  });
   // Rule 1 also holds whenever the labels return to the focused input (R18): a toggle, a close
   // from the keyboard, a controlled change or a form reset writes them with the caret at their
   // end, so they are selected again here. A press that moves the caret into them changes neither
@@ -842,7 +918,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     listbox.onKeyDown(event);
   };
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useEventCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.nativeEvent === handledInputRef.current) return;
     const text = event.target.value;
     // The edit the last `beforeinput` announced, if this change is that edit. A change nothing
@@ -877,7 +953,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     }
     if (!open) setOpen(true);
     if (freeform) commitText(text);
-  };
+  });
 
   // The expand button opens and closes the list like the input's own keys; focus stays in (or
   // returns to) the input.
@@ -890,14 +966,15 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
 
   // Clearing is not an option activation: the state is set directly, not through `commitText`
   // (which calls the deprecated `onOptionSelect` in freeform mode). The button disappears with the
-  // value, so focus moves to the input explicitly (C-DISABLED).
-  const handleClear = () => {
+  // value, so focus moves to the input explicitly (C-DISABLED). An event callback, like the
+  // input's handlers that read a ref.
+  const handleClear = useEventCallback(() => {
     setValue(multiselect ? EMPTY_VALUES : '');
     setTypedValue(null);
     dropDraft();
     setOpen(false);
     inputRef.current?.focus();
-  };
+  });
 
   const showExpand = showsExpandButton(expandIcon);
   // Read-only comboboxes offer no clear action (the value cannot change).
@@ -915,6 +992,71 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     renderOption,
   };
 
+  const inputProps = mergeSlotProps(slotProps?.input, {
+    className: cn(
+      comboboxClassNames.input,
+      inputHeightClasses[size],
+      'w-full',
+      inputPaddingClasses[size],
+      inputTextClasses[size],
+      inputAppearanceClasses[appearance],
+      'text-foreground placeholder:text-muted-foreground',
+      inputFocus,
+      disabledStyles,
+      invalidLook && inputInvalid,
+      pickerEndPadding(Number(showClear) + Number(showExpand), size),
+    ),
+    locked: {
+      type: 'text',
+      autoComplete,
+      ...fieldProps,
+      // The routed naming and Field attributes, set only through the Combobox's own props.
+      ...fieldLocks(fieldProps),
+      // The combobox props carry these only while set (an active option): a part sets neither.
+      'aria-activedescendant': undefined,
+      'aria-autocomplete': undefined,
+      ...listbox.getComboboxProps(),
+      'aria-expanded': expanded,
+      'aria-errormessage': ariaErrorMessage,
+      'aria-details': ariaDetails,
+      disabled,
+      readOnly,
+      // Multi-select: the selected labels take the placeholder's place (D11).
+      placeholder: multiselect && labelsText !== '' ? undefined : placeholder,
+      autoCapitalize,
+      autoCorrect,
+      // Multi-select: no limit while the labels show, so typing into them (the caret moved
+      // there) is never blocked; the limit applies to the typed query only.
+      maxLength: showingLabels ? undefined : maxLength,
+      inputMode,
+      spellCheck,
+      enterKeyHint,
+      autoFocus,
+      tabIndex,
+      value: inputText,
+      // Controlled: a part's default value would only make React warn.
+      defaultValue: undefined,
+      onChange: handleChange,
+      onClick: () => {
+        if (!open && interactive) setOpen(true);
+      },
+      onMouseDown: handleMouseDown,
+      onMouseUp: handleMouseUp,
+      // Read-only: no listbox keys at all (they would open, commit or clear the value).
+      onKeyDown: composeEventHandlers(onKeyDown, readOnly ? undefined : handleKeyDown),
+      onKeyUp: composeEventHandlers(onKeyUp, listbox.onKeyUp),
+      onFocus: composeEventHandlers(onFocus, handleFocus),
+      onBlur,
+      // The control's own: the hidden input submits the value, and a focusable control is never
+      // hidden.
+      name: undefined,
+      form: undefined,
+      hidden: undefined,
+      inert: undefined,
+      'aria-hidden': undefined,
+    },
+  });
+
   return (
     <div
       data-size={size}
@@ -926,71 +1068,44 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       {multiselect && <PickerAnnouncer />}
       <div className="relative flex items-center">
         <input
-          type="text"
-          autoComplete={autoComplete}
-          {...fieldProps}
-          {...listbox.getComboboxProps()}
-          aria-expanded={expanded}
-          aria-errormessage={ariaErrorMessage}
-          aria-details={ariaDetails}
+          {...inputProps}
           ref={inputMergedRef}
-          disabled={disabled}
-          readOnly={readOnly}
-          // Multi-select: the selected labels take the placeholder's place (D11).
-          placeholder={multiselect && labelsText !== '' ? undefined : placeholder}
-          autoCapitalize={autoCapitalize}
-          autoCorrect={autoCorrect}
-          // Multi-select: no limit while the labels show, so typing into them (the caret moved
-          // there) is never blocked; the limit applies to the typed query only.
-          maxLength={showingLabels ? undefined : maxLength}
-          inputMode={inputMode}
-          spellCheck={spellCheck}
-          enterKeyHint={enterKeyHint}
-          autoFocus={autoFocus}
-          tabIndex={tabIndex}
-          value={inputText}
-          onChange={handleChange}
-          onClick={() => {
-            if (!open && interactive) setOpen(true);
-          }}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          // Read-only: no listbox keys at all (they would open, commit or clear the value).
-          onKeyDown={composeEventHandlers(onKeyDown, readOnly ? undefined : handleKeyDown)}
-          onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
-          onFocus={composeEventHandlers(onFocus, handleFocus)}
-          onBlur={composeEventHandlers(onBlur, dropDraft, {
-            checkDefaultPrevented: false,
-          })}
-          className={cn(
-            comboboxClassNames.input,
-            inputHeightClasses[size],
-            'w-full',
-            inputPaddingClasses[size],
-            inputTextClasses[size],
-            inputAppearanceClasses[appearance],
-            'text-foreground placeholder:text-muted-foreground',
-            inputFocus,
-            disabledStyles,
-            invalidLook && inputInvalid,
-            pickerEndPadding(Number(showClear) + Number(showExpand), size),
+          // Dropping the typed text on blur runs after the part's and the Combobox's own `onBlur`,
+          // also when they prevent the default.
+          onBlur={composeEventHandlers(
+            inputProps.onBlur as React.FocusEventHandler<HTMLInputElement> | undefined,
+            dropDraft,
+            { checkDefaultPrevented: false },
           )}
         />
         {showClear && (
           <button
+            // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
-            aria-label={labels?.clear ?? 'Clear selection'}
-            disabled={disabled}
-            // Keeps focus in the input, so its blur does not act on a draft before the clear.
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={handleClear}
-            className={cn(
-              comboboxClassNames.clearButton,
-              pickerIconButtonClasses(size, appearance),
-              pickerButtonOffset(size, showExpand ? 2 : 1),
-              focusRing,
-              disabledStyles,
-            )}
+            {...mergeSlotProps(slotProps?.clearButton, {
+              className: cn(
+                comboboxClassNames.clearButton,
+                pickerIconButtonClasses(size, appearance),
+                pickerButtonOffset(size, showExpand ? 2 : 1),
+                focusRing,
+                disabledStyles,
+              ),
+              locked: {
+                type: 'button',
+                'aria-label': labels?.clear ?? 'Clear selection',
+                disabled,
+                tabIndex: undefined,
+                'aria-disabled': undefined,
+                'data-disabled': undefined,
+                'data-disabled-focusable': undefined,
+                hidden: undefined,
+                inert: undefined,
+                'aria-hidden': undefined,
+                // Keeps focus in the input, so its blur does not act on a draft before the clear.
+                onMouseDown: preventMouseDown,
+                onClick: handleClear,
+              },
+            })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
           </button>
@@ -1008,6 +1123,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
             appearance={appearance}
             className={comboboxClassNames.expandButton}
             iconClassName={comboboxClassNames.expandIcon}
+            part={slotProps?.expandButton}
           />
         )}
       </div>
@@ -1016,7 +1132,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       <span role="status" className="sr-only">
         {noMatches && noMatchesText}
       </span>
-      <ListboxSurface
+      <PickerListboxSurface
         listbox={listbox}
         layerId={layerId}
         surfaceRef={surfaceRef}
@@ -1029,11 +1145,13 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         emptyContent={
           draft ? (
             <div
-              aria-hidden="true"
-              className={cn(
-                comboboxClassNames.emptyMessage,
-                'px-3 py-1.5 text-body-1 text-muted-foreground',
-              )}
+              {...mergeSlotProps(slotProps?.emptyMessage, {
+                className: cn(
+                  comboboxClassNames.emptyMessage,
+                  'px-3 py-1.5 text-body-1 text-muted-foreground',
+                ),
+                locked: { 'aria-hidden': 'true', tabIndex: undefined },
+              })}
             >
               {noMatchesText}
             </div>
@@ -1042,6 +1160,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
         listProps={activeWindow ? { ref: listScrollRef } : undefined}
+        parts={{ list: slotProps?.listbox, surface: slotProps?.surface }}
       >
         {/* Data mode: the options of the shown items while the list shows (labels come from
             `items`, so a closed list needs none), or the window's; the children are ignored. */}
@@ -1056,7 +1175,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
                   comboboxClassNames.spacer,
                 )
               : renderListboxItems(listbox.items, optionsState))}
-      </ListboxSurface>
+      </PickerListboxSurface>
       <HiddenInput
         name={name}
         form={form}

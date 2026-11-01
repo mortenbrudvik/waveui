@@ -1,16 +1,20 @@
 import * as React from 'react';
-import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
-import { InfoButton } from '../InfoButton';
+import { InfoButton, type InfoButtonProps } from '../InfoButton';
 import { Dialog } from '../../overlays/Dialog';
 import { Popover } from '../../overlays/Popover';
+import { infoButtonClassNames } from '../../../lib/classNames';
 import {
+  expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefs,
   mockAnimations,
   mockRect,
+  normaliseIds,
+  sortAttributes,
   testComposedHandler,
   testNoImplicitSubmit,
   testSystemProps,
@@ -918,5 +922,412 @@ describe('InfoButton behaviour (Phase 4 D29)', () => {
     expect(note()).toBeInTheDocument();
     await user.hover(button());
     expect(onPointerMove).toHaveBeenCalled();
+  });
+});
+
+describe('InfoButton — slotProps', () => {
+  type InfoButtonSlotProps = NonNullable<InfoButtonProps['slotProps']>;
+  const EVERY_PART: InfoButtonSlotProps = { info: {}, beak: {} };
+  const info = () =>
+    document.querySelector<HTMLElement>('.' + infoButtonClassNames.info) as HTMLElement;
+  const beak = () =>
+    document.querySelector<HTMLElement>('.' + infoButtonClassNames.beak) as HTMLElement;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    Reflect.deleteProperty(document.documentElement, 'clientWidth');
+    Reflect.deleteProperty(document.documentElement, 'clientHeight');
+  });
+
+  /** Opens the note with a click on the (first) button and lets the positioning settle. */
+  async function open() {
+    fireEvent.click(screen.getAllByRole('button')[0]);
+    await act(async () => {});
+  }
+
+  /** {@link expectInertSlotProps} for an open note: the same root, opened once. */
+  async function expectInertOpen(ui: (slotProps?: InfoButtonSlotProps) => React.ReactElement) {
+    const { baseElement, rerender, unmount } = render(ui(undefined));
+    await open();
+    const markup = baseElement.innerHTML;
+    expect(info()).not.toBeNull();
+    for (const slotProps of [{}, EVERY_PART, undefined]) {
+      rerender(ui(slotProps));
+      await act(async () => {});
+      expect(baseElement.innerHTML).toBe(markup);
+    }
+    unmount();
+  }
+
+  /** Boxes by `data-testid` and a 1024×768 viewport (jsdom has no layout). */
+  function mockLayout(
+    boxes: Record<string, { x: number; y: number; width: number; height: number }>,
+  ) {
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      configurable: true,
+      value: 1024,
+    });
+    Object.defineProperty(document.documentElement, 'clientHeight', {
+      configurable: true,
+      value: 768,
+    });
+    const boxOf = (el: Element) => boxes[el.getAttribute('data-testid') ?? ''];
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const { x, y, width, height } = boxOf(this) ?? { x: 0, y: 0, width: 0, height: 0 };
+      const full = { x, y, left: x, top: y, width, height, right: x + width, bottom: y + height };
+      return { ...full, toJSON: () => full } as DOMRect;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return boxOf(this)?.width ?? 0;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return boxOf(this)?.height ?? 0;
+    });
+  }
+
+  it('renders the open note of a98c113 (attributes sorted)', async () => {
+    // Captured from a98c113: the merged props may put the class before the locked attributes.
+    render(<InfoButton info="Some info" openOnHover={false} />);
+    await open();
+    expect(normaliseIds(sortAttributes(document.body))).toBe(
+      [
+        '<div>',
+        '<button aria-controls="info-note-_id0_" aria-describedby="info-_id1_" aria-expanded="true" aria-label="Information" class="wave-info-button inline-flex size-6 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground -my-0.5 not-disabled:not-aria-disabled:hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-size="medium" id="info-button-_id2_" type="button">',
+        '<svg aria-hidden="true" data-wave-icon="info" fill="currentColor" focusable="false" height="16" viewBox="0 0 20 20" width="16" xmlns="http://www.w3.org/2000/svg">',
+        '<path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm.5 5v1h-1V7h1Zm0 3v4h-1v-4h1Z" fill-rule="evenodd">',
+        '</path>',
+        '</svg>',
+        '</button>',
+        '<span hidden="">',
+        '</span>',
+        '</div>',
+        '<div class="wave-portal" data-layer="overlay" data-wave-portal="" dir="ltr" style="position: relative; z-index: calc(var(--wave-z-overlay, 1000) + 0);">',
+        '<div aria-labelledby="info-button-_id2_" class="wave-info-button__info w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16 transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-faster data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[side=top]:data-[presence=entering]:starting:translate-y-1 data-[side=top]:data-[presence=exiting]:translate-y-1 data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 data-[side=bottom]:data-[presence=exiting]:-translate-y-1 data-[side=left]:data-[presence=entering]:starting:translate-x-1 data-[side=left]:data-[presence=exiting]:translate-x-1 data-[side=right]:data-[presence=entering]:starting:-translate-x-1 data-[side=right]:data-[presence=exiting]:-translate-x-1" data-align="center" data-presence="entered" data-side="top" data-state="open" data-wave-infolabel-surface="" id="info-note-_id0_" role="note" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, -8px);">',
+        '<div aria-hidden="true" class="size-2 rotate-45 border-inherit bg-inherit border-b border-r wave-info-button__beak" data-wave-popover-arrow="" style="position: absolute; bottom: calc(var(--wave-popup-arrow-size, 8px) / -2); left: -1px;">',
+        '</div>',
+        '<div id="info-_id1_">Some info',
+        '</div>',
+        '</div>',
+        '</div>',
+      ].join(''),
+    );
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', async () => {
+    expectInertSlotProps(
+      (slotProps) => <InfoButton info="Some info" slotProps={slotProps} />,
+      EVERY_PART,
+    );
+    await expectInertOpen((slotProps) => <InfoButton info={INFO} slotProps={slotProps} />);
+    await expectInertOpen((slotProps) => (
+      <>
+        <span id="billing">Billing</span>
+        <InfoButton
+          id="billing-info"
+          aria-labelledby="billing billing-info"
+          size="small"
+          motion={null}
+          info="Invoices are sent monthly."
+          slotProps={slotProps}
+        />
+      </>
+    ));
+  });
+
+  it('puts your className, style and data-* on each part, after its own classes', async () => {
+    render(
+      <InfoButton
+        info="Some info"
+        slotProps={{
+          info: { className: 'my-note', style: { opacity: 0.5 }, 'data-part': 'info' },
+          beak: { className: 'my-beak', style: { opacity: 0.25 }, 'data-part': 'beak' },
+        }}
+      />,
+    );
+    await open();
+    for (const [element, stable, own, mine, data, opacity] of [
+      [info(), infoButtonClassNames.info, 'shadow-16', 'my-note', 'info', '0.5'],
+      [beak(), infoButtonClassNames.beak, 'rotate-45', 'my-beak', 'beak', '0.25'],
+    ] as const) {
+      expect(element).toHaveClass(stable, own, mine);
+      expect(element.classList[element.classList.length - 1]).toBe(mine);
+      expect(element).toHaveAttribute('data-part', data);
+      expect(element).toHaveStyle({ opacity });
+    }
+    expect(info().classList[0]).toBe(infoButtonClassNames.info);
+    // The button takes none of it, and no `slotProps` attribute.
+    expect(button()).not.toHaveAttribute('data-part');
+    expect(document.querySelector('[slotprops]')).toBeNull();
+  });
+
+  it('lets your class replace a conflicting class of a part', async () => {
+    render(
+      <InfoButton
+        info="Some info"
+        slotProps={{ info: { className: 'px-4' }, beak: { className: 'size-3' } }}
+      />,
+    );
+    await open();
+    expect(info()).toHaveClass('px-4');
+    expect(info()).not.toHaveClass('px-3');
+    expect(beak()).toHaveClass('size-3');
+    expect(beak()).not.toHaveClass('size-2');
+  });
+
+  it('locks the note’s id, role, name, marker, phase and placement, and keeps it shown', async () => {
+    render(
+      <>
+        <span id="extra">Extra</span>
+        <InfoButton
+          info="Some info"
+          slotProps={{
+            info: {
+              id: 'mine',
+              role: 'dialog',
+              'aria-labelledby': 'extra',
+              'data-wave-infolabel-surface': 'mine',
+              'data-state': 'closed',
+              'data-presence': 'exiting',
+              'data-side': 'bottom',
+              'data-align': 'start',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+              title: 'Note',
+            },
+          }}
+        />
+      </>,
+    );
+    await open();
+    const note = screen.getByRole('note');
+    expect(note).toBe(info());
+    expect(button()).toHaveAttribute('aria-controls', note.id);
+    expect(note.id).not.toBe('mine');
+    // Your ids come after the note's own: it is labelled like the button, then by yours.
+    expect(note).toHaveAttribute('aria-labelledby', `${button().id} extra`);
+    expect(note).toHaveAttribute('data-wave-infolabel-surface', '');
+    expect(note).toHaveAttribute('data-state', 'open');
+    expect(note).toHaveAttribute('data-presence', 'entered');
+    expect(note).toHaveAttribute('data-side', 'top');
+    expect(note).toHaveAttribute('data-align', 'center');
+    // Set by no state of the open note, so locked unset (the presence core adds `inert` and
+    // `hidden` only in some phases).
+    for (const name of ['hidden', 'inert', 'aria-hidden']) {
+      expect(note, name).not.toHaveAttribute(name);
+    }
+    expect(note).toHaveAttribute('title', 'Note');
+  });
+
+  it('keeps the exiting phase over yours: closed and inert while the note fades out', async () => {
+    const motion = mockAnimations({
+      animated: (el) => el.hasAttribute('data-wave-infolabel-surface'),
+    });
+    render(
+      <InfoButton
+        info="Some info"
+        openOnHover={false}
+        slotProps={{ info: { inert: false, 'data-state': 'open', 'data-presence': 'entered' } }}
+      />,
+    );
+    await open();
+    await act(async () => {
+      await motion.finishAll();
+    });
+    fireEvent.click(button());
+    expect(info()).toHaveAttribute('data-presence', 'exiting');
+    expect(info()).toHaveAttribute('data-state', 'closed');
+    expect(info()).toHaveAttribute('inert');
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('locks the beak’s hidden state, its marker, its tab stop and the position keys of its style', async () => {
+    render(
+      <InfoButton
+        info="Some info"
+        slotProps={{
+          beak: {
+            'aria-hidden': false,
+            'data-wave-popover-arrow': 'mine',
+            tabIndex: 0,
+            style: { position: 'static', bottom: '1px', left: '2px', opacity: 0.5 },
+            title: 'Beak',
+          },
+        }}
+      />,
+    );
+    await open();
+    expect(beak()).toHaveAttribute('aria-hidden', 'true');
+    expect(beak()).toHaveAttribute('data-wave-popover-arrow', '');
+    expect(beak()).not.toHaveAttribute('tabindex');
+    expect(beak()).toHaveAttribute('title', 'Beak');
+    expect(beak().style.position).toBe('absolute');
+    expect(beak().style.bottom).toBe('calc(var(--wave-popup-arrow-size, 8px) / -2)');
+    expect(beak().style.left).toBe('-1px');
+    expect(beak()).toHaveStyle({ opacity: '0.5' });
+  });
+
+  it('keeps the position the positioning sets over your note style', async () => {
+    render(
+      <InfoButton
+        info="Some info"
+        slotProps={{
+          info: { style: { position: 'static', top: '5px', transform: 'none', opacity: 0.5 } },
+        }}
+      />,
+    );
+    await open();
+    expect(info().style.position).toBe('fixed');
+    expect(info().style.top).toBe('0px');
+    expect(info().style.transform).toBe('translate(8px, -8px)');
+    expect(info()).toHaveStyle({ opacity: '0.5' });
+  });
+
+  it('attaches your refs to the parts', async () => {
+    const infoRef = React.createRef<HTMLDivElement>();
+    const beakRef = React.createRef<HTMLDivElement>();
+    render(
+      <InfoButton
+        info="Some info"
+        slotProps={{ info: { ref: infoRef }, beak: { ref: beakRef } }}
+      />,
+    );
+    await open();
+    expect(infoRef.current).toBe(info());
+    expect(beakRef.current).toBe(beak());
+  });
+
+  it('keeps placing the note and the beak while you pass new inline refs on every render', async () => {
+    mockLayout({
+      button: { x: 400, y: 300, width: 24, height: 24 },
+      note: { x: 0, y: 0, width: 200, height: 60 },
+      beak: { x: 0, y: 0, width: 8, height: 8 },
+    });
+    const notes: Array<HTMLDivElement | null> = [];
+    const beaks: Array<HTMLDivElement | null> = [];
+    const ui = () => (
+      <InfoButton
+        info="Some info"
+        data-testid="button"
+        slotProps={{
+          info: { 'data-testid': 'note', ref: (element) => void notes.push(element) },
+          beak: { 'data-testid': 'beak', ref: (element) => void beaks.push(element) },
+        }}
+      />
+    );
+    const { rerender } = render(ui());
+    await open();
+    rerender(ui());
+    rerender(ui());
+    expect(notes.at(-1)).toBe(info());
+    expect(beaks.at(-1)).toBe(beak());
+    // Centred above the button: x = 400 + 24 / 2 - 200 / 2 = 312, y = 300 - 60 - 8 = 232; the
+    // beak at (400 + 24 / 2) - 312 - 8 / 2 = 96.
+    await waitFor(() => expect(info().style.transform).toBe('translate(312px, 232px)'));
+    await waitFor(() => expect(beak().style.left).toBe('96px'));
+  });
+
+  it('runs your note keydown first: a prevented Tab keeps focus in the note', async () => {
+    const user = userEvent.setup();
+    const onKeyDown = vi.fn((event: React.KeyboardEvent) => {
+      if (event.key === 'Tab') event.preventDefault();
+    });
+    render(
+      <>
+        <InfoButton info={INFO} slotProps={{ info: { onKeyDown } }} />
+        <button type="button">After</button>
+      </>,
+    );
+    await user.tab();
+    await user.tab();
+    const link = screen.getByRole('link', { name: 'Rules' });
+    expect(link).toHaveFocus();
+    await user.tab();
+    expect(onKeyDown).toHaveBeenCalled();
+    expect(link).toHaveFocus();
+    expect(note()).toBeInTheDocument();
+  });
+
+  it('follows the pointer on the note also when your pointer handlers prevent the default', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+    const prevent = (event: React.SyntheticEvent) => event.preventDefault();
+    const onPointerEnter = vi.fn(prevent);
+    const onPointerLeave = vi.fn(prevent);
+    render(
+      <InfoButton info="Some info" slotProps={{ info: { onPointerEnter, onPointerLeave } }} />,
+    );
+    await user.hover(button());
+    advance(300);
+    await user.hover(note());
+    advance(1000);
+    expect(onPointerEnter).toHaveBeenCalled();
+    expect(note()).toBeInTheDocument();
+    await user.unhover(note());
+    expect(onPointerLeave).toHaveBeenCalled();
+    advance(300);
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('calls your part handlers once per click in StrictMode', async () => {
+    const onInfoClick = vi.fn();
+    const onBeakClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <InfoButton
+          info="Some info"
+          openOnHover={false}
+          slotProps={{ info: { onClick: onInfoClick }, beak: { onClick: onBeakClick } }}
+        />
+      </React.StrictMode>,
+    );
+    await open();
+    fireEvent.click(beak());
+    expect(onBeakClick).toHaveBeenCalledTimes(1);
+    expect(onInfoClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the parts while the note is closed', () => {
+    render(
+      <InfoButton
+        info="Some info"
+        slotProps={{ info: { className: 'my-note' }, beak: { className: 'my-beak' } }}
+      />,
+    );
+    expect(screen.queryByRole('note')).toBeNull();
+    expect(document.querySelector('.my-note, .my-beak')).toBeNull();
+  });
+
+  it('has no accessibility violations with every part customised', async () => {
+    render(
+      <InfoButton
+        info={INFO}
+        slotProps={{ info: { className: 'my-note' }, beak: { className: 'my-beak' } }}
+      />,
+    );
+    await open();
+    await expectNoA11yViolations();
+  });
+
+  it('types each part for its element, and takes no children', () => {
+    expectTypeOf<keyof InfoButtonSlotProps>().toEqualTypeOf<'info' | 'beak'>();
+    expectTypeOf<NonNullable<InfoButtonSlotProps['info']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<InfoButtonSlotProps['beak']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    // @ts-expect-error -- a part takes no children: `info` is the note's content
+    void (<InfoButton info="Some info" slotProps={{ info: { children: 'Other' } }} />);
   });
 });

@@ -1,5 +1,18 @@
+import type { InputHTMLAttributes } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { Checkbox, Field, Input, RadioGroup, Select, Slider, Switch, Textarea } from '../src';
+import {
+  Checkbox,
+  cn,
+  Field,
+  Input,
+  inputFocus,
+  inputFocusWithin,
+  RadioGroup,
+  Select,
+  Slider,
+  Switch,
+  Textarea,
+} from '../src';
 import { orientationArgType, validationStateArgType } from './_helpers';
 
 const meta = {
@@ -218,6 +231,67 @@ export const Sizes: Story = {
       </Field>
       <Field {...args} label="Large field" size="large">
         <Input placeholder="Large" />
+      </Field>
+    </div>
+  ),
+};
+
+/** The look of an outline Input, for the native controls of the function child story. */
+const OUTLINE_BOX = 'rounded border border-input border-b-stroke-accessible bg-background';
+
+/** Props of {@link PhoneInput}. */
+interface PhoneInputProps {
+  /** The attributes of the input, the way many third-party controls take them. */
+  inputProps?: InputHTMLAttributes<HTMLInputElement>;
+  /** The country calling code shown before the number. */
+  countryCode?: string;
+}
+
+/**
+ * Stands in for a third-party control: it takes the attributes of its input as `inputProps` and
+ * ignores the others, so Field cannot reach the input by merging into the element.
+ */
+function PhoneInput({ inputProps, countryCode = '+47' }: PhoneInputProps) {
+  return (
+    <span className={cn('flex h-8 items-center gap-2 px-3', OUTLINE_BOX, inputFocusWithin)}>
+      <span className="text-body-1 text-muted-foreground">{countryCode}</span>
+      <input
+        type="tel"
+        autoComplete="tel"
+        {...inputProps}
+        className="min-w-0 flex-1 bg-transparent text-body-1 text-foreground focus:outline-hidden"
+      />
+    </span>
+  );
+}
+
+/**
+ * A function child renders the control itself and receives the Field's attributes as props
+ * (`id`, `aria-labelledby`, `aria-describedby`, `aria-invalid` and `aria-required`): spread them on
+ * a native `<input>`, or give them to a third-party control under the name it takes them by (here
+ * `inputProps`). Field renders what the function returns as it is.
+ */
+export const WithFunctionChild: Story = {
+  name: 'Field with a function child',
+  args: {
+    label: 'Email',
+    hint: 'Your work address.',
+    required: true,
+  },
+  render: (args) => (
+    <div className="flex max-w-sm flex-col gap-4">
+      <Field {...args}>
+        {(props) => (
+          <input
+            type="email"
+            autoComplete="email"
+            {...props}
+            className={cn('h-8 px-3 text-body-1 text-foreground', OUTLINE_BOX, inputFocus)}
+          />
+        )}
+      </Field>
+      <Field {...args} label="Phone" hint="A mobile number." error="Enter a phone number.">
+        {(props) => <PhoneInput inputProps={props} />}
       </Field>
     </div>
   ),

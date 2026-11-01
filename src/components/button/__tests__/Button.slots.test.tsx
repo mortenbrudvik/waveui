@@ -109,6 +109,22 @@ describe('Button.slots', () => {
     });
 
     it.each([
+      ['"button"', 'button'],
+      ['a Wave Button', Button],
+    ] as const)(
+      'unwraps a slot object whose `as` is %s around a render function to the slot object of the function (P13-01)',
+      (_name, as) => {
+        const renderGlyph = (Component: React.ElementType, props: object) => (
+          <Component {...props} />
+        );
+        expect(unwrapButtonGlyph({ as, className: 'dropped', children: renderGlyph })).toEqual({
+          glyph: { children: renderGlyph },
+          button: 'a slot object that renders a button',
+        });
+      },
+    );
+
+    it.each([
       ['undefined', undefined],
       ['null', null],
       ['false', false],
@@ -182,6 +198,24 @@ describe('Button.slots', () => {
         expect(withPartClass(slot as Slot<'span'>, part)).toBe(slot);
       },
     );
+
+    it('keeps a render function: it receives the part class with the classes of the renderer (P13-01)', () => {
+      const renderGlyph = vi.fn((Component: React.ElementType, props: object) => (
+        <Component {...props} data-testid="glyph" />
+      ));
+      const slot = withPartClass({ className: 'custom', children: renderGlyph }, part);
+      render(<>{renderSlot(slot, 'span', 'base', { 'aria-hidden': true })}</>);
+      expect(renderGlyph).toHaveBeenCalledWith('span', {
+        'aria-hidden': true,
+        className: `base ${part} custom`,
+      });
+      expect(screen.getByTestId('glyph').className).toBe(`base ${part} custom`);
+    });
+
+    it('returns a render function that renders nothing unchanged (P13-01)', () => {
+      const slot = { children: () => null };
+      expect(withPartClass(slot, part)).toBe(slot);
+    });
 
     it('treats 0 as content', () => {
       const { container } = render(<>{renderSlot(withPartClass(0, part), 'span')}</>);

@@ -9,11 +9,13 @@ import { hasIsolatingModalBelow, subscribeLayers } from '../../lib/layers';
 import {
   materialiseSlotContent,
   resolveSlot,
+  resolveWiredSlot,
   slotRendersContent,
   slotWrapsDefaultContent,
   type Slot,
   type SlotObject,
 } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { BackdropAppearance, IconPosition } from '../../lib/types';
 import type { PresenceAttributes } from '../../hooks/usePresence';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -146,7 +148,8 @@ function resolveCloseButton(closeButton: Slot<'span'> | undefined): CloseButtonP
     );
   }
 
-  const resolved = resolveSlot(closeButton, 'span');
+  // A render function is merged with a button `as`, or dropped when it renders nothing.
+  const resolved = resolveWiredSlot(resolveSlot(closeButton, 'span'), isButtonType);
   if (!resolved) return defaultParts();
   const { Component, props, children } = resolved;
   if (isButtonType(Component)) {
@@ -199,7 +202,27 @@ export interface ModalCloseButtonProps {
   onClose: (event: Event) => void;
   /** The part class and layout classes, after Button's own (`drawerClassNames.closeButton`, …). */
   className: string;
+  /**
+   * The consumer's props for the button (TeachingPopover's `slotProps.closeButton`), merged after
+   * what the slot merged in: the slot's attributes are the part's defaults, and the type, the
+   * disabled state, the tab stop, the hidden state, the name and the click stay locked.
+   */
+  part?: SlotPart<'button'>;
 }
+
+/** The Close button's attributes that a part cannot change: kept at the slot's values. */
+const CLOSE_BUTTON_LOCKED_KEYS = [
+  'type',
+  'disabled',
+  'tabIndex',
+  'hidden',
+  'inert',
+  'aria-hidden',
+  'aria-label',
+  'aria-disabled',
+  'data-disabled',
+  'data-disabled-focusable',
+] as const;
 
 /**
  * The built-in Close button with the `closeButton` slot rules (D95), shared by `Dialog.Content`,
@@ -217,6 +240,7 @@ export function ModalCloseButton({
   closeLabel,
   onClose,
   className,
+  part,
 }: ModalCloseButtonProps): React.ReactNode {
   const parts = resolveCloseButton(closeButton);
   const merged = parts?.merged ?? null;
@@ -232,6 +256,7 @@ export function ModalCloseButton({
     ref: slotRef,
     onClick: slotOnClick,
     className: slotClassName,
+    style: slotStyle,
     ...slotButtonProps
   } = parts?.buttonProps ?? {};
   const hasOwnName = Object.keys(slotButtonProps).some(
@@ -257,24 +282,38 @@ export function ModalCloseButton({
   const ref = useMergedRefs<HTMLButtonElement>(
     slotRef as React.Ref<HTMLButtonElement> | undefined,
     checksContent ? setLabelTarget : undefined,
+    part?.ref,
   );
 
   if (parts === null) return null;
+  // The slot's attributes are the part's defaults: a part replaces them, its classes come after
+  // theirs and its handlers run first; the attributes the two give together stay locked.
+  const defaults: UnknownProps = {
+    'aria-label': hasOwnName || namedByContent ? undefined : closeLabel,
+    ...slotButtonProps,
+  };
+  const locked: UnknownProps = {
+    onClick: composeEventHandlers(
+      slotOnClick as React.MouseEventHandler<HTMLButtonElement> | undefined,
+      (event: React.MouseEvent<HTMLButtonElement>) => onClose(event.nativeEvent),
+    ),
+  };
+  for (const key of CLOSE_BUTTON_LOCKED_KEYS) locked[key] = defaults[key];
   return (
     <Button
       appearance="subtle"
       size="small"
-      aria-label={hasOwnName || namedByContent ? undefined : closeLabel}
-      {...slotButtonProps}
+      {...mergeSlotProps(part, {
+        className: cn(className, slotClassName as string | undefined),
+        style: slotStyle as React.CSSProperties | undefined,
+        defaults,
+        locked,
+      })}
       ref={ref}
       icon={parts.icon}
       iconPosition={parts.iconPosition}
+      // A merged `disabledFocusable` Button blocks every click, a part's too.
       disabledFocusable={parts.disabledFocusable}
-      onClick={composeEventHandlers(
-        slotOnClick as React.MouseEventHandler<HTMLButtonElement> | undefined,
-        (event: React.MouseEvent<HTMLButtonElement>) => onClose(event.nativeEvent),
-      )}
-      className={cn(className, slotClassName as string | undefined)}
     >
       {parts.children}
     </Button>

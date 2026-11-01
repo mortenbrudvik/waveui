@@ -12,6 +12,7 @@ import {
 import type { IconComponent } from '../../lib/icons';
 import { warnDeprecated } from '../../lib/dev';
 import { AvatarBadgeSizeContext } from './Avatar.context';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { DeprecatedPresenceStatus, PresenceStatus, Size } from '../../lib/types';
 
@@ -30,7 +31,31 @@ export interface PresenceBadgeProps extends React.HTMLAttributes<HTMLSpanElement
   size?: Size;
   /** Ref to the root `<span>`. */
   ref?: React.Ref<HTMLSpanElement>;
+  /**
+   * Props for the element the badge draws inside its root, by part, merged into the part's own:
+   * your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref attached. Every attribute the badge sets on the part
+   * is locked. A part takes no `children` (the badge draws its glyph); the root takes the badge's
+   * own props.
+   */
+  slotProps?: {
+    /**
+     * The status glyph, an `<svg>` (stable class `wave-presence-badge__icon`), mirrored in
+     * right-to-left layouts for out of office. Locked: `aria-hidden`, `focusable="false"` and,
+     * unset, `role` and `tabIndex` (it is decorative: the badge's name is the root's
+     * `aria-label`).
+     */
+    icon?: SlotPart<'svg'>;
+  };
 }
+
+/** What the glyph part locks: decorative, never a tab stop or focusable. */
+const ICON_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'aria-hidden': true,
+  focusable: 'false',
+} as const;
 
 /** The shape drawn for a status, exposed as `data-glyph` (styling hook and test contract). */
 type PresenceGlyph = 'check' | 'solid' | 'clock' | 'ring-x' | 'bar' | 'arrow';
@@ -129,12 +154,19 @@ export const PresenceBadge = ({
   size: sizeProp,
   className,
   ref,
+  slotProps,
   ...props
 }: PresenceBadgeProps) => {
   const avatarBadgeSize = React.useContext(AvatarBadgeSizeContext);
   const size = sizeProp ?? avatarBadgeSize ?? 'medium';
   const status = normalizePresenceStatus(statusProp);
   const { glyph, Icon, className: statusClassName } = statusStyles[status];
+  const iconPart = slotProps?.icon;
+  const iconClassName = cn(
+    presenceBadgeClassNames.icon,
+    'size-full',
+    glyph === 'arrow' && 'wave-rtl:-scale-x-100',
+  );
 
   return (
     <span
@@ -156,11 +188,9 @@ export const PresenceBadge = ({
     >
       <Icon
         size="100%"
-        className={cn(
-          presenceBadgeClassNames.icon,
-          'size-full',
-          glyph === 'arrow' && 'wave-rtl:-scale-x-100',
-        )}
+        className={iconClassName}
+        {...(iconPart &&
+          mergeSlotProps(iconPart, { className: iconClassName, locked: ICON_PART_LOCKS }))}
       />
     </span>
   );

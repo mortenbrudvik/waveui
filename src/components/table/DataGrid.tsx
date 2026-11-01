@@ -14,6 +14,7 @@ import type { ColumnSizingOption } from '../../lib/columnSizing';
 import { endsTextSelection, isForeignEvent } from '../../lib/events';
 import { clearIds, selectAllIds, summarizeSelection, toggleId } from '../../lib/selection';
 import type { Slot } from '../../lib/slot';
+import type { SlotPart } from '../../lib/slotProps';
 import { focusRingInset, forcedColors } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -73,6 +74,8 @@ import {
 export { createSelectionStore };
 export type { SelectionStore, SelectionUniverse };
 export type { SortDirection };
+export { useDataGridRowId, useDataGridSelection, useDataGridSort } from './DataGrid.hooks';
+export type { UseDataGridSelectionResult, UseDataGridSortResult } from './DataGrid.hooks';
 
 /** The sort state of a DataGrid: the sorted column and its direction. */
 export interface DataGridSort {
@@ -84,7 +87,11 @@ export interface DataGridSort {
 
 /** Second argument of `onSortChange` (the `DataGridSort` form): the event behind the sort. */
 export interface DataGridSortChangeDetails {
-  /** The DOM event behind the sort: the click of the sort button (Enter and Space click it). */
+  /**
+   * The DOM event behind the sort: the click of the sort button (Enter and Space click it), or the
+   * event passed to `setSort` of `useDataGridSort` (without one, an untrusted `sort` event with no
+   * target).
+   */
   event: Event;
 }
 
@@ -92,7 +99,8 @@ export interface DataGridSortChangeDetails {
 export interface DataGridSelectedItemsChangeDetails {
   /**
    * The DOM event behind the change: the click of a selection control (the select-all checkbox
-   * included), or the key press of Space on a row.
+   * included), the key press of Space on a row, or the event passed to `toggle` of
+   * `useDataGridSelection` (without one, an untrusted `select` event with no target).
    */
   event: Event;
 }
@@ -411,7 +419,8 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
   defaultSelectedItems?: readonly string[];
   /**
    * Called with the new selected row ids when the selection changes, then `details` (`{ event }`,
-   * the click or key press behind the change).
+   * the click or key press behind the change). A `toggle` of `useDataGridSelection` in a part of
+   * your own calls it as the row's control does.
    *
    * With `items`, the selection follows the data: it reports every selected id, also ids whose
    * rows are not rendered or not in `items` (filtered out, on another page, restored by id), and no
@@ -470,7 +479,8 @@ export interface DataGridControlledSortProps extends NoDeprecatedSortProps {
   /** Initial sort while `sort` is not given yet. */
   defaultSort?: DataGridSort | null;
   /**
-   * Called with the new sort when a sortable header is activated, then `details` (`{ event }`).
+   * Called with the new sort when a sortable header is activated (or `setSort` of
+   * `useDataGridSort` is called), then `details` (`{ event }`).
    * With `items`, the grid orders its rows by the sorted column's `compare` (see
    * `DataGridColumn.compare`), also while `sort` is controlled; otherwise the consumer orders them.
    */
@@ -483,7 +493,8 @@ export interface DataGridUncontrolledSortProps extends NoDeprecatedSortProps {
   /** The initial sort, or `null` for an initially unsorted grid. */
   defaultSort: DataGridSort | null;
   /**
-   * Called with the new sort when a sortable header is activated, then `details` (`{ event }`).
+   * Called with the new sort when a sortable header is activated (or `setSort` of
+   * `useDataGridSort` is called), then `details` (`{ event }`).
    * With `items`, the grid orders its rows by the sorted column's `compare` (see
    * `DataGridColumn.compare`); otherwise the consumer orders them.
    */
@@ -504,7 +515,8 @@ export interface DataGridItemsSortProps<T = unknown>
   /** The initial sort while `sort` is not given. */
   defaultSort?: DataGridSort | null;
   /**
-   * Called with the new sort when a sortable header is activated, then `details` (`{ event }`).
+   * Called with the new sort when a sortable header is activated (or `setSort` of
+   * `useDataGridSort` is called), then `details` (`{ event }`).
    * The grid orders its rows by the sorted column's `compare` (see `DataGridColumn.compare`).
    */
   onSortChange?: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
@@ -537,8 +549,9 @@ export interface DataGridLegacySortProps {
   /** @deprecated Use `defaultSort`. */
   defaultSortDirection?: SortDirection;
   /**
-   * Called when a sortable header is activated, with the 0.4 arguments. Pass `items`, `sort` or
-   * `defaultSort` to receive a `DataGridSort` object (and `details`) instead:
+   * Called when a sortable header is activated (or `setSort` of `useDataGridSort` is called),
+   * with the 0.4 arguments (deprecated: removed in 1.0, with a development warning). Pass
+   * `items`, `sort` or `defaultSort` to receive a `DataGridSort` object (and `details`) instead:
    * `defaultSort={null}` turns the object form on for an initially unsorted grid. A `sort` that is
    * still `undefined` (e.g. while data loads) does not: pass `sort={sort ?? null}`.
    *
@@ -574,6 +587,32 @@ export interface DataGridHeaderProps extends React.HTMLAttributes<HTMLTableSecti
    * an empty cell.
    */
   children: React.ReactNode;
+  /**
+   * Props for the select-all checkbox the header draws, by part, merged into the part's own
+   * (Fluent UI's DataGridHeader has no slot for it: it is its selection cell's checkbox): your
+   * classes after the part's (yours win a conflict), your styles over its styles, your handlers
+   * before its handlers, your ids added to its `aria-labelledby` and `aria-describedby`, and your
+   * ref beside its ref. Every attribute the header sets on the checkbox is locked and keeps the
+   * header's value (set it through the row's `selectionCellProps` or a `DataGrid.SelectionCell`);
+   * you add the attributes it does not set. A part takes no `children`.
+   */
+  slotProps?: {
+    /**
+     * The select-all `<input type="checkbox">` of a grid with multiple selection, in the first
+     * header row's selection cell, whichever draws it: the cell the header adds to a `<tr>`, a
+     * `DataGrid.Row` header row, or a `DataGrid.SelectionCell` (stable class
+     * `wave-data-grid-header__select-all-checkbox`). A grid with single selection draws none.
+     * Locked: `type`, the checked and mixed state (with `defaultChecked`, `defaultValue` and
+     * `aria-checked` unset: it is controlled and natively checked), `disabled`, the name
+     * (`aria-label`, and `aria-labelledby` and `aria-describedby`, to which your ids are added)
+     * and its change handler (your `onChange` runs first, and `preventDefault()` in it keeps the
+     * selection as it is), and unset `role`, `tabIndex` (the grid's navigation writes it),
+     * `name`, `form`, `required`, `contentEditable`, `hidden`, `inert`, `aria-hidden` and the
+     * markers the grid's navigation reads (`data-roving-container`, `data-grid-auxiliary`). A
+     * disabled checkbox calls no click handler, yours included.
+     */
+    selectAllCheckbox?: SlotPart<'input'>;
+  };
   /** Ref to the `<thead>` element. */
   ref?: React.Ref<HTMLTableSectionElement>;
 }
@@ -598,6 +637,50 @@ export interface DataGridHeaderCellProps extends React.ThHTMLAttributes<HTMLTabl
    * become the glyph and its props are dropped, with a development warning.
    */
   sortIcon?: Slot<'span'>;
+  /**
+   * Props for the elements the header cell draws inside it, by part, merged into each part's own
+   * (Fluent UI's `button` slot prop, and the props of its column's resize handle): your classes
+   * after the part's (yours win a conflict), your styles over its styles, your handlers before
+   * its handlers, your ids added to its `aria-labelledby` and `aria-describedby`, and your ref
+   * beside its ref. Every attribute the cell sets on a part is locked and keeps the cell's value;
+   * you add the attributes it does not set. A part takes no `children`: the cell's children fill
+   * the sort button, and `sortIcon` is a slot of its own.
+   */
+  slotProps?: {
+    /**
+     * The sort `<button>` of a `sortable` header with a `columnId`, around the content and the
+     * direction glyph (stable class `wave-data-grid-header-cell__button`); a header that is not
+     * sortable draws none. Locked: `type`, `id` (the cell's `aria-labelledby` names it in a grid
+     * with resizable columns; unset otherwise), and unset `role`, `tabIndex` (the grid's
+     * navigation writes it), `disabled`, `contentEditable` (the grid takes an editable element for
+     * text entry, so the cell would take focus instead), `hidden`, `inert`, `aria-hidden` and the
+     * markers the grid's navigation reads (`data-roving-container`, which makes a nested
+     * composite, and `data-grid-auxiliary`, which keeps a widget from being the cell's target).
+     * The cell sorts when a click on the button reaches it: your `onClick` runs first, and
+     * `preventDefault()` in it skips the sort, while the cell's own `onClick` still runs. The
+     * direction is the cell's `aria-sort`.
+     */
+    button?: SlotPart<'button'>;
+    /**
+     * The column's resize handle in a grid with `resizableColumns`, a `<div role="separator">`
+     * (stable class `wave-data-grid-header-cell__resize-handle`, beside the handle's own
+     * `wave-table-resize-handle`); a header without a column of `columns` draws none. A
+     * `Table.ResizeHandle` you render yourself takes its props directly. Locked: `role`,
+     * `aria-orientation`, the `aria-value*` attributes, `tabIndex` (the grid's navigation writes
+     * it), the name (`aria-label`, from `labels.resizeColumn`; your ids are added to
+     * `aria-labelledby` and `aria-describedby`), `data-dragging`, `data-grid-auxiliary` (the
+     * marker that keeps it from being its cell's target and lets F2 reach it), unset `hidden`,
+     * `inert`, `aria-hidden`, `contentEditable` and `data-roving-container`, and its pointer,
+     * key and double-click handling: your `onPointerDown`, `onPointerMove`, `onKeyDown`,
+     * `onKeyDownCapture` and `onDoubleClick` run first, and `preventDefault()` in them skips the
+     * drag, the move, the key and the reset. The end of a drag (`onPointerUp`,
+     * `onPointerCancel`, `onLostPointerCapture`), the blur and the measure of the column on focus
+     * run after yours whatever they do. On the release of a pressed Enter or Space (`onKeyUp`)
+     * the handle always forgets the pressed key after yours, but `preventDefault()` in yours
+     * keeps focus on the handle instead of returning it to the header cell.
+     */
+    resizeHandle?: SlotPart<'div'>;
+  };
   /** Header cell content. */
   children: React.ReactNode;
   /** Ref to the `<th>` element. */
@@ -650,6 +733,35 @@ export interface DataGridRowProps extends React.HTMLAttributes<HTMLTableRowEleme
    * props win (their classes are merged). In a header row they apply to the select-all cell.
    */
   selectionCellProps?: DataGridRowSelectionCellProps;
+  /**
+   * Props for the selection control of the row, by part, merged into the part's own (Fluent UI's
+   * `checkboxIndicator` and `radioIndicator` of its selection cell stand for it): your classes
+   * after the part's (yours win a conflict), your styles over its styles, your handlers before
+   * its handlers, your ids added to its `aria-labelledby` and `aria-describedby`, and your ref
+   * beside its ref. Every attribute the row sets on the control is locked and keeps the row's
+   * value (set it through `selectionLabel`, `selectionCellProps` or a `DataGrid.SelectionCell`);
+   * you add the attributes it does not set. A part takes no `children`. In a grid of many rows,
+   * keep the object stable: a new object renders the row's selection cell again.
+   */
+  slotProps?: {
+    /**
+     * The `<input type="checkbox">` (multiple selection) or `<input type="radio">` (single
+     * selection) in the row's selection cell, the cell the row adds or a `DataGrid.SelectionCell`
+     * child (stable class `wave-data-grid-row__selection-control`). A row without a `rowId`, a
+     * header row (whose select-all checkbox is `DataGrid.Header`'s `selectAllCheckbox`) and a grid
+     * without selection draw none. Locked: `type`, the checked state (with `defaultChecked`,
+     * `defaultValue` and `aria-checked` unset: it is controlled and natively checked),
+     * `disabled`, `name` and `form` (which group the radios and keep them out of any form; unset
+     * on a checkbox), the name (`aria-label`, and `aria-labelledby` and `aria-describedby`, to
+     * which your ids are added) and its change handler (your `onChange` runs first, and
+     * `preventDefault()` in it keeps the row's selection as it is), and unset `role`, `tabIndex`
+     * (the grid's navigation writes it), `required`, `contentEditable`, `hidden`, `inert`,
+     * `aria-hidden` and the markers the grid's navigation reads (`data-roving-container`,
+     * `data-grid-auxiliary`). A click on the control never also selects the row through
+     * `selectOnRowClick`, and a disabled control calls no click handler, yours included.
+     */
+    selectionControl?: SlotPart<'input'>;
+  };
   /**
    * DataGrid cell elements. A `DataGrid.SelectionCell` child (also inside a Fragment) is the row's
    * selection cell, where it stands: the row then adds none.
@@ -833,6 +945,27 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   /** A grid with `items` (and no `sort`/`defaultSort`) ignores the deprecated sort props. */
   const ignoredSortProps = !legacySort && !usesSortApi && deprecatedSortProps;
 
+  // C-DEV: the positional callback of the 0.4 sort API is removed in 1.0.
+  const positionalSortCallback = !objectCallbacks && onSortChange !== undefined;
+  React.useEffect(() => {
+    if (!positionalSortCallback) return;
+    // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
+    // production bundle then drops the warning and its text. Without a bundler and without
+    // `process` (an unbundled import in a browser), the read throws and it is skipped.
+    try {
+      if (process.env.NODE_ENV !== 'production') {
+        warnDeprecated(
+          'DataGrid',
+          'onSortChange(columnId, direction)',
+          'onSortChange(sort, details?)',
+          'Pass `items`, `sort` or `defaultSort` to receive the sort object.',
+        );
+      }
+    } catch {
+      // No `process`: see above.
+    }
+  }, [positionalSortCallback]);
+
   React.useEffect(() => {
     if (mixedSortApi) {
       warnOnce(
@@ -931,17 +1064,11 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     emitSortChange,
   );
 
-  const requestSort = React.useCallback(
-    (columnId: string, event: Event) => {
+  const changeSort = React.useCallback(
+    (event: Event, update: (previous: DataGridSort | null) => DataGridSort | null) => {
       sortDetailsRef.current = { event };
       try {
-        setSort((previous) => ({
-          columnId,
-          direction:
-            previous?.columnId === columnId && previous.direction === 'ascending'
-              ? 'descending'
-              : 'ascending',
-        }));
+        setSort(update);
       } finally {
         sortDetailsRef.current = undefined;
       }
@@ -949,9 +1076,32 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     [setSort],
   );
 
+  const requestSort = React.useCallback(
+    (columnId: string, event: Event) =>
+      changeSort(event, (previous) => ({
+        columnId,
+        direction:
+          previous?.columnId === columnId && previous.direction === 'ascending'
+            ? 'descending'
+            : 'ascending',
+      })),
+    [changeSort],
+  );
+
+  // `useDataGridSort().setSort`: a sort the grid already has changes nothing and reports nothing.
+  const setSortTo = React.useCallback(
+    ({ columnId, direction }: DataGridSort, event?: Event) =>
+      changeSort(event ?? new Event('sort'), (previous) =>
+        previous?.columnId === columnId && previous.direction === direction
+          ? previous
+          : { columnId, direction },
+      ),
+    [changeSort],
+  );
+
   const sortContext = React.useMemo<DataGridSortContextValue>(
-    () => ({ sort, requestSort }),
-    [sort, requestSort],
+    () => ({ sort, requestSort, setSort: setSortTo }),
+    [sort, requestSort, setSortTo],
   );
 
   // --- selection ------------------------------------------------------------
@@ -1063,6 +1213,8 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
             toggleId(current, rowId, single ? 'single' : 'multiple', { allowEmpty: true }),
           );
         } else {
+          // Only a rendered row has a selection (`useDataGridSelection().toggle` takes any id).
+          if (store.countRegistrations(rowId) === 0) return previous;
           const effective = store.prune(previous);
           if (single) {
             // Single mode shows the first selected row that is rendered (see the store).
@@ -1579,6 +1731,7 @@ const DataGridRow = ({
   rowId: rowIdProp,
   selectionLabel,
   selectionCellProps,
+  slotProps,
   children,
   className,
   style,
@@ -1748,28 +1901,31 @@ const DataGridRow = ({
   // The selection control's name: the cell's own, else the row's first cell, else "Select row".
   const controlLabelledBy = ownLabelledBy ?? labelledBy;
   const controlLabel = ownLabel ?? (controlLabelledBy === undefined ? 'Select row' : undefined);
+  const selectionControlPart = slotProps?.selectionControl;
 
   const rowContext = React.useMemo<DataGridRowContextValue>(
     () => ({
       selectionCellProps,
       hasSelectionCell,
-      rowId: selectable ? rowId : undefined,
+      rowId: inHeader ? undefined : rowId,
       isSelected,
       disabled: selectionDisabled,
       invisible: selectionInvisible,
       ariaLabel: controlLabel,
       ariaLabelledBy: controlLabelledBy,
+      selectionControlPart,
     }),
     [
       selectionCellProps,
       hasSelectionCell,
-      selectable,
+      inHeader,
       rowId,
       isSelected,
       selectionDisabled,
       selectionInvisible,
       controlLabel,
       controlLabelledBy,
+      selectionControlPart,
     ],
   );
 
@@ -1885,6 +2041,7 @@ function DataGridBodySelectionCell({
           aria-labelledby={row.ariaLabelledBy}
           aria-describedby={ariaDescribedBy}
           className={dataGridRowClassNames.selectionControl}
+          part={row.selectionControlPart}
         />
       )}
     </td>
@@ -2063,6 +2220,12 @@ export {
  * and column sizing still cover every item. The grid then carries `aria-rowcount` and its rows
  * `aria-rowindex`, so assistive technology reads each row's place in the whole list. Fluent's
  * DataGrid has no built-in counterpart.
+ *
+ * Cells, headers and footer rows of your own read and change the grid through three hooks:
+ * `useDataGridSort` (the sort, and `setSort`, which calls `onSortChange` as a sortable header
+ * does), `useDataGridSelection` (the selected ids, `isSelected`, and `toggle`, which calls
+ * `onSelectedItemsChange` as a row's selection control does) and `useDataGridRowId` (the id of
+ * the row around a cell).
  *
  * Sub-components are available as `DataGrid.Header`, `DataGrid.HeaderCell`, `DataGrid.Body`,
  * `DataGrid.Row`, `DataGrid.Cell` and `DataGrid.SelectionCell` in client components, and as the

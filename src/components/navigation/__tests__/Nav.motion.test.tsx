@@ -585,6 +585,40 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
     expect(icon).toHaveAttribute('aria-hidden', 'true');
   });
 
+  it('a render function renders the glyph element with the expand icon and motion classes (P13-01)', () => {
+    render(
+      <Docs
+        defaultOpenCategories={['docs']}
+        category={{
+          expandIcon: {
+            className: 'my-glyph',
+            children: (Component, props) => <Component {...props}>+</Component>,
+          },
+        }}
+      />,
+    );
+    const icon = expandIcon()!;
+    expect(icon.tagName).toBe('SPAN');
+    expect(icon.classList[0]).toBe(navCategoryClassNames.expandIcon);
+    expect(icon).toHaveClass('inline-flex', 'shrink-0', ...motionClasses(expandIconMotion));
+    expect(icon).toHaveClass('my-glyph');
+    expect(icon).not.toHaveClass('rotate-180');
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(icon).toHaveTextContent('+');
+    expect(toggle().lastElementChild).toBe(icon);
+    expect(toggle()).toHaveAccessibleName('Docs');
+  });
+
+  it('a render function that renders nothing hides the chevron (P13-01)', () => {
+    render(
+      <Docs defaultOpenCategories={['docs']} category={{ expandIcon: { children: () => null } }} />,
+    );
+    expect(expandIcon()).toBeNull();
+    expect(toggle().querySelector('svg')).toBeNull();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle().textContent).toBe('Docs');
+  });
+
   /** The one-time warning of a button passed as the glyph (C-SLOTS, `unwrapButtonGlyph`). */
   const buttonGlyphWarning = (received: string) =>
     `[WaveUI] Nav.Category: \`expandIcon\` received ${received}; its children render as the glyph of the toggle button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. \`expandIcon={<MyIcon />}\`.`;
@@ -643,6 +677,37 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
       warn.mockClear();
     },
   );
+
+  it('unwraps a button slot object around a render function: the function renders the glyph span (P13-01)', () => {
+    warn.mockImplementation(() => {});
+    render(
+      <Docs
+        defaultOpenCategories={['docs']}
+        category={{
+          expandIcon: {
+            as: 'button',
+            className: 'own-button',
+            children: (Component, props) => (
+              <Component {...props} data-own="">
+                +
+              </Component>
+            ),
+          },
+        }}
+      />,
+    );
+    expect(toggle().querySelector('button')).toBeNull();
+    const icon = expandIcon()!;
+    expect(icon.tagName).toBe('SPAN');
+    expect(icon.classList[0]).toBe(navCategoryClassNames.expandIcon);
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(icon).toHaveAttribute('data-own', '');
+    expect(icon).toHaveTextContent('+');
+    // The button's props are dropped, its render function kept.
+    expect(document.querySelector('.own-button')).toBeNull();
+    expect(warn.mock.calls).toEqual([[buttonGlyphWarning('a slot object that renders a button')]]);
+    warn.mockClear();
+  });
 
   it('a button without children keeps the default chevron (the glyph is its nothing), with the warning', () => {
     warn.mockImplementation(() => {});

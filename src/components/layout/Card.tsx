@@ -11,9 +11,10 @@ import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
 import { CheckIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
-import type { CoreSize, Orientation, Slot } from '../../lib/types';
+import type { CoreSize, Orientation, Slot, SlotObject } from '../../lib/types';
 import { CardCornersContext, CardOrientationContext } from './Card.context';
 import { CardPreview } from './Card.preview';
 
@@ -98,6 +99,20 @@ const cardAppearanceClasses: Readonly<
   },
 };
 
+/** What the check glyph part locks: decorative, never a tab stop or focusable. */
+const CHECKMARK_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'aria-hidden': true,
+  focusable: 'false',
+} as const;
+
+/** The props of a selected card's check glyph, its `slotProps.checkmark` merged in when given. */
+function checkmarkProps(part: SlotPart<'svg'> | undefined): Record<string, unknown> {
+  const className = cn(cardClassNames.checkmark, 'absolute end-2 top-2 text-primary');
+  return part ? mergeSlotProps(part, { className, locked: CHECKMARK_PART_LOCKS }) : { className };
+}
+
 /** The padding the parts of a card read (`--wave-card-padding`), per size. */
 const cardSizeClasses: Readonly<Record<CoreSize, string>> = {
   small: '[--wave-card-padding:0.75rem]',
@@ -175,15 +190,39 @@ export interface CardOwnProps {
    * merged onto it (a class, `aria-describedby`, `name`; its type, checked state and change
    * handling stay the card's), an element replaces it (give that control its own name and call
    * `onSelect` from it), and `null` or `false` removes it, for a control you render elsewhere.
-   * Ignored with the default `selectionControl`.
+   * Ignored with the default `selectionControl`. An `<input>` has no content, so the object takes
+   * no `children` (any are dropped).
    */
-  checkbox?: Slot<'input'>;
+  checkbox?:
+    | (Omit<SlotObject<'input'>, 'children'> & {
+        /** An `<input>` has no content: none is taken. */
+        children?: never;
+      })
+    | React.ReactNode;
   /**
    * An action over the top end corner of the card (a menu button, say). A card with one is
    * positioned; with `selectionControl="checkbox"` the built-in checkbox then moves to the top
    * start corner. Content that renders nothing renders no element.
    */
   floatingAction?: Slot<'span'>;
+  /**
+   * Props for the element the card draws over its corner, by part, merged into the part's own:
+   * your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref attached. Every attribute the card sets on the part is
+   * locked. A part takes no `children` (the card draws its glyph). The built-in checkbox and the
+   * floating action are the `checkbox` and `floatingAction` slots.
+   */
+  slotProps?: {
+    /**
+     * The check glyph of a `selected` card, an `<svg>` over the top end corner (stable class
+     * `wave-card__checkmark`), drawn unless `selectionControl="checkbox"` shows the checkbox
+     * instead. Locked: `aria-hidden`, `focusable="false"` and, unset, `role` and `tabIndex` (it is
+     * decorative: the selection reaches assistive technology through `aria-pressed` or the
+     * checkbox). A click on it is a click on the card, after yours: `preventDefault()` in yours
+     * means `onSelect` is not called, and the card's own `onClick` still runs.
+     */
+    checkmark?: SlotPart<'svg'>;
+  };
 }
 
 /**
@@ -220,6 +259,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
     onKeyDown,
     onKeyUp,
     onBlur,
+    slotProps,
     ...rest
   } = props as CardImplProps;
 
@@ -238,7 +278,8 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
     checkbox !== null &&
     !React.isValidElement(checkbox) &&
     !Array.isArray(checkbox)
-      ? (checkbox as React.InputHTMLAttributes<HTMLInputElement>)
+      ? // An `<input>` takes no children: React would throw for any.
+        { ...(checkbox as React.InputHTMLAttributes<HTMLInputElement>), children: undefined }
       : undefined;
   const corners = React.useMemo(
     () => ({
@@ -415,10 +456,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
                 cn(cardClassNames.floatingAction, 'absolute end-3 top-3 inline-flex'),
               )}
             {selected && !checkboxMode && (
-              <CheckIcon
-                size={12}
-                className={cn(cardClassNames.checkmark, 'absolute end-2 top-2 text-primary')}
-              />
+              <CheckIcon size={12} {...checkmarkProps(slotProps?.checkmark)} />
             )}
             {children}
           </Component>
@@ -449,6 +487,65 @@ export interface CardHeaderOwnProps {
    * renders no element.
    */
   action?: Slot<'span'>;
+  /**
+   * Props for the elements the header draws around its text, by part, merged into each part's
+   * own: your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref attached. Every attribute the header sets on a part
+   * is locked. A part takes no `children` (the header draws their content); the image and the
+   * action are the `image` and `action` slots.
+   *
+   * Every part is a `<div>` that holds the header's text, which names a selectable card (its
+   * content, or the checkbox through the title): each locks, unset, `role`, `aria-label` (which
+   * would replace the text in that name) and `hidden`, `inert` and `aria-hidden`.
+   */
+  slotProps?: {
+    /**
+     * The column around the title, the subtitle and your children (stable class
+     * `wave-card-header__text`), drawn only beside an `image` or an `action`; without either they
+     * sit in the header itself.
+     */
+    text?: SlotPart<'div'>;
+    /**
+     * The title (stable class `wave-card-header__title`), drawn while `title` renders content.
+     * Also locked in a `selectionControl="checkbox"` card: its `id`, which the checkbox's
+     * `aria-labelledby` names.
+     */
+    title?: SlotPart<'div'>;
+    /**
+     * The subtitle (stable class `wave-card-header__subtitle`), drawn while `subtitle` renders
+     * content.
+     */
+    subtitle?: SlotPart<'div'>;
+  };
+}
+
+/**
+ * What a text part of the header locks unset: a role, a name of its own (it would replace the
+ * text in the card's name) and its hidden state.
+ */
+const TEXT_PART_LOCKS = {
+  role: undefined,
+  'aria-label': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/**
+ * The props of a text part of the header, its `slotProps` part merged in when given; `id` is the
+ * title's id that a checkbox card's checkbox names, locked with the part.
+ */
+function textPartProps(
+  part: SlotPart<'div'> | undefined,
+  className: string,
+  id?: string | null,
+): Record<string, unknown> {
+  return part
+    ? mergeSlotProps(part, {
+        className,
+        locked: id ? { ...TEXT_PART_LOCKS, id } : TEXT_PART_LOCKS,
+      })
+    : { className };
 }
 
 /** Props of {@link CardHeader} rendered as `C` (default `'div'`), including `ref`. */
@@ -468,7 +565,7 @@ type CardHeaderImplProps = CardHeaderOwnProps &
  * Flat export for React Server Components (`Card.Header` in client files).
  */
 export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (props) => {
-  const { as, title, subtitle, image, action, className, children, ref, ...rest } =
+  const { as, title, subtitle, image, action, className, children, ref, slotProps, ...rest } =
     props as CardHeaderImplProps;
   const Component: React.ElementType = as ?? 'div';
   /** Set only inside a `selectionControl="checkbox"` card: the title names its checkbox. */
@@ -485,13 +582,22 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
       {hasTitle && (
         <div
           id={titleId ?? undefined}
-          className={cn(cardHeaderClassNames.title, 'text-subtitle-1')}
+          {...textPartProps(
+            slotProps?.title,
+            cn(cardHeaderClassNames.title, 'text-subtitle-1'),
+            titleId,
+          )}
         >
           {materialiseSlotContent(title)}
         </div>
       )}
       {hasSubtitle && (
-        <div className={cn(cardHeaderClassNames.subtitle, 'text-caption-1 text-muted-foreground')}>
+        <div
+          {...textPartProps(
+            slotProps?.subtitle,
+            cn(cardHeaderClassNames.subtitle, 'text-caption-1 text-muted-foreground'),
+          )}
+        >
           {materialiseSlotContent(subtitle)}
         </div>
       )}
@@ -526,7 +632,11 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
           'span',
           cn(cardHeaderClassNames.image, 'inline-flex shrink-0 items-center'),
         )}
-      {hasImage || hasAction ? <div className={cardHeaderClassNames.text}>{text}</div> : text}
+      {hasImage || hasAction ? (
+        <div {...textPartProps(slotProps?.text, cardHeaderClassNames.text)}>{text}</div>
+      ) : (
+        text
+      )}
       {hasAction &&
         renderSlot(
           action,

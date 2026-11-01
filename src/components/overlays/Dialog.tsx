@@ -10,6 +10,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { dialogBackdropMotion, dialogMotion } from '../../lib/motion';
 import { renderSlot, slotRendersContent, type Slot, type SlotObject } from '../../lib/slot';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type {
   BackdropAppearance,
   ModalOpenChangeReason,
@@ -22,7 +23,7 @@ import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { useMotionClasses } from '../../hooks/useMotion';
+import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { Portal } from '../portal/Portal';
 import {
@@ -169,7 +170,8 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
    * or `{ className }` replaces the default classes with yours (see `MotionSlot`), also under a
    * `WaveProvider` with `motion="none"`, which otherwise turns the default off. A `className` that
    * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
-   * motion, your classes animate the surface. Fluent's `Dialog` `surfaceMotion`.
+   * motion, your classes animate the surface; development builds log a warning once, and the rule
+   * is removed in 1.0, so pass `motion` instead. Fluent's `Dialog` `surfaceMotion`.
    * @default the scale and fade above
    */
   motion?: MotionSlot | null;
@@ -216,6 +218,35 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
   children: React.ReactNode;
   /** Ref to the dialog surface (`role="dialog"`, or `alertdialog` with `modalType="alert"`). */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the two elements the surface draws around your content, by part, merged into each
+   * part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref beside its ref. Every attribute the
+   * dialog sets on a part is locked and keeps the dialog's value; you add the attributes it does
+   * not set. A part takes no `children`. No part carries a handler of the dialog: yours run as
+   * those of the content do, before the dialog's own handling of the event, which
+   * `preventDefault()` in yours skips as it does in the content (an Escape you prevent keeps the
+   * dialog open). The surface takes the Content's own props, and the backdrop, the title action
+   * and the Close button are the `backdrop`, `titleAction` and `closeButton` slots. Fluent UI has
+   * no such parts: its `DialogBody` and `DialogContent` are components you write.
+   */
+  slotProps?: {
+    /**
+     * The `<div>` in the surface's top end corner that holds the `titleAction` content, the
+     * `action` of each `Dialog.Title` and the Close button, in that order (stable class
+     * `wave-dialog-content__title-actions`). Its width is measured for the titles' end padding,
+     * and your ref is attached beside the dialog's. Locked: `hidden`, `inert` and `aria-hidden`,
+     * unset (it holds buttons, the first of which takes focus when the dialog opens).
+     */
+    titleActions?: SlotPart<'div'>;
+    /**
+     * The scrolling `<div>` of the content, `children` and `Dialog.Footer` included (stable class
+     * `wave-dialog-content__body`). Its style holds the measured height of the footer, which your
+     * styles may replace. Locked: `hidden`, `inert` and `aria-hidden`, unset (it holds the
+     * content).
+     */
+    body?: SlotPart<'div'>;
+  };
 }
 
 /** Properties for the DialogFooter sub-component. */
@@ -517,6 +548,7 @@ export const DialogContent = ({
   id,
   onKeyDown,
   ref,
+  slotProps,
   ...rest
 }: DialogContentProps) => {
   const {
@@ -540,6 +572,7 @@ export const DialogContent = ({
   // The motion classes of the surface (a `className` with presence variants keeps 0.14's own
   // motion, D19) and of the backdrop.
   const surfaceMotion = useMotionClasses(motion, dialogMotion, className);
+  useLegacyMotionWarning('Dialog.Content', motion, className);
   const backdropMotionClassName = useMotionClasses(backdropMotion, dialogBackdropMotion);
   const keptMounted = !unmountOnClose;
   const generatedId = useId('wave-dialog');
@@ -615,6 +648,11 @@ export const DialogContent = ({
   const [titleActionsArea, setTitleActionsArea] = React.useState<HTMLDivElement | null>(null);
   const [titleActionsOutlet, setTitleActionsOutlet] = React.useState<HTMLSpanElement | null>(null);
   const titleActionsWidth = useTitleActionsWidth(open || exiting ? titleActionsArea : null);
+  // The area is measured: a part's ref goes beside the area's, never in its place.
+  const titleActionsRef = useMergedRefs<HTMLDivElement>(
+    setTitleActionsArea,
+    slotProps?.titleActions?.ref,
+  );
 
   // The height of the sticky Dialog.Footer, reserved as the body's scroll padding.
   const [footerHeight, setFooterHeight] = React.useState<number | null>(null);
@@ -702,12 +740,15 @@ export const DialogContent = ({
               </h2>
             )}
             <div
-              ref={setTitleActionsArea}
-              className={cn(
-                dialogContentClassNames.titleActions,
-                'absolute end-4 top-4 flex items-start gap-1',
-                size === 'full' && fullTitleActionsClasses,
-              )}
+              {...mergeSlotProps(slotProps?.titleActions, {
+                className: cn(
+                  dialogContentClassNames.titleActions,
+                  'absolute end-4 top-4 flex items-start gap-1',
+                  size === 'full' && fullTitleActionsClasses,
+                ),
+                locked: HIDDEN_PART_LOCKS,
+              })}
+              ref={titleActionsRef}
             >
               {slotRendersContent(titleAction)
                 ? renderSlot(
@@ -727,16 +768,20 @@ export const DialogContent = ({
               />
             </div>
             <div
-              // The scroll padding keeps a focused field above the sticky footer (WCAG 2.4.11).
-              className={cn(
-                dialogContentClassNames.body,
-                '-mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1',
-              )}
-              style={
-                footerHeight === null
-                  ? undefined
-                  : ({ '--wave-dialog-footer-height': `${footerHeight}px` } as React.CSSProperties)
-              }
+              {...mergeSlotProps(slotProps?.body, {
+                // The scroll padding keeps a focused field above the sticky footer (WCAG 2.4.11).
+                className: cn(
+                  dialogContentClassNames.body,
+                  '-mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1',
+                ),
+                style:
+                  footerHeight === null
+                    ? undefined
+                    : ({
+                        '--wave-dialog-footer-height': `${footerHeight}px`,
+                      } as React.CSSProperties),
+                locked: HIDDEN_PART_LOCKS,
+              })}
             >
               {children}
             </div>

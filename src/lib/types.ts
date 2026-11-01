@@ -293,6 +293,6 @@ export type MotionSlot = string | { className: string };
 export type MotionPreference = 'default' | 'none';
 
 // Re-export slot and polymorphic types for convenience
-export type { Slot, SlotObject, ResolvedSlot } from './slot';
+export type { Slot, SlotObject, SlotRenderFunction, SlotRenderProps, ResolvedSlot } from './slot';
 export type { PolymorphicProps, PolymorphicComponent } from './polymorphic';
 export { resolveSlot, renderSlot } from './slot';

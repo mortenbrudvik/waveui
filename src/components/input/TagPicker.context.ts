@@ -5,7 +5,7 @@ import type { UseListboxPopupResult } from './Option';
 import type { UseListboxResult } from '../../hooks/useListbox';
 import type { Slot } from '../../lib/slot';
 import type { TagPickerOption } from './TagPicker.option';
-import type { TagPickerSize } from './TagPicker.root';
+import type { TagPickerProps, TagPickerSize } from './TagPicker.root';
 
 /*
  * The contexts of TagPicker's parts: the root's state (TagPickerContext) and the field the
@@ -142,6 +142,12 @@ export interface TagPickerContextValue {
   overflow: 'wrap' | 'count';
   collapsed: boolean;
   hiddenValues: ReadonlySet<string> | undefined;
+  /**
+   * The root's `slotProps`: the parts drawn by TagPicker's parts (the default tags and their
+   * remove buttons, the end buttons, the "+N" chip, the generated options, the surface and its
+   * empty row) read theirs here.
+   */
+  slotProps: TagPickerProps['slotProps'];
 }
 
 /** Internal: read with {@link useTagPickerContext}. `null` outside a TagPicker. */

@@ -1,16 +1,24 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { composeStories } from '@storybook/react';
 import * as stories from '../../../../stories/DataGrid.stories';
 import { createTableColumn } from '../../../lib/table';
 import { dataGridHeaderCellClassNames, tableResizeHandleClassNames } from '../../../lib/classNames';
-import { expectNoA11yViolations, mockRect, renderWithProviders } from '../../../test-utils';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  mockRect,
+  openingTags,
+  renderWithProviders,
+} from '../../../test-utils';
 import { DataGrid } from '../DataGrid';
 import type {
   DataGridBaseProps,
   DataGridColumn,
+  DataGridHeaderCellProps,
   DataGridItemsSortProps,
   DataGridLabels,
 } from '../DataGrid';
@@ -994,5 +1002,401 @@ describe('DataGrid column sizing', () => {
       ).toBeVisible();
       await expectNoA11yViolations();
     });
+  });
+});
+
+describe('DataGrid.HeaderCell — slotProps.resizeHandle', () => {
+  type HandlePart = NonNullable<DataGridHeaderCellProps['slotProps']>['resizeHandle'];
+  const handles = (root: ParentNode = document) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${dataGridHeaderCellClassNames.resizeHandle}`));
+
+  /** A grid of `PARTS` from `COLUMNS` with resizable columns, its header cells written out. */
+  function Sized({ handle, ...props }: GridProps & { handle?: HandlePart }) {
+    return (
+      <DataGrid
+        aria-label="Parts"
+        items={PARTS}
+        columns={COLUMNS}
+        getRowId={partId}
+        resizableColumns
+        {...props}
+      >
+        <DataGrid.Header>
+          <tr>
+            {COLUMNS.map((column) => (
+              <DataGrid.HeaderCell
+                key={column.columnId}
+                columnId={column.columnId}
+                sortable={column.compare !== undefined}
+                slotProps={{ resizeHandle: handle }}
+              >
+                {column.label}
+              </DataGrid.HeaderCell>
+            ))}
+          </tr>
+        </DataGrid.Header>
+      </DataGrid>
+    );
+  }
+
+  // Captured from 6f6b500's dist: the server markup, and the client one after the grid's
+  // navigation wrote its tab stops (the same in both directions).
+  const HANDLE = `wave-table-resize-handle absolute inset-y-0 end-0 z-1 w-2 cursor-col-resize touch-none select-none border-e-2 border-transparent hover:border-stroke-accessible focus-visible:border-primary data-[dragging]:border-primary forced-colors:forced-color-adjust-none forced-colors:hover:border-[ButtonText] forced-colors:focus-visible:border-[Highlight] forced-colors:data-[dragging]:border-[Highlight] wave-data-grid-header-cell__resize-handle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring data-[dragging]:pointer-events-auto`;
+  const pins = (tabIndex: string) =>
+    Array(3)
+      .fill(
+        `<div aria-label="Resize column" aria-orientation="vertical" aria-valuemin="80" aria-valuenow="150" aria-valuetext="150 pixels" class="${HANDLE}" data-grid-auxiliary="" role="separator" tabindex="${tabIndex}">`,
+      )
+      .join('\n');
+  const SERVER_PINS = pins('0');
+  const CLIENT_PINS = pins('-1');
+
+  it('renders the handles of 6f6b500 (attributes sorted), on the client and the server', () => {
+    for (const handle of [undefined, {}]) {
+      const view = render(<Sized handle={handle} />);
+      expect(openingTags(...handles())).toBe(CLIENT_PINS);
+      view.unmount();
+      const rtl = renderWithProviders(<Sized handle={handle} />, { dir: 'rtl' });
+      expect(openingTags(...handles())).toBe(CLIENT_PINS);
+      rtl.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Sized handle={handle} />);
+      expect(openingTags(...handles(template.content))).toBe(SERVER_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with the part empty', () => {
+    type CellParts = NonNullable<DataGridHeaderCellProps['slotProps']>;
+    expectInertSlotProps(
+      (slotProps: CellParts | undefined) => <Sized handle={slotProps?.resizeHandle} />,
+      { resizeHandle: {} },
+    );
+    expectInertSlotProps(
+      (slotProps: CellParts | undefined) => (
+        <Sized
+          handle={slotProps?.resizeHandle}
+          selectionMode="multiple"
+          defaultColumnWidths={{ owner: 200 }}
+          labels={{ resizeColumn: 'Width', columnWidth: (width) => `${width} px` }}
+        />
+      ),
+      { resizeHandle: {} },
+    );
+  });
+
+  it('puts your className, style, data-* and ref on each handle', () => {
+    const refs: Element[] = [];
+    render(
+      <Sized
+        handle={{
+          className: 'my-handle w-4',
+          style: { opacity: 0.5 },
+          'data-part': 'handle',
+          ref: (node) => void (node && refs.push(node)),
+        }}
+      />,
+    );
+    const elements = handles();
+    expect(elements).toHaveLength(3);
+    for (const handle of elements) {
+      expect(handle.classList[0]).toBe(tableResizeHandleClassNames.root);
+      expect(handle).toHaveClass(dataGridHeaderCellClassNames.resizeHandle, 'my-handle', 'w-4');
+      // Your class replaces a conflicting one of the part.
+      expect(handle).not.toHaveClass('w-2');
+      expect(handle).toHaveAttribute('data-part', 'handle');
+      expect(handle).toHaveStyle({ opacity: '0.5' });
+    }
+    expect(refs).toEqual(elements);
+    expect(header('Item')).not.toHaveAttribute('data-part');
+  });
+
+  it('locks the handle’s attributes and the markers the grid reads, and F2 still reaches it', async () => {
+    const user = userEvent.setup();
+    const attempt = {
+      role: 'button',
+      'aria-orientation': 'horizontal',
+      'aria-valuenow': 1,
+      'aria-valuemin': 2,
+      'aria-valuemax': 3,
+      'aria-valuetext': 'Mine',
+      'aria-label': 'Mine',
+      // An author's tabindex="-1" opts a widget out of the grid: F2 would not reach it.
+      tabIndex: -1,
+      'data-dragging': '',
+      'data-grid-auxiliary': 'mine',
+      'data-roving-container': '',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as HandlePart;
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<Sized handle={attempt} />);
+    expect(openingTags(...handles(template.content))).toBe(SERVER_PINS);
+    render(<Sized handle={attempt} />);
+    expect(openingTags(...handles())).toBe(CLIENT_PINS);
+    expect(grid().querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    act(() => header('Owner').focus());
+    await user.keyboard('{F2}');
+    expect(handleOf('Owner')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(header('Owner')).toHaveFocus();
+  });
+
+  it('adds your ids to the handle’s aria-labelledby and aria-describedby', () => {
+    render(
+      <>
+        <span id="hint">Drag to resize</span>
+        <Sized handle={{ 'aria-describedby': 'hint' }} />
+      </>,
+    );
+    for (const handle of handles()) {
+      expect(handle).toHaveAttribute('aria-describedby', 'hint');
+      expect(handle).toHaveAccessibleName('Resize column');
+    }
+  });
+
+  it('runs your pointer, key and double-click handlers first: preventDefault() skips the drag, the move, the key and the reset', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const onColumnWidthsChange = vi.fn(() => void order.push('resize'));
+    const prevent = (name: string) => (event: { preventDefault: () => void }) => {
+      order.push(name);
+      event.preventDefault();
+    };
+    const { rerender } = render(
+      <Sized
+        defaultColumnWidths={{ item: 200 }}
+        onColumnWidthsChange={onColumnWidthsChange}
+        handle={{ onPointerDown: prevent('down') }}
+      />,
+    );
+    down(handleOf('Item'));
+    expect(grid()).not.toHaveAttribute('data-resizing');
+    expect(handleOf('Item')).not.toHaveAttribute('data-dragging');
+    move(handleOf('Item'), 140);
+    flushFrames();
+    up(handleOf('Item'));
+    expect(order).toEqual(['down']);
+
+    rerender(
+      <Sized
+        defaultColumnWidths={{ item: 200 }}
+        onColumnWidthsChange={onColumnWidthsChange}
+        handle={{ onPointerMove: prevent('move') }}
+      />,
+    );
+    down(handleOf('Item'));
+    expect(grid()).toHaveAttribute('data-resizing', '');
+    move(handleOf('Item'), 140);
+    flushFrames();
+    up(handleOf('Item'));
+    expect(order).toEqual(['down', 'move']);
+
+    for (const name of ['onKeyDown', 'onKeyDownCapture'] as const) {
+      rerender(
+        <Sized
+          defaultColumnWidths={{ item: 200 }}
+          onColumnWidthsChange={onColumnWidthsChange}
+          handle={{ [name]: prevent(name) } as unknown as HandlePart}
+        />,
+      );
+      act(() => handleOf('Item').focus());
+      await user.keyboard('{ArrowRight}');
+      expect(handleOf('Item')).toHaveFocus();
+    }
+    expect(order).toEqual(['down', 'move', 'onKeyDown', 'onKeyDownCapture']);
+    expect(colWidths()).toEqual(['200px', '150px', '150px']);
+
+    rerender(
+      <Sized
+        defaultColumnWidths={{ item: 200 }}
+        onColumnWidthsChange={onColumnWidthsChange}
+        handle={{ onKeyDown: () => void order.push('key') }}
+      />,
+    );
+    await user.keyboard('{ArrowRight}');
+    expect(order.slice(-2)).toEqual(['key', 'resize']);
+    expect(colWidths()).toEqual(['220px', '150px', '150px']);
+
+    rerender(
+      <Sized
+        defaultColumnWidths={{ item: 200 }}
+        onColumnWidthsChange={onColumnWidthsChange}
+        handle={{ onDoubleClick: prevent('double') }}
+      />,
+    );
+    fireEvent.doubleClick(handleOf('Item'));
+    expect(order.at(-1)).toBe('double');
+    expect(colWidths()).toEqual(['220px', '150px', '150px']);
+  });
+
+  it.each([
+    ['onPointerUp', (el: Element) => up(el)],
+    ['onPointerCancel', (el: Element) => fireEvent.pointerCancel(el, POINTER)],
+    ['onLostPointerCapture', (el: Element) => fireEvent.lostPointerCapture(el, { pointerId: 1 })],
+  ] as const)('ends the drag after your %s whatever it does', (name, end) => {
+    const onColumnWidthsChange = vi.fn();
+    const handler = vi.fn((event: { preventDefault: () => void }) => event.preventDefault());
+    render(
+      <Sized
+        defaultColumnWidths={{ item: 200 }}
+        onColumnWidthsChange={onColumnWidthsChange}
+        handle={{ [name]: handler } as unknown as HandlePart}
+      />,
+    );
+    const handle = handleOf('Item');
+    down(handle);
+    move(handle, 140);
+    expect(grid()).toHaveAttribute('data-resizing', '');
+    expect(handle).toHaveAttribute('data-dragging', '');
+    end(handle);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(grid()).not.toHaveAttribute('data-resizing');
+    expect(handle).not.toHaveAttribute('data-dragging');
+    // A further move drags nothing.
+    move(handle, 300);
+    flushFrames();
+    expect(onColumnWidthsChange.mock.calls.every(([widths]) => widths.item !== 400)).toBe(true);
+  });
+
+  it('ends the drag when an untyped part gives no function as its onPointerUp', () => {
+    // From JavaScript: a value that is no handler is skipped, as the merge skips it.
+    render(<Sized handle={{ onPointerUp: 'not a handler' } as unknown as HandlePart} />);
+    const handle = handleOf('Item');
+    down(handle);
+    move(handle, 140);
+    expect(handle).toHaveAttribute('data-dragging', '');
+    up(handle);
+    expect(grid()).not.toHaveAttribute('data-resizing');
+    expect(handle).not.toHaveAttribute('data-dragging');
+  });
+
+  it('keeps the handle out of text entry: your contentEditable stays unset', () => {
+    const attempt = { contentEditable: true } as unknown as HandlePart;
+    const template = document.createElement('template');
+    template.innerHTML = renderToString(<Sized handle={attempt} />);
+    expect(openingTags(...handles(template.content))).toBe(SERVER_PINS);
+    render(<Sized handle={attempt} />);
+    expect(openingTags(...handles())).toBe(CLIENT_PINS);
+    for (const handle of handles()) expect(handle).not.toHaveAttribute('contenteditable');
+  });
+
+  it('measures the column on focus and forgets a pressed key after your handlers whatever they do', async () => {
+    const user = userEvent.setup();
+    let preventKeyUp = true;
+    const prevent = (event: { preventDefault: () => void }) => event.preventDefault();
+    render(
+      <>
+        <Sized
+          handle={{
+            onFocus: prevent,
+            onKeyUp: (event) => void (preventKeyUp && event.preventDefault()),
+            onBlur: prevent,
+          }}
+        />
+        <button type="button">After</button>
+      </>,
+    );
+    mockRect(header('Item'), { width: 300 });
+    mockRect(header('Owner'), { width: 280 });
+    mockRect(header('Size'), { width: 260 });
+    const handle = handleOf('Owner');
+    act(() => header('Owner').focus());
+    await user.keyboard('{F2}');
+    expect(handle).toHaveFocus();
+    expect(handle).toHaveAttribute('aria-valuenow', '280');
+    // Your prevented release keeps focus on the handle, and the pressed key is forgotten: a
+    // release with no press of its own leaves nothing.
+    await user.keyboard('{Enter}');
+    expect(handle).toHaveFocus();
+    preventKeyUp = false;
+    fireEvent.keyUp(handle, { key: 'Enter' });
+    expect(handle).toHaveFocus();
+    // A key pressed before focus left is forgotten with the blur, whatever your onBlur does.
+    await user.keyboard('{Enter>}');
+    act(() => screen.getByRole('button', { name: 'After' }).focus());
+    act(() => handle.focus());
+    fireEvent.keyUp(handle, { key: 'Enter' });
+    expect(handle).toHaveFocus();
+    // A key pressed and released on the handle still leaves it.
+    fireEvent.keyDown(handle, { key: 'Enter' });
+    fireEvent.keyUp(handle, { key: 'Enter' });
+    expect(header('Owner')).toHaveFocus();
+  });
+
+  it('keeps the handle’s own ref while a new inline part ref arrives on every render', async () => {
+    const user = userEvent.setup();
+    const seen: Element[] = [];
+    const ui = () => <Sized handle={{ ref: (node) => void (node && seen.push(node)) }} />;
+    const { rerender } = render(ui());
+    rerender(ui());
+    mockRect(header('Size'), { width: 260 });
+    expect(new Set(seen)).toEqual(new Set(handles()));
+    // The handle finds its cell through its own ref: the measure, and Escape back to the cell.
+    act(() => header('Size').focus());
+    await user.keyboard('{F2}');
+    expect(handleOf('Size')).toHaveAttribute('aria-valuenow', '260');
+    await user.keyboard('{Escape}');
+    expect(header('Size')).toHaveFocus();
+  });
+
+  it('mirrors a drag in RTL with a part', () => {
+    const onPointerDown = vi.fn();
+    renderWithProviders(<Sized defaultColumnWidths={{ item: 200 }} handle={{ onPointerDown }} />, {
+      dir: 'rtl',
+    });
+    const handle = handleOf('Item');
+    down(handle);
+    move(handle, 140);
+    flushFrames();
+    expect(colWidths()).toEqual(['160px', '150px', '150px']);
+    up(handle);
+    expect(onPointerDown).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls your handlers once per event in StrictMode', () => {
+    const onPointerDown = vi.fn();
+    const onPointerUp = vi.fn();
+    render(
+      <React.StrictMode>
+        <Sized handle={{ onPointerDown, onPointerUp }} />
+      </React.StrictMode>,
+    );
+    down(handleOf('Owner'));
+    up(handleOf('Owner'));
+    expect(onPointerDown).toHaveBeenCalledTimes(1);
+    expect(onPointerUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the part of a header cell without a handle', () => {
+    const error = vi.spyOn(console, 'error');
+    render(
+      <DataGrid aria-label="Parts" items={PARTS} columns={COLUMNS} getRowId={partId}>
+        <DataGrid.Header>
+          <tr>
+            <DataGrid.HeaderCell
+              columnId="item"
+              slotProps={{ resizeHandle: { className: 'my-handle' } }}
+            >
+              Item
+            </DataGrid.HeaderCell>
+          </tr>
+        </DataGrid.Header>
+      </DataGrid>,
+    );
+    expect(screen.queryByRole('separator')).toBeNull();
+    expect(document.querySelector('.my-handle')).toBeNull();
+    expect(header('Item')).not.toHaveAttribute('slotprops');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('has no accessibility violations with a customised handle', async () => {
+    render(
+      <>
+        <span id="hint">Drag to resize</span>
+        <Sized handle={{ className: 'my-handle', 'aria-describedby': 'hint' }} />
+      </>,
+    );
+    await expectNoA11yViolations();
   });
 });

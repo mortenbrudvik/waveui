@@ -15,8 +15,11 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
   ComponentProps,
+  CSSProperties,
   Dispatch,
+  ElementType,
   HTMLAttributes,
+  JSX,
   KeyboardEvent as ReactKeyboardEvent,
   KeyboardEventHandler,
   MouseEvent as ReactMouseEvent,
@@ -36,6 +39,7 @@ import type {
   AccordionMultipleProps,
   AccordionPanelProps,
   AccordionSingleProps,
+  AccordionTriggerProps,
   addDays,
   addMonths,
   AlphaSliderLabels,
@@ -88,6 +92,7 @@ import type {
   DataGridBaseProps,
   DataGridBodyProps,
   DataGridColumn,
+  DataGridHeaderProps,
   DataGridItemsProps,
   DataGridItemsSortProps,
   DataGridLabels,
@@ -126,8 +131,10 @@ import type {
   DropdownLabels,
   DropdownProps,
   EmptySwatchProps,
+  FieldContextProviderProps,
   FieldContextValue,
   FieldControlIdClaim,
+  FieldControlProps,
   FieldProps,
   FirstWeekOfYear,
   FlatTreeItemData,
@@ -182,6 +189,7 @@ import type {
   markListboxElement,
   Menu,
   MenuButtonProps,
+  MenuContextValue,
   MenuGroupHeaderProps,
   MenuGroupProps,
   MenuItemCheckbox,
@@ -192,12 +200,14 @@ import type {
   MenuItemRadioProps,
   MenuItemSelectableProps,
   MenuItemSwitchProps,
+  MenuListContextValue,
   MenuPopoverProps,
   MenuProps,
   MenuSplitGroup,
   MenuSplitGroupProps,
   MenuTriggerProps,
   MessageBarActionsProps,
+  MessageBarContextValue,
   MessageBarGroupProps,
   MessageBarProps,
   MessageBarTitleProps,
@@ -237,6 +247,7 @@ import type {
   OverflowItemPriorityProps,
   OverflowItemProps,
   OverflowProps,
+  PaginationProps,
   PartitionBreadcrumbItemsOptions,
   PartitionBreadcrumbItemsResult,
   PopoverContentProps,
@@ -249,6 +260,7 @@ import type {
   PresenceProps,
   ProgressBarColor,
   ProgressBarProps,
+  RadioGroupContextValue,
   RadioItemProps,
   Rating,
   RatingColor,
@@ -267,6 +279,13 @@ import type {
   SliderProps,
   SliderSize,
   Slot,
+  SlotObject,
+  SlotPart,
+  SlotPartOwn,
+  SlotPartWithRef,
+  NativeElementProps,
+  SlotRenderFunction,
+  SlotRenderProps,
   SortDirection,
   SpinButton,
   SpinButtonAllowEmptyProps,
@@ -366,6 +385,8 @@ import type {
   useActiveDescendant,
   UseActiveDescendantOptions,
   UseActiveDescendantResult,
+  UseDataGridSelectionResult,
+  UseDataGridSortResult,
   UseFlatTreeOptions,
   useListbox,
   useListboxOption,
@@ -378,6 +399,8 @@ import type {
   UseListboxResult,
   UsePresenceOptions,
   UsePresenceResult,
+  UseRadioGroupItemOptions,
+  UseRadioGroupItemResult,
   UseRovingTabIndexOptions,
   UseSelectionChangeDetails,
   UseSelectionOptions,
@@ -544,9 +567,10 @@ function findUnexportedPublicTypes(program: ts.Program, entry: string, ownDir: s
  * Named types that public declarations refer to but that are deliberately not public API: they
  * name no concept of their own, and exporting them would make every rename a breaking change.
  * Each is a key union for an `Omit` (the handlers a composite routes to its focusable control), a
- * mask whose members are all `undefined`/`never` (it only makes other props a type error), or a
+ * mask whose members are all `undefined`/`never` (it only makes other props a type error), a
  * type-level conversion that only spells out literal types (its accumulator parameters are an
- * implementation detail).
+ * implementation detail), or a member of a public union named only so that inference can match
+ * it.
  */
 const INTERNAL_HELPERS: Record<string, string> = {
   'components/input/Checkbox.tsx#CheckboxControlHandlers':
@@ -561,6 +585,8 @@ const INTERNAL_HELPERS: Record<string, string> = {
     'mask: link-only attributes are a type error on items without `href`',
   'components/table/DataGrid.tsx#NoDeprecatedSortProps':
     'mask: the 0.4 sort props are a type error next to the 0.5 sort API',
+  'lib/slotProps.ts#SlotPartProps':
+    'member: the props half of the `SlotPart` union, named only so that a call infers the part element',
   'lib/tokens.ts#TokenVariable':
     'conversion: spells out the literal `var(--wave-…)` value of each `waveTokens` member',
 };
@@ -2198,5 +2224,220 @@ describe('0.17 theming from the package entry', () => {
     // @ts-expect-error a ramp has no stop 170
     const ramp: Partial<BrandRamp> = { 170: '#000000' };
     expect(ramp).toBeDefined();
+  });
+});
+
+// The 0.18 additions (Phase 13), imported from the package entry (compile-time, `tsconfig.dev.json`).
+describe('0.18 customization surface from the package entry', () => {
+  it('mergeSlotProps, the parts it merges and what the component puts on them', () => {
+    expectTypeOf<Entry['mergeSlotProps']>().toEqualTypeOf<
+      <E extends keyof JSX.IntrinsicElements = 'span'>(
+        part: SlotPart<E> | readonly (SlotPart<E> | undefined)[] | undefined,
+        own: SlotPartOwn,
+      ) => Record<string, unknown>
+    >();
+    expectTypeOf<SlotPart<'input'>>().toHaveProperty('placeholder');
+    expectTypeOf<SlotPart<'span'>>().not.toHaveProperty('placeholder');
+    expectTypeOf<SlotPart<'span'>>().not.toHaveProperty('children');
+    expectTypeOf<SlotPart<'input'>['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<SlotPartOwn>().toEqualTypeOf<{
+      className?: string;
+      style?: CSSProperties;
+      ref?: Ref<unknown>;
+      defaults?: Record<string, unknown>;
+      locked?: Record<string, unknown>;
+      blockHandlers?: true | readonly `on${Capitalize<string>}`[];
+    }>();
+
+    // @ts-expect-error a part never takes children
+    const part: SlotPart<'span'> = { children: 'x' };
+    expect(part).toBeDefined();
+  });
+
+  it('SlotPart takes interface-typed props; SlotPartWithRef types a ref of another element', () => {
+    const attributes: HTMLAttributes<HTMLElement> = { title: 'Attributes' };
+    const button: ComponentProps<'button'> = { title: 'Button' };
+    const native: NativeElementProps<'span'> = { 'data-part': 'native' };
+    const fromAttributes: SlotPart<'span'> = attributes;
+    const fromButton: SlotPart<'button'> = button;
+    const fromNative: SlotPart<'span'> = native;
+    expectTypeOf<Entry['mergeSlotProps']>().toBeCallableWith(attributes, {});
+
+    expectTypeOf<SlotPartWithRef<'span', HTMLElement>['ref']>().toEqualTypeOf<
+      Ref<HTMLElement> | undefined
+    >();
+    expectTypeOf<SlotPartWithRef<'span', HTMLElement>>().toHaveProperty('title');
+    expectTypeOf<SlotPartWithRef<'span', HTMLElement>>().not.toHaveProperty('children');
+    const fromAttributesWithRef: SlotPartWithRef<'span', HTMLElement> = attributes;
+    // @ts-expect-error a data attribute is a string, a number or a boolean
+    const objectData: SlotPartWithRef<'span', HTMLElement> = { title: 'T', 'data-part': {} };
+    expect([
+      fromAttributes,
+      fromButton,
+      fromNative,
+      fromAttributesWithRef,
+      objectData,
+    ]).toHaveLength(5);
+  });
+
+  it('SlotRenderProps, and SlotRenderFunction defaulting to it', () => {
+    expectTypeOf<SlotRenderProps>().toEqualTypeOf<
+      HTMLAttributes<HTMLElement> & { [dataAttribute: `data-${string}`]: unknown }
+    >();
+    expectTypeOf<SlotRenderFunction>().toEqualTypeOf<SlotRenderFunction<SlotRenderProps>>();
+    expectTypeOf<SlotObject<'span'>['children']>().toEqualTypeOf<
+      ReactNode | SlotRenderFunction | undefined
+    >();
+    const reusable: SlotRenderFunction = () => null;
+    expectTypeOf({ children: reusable }).toMatchTypeOf<Slot<'span'>>();
+    expectTypeOf({ alt: '', children: reusable }).toMatchTypeOf<Slot<'img'>>();
+  });
+
+  it('SlotRenderFunction, the children of a slot object that renders the slot itself', () => {
+    expectTypeOf<SlotRenderFunction<{ as?: string; id?: string }>>().toEqualTypeOf<
+      (Component: ElementType<{ as?: string; id?: string }>, props: { id?: string }) => ReactNode
+    >();
+    expectTypeOf<SlotObject<'span'>['children']>().toEqualTypeOf<
+      | ReactNode
+      | SlotRenderFunction<
+          HTMLAttributes<HTMLElement> & { [dataAttribute: `data-${string}`]: unknown }
+        >
+      | undefined
+    >();
+    const icon: Slot<'span'> = {
+      children: (Component, props) => {
+        expectTypeOf(props.className).toEqualTypeOf<string | undefined>();
+        return null;
+      },
+    };
+    expect(icon).toBeDefined();
+  });
+
+  it('getNativeElementProps and the props it returns for an element', () => {
+    expectTypeOf<NativeElementProps<'input'>>().toEqualTypeOf<
+      Partial<JSX.IntrinsicElements['input']> & {
+        [K in `data-${string}`]?: string | number | boolean | undefined;
+      }
+    >();
+    expectTypeOf<Entry['getNativeElementProps']>().toEqualTypeOf<
+      <P extends object, E extends keyof JSX.IntrinsicElements>(
+        tag: E,
+        props: P,
+        excludedNames?: readonly (keyof P & string)[],
+      ) => NativeElementProps<E>
+    >();
+    expectTypeOf<NativeElementProps<'span'>>().not.toHaveProperty('href');
+  });
+
+  it("Field's function child, FieldContextProvider and useFieldContext", () => {
+    expectTypeOf<FieldProps['children']>().toEqualTypeOf<
+      ReactNode | ((props: FieldControlProps) => ReactNode)
+    >();
+    expectTypeOf<Entry['useFieldContext']>().toEqualTypeOf<() => FieldContextValue | null>();
+    expectTypeOf<Entry['FieldContextProvider']>()
+      .parameter(0)
+      .toEqualTypeOf<FieldContextProviderProps>();
+    expectTypeOf<FieldContextProviderProps>().toEqualTypeOf<{
+      value: FieldContextValue;
+      children?: ReactNode;
+    }>();
+  });
+
+  it('useRadioGroupContext and useRadioGroupItem, narrow views of a RadioGroup', () => {
+    expectTypeOf<Entry['useRadioGroupContext']>().toEqualTypeOf<() => RadioGroupContextValue>();
+    expectTypeOf<RadioGroupContextValue>().toEqualTypeOf<{
+      value: string | undefined;
+      disabled: boolean;
+      select: (value: string) => void;
+    }>();
+    expectTypeOf<Entry['useRadioGroupItem']>().toEqualTypeOf<
+      (value: string, options?: UseRadioGroupItemOptions) => UseRadioGroupItemResult
+    >();
+    expectTypeOf<UseRadioGroupItemOptions>().toEqualTypeOf<{ disabled?: boolean }>();
+    expectTypeOf<UseRadioGroupItemResult['props']['role']>().toEqualTypeOf<'radio'>();
+    expectTypeOf<UseRadioGroupItemResult['props']['tabIndex']>().toEqualTypeOf<0 | -1>();
+    expectTypeOf<UseRadioGroupItemResult['checked']>().toEqualTypeOf<boolean>();
+  });
+
+  it('useMenuContext and useMenuListContext, narrow views of a Menu and its list', () => {
+    expectTypeOf<Entry['useMenuContext']>().toEqualTypeOf<() => MenuContextValue>();
+    expectTypeOf<MenuContextValue>().toEqualTypeOf<{
+      open: boolean;
+      close: () => void;
+      isSubmenu: boolean;
+    }>();
+    expectTypeOf<Entry['useMenuListContext']>().toEqualTypeOf<() => MenuListContextValue>();
+    expectTypeOf<MenuListContextValue>().toEqualTypeOf<{
+      hasIcons: boolean;
+      hasCheckmarks: boolean;
+    }>();
+  });
+
+  it('useMessageBarContext, a narrow view of a MessageBar', () => {
+    expectTypeOf<Entry['useMessageBarContext']>().toEqualTypeOf<() => MessageBarContextValue>();
+    expectTypeOf<MessageBarContextValue>().toEqualTypeOf<{
+      status: Status;
+      layout: 'singleline' | 'multiline';
+    }>();
+  });
+
+  it('useDataGridSort, useDataGridSelection and useDataGridRowId, narrow views of a DataGrid', () => {
+    expectTypeOf<Entry['useDataGridSort']>().toEqualTypeOf<() => UseDataGridSortResult>();
+    expectTypeOf<UseDataGridSortResult>().toEqualTypeOf<{
+      sort: DataGridSort | null;
+      setSort: (sort: DataGridSort, event?: Event) => void;
+    }>();
+    expectTypeOf<Entry['useDataGridSelection']>().toEqualTypeOf<() => UseDataGridSelectionResult>();
+    expectTypeOf<UseDataGridSelectionResult>().toEqualTypeOf<{
+      selectedItems: readonly string[];
+      isSelected: (id: string) => boolean;
+      toggle: (id: string, event?: Event) => void;
+    }>();
+    expectTypeOf<Entry['useDataGridRowId']>().toEqualTypeOf<() => string | undefined>();
+  });
+
+  it('slotProps: each part a SlotPart of its element, one component of each category', () => {
+    expectTypeOf<NonNullable<CompoundButtonProps['slotProps']>>().toEqualTypeOf<{
+      contentContainer?: SlotPart<'span'>;
+      primaryText?: SlotPart<'span'>;
+      secondaryText?: SlotPart<'span'>;
+    }>();
+    expectTypeOf<NonNullable<SwitchProps['slotProps']>>().toEqualTypeOf<{
+      track?: SlotPart<'button'>;
+      thumb?: SlotPart<'span'>;
+      label?: SlotPart<'span'>;
+    }>();
+    // A part whose element is a `span` or another element takes a ref to either.
+    expectTypeOf<NonNullable<ListItemProps['slotProps']>>().toEqualTypeOf<{
+      content?: SlotPartWithRef<'span', HTMLElement>;
+      action?: SlotPartWithRef<'span', HTMLElement>;
+    }>();
+    expectTypeOf<NonNullable<AccordionTriggerProps['slotProps']>>().toEqualTypeOf<{
+      heading?: SlotPart<'h3'>;
+      expandIcon?: SlotPart<'svg'>;
+    }>();
+    expectTypeOf<NonNullable<PaginationProps['slotProps']>>().toEqualTypeOf<{
+      list?: SlotPart<'ol'>;
+      listItem?: SlotPart<'li'>;
+      firstButton?: SlotPart<'button'>;
+      previousButton?: SlotPart<'button'>;
+      pageButton?: SlotPart<'button'>;
+      nextButton?: SlotPart<'button'>;
+      lastButton?: SlotPart<'button'>;
+      ellipsis?: SlotPart<'span'>;
+    }>();
+    expectTypeOf<NonNullable<ProgressBarProps['slotProps']>>().toEqualTypeOf<{
+      bar?: SlotPart<'div'>;
+      label?: SlotPart<'span'>;
+    }>();
+    expectTypeOf<NonNullable<DrawerProps['slotProps']>>().toEqualTypeOf<{
+      header?: SlotPart<'div'>;
+    }>();
+    expectTypeOf<NonNullable<DataGridHeaderProps['slotProps']>>().toEqualTypeOf<{
+      selectAllCheckbox?: SlotPart<'input'>;
+    }>();
+    // @ts-expect-error a part takes no children
+    const parts: NonNullable<SwitchProps['slotProps']> = { track: { children: 'x' } };
+    expect(parts).toBeDefined();
   });
 });

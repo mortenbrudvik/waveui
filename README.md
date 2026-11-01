@@ -5,9 +5,9 @@ A React component library inspired by the Fluent UI 2 design language: 80 access
 > This is **not** Microsoft's official `@fluentui/react-components` package.
 
 - [Requirements](#requirements) · [Installation](#installation) · [Quick start](#quick-start)
-- [Styles](#styles) · [Theming](#theming) · [Global effects](#global-effects) · [Styling hooks](#styling-hooks)
+- [Styles](#styles) · [Theming](#theming) · [Global effects](#global-effects) · [Styling hooks](#styling-hooks) · [Customization](#customization)
 - [React Server Components](#react-server-components) · [Components](#components) · [Usage notes](#usage-notes)
-- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [Upgrading from 0.16](#upgrading-from-016) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
+- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [1.0 notices](#10-notices) · [Upgrading from 0.17](#upgrading-from-017) · [Upgrading from 0.16](#upgrading-from-016) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
 
 ## Requirements
 
@@ -399,15 +399,494 @@ export function checkedRows(tree: HTMLElement) {
 - **Variants and nesting.** A component built on another carries both classes: ToggleButton is `wave-button wave-toggle-button` (its icon `wave-button__icon wave-toggle-button__icon`), so `.wave-button` styles every button; the menu item kinds carry `wave-menu-item`, and CounterBadge carries `wave-badge`. A public component rendered inside another also gets the parent's part class: SplitButton's halves are `wave-button wave-split-button__primary-action-button` and `wave-button wave-split-button__menu-button`.
 - **No state classes.** State is in the `data-*` attributes and ARIA (`.wave-button[data-pressed]`, `.wave-tree-item[aria-checked='mixed']`); there is no `wave-button--pressed`.
 - **Cascade.** Wave never styles through these classes and Tailwind generates nothing for them, so your rules are the only ones on them. With the precompiled `./styles` (unlayered), a one-class rule of yours ties with Wave's utility classes and wins when it comes later; on the Tailwind path Wave's utilities sit in Tailwind's `utilities` layer, and any unlayered rule of yours wins.
-- **Stable.** The names are public API: no class is removed before 1.0. A renamed part, or a part that becomes a compound member of its own, keeps its old class next to the new one until 1.0; moving a class to another element is listed in the CHANGELOG as a DOM change. Per-part documentation comes with the part props of a later release (P13-01 in the [roadmap](docs/ROADMAP.md)).
+- **Stable.** The names are public API: no class is removed before 1.0. A renamed part, or a part that becomes a compound member of its own, keeps its old class next to the new one until 1.0; moving a class to another element is listed in the CHANGELOG as a DOM change.
+- **Per part.** The parts take props of yours too, through a named slot or `slotProps` (see [Customization](#customization)): each `slotProps` part's documentation names its element, its stable class and the attributes it locks, and the guide's [Customization](docs/WAVE-UI-GUIDE.md#14-customization) chapter has them in tables.
 - **Server Components.** The constants come from a server-safe module: a Server Component can import them from the entry.
+
+## Customization
+
+WaveUI components open up in several ways, each for a different kind of element. None of them needs a fork or an internal module:
+
+| Mechanism | For | Example |
+| --- | --- | --- |
+| [Named slots](#named-slots) | The leaves a prop fills: icons, media, content before and after a field, the content of dismiss, clear and close buttons, backdrops, motion | `icon={<SaveIcon />}`, `contentAfter={{ children: 'USD', className: 'text-muted-foreground' }}` |
+| [`slotProps`](#parts-slotprops) | The structure a component draws itself: a Switch's track and thumb, a Checkbox's box, a Dialog's body, a Tree item's row, a DataGrid header's sort button | `slotProps={{ track: { className: 'shadow-4', onClick } }}` |
+| [Render-function children](#slot-render-functions) | Replacing the element of a named slot, keeping its wiring | `icon={{ children: (Component, props) => <i {...props} /> }}` |
+| [Field's function child](#fields-function-child) | A control that Field cannot merge its wiring into | `<Field label="Card">{(props) => <VendorInput inputProps={props} />}</Field>` |
+| [Context hooks](#context-hooks) | Content of your own that reads or drives its component: a radio card, a menu item, a MessageBar action, a DataGrid cell | `useRadioGroupItem('pro')` |
+| [Stable classes](#styling-hooks) | Stylesheets of your own | `.wave-switch__track { … }` |
+
+Every part in the class-name registry is reachable one of these ways: it is a `slotProps` key of its component, a named slot, the root of a component you write yourself, or one of the few elements listed under [What is not customizable](#what-is-not-customizable). A test fails on a part that is none of these.
+
+### Named slots
+
+Props such as `icon`, `contentBefore` and `dismiss` are slots. A slot accepts content (rendered inside the slot's element) or an object with `as`, `className`, `children` and any attribute of the slot's element:
+
+```tsx
+import { Input } from '@mortenbrudvik/waveui';
+
+export const Price = () => (
+  <Input
+    aria-label="Price"
+    contentBefore="$"
+    contentAfter={{ children: 'USD', className: 'text-muted-foreground' }}
+  />
+);
+```
+
+A slot takes any `React.ReactNode`. Spread an attributes object typed by an interface into a new object (`image={{ ...imgProps }}` for a `React.ImgHTMLAttributes<HTMLImageElement>`).
+
+Icon slots are decorative (`aria-hidden`). Content that renders nothing (`''`, `[]`, `<></>`, or a collection of only `null`, booleans and `''`) counts as no content: a `contentAfter` that renders nothing takes no room, and SearchBox's `contentBefore` keeps the default search icon. The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag`, the `closeButton` of `Dialog.Content` and Drawer, and the `dismissButton` of `TeachingPopover.Header` render their content inside the component's own button; the 0.4 form that passed a button object is deprecated. A Wave `Button` passed there is merged into that button, and its own props never reach the DOM: its `icon` and `iconPosition` place the icon, and `disabledFocusable` makes the built-in button unavailable but focusable. Content that renders nothing keeps the default icon, and a slot object without children (`{ className: 'text-error' }`) wraps it. A slot object that renders a component or a void element (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the icon itself. On `MessageBar`, `dismiss={null}` is the only value that hides the dismiss button (a boolean counts as no slot), and so is `closeButton={null}` for the Close button of a Dialog or Drawer and `dismissButton={null}` for TeachingPopover's.
+
+The `backdrop` slot of `Dialog.Content` and Drawer takes content or a slot object with `appearance` (`'dimmed'`, `'transparent'`); `null` renders none, and booleans are no slot. Tag's `media` and `icon` (and an InteractionTag Primary's) are content slots: `media` is not hidden from assistive technology (pass `decorative` to an Avatar whose name repeats the tag's text), `icon` is decorative. So are the `media` of `Table.CellLayout` and `TeachingPopover.Body` (give a picture its `alt`), and `Table.HeaderCell`'s `aside`.
+
+Slots that replace a built-in glyph follow one rule per kind:
+
+- **Optional indicators** (`MenuButton.menuIcon`, the `expandIcon` of Combobox, Dropdown, TimePicker, TagPicker (and `TagPicker.Control`) and `Tree.Item`, `EmptySwatch.icon`, the `sortIcon` of `DataGrid.HeaderCell` and `Table.HeaderCell`, Breadcrumb's `divider`, `List.Item checkmark`): `null` or `undefined` keep the default glyph; `false` or any value that renders nothing hides it (for Combobox, TimePicker and TagPicker, the whole expand button; for Dropdown, the chevron and its room). A sort glyph shows only while its column is sorted, and a list check mark only on a selected item of a selectable List (`List.Item checkmark` content shows also without the List's `checkmark`).
+- **Required indicators** (`SplitButton.menuIcon`, `Option.checkIcon`, `Hamburger.icon`): the indicator always shows. A value that renders nothing keeps the default glyph, with a development warning. The check is the sign of an option's selection that does not rely on color, so Fluent's `checkIcon={null}`, which removes it, keeps it here.
+- **Status icons** (`MessageBar.icon`, `Toast.icon`, Field `validationMessageIcon`): only `undefined` keeps the default icon; `null` or a value that renders nothing shows none.
+- A glyph slot inside a built-in button (`expandIcon`, the `menuIcon` of SplitButton and MenuButton, the `icon` of `ColorSwatch`, `EmptySwatch` and `Hamburger`, a header cell's `sortIcon`, and the children of `InteractionTag.Secondary`, which is itself the button) is decorative content. A `<button>` or `Button` passed there, or a slot object whose `as` is one, is not nested: its children become the glyph and its props are dropped, with a development warning.
+
+Named slots stay the way to fill a leaf: they are not repeated in `slotProps`. Where both reach a button (the Dismiss buttons of MessageBar, SearchBox and Tag, TeachingPopover's Close button), the slot fills its content and a `<button>` or `Button` merged through the slot gives its attributes as defaults, which the `slotProps` part replaces; the button's type, name, tab stop and disabled state stay locked at the values the two give together.
+
+### Parts: `slotProps`
+
+The elements a component draws itself besides its root, the parts of the class-name registry that no named slot fills, take props of yours through `slotProps`, one object per part, keyed by the part's name in the registry: `switchClassNames.track` is the `track` part, and `wave-switch__track` its class. A part takes the attributes, handlers and `ref` of its element and any `data-*` attribute (a part is typed `SlotPart<'button'>`, `SlotPart<'input'>`, …), but no `children`, `as`, `key` or `dangerouslySetInnerHTML`: the component owns the part's content and element, so these are type errors in an object literal and are dropped at run time. A value typed by an interface (`React.ButtonHTMLAttributes<HTMLButtonElement>`, an interface of yours) or returned by `getNativeElementProps` fits a part too; a part whose ref takes another element than its own (a List item's content, Input's root) is typed `SlotPartWithRef<'span', HTMLElement>`.
+
+```tsx
+import { Input, Switch } from '@mortenbrudvik/waveui';
+
+export const SyncSettings = ({ confirmOff }: { confirmOff: () => boolean }) => (
+  <>
+    <Switch
+      label="Sync"
+      defaultChecked
+      slotProps={{
+        // The role="switch" button: your handler runs first, and preventDefault() skips the toggle.
+        track: {
+          'data-testid': 'sync-switch',
+          onClick: (event) => {
+            if (event.currentTarget.getAttribute('aria-checked') === 'true' && !confirmOff()) {
+              event.preventDefault();
+            }
+          },
+        },
+        thumb: { className: 'shadow-4' },
+        label: { className: 'font-semibold' },
+      }}
+    />
+    <Input
+      aria-label="Search"
+      contentBefore="🔍"
+      slotProps={{
+        // With content slots the root is the bordered wrapper; the input is the <input>.
+        root: { className: 'rounded-full' },
+        input: { autoCapitalize: 'off', enterKeyHint: 'search' },
+      }}
+    />
+  </>
+);
+```
+
+Your props combine with the component's by the rules a component applies to the props of its root:
+
+| You pass | Result |
+| --- | --- |
+| `className` | After the part's own classes, through `cn`: yours win a conflicting class of the same variant, and the stable class stays first. |
+| `style` | Over the part's own style, your keys winning, except the keys the component must control: a positioned popup's position, size limits and visibility, a beak's offset, a carousel track's translation, a progress bar's value width. |
+| `on…` handlers | Yours run first. `preventDefault()` in yours skips the component's handling of that event, the component's own `on…` prop included (a Switch track's `onClick` that prevents the default calls neither the Switch's `onClick` nor its toggle). Bookkeeping that only follows the DOM (where focus is, the end of a drag, the pointer over a control) runs after yours, also when they prevent the default; each part's documentation says where. |
+| `ref` | Attached beside the component's own ref, which keeps working. |
+| `aria-labelledby`, `aria-describedby` | Your ids are added after the component's, which are never removed. An `aria-labelledby` you add still changes a name: it wins over the part's locked `aria-label` (a Pagination or Carousel button, a Dismiss button, SpinButton's step buttons, a resize handle), and on a part whose text names its control (a menu item's or Nav item's label, InteractionTag's text) it renames the control. |
+| Any other attribute | Replaces the component's default for it, or adds one the component does not set (`title`, `data-*`). The other id references (`aria-controls`, `aria-errormessage`, `aria-details`, `aria-activedescendant`) are no lists: they follow this rule, and are locked where the component wires them. |
+| A locked attribute | Ignored: the component's value wins (below). |
+| `null` or `undefined` | Skipped: it never removes a value or a handler of the component. |
+
+**Locked attributes.** What a component's wiring depends on is locked: the attributes it sets on the part (role, ids and ARIA references, `tabIndex`, `disabled`, state such as `aria-checked`, the markers it finds elements by) and its own props routed to the part, so an Input's `placeholder` wins over `slotProps.input.placeholder`: set those through the component. Some attributes are locked unset: a part that holds a control or the text of a name cannot be hidden (`hidden`, `inert`, `aria-hidden`), a part whose text names a control takes no `aria-label` (it would replace the text in the name: a menu item's label, an Option's content, a CompoundButton's text, a Switch's label), except the parts that name a control or a surface by reference (the label of a Switch, Checkbox or radio, Field's and InfoLabel's `label`, Popover's `title`, a drawer header's `heading` and OptionGroup's `label`): the reference (`htmlFor` or `aria-labelledby`) still reads their text while it is hidden, so their hidden state is yours, and of them only the three control labels lock `aria-label`, so one of yours on another may rename what it names, a decorative part (`aria-hidden`: a Switch's thumb, a required mark, a beak) takes no `tabIndex`, a part inside a composite (a menu, a tree, a toolbar, a grid) cannot take a role, a tab index or a roving container's marker, which would make it another item or tab stop, and a control whose value a hidden input submits locks the form attributes of its focusable part that could take the value from that input (`form`, `name`, `required`, as each applies to the part), so the hidden input alone submits and resets the value. Each part's documentation names its element, its stable class and the attributes it locks, and the guide's [Customization](docs/WAVE-UI-GUIDE.md#14-customization) chapter tables them for every component.
+
+- **Disabled controls.** While a control is disabled (`disabled`, `disabledFocusable`, an unavailable Pagination or Carousel boundary button, a disabled menu item, step or flat tree item), your `onClick` on its parts is not called, as the control's own is not: on the control's own element and on the parts inside or beside it (a Switch's thumb and label, a Checkbox's or radio's label, a CompoundButton's text, an Input's bordered wrapper, a Dropdown's value, an Option's content and check square). Two exceptions: a disabled `Option`'s own `onClick` prop, on its `<li>`, still runs (as in 0.17; the option selects nothing), and the drawings of ColorArea, ColorSlider and AlphaSlider (`field`, `rail`, `thumb`) take your `onClick` in every state, as their roots do (each slider is its range input, natively disabled). A consumer `aria-disabled` alone blocks nothing.
+- **Parts inside a control** (a CompoundButton's text, a menu item's label, a Tree row's label, a Stepper step's indicator) carry no handler of their own: a click bubbles from them to the control after yours, so `preventDefault()` there skips the control's handling (no activation, no selection, no close), while the control's own `onClick` still runs, as for a prevented click on its content.
+- **One element, two parts.** Without `contentBefore` and `contentAfter` an Input is one `<input>`: `slotProps.root` and `slotProps.input` both apply to it, `input` after `root`. An Avatar without a `badge` is its own `visual` part.
+- **Repeated parts** (a Calendar's days, Pagination's buttons, every item of a FlatTree, every toast's container) take the same props on every element; a ref object holds the last one attached, and an `id` would repeat.
+- **Stable objects.** Where a component memoises what reads the parts (`Option`, `TagPicker`, TimePicker's `option` and `checkIcon`, `FlatTree`, `DataGrid.Row`'s `selectionControl`, `TeachingPopover`, AvatarGroup's `surface`, `list` and `listItem`), pass an object that keeps its identity (a constant or `useMemo`): a new object renders those items again.
+- **No change without them.** Without `slotProps`, or with `{}`, a component renders the attributes and values of 0.17; only the order of the attributes in a raw HTML string may differ.
+- **Server Components** can pass `slotProps` that hold only attributes (classes, styles, `data-*`); handlers and refs belong in a client component.
+
+### Slot render functions
+
+The `children` of a slot object may be a function, `(Component, props) => ReactNode` (`SlotRenderFunction`, Fluent's escape hatch): `Component` is the slot's element type (the object's `as`, else the slot's default tag) and `props` every prop that element receives, the component's defaults (`aria-hidden` on an icon), the merged `className`, the object's `ref` and what the component adds when it renders the element included. What the function returns renders in place of the element:
+
+```tsx
+import { Button, Dialog, cn } from '@mortenbrudvik/waveui';
+import type { SlotRenderFunction } from '@mortenbrudvik/waveui';
+
+// The icon slot's element becomes an <i> of an icon font: the classes, `aria-hidden` and the ref
+// the Button gives its icon are kept, because `props` is spread.
+const codicon =
+  (name: string): SlotRenderFunction =>
+  (_Component, props) => <i {...props} className={cn(props.className, `codicon codicon-${name}`)} />;
+
+export const Toolbar = () => (
+  <>
+    <Button icon={{ children: codicon('save') }}>Save</Button>
+    <Dialog>
+      <Dialog.Trigger>
+        <Button>Details</Button>
+      </Dialog.Trigger>
+      <Dialog.Content
+        title="Details"
+        // In a close slot the function renders inside the Close button and receives the default
+        // glyph as `props.children`.
+        closeButton={{
+          children: (Component, props) => <Component {...props} data-tour-step="close" />,
+        }}
+      >
+        Shipped on Monday.
+      </Dialog.Content>
+    </Dialog>
+  </>
+);
+```
+
+- Spread `props`: a function that drops them drops the wiring (the classes, `aria-hidden`, the handlers, the `ref`). `(Component, props) => <Component {...props} />` renders what the object without the function renders.
+- Keep it pure and call no hooks in it (render a component that does): StrictMode, and the check whether a slot renders anything, call it more than once. A function that returns nothing counts as a slot that renders nothing for the glyph rules above.
+- In the dismiss, clear and close slots the component's own button stays: the function renders the content inside it, receives the default glyph as `props.children`, and a function that returns nothing leaves the default glyph. There and in the glyph slots inside a button, an `as` that names a button is merged or unwrapped as the slot's rule says, so no button nests in a button.
+- Annotate a function of your own with the bare `SlotRenderFunction` type, which fits every slot. A `slotProps` part takes no render function, and neither do TeachingPopover's actions (a Wave Button), and a function cannot be passed from a Server Component.
+
+`getNativeElementProps(tag, props, excludedNames?)` keeps the props an intrinsic element accepts (the global attributes, the DOM event handlers, `data-*` and `aria-*`, `ref`, and the attributes of the tag for `a`, `button`, `img`, `input`, `label`, `li`, `ol`, `option`, `select`, `td`, `textarea` and `th`) and drops the rest, so a component of yours spreads a props object onto an element without leaking component props into the DOM (Fluent's `getIntrinsicElementProps`). It is server-safe and costs nothing in a bundle that does not import it.
+
+```tsx
+import { getNativeElementProps } from '@mortenbrudvik/waveui';
+import type { InputProps } from '@mortenbrudvik/waveui';
+
+// A bare input that takes Input's props: `appearance`, `contentBefore`, `onValueChange`,
+// `slotProps` and the other component props never reach the DOM, and Input's `size` (a size
+// name, not the native width in characters) is left out too.
+export function PlainInput(props: InputProps) {
+  return <input {...getNativeElementProps('input', props, ['size'])} />;
+}
+```
+
+`mergeSlotProps(part, own)`, the helper every component applies to its parts, is public too, for components of your own that take parts by the same rules (`SlotPart`, `SlotPartWithRef`, `SlotPartOwn`).
+
+### Field's function child
+
+A function as a Field's child renders the control itself, for a control that Field cannot merge its attributes into, such as a third-party input that takes them under another name (Fluent's render-function child):
+
+```tsx
+import type * as React from 'react';
+import { Field } from '@mortenbrudvik/waveui';
+
+// A third-party control that takes its input's attributes under another name.
+function CardNumberInput({
+  inputProps,
+}: {
+  inputProps: React.InputHTMLAttributes<HTMLInputElement>;
+}) {
+  return <input {...inputProps} />;
+}
+
+export const Payment = ({ error }: { error?: string }) => (
+  <Field label="Card number" hint="16 digits" error={error} required>
+    {(props) => <CardNumberInput inputProps={{ ...props, inputMode: 'numeric', required: true }} />}
+  </Field>
+);
+```
+
+- The function receives `FieldControlProps`, each only when it has a value: `id` (the id the label points at), `aria-labelledby` (the label, which also names an element a label cannot point at), `aria-describedby` (the validation message, then the hint), `aria-invalid` (the `error` state only) and `aria-required`. It receives no native `required` and no `size`: pass them yourself, or read them with `useFieldContext()` below. Leave `aria-labelledby` out to name the control another way.
+- Field calls it during its own render (keep it pure; render a component that calls hooks) and renders the result inside its context, with nothing merged into it. A library control in the result that receives no `id` from the props gets one of its own and is named through `aria-labelledby`.
+- An element child still receives the Field's attributes as before; a function cannot be passed from a Server Component.
+
+### Context hooks
+
+Content of your own inside a component reads it, and acts on it, through hooks that return a narrow view of the component, not its internal context:
+
+| Hook | Inside | Returns | Outside |
+| --- | --- | --- | --- |
+| `useFieldContext()` | a `Field` or a `FieldContextProvider` | the Field's `FieldContextValue`: the ids of its label, message and hint, `required`, `size`, `validationState`, … | `null` |
+| `FieldContextProvider` | (a component) | provides a `FieldContextValue` of yours to the controls inside, for a field layout of your own | |
+| `useRadioGroupContext()` | a `RadioGroup` | `{ value, disabled, select(value) }` | throws in development |
+| `useRadioGroupItem(value, { disabled })` | a `RadioGroup` | `{ props, checked, disabled }`: the props that make an element of yours a radio of the group | throws in development |
+| `useMenuContext()` | a `Menu` | `{ open, close(), isSubmenu }` | throws in development |
+| `useMenuListContext()` | a `Menu.Popover` or a static `Menu` | `{ hasIcons, hasCheckmarks }`: the columns the built-in items keep | throws in development |
+| `useMessageBarContext()` | a `MessageBar` | `{ status, layout }`: the resolved status and the layout the bar renders | throws in development |
+| `useDataGridSort()` | a `DataGrid` | `{ sort, setSort(sort, event?) }` | throws in development |
+| `useDataGridSelection()` | a `DataGrid` | `{ selectedItems, isSelected(id), toggle(id, event?) }` | throws in development |
+| `useDataGridRowId()` | a `DataGrid.Row` | the row's id, `undefined` in a header row | throws in development |
+
+Each value is the same object while its members stay the same, and later releases can add members without a break. A hook that "throws in development" outside its component (`[WaveUI] useMenuContext must be used within Menu`) logs once in production and returns an inert value instead (nothing selected, a `close` that does nothing). `useFieldContext` is optional by design: a control works with and without a Field. Fluent's counterparts (`use…Context_unstable`) return defaults outside their component and never throw.
+
+**Field.** A control of your own reads what `useFieldControl` does not return, and a field layout of your own provides the context Field would (memoise its value):
+
+```tsx
+import * as React from 'react';
+import { FieldContextProvider, Input, useFieldContext, useId } from '@mortenbrudvik/waveui';
+import type { FieldContextValue } from '@mortenbrudvik/waveui';
+
+// Inside a Field (or a FieldContextProvider) a control of your own reads what `useFieldControl`
+// does not return, such as the required state; `null` outside one.
+export function RequiredMarker() {
+  const field = useFieldContext();
+  return field?.required ? <span aria-hidden="true">*</span> : null;
+}
+
+// A field layout of your own: the inputs inside are named by your label and described by your hint.
+export function InlineField({ label, hint }: { label: string; hint: string }) {
+  const controlId = useId('inline-field');
+  const value = React.useMemo<FieldContextValue>(
+    () => ({
+      controlId,
+      labelId: `${controlId}-label`,
+      hintId: `${controlId}-hint`,
+      errorId: undefined,
+      invalid: false,
+      required: false,
+      hasErrorMessage: false,
+    }),
+    [controlId],
+  );
+  return (
+    <div className="flex items-center gap-3">
+      <label id={value.labelId} htmlFor={controlId}>
+        {label}
+      </label>
+      <FieldContextProvider value={value}>
+        <Input />
+      </FieldContextProvider>
+      <span id={value.hintId}>{hint}</span>
+    </div>
+  );
+}
+```
+
+**RadioGroup.** An element of yours that spreads `useRadioGroupItem`'s props is a radio of the group: the group's one tab stop, the arrow keys (mirrored right to left), Space and Enter, its `onValueChange` and its form value reach it as they reach `RadioGroup.Item`, and the two kinds can share a group. Name it, draw its checked, disabled and focus looks, and put no control inside it:
+
+```tsx
+import {
+  RadioGroup,
+  cn,
+  focusRing,
+  useId,
+  useRadioGroupContext,
+  useRadioGroupItem,
+} from '@mortenbrudvik/waveui';
+
+// A card of your own that is a radio of the group: the group's tab stop, arrow keys, Space and
+// form value reach it as they reach RadioGroup.Item.
+function PlanCard({ value, title }: { value: string; title: string }) {
+  const id = useId('plan');
+  const { props, checked } = useRadioGroupItem(value);
+  return (
+    <div
+      {...props}
+      aria-labelledby={id}
+      className={cn(
+        'rounded-md border-2 p-3',
+        focusRing,
+        checked ? 'border-primary' : 'border-stroke-accessible',
+      )}
+    >
+      <span id={id}>{title}</span>
+    </div>
+  );
+}
+
+function ChosenPlan() {
+  const { value } = useRadioGroupContext();
+  return <p>{value === undefined ? 'No plan chosen' : `Chosen: ${value}`}</p>;
+}
+
+export const Plans = () => (
+  <RadioGroup aria-label="Plan" name="plan" defaultValue="pro">
+    <PlanCard value="free" title="Free" />
+    <PlanCard value="pro" title="Pro" />
+    <ChosenPlan />
+  </RadioGroup>
+);
+```
+
+**Menu.** An element of yours with `role="menuitem"` inside `Menu.Popover` is an item of the menu: the arrow keys, Home, End, typeahead and the pointer reach it. It activates itself, closes the menu with `close()` (focus returns as for a built-in item), and keeps the columns the built-in items keep so its label lines up:
+
+```tsx
+import { Button, Menu, useMenuContext, useMenuListContext } from '@mortenbrudvik/waveui';
+
+// An item of your own: `role="menuitem"` makes it an item of the menu (arrow keys, typeahead,
+// pointer focus); it activates itself and closes the menu as a built-in item does.
+function TemplateItem({ title, onSelect }: { title: string; onSelect: () => void }) {
+  const { close } = useMenuContext();
+  const { hasIcons, hasCheckmarks } = useMenuListContext();
+  return (
+    <div
+      role="menuitem"
+      className="flex items-center gap-2 px-3 py-1.5"
+      onClick={(event) => {
+        if (event.defaultPrevented) return;
+        onSelect();
+        close();
+      }}
+      onKeyDown={(event) => {
+        if (event.defaultPrevented || event.target !== event.currentTarget) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.currentTarget.click();
+      }}
+    >
+      {hasCheckmarks && <span aria-hidden="true" className="w-4 shrink-0" />}
+      {hasIcons && <span aria-hidden="true" className="w-5 shrink-0" />}
+      {title}
+    </div>
+  );
+}
+
+export const NewMenu = ({ create }: { create: (template: string) => void }) => (
+  <Menu>
+    <Menu.Trigger>
+      <Button>New</Button>
+    </Menu.Trigger>
+    <Menu.Popover>
+      <TemplateItem title="Meeting notes" onSelect={() => create('notes')} />
+      <Menu.Item onClick={() => create('blank')}>Blank document</Menu.Item>
+    </Menu.Popover>
+  </Menu>
+);
+```
+
+**MessageBar.** An action, or other content of yours anywhere in a bar, follows the bar's resolved `status` (`'info'` without one; Fluent's `intent`) and the `layout` it renders, after `layout="auto"` has measured. Compute text that depends on them during render, never in an effect:
+
+```tsx
+import { Button, MessageBar, useMessageBarContext } from '@mortenbrudvik/waveui';
+
+// An action that follows its bar: the label by the bar's status, the size by the layout it renders.
+function RetryAction({ onRetry }: { onRetry: () => void }) {
+  const { status, layout } = useMessageBarContext();
+  return (
+    <Button
+      appearance={status === 'error' ? 'primary' : 'outline'}
+      size={layout === 'multiline' ? 'medium' : 'small'}
+      onClick={onRetry}
+    >
+      {status === 'error' ? 'Try again' : 'Refresh'}
+    </Button>
+  );
+}
+
+export const SyncError = ({ retry }: { retry: () => void }) => (
+  <MessageBar status="error" layout="auto">
+    <MessageBar.Title>Sync failed</MessageBar.Title>
+    Your last changes were not saved.
+    <MessageBar.Actions>
+      <RetryAction onRetry={retry} />
+    </MessageBar.Actions>
+  </MessageBar>
+);
+```
+
+**DataGrid.** A cell, a header or a footer of yours reads and changes the grid's sort and selection through the grid's own callbacks (`onSortChange`, `onSelectedItemsChange`), so the headers, the row checkboxes, Space on a cell and select-all stay in step with it, also for rows a `virtualWindow` does not render:
+
+```tsx
+import {
+  Button,
+  DataGrid,
+  ToggleButton,
+  createTableColumn,
+  useDataGridRowId,
+  useDataGridSelection,
+  useDataGridSort,
+} from '@mortenbrudvik/waveui';
+
+interface Member {
+  id: string;
+  name: string;
+}
+
+// A cell of your own that shows and toggles its row's selection, in step with the row's checkbox.
+function SelectToggle({ name }: { name: string }) {
+  const rowId = useDataGridRowId();
+  const { isSelected, toggle } = useDataGridSelection();
+  if (rowId === undefined) return null;
+  return (
+    <ToggleButton
+      size="small"
+      pressed={isSelected(rowId)}
+      aria-label={`Select ${name}`}
+      onClick={(event) => toggle(rowId, event.nativeEvent)}
+    >
+      Select
+    </ToggleButton>
+  );
+}
+
+// A footer of your own that reverses the sort, as a sortable header does.
+function ReverseOrder() {
+  const { sort, setSort } = useDataGridSort();
+  if (sort === null) return null;
+  const direction = sort.direction === 'ascending' ? 'descending' : 'ascending';
+  return (
+    <Button onClick={(event) => setSort({ columnId: sort.columnId, direction }, event.nativeEvent)}>
+      Reverse order
+    </Button>
+  );
+}
+
+const columns = [
+  createTableColumn<Member>({
+    columnId: 'name',
+    label: 'Name',
+    compare: (a, b) => a.name.localeCompare(b.name),
+    renderCell: (member) => member.name,
+  }),
+  createTableColumn<Member>({
+    columnId: 'selected',
+    label: 'Selected',
+    renderCell: (member) => <SelectToggle name={member.name} />,
+  }),
+];
+
+export const Members = ({ members }: { members: readonly Member[] }) => (
+  <DataGrid
+    aria-label="Members"
+    items={members}
+    columns={columns}
+    getRowId={(member) => member.id}
+    selectionMode="multiple"
+    defaultSort={{ columnId: 'name', direction: 'ascending' }}
+  >
+    <tfoot>
+      <tr>
+        <td colSpan={3}>
+          <ReverseOrder />
+        </td>
+      </tr>
+    </tfoot>
+  </DataGrid>
+);
+```
+
+Every component that calls `useDataGridSelection` renders again on each change of the selection, so in a grid of many rendered rows keep its callers few or render the rows in a window. The guide's [recipes](docs/WAVE-UI-GUIDE.md#recipes) build each of these out, and the stories `CustomRadioCard`, `CustomMenuItem`, `StatusAwareAction` and `CustomCell` run them.
+
+### `ref` and `controlRef`
+
+- **`ref`** reaches the root element, the one that receives `className`, also on the controls whose focusable element sits inside a wrapper (Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker, TimePicker). Two components are exceptions, and stay so: Input's `ref` reaches the `<input>`, also with `contentBefore` or `contentAfter`, where the bordered wrapper that receives `className` is reached through `slotProps.root.ref`; and `RadioGroup.Item`'s `ref` reaches its `role="radio"` button (as `slotProps.indicator.ref` does), while `className` stays on its root `<label>`, which no ref reaches.
+- **`controlRef`** reaches the focusable element of those controls, and of ColorArea, ColorSlider, AlphaSlider, `ColorPicker.HexField` and the selection cells of Table and DataGrid.
+- **`slotProps.<part>.ref`** reaches a part's element, beside the component's own ref.
+
+This placement is decided for 1.0: nothing moves. Fluent puts `ref` on a control's primary element; code ported from Fluent passes `controlRef` where it passed `ref` to such a control (see [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md#decided-no-change)).
+
+### What is not customizable
+
+- **Elements that exist for layout, motion or measurement**: the virtual spacers of DataGrid, List, Listbox, Combobox, Dropdown and FlatTree (sized by the window), the collapse elements of `Accordion.Panel`, `Tree.Item`, `Nav.Category` and the inline Drawer and NavDrawer, the element that holds each bar of a MessageBarGroup and each toast's content element (their `motion` slots style them, and the content inside takes your props), `Dialog.Content`'s positioner (it places the surface and lets presses through to the backdrop) and the Carousel's viewport (measured for `groupSize="auto"`). A prop there could break the motion or the measurement.
+- **Roots of components you write yourself** take their props directly and have no part: `Accordion.Item`, `Menu.Item`, the table cells, `Rating.Item` (also those `max` generates), the swatches, `TagPicker.Control`, `Group`, `Input` and `List`, `TeachingPopover.Title`, `Body` and `Footer`, `Drawer.Body`, `DataGrid.SelectionCell` and `AvatarGroup.Popover`'s button. Menu.Item keeps only an unclassed placeholder in the check column (shown while its list holds a checkable item), so it has no `checkmark` part; the checkable kinds' `checkmark` slot fills theirs.
+- **Locked attributes** stay the component's: set them through its own props.
+- **Hidden form inputs, live regions and visually hidden text** are no parts.
+- **App-wide classes per component** (Fluent's `customStyleHooks_unstable`, a `WaveProvider classNames`) are left for after 1.0: style the stable classes in a stylesheet, or pass `className` and `slotProps` per instance.
+
+Nothing in this chapter changes in 1.0 (see [1.0 notices](#10-notices)).
 
 ## React Server Components
 
-- Every component and hook module of the package starts with `"use client"`. The entry point, `cn`, the slot helpers, the class-name constants (`buttonClassNames`, …), `hsvToHex`, `hexToHsv`, `createToaster`, the date helpers (`addDays`, `addMonths`, `isSameDay`, `startOfWeek`, `getWeekNumber`), `getInitials`, `partitionAvatarGroupItems`, the breadcrumb helpers (`partitionBreadcrumbItems`, `truncateBreadcrumbLongName`, `truncateBreadcrumbLongTooltip`, `isTruncatableBreadcrumbContent`), `createTableColumn`, the theming helpers (`createBrandTokens`, `getTokenStyle`, `waveTokens`, `chartPalette`, `getThemeClassName`) and the types are server-safe, so a Server Component can import from `@mortenbrudvik/waveui`, read the constants, create a toaster handle, compute dates, build a brand ramp and render Wave components with serializable props (a `tokens` object is one). A DataGrid column with functions (`compare`, `renderCell`) is not serializable: define such columns in a client component.
+- Every component and hook module of the package starts with `"use client"`. The entry point, `cn`, the slot helpers, the class-name constants (`buttonClassNames`, …), `hsvToHex`, `hexToHsv`, `createToaster`, the date helpers (`addDays`, `addMonths`, `isSameDay`, `startOfWeek`, `getWeekNumber`), `getInitials`, `partitionAvatarGroupItems`, the breadcrumb helpers (`partitionBreadcrumbItems`, `truncateBreadcrumbLongName`, `truncateBreadcrumbLongTooltip`, `isTruncatableBreadcrumbContent`), `createTableColumn`, the theming helpers (`createBrandTokens`, `getTokenStyle`, `waveTokens`, `chartPalette`, `getThemeClassName`), `mergeSlotProps`, `getNativeElementProps` and the types are server-safe, so a Server Component can import from `@mortenbrudvik/waveui`, read the constants, create a toaster handle, compute dates, build a brand ramp and render Wave components with serializable props (a `tokens` object is one). A DataGrid column with functions (`compare`, `renderCell`) is not serializable: define such columns in a client component.
 - A Server Component **cannot dot into a client component**: `Card.Header` throws "Cannot access Header on the server". Every sub-component is therefore also exported under a flat name. Use the flat names in Server Components and either form in client components.
 - Every compound can be composed in a Server Component. Parts written there reach the client as lazy references, and the compounds recognise them, so the server HTML and the client behaviour are the same as in a client file: Accordion items, Carousel slides, the options of Combobox, Dropdown and Listbox, the parts and options of TagPicker, DataGrid parts (`DataGrid.SelectionCell` included), the Table parts, Overflow items and dividers, Breadcrumb items (collapsed into the overflow menu too), the TeachingPopover parts, Drawer and Menu triggers, the Drawer header, body and footer parts, the tags of a TagGroup and the halves of an InteractionTag, the header of a `Menu.Group`, the halves of a `Menu.SplitGroup`, List, TabList and Tree items, Nav items, categories, section headers, dividers and app items, the header, body and footer of a NavDrawer, the stars of a Rating or RatingDisplay, the parts of Toast and MessageBar, the bars of a MessageBarGroup, the ColorPicker parts, `SwatchPicker.Row` and the swatches (`ColorSwatch`, `ImageSwatch`, `EmptySwatch`, in rows of the grid layout or the implicit ones), `Tree.ItemPersonaLayout`, a `Label` or `InfoLabel` passed as the `label` of a Field, and a `Button` passed as a MessageBar, SearchBox or Tag dismiss slot.
-- Event handlers and other functions cannot be passed from a Server Component; put interactive parts in a `'use client'` component. That includes every windowed or data-driven component: a `virtualWindow` (from the `useVirtualWindow` hook), `renderOption`, a FlatTree's model and `renderItem`, a windowed List's function child and `isSelectionDisabled` are client values. The server HTML of a windowed component holds its first window (the top of the list in the window's `initialViewportSize`), and that of a closed data-mode Combobox or Dropdown no options.
+- Event handlers and other functions cannot be passed from a Server Component; put interactive parts in a `'use client'` component. That includes a slot render function, a Field's function child, the handlers and refs of a `slotProps` part (its classes, styles and attributes are serializable) and every windowed or data-driven component: a `virtualWindow` (from the `useVirtualWindow` hook), `renderOption`, a FlatTree's model and `renderItem`, a windowed List's function child and `isSelectionDisabled` are client values. The server HTML of a windowed component holds its first window (the top of the list in the window's `initialViewportSize`), and that of a closed data-mode Combobox or Dropdown no options.
 - A `Popover`, `Dialog`, overlay `Drawer` or `NavDrawer`, popup `Menu`, `Combobox`, `Dropdown`, `DatePicker`, `TimePicker` or `TagPicker` rendered on the server with `defaultOpen` (or `open`) is closed in the server HTML and opens once hydrated, so no ARIA reference points at a popup that is not there. `onOpenChange` is not called for it.
 - An inline `Drawer` or `NavDrawer` (`type="inline"`) renders in the server HTML: open, or `hidden` when it is closed and kept mounted (`unmountOnClose={false}`).
 - A TeachingPopover with a `TeachingPopover.Trigger` written directly inside it starts closed. One that points at its Trigger or a `target` renders its surface once hydrated (the surface sits in a portal). Write `TeachingPopover.Surface` directly inside TeachingPopover too: a Surface rendered by a component of yours is found only once it has mounted, so the server HTML holds the popover's own surface as well (two dialogs with the same title id) until then. A Surface with children of yours is named by its `TeachingPopover.Title` once mounted (as a Dialog is by `Dialog.Title`), so its server HTML has no `aria-labelledby`.
@@ -786,6 +1265,7 @@ export function AccountSettings({ backedUp }: { backedUp: number }) {
   ```
 
 - One control per Field. Put wrapper or layout components (a `Tooltip`, your own row) **inside a plain `<div>`** in the Field; the library control inside is then labelled correctly.
+- **Controls of your own.** A control that takes its attributes under other names goes in a function child, `{(props) => …}`, which receives the Field's id and ARIA wiring ([Field's function child](#fields-function-child)); one built on `useFieldControl` reads the Field's other state with `useFieldContext()`, and `FieldContextProvider` gives a field layout of your own the same wiring ([Context hooks](#context-hooks)).
 - `error` on `Input`, `Select` and `Textarea`: a string renders the message after the control in a `role="alert"` element linked with `aria-describedby`/`aria-errormessage`; `error={true}` only marks the control invalid. Inside a Field that shows its own error, the message is not repeated.
 - Value controls take part in native forms when you pass `name`, or when they are required (their own `required`, or a required `Field`): `Checkbox`, `Switch`, `RadioGroup`, `Rating`, `SpinButton`, `SwatchPicker`, `ColorPicker`, `ColorArea`, `ColorSlider` and `AlphaSlider` (the hex of the color; inside a ColorPicker they are bound and the picker submits), `Combobox`, `Dropdown` and `Listbox` (one input per value with `multiselect`), `TagPicker`, `DatePicker` and `Calendar` (ISO `yyyy-mm-dd`) and `TimePicker` (`HH:mm`) render a hidden input, honour `required` and `form`, and reset with their form. `SearchBox` submits through its own `<input name>` and resets with its form too. No name is generated for you.
 
@@ -2664,35 +3144,6 @@ export function Shell({ narrow }: { narrow: boolean }) {
 - **Controls.** `controlsLayout` is `overlay` (the default, round buttons over the slides), `overlay-wide` (full-height edge strips), `inline` (buttons beside the slides) or `inline-wide`. `Carousel.Button` (`direction="previous"` or `"next"`) replaces the built-in button of that direction and keeps its name, `aria-controls` and disabled behaviour; its children replace the chevron. `appearance="elevated"` rounds the carousel and adds a shadow.
 - **Carousel motion.** `motion` is `slide` (the default: the slides glide in from the side of the page order, mirrored in right-to-left layouts), `fade` (the slides cross-fade in place; one slide per page, else they slide, with a development warning; a drag still pages on release) or `null` (the page changes at once); the root renders it as `data-motion` (`slide`, `fade`, `none`). `motionDuration` is the time in milliseconds (300 by default; Fluent's `duration` is another unit, Embla's speed of 20 to 60). Below `WaveProvider motion="none"` a carousel moves only with its own `motion`, and under reduced motion it never moves.
 
-### Slots
-
-Props such as `icon`, `contentBefore` and `dismiss` are slots. A slot accepts content (rendered inside the slot's element) or an object with `as`, `className`, `children` and any attribute of the slot's element:
-
-```tsx
-import { Input } from '@mortenbrudvik/waveui';
-
-export const Price = () => (
-  <Input
-    aria-label="Price"
-    contentBefore="$"
-    contentAfter={{ children: 'USD', className: 'text-muted-foreground' }}
-  />
-);
-```
-
-A slot takes any `React.ReactNode`. Spread an attributes object typed by an interface into a new object (`image={{ ...imgProps }}` for a `React.ImgHTMLAttributes<HTMLImageElement>`).
-
-Icon slots are decorative (`aria-hidden`). Content that renders nothing (`''`, `[]`, `<></>`, or a collection of only `null`, booleans and `''`) counts as no content: a `contentAfter` that renders nothing takes no room, and SearchBox's `contentBefore` keeps the default search icon. The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag`, the `closeButton` of `Dialog.Content` and Drawer, and the `dismissButton` of `TeachingPopover.Header` render their content inside the component's own button; the 0.4 form that passed a button object is deprecated. A Wave `Button` passed there is merged into that button, and its own props never reach the DOM: its `icon` and `iconPosition` place the icon, and `disabledFocusable` makes the built-in button unavailable but focusable. Content that renders nothing keeps the default icon, and a slot object without children (`{ className: 'text-error' }`) wraps it. A slot object that renders a component or a void element (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the icon itself. On `MessageBar`, `dismiss={null}` is the only value that hides the dismiss button (a boolean counts as no slot), and so is `closeButton={null}` for the Close button of a Dialog or Drawer and `dismissButton={null}` for TeachingPopover's.
-
-The `backdrop` slot of `Dialog.Content` and Drawer takes content or a slot object with `appearance` (`'dimmed'`, `'transparent'`); `null` renders none, and booleans are no slot. Tag's `media` and `icon` (and an InteractionTag Primary's) are content slots: `media` is not hidden from assistive technology (pass `decorative` to an Avatar whose name repeats the tag's text), `icon` is decorative. So are the `media` of `Table.CellLayout` and `TeachingPopover.Body` (give a picture its `alt`), and `Table.HeaderCell`'s `aside`.
-
-Slots that replace a built-in glyph follow one rule per kind:
-
-- **Optional indicators** (`MenuButton.menuIcon`, the `expandIcon` of Combobox, Dropdown, TimePicker, TagPicker (and `TagPicker.Control`) and `Tree.Item`, `EmptySwatch.icon`, the `sortIcon` of `DataGrid.HeaderCell` and `Table.HeaderCell`, Breadcrumb's `divider`, `List.Item checkmark`): `null` or `undefined` keep the default glyph; `false` or any value that renders nothing hides it (for Combobox, TimePicker and TagPicker, the whole expand button; for Dropdown, the chevron and its room). A sort glyph shows only while its column is sorted, and a list check mark only on a selected item of a selectable List (`List.Item checkmark` content shows also without the List's `checkmark`).
-- **Required indicators** (`SplitButton.menuIcon`, `Option.checkIcon`, `Hamburger.icon`): the indicator always shows. A value that renders nothing keeps the default glyph, with a development warning. The check is the sign of an option's selection that does not rely on color, so Fluent's `checkIcon={null}`, which removes it, keeps it here.
-- **Status icons** (`MessageBar.icon`, `Toast.icon`, Field `validationMessageIcon`): only `undefined` keeps the default icon; `null` or a value that renders nothing shows none.
-- A glyph slot inside a built-in button (`expandIcon`, the `menuIcon` of SplitButton and MenuButton, the `icon` of `ColorSwatch`, `EmptySwatch` and `Hamburger`, a header cell's `sortIcon`, and the children of `InteractionTag.Secondary`, which is itself the button) is decorative content. A `<button>` or `Button` passed there, or a slot object whose `as` is one, is not nested: its children become the glyph and its props are dropped, with a development warning.
-
 ### Built-in text
 
 The names and hidden texts that components render themselves are English by default. These props translate them:
@@ -2890,6 +3341,11 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
 | `useIsClient()`                                                                                                                              | `false` on the server and during hydration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `usePresence(visible, options?)`, `<Presence visible>`                                                                                       | Mount and unmount an element with CSS enter and exit motion (`data-presence` phases; see [Enter and exit motion](#enter-and-exit-motion)).                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `useFieldControl(props, options?)`                                                                                                           | Merge a custom control's labelling props with the surrounding `Field` (its label, validation message, hint and state).                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `useFieldContext()`, `FieldContextProvider`                                                                                                  | The surrounding Field's context (`FieldContextValue`: the ids of its label, message and hint, `required`, `size`, `validationState`), or `null` outside a Field; and the provider of such a value for a field layout of your own (see [Context hooks](#context-hooks)).                                                                                                                                                                                                                                                                                                |
+| `useRadioGroupContext()`, `useRadioGroupItem(value, options?)`                                                                               | Inside a `RadioGroup`: its `value`, `disabled` and `select(value)`; and the props (`role`, `aria-checked`, the roving `tabIndex`, the handlers) that make an element of yours one of its radios (see [Context hooks](#context-hooks)).                                                                                                                                                                                                                                                                                                                                 |
+| `useMenuContext()`, `useMenuListContext()`                                                                                                   | Inside a `Menu`: `open`, `close()` and `isSubmenu`, for an item of your own; inside its list, the icon and check columns the built-in items keep (`hasIcons`, `hasCheckmarks`).                                                                                                                                                                                                                                                                                                                                                                                        |
+| `useMessageBarContext()`                                                                                                                     | Inside a `MessageBar`: its resolved `status` and the `layout` it renders, for an action of your own.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `useDataGridSort()`, `useDataGridSelection()`, `useDataGridRowId()`                                                                          | Inside a `DataGrid`: its sort and `setSort`, its selection with `isSelected` and `toggle` (through `onSortChange` and `onSelectedItemsChange`), and the id of the surrounding `DataGrid.Row`, for cells, headers and footers of your own.                                                                                                                                                                                                                                                                                                                              |
 | `useAnnounce()`, `announce(message, politeness?)`                                                                                            | Screen-reader announcements through a shared live region.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `useActiveDescendant(options)`                                                                                                               | The `aria-activedescendant` model under the pickers, for composites that keep focus on one element: `items`, `getId`, `getElement` (the item's element for scrolling; by default the element with its id), `enabled`, `fallback`, `loop`, `activateFirstOnChange`, `onActiveValueChange`; returns `activeValue`, `activeDescendantId` and stable `setActiveValue`, `highlight` (pointer moves, not scrolled into view), `first`, `last`, `next`, `prev` and `move`. State-based: it reads no DOM during render, so an active fallback item's id is in the server HTML. `onScrollToItem(index)` is called first for every move that scrolls, for a windowed list that renders part of its items. |
 | `useListbox(options)`, `useListboxOption(props)`                                                                                             | The listbox under Dropdown, Combobox, TagPicker and Listbox: keys, typeahead, filtering, the active option and option registration, in `'select-only'`, `'editable'` or `'standalone'` mode, with `multiselect` and `disabledOptionsFocusable`; `onOpenChange(open, details)` and `onSelect(value, details)` (see [Listbox and custom pickers](#listbox-and-custom-pickers)). `useListboxOption` builds an option component of your own. In data mode (`items`) `onScrollToItem(index)` receives every active option that scrolls into view, by its index among the shown options. |
@@ -2916,12 +3372,30 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
 | `cn(...classes)`                                                                                                                             | clsx + tailwind-merge that knows Wave's type ramp, shadows and font families; the last class wins over a conflicting class of the same variant.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `composeEventHandlers(theirs, ours)`                                                                                                         | Run a consumer handler, then yours unless it called `preventDefault()`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `mergeRefs(...refs)`                                                                                                                         | Merge refs outside components.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `resolveSlot`, `renderSlot`                                                                                                                  | The slot helpers the components use.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `resolveSlot`, `renderSlot`                                                                                                                  | The slot helpers the components use; a slot object's `children` may be a render function, `(Component, props) => ReactNode` (`SlotRenderFunction`; see [Slot render functions](#slot-render-functions)).                                                                                                                                                                                                                                                                                                                                                               |
+| `mergeSlotProps(part, own)`                                                                                                                  | Merges a part's props (`SlotPart`) with what a component puts on it (`SlotPartOwn`: classes, style, ref, defaults and locked attributes), by the rules of [`slotProps`](#parts-slotprops), for components of your own. Server-safe.                                                                                                                                                                                                                                                                                                                                    |
+| `getNativeElementProps(tag, props, excludedNames?)`                                                                                          | The props of `props` that the intrinsic element `tag` accepts (`NativeElementProps`), so a component of yours forwards native props without leaking its own (Fluent's `getIntrinsicElementProps`). Server-safe.                                                                                                                                                                                                                                                                                                                                                        |
 | `getThemeClassName(theme)`                                                                                                                   | The theme classes of a theme.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `createBrandTokens(seed)` | The 16 brand tokens (`brand10` … `brand160`, a `BrandTokens`) of a `#rgb` or `#rrggbb` seed, each stop at the default ramp's luminance so the light and dark themes keep their contrast; or of a full `BrandRamp`, returned unchanged and checked for contrast in development. For `WaveProvider tokens` or `getTokenStyle` (see [Brand colors and token overrides](#brand-colors-and-token-overrides)). Server-safe. |
 | `waveTokens` | Every design token as the `var()` that reads it, typed as that literal (`waveTokens.primary` is `'var(--wave-primary)'`), for inline styles and SVG charts; with the types `WaveTokens` and `WaveTokenName`. Frozen and server-safe; no component imports it. |
 | `chartPalette` | The 12 palette fills as token names, in the order that keeps neighbouring chart series as far apart as the palette allows (read each with `waveTokens[name]`); colors still need a second encoding in every chart. Frozen and server-safe. |
 | `getTokenStyle(overrides)` | The inline style (`TokenStyle`) that applies token overrides (`WaveTokenOverrides`), the one `WaveProvider` puts on its root and portals; `undefined` when there is nothing to set. Server-safe. |
+
+## 1.0 notices
+
+1.0 removes what 0.x deprecated, changes a few defaults and meanings, and makes the optional `details` arguments required. Every change decided for 1.0 was announced in a 0.x release, 0.18 restates them all, and none of them happens before 1.0. [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) lists every item with its replacement and the release that announced it, and how to find the uses in your app: a development build warns once about each use that the guide marks "Warns: yes". Namespaced utilities (see [Global effects](#global-effects)) are not decided yet; if 1.0 ships them, a 0.x release announces them first.
+
+## Upgrading from 0.17
+
+0.18 removes nothing public and changes no default, and everything it adds is opt-in (`slotProps`, slot render functions, `getNativeElementProps` and `mergeSlotProps`, Field's function child, `useFieldContext` and `FieldContextProvider`, and the context hooks of RadioGroup, Menu, MessageBar and DataGrid); it also announces what 1.0 changes ([1.0 notices](#10-notices)). These changes can affect your tests and types:
+
+1. **Attribute order.** Without `slotProps` every component renders the attributes and values of 0.17, but on some elements in another order: a part's class may now come before attributes it followed, a Tag's Dismiss button renders the attributes its `dismissIcon` slot adds before its `class`, and MessageBar's Dismiss button renders its `type` first. Queries, hydration and Vitest's DOM snapshots ignore the order; a test that compares raw HTML strings changes.
+2. **New development warnings** for uses that 1.0 removes or changes: Badge and CounterBadge `color="important"` (pass `color="severe"` to keep the orange look), `useRovingTabIndex(containerRef, options)`, DataGrid's positional `onSortChange(columnId, direction)`, and a `className` with presence variants on `Menu.Popover`, `Dialog.Content`, Drawer or NavDrawer while `motion` is unset. A test that spies on `console.warn` and renders one of these forms asserts the warning. A production bundle drops them, and an import without a bundler (no `process`) skips them.
+3. **Types.** `FieldProps['children']` and a slot object's `children` widen to functions; `CardProps['checkbox']` narrows (its slot object takes no `children`, so a variable typed `Slot<'input'>` no longer fits: type it `CardProps['checkbox']`); `AvatarGroupItemProps` is an interface (Avatar's props with a `slotProps` of its own) rather than an alias of `AvatarProps`. `WaveContextValue` is unchanged.
+4. **`details.event` may be the grid's own.** A cell of yours that sorts or selects through `useDataGridSort().setSort` or `useDataGridSelection().toggle` without an event reaches `onSortChange` and `onSelectedItemsChange` with an untrusted `Event` of type `sort` or `select` and no target.
+5. **Two behaviour changes without `slotProps`.** A MessageBar that measures its layout (`layout="auto"` with actions) leaves out the text changes of the commit that renders a newly measured layout, so text rendered from `useMessageBarContext().layout` settles; a static `Menu` renders its root once more as it mounts (its items do not).
+
+`ref` stays where it is in 1.0 (see [`ref` and `controlRef`](#ref-and-controlref)), and `WaveProvider classNames` is left for after 1.0. [Customization](#customization) shows the new API; the CHANGELOG's [0.18.0 section](CHANGELOG.md) lists the additions and the full upgrade notes.
 
 ## Upgrading from 0.16
 

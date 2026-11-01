@@ -21,6 +21,8 @@ export {
   MenuGroup,
   MenuGroupHeader,
   MenuSplitGroup,
+  useMenuContext,
+  useMenuListContext,
 } from './Menu';
 export type {
   MenuProps,
@@ -38,6 +40,8 @@ export type {
   MenuGroupProps,
   MenuGroupHeaderProps,
   MenuSplitGroupProps,
+  MenuContextValue,
+  MenuListContextValue,
 } from './Menu';
 
 export {

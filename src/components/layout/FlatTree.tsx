@@ -6,6 +6,7 @@ import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { isEditableTarget, isOwnEvent } from '../../lib/events';
 import type { VisibleFlatItem } from '../../lib/flatTree';
+import type { SlotPart } from '../../lib/slotProps';
 import type { CheckState } from '../../lib/treeCascade';
 import type { SelectionMode } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -69,6 +70,64 @@ export interface FlatTreeProps extends Omit<
   onItemSelect?: (value: string) => void;
   /** Ref to the `role="tree"` element. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements every item draws, by part: each `FlatTree.Item` is rendered by the
+   * tree, never written by hand, so the parts of all of them are given here once. The items read
+   * the object from the tree's context: an object that keeps its identity across renders (defined
+   * outside the component, or memoised) changes that context only when the tree's state changes.
+   * Each part is merged into the part's own props: your classes after the part's (yours win a
+   * conflict), your styles over its styles, your attributes and handlers added, your ref attached
+   * (to the part of every rendered item). Every attribute an item sets on a part is locked and
+   * keeps the item's value, and no part takes a role, a tab index or the markers by which the tree
+   * reads an item (its row and its checkbox), so a part changes neither the tree's items, its one
+   * tab stop nor which clicks an item takes. A part takes no `children` (the item draws their
+   * content: the chevron, the check marks and what `renderItem` returns); the treeitem elements
+   * take no props of yours. Apart from the checkbox (below), no part carries a handler of the
+   * item: an event on a part reaches the item and the tree after your handler, as one on the
+   * content does, and `preventDefault()` in yours skips their handling of it there too: a click
+   * you prevent on the row, the chevron, the radio or the label neither activates nor expands the
+   * item. While an item is disabled (its data's `disabled`), your `onClick` on its parts is not
+   * called, as the item activates on no click. Fluent UI's FlatTreeItem takes the parts of its
+   * TreeItemLayout as slots of their own (`main` for the label, `expandIcon`, `selector` for the
+   * checkbox or radio).
+   */
+  slotProps?: {
+    /**
+     * The `<div>` of an item's row, which holds the chevron, the checkbox or radio and the label,
+     * and draws the focus ring and the selected look (stable class `wave-flat-tree-item__row`).
+     * Locked: its marker (the focus ring finds the row by it), no role or tab index, no checkbox
+     * marker, and no `hidden`, `inert` or `aria-hidden`, since it holds the item's name and
+     * content.
+     */
+    row?: SlotPart<'div'>;
+    /**
+     * The chevron `<svg>` of a branch, turned while the branch is expanded and mirrored in a
+     * right-to-left tree (stable class `wave-flat-tree-item__expand-icon`); a leaf has none.
+     * Locked: `aria-hidden` and `focusable` (it is a drawing), no role or tab index, and the
+     * item's markers; its size, view box and paint are the glyph's, which your attributes replace.
+     */
+    expandIcon?: SlotPart<'svg'>;
+    /**
+     * The checkbox `<span>` of a `selectionMode="multiple"` tree, or the radio `<span>` of a
+     * `"single"` one (stable class `wave-flat-tree-item__indicator`); absent with
+     * `selectionMode="none"`. Locked on the checkbox: its role, `aria-checked`, its name
+     * (`aria-labelledby`, the item's label; your ids are joined after it), `aria-disabled` (set
+     * while the item is disabled), its tab index (-1: it never takes focus) and marker, no
+     * `hidden`, `inert` or `aria-hidden`, and its handlers: a press focuses the item instead, a
+     * click toggles the check, and `preventDefault()` in your `onMouseDown` or `onClick` skips
+     * that handling. Locked on the radio: `aria-hidden` (the item's `aria-selected` carries the
+     * state), no role or tab index; a click on it is a click on the row.
+     */
+    indicator?: SlotPart<'span'>;
+    /**
+     * The `<span>` around an item's content (what `renderItem` returns, else the item's label),
+     * which names the item (stable class `wave-flat-tree-item__label`). Locked: its `id` (the
+     * item's `aria-labelledby`), no `aria-label` (it would replace the content's text in the
+     * item's name), no role or tab index, the item's markers, and no `hidden`, `inert` or
+     * `aria-hidden`.
+     */
+    label?: SlotPart<'span'>;
+  };
 }
 
 /** The focused and the awaited item of a FlatTree, by value (see {@link FlatTreeFocusStore}). */
@@ -189,6 +248,7 @@ const FlatTreeRoot = ({
   onBlur,
   onPointerDownCapture,
   ref,
+  slotProps,
   ...rest
 }: FlatTreeProps) => {
   const modelMode = model.getTreeProps().selectionMode;
@@ -253,8 +313,18 @@ const FlatTreeRoot = ({
       itemSize,
       activate,
       toggleChecked,
+      slotProps,
     }),
-    [selectionMode, effectiveSelected, current, tabStop, itemSize, activate, toggleChecked],
+    [
+      selectionMode,
+      effectiveSelected,
+      current,
+      tabStop,
+      itemSize,
+      activate,
+      toggleChecked,
+      slotProps,
+    ],
   );
 
   const rootRef = React.useRef<HTMLDivElement | null>(null);

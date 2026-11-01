@@ -16,6 +16,13 @@ export {
   type RadioGroupItemProps,
   type RadioItemProps,
 } from './RadioGroup';
+export {
+  useRadioGroupContext,
+  useRadioGroupItem,
+  type RadioGroupContextValue,
+  type UseRadioGroupItemOptions,
+  type UseRadioGroupItemResult,
+} from './RadioGroup.context';
 export { Switch, type SwitchProps, type SwitchLabelPosition, type SwitchSize } from './Switch';
 export { Select, type SelectProps } from './Select';
 export { SearchBox, type SearchBoxProps, type SearchBoxInputProps } from './SearchBox';

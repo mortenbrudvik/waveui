@@ -3,10 +3,12 @@ import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { avatarGroupClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { avatarSizeClassesFor, type AvatarSize } from './Avatar.sizes';
 import { AvatarGroupContext } from './AvatarGroup.context';
 import { partitionAvatarGroupItems, type AvatarGroupLayout } from './AvatarGroup.partition';
 import {
+  AVATAR_GROUP_PART_LOCKS,
   AvatarGroupItem,
   AvatarGroupPopover,
   DEFAULT_UNNAMED_MEMBER_LABEL,
@@ -73,7 +75,52 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   onOpenChange?: (open: boolean, details?: AvatarGroupOpenChangeDetails) => void;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the group draws, by part, merged into each part's own: your classes
+   * after the part's (yours win a conflict), your styles over its styles, your attributes and
+   * handlers added (yours run first), your ref attached. Every attribute the group sets on a part
+   * is locked. A part takes no `children` (the group draws their content); the members and the
+   * overflow button take their own props (an `AvatarGroup.Popover` you write is the button).
+   *
+   * The wrappers, the pie and the list parts hold the members, which may be links: each locks,
+   * unset, `role`, `tabIndex`, the roving container marker `data-roving-container` (it would
+   * take a member out of the arrow-key order of a toolbar around the group) and `hidden`, `inert`
+   * and `aria-hidden`. The popup's parts reach the built-in overflow and an `AvatarGroup.Popover`
+   * you write alike, through the group's context: keep the `surface`, `list` and `listItem`
+   * objects stable (a constant or a memoised value) where the members are memoised, since a new
+   * object renders every member again.
+   */
+  slotProps?: {
+    /**
+     * The wrapper around each shown member (stable class `wave-avatar-group__item`), merged into
+     * every one. In a `pie` it is a wedge, which keeps `aria-hidden="true"` (the group's name is
+     * the pie's only name).
+     */
+    item?: SlotPart<'span'>;
+    /** The circle of a `pie` around its wedges (stable class `wave-avatar-group__pie`). */
+    pie?: SlotPart<'span'>;
+    /**
+     * The overflow popup (stable class `wave-avatar-group__surface`), rendered in a portal while
+     * open. Locked: its `id` (the button's `aria-controls`), `role="dialog"`, `aria-label`, no
+     * `aria-modal`, `tabIndex={-1}` (focus moves to it as it opens), `data-state`, `data-side`
+     * and `data-align`, `hidden`, `inert` and `aria-hidden` unset, and its position, which wins
+     * over your style. Its key handler moves Tab through the popup and closes it when Tab leaves:
+     * `preventDefault()` in your `onKeyDown` skips that: the popup neither moves focus nor
+     * closes, and focus stays where it is unless your handler moves it.
+     */
+    surface?: SlotPart<'div'>;
+    /** The popup's list (stable class `wave-avatar-group__list`). */
+    list?: SlotPart<'ul'>;
+    /**
+     * Each item of the popup's list (stable class `wave-avatar-group__list-item`), merged into
+     * every one.
+     */
+    listItem?: SlotPart<'li'>;
+  };
 }
+
+/** What a wedge of a pie locks: the group's part locks, and hidden from assistive technology. */
+const PIE_ITEM_PART_LOCKS = { ...AVATAR_GROUP_PART_LOCKS, 'aria-hidden': true } as const;
 
 /** The clip of each wedge of a pie, by the number of wedges (one wedge is a full circle). Literal strings only. */
 const pieWedgeClasses: ReadonlyArray<ReadonlyArray<string>> = [
@@ -101,6 +148,7 @@ const AvatarGroupRoot = ({
   ref,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
+  slotProps,
   ...props
 }: AvatarGroupProps) => {
   // Fragments are flattened, so each member counts, overlaps and is listed on its own (C-COMPOUND).
@@ -116,10 +164,25 @@ const AvatarGroupRoot = ({
   });
   const hidden = overflowItems ?? [];
   const hasInlineItems = visible.length > 0;
+  // The popup's parts reach AvatarGroup.Popover, built in or yours, through the context.
+  const surface = slotProps?.surface;
+  const list = slotProps?.list;
+  const listItem = slotProps?.listItem;
   const groupContext = React.useMemo(
-    () => ({ size: resolvedSize, layout, hasInlineItems }),
-    [resolvedSize, layout, hasInlineItems],
+    () => ({ size: resolvedSize, layout, hasInlineItems, surface, list, listItem }),
+    [resolvedSize, layout, hasInlineItems, surface, list, listItem],
   );
+  // The wrappers merge a part only when given, so a group without `slotProps` allocates nothing.
+  const itemPart = slotProps?.item;
+  const piePart = slotProps?.pie;
+  const pieClassName =
+    layout === 'pie'
+      ? cn(
+          avatarGroupClassNames.pie,
+          'relative inline-block shrink-0 overflow-hidden rounded-full',
+          avatarSizeClassesFor(resolvedSize),
+        )
+      : undefined;
 
   const unnamed = ariaLabel === undefined && ariaLabelledBy === undefined;
   React.useEffect(() => {
@@ -150,39 +213,56 @@ const AvatarGroupRoot = ({
         {layout === 'pie'
           ? visible.length > 0 && (
               <span
-                className={cn(
-                  avatarGroupClassNames.pie,
-                  'relative inline-block shrink-0 overflow-hidden rounded-full',
-                  avatarSizeClassesFor(resolvedSize),
-                )}
+                className={pieClassName}
+                {...(piePart &&
+                  mergeSlotProps(piePart, {
+                    className: pieClassName,
+                    locked: AVATAR_GROUP_PART_LOCKS,
+                  }))}
               >
-                {visible.map(({ key, node }, i) => (
-                  <span
-                    key={key}
-                    aria-hidden="true"
-                    className={cn(
-                      avatarGroupClassNames.item,
-                      'absolute inset-0 inline-flex',
-                      pieWedgeClasses[visible.length - 1]?.[i],
-                    )}
-                  >
-                    {node}
-                  </span>
-                ))}
+                {visible.map(({ key, node }, i) => {
+                  const itemClassName = cn(
+                    avatarGroupClassNames.item,
+                    'absolute inset-0 inline-flex',
+                    pieWedgeClasses[visible.length - 1]?.[i],
+                  );
+                  return (
+                    <span
+                      key={key}
+                      aria-hidden="true"
+                      className={itemClassName}
+                      {...(itemPart &&
+                        mergeSlotProps(itemPart, {
+                          className: itemClassName,
+                          locked: PIE_ITEM_PART_LOCKS,
+                        }))}
+                    >
+                      {node}
+                    </span>
+                  );
+                })}
               </span>
             )
-          : visible.map(({ key, node }, i) => (
-              <span
-                key={key}
-                className={cn(
-                  avatarGroupClassNames.item,
-                  'inline-flex rounded-full ring-2 ring-background',
-                  layout === 'stack' && i > 0 && '-ms-2',
-                )}
-              >
-                {node}
-              </span>
-            ))}
+          : visible.map(({ key, node }, i) => {
+              const itemClassName = cn(
+                avatarGroupClassNames.item,
+                'inline-flex rounded-full ring-2 ring-background',
+                layout === 'stack' && i > 0 && '-ms-2',
+              );
+              return (
+                <span
+                  key={key}
+                  className={itemClassName}
+                  {...(itemPart &&
+                    mergeSlotProps(itemPart, {
+                      className: itemClassName,
+                      locked: AVATAR_GROUP_PART_LOCKS,
+                    }))}
+                >
+                  {node}
+                </span>
+              );
+            })}
         {customPopover
           ? customPopover.node
           : hidden.length > 0 && (

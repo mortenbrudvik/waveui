@@ -5,12 +5,14 @@ import { fieldClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ErrorIcon, SuccessIcon, WarningIcon, type IconComponent } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { CoreSize, Orientation, ValidationState } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import {
   FieldContext,
   createFieldControlIdClaim,
   type FieldContextValue,
+  type FieldControlProps,
 } from '../../hooks/useFieldControl';
 import { useWaveTheme } from '../provider/WaveProvider';
 import { isFieldLabelElement, type FieldLabelElementProps } from './fieldLabel';
@@ -29,7 +31,30 @@ interface InjectedFieldProps {
 }
 
 /** Properties for the Field component. */
-export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface FieldProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
+  /**
+   * The control. An element child receives the Field's attributes (see the component's notes on
+   * the first element child). A function child renders the control itself, for a control Field
+   * cannot merge into, such as a third-party input that takes its attributes under other names:
+   * `{(props) => <ThirdPartyInput inputProps={props} />}` (Fluent's render-function child,
+   * `children: (props: FieldControlProps) => ReactNode`).
+   *
+   * The function receives, each only when it has a value: `id` (the id the label points at),
+   * `aria-labelledby` (the label's id, which also names an element that a label cannot point at,
+   * such as a `role="radiogroup"` element), `aria-describedby` (the validation message, then the
+   * hint), `aria-invalid` (`true` in the `error` state only) and `aria-required` (`true` while
+   * the Field is required). It receives no native `required` and no `size`: pass them yourself,
+   * or read them from `useFieldContext()` in a component of your own. Leave `aria-labelledby` out
+   * to name the control otherwise (`aria-label`).
+   *
+   * Field calls the function during its own render (keep it pure and call no hooks in it; render
+   * a component that does) and renders what it returns as it is, with nothing merged into it,
+   * inside the Field's context. The function's control holds the label's id, so a library control
+   * in the result that receives no `id` from the props gets an id of its own and is named through
+   * `aria-labelledby`. A function cannot be passed from a Server Component: write the Field in a
+   * client component.
+   */
+  children?: React.ReactNode | ((props: FieldControlProps) => React.ReactNode);
   /**
    * Label displayed above the control (beside it with `orientation="horizontal"`); names the
    * control.
@@ -111,6 +136,42 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
   htmlFor?: string;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the Field draws around the control, by part, merged into each part's
+   * own (Fluent UI's `label`, `validationMessage` and `hint` slot props): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers and attributes
+   * added, your ref attached. Every attribute the Field sets on a part is locked and keeps the
+   * Field's value: the ids the control's `aria-labelledby` and `aria-describedby` point at
+   * among them. A part takes no `children` (the Field's props give each its content). The
+   * control is your child: give it its props directly.
+   */
+  slotProps?: {
+    /**
+     * The Field's own `<label>` (stable class `wave-field__label`), rendered for a `label` that
+     * is not a `Label` or `InfoLabel` element. Locked: `id` and `htmlFor`, which name the
+     * control. A `Label` or `InfoLabel` element passed as `label` renders in its place and takes
+     * your props directly; this part is then ignored.
+     */
+    label?: SlotPart<'label'>;
+    /**
+     * The asterisk `<span>` inside the Field's own `<label>`, rendered while the Field is
+     * `required` (stable class `wave-field__required`). Locked: `aria-hidden`, and `tabIndex`
+     * (unset: a decorative element is never a tab stop). A `Label` or `InfoLabel` element shows
+     * its own indicator instead (its `required` part).
+     */
+    required?: SlotPart<'span'>;
+    /**
+     * The `<p>` of the validation message (stable class `wave-field__validation-message`).
+     * Locked: `id`, which describes the control, `role` (`alert` for an error or a warning) and
+     * `data-validation-state`.
+     */
+    validationMessage?: SlotPart<'p'>;
+    /**
+     * The `<p>` of the hint (stable class `wave-field__hint`). Locked: `id`, which describes the
+     * control.
+     */
+    hint?: SlotPart<'p'>;
+  };
 }
 
 /** Intrinsic elements a `<label htmlFor>` can name (HTML "labelable elements"). */
@@ -258,6 +319,67 @@ interface FieldMergeState {
   required: boolean;
 }
 
+/** Which of Field's attributes a control receives (see {@link getFieldProps}). */
+interface FieldWiring {
+  /** The control id, which the `<label htmlFor>` points at. */
+  id: boolean;
+  /** `aria-labelledby` with the label's id. */
+  labelledBy: boolean;
+  /** `aria-required` while the Field is required. */
+  ariaRequired: boolean;
+  /** The native `required` attribute while the Field is required. */
+  nativeRequired: boolean;
+  /** The value of a true ARIA attribute. */
+  ariaTrue: true | 'true';
+}
+
+/**
+ * Field's attributes for a control whose own attributes are `own`, as `wiring` allows (only
+ * defined keys; the control's own `id`, `aria-label`, `aria-invalid`, `aria-required` and
+ * `required` are kept, its `aria-labelledby` and `aria-describedby` are joined with the label,
+ * the message and the hint).
+ */
+function getFieldProps(
+  own: InjectedFieldProps,
+  state: FieldMergeState,
+  wiring: FieldWiring,
+): InjectedFieldProps {
+  const injected: InjectedFieldProps = {};
+  if (wiring.id && own.id === undefined) injected.id = state.controlId;
+  if (wiring.labelledBy && state.labelId !== undefined && own['aria-label'] === undefined) {
+    injected['aria-labelledby'] = joinIds(own['aria-labelledby'], state.labelId);
+  }
+  if (state.messageId || state.hintId) {
+    injected['aria-describedby'] = joinIds(own['aria-describedby'], state.messageId, state.hintId);
+  }
+  // The control's own `aria-invalid` wins, as `useFieldControl` lets it win for a nested control.
+  if (state.invalid && own['aria-invalid'] === undefined) {
+    injected['aria-invalid'] = wiring.ariaTrue;
+  }
+  // A control's own `required={false}` wins: it gets neither `aria-required` nor `required`, so
+  // what is announced matches what is validated.
+  if (state.required && own.required !== false) {
+    if (wiring.ariaRequired && own['aria-required'] === undefined) {
+      injected['aria-required'] = wiring.ariaTrue;
+    }
+    if (wiring.nativeRequired && own.required === undefined) injected.required = true;
+  }
+  return injected;
+}
+
+/**
+ * What a function child receives: Field cannot see the element it renders, so it gets both the
+ * control id (a `<label htmlFor>` names a labelable element) and `aria-labelledby` (which names
+ * any element), and `aria-required` but no native `required`, which the function decides on.
+ */
+const FUNCTION_CHILD_WIRING: FieldWiring = {
+  id: true,
+  labelledBy: true,
+  ariaRequired: true,
+  nativeRequired: false,
+  ariaTrue: true,
+};
+
 /**
  * Returns `children` with Field's props merged into the merge target (only defined keys; the
  * child's own `id`, `aria-label`, `aria-invalid`, `aria-required` and `required` are kept, its
@@ -268,40 +390,15 @@ function mergeIntoFirstChild(children: React.ReactNode, state: FieldMergeState):
   // Always map, so the children keep the same keys whether or not one of them is merged.
   if (!target || !mode) return React.Children.map(children, (child) => child);
 
-  const childProps = target.props;
-  // React renders a boolean `true` on a custom element as an empty attribute (`aria-invalid=""`).
-  const ariaTrue = isCustomElement(target.type) ? 'true' : true;
-  const injected: InjectedFieldProps = {};
-  if (mode === 'label-for') {
-    if (childProps.id === undefined) injected.id = state.controlId;
-  } else if (state.labelId !== undefined && childProps['aria-label'] === undefined) {
-    injected['aria-labelledby'] = joinIds(childProps['aria-labelledby'], state.labelId);
-  }
-  if (state.messageId || state.hintId) {
-    injected['aria-describedby'] = joinIds(
-      childProps['aria-describedby'],
-      state.messageId,
-      state.hintId,
-    );
-  }
-  // The child's own `aria-invalid` wins, as `useFieldControl` lets it win for a nested control.
-  if (state.invalid && childProps['aria-invalid'] === undefined) {
-    injected['aria-invalid'] = ariaTrue;
-  }
-  // A child's own `required={false}` wins: it gets neither `aria-required` nor `required`, so what
-  // is announced matches what is validated.
-  if (state.required && childProps.required !== false) {
-    if (childProps['aria-required'] === undefined && supportsAriaRequired(target)) {
-      injected['aria-required'] = ariaTrue;
-    }
-    if (
-      typeof target.type === 'string' &&
-      isNativeValueControl(target.type, childProps.type) &&
-      childProps.required === undefined
-    ) {
-      injected.required = true;
-    }
-  }
+  const injected = getFieldProps(target.props, state, {
+    id: mode === 'label-for',
+    labelledBy: mode === 'labelledby',
+    ariaRequired: supportsAriaRequired(target),
+    nativeRequired:
+      typeof target.type === 'string' && isNativeValueControl(target.type, target.props.type),
+    // React renders a boolean `true` on a custom element as an empty attribute (`aria-invalid=""`).
+    ariaTrue: isCustomElement(target.type) ? 'true' : true,
+  });
   return React.Children.map(children, (child) =>
     child === target ? React.cloneElement(target, injected) : child,
   );
@@ -326,6 +423,16 @@ function getChildInfo(children: React.ReactNode): {
     controlIdAssigned: assigned,
   };
 }
+
+/**
+ * The facts of a function child: no element to count or merge into, and the control id handed to
+ * it in its props, so a library control in its result that receives no `id` gets its own.
+ */
+const FUNCTION_CHILD_INFO: ReturnType<typeof getChildInfo> = {
+  elementCount: 0,
+  targetId: undefined,
+  controlIdAssigned: true,
+};
 
 /** The default glyph of each message state (`none` has none). */
 const MESSAGE_ICONS: Readonly<Record<ValidationState, IconComponent | null>> = {
@@ -456,7 +563,8 @@ function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefine
  * - Provides `FieldContext`: the library's inputs (Input, Select, Textarea, Slider, SearchBox,
  *   Checkbox, Switch, RadioGroup, Rating, SpinButton, pickers, …) read it wherever they are inside
  *   the Field and are named by the label, described by the message and the hint and marked
- *   invalid/required.
+ *   invalid/required. Controls of your own read it with `useFieldControl` and `useFieldContext`;
+ *   `FieldContextProvider` provides one for a field layout of your own.
  * - Merges into its **first** element child (a native `<input>`/`<select>`/`<textarea>`, a
  *   library control or your own component): `id` (unless the child has one — the label then
  *   points at the child's id), `aria-describedby` (joined with the child's own ids),
@@ -464,6 +572,10 @@ function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefine
  *   value, `required`. Only defined values are merged; the child's own values are kept, so a
  *   child's `aria-invalid={false}` stays valid while the Field error still describes it (as for a
  *   library control nested deeper). Further element children are rendered as they are.
+ * - A **function child** renders the control itself and receives the attributes as props (`id`,
+ *   `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`; see `children`), for a
+ *   control Field cannot merge into, such as a third-party input that takes them under other
+ *   names. Field renders what it returns as it is.
  * - `aria-required` is added only where it is allowed: components (Field cannot see what they
  *   render, so they decide where it goes — see the wrapper note below), `<input>` (not
  *   `type="button"`/`"submit"`/`"reset"`/`"image"`), `<select>`, `<textarea>`, and elements
@@ -528,6 +640,12 @@ function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefine
  *     </Tooltip>
  *   </div>
  * </Field>
+ *
+ * @example
+ * // A function child: a third-party control that takes its input's attributes as `inputProps`.
+ * <Field label="Phone" hint="A mobile number" required>
+ *   {(props) => <PhoneInput inputProps={props} />}
+ * </Field>
  */
 export const Field = ({
   label,
@@ -543,12 +661,14 @@ export const Field = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: FieldProps) => {
   const fieldId = useId('field');
   // Hands the control id to one library control when Field leaves its first child alone.
   const [controlIdClaim] = React.useState(createFieldControlIdClaim);
-  const { elementCount, targetId, controlIdAssigned } = getChildInfo(children);
+  const { elementCount, targetId, controlIdAssigned } =
+    typeof children === 'function' ? FUNCTION_CHILD_INFO : getChildInfo(children);
   // Own prop, else the provider default, else medium (D8); called unconditionally (C-HOOKS), so
   // the provider fallback still applies while `size` is unset.
   const { inputDefaults } = useWaveTheme();
@@ -650,18 +770,46 @@ export const Field = ({
     ],
   );
 
-  const content = mergeIntoFirstChild(children, {
-    controlId,
-    labelId,
-    messageId,
-    hintId,
-    invalid,
-    required,
-  });
+  const mergeState: FieldMergeState = { controlId, labelId, messageId, hintId, invalid, required };
+  // A function child renders the control itself: it receives the attributes and its result is
+  // rendered as it is, never cloned.
+  const content =
+    typeof children === 'function'
+      ? children(getFieldProps({}, mergeState, FUNCTION_CHILD_WIRING))
+      : mergeIntoFirstChild(children, mergeState);
 
   const horizontal = orientation === 'horizontal';
   // Beside the control: a third of the width, its first line lined up with LABEL_TOP.
   const labelColumn = horizontal && cn('mb-0 shrink-0 basis-1/3', LABEL_TOP[labelSize]);
+  const labelProps = mergeSlotProps(slotProps?.label, {
+    className: cn(
+      fieldClassNames.label,
+      'mb-1 font-semibold text-foreground',
+      LABEL_TEXT[labelSize],
+      labelColumn,
+    ),
+    locked: { id: labelId, htmlFor: controlId },
+  });
+  const requiredProps = mergeSlotProps(slotProps?.required, {
+    className: cn(fieldClassNames.required, 'ms-0.5 text-error'),
+    locked: { 'aria-hidden': 'true', tabIndex: undefined },
+  });
+  const messageProps = mergeSlotProps(slotProps?.validationMessage, {
+    className: cn(
+      fieldClassNames.validationMessage,
+      'mt-1 flex items-start gap-1 text-caption-1',
+      MESSAGE_COLORS[state],
+    ),
+    locked: {
+      id: messageId,
+      role: state === 'error' || state === 'warning' ? 'alert' : undefined,
+      'data-validation-state': state,
+    },
+  });
+  const hintProps = mergeSlotProps(slotProps?.hint, {
+    className: cn(fieldClassNames.hint, 'mt-1 text-caption-1 text-muted-foreground'),
+    locked: { id: hintId },
+  });
   const control = (
     <>
       <FieldContext.Provider value={context}>{content}</FieldContext.Provider>
@@ -669,27 +817,13 @@ export const Field = ({
           warning that becomes an error) is a newly inserted element, which screen readers
           announce reliably as an alert, not an existing node with a new role. */}
       {hasMessage ? (
-        <p
-          key={`message-${state}`}
-          id={messageId}
-          role={state === 'error' || state === 'warning' ? 'alert' : undefined}
-          data-validation-state={state}
-          className={cn(
-            fieldClassNames.validationMessage,
-            'mt-1 flex items-start gap-1 text-caption-1',
-            MESSAGE_COLORS[state],
-          )}
-        >
+        <p key={`message-${state}`} {...messageProps}>
           {renderMessageIcon(state, validationMessageIcon)}
           <span>{materialiseSlotContent(message)}</span>
         </p>
       ) : null}
       {hasHint ? (
-        <p
-          key="hint"
-          id={hintId}
-          className={cn(fieldClassNames.hint, 'mt-1 text-caption-1 text-muted-foreground')}
-        >
+        <p key="hint" {...hintProps}>
           {materialiseSlotContent(hint)}
         </p>
       ) : null}
@@ -719,22 +853,9 @@ export const Field = ({
           className: cn(fieldClassNames.label, 'mb-1', labelColumn),
         })
       ) : hasLabel ? (
-        <label
-          id={labelId}
-          htmlFor={controlId}
-          className={cn(
-            fieldClassNames.label,
-            'mb-1 font-semibold text-foreground',
-            LABEL_TEXT[labelSize],
-            labelColumn,
-          )}
-        >
+        <label {...labelProps}>
           {materialiseSlotContent(label)}
-          {required && (
-            <span aria-hidden="true" className={cn(fieldClassNames.required, 'ms-0.5 text-error')}>
-              *
-            </span>
-          )}
+          {required && <span {...requiredProps}>*</span>}
         </label>
       ) : null}
       {horizontal ? (

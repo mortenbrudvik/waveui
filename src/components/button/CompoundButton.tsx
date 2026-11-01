@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { buttonClassNames, compoundButtonClassNames } from '../../lib/classNames';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
+import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
 import { Button } from './Button';
@@ -55,6 +56,39 @@ export interface CompoundButtonOwnProps {
    * @default 'before'
    */
   iconPosition?: IconPosition;
+  /**
+   * Props for the elements the CompoundButton draws inside the button, by part, merged into each
+   * part's own (Fluent UI's `contentContainer` and `secondaryContent` slot props; the button
+   * itself and its `icon` are the Button's, reached through the CompoundButton's own props):
+   * your classes after the part's (yours win a conflict), your styles over its styles, your
+   * handlers and attributes added, your ref attached. Every attribute the CompoundButton sets on
+   * a part is locked. A part takes no `children` (the label and `secondaryText` are its content).
+   * No part carries a handler of the button: a click on a part is a click on the button, after
+   * yours, so `preventDefault()` in yours cancels the button's native activation (the submission
+   * of a submit button), while the button's own `onClick` still runs. While the button is
+   * `disabled` or `disabledFocusable`, your `onClick` on a part is not called, as the button's
+   * own is not. A CompoundButton with only an icon draws no part and ignores them.
+   */
+  slotProps?: {
+    /**
+     * The `<span>` column that holds the two lines of text (stable class
+     * `wave-compound-button__content-container`). Locked: `data-wave-compound-content`, the
+     * marker of the column.
+     */
+    contentContainer?: SlotPart<'span'>;
+    /**
+     * The `<span>` of the main label, the CompoundButton's `children`, whose text names the
+     * button (stable class `wave-compound-button__primary-text`). Locked unset: `aria-label` (it
+     * would replace the text in the button's name), `hidden`, `inert` and `aria-hidden`.
+     */
+    primaryText?: SlotPart<'span'>;
+    /**
+     * The `<span>` of the second line, rendered while `secondaryText` renders content, whose text
+     * is part of the button's name (stable class `wave-compound-button__secondary-text`). Locked
+     * unset: `aria-label`, `hidden`, `inert` and `aria-hidden`, as on `primaryText`.
+     */
+    secondaryText?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -87,6 +121,17 @@ const iconBoxClasses: Record<Size, string> = {
   large: 'size-10',
   'extra-large': 'size-10',
 };
+
+/**
+ * What the two text parts lock unset: their text is the button's name, which an `aria-label`
+ * would replace and the hidden state would take away.
+ */
+const TEXT_PART_LOCKS = {
+  'aria-label': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
 
 /** The props the implementation reads, for any `as`. */
 type CompoundButtonImplProps = CompoundButtonOwnProps & {
@@ -128,6 +173,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
     iconPosition = 'before',
     className,
     children,
+    slotProps,
     ...rest
   } = props as CompoundButtonImplProps;
   // Content that renders nothing (`''`, `[]`, `<></>`) counts as absent; a generator is read once
@@ -161,19 +207,41 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
     ),
     { 'aria-hidden': true },
   );
+  // A button that does not activate calls no click handler of a part either.
+  const blockHandlers =
+    rest.disabled || rest.disabledFocusable ? (['onClick'] as const) : undefined;
   const content = (
     <span
-      data-wave-compound-content=""
-      className={cn(compoundButtonClassNames.contentContainer, 'flex min-w-0 flex-col items-start')}
+      {...mergeSlotProps(slotProps?.contentContainer, {
+        className: cn(
+          compoundButtonClassNames.contentContainer,
+          'flex min-w-0 flex-col items-start',
+        ),
+        locked: { 'data-wave-compound-content': '' },
+        blockHandlers,
+      })}
     >
-      <span className={cn(compoundButtonClassNames.primaryText, 'font-bold')}>{label}</span>
+      <span
+        {...mergeSlotProps(slotProps?.primaryText, {
+          className: cn(compoundButtonClassNames.primaryText, 'font-bold'),
+          // The text names the button: a part neither renames nor hides it.
+          locked: TEXT_PART_LOCKS,
+          blockHandlers,
+        })}
+      >
+        {label}
+      </span>
       {hasSecondary && (
         <span
-          className={cn(
-            compoundButtonClassNames.secondaryText,
-            'text-caption-1 font-normal',
-            appearance === 'primary' ? 'text-primary-foreground' : 'text-muted-foreground',
-          )}
+          {...mergeSlotProps(slotProps?.secondaryText, {
+            className: cn(
+              compoundButtonClassNames.secondaryText,
+              'text-caption-1 font-normal',
+              appearance === 'primary' ? 'text-primary-foreground' : 'text-muted-foreground',
+            ),
+            locked: TEXT_PART_LOCKS,
+            blockHandlers,
+          })}
         >
           {secondary}
         </span>

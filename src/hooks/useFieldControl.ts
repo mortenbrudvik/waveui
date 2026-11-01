@@ -169,17 +169,62 @@ const noVersion = (): number => 0;
 
 /**
  * Context provided by `Field`. `null` outside a Field (controls then use only their own props).
+ * Not exported from the package: {@link FieldContextProvider} and {@link useFieldContext} are its
+ * public form.
  */
 export const FieldContext: React.Context<FieldContextValue | null> =
   React.createContext<FieldContextValue | null>(null);
 FieldContext.displayName = 'FieldContext';
 
-/** The surrounding Field's context value, or `null` when the control is not inside a Field. */
+/**
+ * The surrounding Field's context, or `null` outside a `Field` (and outside a
+ * {@link FieldContextProvider}): Fluent's `useFieldContext_unstable`, which returns `undefined`
+ * there. Optional by design, so it never throws or warns: a control works with and without a
+ * Field. A control of your own reads in it what {@link useFieldControl} does not return: the
+ * Field's `required` state (for a native `required` attribute or a hidden form input), its
+ * `size`, its `validationState`, and `hasErrorMessage` (the Field already shows an error, so the
+ * control does not repeat its own).
+ */
 export function useFieldContext(): FieldContextValue | null {
   return React.useContext(FieldContext);
 }
 
-/** The labelling/validation props a control receives from its consumer and from its Field. */
+/** Props of {@link FieldContextProvider}. */
+export interface FieldContextProviderProps {
+  /** What the controls inside read: the ids of your label, message and hint, and the state. */
+  value: FieldContextValue;
+  /** The controls. */
+  children?: React.ReactNode;
+}
+
+/**
+ * Provides a Field's context to the controls inside it, for a field layout of your own (Fluent's
+ * `FieldContextProvider`). The library's inputs, and controls of your own on
+ * {@link useFieldControl}, read `value` as they read a `Field`'s and are named, described and
+ * marked invalid or required by it: render the label (a `<label>` with the `labelId` as its id,
+ * pointing at the `controlId`), the message and the hint with the ids of `value` yourself. Inside
+ * a `Field`, it replaces the Field's context for its subtree.
+ *
+ * Without `controlIdAssigned` or `controlIdClaim` in `value`, every control inside without an `id`
+ * of its own takes the `controlId`: put one such control inside, or give the others ids.
+ *
+ * The provider passes `value` on as it is: memoise it (`useMemo` over its members) or hoist it out
+ * of the component, since a new object on every render re-renders every control that reads it.
+ */
+export function FieldContextProvider({
+  value,
+  children,
+}: FieldContextProviderProps): React.ReactElement {
+  return React.createElement(FieldContext.Provider, { value }, children);
+}
+FieldContextProvider.displayName = 'FieldContextProvider';
+
+/**
+ * The labelling and validation props of a control: what a control receives from its consumer and
+ * from its Field (the argument and the result of {@link useFieldControl}), and what a `Field`'s
+ * function child receives (Fluent's `FieldControlProps`), of which Field sets only `id`,
+ * `aria-labelledby`, `aria-describedby`, `aria-invalid` and `aria-required`.
+ */
 export interface FieldControlProps {
   id?: string;
   'aria-label'?: string;
@@ -298,4 +343,31 @@ export function useFieldControl(
   if (ariaRequired !== undefined) result['aria-required'] = ariaRequired;
   if (required !== undefined) result.required = required;
   return result;
+}
+
+/** The keys {@link fieldLocks} locks, each present, with the value the control renders. */
+type FieldLocks = {
+  [K in 'id' | 'aria-label' | 'aria-invalid' | 'aria-required' | 'required']: FieldControlProps[K];
+};
+
+/**
+ * The routed naming and Field attributes of a control part, for the `locked` props of its
+ * `slotProps` part (module-only): `id`, `aria-label`, `aria-invalid`, `aria-required` and
+ * `required` from a {@link useFieldControl} result, each key present also while its value is
+ * `undefined`, so a part can neither set nor change them; the control's own props stay the only
+ * way to. `aria-labelledby` and `aria-describedby` are not here: a part's ids join those lists.
+ * Spread it after the result itself, and before any key the control resolves on its own (a
+ * generated `id` goes before both, so a defined `id` replaces it).
+ *
+ * @example
+ * locked: { ...fieldLocks(fieldProps), id: fieldProps.id ?? generatedId, ...fieldProps }
+ */
+export function fieldLocks(fieldProps: FieldControlProps): FieldLocks {
+  return {
+    id: fieldProps.id,
+    'aria-label': fieldProps['aria-label'],
+    'aria-invalid': fieldProps['aria-invalid'],
+    'aria-required': fieldProps['aria-required'],
+    required: fieldProps.required,
+  };
 }

@@ -9,10 +9,12 @@ import {
 import { warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
 import { isInsideLayerTree } from '../../lib/layers';
+import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
 import type { OpenChangeDetails } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { DismissLayerContext, useDismiss, type DismissReason } from '../../hooks/useDismiss';
+import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
@@ -36,29 +38,83 @@ const nonBlank = (value: unknown): value is string =>
 const OverflowContext = React.createContext<{ unnamedMemberLabel: string } | null>(null);
 OverflowContext.displayName = 'AvatarGroupOverflowContext';
 
-/** Properties for the AvatarGroup.Item sub-component: the props of an Avatar. */
-export type AvatarGroupItemProps = AvatarProps;
+/**
+ * What the group's structural parts lock unset (module-only): the wrapper of each member, the
+ * pie, and the popup's list and its items. A role, a tab stop, a roving container's marker (which
+ * would take a member out of the arrow-key order of a toolbar around the group) and the hidden
+ * state, since they hold the members, which may be links.
+ */
+export const AVATAR_GROUP_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
 
-const AvatarGroupItemImpl = ({ className, ...props }: AvatarGroupItemProps) => {
+/** What the name part of an item's row locks unset: a role, a name of its own, the hidden state. */
+const NAME_PART_LOCKS = {
+  role: undefined,
+  'aria-label': undefined,
+  hidden: undefined,
+  inert: undefined,
+  'aria-hidden': undefined,
+} as const;
+
+/** Properties for the AvatarGroup.Item sub-component: the props of an Avatar, and its own parts. */
+export interface AvatarGroupItemProps extends Omit<AvatarProps, 'slotProps'> {
+  /**
+   * Props for the element the item draws in the overflow list, by part, merged into the part's
+   * own: your classes after the part's (yours win a conflict), your styles over its styles, your
+   * attributes and handlers added, your ref attached. Every attribute the item sets on the part is
+   * locked. A part takes no `children`. These are the item's parts, not its avatar's: the item
+   * passes none of them to the `Avatar` it renders, so its avatar takes no `visual` part (in the
+   * group, the item's other props, its `className` and `style` included, still reach that
+   * avatar).
+   */
+  slotProps?: {
+    /**
+     * The name text of the item's row in the overflow list (stable class
+     * `wave-avatar-group-item__name`), the member's name there (the avatar beside it is
+     * decorative). Locked, unset: `role`, `aria-label` (which would replace the text) and
+     * `hidden`, `inert` and `aria-hidden`.
+     */
+    name?: SlotPart<'span'>;
+  };
+}
+
+const AvatarGroupItemImpl = ({ className, slotProps, ...props }: AvatarGroupItemProps) => {
   const overflow = React.useContext(OverflowContext);
   if (!overflow) {
     return <Avatar {...props} className={cn(avatarGroupItemClassNames.root, className)} />;
   }
   const { name, 'aria-label': ariaLabel, size, ref, ...avatarProps } = props;
   const text = [ariaLabel, name].find(nonBlank)?.trim() ?? overflow.unnamedMemberLabel;
+  const namePart = slotProps?.name;
   return (
     <span
       className={cn(avatarGroupItemClassNames.root, 'inline-flex items-center gap-2', className)}
     >
       <Avatar {...avatarProps} name={name} size={size ?? 'small'} decorative />
-      <span className={avatarGroupItemClassNames.name}>{text}</span>
+      <span
+        className={avatarGroupItemClassNames.name}
+        {...(namePart &&
+          mergeSlotProps(namePart, {
+            className: avatarGroupItemClassNames.name,
+            locked: NAME_PART_LOCKS,
+          }))}
+      >
+        {text}
+      </span>
     </span>
   );
 };
 AvatarGroupItemImpl.displayName = 'AvatarGroupItem';
 /**
  * A member of an AvatarGroup. In the group it renders as an `Avatar`; in the overflow list of the
- * popup it renders as a row with the avatar and the name. It takes the props of an `Avatar`.
+ * popup it renders as a row with the avatar and the name. It takes the props of an `Avatar`, but
+ * its `slotProps` reach the name of that row: its avatar takes no `visual` part.
  */
 export const AvatarGroupItem = AvatarGroupItemImpl;
 
@@ -218,7 +274,13 @@ const AvatarGroupPopoverImpl = ({
   });
   useRestoreFocus({ enabled: isOpen, container: surface, triggerRef, onlyIfFocusInside: true });
   const triggerRefs = useMergedRefs<HTMLButtonElement>(triggerRef, setReference, ref);
-  const surfaceRefs = useMergedRefs<HTMLDivElement>(surfaceRef, setFloating, setSurface);
+  // A surface part's ref beside the popup's own, so an inline one never detaches them.
+  const surfaceRefs = useMergedRefs<HTMLDivElement>(
+    surfaceRef,
+    setFloating,
+    setSurface,
+    group?.surface?.ref,
+  );
 
   // Move focus into the popup once it is mounted, so its list is read next.
   React.useEffect(() => {
@@ -235,8 +297,9 @@ const AvatarGroupPopoverImpl = ({
   // layer is treated the same way: a focus trap that leaves the page outside it interactive would
   // pull focus back from there, while its descendant-layer rule (§2.4) wraps from the button.
   // Tab stops are computed at keydown time, never cached (§2.2 focus utilities). A key that
-  // bubbles through React from a portal a member opened is not the popup's: it is ignored.
-  const handleSurfaceKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  // bubbles through React from a portal a member opened is not the popup's: it is ignored. Stable,
+  // since a surface part merges it during render.
+  const handleSurfaceKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     const trigger = triggerRef.current;
     if (event.key !== 'Tab' || event.defaultPrevented || !trigger) return;
     const popup = event.currentTarget;
@@ -268,7 +331,7 @@ const AvatarGroupPopoverImpl = ({
     if (!target) return;
     event.preventDefault();
     target.focus();
-  };
+  });
 
   const hasUnnamedMember =
     isOpen &&
@@ -287,6 +350,35 @@ const AvatarGroupPopoverImpl = ({
   }, [hasUnnamedMember, unnamedMemberLabel]);
 
   const overflowContext = React.useMemo(() => ({ unnamedMemberLabel }), [unnamedMemberLabel]);
+
+  // The popup's parts, declared by the group (`slotProps`), each merged only when given.
+  const surfaceClassName = cn(
+    avatarGroupClassNames.surface,
+    'min-w-32 max-w-xs rounded-md border border-border bg-background p-2 text-body-1 text-foreground shadow-16',
+    focusRing,
+  );
+  const surfaceProps =
+    isOpen && group?.surface
+      ? mergeSlotProps(group.surface, {
+          className: surfaceClassName,
+          locked: {
+            id: popupId,
+            role: 'dialog',
+            'aria-label': label,
+            'aria-modal': undefined,
+            tabIndex: -1,
+            'data-state': 'open',
+            'data-side': floatingProps['data-side'],
+            'data-align': floatingProps['data-align'],
+            hidden: undefined,
+            inert: undefined,
+            'aria-hidden': undefined,
+            onKeyDown: handleSurfaceKeyDown,
+          },
+        })
+      : undefined;
+  const listClassName = cn(avatarGroupClassNames.list, 'm-0 flex list-none flex-col gap-1 p-0');
+  const listItemPart = group?.listItem;
 
   return (
     <>
@@ -315,31 +407,47 @@ const AvatarGroupPopoverImpl = ({
       {isOpen && (
         <Portal layerId={layerId}>
           <div
-            ref={surfaceRefs}
             id={popupId}
             role="dialog"
             aria-label={label}
             tabIndex={-1}
             data-state="open"
             {...floatingProps}
-            className={cn(
-              avatarGroupClassNames.surface,
-              'min-w-32 max-w-xs rounded-md border border-border bg-background p-2 text-body-1 text-foreground shadow-16',
-              focusRing,
-            )}
+            className={surfaceClassName}
             onKeyDown={handleSurfaceKeyDown}
+            {...surfaceProps}
+            // The position wins over a part's style.
+            style={lockPositionStyle(surfaceProps?.style, floatingProps.style)}
+            ref={surfaceRefs}
           >
             <OverflowContext.Provider value={overflowContext}>
               <ul
-                className={cn(avatarGroupClassNames.list, 'm-0 flex list-none flex-col gap-1 p-0')}
+                className={listClassName}
+                {...(group?.list &&
+                  mergeSlotProps(group.list, {
+                    className: listClassName,
+                    locked: AVATAR_GROUP_PART_LOCKS,
+                  }))}
               >
-                {items.map(({ key, node }) => (
-                  <li key={key} className={cn(avatarGroupClassNames.listItem, 'px-1 py-0.5')}>
-                    {isElementOfType<AvatarProps>(node, AvatarGroupItem)
-                      ? node
-                      : (getMemberName(node) ?? (rendersUnnamed(node) ? unnamedMemberLabel : node))}
-                  </li>
-                ))}
+                {items.map(({ key, node }) => {
+                  const listItemClassName = cn(avatarGroupClassNames.listItem, 'px-1 py-0.5');
+                  return (
+                    <li
+                      key={key}
+                      className={listItemClassName}
+                      {...(listItemPart &&
+                        mergeSlotProps(listItemPart, {
+                          className: listItemClassName,
+                          locked: AVATAR_GROUP_PART_LOCKS,
+                        }))}
+                    >
+                      {isElementOfType<AvatarProps>(node, AvatarGroupItem)
+                        ? node
+                        : (getMemberName(node) ??
+                          (rendersUnnamed(node) ? unnamedMemberLabel : node))}
+                    </li>
+                  );
+                })}
               </ul>
             </OverflowContext.Provider>
           </div>
@@ -354,5 +462,7 @@ AvatarGroupPopoverImpl.displayName = 'AvatarGroupPopover';
  * children (`AvatarGroup.Item`s, `Avatar`s, text or other elements). Write it as a child of the
  * group to replace the overflow that `max` makes; its `count`, `indicator`, `label`, `open` and
  * `onOpenChange` take over what `max` would have derived. Tab leaves the popup from the button.
+ * Its popup, the popup's list and the list's items take the group's `slotProps.surface`, `list`
+ * and `listItem`, as the built-in overflow's do; the button takes this component's own props.
  */
 export const AvatarGroupPopover = AvatarGroupPopoverImpl;
