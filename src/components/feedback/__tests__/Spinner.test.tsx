@@ -1,11 +1,17 @@
 import { describe, it, expect, expectTypeOf, vi, afterEach, beforeEach } from 'vitest';
 import * as React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import { Spinner } from '../Spinner';
 import type { SpinnerAppearance, SpinnerProps } from '../Spinner';
-import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
+import { spinnerClassNames } from '../../../lib/classNames';
+import {
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  openingTags,
+  testSystemProps,
+} from '../../../test-utils';
 
 /** Resolves after the next animation frame has run (and React has committed its update). */
 const nextFrame = () =>
@@ -447,5 +453,226 @@ describe('Spinner', () => {
 
   it('SpinnerProps carries ref (C-REF)', () => {
     expectTypeOf<SpinnerProps['ref']>().toEqualTypeOf<React.Ref<HTMLSpanElement> | undefined>();
+  });
+});
+
+describe('Spinner — slotProps', () => {
+  type SpinnerSlotProps = NonNullable<SpinnerProps['slotProps']>;
+  const EVERY_PART: SpinnerSlotProps = { spinner: {}, label: {} };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, spinnerClassNames.spinner),
+    ...all(root, spinnerClassNames.label),
+  ];
+  const RING =
+    'wave-spinner__spinner rounded-full border-2 animate-wave-spin motion-reduce:animate-wave-spin-slow';
+  const FORCED =
+    'forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:border-t-[Highlight]';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A shown spinner, a visible inverted one and one that waits for its delay. */
+  function Spinners({ slotProps }: { slotProps?: SpinnerSlotProps }) {
+    return (
+      <>
+        <Spinner label="Loading results" slotProps={slotProps} />
+        <Spinner
+          label="Saving"
+          labelVisible
+          appearance="inverted"
+          size="large"
+          slotProps={slotProps}
+        />
+        <Spinner label="Later" delay={500} slotProps={slotProps} />
+      </>
+    );
+  }
+
+  // Captured from 54699b8's dist (client and server agree).
+  const BASE_PINS = [
+    `<span aria-hidden="true" class="${RING} border-track border-t-primary ${FORCED} w-6 h-6" data-wave-spinner-ring="">`,
+    `<span aria-hidden="true" class="${RING} border-current/30 border-t-current ${FORCED} w-9 h-9" data-wave-spinner-ring="">`,
+    '<span class="wave-spinner__label sr-only" data-wave-spinner-label="">',
+    '<span class="wave-spinner__label text-body-1 text-current" data-wave-spinner-label="">',
+    '<span class="wave-spinner__label sr-only" data-wave-spinner-label="">',
+  ].join('\n');
+
+  it('renders the parts of 54699b8 (attributes sorted), on the client and the server', () => {
+    for (const slotProps of [undefined, EVERY_PART]) {
+      const view = render(<Spinners slotProps={slotProps} />);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Spinners slotProps={slotProps} />);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps(
+      (slotProps: SpinnerSlotProps | undefined) => <Spinners slotProps={slotProps} />,
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: SpinnerSlotProps | undefined) => (
+        <>
+          <Spinner role="progressbar" slotProps={slotProps} />
+          <Spinner role="none" size="extra-small" slotProps={slotProps} />
+        </>
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('does not pass slotProps to the root', () => {
+    const error = vi.spyOn(console, 'error');
+    render(<Spinner data-testid="sp" slotProps={EVERY_PART} />);
+    expect(screen.getByTestId('sp')).not.toHaveAttribute('slotprops');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('puts your className, style, data-* and ref on each part', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    render(
+      <Spinner
+        labelVisible
+        slotProps={{
+          spinner: {
+            className: 'my-ring border-4',
+            style: { opacity: 0.5 },
+            'data-part': 'spinner',
+            ref: collect,
+          },
+          label: {
+            className: 'my-label text-body-2',
+            style: { opacity: 0.5 },
+            'data-part': 'label',
+            ref: collect,
+          },
+        }}
+      />,
+    );
+    for (const [cls, name, mine, conflict] of [
+      [spinnerClassNames.spinner, 'spinner', 'my-ring', 'border-2'],
+      [spinnerClassNames.label, 'label', 'my-label', 'text-body-1'],
+    ] as const) {
+      const [element] = all(document, cls);
+      expect(element.classList[0]).toBe(cls);
+      expect(element).toHaveClass(mine);
+      // Your class replaces a conflicting one of the part.
+      expect(element).not.toHaveClass(conflict);
+      expect(element).toHaveAttribute('data-part', name);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(refs).toContain(element);
+    }
+    expect(refs).toHaveLength(2);
+  });
+
+  it('locks the attributes the spinner sets on its parts, and keeps announcing the label', async () => {
+    const ringAttempt = {
+      'aria-hidden': false,
+      'data-wave-spinner-ring': 'mine',
+      role: 'img',
+      tabIndex: 0,
+      hidden: true,
+    } as unknown as SpinnerSlotProps['spinner'];
+    const labelAttempt = {
+      'data-wave-spinner-label': 'mine',
+      role: 'alert',
+      'aria-live': 'off',
+      'aria-label': 'Mine',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as SpinnerSlotProps['label'];
+    const slotProps = { spinner: ringAttempt, label: labelAttempt };
+    const view = render(<Spinners slotProps={slotProps} />);
+    expect(openingTags(...partsOf())).toBe(BASE_PINS);
+    view.unmount();
+    render(<Spinner label="Loading results" slotProps={slotProps} />);
+    await React.act(nextFrame);
+    // The status region announces the label's text, and the label is no region of its own.
+    expect(screen.getByRole('status')).toHaveTextContent('Loading results');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  describe('while delayed', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('applies the spinner part once the ring is shown', () => {
+      const ref = vi.fn();
+      render(
+        <Spinner
+          delay={300}
+          data-testid="sp"
+          slotProps={{ spinner: { ref, className: 'my-ring' }, label: { className: 'my-label' } }}
+        />,
+      );
+      const root = screen.getByTestId('sp');
+      expect(ringOf(root)).toBeNull();
+      expect(ref).not.toHaveBeenCalled();
+      expect(all(root, spinnerClassNames.label)[0]).toHaveClass('my-label');
+      React.act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(ringOf(root)).toHaveClass('my-ring');
+      expect(ref).toHaveBeenCalledWith(ringOf(root));
+    });
+  });
+
+  it('gives the parts no handler of the spinner: yours run', () => {
+    const order: string[] = [];
+    render(
+      <Spinner
+        labelVisible
+        data-testid="sp"
+        slotProps={{
+          spinner: { onClick: () => void order.push('spinner') },
+          label: { onClick: () => void order.push('label') },
+        }}
+      />,
+    );
+    const root = screen.getByTestId('sp');
+    fireEvent.click(ringOf(root) as HTMLElement);
+    fireEvent.click(all(root, spinnerClassNames.label)[0]);
+    expect(order).toEqual(['spinner', 'label']);
+  });
+
+  it('has no axe violations with parts once announced', async () => {
+    render(
+      <Spinner
+        label="Loading data"
+        labelVisible
+        slotProps={{ spinner: { className: 'my-ring' }, label: { className: 'my-label', id: 'l' } }}
+      />,
+    );
+    await React.act(nextFrame);
+    await expectNoA11yViolations();
+  });
+
+  it('types the parts by their elements and takes no children', () => {
+    expectTypeOf<NonNullable<SpinnerSlotProps['spinner']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<NonNullable<SpinnerSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<keyof SpinnerSlotProps>().toEqualTypeOf<'spinner' | 'label'>();
+    const elements = [
+      // @ts-expect-error a part takes no children
+      <Spinner key="1" slotProps={{ spinner: { children: 'x' } }} />,
+      // @ts-expect-error a part takes no children
+      <Spinner key="2" slotProps={{ label: { children: 'x' } }} />,
+    ];
+    expect(elements).toHaveLength(2);
   });
 });

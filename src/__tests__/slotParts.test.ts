@@ -58,6 +58,7 @@ import type {
   MenuItemProps,
   MenuItemRadioProps,
   MenuItemSwitchProps,
+  MessageBarProps,
   NavAppItemProps,
   NavAppItemStaticProps,
   NavCategoryProps,
@@ -74,10 +75,12 @@ import type {
   PaginationProps,
   PopoverContentProps,
   PresenceBadgeProps,
+  ProgressBarProps,
   RadioGroupItemProps,
   RatingDisplayProps,
   SearchBoxProps,
   SpinButtonProps,
+  SpinnerProps,
   StepperProps,
   StepProps,
   SwitchProps,
@@ -518,6 +521,10 @@ type SlotPropsOwners = {
   dataGridHeaderCellClassNames: DataGridHeaderCellProps;
   // The control of the row's selection cell, the automatic one or a DataGrid.SelectionCell child.
   dataGridRowClassNames: DataGridRowProps;
+  // `dismissButton` is the bar's own Dismiss button, which a `dismiss` button merges into.
+  messageBarClassNames: MessageBarProps;
+  progressBarClassNames: ProgressBarProps;
+  spinnerClassNames: SpinnerProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

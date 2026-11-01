@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { spinnerClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { Size } from '../../lib/types';
 
@@ -42,7 +43,50 @@ export interface SpinnerProps extends React.HTMLAttributes<HTMLSpanElement> {
    */
   role?: React.AriaRole;
   ref?: React.Ref<HTMLSpanElement>;
+  /**
+   * Props for the elements the spinner draws inside its root, by part, merged into each part's
+   * own (Fluent UI's `spinner` and `label` slot props): your classes after the part's (yours win
+   * a conflict), your styles over its styles, your attributes and handlers added, your ids added
+   * to its `aria-labelledby` and `aria-describedby`, and your ref beside its ref. Every attribute
+   * the spinner sets on a part is locked and keeps its value; you add the attributes it does not
+   * set. A part takes no `children`. The root, the status region (or the role you give it), takes
+   * the component's own props. Neither part carries a handler of the spinner.
+   */
+  slotProps?: {
+    /**
+     * The ring `<span>`, rendered once the spinner is shown (stable class `wave-spinner__spinner`):
+     * decorative, so locked: `aria-hidden` and its marker `data-wave-spinner-ring`, and, unset,
+     * `role`, `tabIndex` and `hidden`.
+     */
+    spinner?: SlotPart<'span'>;
+    /**
+     * The label `<span>` (stable class `wave-spinner__label`), whose text the status region
+     * announces, shown with `labelVisible` and visually hidden otherwise. Locked: its marker
+     * `data-wave-spinner-label` and, unset, `role` and `aria-live` (the label never becomes a live
+     * region of its own, nor silences the root's), `aria-label` (the text stays what is
+     * announced), `hidden`, `inert` and `aria-hidden`.
+     */
+    label?: SlotPart<'span'>;
+  };
 }
+
+/** What the ring part locks: it stays decorative, and never a widget of its own. */
+const RING_LOCKS = {
+  'aria-hidden': 'true',
+  'data-wave-spinner-ring': '',
+  role: undefined,
+  tabIndex: undefined,
+  hidden: undefined,
+} as const;
+
+/** What the label part locks: its text stays what the status region announces. */
+const LABEL_LOCKS = {
+  'data-wave-spinner-label': '',
+  role: undefined,
+  'aria-live': undefined,
+  'aria-label': undefined,
+  ...HIDDEN_PART_LOCKS,
+} as const;
 
 /** Whether a name prop (`aria-label`, `aria-labelledby`) holds more than whitespace. */
 function isName(value: unknown): value is string {
@@ -98,6 +142,7 @@ export const Spinner = ({
   labelVisible,
   appearance = 'primary',
   delay = 0,
+  slotProps,
   className,
   // Destructured with a default rather than set before `{...rest}`: a wrapper that forwards
   // `role={props.role}` passes `undefined`, which must not strip the live region.
@@ -132,6 +177,22 @@ export const Spinner = ({
     ? appearance
     : 'primary';
   const colors = appearanceClasses[resolvedAppearance];
+  // The parts merge only when given.
+  const ringPart = slotProps?.spinner;
+  const ringClassName = shown
+    ? cn(
+        spinnerClassNames.spinner,
+        'rounded-full border-2 animate-wave-spin motion-reduce:animate-wave-spin-slow',
+        colors.ring,
+        forcedColors.ringArc,
+        sizeClasses[size],
+      )
+    : undefined;
+  const labelPart = slotProps?.label;
+  const labelClassName = cn(
+    spinnerClassNames.label,
+    labelVisible ? cn('text-body-1', colors.label) : 'sr-only',
+  );
 
   return (
     <span
@@ -147,21 +208,16 @@ export const Spinner = ({
         <span
           aria-hidden="true"
           data-wave-spinner-ring=""
-          className={cn(
-            spinnerClassNames.spinner,
-            'rounded-full border-2 animate-wave-spin motion-reduce:animate-wave-spin-slow',
-            colors.ring,
-            forcedColors.ringArc,
-            sizeClasses[size],
-          )}
+          className={ringClassName}
+          {...(ringPart &&
+            mergeSlotProps(ringPart, { className: ringClassName, locked: RING_LOCKS }))}
         />
       ) : null}
       <span
         data-wave-spinner-label=""
-        className={cn(
-          spinnerClassNames.label,
-          labelVisible ? cn('text-body-1', colors.label) : 'sr-only',
-        )}
+        className={labelClassName}
+        {...(labelPart &&
+          mergeSlotProps(labelPart, { className: labelClassName, locked: LABEL_LOCKS }))}
       >
         {announced ? label : null}
       </span>

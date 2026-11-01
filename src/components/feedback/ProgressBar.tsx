@@ -3,6 +3,7 @@ import { progressBarClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { isDev, warnOnce } from '../../lib/dev';
 import { progressIndeterminateMotion } from '../../lib/motion';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { MotionSlot, ValidationState } from '../../lib/types';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -63,6 +64,33 @@ export interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   indeterminateMotion?: MotionSlot | null;
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the progress bar draws besides its root, by part, merged into each
+   * part's own (Fluent UI's `bar` slot props; Fluent's label is a Field's): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your attributes and handlers
+   * added, your ids added to its `aria-labelledby` and `aria-describedby`, and your ref beside its
+   * ref. Every attribute the progress bar sets on a part is locked and keeps its value; you add
+   * the attributes it does not set. A part takes no `children`. The root, the element with
+   * `role="progressbar"`, takes the component's own props.
+   */
+  slotProps?: {
+    /**
+     * The fill `<div>` inside the track (stable class `wave-progress-bar__bar`), which shows the
+     * value: its color follows `color` (or the Field's validation state) and, without `value`,
+     * `indeterminateMotion` gives it its motion classes, before yours. Your `style` merges, but
+     * while the bar has a `value` the width that shows it wins. It carries no handler of the
+     * progress bar. Locked, unset: `role`, `tabIndex` (the fill is part of the progress bar, never
+     * a widget of its own) and `hidden` (it shows the value).
+     */
+    bar?: SlotPart<'div'>;
+    /**
+     * The visible label `<span>` above the bar, rendered with `showLabel` and a `label` (stable
+     * class `wave-progress-bar__label`), which names the bar unless you name it yourself. Locked:
+     * its `id`, which the bar's `aria-labelledby` points at, and, unset, `aria-label` (the text
+     * stays the name), `hidden`, `inert` and `aria-hidden`.
+     */
+    label?: SlotPart<'span'>;
+  };
 }
 
 const fillColorClasses: Record<ProgressBarColor, string> = {
@@ -79,6 +107,12 @@ const fieldColors: Partial<Record<ValidationState, ProgressBarColor>> = {
   warning: 'warning',
   success: 'success',
 };
+
+/** What the fill part locks unset: it is part of the progress bar, and it shows the value. */
+const FILL_LOCKS = { role: undefined, tabIndex: undefined, hidden: undefined } as const;
+
+/** What the label part locks unset besides its id: its text stays the bar's name, and visible. */
+const LABEL_LOCKS = { 'aria-label': undefined, ...HIDDEN_PART_LOCKS } as const;
 
 /** Whether a name prop (`label`, `aria-label`, `aria-labelledby`) holds more than whitespace. */
 function isName(value: unknown): value is string {
@@ -117,6 +151,7 @@ export const ProgressBar = ({
   showLabel,
   color,
   indeterminateMotion,
+  slotProps,
   id,
   'aria-describedby': ariaDescribedBy,
   // Field merges both into its first child; neither is allowed on role="progressbar".
@@ -235,6 +270,21 @@ export const ProgressBar = ({
     barProps[key] = propValue;
   }
 
+  // The parts merge only when given. The fill's width shows the value, so it wins over a part's
+  // style.
+  const fillClassName = cn(
+    progressBarClassNames.bar,
+    'h-full rounded-full',
+    fillColorClasses[resolvedColor],
+    forcedColors.selectedLeaf,
+    isIndeterminate && cn('w-full', indeterminateClasses),
+  );
+  const fillPart = slotProps?.bar;
+  const fill: Record<string, unknown> = fillPart
+    ? mergeSlotProps(fillPart, { className: fillClassName, locked: FILL_LOCKS })
+    : { className: fillClassName };
+  const width = isIndeterminate ? undefined : `${percentage}%`;
+
   const bar = (
     <div
       {...barProps}
@@ -248,23 +298,30 @@ export const ProgressBar = ({
       )}
     >
       <div
-        className={cn(
-          progressBarClassNames.bar,
-          'h-full rounded-full',
-          fillColorClasses[resolvedColor],
-          forcedColors.selectedLeaf,
-          isIndeterminate && cn('w-full', indeterminateClasses),
-        )}
-        style={isIndeterminate ? undefined : { width: `${percentage}%` }}
+        {...fill}
+        style={
+          width === undefined
+            ? (fill.style as React.CSSProperties | undefined)
+            : { ...(fill.style as React.CSSProperties | undefined), width }
+        }
       />
     </div>
   );
 
   if (!visibleLabel) return bar;
 
+  const labelClassName = cn(progressBarClassNames.label, 'text-body-1 text-foreground');
   return (
     <div className="flex flex-col gap-1">
-      <span id={labelId} className={cn(progressBarClassNames.label, 'text-body-1 text-foreground')}>
+      <span
+        id={labelId}
+        className={labelClassName}
+        {...(slotProps?.label &&
+          mergeSlotProps(slotProps.label, {
+            className: labelClassName,
+            locked: { ...LABEL_LOCKS, id: labelId },
+          }))}
+      >
         {label}
       </span>
       {bar}

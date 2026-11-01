@@ -1,17 +1,21 @@
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { ProgressBar } from '../ProgressBar';
 import { Field } from '../../input/Field';
 import { Input } from '../../input/Input';
 import { createFieldControlIdClaim } from '../../../hooks/useFieldControl';
 import type { ProgressBarColor, ProgressBarProps } from '../ProgressBar';
+import { progressBarClassNames } from '../../../lib/classNames';
 import { progressIndeterminateMotion } from '../../../lib/motion';
 import {
   axe,
+  expectInertSlotProps,
   expectNoA11yViolations,
   motionClasses,
+  openingTags,
   renderWithProviders,
   testSystemProps,
 } from '../../../test-utils';
@@ -734,5 +738,244 @@ describe('ProgressBar', () => {
     expect(ref.current).toBe(screen.getByRole('progressbar', { name: 'Upload' }));
     expectTypeOf<ProgressBarProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
     expectTypeOf<ProgressBarProps['showLabel']>().toEqualTypeOf<boolean | undefined>();
+  });
+});
+
+describe('ProgressBar — slotProps', () => {
+  type ProgressSlotProps = NonNullable<ProgressBarProps['slotProps']>;
+  const EVERY_PART: ProgressSlotProps = { bar: {}, label: {} };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, progressBarClassNames.bar),
+    ...all(root, progressBarClassNames.label),
+  ];
+  const FILL = 'wave-progress-bar__bar h-full rounded-full';
+  const FORCED =
+    'forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none';
+  const SWEEP =
+    'w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A determinate bar with a visible label, an indeterminate one and one in a warning Field. */
+  function Bars({ slotProps }: { slotProps?: ProgressSlotProps }) {
+    return (
+      <>
+        <ProgressBar value={30} max={60} label="Uploading" showLabel slotProps={slotProps} />
+        <ProgressBar label="Working" slotProps={slotProps} />
+        <Field label="Upload" validationState="warning" validationMessage="Slow.">
+          <ProgressBar value={10} slotProps={slotProps} />
+        </Field>
+      </>
+    );
+  }
+
+  // Captured from 54699b8's dist; the server writes the width without spaces.
+  const pins = (width: (value: string) => string) =>
+    [
+      `<div class="${FILL} bg-primary ${FORCED}" style="${width('50%')}">`,
+      `<div class="${FILL} bg-primary ${FORCED} ${SWEEP}">`,
+      `<div class="${FILL} bg-severe ${FORCED}" style="${width('10%')}">`,
+      '<span class="wave-progress-bar__label text-body-1 text-foreground" id="progress-label-_id0_">',
+    ].join('\n');
+  const CLIENT_PINS = pins((value) => `width: ${value};`);
+  const SERVER_PINS = pins((value) => `width:${value}`);
+
+  it('renders the parts of 54699b8 (attributes sorted), on the client and the server', () => {
+    for (const slotProps of [undefined, EVERY_PART]) {
+      const view = render(<Bars slotProps={slotProps} />);
+      expect(openingTags(...partsOf())).toBe(CLIENT_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Bars slotProps={slotProps} />);
+      expect(openingTags(...partsOf(template.content))).toBe(SERVER_PINS);
+    }
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    expectInertSlotProps(
+      (slotProps: ProgressSlotProps | undefined) => <Bars slotProps={slotProps} />,
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: ProgressSlotProps | undefined) => (
+        <>
+          <ProgressBar label="A" indeterminateMotion={null} slotProps={slotProps} />
+          <ProgressBar label="B" indeterminateMotion="my-sweep" slotProps={slotProps} />
+          <Field label="Upload" validationState="error" validationMessage="Failed.">
+            <ProgressBar value={110} label="Over" showLabel slotProps={slotProps} />
+          </Field>
+        </>
+      ),
+      EVERY_PART,
+    );
+  });
+
+  it('does not pass slotProps to the root', () => {
+    const error = vi.spyOn(console, 'error');
+    render(<ProgressBar value={5} label="Upload" slotProps={EVERY_PART} />);
+    expect(screen.getByRole('progressbar')).not.toHaveAttribute('slotprops');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('puts your className, style, data-* and ref on each part', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    render(
+      <ProgressBar
+        value={20}
+        label="Upload"
+        showLabel
+        slotProps={{
+          bar: {
+            className: 'my-bar rounded-none',
+            style: { opacity: 0.5 },
+            'data-part': 'bar',
+            ref: collect,
+          },
+          label: {
+            className: 'my-label text-body-2',
+            style: { opacity: 0.5 },
+            'data-part': 'label',
+            ref: collect,
+          },
+        }}
+      />,
+    );
+    for (const [cls, name, mine, conflict] of [
+      [progressBarClassNames.bar, 'bar', 'my-bar', 'rounded-full'],
+      [progressBarClassNames.label, 'label', 'my-label', 'text-body-1'],
+    ] as const) {
+      const [element] = all(document, cls);
+      expect(element.classList[0]).toBe(cls);
+      expect(element).toHaveClass(mine);
+      // Your class replaces a conflicting one of the part.
+      expect(element).not.toHaveClass(conflict);
+      expect(element).toHaveAttribute('data-part', name);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(refs).toContain(element);
+    }
+    expect(refs).toHaveLength(2);
+    // The width that shows the value stays, next to your style.
+    expect(fillOf(screen.getByRole('progressbar'))).toHaveStyle({ width: '20%', opacity: '0.5' });
+  });
+
+  it('locks the attributes the progress bar sets on its parts, and the width that shows the value', () => {
+    const attempt = {
+      role: 'progressbar',
+      tabIndex: 0,
+      hidden: true,
+      style: { width: '90%' },
+    } as unknown as ProgressSlotProps['bar'];
+    const labelAttempt = {
+      id: 'mine',
+      'aria-label': 'Mine',
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as ProgressSlotProps['label'];
+    render(<Bars slotProps={{ bar: attempt, label: labelAttempt }} />);
+    // The indeterminate fill shows no value: your width applies there.
+    expect(openingTags(...partsOf())).toBe(
+      CLIENT_PINS.replace(`${SWEEP}">`, `${SWEEP}" style="width: 90%;">`),
+    );
+    // The visible label still names the bar.
+    expect(screen.getByRole('progressbar', { name: 'Uploading' })).toHaveAttribute(
+      'aria-labelledby',
+      all(document, progressBarClassNames.label)[0].id,
+    );
+  });
+
+  it('follows the value with your style, and keeps the Field look and the motion classes next to yours', () => {
+    const slotProps: ProgressSlotProps = {
+      bar: { className: 'my-bar', style: { width: '90%', opacity: 0.5 } },
+    };
+    const { rerender } = render(<ProgressBar value={20} label="Upload" slotProps={slotProps} />);
+    const fill = () => fillOf(screen.getByRole('progressbar'));
+    expect(fill()).toHaveStyle({ width: '20%', opacity: '0.5' });
+    rerender(<ProgressBar value={70} label="Upload" slotProps={slotProps} />);
+    expect(fill()).toHaveStyle({ width: '70%', opacity: '0.5' });
+    rerender(<ProgressBar label="Upload" slotProps={slotProps} />);
+    expect(fill()).toHaveClass('my-bar', ...motionClasses(progressIndeterminateMotion));
+    rerender(<ProgressBar label="Upload" indeterminateMotion="my-sweep" slotProps={slotProps} />);
+    expect(fill()).toHaveClass('my-bar', 'my-sweep');
+    expect(fill()).not.toHaveClass('animate-wave-indeterminate');
+    renderWithFieldContext(<ProgressBar value={10} slotProps={slotProps} />, {
+      validationState: 'error',
+    });
+    const [, inField] = screen.getAllByRole('progressbar');
+    expect(fillOf(inField)).toHaveClass('bg-error', 'my-bar');
+    expect(fillOf(inField)).toHaveStyle({ width: '10%' });
+  });
+
+  it('ignores the label part without a visible label', () => {
+    const ref = vi.fn();
+    render(<ProgressBar value={5} label="Upload" slotProps={{ label: { ref, className: 'x' } }} />);
+    expect(all(document, progressBarClassNames.label)).toHaveLength(0);
+    expect(ref).not.toHaveBeenCalled();
+    expect(screen.getByRole('progressbar', { name: 'Upload' })).toBeInTheDocument();
+  });
+
+  it('gives the parts no handler of the progress bar: yours run', () => {
+    const order: string[] = [];
+    render(
+      <ProgressBar
+        value={5}
+        label="Upload"
+        showLabel
+        slotProps={{
+          bar: { onClick: () => void order.push('bar') },
+          label: { onClick: () => void order.push('label') },
+        }}
+      />,
+    );
+    fireEvent.click(fillOf(screen.getByRole('progressbar')));
+    fireEvent.click(screen.getByText('Upload'));
+    expect(order).toEqual(['bar', 'label']);
+  });
+
+  it('puts the parts in a right-to-left bar, with the mirrored motion', () => {
+    renderWithProviders(
+      <ProgressBar label="Syncing" slotProps={{ bar: { className: 'my-bar' } }} />,
+      { dir: 'rtl' },
+    );
+    const bar = screen.getByRole('progressbar', { name: 'Syncing' });
+    expect(bar.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+    expect(fillOf(bar)).toHaveClass('my-bar', 'wave-rtl:animate-wave-indeterminate-rtl');
+  });
+
+  it('has no axe violations with parts', async () => {
+    render(
+      <ProgressBar
+        value={40}
+        label="Upload"
+        showLabel
+        slotProps={{
+          bar: { className: 'my-bar' },
+          label: { className: 'my-label', title: 'Upload' },
+        }}
+      />,
+    );
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('types the parts by their elements and takes no children', () => {
+    expectTypeOf<NonNullable<ProgressSlotProps['bar']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<ProgressSlotProps['label']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLSpanElement> | undefined
+    >();
+    expectTypeOf<keyof ProgressSlotProps>().toEqualTypeOf<'bar' | 'label'>();
+    const elements = [
+      // @ts-expect-error a part takes no children
+      <ProgressBar key="1" label="A" slotProps={{ bar: { children: 'x' } }} />,
+      // @ts-expect-error a part takes no children
+      <ProgressBar key="2" label="B" showLabel slotProps={{ label: { children: 'x' } }} />,
+    ];
+    expect(elements).toHaveLength(2);
   });
 });

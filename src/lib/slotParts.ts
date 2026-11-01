@@ -224,6 +224,9 @@ export const SLOT_PROPS_KEYS = {
   dataGridHeaderClassNames: ['selectAllCheckbox'],
   dataGridHeaderCellClassNames: ['button', 'resizeHandle'],
   dataGridRowClassNames: ['selectionControl'],
+  messageBarClassNames: ['body', 'dismissButton'],
+  progressBarClassNames: ['bar', 'label'],
+  spinnerClassNames: ['spinner', 'label'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -497,8 +500,4 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
 ];
 
 /** The parts no rollout task has covered yet (R7); empty once the rollout is done. */
-export const PENDING_SLOT_PARTS: SlotPartLists = {
-  messageBarClassNames: ['body', 'dismissButton'],
-  progressBarClassNames: ['bar', 'label'],
-  spinnerClassNames: ['spinner', 'label'],
-};
+export const PENDING_SLOT_PARTS: SlotPartLists = {};

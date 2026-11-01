@@ -1,17 +1,26 @@
 import * as React from 'react';
-import { describe, it, expect, vi, expectTypeOf, afterEach } from 'vitest';
+import { describe, it, expect, vi, expectTypeOf, afterEach, onTestFinished } from 'vitest';
 import { createPortal } from 'react-dom';
 import { renderToString } from 'react-dom/server';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MessageBar } from '../MessageBar';
 import type { MessageBarProps } from '../MessageBar';
+import { MessageBarGroup } from '../MessageBarGroup';
 import { StatusIcon, StatusText } from '../MessageBar.status';
 import { Button } from '../../button/Button';
-import { messageBarClassNames } from '../../../lib/classNames';
+import { Toolbar } from '../../button/Toolbar';
+import { messageBarClassNames, messageBarGroupClassNames } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/types';
 import {
   asClientReference,
+  expectInertSlotProps,
+  expectNoA11yViolations,
+  honourInert,
+  installResizeObserverMock,
+  mockAnimations,
+  mockRect,
+  openingTags,
   renderWithProviders,
   testDisplayName,
   testNoImplicitSubmit,
@@ -1539,5 +1548,735 @@ describe('MessageBar', () => {
       expect(bar).toHaveClass('border-s-4', 'border-s-info');
       expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveClass('ms-auto');
     });
+  });
+});
+
+describe('MessageBar — slotProps', () => {
+  type BarSlotProps = NonNullable<MessageBarProps['slotProps']>;
+  const EVERY_PART: BarSlotProps = { body: {}, dismissButton: {} };
+  const all = (root: ParentNode, cls: string) =>
+    Array.from(root.querySelectorAll<HTMLElement>(`.${cls}`));
+  const partsOf = (root: ParentNode = document) => [
+    ...all(root, messageBarClassNames.body),
+    ...all(root, messageBarClassNames.dismissButton),
+  ];
+  const bodyOf = (bar: HTMLElement) => all(bar, messageBarClassNames.body)[0];
+  const barOf = (id: string) => document.querySelector<HTMLElement>(`[data-bar="${id}"]`);
+  const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const Icon = () => <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" />;
+  const DISMISS_CLASSES =
+    'wave-message-bar__dismiss-button ms-auto inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-subtle-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100';
+  const BODY_CLASSES = 'wave-message-bar__body min-w-0 flex-1 text-body-1';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * A measuring bar with a title and actions, one with a merged `<button>`, one with a merged
+   * `disabledFocusable` Button and one with the deprecated button object.
+   */
+  function Bars({ slotProps }: { slotProps?: BarSlotProps }) {
+    return (
+      <>
+        <MessageBar status="warning" onDismiss={() => {}} slotProps={slotProps}>
+          <MessageBar.Title>Update available</MessageBar.Title>A new version is ready.
+          <MessageBar.Actions>
+            <Button size="small">Update</Button>
+          </MessageBar.Actions>
+        </MessageBar>
+        <MessageBar
+          onDismiss={() => {}}
+          dismiss={
+            <button type="button" id="merged" title="Close it" className="my-merged" tabIndex={-1}>
+              Close
+            </button>
+          }
+          slotProps={slotProps}
+        >
+          Saved.
+        </MessageBar>
+        <MessageBar
+          onDismiss={() => {}}
+          dismiss={<Button disabledFocusable icon={<Icon />} />}
+          slotProps={slotProps}
+        >
+          Held.
+        </MessageBar>
+        <MessageBar
+          layout="singleline"
+          dismiss={{ as: 'button', type: 'reset', 'aria-label': 'Close', className: 'obj' }}
+          slotProps={slotProps}
+        >
+          Object.
+        </MessageBar>
+      </>
+    );
+  }
+
+  // Captured from 54699b8's dist (client and server agree).
+  const BASE_PINS = [
+    `<div class="${BODY_CLASSES} whitespace-nowrap">`,
+    `<div class="${BODY_CLASSES}">`,
+    `<div class="${BODY_CLASSES}">`,
+    `<div class="${BODY_CLASSES}">`,
+    `<button aria-label="Dismiss" class="${DISMISS_CLASSES}" type="button">`,
+    `<button class="${DISMISS_CLASSES} my-merged" id="merged" tabindex="-1" title="Close it" type="button">`,
+    `<button aria-disabled="true" aria-label="Dismiss" class="${DISMISS_CLASSES}" data-disabled="" data-disabled-focusable="" type="button">`,
+    `<button aria-label="Close" class="${DISMISS_CLASSES} obj" type="reset">`,
+  ].join('\n');
+
+  /** The development warnings of the merged button and the button object, once each. */
+  function expectMergedWarnings(warn: { mock: { calls: unknown[][] } }) {
+    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING], [BUTTON_OBJECT_WARNING]]);
+  }
+
+  it('renders the parts of 54699b8 (attributes sorted), on the client and the server', () => {
+    const warn = spyOnWarn();
+    for (const slotProps of [undefined, EVERY_PART]) {
+      const view = render(<Bars slotProps={slotProps} />);
+      expect(openingTags(...partsOf())).toBe(BASE_PINS);
+      view.unmount();
+      const template = document.createElement('template');
+      template.innerHTML = renderToString(<Bars slotProps={slotProps} />);
+      expect(openingTags(...partsOf(template.content))).toBe(BASE_PINS);
+    }
+    expectMergedWarnings(warn);
+  });
+
+  it('renders the same markup without slotProps, with {} and with every part empty', () => {
+    const warn = spyOnWarn();
+    expectInertSlotProps(
+      (slotProps: BarSlotProps | undefined) => <Bars slotProps={slotProps} />,
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: BarSlotProps | undefined) => (
+        <MessageBar role="region" status="success" onDismiss={() => {}} slotProps={slotProps}>
+          <MessageBar.Title>Done</MessageBar.Title>
+          All files uploaded.
+        </MessageBar>
+      ),
+      EVERY_PART,
+    );
+    expectInertSlotProps(
+      (slotProps: BarSlotProps | undefined) => (
+        <MessageBarGroup>
+          <MessageBar key="a" onDismiss={() => {}} slotProps={slotProps}>
+            A
+          </MessageBar>
+          <MessageBar key="b" status="error" slotProps={slotProps}>
+            B
+          </MessageBar>
+        </MessageBarGroup>
+      ),
+      EVERY_PART,
+    );
+    expectMergedWarnings(warn);
+  });
+
+  it('does not pass slotProps to the root', () => {
+    const error = vi.spyOn(console, 'error');
+    render(
+      <MessageBar data-testid="bar" slotProps={EVERY_PART}>
+        Saved.
+      </MessageBar>,
+    );
+    expect(screen.getByTestId('bar')).not.toHaveAttribute('slotprops');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('puts your className, style, data-* and ref on each part', () => {
+    const refs: Element[] = [];
+    const collect = (node: Element | null) => void (node && refs.push(node));
+    render(
+      <MessageBar
+        onDismiss={() => {}}
+        slotProps={{
+          body: {
+            className: 'my-body flex-auto',
+            style: { opacity: 0.5 },
+            'data-part': 'body',
+            ref: collect,
+          },
+          dismissButton: {
+            className: 'my-dismiss p-2',
+            style: { opacity: 0.5 },
+            'data-part': 'dismissButton',
+            ref: collect,
+          },
+        }}
+      >
+        Saved.
+      </MessageBar>,
+    );
+    for (const [cls, name, mine, conflict] of [
+      [messageBarClassNames.body, 'body', 'my-body', 'flex-1'],
+      [messageBarClassNames.dismissButton, 'dismissButton', 'my-dismiss', 'p-1'],
+    ] as const) {
+      const [element] = all(document, cls);
+      expect(element.classList[0]).toBe(cls);
+      expect(element).toHaveClass(mine);
+      // Your class replaces a conflicting one of the part.
+      expect(element).not.toHaveClass(conflict);
+      expect(element).toHaveAttribute('data-part', name);
+      expect(element).toHaveStyle({ opacity: '0.5' });
+      expect(refs).toContain(element);
+    }
+    expect(refs).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveAttribute(
+      'data-part',
+      'dismissButton',
+    );
+  });
+
+  it('locks the attributes the bar sets on its parts, at the values a merged button gives', () => {
+    const warn = spyOnWarn();
+    const bodyAttempt = {
+      hidden: true,
+      inert: true,
+      'aria-hidden': true,
+    } as unknown as BarSlotProps['body'];
+    const dismissAttempt = {
+      type: 'submit',
+      disabled: true,
+      tabIndex: 0,
+      hidden: true,
+      'aria-hidden': true,
+      inert: true,
+      role: 'link',
+      contentEditable: true,
+      'aria-label': 'Mine',
+      'aria-disabled': 'true',
+      'data-disabled': 'mine',
+      'data-disabled-focusable': 'mine',
+      'data-roving-container': '',
+      'data-roving-disabled': '',
+      'data-roving-value': 'mine',
+    } as unknown as BarSlotProps['dismissButton'];
+    render(<Bars slotProps={{ body: bodyAttempt, dismissButton: dismissAttempt }} />);
+    expect(openingTags(...partsOf())).toBe(BASE_PINS);
+    expectMergedWarnings(warn);
+  });
+
+  it("adds your ids to the Dismiss button's aria-labelledby and aria-describedby", () => {
+    const warn = spyOnWarn();
+    render(
+      <>
+        <span id="what">Dismiss the notice</span>
+        <span id="note">Closes it for good</span>
+        <span id="merged-name">Close</span>
+        <MessageBar
+          onDismiss={() => {}}
+          slotProps={{ dismissButton: { 'aria-labelledby': 'what', 'aria-describedby': 'note' } }}
+        >
+          Saved.
+        </MessageBar>
+        <MessageBar
+          onDismiss={() => {}}
+          dismiss={
+            <button type="button" aria-labelledby="merged-name">
+              x
+            </button>
+          }
+          slotProps={{ dismissButton: { 'aria-labelledby': 'what' } }}
+        >
+          Sent.
+        </MessageBar>
+      </>,
+    );
+    const own = screen.getByRole('button', { name: 'Dismiss the notice' });
+    // The default name stays on the button; your ids name it.
+    expect(own).toHaveAttribute('aria-label', 'Dismiss');
+    expect(own).toHaveAttribute('aria-labelledby', 'what');
+    expect(own).toHaveAttribute('aria-describedby', 'note');
+    const merged = screen.getByRole('button', { name: 'Close Dismiss the notice' });
+    expect(merged).toHaveAttribute('aria-labelledby', 'merged-name what');
+    expect(merged).not.toHaveAttribute('aria-label');
+    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+  });
+
+  it('runs your dismissButton onClick first: preventDefault() skips onDismiss, once in StrictMode', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const ui = (prevent: boolean) => (
+      <React.StrictMode>
+        <MessageBar
+          onDismiss={() => void order.push('onDismiss')}
+          slotProps={{
+            dismissButton: {
+              onClick: (event) => {
+                order.push('part');
+                if (prevent) event.preventDefault();
+              },
+            },
+          }}
+        >
+          Saved.
+        </MessageBar>
+      </React.StrictMode>
+    );
+    const { rerender } = render(ui(false));
+    const button = screen.getByRole('button', { name: 'Dismiss' });
+    await user.click(button);
+    expect(order).toEqual(['part', 'onDismiss']);
+    rerender(ui(true));
+    await user.click(button);
+    expect(order).toEqual(['part', 'onDismiss', 'part']);
+  });
+
+  it("gives a merged <button> the defaults: your attributes replace its own, the bar's wiring stays locked", () => {
+    const warn = spyOnWarn();
+    const order: string[] = [];
+    const ui = (prevent: boolean) => (
+      <>
+        <p id="merged-note">Merged note</p>
+        <p id="part-note">Part note</p>
+        <MessageBar
+          onDismiss={() => void order.push('onDismiss')}
+          dismiss={
+            <button
+              type="button"
+              id="merged"
+              title="Merged"
+              className="merged p-1"
+              data-from="merged"
+              tabIndex={-1}
+              aria-describedby="merged-note"
+              onClick={() => void order.push('merged')}
+            >
+              Close
+            </button>
+          }
+          slotProps={{
+            dismissButton: {
+              id: 'part',
+              title: 'Part',
+              className: 'part p-2',
+              'data-from': 'part',
+              'aria-describedby': 'part-note',
+              // Locked: tried, and kept at the values the bar and the merged button give.
+              type: 'submit',
+              tabIndex: 0,
+              disabled: true,
+              'aria-label': 'Mine',
+              onClick: (event) => {
+                order.push('part');
+                if (prevent) event.preventDefault();
+              },
+            },
+          }}
+        >
+          Saved.
+        </MessageBar>
+      </>
+    );
+    const { rerender } = render(ui(false));
+    const button = screen.getByRole('button', { name: 'Close' });
+    expect(button.classList[0]).toBe(messageBarClassNames.dismissButton);
+    expect(button).toHaveAttribute('id', 'part');
+    expect(button).toHaveAttribute('title', 'Part');
+    expect(button).toHaveAttribute('data-from', 'part');
+    // The merged button's classes, then yours, which win a conflict.
+    expect(button).toHaveClass('merged', 'part', 'p-2');
+    expect(button).not.toHaveClass('p-1');
+    expect(button).toHaveAttribute('aria-describedby', 'merged-note part-note');
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button).toHaveAttribute('tabindex', '-1');
+    expect(button).not.toBeDisabled();
+    expect(button).not.toHaveAttribute('aria-label');
+    fireEvent.click(button);
+    expect(order).toEqual(['part', 'merged', 'onDismiss']);
+    rerender(ui(true));
+    fireEvent.click(button);
+    expect(order).toEqual(['part', 'merged', 'onDismiss', 'part']);
+    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+  });
+
+  it('keeps the type and name a merged button or the button object gives over yours', () => {
+    const warn = spyOnWarn();
+    render(
+      <>
+        <MessageBar
+          dismiss={<button type="reset">Reset</button>}
+          slotProps={{ dismissButton: { type: 'button', 'aria-label': 'Mine' } }}
+        >
+          Form.
+        </MessageBar>
+        <MessageBar
+          dismiss={{
+            as: 'button',
+            type: 'reset',
+            id: 'object',
+            className: 'obj',
+            'aria-label': 'Close',
+          }}
+          slotProps={{
+            dismissButton: { id: 'part', className: 'part', type: 'button', 'aria-label': 'Mine' },
+          }}
+        >
+          Object.
+        </MessageBar>
+      </>,
+    );
+    const merged = screen.getByRole('button', { name: 'Reset' });
+    expect(merged).toHaveAttribute('type', 'reset');
+    expect(merged).not.toHaveAttribute('aria-label');
+    const object = screen.getByRole('button', { name: 'Close' });
+    expect(object).toHaveAttribute('type', 'reset');
+    // The object's attributes are defaults too: your id replaces its id.
+    expect(object).toHaveAttribute('id', 'part');
+    expect(object).toHaveClass('obj', 'part');
+    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING], [BUTTON_OBJECT_WARNING]]);
+  });
+
+  it("keeps a merged disabledFocusable Button's state and does not call your onClick", () => {
+    const warn = spyOnWarn();
+    const onClick = vi.fn();
+    const onDismiss = vi.fn();
+    // A click that reaches the document: a natively disabled button dispatches none either.
+    const outer = vi.fn();
+    document.addEventListener('click', outer);
+    onTestFinished(() => document.removeEventListener('click', outer));
+    render(
+      <>
+        <MessageBar
+          onDismiss={onDismiss}
+          dismiss={<Button disabledFocusable icon={<Icon />} />}
+          slotProps={{
+            dismissButton: {
+              onClick,
+              'aria-disabled': false,
+              'data-disabled-focusable': 'no',
+              tabIndex: -1,
+            },
+          }}
+        >
+          Held.
+        </MessageBar>
+      </>,
+    );
+    const button = screen.getByRole('button', { name: 'Dismiss' });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAttribute('data-disabled-focusable', '');
+    expect(button).not.toHaveAttribute('tabindex');
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(outer).not.toHaveBeenCalled();
+    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+  });
+
+  it('calls your onClick on a merged button only while it is enabled', () => {
+    const warn = spyOnWarn();
+    const onClick = vi.fn();
+    const ui = (disabled: boolean) => (
+      <MessageBar
+        dismiss={
+          <button type="button" disabled={disabled}>
+            Close
+          </button>
+        }
+        slotProps={{ dismissButton: { onClick } }}
+      >
+        Saved.
+      </MessageBar>
+    );
+    const { rerender } = render(ui(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    rerender(ui(true));
+    // React dispatches no click to a natively disabled button: neither yours nor the bar's.
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+  });
+
+  it("keeps the slot's ref, the label check and your ref on the Dismiss button", () => {
+    const warn = spyOnWarn();
+    const slotRef = React.createRef<HTMLButtonElement>();
+    const partNodes: (HTMLButtonElement | null)[] = [];
+    // Text from a component: only the rendered button tells that it names the button.
+    const Label = () => <>Close</>;
+    const ui = (tick: number) => (
+      <MessageBar
+        data-tick={tick}
+        onDismiss={() => {}}
+        dismiss={
+          <button type="button" ref={slotRef}>
+            <Label />
+          </button>
+        }
+        slotProps={{ dismissButton: { ref: (node) => void partNodes.push(node) } }}
+      >
+        Saved.
+      </MessageBar>
+    );
+    const { rerender } = render(ui(0));
+    const button = screen.getByRole('button', { name: 'Close' });
+    expect(button).not.toHaveAttribute('aria-label');
+    expect(slotRef.current).toBe(button);
+    // A new inline ref on every render: yours follows, the slot's stays attached.
+    rerender(ui(1));
+    rerender(ui(2));
+    expect(slotRef.current).toBe(button);
+    expect(partNodes.at(-1)).toBe(button);
+    expect(screen.getByRole('button', { name: 'Close' })).toBe(button);
+    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+  });
+
+  it("measures the body with your ref; the layout the bar writes stays the root's", async () => {
+    const ro = installResizeObserverMock();
+    try {
+      const objectRef = React.createRef<HTMLDivElement>();
+      const inline: (HTMLDivElement | null)[] = [];
+      const ui = (tick: number) => (
+        <MessageBar
+          data-tick={tick}
+          slotProps={{
+            body: {
+              ref: tick % 2 ? objectRef : (node) => void inline.push(node),
+              className: 'my-body',
+              'data-layout': 'mine',
+            },
+          }}
+        >
+          Your session expires in five minutes.
+          <MessageBar.Actions>
+            <Button>Retry</Button>
+          </MessageBar.Actions>
+        </MessageBar>
+      );
+      const { rerender } = render(ui(0));
+      const bar = screen.getByRole('status');
+      const body = bodyOf(bar);
+      expect(inline.at(-1)).toBe(body);
+      rerender(ui(1));
+      expect(objectRef.current).toBe(body);
+      expect(bar).toHaveAttribute('data-layout', 'singleline');
+      expect(body).toHaveAttribute('data-layout', 'mine');
+      expect(body).toHaveClass('whitespace-nowrap', 'my-body');
+
+      // The text needs 150 px more than its column: the bar measures it and goes multiline.
+      mockRect(bar, { width: 400 });
+      mockRect(body, { width: 200 });
+      Object.defineProperty(body, 'scrollWidth', { configurable: true, value: 350 });
+      ro.trigger(bar);
+      await act(async () => {
+        await nextFrame();
+      });
+      expect(bar).toHaveAttribute('data-layout', 'multiline');
+      expect(body).toHaveAttribute('data-layout', 'mine');
+      expect(body).not.toHaveClass('whitespace-nowrap');
+      expect(bodyOf(bar)).toBe(body);
+
+      // Back to one row once the bar is as wide as the text needed, with the ref changed again.
+      rerender(ui(2));
+      mockRect(bar, { width: 550 });
+      mockRect(body, { width: 550 });
+      ro.trigger(bar);
+      await act(async () => {
+        await nextFrame();
+      });
+      expect(bar).toHaveAttribute('data-layout', 'singleline');
+      expect(inline.at(-1)).toBe(body);
+    } finally {
+      ro.restore();
+    }
+  });
+
+  it('gives the body no handler of the bar: yours runs first, and the bar still sees the event', () => {
+    const order: string[] = [];
+    render(
+      <MessageBar
+        onClick={() => void order.push('bar')}
+        slotProps={{ body: { onClick: () => void order.push('body') } }}
+      >
+        <a href="#details">Details</a>
+      </MessageBar>,
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Details' }));
+    expect(order).toEqual(['body', 'bar']);
+  });
+
+  it('dismisses a bar of a MessageBarGroup through your part, and focus moves to the next bar', async () => {
+    const motion = mockAnimations({
+      animated: (el) => el.classList.contains(messageBarGroupClassNames.item),
+    });
+    honourInert();
+    const user = userEvent.setup();
+    const partClick = vi.fn();
+    const slotProps = {
+      body: { className: 'my-body', hidden: true },
+      dismissButton: {
+        className: 'my-dismiss',
+        onClick: partClick,
+        tabIndex: -1,
+        inert: true,
+        hidden: true,
+      },
+    } as unknown as BarSlotProps;
+    function Group() {
+      const [ids, setIds] = React.useState(['a', 'b', 'c']);
+      return (
+        <MessageBarGroup>
+          {ids.map((id) => (
+            <MessageBar
+              key={id}
+              data-bar={id}
+              onDismiss={() => setIds((current) => current.filter((other) => other !== id))}
+              slotProps={slotProps}
+            >{`Message ${id}`}</MessageBar>
+          ))}
+        </MessageBarGroup>
+      );
+    }
+    render(<Group />);
+    const dismissOf = (id: string) =>
+      within(barOf(id) as HTMLElement).getByRole('button', { name: 'Dismiss' });
+    for (const id of ['a', 'b', 'c']) {
+      const body = bodyOf(barOf(id) as HTMLElement);
+      expect(body).not.toHaveAttribute('hidden');
+      expect(body).toHaveClass('my-body');
+    }
+    await user.click(dismissOf('b'));
+    expect(partClick).toHaveBeenCalledTimes(1);
+    expect(barOf('b')?.parentElement).toHaveAttribute('data-presence', 'exiting');
+    expect(dismissOf('c')).toHaveFocus();
+    expect(dismissOf('c')).toHaveClass('my-dismiss');
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(barOf('b')).toBeNull();
+    expect(dismissOf('c')).toHaveFocus();
+  });
+
+  it("keeps the Dismiss buttons in a toolbar's arrow order and one Tab stop, with the roving markers tried", async () => {
+    const user = userEvent.setup();
+    const marked = {
+      dismissButton: {
+        role: 'radiogroup',
+        inert: true,
+        tabIndex: 0,
+        'data-roving-container': '',
+        'data-roving-disabled': '',
+        'data-roving-value': 'mine',
+      },
+    } as unknown as BarSlotProps;
+    render(
+      <>
+        <button type="button">Before</button>
+        <Toolbar aria-label="Tools">
+          <Toolbar.Button>Bold</Toolbar.Button>
+          <MessageBar onDismiss={() => {}} slotProps={marked}>
+            Saved.
+          </MessageBar>
+          <MessageBar onDismiss={() => {}} slotProps={marked}>
+            Sent.
+          </MessageBar>
+          <Toolbar.Button>Italic</Toolbar.Button>
+        </Toolbar>
+        <button type="button">After</button>
+      </>,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Tools' });
+    const tabStops = () => toolbar.querySelectorAll('[tabindex="0"]');
+    const bold = screen.getByRole('button', { name: 'Bold' });
+    const italic = screen.getByRole('button', { name: 'Italic' });
+    const [saved, sent] = screen.getAllByRole('button', { name: 'Dismiss' });
+    for (const button of [saved, sent]) {
+      for (const key of ['role', 'inert', 'data-roving-container', 'data-roving-disabled']) {
+        expect(button).not.toHaveAttribute(key);
+      }
+      expect(button).not.toHaveAttribute('data-roving-value', 'mine');
+    }
+    expect(tabStops()).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Before' }));
+    await user.tab();
+    expect(bold).toHaveFocus();
+    const order: Element[] = [];
+    for (let step = 0; step < 4; step++) {
+      await user.keyboard('{ArrowRight}');
+      order.push(document.activeElement as Element);
+      expect(tabStops()).toHaveLength(1);
+    }
+    expect(order).toEqual([saved, sent, italic, bold]);
+    // From a Dismiss button Tab leaves the toolbar, and Shift+Tab comes back to it only.
+    await user.keyboard('{ArrowRight}');
+    expect(saved).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(saved).toHaveFocus();
+  });
+
+  it('ignores a dismissButton part while the bar has no Dismiss button', () => {
+    const ref = vi.fn();
+    render(
+      <MessageBar slotProps={{ dismissButton: { ref, className: 'my-dismiss' } }}>
+        Saved.
+      </MessageBar>,
+    );
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(ref).not.toHaveBeenCalled();
+  });
+
+  it('puts the parts in a right-to-left bar too', () => {
+    renderWithProviders(
+      <MessageBar
+        onDismiss={() => {}}
+        slotProps={{ body: { className: 'my-body' }, dismissButton: { className: 'my-dismiss' } }}
+      >
+        Saved.
+      </MessageBar>,
+      { dir: 'rtl' },
+    );
+    const bar = screen.getByRole('status');
+    expect(bar.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+    expect(bodyOf(bar)).toHaveClass('my-body');
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveClass('my-dismiss', 'ms-auto');
+  });
+
+  it('has no axe violations with parts', async () => {
+    render(
+      <MessageBar
+        status="error"
+        onDismiss={() => {}}
+        slotProps={{
+          body: { className: 'my-body', id: 'error-body' },
+          dismissButton: { title: 'Dismiss the error', 'aria-describedby': 'error-body' },
+        }}
+      >
+        <MessageBar.Title>Upload failed</MessageBar.Title>
+        Try again later.
+        <MessageBar.Actions>
+          <Button size="small">Retry</Button>
+        </MessageBar.Actions>
+      </MessageBar>,
+    );
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('types the parts by their elements and takes no children', () => {
+    expectTypeOf<NonNullable<BarSlotProps['body']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<NonNullable<BarSlotProps['dismissButton']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<keyof BarSlotProps>().toEqualTypeOf<'body' | 'dismissButton'>();
+    const elements = [
+      // @ts-expect-error a part takes no children
+      <MessageBar key="1" slotProps={{ body: { children: 'x' } }}>
+        Msg
+      </MessageBar>,
+      // @ts-expect-error a part takes no children
+      <MessageBar key="2" onDismiss={() => {}} slotProps={{ dismissButton: { children: 'x' } }}>
+        Msg
+      </MessageBar>,
+    ];
+    expect(elements).toHaveLength(2);
   });
 });
