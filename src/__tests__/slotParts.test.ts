@@ -43,9 +43,16 @@ import type {
   MenuItemProps,
   MenuItemRadioProps,
   MenuItemSwitchProps,
+  NavAppItemProps,
+  NavAppItemStaticProps,
+  NavCategoryProps,
   NavDrawerBodyProps,
   NavDrawerFooterProps,
   NavDrawerProps,
+  NavItemProps,
+  NavProps,
+  NavSectionHeaderProps,
+  NavSubItemProps,
   OptionGroupProps,
   OptionProps,
   PopoverContentProps,
@@ -440,6 +447,15 @@ type SlotPropsOwners = {
   // FlatTree.Item is the tree's own row, never written by hand: FlatTree declares its parts and
   // hands them to every item.
   flatTreeItemClassNames: FlatTreeProps;
+  // NavDrawer shares the Nav state, not the Nav's list: its lists are NavDrawer.Body's and
+  // NavDrawer.Footer's.
+  navClassNames: NavProps;
+  navCategoryClassNames: NavCategoryProps;
+  navItemClassNames: NavItemProps;
+  navSubItemClassNames: NavSubItemProps;
+  navSectionHeaderClassNames: NavSectionHeaderProps;
+  navAppItemClassNames: NavAppItemProps;
+  navAppItemStaticClassNames: NavAppItemStaticProps;
 };
 
 /** The `slotProps` keys of a props type (all of them, `root` included). */

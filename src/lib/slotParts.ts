@@ -175,6 +175,13 @@ export const SLOT_PROPS_KEYS = {
   treeItemClassNames: ['row', 'indicator', 'label', 'aside', 'actions', 'group'],
   treeItemPersonaLayoutClassNames: ['media', 'main', 'description'],
   flatTreeItemClassNames: ['row', 'expandIcon', 'indicator', 'label'],
+  navClassNames: ['list'],
+  navCategoryClassNames: ['button', 'label', 'list'],
+  navItemClassNames: ['listItem', 'content', 'actions'],
+  navSubItemClassNames: ['listItem', 'actions'],
+  navSectionHeaderClassNames: ['listItem'],
+  navAppItemClassNames: ['listItem', 'content'],
+  navAppItemStaticClassNames: ['listItem', 'content'],
 } as const satisfies SlotPartLists;
 
 /**
@@ -476,13 +483,6 @@ export const PENDING_SLOT_PARTS: SlotPartLists = {
   ],
   overflowClassNames: ['overflowButton'],
   breadcrumbClassNames: ['list', 'listItem', 'overflowButton'],
-  navClassNames: ['list'],
-  navCategoryClassNames: ['button', 'label', 'list'],
-  navItemClassNames: ['listItem', 'content', 'actions'],
-  navSubItemClassNames: ['listItem', 'actions'],
-  navSectionHeaderClassNames: ['listItem'],
-  navAppItemClassNames: ['listItem', 'content'],
-  navAppItemStaticClassNames: ['listItem', 'content'],
   paginationClassNames: [
     'list',
     'listItem',

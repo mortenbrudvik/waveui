@@ -7,9 +7,15 @@ import {
   navSectionHeaderClassNames,
 } from '../../lib/classNames';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 import type { HeadingLevel, Slot } from '../../lib/types';
-import { useNavContext, type NoAnchorOnlyAttributes } from './Nav.context';
+import {
+  BLOCK_CLICK,
+  NAV_PART_LOCKS,
+  useNavContext,
+  type NoAnchorOnlyAttributes,
+} from './Nav.context';
 
 /*
  * The parts of a Nav that carry no value: Nav.SectionHeader, Nav.Divider, Nav.AppItem and
@@ -34,6 +40,20 @@ export interface NavSectionHeaderProps extends React.HTMLAttributes<HTMLHeadingE
   children?: React.ReactNode;
   /** Ref to the heading element. */
   ref?: React.Ref<HTMLHeadingElement>;
+  /**
+   * Props for the list item the header draws around its heading, merged into its own: your
+   * classes after its class (yours win a conflict), your styles, attributes and handlers added,
+   * your ref attached. A part takes no `children` (the heading is the header's) and carries no
+   * handler of the header; the heading takes the header's own props. Fluent UI has no such part:
+   * its NavSectionHeader is the heading itself.
+   */
+  slotProps?: {
+    /**
+     * The `<li>` around the heading (stable class `wave-nav-section-header__list-item`). Locked:
+     * no role (it stays a list item), no tab index and no roving container's marker.
+     */
+    listItem?: SlotPart<'li'>;
+  };
 }
 
 /**
@@ -48,6 +68,7 @@ export const NavSectionHeader = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: NavSectionHeaderProps) => {
   useNavContext('Nav.SectionHeader');
@@ -55,7 +76,14 @@ export const NavSectionHeader = ({
   if (!slotRendersContent(children)) return null;
   const Heading: `h${HeadingLevel}` = `h${headingLevel}`;
   return (
-    <li className={navSectionHeaderClassNames.listItem}>
+    <li
+      className={navSectionHeaderClassNames.listItem}
+      {...(slotProps?.listItem &&
+        mergeSlotProps(slotProps.listItem, {
+          className: navSectionHeaderClassNames.listItem,
+          locked: NAV_PART_LOCKS,
+        }))}
+    >
       <Heading
         {...rest}
         ref={ref}
@@ -124,6 +152,32 @@ export interface NavAppItemOwnProps {
   icon?: Slot<'span'>;
   /** The app's name. */
   children?: React.ReactNode;
+  /**
+   * Props for the elements the app item draws around and inside its link or button, by part,
+   * merged into each part's own: your classes after the part's (yours win a conflict), your styles
+   * over its styles, your attributes and handlers added, your ref attached. Every attribute the
+   * item sets on a part is locked, and no part takes a role, a tab index or a roving container's
+   * marker. A part takes no `children` (the item draws their content); the link or button takes
+   * the item's own props and `icon` fills its own slot. No part carries a handler of the item.
+   * Fluent UI's AppItem is the link or button itself.
+   */
+  slotProps?: {
+    /**
+     * The `<li>` around the link or button (stable class `wave-nav-app-item__list-item`).
+     * Locked: no role (it stays a list item), no tab index or roving container's marker, and no
+     * `hidden`, `inert` or `aria-hidden`, since it holds the item. The link or button handles its
+     * events before yours.
+     */
+    listItem?: SlotPart<'li'>;
+    /**
+     * The `<span>` of the app's name inside the link or button, which names it (stable class
+     * `wave-nav-app-item__content`). Locked: no `aria-label` (it would replace the name), no
+     * role, tab index or roving container's marker, and no `hidden`, `inert` or `aria-hidden`. A
+     * click on it is a click on the item, after yours. While a button item is `disabled` your
+     * `onClick` here is not called, as the item's own is not.
+     */
+    content?: SlotPart<'span'>;
+  };
 }
 
 /**
@@ -183,6 +237,26 @@ export interface NavAppItemStaticProps extends React.HTMLAttributes<HTMLDivEleme
   children?: React.ReactNode;
   /** Ref to the `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Props for the elements the item draws around and inside its `<div>`, by part, merged into
+   * each part's own: your classes after the part's (yours win a conflict), your styles over its
+   * styles, your attributes and handlers added, your ref attached. No part takes a role, a tab
+   * index or a roving container's marker, so the item stays plain text: no part becomes a control
+   * or a tab stop. A part takes no `children` (the item draws their content) and carries no
+   * handler of the item; the `<div>` takes the item's own props and `icon` fills its own slot.
+   */
+  slotProps?: {
+    /**
+     * The `<li>` around the `<div>` (stable class `wave-nav-app-item-static__list-item`).
+     * Locked: no role (it stays a list item), no tab index and no roving container's marker.
+     */
+    listItem?: SlotPart<'li'>;
+    /**
+     * The `<span>` of the app's name (stable class `wave-nav-app-item-static__content`). Locked:
+     * no role, no tab index and no roving container's marker.
+     */
+    content?: SlotPart<'span'>;
+  };
 }
 
 /** The props of both app item branches at run time (the union narrowed by `href`). */
@@ -224,7 +298,12 @@ export function NavAppItem(props: NavAppItemAnchorProps): React.ReactElement;
 export function NavAppItem(props: NavAppItemDynamicProps): React.ReactElement;
 export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): React.ReactElement {
   useNavContext('Nav.AppItem');
-  const { icon, href, className, children, ref, ...rest } = props as NavAppItemRuntimeProps;
+  const { icon, href, className, children, ref, slotProps, ...rest } =
+    props as NavAppItemRuntimeProps;
+  // A disabled button activates nothing: a click handler of the part inside it is not called.
+  const disabled = href === undefined && !!rest.disabled;
+  const contentPart = slotProps?.content;
+  const contentClassName = cn(navAppItemClassNames.content, 'flex-1 text-start');
   const content = (
     <>
       {icon && slotRendersContent(icon)
@@ -232,13 +311,29 @@ export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): Rea
             'aria-hidden': true,
           })
         : null}
-      <span className={cn(navAppItemClassNames.content, 'flex-1 text-start')}>{children}</span>
+      <span
+        className={contentClassName}
+        {...(contentPart &&
+          mergeSlotProps(contentPart, {
+            className: contentClassName,
+            locked: { ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS, 'aria-label': undefined },
+            blockHandlers: disabled ? BLOCK_CLICK : undefined,
+          }))}
+      >
+        {children}
+      </span>
     </>
   );
+  const listItemProps =
+    slotProps?.listItem &&
+    mergeSlotProps(slotProps.listItem, {
+      className: navAppItemClassNames.listItem,
+      locked: { ...NAV_PART_LOCKS, ...HIDDEN_PART_LOCKS },
+    });
 
   if (href !== undefined) {
     return (
-      <li className={navAppItemClassNames.listItem}>
+      <li className={navAppItemClassNames.listItem} {...listItemProps}>
         <a
           {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
           ref={ref as React.Ref<HTMLAnchorElement>}
@@ -254,7 +349,7 @@ export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): Rea
   // `rel` belongs only on a link and `value` on nothing: an app item is never selected.
   const { rel, value, ...buttonRest } = rest;
   return (
-    <li className={navAppItemClassNames.listItem}>
+    <li className={navAppItemClassNames.listItem} {...listItemProps}>
       <button
         type="button"
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
@@ -279,11 +374,20 @@ export const NavAppItemStatic = ({
   className,
   children,
   ref,
+  slotProps,
   ...rest
 }: NavAppItemStaticProps) => {
   useNavContext('Nav.AppItemStatic');
+  const contentClassName = cn(navAppItemStaticClassNames.content, 'flex-1 text-start');
   return (
-    <li className={navAppItemStaticClassNames.listItem}>
+    <li
+      className={navAppItemStaticClassNames.listItem}
+      {...(slotProps?.listItem &&
+        mergeSlotProps(slotProps.listItem, {
+          className: navAppItemStaticClassNames.listItem,
+          locked: NAV_PART_LOCKS,
+        }))}
+    >
       <div
         {...rest}
         ref={ref}
@@ -299,7 +403,14 @@ export const NavAppItemStatic = ({
               'aria-hidden': true,
             })
           : null}
-        <span className={cn(navAppItemStaticClassNames.content, 'flex-1 text-start')}>
+        <span
+          className={contentClassName}
+          {...(slotProps?.content &&
+            mergeSlotProps(slotProps.content, {
+              className: contentClassName,
+              locked: NAV_PART_LOCKS,
+            }))}
+        >
           {children}
         </span>
       </div>
