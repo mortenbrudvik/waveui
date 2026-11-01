@@ -237,10 +237,13 @@ export interface TagOwnProps {
      * `wave-tag__dismiss-button`; `dismissIcon` fills its content). A `<button>` or `Button`
      * passed as `dismissIcon` reaches this button too: its attributes are the defaults these props
      * replace (yours win), its classes come before yours and its handlers run after yours. Locked,
-     * at the values the tag and that button give together: `type`, `disabled`, `tabIndex`,
-     * `hidden`, `aria-hidden`, the name (`aria-label`, and `aria-labelledby`, to which your ids
-     * are added), `aria-disabled`, `data-disabled`, `data-disabled-focusable`, the
-     * `data-wave-tag-dismiss` marker, and its click and key handling: your `onClick` runs first,
+     * at the values the tag and that button give together (unset unless that button sets them):
+     * `type`, `role`, `disabled`, `tabIndex`, `hidden`, `inert`, `aria-hidden`, the name
+     * (`aria-label`, and `aria-labelledby`, to which your ids are added), `aria-disabled`,
+     * `data-disabled`, `data-disabled-focusable`, the markers by which a TagGroup's arrow keys
+     * find their controls (`data-roving-container`, `data-roving-disabled`, `data-roving-value`)
+     * and its tags and their Dismiss buttons (`data-wave-tag-item`, `data-wave-tag-dismiss`), and
+     * its click and key handling: your `onClick` runs first,
      * and `preventDefault()` in it skips the merged button's `onClick`, `onDismiss` and a
      * TagGroup's `onDismiss(value)`; `preventDefault()` in your `onKeyDown` keeps Delete and
      * Backspace from dismissing. While the button is disabled, or unavailable but focusable (a
@@ -583,17 +586,26 @@ const NATIVELY_DISABLED_PROPS = {
 /**
  * The Dismiss button's attributes that its parts cannot change, at the values the Tag and a merged
  * `dismissIcon` button give together (each key present, so it stays unset while neither sets it):
- * the tab stop, the visibility and the disabled state, then the Tag's own attributes and handlers.
- * The merged button's other attributes are the parts' defaults.
+ * the role, the tab stop, the visibility and the disabled state, the markers a TagGroup toolbar's
+ * roving tab stop reads (in one, the button is a control of the group: a nested composite, a
+ * skipped item or a value of its own would break its arrow order and its one Tab stop) and the tag
+ * item marker (the focus after a removal would take the button for a tag), then the Tag's own
+ * attributes and handlers. The merged button's other attributes are the parts' defaults.
  */
 const DISMISS_LOCKS = {
+  role: undefined,
   tabIndex: undefined,
   hidden: undefined,
+  inert: undefined,
   'aria-hidden': undefined,
   disabled: undefined,
   'aria-disabled': undefined,
   'data-disabled': undefined,
   'data-disabled-focusable': undefined,
+  'data-roving-container': undefined,
+  'data-roving-disabled': undefined,
+  'data-roving-value': undefined,
+  'data-wave-tag-item': undefined,
   type: undefined,
   'data-wave-tag-dismiss': undefined,
   onKeyDown: undefined,

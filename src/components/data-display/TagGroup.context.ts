@@ -11,8 +11,8 @@ import { usePreserveFocus } from '../../hooks/usePreserveFocus';
  * TagPicker gives the TagGroup and the Tags it renders, the tag item hooks (value registration and
  * focus after a removal), the held focus of a control disabled while it has focus, the
  * Delete/Backspace key test and what the family's `slotProps` parts lock. Module-only (never
- * exported from a barrel), and it imports no
- * component, so a module that reads it (Tag) holds no TagGroup or InteractionTag code.
+ * exported from a barrel), and it imports no component, so a module that reads it (Tag) holds no
+ * TagGroup or InteractionTag code.
  */
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,8 @@ export interface TagHostContextValue {
   /**
    * Props merged into the Dismiss button as a `slotProps` part (TagPicker's
    * `slotProps.removeButton`), before the Tag's own `slotProps.dismissButton`: its classes after
-   * the button's, its handlers first, the button's own attributes locked.
+   * the button's, its handlers first. The Tag's attributes are locked; those a button merged
+   * through `dismissIcon` adds are the part's defaults, which it replaces.
    */
   dismissButtonPart?: SlotPart<'button'>;
 }

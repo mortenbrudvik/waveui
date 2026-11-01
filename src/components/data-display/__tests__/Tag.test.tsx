@@ -2965,6 +2965,84 @@ describe('Tag — slotProps', () => {
     expect(dismiss('Red')).toHaveFocus();
   });
 
+  /** The role, `inert` and every marker a toolbar or the removal focus reads, on each Dismiss button. */
+  const MARKED_DISMISS: TagSlotProps = {
+    dismissButton: {
+      role: 'radiogroup',
+      inert: true,
+      'data-roving-container': '',
+      'data-roving-disabled': '',
+      'data-roving-value': 'mine',
+      'data-wave-tag-item': '',
+    } as unknown as TagSlotProps['dismissButton'],
+  };
+
+  it("keeps every Dismiss button in the toolbar's arrow order and one Tab stop, and the focus after a removal", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">Before</button>
+        <LinkFilters slotProps={MARKED_DISMISS} />
+        <button type="button">After</button>
+      </>,
+    );
+    const link = (name: string) => screen.getByRole('link', { name });
+    const dismiss = (name: string) => screen.getByRole('button', { name: `Dismiss ${name}` });
+    const before = screen.getByRole('button', { name: 'Before' });
+    const after = screen.getByRole('button', { name: 'After' });
+    const group = screen.getByRole('toolbar', { name: 'Filters' });
+    const tabStops = () => group.querySelectorAll('[tabindex="0"]');
+    for (const name of ['Red', 'Blue', 'Large']) {
+      const button = dismiss(name);
+      for (const key of [
+        'role',
+        'inert',
+        'data-roving-container',
+        'data-roving-disabled',
+        'data-wave-tag-item',
+      ]) {
+        expect(button).not.toHaveAttribute(key);
+      }
+      expect(button).not.toHaveAttribute('data-roving-value', 'mine');
+    }
+    expect(tabStops()).toHaveLength(1);
+
+    await user.click(before);
+    await user.tab();
+    expect(link('Red')).toHaveFocus();
+    const order: Element[] = [];
+    for (let step = 0; step < 6; step++) {
+      await user.keyboard('{ArrowRight}');
+      order.push(document.activeElement as Element);
+      expect(tabStops()).toHaveLength(1);
+    }
+    expect(order).toEqual([
+      dismiss('Red'),
+      link('Blue'),
+      dismiss('Blue'),
+      link('Large'),
+      dismiss('Large'),
+      link('Red'),
+    ]);
+    // From a Dismiss button Tab leaves the group, and Shift+Tab comes back to that button only.
+    await user.keyboard('{ArrowRight}');
+    expect(dismiss('Red')).toHaveFocus();
+    expect(Array.from(tabStops())).toEqual([dismiss('Red')]);
+    await user.tab();
+    expect(after).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(dismiss('Red')).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(before).toHaveFocus();
+
+    // Delete on the last tag's link moves focus to the previous tag's link, its first control.
+    act(() => link('Large').focus());
+    await user.keyboard('{Delete}');
+    await act(async () => {});
+    expect(screen.queryByText('Large')).toBeNull();
+    expect(link('Blue')).toHaveFocus();
+  });
+
   it('runs your text part handlers before the tag: preventDefault() keeps Delete on a link in the text from dismissing', () => {
     const order: string[] = [];
     const onDismiss = vi.fn(() => void order.push('dismiss'));
