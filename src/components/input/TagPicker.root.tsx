@@ -331,7 +331,7 @@ export interface TagPickerProps extends Omit<
     tag?: SlotPart<'span'>;
     /**
      * The remove `<button>` of every default tag (stable class `wave-tag-picker__remove-button`).
-     * Locked: `type`, `aria-label` (`labels.remove`), `disabled`, `tabIndex`, `hidden`,
+     * Locked: `type`, `aria-label` (`labels.remove`), `disabled`, `tabIndex`, `hidden`, `inert`,
      * `aria-hidden` and the attributes of a remove button kept focusable while it is disabled.
      * Your `onClick` runs before the removal (`preventDefault()` skips it) and is not called
      * while the button is unavailable.

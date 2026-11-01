@@ -1495,6 +1495,36 @@ describe('Option — slotProps', () => {
     expect(part(optionClassNames.indicator)).not.toHaveAttribute('tabindex');
   });
 
+  it.each([
+    ['enabled', false, 1],
+    ['disabled', true, 0],
+  ] as const)(
+    'calls your content and indicator onClick only while the option is %s',
+    (_, disabled, calls) => {
+      const content = vi.fn();
+      const indicator = vi.fn();
+      const own = vi.fn();
+      render(
+        <Listbox aria-label="Fruit" multiselect>
+          <Option
+            value="a"
+            disabled={disabled}
+            onClick={own}
+            slotProps={{ content: { onClick: content }, indicator: { onClick: indicator } }}
+          >
+            Apple
+          </Option>
+        </Listbox>,
+      );
+      fireEvent.click(part(optionClassNames.content)!);
+      fireEvent.click(part(optionClassNames.indicator)!);
+      expect(content).toHaveBeenCalledTimes(calls);
+      expect(indicator).toHaveBeenCalledTimes(calls);
+      // The Option's own onClick, on its <li>, runs in both states (as in 0.17.1).
+      expect(own).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it('keeps the content naming the option: no role, aria-label or hidden state from a part', () => {
     render(
       <Listbox aria-label="Fruit">

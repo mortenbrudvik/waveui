@@ -320,11 +320,10 @@ export interface ColorPickerHexFieldProps extends React.HTMLAttributes<HTMLEleme
      * `enterKeyHint`, `autoCapitalize`, `autoCorrect`, `spellCheck`); `name`, `form` and
      * `required`, which it never sets (the picker submits the color under its own `name`, never
      * the typed text); `hidden`, `inert` and `aria-hidden` (a focusable control is never
-     * hidden). Your
-     * handlers run first: `preventDefault()` in your `onChange` rejects the edit (the text
-     * stays), and in your `onFocus`, `onBlur`, `onKeyDown` or `onKeyUp` it skips the field's own
-     * handler of that event, so in `onBlur` or on Enter the typed text is neither applied nor
-     * flagged.
+     * hidden). Your handlers run first: `preventDefault()` in your `onChange` rejects the edit
+     * (the text stays), and in your `onFocus`, `onBlur`, `onKeyDown` or `onKeyUp` it skips the
+     * field's own handler of that event, so in `onBlur` or on Enter the typed text is neither
+     * applied nor flagged.
      */
     input?: SlotPart<'input'>;
     /**

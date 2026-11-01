@@ -114,6 +114,9 @@ export function isInvalidLook(
   return ownError || ariaInvalid === true || ariaInvalid === 'true';
 }
 
+/** The handlers the wrapper part drops while the Input is disabled: it does not activate then. */
+const BLOCK_CLICK = ['onClick'] as const;
+
 /** Padding of the slot spans and the inner input of the slot wrapper, per size. */
 const SLOT_PADDING: Readonly<Record<CoreSize, { before: string; after: string; input: string }>> = {
   small: { before: 'ps-1.5', after: 'pe-1.5', input: 'px-1.5' },
@@ -194,7 +197,8 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
      * the input with `contentBefore` or `contentAfter`, else the `<input>` itself, where `input`
      * applies after it. Locked in both shapes: `hidden`, the Input's own. On the `<span>`, also
      * `data-size` and `data-appearance`, and `inert` and `aria-hidden` unset (the input inside
-     * stays reachable); on the `<input>`, the locked attributes of `input`.
+     * stays reachable), and your `onClick` is not called while the Input is `disabled`, as a
+     * disabled `<input>` calls none; on the `<input>`, the locked attributes of `input`.
      */
     root?: SlotPartWithRef<'span', HTMLElement>;
     /**
@@ -354,6 +358,8 @@ export const Input = ({
       style,
       // The wrapper holds the input: a part neither hides it nor takes it out of reach.
       locked: { hidden, inert: undefined, 'aria-hidden': undefined, ...look },
+      // A disabled Input activates nothing: no click handler of the wrapper either.
+      blockHandlers: props.disabled ? BLOCK_CLICK : undefined,
     });
     control = (
       <span {...rootProps}>

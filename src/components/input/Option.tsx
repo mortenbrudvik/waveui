@@ -96,13 +96,15 @@ export interface OptionProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>,
      * The 16px checkbox square of an option in a multi-select list, rendered only there (stable
      * class `wave-option__indicator`); the check glyph sits in it while the option is selected.
      * Locked: `aria-hidden`, the internal data attribute that marks the square, and `tabIndex`
-     * (unset: the square is never a tab stop).
+     * (unset: the square is never a tab stop). Your `onClick` is not called while the option is
+     * `disabled`.
      */
     indicator?: SlotPart<'span'>;
     /**
      * The `<span>` around the option's content, whose text names the option (stable class
      * `wave-option__content`). Locked unset: `role`, `aria-label` (it would replace the text in
-     * the option's name), `hidden`, `inert` and `aria-hidden`.
+     * the option's name), `hidden`, `inert` and `aria-hidden`. Your `onClick` is not called
+     * while the option is `disabled`; the Option's own `onClick` prop, on its `<li>`, still is.
      */
     content?: SlotPart<'span'>;
   };
@@ -157,6 +159,9 @@ const OPTION_CLASSES = cn(
 );
 
 const OPTION_CONTENT_CLASSES = cn(optionClassNames.content, 'min-w-0 flex-1');
+
+/** The handlers the parts of a disabled option drop: the option selects nothing then. */
+const BLOCK_CLICK = ['onClick'] as const;
 
 /**
  * The values of the options rendered inside an `OptionGroup`, whatever wraps them (custom
@@ -278,6 +283,7 @@ function renderCheck(
         mergeSlotProps(indicator, {
           className: indicatorClasses,
           locked: { 'aria-hidden': 'true', 'data-wave-option-box': '', tabIndex: undefined },
+          blockHandlers: disabled ? BLOCK_CLICK : undefined,
         }))}
     >
       {selected &&
@@ -380,6 +386,8 @@ function OptionImpl(props: OptionProps) {
             className: OPTION_CONTENT_CLASSES,
             // The text names the option: a part neither renames nor hides it.
             locked: { role: undefined, 'aria-label': undefined, ...HIDDEN_PART_LOCKS },
+            // A disabled option selects nothing: no click handler of its parts runs.
+            blockHandlers: disabled ? BLOCK_CLICK : undefined,
           }))}
       >
         {children ?? value}

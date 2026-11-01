@@ -2409,6 +2409,21 @@ describe('Dropdown — slotProps', () => {
     expect(clear).not.toHaveAttribute('aria-disabled');
   });
 
+  it.each([
+    ['enabled', false, 1],
+    ['disabled', true, 0],
+  ] as const)('calls your value onClick only while the Dropdown is %s', (_, disabled, calls) => {
+    const onClick = vi.fn();
+    render(
+      <Dropdown aria-label="Fruit" disabled={disabled} slotProps={{ value: { onClick } }}>
+        {TWO}
+      </Dropdown>,
+    );
+    const button = screen.getByRole('combobox', { name: 'Fruit' });
+    fireEvent.click(button.querySelector(`.${dropdownClassNames.value}`) as HTMLElement);
+    expect(onClick).toHaveBeenCalledTimes(calls);
+  });
+
   it('keeps the button and the clear button reachable: a part sets no inert on them', () => {
     render(
       <Dropdown

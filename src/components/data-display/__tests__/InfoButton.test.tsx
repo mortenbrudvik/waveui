@@ -1257,7 +1257,7 @@ describe('InfoButton — slotProps', () => {
     expect(note()).toBeInTheDocument();
   });
 
-  it('follows the pointer on the note whatever your pointer handlers do', async () => {
+  it('follows the pointer on the note also when your pointer handlers prevent the default', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));

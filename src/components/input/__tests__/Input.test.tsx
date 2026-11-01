@@ -920,6 +920,24 @@ describe('Input — slotProps', () => {
     expect(screen.getByRole('textbox', { name: 'Name', hidden: true })).toHaveAttribute('inert');
   });
 
+  it.each([
+    ['enabled', false, 1],
+    ['disabled', true, 0],
+  ] as const)('calls your wrapper onClick only while the Input is %s', (_, disabled, calls) => {
+    const onClick = vi.fn();
+    render(
+      <Input
+        aria-label="Name"
+        contentBefore="@"
+        disabled={disabled}
+        slotProps={{ root: { onClick } }}
+      />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    fireEvent.click(input.closest(`.${inputClassNames.root}`) as HTMLElement);
+    expect(onClick).toHaveBeenCalledTimes(calls);
+  });
+
   it('has no accessibility violations with both shapes customised', async () => {
     render(
       <>

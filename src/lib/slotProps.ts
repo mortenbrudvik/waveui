@@ -26,7 +26,11 @@ import { mergeRefs } from './mergeRefs';
  * (`React.ButtonHTMLAttributes<HTMLButtonElement>`, `React.ComponentProps<'button'>`) and what
  * `getNativeElementProps` returns. The type is a union of the props with any `data-*` attribute
  * and the props alone, since a value typed by an interface has no `data-*` index of its own; an
- * object literal's `data-*` attributes are still checked (a string, a number or a boolean).
+ * object literal's `data-*` attributes are still checked (a string, a number or a boolean). Two
+ * side effects of the union: reading a part's `data-*` key (`part['data-x']`) is a type error,
+ * since the second member has no `data-*` index, and a `data-*` value of another type in a value
+ * that is not an object literal (a variable typed `{ title: string; 'data-x': object }`) fits
+ * the second member and is not caught.
  *
  * @typeParam E - The part's element, as an intrinsic tag (`'span'`, `'input'`, `'div'`).
  */
@@ -190,10 +194,11 @@ export function lockPositionStyle(
  * whatever that does, for work a `preventDefault()` must not leave stale, such as bookkeeping
  * that follows focus or the pointer. It runs when `theirs` prevents the default (as
  * `composeEventHandlers` with `checkDefaultPrevented: false`) and when `theirs` throws (in a
- * `finally`, after which the error goes on). `theirs` is the handler read from the part itself
- * (`slotProps?.track?.onFocus`), so, as in {@link mergeSlotProps}, only a function counts:
- * another value from an untyped caller is skipped instead of throwing before that work. Without
- * a part handler, `ours` itself.
+ * `finally`, after which the error goes on; should `ours` throw too, its error is the one that
+ * goes on, a case not worth the bytes of keeping the first). `theirs` is the handler read from
+ * the part itself (`slotProps?.track?.onFocus`), so, as in {@link mergeSlotProps}, only a
+ * function counts: another value from an untyped caller is skipped instead of throwing before
+ * that work. Without a part handler, `ours` itself.
  */
 export function composeAfterPart<E extends { defaultPrevented: boolean }>(
   theirs: unknown,

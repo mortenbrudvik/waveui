@@ -311,7 +311,8 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
     button?: SlotPart<'button'>;
     /**
      * The `<span>` in the button that shows the selected label(s), `renderValue`'s content or the
-     * placeholder (stable class `wave-dropdown__value`).
+     * placeholder (stable class `wave-dropdown__value`). Your `onClick` is not called while the
+     * Dropdown is `disabled`, as the button's own is not.
      */
     value?: SlotPart<'span'>;
     /**
@@ -349,6 +350,9 @@ export interface DropdownComponent {
 
 /** The labels read from the children in data mode, where none are read. */
 const NO_LABELS: ReadonlyMap<string, string> = new Map<string, string>();
+
+/** The handlers the value part drops while the Dropdown is disabled: it does not open then. */
+const BLOCK_CLICK = ['onClick'] as const;
 
 const DropdownRoot = (props: DropdownProps<boolean>) => {
   const {
@@ -680,6 +684,9 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
                 'truncate',
                 !showValue && 'text-muted-foreground',
               ),
+              // Inside the natively disabled button, a click on the span still reaches its own
+              // handlers: a disabled Dropdown calls none of yours there.
+              blockHandlers: disabled ? BLOCK_CLICK : undefined,
             })}
           >
             {showValue ? valueNode : placeholder}

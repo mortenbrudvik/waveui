@@ -2608,7 +2608,7 @@ describe('TagPicker — slotProps', () => {
     ).toHaveLength(1);
   });
 
-  it('tracks the clear button focus whatever your onFocus and onBlur do', () => {
+  it('tracks the clear button focus also when your onFocus and onBlur prevent the default', () => {
     const slotProps: TagPickerSlotProps = {
       clearButton: {
         onFocus: (event) => event.preventDefault(),

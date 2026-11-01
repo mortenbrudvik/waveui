@@ -3262,7 +3262,7 @@ describe('Tag — slotProps', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('records focus and blur after your onFocus and onBlur, whatever they do', async () => {
+  it('records focus and blur after your onFocus and onBlur, also when they prevent the default', async () => {
     const user = userEvent.setup();
     const prevent = (event: React.SyntheticEvent) => event.preventDefault();
     const dismissButton = { onFocus: prevent, onBlur: prevent };

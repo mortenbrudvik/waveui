@@ -4238,7 +4238,7 @@ describe('Combobox — slotProps', () => {
     expect(onQueryChange).not.toHaveBeenCalled();
   });
 
-  it('drops the typed text on blur whatever your onBlur does', async () => {
+  it('drops the typed text on blur also when your onBlur prevents the default', async () => {
     const user = userEvent.setup();
     const onBlur = vi.fn();
     render(

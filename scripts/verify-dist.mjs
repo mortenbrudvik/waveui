@@ -110,9 +110,11 @@
  *     server, and `dist/index.*` exports `mergeSlotProps` and `getNativeElementProps` from them;
  *     the imports of {@link RECORDED_IMPORTS_0_18} stay within their budgets, each the size
  *     measured at the end of the phase plus {@link BUDGET_MARGIN_0_18}, which the CLI prints
- *     with the 0.17.1 sizes. Growth over 0.17.1, in bytes minified and gzip: Button-only -143
- *     and -1, MessageBar-only +2,327 and +864, Tree-only +3,060 and +1,028, Dialog-only +1,749
- *     and +680, `WaveProvider` with `Dialog` +1,744 and +680, DataGrid-only +3,213 and +1,202.
+ *     with the 0.17.1 sizes. Growth of the release over 0.17.1, in bytes minified and gzip:
+ *     Button-only -143 and -1, MessageBar-only +2,363 and +877, Tree-only +3,056 and +1,039,
+ *     Dialog-only +1,749 and +680, `WaveProvider` with `Dialog` +1,744 and +680, DataGrid-only
+ *     +3,209 and +1,207 (the budgets' basis, measured at `e7833a7`: MessageBar-only +2,327 and
+ *     +864, Tree-only +3,060 and +1,028, DataGrid-only +3,213 and +1,202).
  *
  * Every probe and size bundles as a consumer's production build: `process.env.NODE_ENV` is defined
  * as `"production"` whatever this process has (Vitest runs with `test`), so development-only code
@@ -959,18 +961,20 @@ export const BUDGET_MARGIN_0_18 = { minified: 512, gzip: 192 };
  * the build of the last rollout commit with the integration package's changes, which move no
  * byte of these imports) and its `budget`, that size plus {@link BUDGET_MARGIN_0_18}. The interim
  * allowance of the phase (the 0.17.1 size plus 4 KiB minified and 1.5 KiB gzip) ends here. The
- * CLI prints each import against 0.17.1. Growth over 0.17.1, in bytes minified and gzip:
+ * CLI prints each import against 0.17.1. Growth over 0.17.1, in bytes minified and gzip, of the
+ * release (of the `measured` basis at `e7833a7`, where the final lock fixes moved it):
  *   - `Button`: -143 and -1. Button has no part, so it holds no `lib/slotProps`; the
  *     render-function children of `lib/slot` were paid for by compacting that module;
- *   - `MessageBar`: +2,327 and +864, the `slotProps` helper, the body and dismiss button parts
- *     and the context of `useMessageBarContext`;
- *   - `Tree`: +3,060 and +1,028, the helper and the six parts of each item and its persona row;
+ *   - `MessageBar`: +2,363 and +877 (+2,327 and +864), the `slotProps` helper, the body and
+ *     dismiss button parts and the context of `useMessageBarContext`;
+ *   - `Tree`: +3,056 and +1,039 (+3,060 and +1,028), the helper and the six parts of each item
+ *     and its persona row;
  *   - `Dialog`: +1,749 and +680, the helper, the title actions and body parts, and the part that
  *     the shared close button takes for TeachingPopover;
  *   - `WaveProvider` with `Dialog`: +1,744 and +680, the same;
- *   - `DataGrid`: +3,213 and +1,202, the helper and the parts of the header cell, the resize
- *     handle and the selection controls ({@link DATA_GRID_BUDGET}, which was the 0.16.0 size plus
- *     25 % until then).
+ *   - `DataGrid`: +3,209 and +1,207 (+3,213 and +1,202), the helper and the parts of the header
+ *     cell, the resize handle and the selection controls ({@link DATA_GRID_BUDGET}, which was
+ *     the 0.16.0 size plus 25 % until then).
  * The budgets of `createBrandTokens`, `waveTokens`, `useVirtualWindow` and the presence core stay
  * as they were: no module of Phase 13 is in their closures.
  */
