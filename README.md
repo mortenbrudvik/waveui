@@ -7,14 +7,14 @@ A React component library inspired by the Fluent UI 2 design language: 80 access
 - [Requirements](#requirements) · [Installation](#installation) · [Quick start](#quick-start)
 - [Styles](#styles) · [Theming](#theming) · [Global effects](#global-effects) · [Styling hooks](#styling-hooks) · [Customization](#customization)
 - [React Server Components](#react-server-components) · [Components](#components) · [Usage notes](#usage-notes)
-- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [1.0 notices](#10-notices) · [Upgrading from 0.17](#upgrading-from-017) · [Upgrading from 0.16](#upgrading-from-016) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
+- [Large data](#large-data) · [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [Upgrading to 1.0](#upgrading-to-10) · [Upgrading from 0.17](#upgrading-from-017) · [Upgrading from 0.16](#upgrading-from-016) · [Upgrading from 0.15](#upgrading-from-015) · [Upgrading from 0.14](#upgrading-from-014) · [Upgrading from 0.13](#upgrading-from-013) · [Upgrading from 0.12](#upgrading-from-012) · [Upgrading from 0.11](#upgrading-from-011) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
 
 ## Requirements
 
 - React 19 (`react` and `react-dom` `^19.0.0`)
 - Tailwind CSS `^4.1.0` only if you use the [Tailwind path](#tailwind-css-4); the precompiled stylesheet needs no Tailwind
 - Browsers: Chrome/Edge 111+, Safari 16.4+, Firefox 128+ (the CSS uses `@property`, `color-mix()`, `:where()` and `:has()`)
-- Node.js 22.12+ (`engines`); the package is ES modules only (`require()` works on Node 22.12+)
+- Node.js 22.12+ (`engines`); the package is ES modules only (see [Installation](#installation))
 
 ## Installation
 
@@ -24,9 +24,19 @@ npm install @mortenbrudvik/waveui
 
 The npm package has always been `@mortenbrudvik/waveui`. Before 0.5 the repository's `package.json` used the name `waveui`, and the 0.4 guide imported from `'waveui'`; import from `@mortenbrudvik/waveui` instead.
 
+**ES modules only.** Since 1.0 the package ships ES modules alone: `dist/*.mjs` and one `index.d.ts`, reached through `exports["."]` (`types` and `default`; `main` points at `dist/index.mjs`). The style entries are files of the same `exports` map (below). Bundlers and `import` load it as before, and so does `require()` in CommonJS code on Node.js 22.12 and later, which returns the same module as `import` (22.12.x prints an ExperimentalWarning, 22.13 and later nothing); on an older Node.js `require()` stops with `ERR_REQUIRE_ESM`. A TypeScript file compiled as CommonJS (a `.cts` file, or a `.ts` file in a `"type": "commonjs"` package) resolves the types with `module` set to `node20` or `nodenext`; under `node16` it reports TS1479. Jest in its default CommonJS mode must transform the package (`transformIgnorePatterns`), or run in its ES modules mode; Vitest needs nothing.
+
 ## Quick start
 
-Pick **one** styling path.
+Pick **one** setup:
+
+| Your app | Add | Your own classes |
+| --- | --- | --- |
+| [Without Tailwind](#without-tailwind-precompiled-css) | `import '@mortenbrudvik/waveui/styles'` once | Classes of your own CSS on the `--wave-*` variables, or the token utilities of `./utilities` (`bg-wave-primary`, `text-wave-body-1`) |
+| [Tailwind CSS 4](#tailwind-css-4), prefixed or not | `@import '@mortenbrudvik/waveui/tailwind';` in your Tailwind entry | Tailwind utilities, with Wave's theme keys (`bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`) and the `wave-rtl:` variant |
+| Tailwind CSS 4 with an entry you assemble | `./tokens` and `./variants.css` in your entry, the components from `./styles` in a layer of yours ([Custom Tailwind setups](#custom-tailwind-setups)) | As with `./tailwind` |
+
+In every setup the components' CSS comes precompiled, and every class the components draw carries Wave's utility prefix, `wave:` (`wave:flex`, `wave:bg-primary`), so no class of yours shares a name with one of Wave's, and your Tailwind build never scans the package. Those classes are internal: style the components through `className`, `slotProps`, the `--wave-*` tokens and the stable `wave-*` classes ([Styling hooks](#styling-hooks)).
 
 ### Without Tailwind (precompiled CSS)
 
@@ -49,6 +59,16 @@ export function App() {
 
 `WaveProvider` is **required** on this path: the stylesheet scopes its base styles (font, colors, box sizing) and its reset of native elements (`button`, `input`, lists, headings, …) to the provider root and to portaled overlays. Components rendered outside a provider are not reset.
 
+**Your own classes.** `./styles` holds the components' CSS and nothing else. A Tailwind class you pass in `className` still merges with the component's classes, so `p-2` on a Button removes the Button's own padding, but nothing defines it: the Button is left with no padding at all. Pass classes of your own CSS, or link the token utilities of `./utilities` after the stylesheet and before your own CSS:
+
+```tsx
+import '@mortenbrudvik/waveui/styles';
+import '@mortenbrudvik/waveui/utilities.css';
+import './app.css'; // your own CSS comes last
+```
+
+`./utilities` has Wave's colors (background, text, border, ring, fill and stroke), type ramp, shadows, font families and animations, without variants and without spacing or layout utilities ([Styles](#styles)).
+
 ### Tailwind CSS 4
 
 Add Wave to your Tailwind entry instead:
@@ -59,7 +79,16 @@ Add Wave to your Tailwind entry instead:
 @import '@mortenbrudvik/waveui/tailwind';
 ```
 
-This adds Wave's tokens and its namespaced theme keys to `layer(theme)` (your own classes use them as `bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`), its scoped base styles to `layer(base)`, and the components' precompiled utilities to `layer(components)`, so any utility of yours and any unlayered CSS of yours win over Wave's classes, whichever of the two imports comes first. Tailwind scans nothing of the package (the entry has no `@source`). **Never import `@mortenbrudvik/waveui/styles` as well** in a Tailwind app: the two would define the same utilities twice. The one exception is an app whose own Tailwind build uses a prefix: it imports `./styles` **instead of** `./tailwind`, into a cascade layer between Tailwind's `base` and `utilities` (the CSS is in [Global effects](#global-effects)), and its own utilities cannot collide with Wave's.
+This adds Wave's tokens and its namespaced theme keys to `layer(theme)` (your own classes use them as `bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`), its scoped base styles to `layer(base)`, and the components' precompiled utilities to `layer(components)`, whichever of the two imports comes first. Tailwind scans nothing of the package (the entry has no `@source`). An app whose own build uses a prefix (`@import 'tailwindcss' prefix(tw);`) imports it the same way: its classes are `tw:bg-wave-primary`, and Wave's keep `wave:`. **Never import `@mortenbrudvik/waveui/styles` as well** in a Tailwind app: it would define the components' utilities a second time, unlayered.
+
+**The cascade.** The entry declares `@layer theme, base, components, utilities;`, so across layers the layer decides, not the specificity:
+
+- Any utility of yours, and any unlayered rule of yours, wins over Wave's classes. A bare background class of yours on a Wave component (`className="bg-wave-error"`) therefore also covers its hover, pressed, selected and disabled backgrounds; give those states their colors too, with Wave's gate ([Buttons](#buttons)).
+- A class of yours in `@layer components` competes with Wave's utilities by source order: the later rule wins.
+- Your own `@layer base` rules share the layer with Wave's scoped base styles, which have no specificity: an element rule of yours (`h2 { … }`) wins, and a `*` rule wins when it comes later. A token override of yours in `@layer base` (`:root { --wave-primary: … }`) wins over Wave's tokens in `theme`.
+- An unlayered reset of yours (`*{margin:0}`, normalize, Bootstrap's reboot) wins over the components' utilities too, and strips them: put it in `@layer base`, as Tailwind puts its Preflight.
+
+**Wave's 0.x names.** Your Tailwind theme gets Wave's colors, type ramp and shadows under the `wave` namespace only: without a theme of your own, `bg-primary`, `text-foreground`, `border-border`, `text-body-1` and `shadow-4` no longer resolve. Write `bg-wave-primary`, `text-wave-foreground`, `border-wave-border`, `text-wave-body-1` and `shadow-wave-4`; the migration codemod rewrites them ([Upgrading to 1.0](#upgrading-to-10)).
 
 Wrap the app in `WaveProvider` here too. It selects the theme and direction, paints the themed background, text color and font, and passes the theme to portaled overlays (dialogs, menus, popovers, toasts).
 
@@ -67,30 +96,37 @@ Wrap the app in `WaveProvider` here too. It selects the theme and direction, pai
 
 | Import                                                  | What it is                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@mortenbrudvik/waveui/styles` (also `/styles.css`)     | Precompiled, **unlayered** CSS: tokens, the provider-scoped base styles and every utility the components use (the only layered block is Tailwind's `--tw-*` fallback, see [Global effects](#global-effects)). No Preflight. For apps without Tailwind, and, imported into a layer, for apps with a prefixed Tailwind build. |
-| `@mortenbrudvik/waveui/utilities` (also `/utilities.css`) | The namespaced token utilities without Tailwind (`bg-wave-primary`, `text-wave-body-1`, `border-`, `ring-`, `fill-` and `stroke-wave-*`, `shadow-wave-4`, `font-wave`, `animate-wave-*`), without variants, **unlayered** like `./styles`: each is one class selector, so inside `WaveProvider` it beats the base styles of `./styles` (a native button's transparent background, its inherited color and font, every element's border color). Link it after `./styles`, which declares the tokens they read, and before your own CSS, whose unlayered rules then win over it at equal specificity. |
-| `@mortenbrudvik/waveui/tailwind` (also `/tailwind.css`) | Tailwind 4 source entry: tokens and the namespaced theme keys in `layer(theme)`, base in `layer(base)`, the components' precompiled utilities in `layer(components)`, the `wave-rtl:` variant; no `@source`. Import it after (or before) `@import 'tailwindcss'`.                                                          |
-| `@mortenbrudvik/waveui/tokens` (also `/tokens.css`)     | The token source alone (`--wave-*` variables, theme classes and the namespaced `@theme inline` keys), without base styles or components. For custom Tailwind setups, together with `./variants.css`, for your own classes; the components come from `./styles`, and `./tailwind` is the complete Tailwind entry.          |
-| `@mortenbrudvik/waveui/variants` (also `/variants.css`) | Wave's `wave-rtl:` direction variant, for your own classes in a custom Tailwind setup built on `./tokens` (see below).                                                                                                                                                                                                     |
-| `@mortenbrudvik/waveui/preflight.css`                   | Opt-in Tailwind Preflight for the **whole page** (unlayered). Wave does not need it.                                                                                                                                                                                                                                        |
+| `@mortenbrudvik/waveui/styles` (also `/styles.css`)     | Precompiled, **unlayered** CSS: tokens, the provider-scoped base styles and every utility the components use, each class with Wave's prefix (`.wave\:flex`; the only layered block is Tailwind's `--tw-*` fallback, see [Global effects](#global-effects)). No Preflight. For apps without Tailwind, and, in a layer, for a [custom Tailwind setup](#custom-tailwind-setups). |
+| `@mortenbrudvik/waveui/utilities` (also `/utilities.css`) | The namespaced token utilities without Tailwind: `bg-`, `text-`, `border-`, `ring-`, `fill-` and `stroke-` with every color token (`bg-wave-primary`, `text-wave-muted-foreground`), the type ramp (`text-wave-body-1`), the shadows (`shadow-wave-4`), the font families (`font-wave`, `font-wave-mono`, `font-wave-numeric`) and the animations (`animate-wave-*`); no spacing or layout utilities and no variants. **Unlayered** like `./styles`, one class selector each: below the provider root and in the overlays it beats the zero-specificity base styles of `./styles` (a native button's transparent background, its inherited color and font, every element's border color); on the provider root element itself, whose own rules are one class selector too, it wins by coming later. Link it after `./styles`, which declares the tokens it reads, and before your own CSS, whose unlayered rules then win over it at equal specificity. |
+| `@mortenbrudvik/waveui/tailwind` (also `/tailwind.css`) | Tailwind 4 source entry: the layer order `theme, base, components, utilities`, the tokens and the namespaced theme keys in `theme`, the base styles in `base`, the components' precompiled utilities in `components` (an internal file of `dist`), and the `wave-rtl:` variant; no `@source`. Import it after (or before) `@import 'tailwindcss'`, in a prefixed build too. |
+| `@mortenbrudvik/waveui/tokens` (also `/tokens.css`)     | The token source alone (`--wave-*` variables, theme classes and the namespaced `@theme inline` keys: `--color-wave-*`, `--text-wave-*`, `--shadow-wave-*`, the font families, durations, curves and animations), without base styles or components. For a [custom Tailwind setup](#custom-tailwind-setups), together with `./variants.css`, for your own classes; `./tailwind` is the complete Tailwind entry. |
+| `@mortenbrudvik/waveui/variants` (also `/variants.css`) | Wave's `wave-rtl:` direction variant, for your own classes in a custom Tailwind setup built on `./tokens` (see below). |
+| `@mortenbrudvik/waveui/preflight.css`                   | Opt-in Tailwind Preflight for the **whole page** (unlayered). Wave does not need it. |
 
-**Cascade.** `./styles` is unlayered on purpose: unlayered CSS beats any layered CSS, and Wave's class selectors beat element-level resets such as `*{padding:0}` or `button{background:none}`, so ordinary app resets cannot strip the components. To put Wave inside your own layer order, import it into a layer yourself. Unlayered app CSS (including resets) then wins over it:
+**Cascade.** `./styles` is unlayered on purpose: unlayered CSS beats any layered CSS, and Wave's class selectors (one class each) beat element-level resets such as `*{padding:0}` or `button{background:none}`, so ordinary app resets cannot strip the components; a one-class rule of yours wins over Wave's when it comes later. To put Wave inside your own layer order, import it into a layer yourself. Unlayered app CSS (including resets) then wins over it:
 
 ```css
 @import '@mortenbrudvik/waveui/styles.css' layer(wave);
 ```
 
-The other side of this: **layered** app CSS, such as a Tailwind build's utilities, loses to the unlayered `./styles` whatever its specificity, so inside `WaveProvider` Wave's zero-specificity base styles override it. If your own CSS is layered, import Wave into a layer ordered before yours; [Global effects](#global-effects) has the recipe for an app with a prefixed Tailwind build.
+The other side of this: **layered** app CSS loses to the unlayered `./styles` whatever its specificity, so inside `WaveProvider` Wave's zero-specificity base styles override it. If your own CSS is layered, import Wave into a layer ordered before yours, as below; a Tailwind app imports `./tailwind`, which does that for it.
 
-**Custom Tailwind setups.** An app that builds its own Tailwind entry from `./tokens` instead of `./tailwind` gets Wave's tokens, the namespaced theme keys and the `wave-rtl:` variant for its own classes, and brings its own base styles. Its build does not compile the components (it scans nothing of the package): they come from `./styles`, imported apart (from JavaScript, or into a layer of your own: see [Global effects](#global-effects)).
+### Custom Tailwind setups
+
+`./tailwind` is built from entries you can import yourself, for a Tailwind entry with a layer order of your own. `./tokens` gives your build Wave's tokens and the namespaced theme keys, and `./variants.css` the `wave-rtl:` variant, for your own classes. Your build compiles none of the components (it scans nothing of the package): they come from `./styles`, which holds the tokens again, the base styles and the components' utilities. Unlayered, `./styles` would beat every rule of your layered build (inside a provider its base styles would reset your own headings, lists and buttons, and win over your utilities on Wave's components), so import it into a layer between Tailwind's `base` and `components`, with the `@layer` statement first:
 
 ```css
+/* app.css */
+@layer theme, base, wave, components, utilities;
 @import 'tailwindcss';
 @import '@mortenbrudvik/waveui/tokens' layer(theme);
 @import '@mortenbrudvik/waveui/variants.css';
+@import '@mortenbrudvik/waveui/styles.css' layer(wave);
 ```
 
-**Preflight.** 0.4 applied Tailwind's Preflight to the whole page; 0.5 does not. If you want it without Tailwind, import it before the Wave styles:
+Your utilities, your `@layer components` classes and your unlayered CSS win over Wave's classes, and Wave's styles win over Tailwind's Preflight (`base`), so the components look as with `./tailwind`. Wave's base styles there also win over your own `@layer base` rules inside a provider, and its tokens, declared again in `wave`, over your token overrides in `base` or `theme`: put those unlayered, or in a layer after `wave`.
+
+**Preflight.** Wave does not apply Tailwind's Preflight (0.4 applied it to the whole page). If you want it without Tailwind, import it before the Wave styles:
 
 ```tsx
 import '@mortenbrudvik/waveui/preflight.css';
@@ -117,14 +153,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
 - `theme`: `'light'` (default), `'dark'` or `'high-contrast'`. `dir`: `'ltr'` (default) or `'rtl'`. `portalContainer`: where overlays render (default `document.body`).
 - A nested provider inherits every prop it omits (`theme`, `dir`, `portalContainer`, `motion`, `applyStylesToPortals`; `inputDefaults` and `tokens` merge key by key) from the enclosing provider, so the light panel above stays right-to-left. `portalContainer={null}` sends a nested subtree's overlays to `document.body`.
-- The provider renders `<div class="wave-root wave-<theme>" dir data-wave-theme>` with `bg-background text-foreground font-wave text-body-1`; a `className` you pass wins.
+- The provider renders `<div class="wave-root wave-<theme>" dir data-wave-theme>` with Wave's `wave:bg-background wave:text-foreground wave:font-wave wave:text-body-1`; a `className` you pass wins (`bg-wave-card` replaces the background, `text-wave-body-2` the type size).
 - Portaled overlays (Dialog, Drawer, Popover, Menu, listboxes, Tooltip, Toaster) render in a `wave-portal` wrapper that carries the provider's theme classes, direction and font, and its `tokens` overrides unless `applyStylesToPortals={false}` (see [Brand colors and token overrides](#brand-colors-and-token-overrides)).
 - `inputDefaults`: `{ size?, appearance? }`, the default `size` and `appearance` of the text inputs and pickers below it (see [Sizes and appearances](#sizes-and-appearances)). A nested provider merges its own defined keys over the enclosing provider's, so `<WaveProvider inputDefaults={{ size: 'small' }}>` inside an app with `appearance: 'filled-darker'` gives small filled-darker fields; omitting the prop inherits the enclosing value.
 - `useWaveTheme()` returns `{ theme, dir, themeClassName, portalContainer, inputDefaults, motion, tokens, tokenStyle, applyStylesToPortals, hasProvider }` (outside a provider `inputDefaults` and `tokens` are `{}`, `tokenStyle` is `undefined` and `applyStylesToPortals` is `true`).
 
 **Theme classes.** The tokens are selected by `wave-light` (also `:root`), `wave-dark` and `wave-high-contrast`, and the provider adds no other theme class; `getThemeClassName(theme)` returns a theme's class. Target these classes in your CSS. Tailwind 4's default `dark:` variant follows `prefers-color-scheme`, not a class, and Wave does not define a class-based one; to have your `dark:` utilities follow a dark provider, key the variant on Wave's class: `@custom-variant dark (&:where(.wave-dark, .wave-dark *));`. `color-scheme` is set on the three `wave-*` theme classes only, never on `:root`, so a page without a provider keeps its own scrollbar and form-control scheme.
 
-**The page outside the provider.** The page's scrollbar and its canvas (the overscroll area and the space below short content) take their colours from `<html>`, which a provider never touches. To match them, put the theme classes on `<html>` as well, which sets `color-scheme` there; in a server-rendered layout that is `<html className={getThemeClassName(theme)}>` (safe in a Server Component). `color-scheme` gives the canvas the browser's default colour for the scheme; for the theme's own background, add `html { background-color: var(--wave-background); }` to your CSS.
+**The page outside the provider.** The page's scrollbar and its canvas (the overscroll area and the space below short content) take their colours from `<html>`, which a provider never touches. To match them, put the theme class on `<html>` as well, which sets `color-scheme` there; in a server-rendered layout that is `<html className={getThemeClassName(theme)}>` (safe in a Server Component). `color-scheme` gives the canvas the browser's default colour for the scheme; for the theme's own background, add `html { background-color: var(--wave-background); }` to your CSS.
 
 **Following the operating system.** `theme` takes one of the named themes, so resolve the OS setting in your app and pass the result:
 
@@ -153,9 +189,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const theme = useSystemTheme();
   // The page outside the provider: its scrollbar and canvas.
   React.useLayoutEffect(() => {
-    const classes = getThemeClassName(theme).split(' ');
-    document.documentElement.classList.add(...classes);
-    return () => document.documentElement.classList.remove(...classes);
+    const themeClass = getThemeClassName(theme);
+    document.documentElement.classList.add(themeClass);
+    return () => document.documentElement.classList.remove(themeClass);
   }, [theme]);
   return <WaveProvider theme={theme}>{children}</WaveProvider>;
 }
@@ -307,16 +343,16 @@ Generated from `src/styles/tokens.css`. A value followed by a ramp or token name
 
 Each theme also declares, beside the table's tokens:
 
-- **The persona palette**: 12 hues (`red`, `pumpkin`, `gold`, `forest`, `teal`, `blue`, `navy`, `lavender`, `purple`, `magenta`, `brown`, `steel`) with five tokens each: `--wave-palette-<hue>` (the strong fill, 3:1 on the page), `-foreground` (its text), `-tint` (a surface: light in light, deep in dark), `-tint-foreground` (text on the tint and on the page) and `-border` (the hue's stroke), the last three Fluent's `Background2`, `Foreground2` and `BorderActive` persona roles. Utilities follow the names on the Tailwind path (`bg-palette-blue-tint`; the precompiled `./styles` holds only the fill and foreground utilities Avatar uses); high contrast paints every fill, tint foreground and border white, and every foreground and tint black. The guide's "Persona Palette" section lists the values.
-- **The shadows** `--wave-shadow-2` … `--wave-shadow-64`, which the `shadow-N` utilities read: Fluent's values, ambient and key opacity 0.12 and 0.14 in light and the stronger 0.24 and 0.28 in dark and high contrast; on a dark page the border still carries most of a raised surface's separation.
+- **The persona palette**: 12 hues (`red`, `pumpkin`, `gold`, `forest`, `teal`, `blue`, `navy`, `lavender`, `purple`, `magenta`, `brown`, `steel`) with five tokens each: `--wave-palette-<hue>` (the strong fill, 3:1 on the page), `-foreground` (its text), `-tint` (a surface: light in light, deep in dark), `-tint-foreground` (text on the tint and on the page) and `-border` (the hue's stroke), the last three Fluent's `Background2`, `Foreground2` and `BorderActive` persona roles. Their utilities carry the namespace, on the Tailwind path and in `./utilities` (`bg-wave-palette-blue-tint`, `text-wave-palette-blue-tint-foreground`, `border-wave-palette-blue-border`); high contrast paints every fill, tint foreground and border white, and every foreground and tint black. The guide's "Persona Palette" section lists the values.
+- **The shadows** `--wave-shadow-2` … `--wave-shadow-64`, which Wave's shadow utilities and your `shadow-wave-N` read: Fluent's values, ambient and key opacity 0.12 and 0.14 in light and the stronger 0.24 and 0.28 in dark and high contrast; on a dark page the border still carries most of a raised surface's separation.
 
-Theme-independent variables on `:root`: `--wave-brand-10` … `--wave-brand-160` (also utilities such as `bg-brand-80`), `--wave-grey-2` … `--wave-grey-98`, the font families `--wave-font-family`, `--wave-font-family-monospace` and `--wave-font-family-numeric` (utilities `font-wave`, `font-wave-mono` and `font-wave-numeric`; `Text font="monospace"` and `font="numeric"` use the last two), the stacking layers `--wave-z-overlay` (1000), `--wave-z-toast` (1100) and `--wave-z-tooltip` (1200), and the motion durations `--wave-duration-*` and curves `--wave-curve-*` (see [Enter and exit motion](#enter-and-exit-motion)).
+Theme-independent variables on `:root`: `--wave-brand-10` … `--wave-brand-160` (also utilities such as `bg-wave-brand-80`), `--wave-grey-2` … `--wave-grey-98`, the font families `--wave-font-family`, `--wave-font-family-monospace` and `--wave-font-family-numeric` (utilities `font-wave`, `font-wave-mono` and `font-wave-numeric`; `Text font="monospace"` and `font="numeric"` use the last two), the stacking layers `--wave-z-overlay` (1000), `--wave-z-toast` (1100) and `--wave-z-tooltip` (1200), and the motion durations `--wave-duration-*` and curves `--wave-curve-*` (see [Enter and exit motion](#enter-and-exit-motion)).
 
-The three `input-filled-*` tokens (utilities `bg-input-filled-darker`, `bg-input-filled-lighter`, `border-input-filled-stroke`) draw the `filled-darker` and `filled-lighter` appearances of the text inputs and pickers (see [Sizes and appearances](#sizes-and-appearances)); `input-filled-lighter` follows `background`, and the stroke is transparent except in the high-contrast theme.
+The three `input-filled-*` tokens (utilities `bg-wave-input-filled-darker`, `bg-wave-input-filled-lighter`, `border-wave-input-filled-stroke`) draw the `filled-darker` and `filled-lighter` appearances of the text inputs and pickers (see [Sizes and appearances](#sizes-and-appearances)); `input-filled-lighter` follows `background`, and the stroke is transparent except in the high-contrast theme.
 
 Contrast of every text and non-text pair is checked per theme by `src/styles/__tests__/tokens.test.ts`. One known limit: the `warning` fill (`#fde300` in light) is a background and accent color only; use `warning-tint-foreground` for warning text and icons.
 
-Other Wave theme values: the type ramp `text-caption-2`, `text-caption-1`, `text-body-1`, `text-body-2`, `text-subtitle-2`, `text-subtitle-1`, `text-title-3`, `text-title-2`, `text-title-1`, `text-large-title`, `text-display`; shadows `shadow-2`, `shadow-4`, `shadow-8`, `shadow-16`, `shadow-28`, `shadow-64` (per theme, above); animations `animate-wave-spin`, `animate-wave-spin-slow`, `animate-wave-pulse`, `animate-wave-indeterminate`, `animate-wave-indeterminate-rtl`; on the Tailwind path, the motion utilities `duration-wave-ultra-fast` … `duration-wave-ultra-slow` and `ease-wave-accelerate-max` … `ease-wave-linear`. Spacing, border radius and stroke widths use Tailwind's default scales (Wave defines no tokens for them and no longer overrides the radius); the guide's "Spacing, Radius and Stroke Scales" maps Fluent's `spacing*`, `borderRadius*` and `strokeWidth*` tokens to the classes.
+Other Wave theme values, as your Tailwind build and `./utilities` name them: the type ramp `text-wave-caption-2`, `text-wave-caption-1`, `text-wave-body-1`, `text-wave-body-2`, `text-wave-subtitle-2`, `text-wave-subtitle-1`, `text-wave-title-3`, `text-wave-title-2`, `text-wave-title-1`, `text-wave-large-title`, `text-wave-display`; shadows `shadow-wave-2`, `shadow-wave-4`, `shadow-wave-8`, `shadow-wave-16`, `shadow-wave-28`, `shadow-wave-64` (per theme, above); animations `animate-wave-spin`, `animate-wave-spin-slow`, `animate-wave-pulse`, `animate-wave-indeterminate`, `animate-wave-indeterminate-rtl`; on the Tailwind path only, the motion utilities `duration-wave-ultra-fast` … `duration-wave-ultra-slow` and `ease-wave-accelerate-max` … `ease-wave-linear`. Spacing, border radius and stroke widths use Tailwind's default scales (Wave defines no tokens for them and no longer overrides the radius); the guide's "Spacing, Radius and Stroke Scales" maps Fluent's `spacing*`, `borderRadius*` and `strokeWidth*` tokens to the classes.
 
 ## Global effects
 
@@ -325,37 +361,23 @@ What adding Wave changes outside its own components:
 - **Variables.** `--wave-*` custom properties on `:root` and on the theme classes (`.wave-light`, `.wave-dark`, `.wave-high-contrast`). No unprefixed variables are defined.
 - **Base styles and reset, provider-scoped.** They apply inside `.wave-root` (WaveProvider) and `.wave-portal` (overlay wrappers) only, and your own content inside the provider receives them too:
   - Two root rules are plain class selectors (specificity 0,1,0): `.wave-root, .wave-portal` set the font family, text color, 14px font size and 20px line height, and `.wave-root` sets the background color. Override them with a class selector loaded after Wave's CSS, or with the provider's `className`.
-  - Every other selector is wrapped in `:where()` (zero specificity), so any unlayered style of yours wins, except the descendant `::before`/`::after` selectors of the box-sizing rule. Pseudo-elements cannot sit inside `:where()` (the selector would be dropped), so those two are specificity (0, 0, 1): an author `::before` or `::after` of the same specificity wins or loses by source order, and any more specific one (a class, attribute, ID or type selector before the pseudo-element) wins. Layered CSS, such as Tailwind utilities, loses to the unlayered `./styles` whatever its specificity, unless you import `./styles` into a layer (see [Cascade](#styles) and the workarounds below). These rules set `box-sizing: border-box` and `border-color: var(--wave-border)` on every descendant (and its `::before`/`::after`), reset the native elements Wave renders (`button`, `input`, `select`, `textarea`, lists, headings, `p`, `figure`, `blockquote`, `dl`, `dd`, `fieldset`, `legend`, `table`, `hr`), set `vertical-align: middle` on `img`, `svg` and `video`, and give `button` and `[role=button]` a pointer cursor.
-  - One rule is `!important`, as in Preflight: an element with the `hidden` attribute gets `display: none` (except `hidden="until-found"`), so a display utility (`flex`, `inline-flex`, …) on a component root or on your own element inside the provider cannot keep it visible. Like every rule here it is scoped, so elsewhere `hidden` on a Wave component that sets a display utility relies on Preflight: outside `WaveProvider` (and the overlays' portal wrappers) on the precompiled `./styles` path it takes effect only when you import `preflight.css`, and a custom Tailwind setup on `./tokens` loads no Wave base styles at all, so there it relies on Tailwind's Preflight (part of `@import 'tailwindcss'`); a setup without Preflight adds `[hidden]:where(:not([hidden='until-found'])) { display: none !important; }` itself.
+  - Every other selector is wrapped in `:where()` (zero specificity), so any unlayered style of yours wins, except the descendant `::before`/`::after` selectors of the box-sizing rule. Pseudo-elements cannot sit inside `:where()` (the selector would be dropped), so those two are specificity (0, 0, 1): an author `::before` or `::after` of the same specificity wins or loses by source order, and any more specific one (a class, attribute, ID or type selector before the pseudo-element) wins. Layered CSS loses to the unlayered `./styles` whatever its specificity, unless you import `./styles` into a layer (see [Cascade](#styles)). These rules set `box-sizing: border-box` and `border-color: var(--wave-border)` on every descendant (and its `::before`/`::after`), reset the native elements Wave renders (`button`, `input`, `select`, `textarea`, lists, headings, `p`, `figure`, `blockquote`, `dl`, `dd`, `fieldset`, `legend`, `table`, `hr`), set `vertical-align: middle` on `img`, `svg` and `video`, and give `button` and `[role=button]` a pointer cursor.
+  - One rule is `!important`, as in Preflight: an element with the `hidden` attribute gets `display: none` (except `hidden="until-found"`), so a display utility (`flex`, `inline-flex`, …) on a component root or on your own element inside the provider cannot keep it visible. Like every rule here it is scoped, so outside `WaveProvider` (and the overlays' portal wrappers) `hidden` on a Wave component that sets a display utility relies on a Preflight: Tailwind's (part of `@import 'tailwindcss'`), or `preflight.css` on the precompiled path; an app with neither adds `[hidden]:where(:not([hidden='until-found'])) { display: none !important; }` itself. The `!important` holds in a cascade layer too (an important declaration of an earlier layer beats the normal declarations of every later one), so `./tailwind` keeps it.
   - This is not a subset of Tailwind's Preflight: Preflight leaves borders `currentColor` and buttons with the default cursor, while Wave uses its border token and a pointer.
   - On the Tailwind path all of them sit in `layer(base)`, so your utilities and unlayered CSS win over them.
 
   There are no `html` or `body` rules, no global reduced-motion override (each component handles reduced motion itself), and no Preflight unless you import it. The only global rule is Tailwind's `@layer properties` fallback in `./styles`: in browsers without `@property` support (detected by an `@supports` query) it sets the initial values of Tailwind's `--tw-*` custom properties on `*`, `::before`, `::after` and `::backdrop`, and nothing else. It is also the only layered block in that otherwise unlayered file.
 
-- **Utility classes (`./styles`).** The precompiled stylesheet contains the Tailwind utilities the components use (`.flex`, `.p-4`, `.bg-primary`, …) as ordinary class selectors, unlayered, plus Tailwind's `@property --tw-*` registrations. An element of yours with the same class name gets the same style. It contains no other utility: generic names that Tailwind would generate from words in Wave's comments and strings (`.container`, `.collapse`, `.table`, `.shadow`, `.ring`, …) are excluded, so they never restyle your own markup.
-- **Theme and variant (`./tailwind`).** Wave adds its color names, the type ramp and the shadow scale under its namespace (`bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`), the font families `font-wave`, `font-wave-mono` and `font-wave-numeric`, the `animate-wave-*` animations and the `duration-wave-*` and `ease-wave-*` motion tokens to your Tailwind theme, and defines the `wave-rtl:` variant the components use to mirror glyphs (`./variants` defines it alone, for custom setups on `./tokens`). It matches by the element's own direction (`:dir(rtl)`, with a `[dir=rtl]` fallback for browsers without `:dir()`), so unlike Tailwind's `rtl:` it does not apply inside an LTR subtree of an RTL page; your build can use it too. Tailwind's `rtl:` is unchanged.
+- **Utility classes (`./styles`, `./tailwind`).** The precompiled sheets contain the Tailwind utilities the components use, each with Wave's prefix (`.wave\:flex`, `.wave\:p-4`, `.wave\:bg-primary`, …), as ordinary class selectors, plus Tailwind's `@property --tw-*` registrations: unlayered in `./styles`, in `layer(components)` through `./tailwind`. No class of yours shares a name with one of them, so an element of yours never takes Wave's styles by accident, and no other utility ships (a word in Wave's comments or strings never becomes a class). They are internal: in the HTML they read `wave:flex`, and CSS or test selectors that target them escape the colon (`.wave\:flex` in CSS, `querySelector('.wave\\:flex')` in a JavaScript string); select the stable `wave-*` classes and the `data-*` attributes instead ([Styling hooks](#styling-hooks)).
+- **Theme and variant (`./tailwind`).** Wave adds its color names, the type ramp and the shadow scale under its namespace (`bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`), the font families `font-wave`, `font-wave-mono` and `font-wave-numeric`, the `animate-wave-*` animations and the `duration-wave-*` and `ease-wave-*` motion tokens to your Tailwind theme, and defines the `wave-rtl:` variant for your own classes (the components' precompiled classes carry it already; `./variants` defines it alone, for custom setups on `./tokens`, and a build with neither has no `wave-rtl:`). It matches by the element's own direction (`:dir(rtl)`, with a `[dir=rtl]` fallback for browsers without `:dir()`), so unlike Tailwind's `rtl:` it does not apply inside an LTR subtree of an RTL page. Tailwind's `rtl:` is unchanged.
   - The variant writes the direction as `:nth-child(n of :dir(rtl))`, which matches the same elements, so your app's CSS minifier keeps it. Vite's default minifier, Lightning CSS, rewrites a bare `:dir()` to a `:lang()` list for targets below Chrome 120, which never matches a page that sets `dir` without a right-to-left `lang`. Your own `:dir()` rules still go through that rewrite in a Vite build (Tailwind's `rtl:` keeps working through its `[dir=rtl]` alternatives). To keep them, set `build.cssTarget` to browsers with `:dir()` (for example `['chrome120', 'edge120', 'firefox128', 'safari16.4']`), or exclude the feature: `css: { lightningcss: { exclude: Features.DirSelector } }` with `import { Features } from 'lightningcss'`.
   - postcss-preset-env at its default stage 2 enables `dir-pseudo-class`, which rewrites `:dir()` in a way that breaks Wave's mirroring (the 0.5 form of the variant too). Turn it off with `features: { 'dir-pseudo-class': false }`. Next.js's built-in PostCSS defaults (stage 3) are not affected.
 
-**Colliding utility names.** Wave's Tailwind color names are unprefixed, because they are the utility vocabulary 0.4 documented and that consumer code uses in `className` overrides. In a shared Tailwind build, or next to another stylesheet that defines the same class names, each of the following names resolves to a single definition in every utility that takes a color (`bg-`, `text-`, `border-`, `ring-`, `outline-`, `fill-`, `stroke-`, `accent-`, `caret-`, `decoration-`, `divide-`, `placeholder-`, `shadow-`, `from-`/`via-`/`to-`, …):
+**Namespaced names.** Nothing of Wave's styling shares a name with an app's: the components' classes carry the `wave:` prefix, and the theme keys your build gets are `wave-` names (`bg-wave-primary`, not `bg-primary`), so an app's own design system, shadcn/ui's `bg-primary` and `border-border` among them, keeps its names and values next to Wave. What two stylesheets on one page can still share:
 
-- Shared with shadcn/ui: `background`, `foreground`, `card`, `card-foreground`, `primary`, `primary-foreground`, `secondary`, `secondary-foreground`, `muted`, `muted-foreground`, `accent`, `accent-foreground`, `destructive`, `destructive-foreground`, `border`, `input`, `ring`.
-- Wave's other names: `primary-hover`, `primary-pressed`, `error`, `error-foreground`, `subtle`, `subtle-hover`, `subtle-pressed`, `subtle-selected`, `selected`, `selected-foreground`, `selected-hover`, `selected-pressed`, `muted-hover`, `muted-pressed`, `stroke`, `stroke-hover`, `stroke-accessible`, `success`, `success-foreground`, `success-tint`, `success-tint-foreground`, `warning`, `warning-foreground`, `warning-tint`, `warning-tint-foreground`, `error-tint`, `error-tint-foreground`, `severe`, `severe-foreground`, `severe-tint`, `severe-tint-foreground`, `info`, `info-foreground`, `info-tint`, `info-tint-foreground`, `inverted`, `inverted-foreground`, `inverted-border`, `input-filled-darker`, `input-filled-lighter`, `input-filled-stroke`, `track`, `skeleton`, `rating`, `presence-available`, `presence-busy`, `presence-away`, `presence-offline`, `presence-oof`, `presence-glyph`, `backdrop`, `brand-10` … `brand-160`, and for each palette hue (`red`, `pumpkin`, … `steel`) `palette-<hue>`, `palette-<hue>-foreground`, `palette-<hue>-tint`, `palette-<hue>-tint-foreground` and `palette-<hue>-border`.
-
-Workarounds when your app has its own design system:
-
-- Build your own Tailwind with a prefix, so your utilities cannot collide (`prefix(tw)` makes them `tw:bg-primary`), and import Wave's precompiled `./styles` instead of `./tailwind`, into a layer between Tailwind's `base` and `utilities`. The `@layer` statement comes first:
-
-  ```css
-  /* app.css */
-  @layer theme, base, wave, components, utilities;
-  @import 'tailwindcss' prefix(tw);
-  @import '@mortenbrudvik/waveui/styles.css' layer(wave);
-  ```
-
-  Do not import `./styles` unlayered (from JavaScript, or without `layer(wave)`) as well. Unlayered, it beats every layered rule, so inside `WaveProvider` its base styles would override your utilities: `tw:text-2xl` on a heading stays 14px, `tw:mb-4` stays 0, `tw:border-red-500` gets Wave's border color, `tw:p-4` and `tw:bg-red-500` on a button have no effect, and `tw:list-disc` stays `none`; a `className="tw:bg-red-500"` on a Wave `Button` loses to its `bg-primary`. In the `wave` layer your utilities win over Wave's base styles and over Wave's own classes (so that `className` works), Wave's styles still win over Tailwind's Preflight (`base`), and Wave's components look the same.
-
-Namespaced Wave utilities are being considered for 1.0.
+- Tailwind's `--tw-*` custom properties and their `@property` registrations, when the app's Tailwind is another version than the one Wave's sheets were built with.
+- `@keyframes wave-*`: a Tailwind app's CSS holds them twice (Wave's sheet and the namespaced theme of `./tokens`), and so does a page with `./styles` and `./utilities`. They are identical, so either one applies.
+- The cascade of `./tailwind` ([Tailwind CSS 4](#tailwind-css-4)): a class of yours on a Wave component wins by its layer, and an unlayered reset of yours strips the components.
 
 ## Styling hooks
 
@@ -389,7 +411,7 @@ export function checkedRows(tree: HTMLElement) {
 - **Variants and nesting.** A component built on another carries both classes: ToggleButton is `wave-button wave-toggle-button` (its icon `wave-button__icon wave-toggle-button__icon`), so `.wave-button` styles every button; the menu item kinds carry `wave-menu-item`, and CounterBadge carries `wave-badge`. A public component rendered inside another also gets the parent's part class: SplitButton's halves are `wave-button wave-split-button__primary-action-button` and `wave-button wave-split-button__menu-button`.
 - **No state classes.** State is in the `data-*` attributes and ARIA (`.wave-button[data-pressed]`, `.wave-tree-item[aria-checked='mixed']`); there is no `wave-button--pressed`.
 - **Cascade.** Wave never styles through these classes and Tailwind generates nothing for them, so your rules are the only ones on them. With the precompiled `./styles` (unlayered), a one-class rule of yours ties with Wave's utility classes and wins when it comes later; on the Tailwind path Wave's utilities sit in the `components` layer, and any utility or unlayered rule of yours wins.
-- **Stable.** The names are public API: no class is removed before 1.0. A renamed part, or a part that becomes a compound member of its own, keeps its old class next to the new one until 1.0; moving a class to another element is listed in the CHANGELOG as a DOM change.
+- **Stable.** The names are public API under semantic versioning: a class is removed or renamed only in a major release, and moving one to another element is listed in the CHANGELOG as a DOM change. Wave's utility classes (`wave:flex`) are not: which utilities a component draws can change in any release.
 - **Per part.** The parts take props of yours too, through a named slot or `slotProps` (see [Customization](#customization)): each `slotProps` part's documentation names its element, its stable class and the attributes it locks, and the guide's [Customization](docs/WAVE-UI-GUIDE.md#14-customization) chapter has them in tables.
 - **Server Components.** The constants come from a server-safe module: a Server Component can import them from the entry.
 
@@ -399,14 +421,16 @@ WaveUI components open up in several ways, each for a different kind of element.
 
 | Mechanism | For | Example |
 | --- | --- | --- |
-| [Named slots](#named-slots) | The leaves a prop fills: icons, media, content before and after a field, the content of dismiss, clear and close buttons, backdrops, motion | `icon={<SaveIcon />}`, `contentAfter={{ children: 'USD', className: 'text-muted-foreground' }}` |
-| [`slotProps`](#parts-slotprops) | The structure a component draws itself: a Switch's track and thumb, a Checkbox's box, a Dialog's body, a Tree item's row, a DataGrid header's sort button | `slotProps={{ track: { className: 'shadow-4', onClick } }}` |
+| [Named slots](#named-slots) | The leaves a prop fills: icons, media, content before and after a field, the content of dismiss, clear and close buttons, backdrops, motion | `icon={<SaveIcon />}`, `contentAfter={{ children: 'USD', className: 'text-wave-muted-foreground' }}` |
+| [`slotProps`](#parts-slotprops) | The structure a component draws itself: a Switch's track and thumb, a Checkbox's box, a Dialog's body, a Tree item's row, a DataGrid header's sort button | `slotProps={{ track: { className: 'shadow-wave-4', onClick } }}` |
 | [Render-function children](#slot-render-functions) | Replacing the element of a named slot, keeping its wiring | `icon={{ children: (Component, props) => <i {...props} /> }}` |
 | [Field's function child](#fields-function-child) | A control that Field cannot merge its wiring into | `<Field label="Card">{(props) => <VendorInput inputProps={props} />}</Field>` |
 | [Context hooks](#context-hooks) | Content of your own that reads or drives its component: a radio card, a menu item, a MessageBar action, a DataGrid cell | `useRadioGroupItem('pro')` |
 | [Stable classes](#styling-hooks) | Stylesheets of your own | `.wave-switch__track { … }` |
 
 Every part in the class-name registry is reachable one of these ways: it is a `slotProps` key of its component, a named slot, the root of a component you write yourself, or one of the few elements listed under [What is not customizable](#what-is-not-customizable). A test fails on a part that is none of these.
+
+The examples in this README pass Tailwind classes, as an app on `./tailwind` writes them, with Wave's theme keys (`text-wave-muted-foreground`, `shadow-wave-4`). Without Tailwind, `./utilities` defines the token classes among them, and classes of your own CSS work everywhere a class does ([Quick start](#quick-start)).
 
 ### Named slots
 
@@ -419,14 +443,14 @@ export const Price = () => (
   <Input
     aria-label="Price"
     contentBefore="$"
-    contentAfter={{ children: 'USD', className: 'text-muted-foreground' }}
+    contentAfter={{ children: 'USD', className: 'text-wave-muted-foreground' }}
   />
 );
 ```
 
 A slot takes any `React.ReactNode`. Spread an attributes object typed by an interface into a new object (`image={{ ...imgProps }}` for a `React.ImgHTMLAttributes<HTMLImageElement>`).
 
-Icon slots are decorative (`aria-hidden`). Content that renders nothing (`''`, `[]`, `<></>`, or a collection of only `null`, booleans and `''`) counts as no content: a `contentAfter` that renders nothing takes no room, and SearchBox's `contentBefore` keeps the default search icon. The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag`, the `closeButton` of `Dialog.Content` and Drawer, and the `dismissButton` of `TeachingPopover.Header` render their content inside the component's own button. A `<button>` or a Wave `Button` passed there is merged into that button, and a Wave `Button`'s own props never reach the DOM: its `icon` and `iconPosition` place the icon, and `disabledFocusable` makes the built-in button unavailable but focusable. In `MessageBar`, `SearchBox` and `Tag` a slot object is the content element, not the button (the 0.4 button-object form is gone): its attributes and handlers stay on it, only its naming attributes (and Tag's other `aria-*`) reach the button, and one whose `as` is a button is unwrapped, its children rendered as the content and its props dropped. Content that renders nothing keeps the default icon, and a slot object without children (`{ className: 'text-error' }`) wraps it. A slot object that renders a component or a void element (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the icon itself. On `MessageBar`, `dismiss={null}` is the only value that hides the dismiss button (a boolean counts as no slot), and so is `closeButton={null}` for the Close button of a Dialog or Drawer and `dismissButton={null}` for TeachingPopover's.
+Icon slots are decorative (`aria-hidden`). Content that renders nothing (`''`, `[]`, `<></>`, or a collection of only `null`, booleans and `''`) counts as no content: a `contentAfter` that renders nothing takes no room, and SearchBox's `contentBefore` keeps the default search icon. The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag`, the `closeButton` of `Dialog.Content` and Drawer, and the `dismissButton` of `TeachingPopover.Header` render their content inside the component's own button. A `<button>` or a Wave `Button` passed there is merged into that button, and a Wave `Button`'s own props never reach the DOM: its `icon` and `iconPosition` place the icon, and `disabledFocusable` makes the built-in button unavailable but focusable. In `MessageBar`, `SearchBox` and `Tag` a slot object is the content element, not the button (the 0.4 button-object form is gone): its attributes and handlers stay on it, only its naming attributes (and Tag's other `aria-*`) reach the button, and one whose `as` is a button is unwrapped, its children rendered as the content and its props dropped. Content that renders nothing keeps the default icon, and a slot object without children (`{ className: 'text-wave-error' }`) wraps it. A slot object that renders a component or a void element (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the icon itself. On `MessageBar`, `dismiss={null}` is the only value that hides the dismiss button (a boolean counts as no slot), and so is `closeButton={null}` for the Close button of a Dialog or Drawer and `dismissButton={null}` for TeachingPopover's.
 
 The `backdrop` slot of `Dialog.Content` and Drawer takes content or a slot object with `appearance` (`'dimmed'`, `'transparent'`); `null` renders none, and booleans are no slot. Tag's `media` and `icon` (and an InteractionTag Primary's) are content slots: `media` is not hidden from assistive technology (pass `decorative` to an Avatar whose name repeats the tag's text), `icon` is decorative. So are the `media` of `Table.CellLayout` and `TeachingPopover.Body` (give a picture its `alt`), and `Table.HeaderCell`'s `aside`.
 
@@ -461,7 +485,7 @@ export const SyncSettings = ({ confirmOff }: { confirmOff: () => boolean }) => (
             }
           },
         },
-        thumb: { className: 'shadow-4' },
+        thumb: { className: 'shadow-wave-4' },
         label: { className: 'font-semibold' },
       }}
     />
@@ -498,7 +522,7 @@ Your props combine with the component's by the rules a component applies to the 
 - **One element, two parts.** Without `contentBefore` and `contentAfter` an Input is one `<input>`: `slotProps.root` and `slotProps.input` both apply to it, `input` after `root`. An Avatar without a `badge` is its own `visual` part.
 - **Repeated parts** (a Calendar's days, Pagination's buttons, every item of a FlatTree, every toast's container) take the same props on every element; a ref object holds the last one attached, and an `id` would repeat.
 - **Stable objects.** Where a component memoises what reads the parts (`Option`, `TagPicker`, TimePicker's `option` and `checkIcon`, `FlatTree`, `DataGrid.Row`'s `selectionControl`, `TeachingPopover`, AvatarGroup's `surface`, `list` and `listItem`), pass an object that keeps its identity (a constant or `useMemo`): a new object renders those items again.
-- **No change without them.** Without `slotProps`, or with `{}`, a component renders the attributes and values of 0.17; only the order of the attributes in a raw HTML string may differ.
+- **No change without them.** Without `slotProps`, with `{}` or with every part `{}`, a component renders the same attributes and values: a part changes nothing until you give it a value.
 - **Server Components** can pass `slotProps` that hold only attributes (classes, styles, `data-*`); handlers and refs belong in a client component.
 
 ### Slot render functions
@@ -672,7 +696,7 @@ function PlanCard({ value, title }: { value: string; title: string }) {
       className={cn(
         'rounded-md border-2 p-3',
         focusRing,
-        checked ? 'border-primary' : 'border-stroke-accessible',
+        checked ? 'border-wave-primary' : 'border-wave-stroke-accessible',
       )}
     >
       <span id={id}>{title}</span>
@@ -861,6 +885,31 @@ Every component that calls `useDataGridSelection` renders again on each change o
 
 1.0 moves the `ref` of Checkbox, Switch, SearchBox, SpinButton, ColorSlider, AlphaSlider, `ColorPicker.HexField`, Combobox, Dropdown, TimePicker, DatePicker and TagPicker from the root to the control: code that held the root through `ref` passes `slotProps.root.ref`, and code that passed `controlRef` passes `ref` (a ref object typed for the root no longer compiles, and `controlRef` is no prop; a callback ref or state setter typed for a `<div>` still compiles where the control is an `<input>`, which has every member of a `<div>` element, so look for those by hand; TagPicker's `ref`, typed for its `<input>` or `<button>` trigger, rejects one). TagPicker's `ref` now reaches `TagPicker.Button` too, which `controlRef` never did, so a state setter passed to it takes state typed for both triggers (`HTMLInputElement | HTMLButtonElement`, or `HTMLElement`): one typed for the input alone no longer compiles. The root of Combobox, Dropdown, TimePicker and TagPicker keeps the picker's own ref beside yours, so a press inside it still does not dismiss the open list.
 
+**The `root` part.** The fourteen controls whose `ref` reaches a focusable element inside their root (Input, the twelve above and `RadioGroup.Item`) take `slotProps.root` for that root: its `ref`, classes, style, attributes and handlers. Your classes and style come after the component's own `className` and `style`, your handlers run before the component's own root handlers (`preventDefault()` in yours skips them), and the component keeps its enumerated `data-*` attributes, its own root props and its hidden state (`hidden`, `inert`, `aria-hidden`); a `<label>` root takes no `htmlFor` from a part, which would send its clicks to another element. The guide's [part tables](docs/WAVE-UI-GUIDE.md#part-tables) list each root's element and locks.
+
+**Components that read a child's `ref`** reach the control of these fourteen:
+
+- `Popover.Trigger` and `Menu.Trigger` place their surface against the control and return focus to it, and a press on the rest of the root (a Switch's label text) is outside the trigger. Their `aria-expanded` and `aria-controls` stay on the root, where a `<label>` or a `<div>` cannot carry them, so such a control makes no click trigger; a context Menu (`openOnContext`) around one carries no such state and is the composition to use. Tooltip places its surface against its own wrapper around the child, as before.
+- `Overflow.Item asChild` measures the control, not the whole component: one whose root is wider than its control (a Checkbox with its label, a SearchBox with its icon) can overflow the row by the difference. Put it in an `Overflow.Item` without `asChild`, whose own element is measured.
+- `Presence` puts its attributes (`data-presence`, and `inert` while exiting) on the root and waits for the control's own animations: an exit motion drawn on the root is not waited for. For motion on the root, use the render function and pass its `ref` to the root part:
+
+```tsx
+import { Checkbox, Presence } from '@mortenbrudvik/waveui';
+
+export const OptionalTerms = ({ shown }: { shown: boolean }) => (
+  <Presence visible={shown}>
+    {({ ref, presenceProps }) => (
+      <Checkbox
+        {...presenceProps}
+        label="I accept the terms"
+        className="transition-opacity duration-wave-fast motion-reduce:transition-none data-[presence=exiting]:opacity-0"
+        slotProps={{ root: { ref } }}
+      />
+    )}
+  </Presence>
+);
+```
+
 ### What is not customizable
 
 - **Elements that exist for layout, motion or measurement**: the virtual spacers of DataGrid, List, Listbox, Combobox, Dropdown and FlatTree (sized by the window), the collapse elements of `Accordion.Panel`, `Tree.Item`, `Nav.Category` and the inline Drawer and NavDrawer, the element that holds each bar of a MessageBarGroup and each toast's content element (their `motion` slots style them, and the content inside takes your props), `Dialog.Content`'s positioner (it places the surface and lets presses through to the backdrop) and the Carousel's viewport (measured for `groupSize="auto"`). A prop there could break the motion or the measurement.
@@ -869,7 +918,7 @@ Every component that calls `useDataGridSelection` renders again on each change o
 - **Hidden form inputs, live regions and visually hidden text** are no parts.
 - **App-wide classes per component** (Fluent's `customStyleHooks_unstable`, a `WaveProvider classNames`) are left for after 1.0: style the stable classes in a stylesheet, or pass `className` and `slotProps` per instance.
 
-Nothing in this chapter changes in 1.0 (see [1.0 notices](#10-notices)).
+1.0 moved `ref` and added the `root` parts (above); [Upgrading to 1.0](#upgrading-to-10) lists what else changed.
 
 ## React Server Components
 
@@ -989,7 +1038,11 @@ export function SaveArea() {
 
 80 components, plus the `Portal` and `Presence` utilities. Every component accepts `ref` as a prop (React 19), a `className`, and the native attributes of its element. Storybook (`npm run dev`) shows every component with its props, states and themes.
 
-Your `className` is merged last with `cn()`, so it replaces a conflicting class **of the same variant**: `bg-error` replaces a resting `bg-primary`. A class behind a variant is replaced only by a class with the same variant. That matters for the gated hover and pressed classes (`not-disabled:not-aria-disabled:hover:…` / `…:active:…`) and the state classes (`data-[selected]:…`, `aria-disabled:…`): they stay next to yours and win while their state applies, because they are more specific. A bare `hover:bg-error` therefore does not override a Button's built-in hover color while the Button is enabled. It still paints on hover while the Button is disabled or `aria-disabled`, and on `appearance="transparent"`, which has no hover background. To override the gated and state classes, use the same prefix (`not-disabled:not-aria-disabled:hover:bg-error`, `data-[selected]:bg-error`) or the important modifier (`hover:bg-error!`); see [Buttons](#buttons).
+Your `className` is merged last with `cn()`, so it replaces a conflicting class **of the same variant**: `bg-wave-error` replaces the Button's resting `wave:bg-primary` (the merge reads a class and its `wave:`-prefixed twin as one utility), and `p-2` its padding. A class behind a variant is replaced only by a class with the same variant: the gated hover and pressed classes (`wave:not-disabled:not-aria-disabled:hover:…` / `…:active:…`) and the state classes (`wave:data-[selected]:…`, `wave:aria-disabled:…`) stay next to a bare class of yours, and `not-disabled:not-aria-disabled:hover:bg-wave-error` or `data-[selected]:bg-wave-error` replaces them. Which class then wins in the browser depends on the setup:
+
+- **`./tailwind`**: your classes sit in a later cascade layer than Wave's, so each wins whatever its specificity. A bare `hover:bg-wave-error` paints over the built-in hover color (also while the Button is disabled or `aria-disabled`), and a resting `bg-wave-error` covers the hover and pressed colors too: give those with Wave's gate, as in [Buttons](#buttons).
+- **`./styles`** (no Tailwind): a class of your own CSS competes with Wave's by specificity and order. A one-class rule that comes later beats Wave's resting classes, while the gated and state classes are more specific (`:not(:disabled):not([aria-disabled="true"]):hover` after the class), so a rule of yours for those states needs the same specificity, or `!important`.
+- A class that nothing defines (a Tailwind class in an app without Tailwind) still removes the class it replaces: see [Without Tailwind](#without-tailwind-precompiled-css).
 
 ### Buttons and actions
 
@@ -1136,12 +1189,13 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 ```tsx
 import { Button } from '@mortenbrudvik/waveui';
 
-// Tailwind path. The resting colors are plain classes; the hover and pressed colors use the gate
-// prefix, because a bare `hover:` or `active:` class loses to the built-in one.
+// Tailwind path (`./tailwind`). The resting colors are plain classes; the hover and pressed colors
+// use Wave's gate, which replaces the built-in ones and, like them, stays off while the Button is
+// disabled (a bare `hover:` class would also paint a disabled Button).
 export const DeleteButton = () => (
   <Button
     appearance="primary"
-    className="bg-destructive text-destructive-foreground not-disabled:not-aria-disabled:hover:bg-destructive/90 not-disabled:not-aria-disabled:active:bg-destructive/80"
+    className="bg-wave-destructive text-wave-destructive-foreground not-disabled:not-aria-disabled:hover:bg-wave-destructive/90 not-disabled:not-aria-disabled:active:bg-wave-destructive/80"
   >
     Delete
   </Button>
@@ -1161,7 +1215,7 @@ export const PublishButton = ({ ready }: { ready: boolean }) => (
 );
 ```
 
-- **Hover and pressed colors.** They are gated (`not-disabled:not-aria-disabled:hover:` / `…:active:`), so they never apply to a disabled or `aria-disabled` Button, and they work for `as="a"`. The gate makes them more specific than a bare `hover:` class, so `className="hover:bg-error"` does not override the built-in hover color while the Button is enabled. Like `hover:bg-error!`, a bare `hover:` class still applies on hover while the Button is disabled or `aria-disabled` (the gate switches the built-in class off), and on `appearance="transparent"`, which has no hover background (a pressed ToggleButton has one). To change only the enabled hover color, use the same prefix, which replaces the built-in class; the important modifier (`hover:bg-error!`) also wins while enabled, but keeps applying while disabled. A plain `bg-error` replaces only the resting color. The same applies to CompoundButton, ToggleButton, MenuButton and SplitButton. Class overrides need Tailwind to generate the classes: the precompiled `./styles` contains only the classes Wave itself uses.
+- **Hover and pressed colors.** They are gated (`not-disabled:not-aria-disabled:hover:` / `…:active:`), so they never apply to a disabled or `aria-disabled` Button, and they work for `as="a"`. A class of yours with the same gate replaces the built-in one, and keeps it off while the Button is disabled. With `./tailwind` your classes win by their cascade layer, so a bare `hover:bg-wave-error` also paints over the built-in hover color, and keeps painting while the Button is disabled or `aria-disabled` (the gate switches only the built-in class off), and a plain `bg-wave-error` also covers the built-in hover and pressed colors: give those with the gate, as above. The same applies to CompoundButton, ToggleButton, MenuButton and SplitButton. Without Tailwind, nothing defines these classes (the precompiled `./styles` contains only the classes Wave itself uses): write the colors in your own CSS, with the specificity of the gate for the hover and pressed states (`.delete-button:not(:disabled):not([aria-disabled="true"]):hover`).
 - **Non-interactive `as`.** `as="div"`, `as="span"` and other elements that are not interactive by themselves get `role="button"`, a tab stop (`tabIndex={0}`) and Enter (key down) / Space (key up) activation, like a native button; your own `role` or `tabIndex` wins. `as="a"` without `href` is treated the same way; with any `href` (`''` included) it stays a link. `as="a"` shows no link underline. A native `<button>` gets `type="button"` by default; a custom `as` component gets no `type` default, so pass `type` yourself inside a form.
 - **`disabled` with a non-native `as`.** Only `button` (the default), `input`, `select` and `textarea` receive the native `disabled` attribute. Every other `as` gets `aria-disabled="true"` and `tabIndex={-1}` instead, which your props cannot override. That covers `a`, `div`, `span` and any custom component, including router links and styled or motion components that render a native `<button>`. Its clicks, Enter and Space are prevented, the click does not reach ancestor `onClick` handlers, and an `<a>` drops its `href` (it keeps `role="link"` when it had an `href`, and has `role="button"` without one). Such an element has no native `:disabled` state, so a component's own `:disabled` styling no longer applies: style it on `[aria-disabled="true"]` (the `aria-disabled:` variant). It leaves the tab order but can still take focus from a mouse click. Every disabled Button also renders `data-disabled`.
 - **`disabledFocusable`** (Button, CompoundButton, ToggleButton, MenuButton, SplitButton and Link) marks the control unavailable but keeps it focusable and in the tab order: for a Tooltip that explains why (above), a toolbar item, or a button that disables itself when activated. It renders `aria-disabled="true"`, `data-disabled` and `data-disabled-focusable` instead of the native `disabled`. A click, Enter, Space and implicit form submission do nothing: your `onClick` is not called and the click does not reach ancestor click handlers, while other keys still reach your key handlers. Hover and pressed colors are off, and it wins over `disabled`. A `Toolbar` keeps it in its arrow-key order, and `Menu.Trigger` does not open its menu from it. While it shows its keyboard focus ring it is drawn at full opacity, so the ring keeps its contrast (the disabled look's opacity would dim it). On SplitButton it affects both halves; `primaryActionButtonProps={{ disabledFocusable: true }}` or `menuButtonProps` affect one.
@@ -2023,7 +2077,7 @@ export function DocumentTools() {
 - **Which item hides.** Items hide in ascending `priority` (default `0`); among equal priorities the last one in DOM order goes first, or the first one with `overflowDirection="start"`. `pinned` items never hide, and `minimumVisible` items always stay. While no item sets `priority` or `pinned`, the first item (with `start`, the last) always stays, as in 0.13; once one does, only `pinned` protects. The hidden items stay mounted with `data-overflow-hidden`, `display: none`, `aria-hidden` and `inert`, so arrow keys and Tab pass them.
 - **Groups.** A group is `'visible'` (every member shown), `'hidden'` or `'overflow'` (some members hidden): `useIsOverflowGroupVisible(groupId)` reads it, and an `Overflow.Divider` with the group's `groupId` hides while its group is hidden. `useHasHiddenItems()` tells whether anything is hidden. `onOverflowChange(hiddenItems, details)` reports the hidden ids in DOM order, with `details.visibleItems` and `details.groupVisibility`, once per change.
 - **The button.** `buttonPosition="end"` (the default) puts it after the items, sticking to the end of the row; `"before-hidden"` puts it just before the first hidden item, where the hidden items were (a breadcrumb trail does this), when the items are children of the Overflow (Fragments are fine). The button then moves as items hide and show, without remounting; a browser can still drop focus from a moved element, so focus on it can fall to the page while the row resizes, and switching `buttonPosition` on a mounted row remounts the items. `hasHiddenItems` renders the button before the first measurement, so the server HTML reserves its room.
-- **Without wrappers.** `Overflow.Item asChild` puts the item's props on its single element child, so `<Overflow role="list">` with `<li>` items is a list (the button's wrapper is then a list item).
+- **Without wrappers.** `Overflow.Item asChild` puts the item's props on its single element child, so `<Overflow role="list">` with `<li>` items is a list (the button's wrapper is then a list item). The item measures the element the child's `ref` reaches: for a form control whose `ref` reaches its focusable element (a Checkbox, a SearchBox, a Combobox), that is the control, not the label or icon around it, so give such a control an item without `asChild` ([Components that read a child's `ref`](#ref-and-controlref)).
 - **Columns.** `orientation="vertical"` stacks the items and measures heights; give the column a height.
 
 ### Dialogs and triggers
@@ -2290,7 +2344,7 @@ function Details() {
 - **Positioning.** `usePopupPosition` takes `side`, `align`, `offset`, `flip`, `fallbackPlacements`, `shift`, `fitViewport`, `matchReferenceWidth`, `strategy`, `hideWhenDetached` and `onPositioned`, and returns `update()`. The anchor is an element or a `VirtualElement`.
 - **App-owned regions.** Spread `modalAllowProps` on a region that a modal must leave usable (a notification area); `useModalOpen()` tells you when a modal is open, so global shortcuts can wait.
 - **`positioning` prop.** Popover, `Menu.Popover`, Tooltip, TeachingPopover, Combobox, Dropdown, TagPicker, DatePicker and TimePicker take `positioning={{ offset, fitViewport, matchReferenceWidth, fallbackPlacements }}` (and `target` where the component has one); `side` and `align` stay their own props.
-- **Stability.** These hooks are public but pre-1.0: their options may still change through the usual deprecation path.
+- **Stability.** These hooks are public API under semantic versioning since 1.0: an option is removed or changes its meaning only in a major release.
 
 ### Enter and exit motion
 
@@ -2402,6 +2456,7 @@ export function SavedNotice() {
 - **Reduced motion.** Pair every motion class with a `motion-reduce:` variant, as above: the tokens are never zeroed, and Wave has no global reduced-motion rule. Under `prefers-reduced-motion: reduce` the presence core ends every phase at once, even while a motion runs.
 - **Phases.** On the server and while hydrating the element renders its `entered` phase (a hidden one its `exited` phase), so no enter motion replays after hydration; `appear` runs it for an element that mounts visible on the client. Showing the element again while it exits returns it to `entering`, on the same element. `unmountOnExit={false}` keeps an exited element mounted, `hidden` and `inert`, so its state (a typed value, a scroll position) survives. `onEntered` and `onExited` report the end of a phase.
 - **Gate the enter on the phase.** `@starting-style` applies to every first style of an element, whatever its phase. An ungated `starting:` class, or a `@starting-style` rule without `[data-presence='entering']`, therefore also fades in an element that mounts `entered`: without `appear`, and server-rendered content after hydration, while the core already reports `entered` and has called `onEntered`. The gated form runs only when the core runs the enter phase: a show after mount, `appear`, and a kept-mounted element shown again.
+- **Around a form control.** `Presence` waits for the animations of the element its child's `ref` reaches: on Checkbox, Switch, the pickers and the other controls whose `ref` reaches their focusable element, that is the control, while the presence attributes reach the root. For motion on the root, pass the render function's `ref` to `slotProps.root` ([an example](#ref-and-controlref)).
 - **The hook.** `const { isMounted, ref, presenceProps } = usePresence(open)` for your own components: render the element while `isMounted`, pass it `ref` and spread `presenceProps` (`data-presence`, and `inert`/`hidden` when they apply). Destructure the result: `eslint-plugin-react-hooks` treats the whole object as a ref once its `ref` is passed on, and reports reads of its other members during render. Keep focus, dismissal and positioning on your open state, not on `isMounted`, so they happen on close and not after the exit motion.
 
 ### Toasts
@@ -2805,6 +2860,7 @@ export function Members({ members }: { members: Member[] }) {
 - **Selection cells.** `checked` (`true`, `false` or `'mixed'`, an indeterminate select-all), or `defaultChecked`; `onCheckedChange(checked, details)`, with the form's `reset` event as `details.event` when a form reset restores `defaultChecked`; `type="radio"` with a shared `name` selects one row (uncontrolled radios uncheck each other); `name`, `value`, `form` and `required` submit the control. Its id, ARIA attributes and focus, key and change handlers go to the input, `className` and `ref` stay on the cell. Name every control (`aria-label` or `aria-labelledby`; a development warning asks for it). `subtle` draws an unchecked box only while its row is hovered or holds focus, and `invisible` keeps the cell's box without a control.
 - **Cell layout.** `Table.CellLayout` puts `media` (an icon, or an Avatar, which gets a 32px box) before the main text and a `description` under it; `truncate` keeps each line on one line where the column's width is bounded, and `appearance="primary"` marks the cell that names the row.
 - **Cell actions.** `Table.CellActions` covers the end of its cell (the cell is its positioning box) and shows its buttons while the row is hovered or holds focus, always in forced colors and on touch screens; `visible` keeps them (while a menu opened from one is open). Its background follows the library's own row fills: none, the row hover, a `striped` table's stripe and a DataGrid's selected rows. A row background of your own, or a table on another surface (a Card), needs the same background class on the actions, and the actions must be direct children of the cell for the stripe and selection fills to match.
+- **Reveals of your own.** The rows of Table and DataGrid are Wave's group `wave:group/table-row` (Tree's rows `wave:group/row`, Nav's `wave:group/nav-row`), which your build's `group-hover/table-row:` does not match. Give the row a group of your own and reveal against it: `<Table.Row className="group/my-row">` with `opacity-0 group-hover/my-row:opacity-100 group-focus-within/my-row:opacity-100` on the content; or select the row's stable class and state in your CSS (`.wave-table-row:hover .my-reveal`, `.wave-data-grid-row[aria-selected='true']`).
 
 **State from hooks.** `useTableFeatures` holds a table's rows and its plugins hold the sort, the selection and the column widths, by row id and over every item, so a table that renders only a page or a window of its rows keeps select-all and the sort over all of them (Fluent's call shape; the `Components/Table/Features` story is the full version):
 
@@ -3371,13 +3427,28 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
 | `chartPalette` | The 12 palette fills as token names, in the order that keeps neighbouring chart series as far apart as the palette allows (read each with `waveTokens[name]`); colors still need a second encoding in every chart. Frozen and server-safe. |
 | `getTokenStyle(overrides)` | The inline style (`TokenStyle`) that applies token overrides (`WaveTokenOverrides`), the one `WaveProvider` puts on its root and portals; `undefined` when there is nothing to set. Server-safe. |
 
-## 1.0 notices
+## Upgrading to 1.0
 
-1.0 removes what 0.x deprecated, changes a few defaults and meanings, and makes the optional `details` arguments required. Every change decided for 1.0 was announced in a 0.x release, 0.18 restates them all, and none of them happens before 1.0. [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) lists every item with its replacement and the release that announced it, and how to find the uses in your app: a development build warns once about each use that the guide marks "Warns: yes". Namespaced utilities (see [Global effects](#global-effects)) are not decided yet; if 1.0 ships them, a 0.x release announces them first.
+1.0 is the first stable release: from it on, the exports of the package entry, the documented props, the stable `wave-*` classes, the `--wave-*` tokens, the namespaced theme keys and the CSS entries follow semantic versioning (Wave's own `wave:` utility classes and the modules the package does not export are internal). It is also the release that ends the 0.x compromises, at once. [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) lists every change with its replacement and how to find the uses in your app; upgrade to 0.18 first and replace what its development build warns about. In short:
+
+1. **ES modules only.** `dist` holds ES modules and one `index.d.ts`; `require()` of the package needs Node.js 22.12 or later, a TypeScript file compiled as CommonJS `module` `node20` or `nodenext`, and Jest in CommonJS mode a transform ([Installation](#installation)).
+2. **Namespaced utilities.** Every class the components draw carries the prefix `wave:`, and your Tailwind build gets Wave's theme keys under `wave-` only: write `bg-wave-primary`, `text-wave-foreground`, `border-wave-border`, `text-wave-body-1` and `shadow-wave-4` for 0.x's `bg-primary`, `text-foreground`, `border-border`, `text-body-1` and `shadow-4`. `./tailwind` puts Wave in cascade layers, and an app with a prefixed Tailwind build uses it too; without Tailwind, `./utilities` holds the token utilities ([Quick start](#quick-start)). The migration codemod ships in the package and rewrites your own classes, `@apply` lists and `var(--color-*)` uses of the former names (Node.js built-ins only; `--dry-run` writes nothing and prints every change):
+
+   ```bash
+   node node_modules/@mortenbrudvik/waveui/codemod/migrate-1.0.mjs --dry-run "src/**/*.{ts,tsx,css}"
+   ```
+
+   The 17 names a stock shadcn/ui theme defines too (`bg-primary`, `border-border`, `ring-ring`, …), and the names your own theme declares, are left alone and counted unless you pass `--include-shared` (pass it when those classes meant Wave's tokens). What no codemod finds: CSS or test selectors of Wave's 0.x utility classes (`.bg-primary`, `querySelector('.flex')`: use the stable `wave-*` classes or `data-*` attributes), a Tailwind class that worked without Tailwind because Wave's sheet happened to define it (`p-2`), and the cascade of `./tailwind`, where a class of yours on a component now wins over its hover, pressed and selected colors too.
+3. **`ref` reaches the control** of Checkbox, Switch, SearchBox, SpinButton, ColorSlider, AlphaSlider, `ColorPicker.HexField`, Combobox, Dropdown, TimePicker, DatePicker and TagPicker, which lose `controlRef`; their root is `slotProps.root.ref` ([`ref` and `controlRef`](#ref-and-controlref)).
+4. **Removed**: every prop, value, call form, export, class and stylesheet that 0.x deprecated, among them the 0.4 names renamed in 0.5 (`onChange` of the value controls, `onOptionSelect`), the positional `useRovingTabIndex(containerRef, options)` and DataGrid `onSortChange(columnId, direction)`, the `[presence=` className rule that turned a default motion off (pass the part's `motion` instead), `legacy-tokens.css`, `animations.css`, the `.dark` and `.high-contrast` theme classes and the 0.4 variable names (an override of `--brand-80` or `--grey-38` included). TypeScript reports a removed prop or export, and an import of a removed stylesheet fails to resolve; a removed class or variable in your CSS no longer matches or applies, without a message.
+5. **Required**: the `details` argument of `onOpenChange`, `onCheckedValuesChange` and `onCheckedItemsChange` (code that calls such a prop itself passes it), and `Image`'s `alt`.
+6. **Defaults and meanings**: Badge and CounterBadge `color="important"` is the neutral high-emphasis look (`color="severe"` keeps the orange), and a TimePicker without `format` follows the hour cycle of the browser's language (pass `format` for the same server and client output).
+
+The sections below describe each 0.x release as it shipped, for an app that upgrades from an older 0.x: a prop or name they call deprecated, or say still works, was removed in 1.0 (item 4), and the classes they name are written with 0.x's names.
 
 ## Upgrading from 0.17
 
-0.18 removes nothing public and changes no default, and everything it adds is opt-in (`slotProps`, slot render functions, `getNativeElementProps` and `mergeSlotProps`, Field's function child, `useFieldContext` and `FieldContextProvider`, and the context hooks of RadioGroup, Menu, MessageBar and DataGrid); it also announces what 1.0 changes ([1.0 notices](#10-notices)). These changes can affect your tests and types:
+0.18 removes nothing public and changes no default, and everything it adds is opt-in (`slotProps`, slot render functions, `getNativeElementProps` and `mergeSlotProps`, Field's function child, `useFieldContext` and `FieldContextProvider`, and the context hooks of RadioGroup, Menu, MessageBar and DataGrid); it also announces what 1.0 changes ([Upgrading to 1.0](#upgrading-to-10)). These changes can affect your tests and types:
 
 1. **Attribute order.** Without `slotProps` every component renders the attributes and values of 0.17, but on some elements in another order: a part's class may now come before attributes it followed, a Tag's Dismiss button renders the attributes its `dismissIcon` slot adds before its `class`, and MessageBar's Dismiss button renders its `type` first. Queries, hydration and Vitest's DOM snapshots ignore the order; a test that compares raw HTML strings changes.
 2. **New development warnings** for uses that 1.0 removes or changes: Badge and CounterBadge `color="important"` (pass `color="severe"` to keep the orange look), `useRovingTabIndex(containerRef, options)`, DataGrid's positional `onSortChange(columnId, direction)`, and a `className` with presence variants on `Menu.Popover`, `Dialog.Content`, Drawer or NavDrawer while `motion` is unset. A test that spies on `console.warn` and renders one of these forms asserts the warning. A production bundle drops them, and an import without a bundler (no `process`) skips them.
@@ -3385,7 +3456,7 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
 4. **`details.event` may be the grid's own.** A cell of yours that sorts or selects through `useDataGridSort().setSort` or `useDataGridSelection().toggle` without an event reaches `onSortChange` and `onSelectedItemsChange` with an untrusted `Event` of type `sort` or `select` and no target.
 5. **Two behaviour changes without `slotProps`.** A MessageBar that measures its layout (`layout="auto"` with actions) leaves out the text changes of the commit that renders a newly measured layout, so text rendered from `useMessageBarContext().layout` settles; a static `Menu` renders its root once more as it mounts (its items do not).
 
-`ref` stays where it is in 1.0 (see [`ref` and `controlRef`](#ref-and-controlref)), and `WaveProvider classNames` is left for after 1.0. [Customization](#customization) shows the new API; the CHANGELOG's [0.18.0 section](CHANGELOG.md) lists the additions and the full upgrade notes.
+0.18 left `ref` on the root (1.0 moved it to the control: see [`ref` and `controlRef`](#ref-and-controlref)), and `WaveProvider classNames` is left for after 1.0. [Customization](#customization) shows the new API; the CHANGELOG's [0.18.0 section](CHANGELOG.md) lists the additions and the full upgrade notes.
 
 ## Upgrading from 0.16
 

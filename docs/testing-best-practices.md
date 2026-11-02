@@ -46,20 +46,25 @@ One call registers the tests every component needs:
 ```tsx
 // src/components/input/__tests__/Switch.test.tsx
 import { Switch } from '../Switch';
-import { testNoImplicitSubmit, testSystemProps } from '../../../test-utils';
+import { testNoImplicitSubmit, testRootPartRef, testSystemProps } from '../../../test-utils';
 
 describe('Switch', () => {
   testSystemProps(Switch, {
     expectedTag: 'label',
     displayName: 'Switch',
     defaultProps: { label: 'Wi-Fi' },
-    control: { role: 'switch' },
-    conflictingClass: { className: 'gap-4', overrides: 'gap-2' },
+    // `ref` reaches the role="switch" button inside the <label> root (1.0, Phase 14 R5).
+    ref: 'control',
+    control: { role: 'switch', tag: 'button' },
+    // The consumer's class is unprefixed; the default it replaces is Wave's, with the prefix.
+    conflictingClass: { className: 'gap-4', overrides: 'wave:gap-2' },
     a11yVariants: [
       { name: 'checked', props: { defaultChecked: true } },
       { name: 'disabled', props: { disabled: true } },
     ],
   });
+
+  testRootPartRef(Switch, { props: { label: 'Wi-Fi' } });
 
   testNoImplicitSubmit(Switch, { defaultProps: { label: 'Wi-Fi' } });
 });
@@ -69,7 +74,7 @@ describe('Switch', () => {
 
 | Field | Default | Meaning |
 |---|---|---|
-| `expectedTag` | required | Tag of the element that receives `ref`, `data-testid` and `className`. |
+| `expectedTag` | required | Tag of the root: the element that receives `data-testid` and `className`, and `ref` unless `ref` is `'control'`. |
 | `displayName` | required | Expected `Component.displayName`. |
 | `defaultProps` | `{}` | Props every render needs: representative, real content. |
 | `polymorphic` | `false` | Also test `as="section"`. |
@@ -78,7 +83,7 @@ describe('Switch', () => {
 | `a11yVariants` | `[]` | Extra axe runs `{ name, props }`, rendered with `{ ...defaultProps, ...props }`. |
 | `control` | — | Composite controls: `{ role, tag? }`, the focusable element that `aria-label` must name (and, with `ref: 'control'`, that `ref` must reach; `tag` asserts its tag, and throws at registration without `ref: 'control'`). |
 | `ref` | `'root'` | What `ref` must reach: `'root'`, the element that carries `data-testid`, or `'control'`, the element `getByRole(control.role)` finds (needs `control`). That query has no name filter, so the role must be unique in the render: a component that renders a second element of the role (a nested control, an option) tests its `ref` by hand. `expectedTag` names the root either way. |
-| `conflictingClass` | — | `{ className, overrides }`: a consumer class that must replace a default class. |
+| `conflictingClass` | — | `{ className, overrides }`: a consumer class (unprefixed, `'px-8'`) that must replace a default class of the component (Wave's, with the prefix: `'wave:px-3'`). |
 | `wrapper` | — | A component rendered around every render (a provider the component needs). |
 
 It registers these building blocks, which are also exported for tests that need one on its own:
@@ -444,7 +449,7 @@ it('Space toggles and keeps the menu open; Enter toggles and closes it', async (
 });
 ```
 
-- The column alignment is CSS `:has()`, which jsdom does not lay out: assert the placeholder spans and their `group-has-[…]/menu:` classes, not their visibility.
+- The column alignment is CSS `:has()`, which jsdom does not lay out: assert the placeholder spans and their `wave:group-has-[…]/menu:` classes, not their visibility.
 - After a `rerender` that changes item attributes inside a roving container, flush with `await act(async () => {})` before pressing keys (the roving hook restamps from a MutationObserver).
 - jsdom joins a row's shortcut text to its accessible name (`RulerCtrl+R`): query such an item by a regular expression (`{ name: /^Ruler/ }`).
 
@@ -530,6 +535,32 @@ it('puts both icon classes on the icon span', () => {
   expect(icon).toHaveClass(buttonClassNames.icon, toggleButtonClassNames.icon);
 });
 ```
+
+### Wave's utility classes in tests
+
+Since 1.0 every class a component writes carries Wave's utility prefix (`wave:flex`, `wave:bg-primary`), so a test names a component's own class with it: `expect(button).toHaveClass('wave:bg-primary')`, `conflictingClass: { className: 'px-8', overrides: 'wave:px-3' }`. A class the test passes in as a consumer would (a `className`, a part's `className`, a motion slot's value) stays unprefixed, and the merge removes the prefixed class it replaces:
+
+```tsx
+// src/components/button/__tests__/Button.test.tsx
+import { render, screen } from '@testing-library/react';
+import { Button } from '../Button';
+import { buttonClassNames } from '../../../lib/classNames';
+
+it('lets a consumer padding replace its own', () => {
+  render(<Button className="px-8">Save</Button>);
+  const button = screen.getByRole('button', { name: 'Save' });
+  expect(button.classList[0]).toBe(buttonClassNames.root);
+  expect(button).toHaveClass('px-8');
+  expect(button).not.toHaveClass('wave:px-3');
+});
+```
+
+- **Constants first.** Read a part's class from its constant (`switchClassNames.track`), and a motion recipe through `motionClasses(recipe)`, whose words carry the prefix as `src/lib/motion.ts` writes them; spell a utility only where it is the contract.
+- **Selectors escape the colon.** `container.querySelector('.wave\\:flex')` in a JavaScript string (`.wave\:flex` in CSS); a role, a `data-*` attribute or a stable class (`` `.${dataGridClassNames.container}` ``) is the better query.
+- **Class-shape checks match the prefix too.** A filter over a class list (`cls.startsWith('px-')`, `/^-?(top|bottom)-/`) matches no prefixed class, so a negative assertion built on it passes for nothing: write `/^wave:-?(top|bottom)-/`, or strip the prefix before reading variants (as `motion.test.ts`'s parser does).
+- **The merge.** A test that models the components' merge (a harness that composes recipes) imports `wcn` from `src/lib/cn`, the module-only merge the components call; the public `cn` is the same merge, tested in `src/lib/__tests__/cn.test.ts` (a class and its prefixed twin are one utility, the 0.x and the namespaced scales, the public recipes).
+- **Markup pins** hold the prefixed classes as React writes them (`class="wave-switch wave:relative …"`), an arbitrary variant HTML-escaped by `renderToString` (`wave:[&amp;>svg]:size-5` for `wave:[&>svg]:size-5`).
+- **Consumer token classes** in a test are written as an app writes them in 1.0 (`className="text-wave-error"`); the merge still knows 0.x's names, so an older `text-error` in a test merges the same way, but no app's build defines it.
 
 ### Toasts
 
@@ -710,7 +741,7 @@ The cascade is pure functions: `computeCheckStates` and `toggleCheck` in `src/li
 
 The token tests read `src/styles/tokens.css` as text, since jsdom has no cascade, through `src/styles/__tests__/tokensHarness.ts` (0.17): `themeDecls(theme)` and `rootConstants()` are the declarations of a theme group and of the `:root` constants, `resolveToken` follows a token's `var()` chain through a list of scopes, `resolved(theme, token)` does it for the file's own values, and `contrastRatio` gives the unrounded WCAG ratio (a 4.499:1 pair fails). The harness also holds the contrast matrix that `tokens.test.ts` asserts in all three themes: `CONTRAST_PAIRS` (`[foreground, background, threshold]`: 4.5 for text, 3 for strokes, focus rings and graphics), the text matrix (each `SURFACE_TEXT_TOKENS` entry on every `TEXT_SURFACES` surface, and `BOUND_TEXT_SURFACES` for text bound to its own fill or tint) and `NOT_TEXT_TOKENS` (color tokens that are never text, each with its reason).
 
-- **Adding a color token.** Declare it in every theme group of `tokens.css` and map it in `@theme inline`, add its light, dark and high-contrast values to `TOKENS` in `tokens.test.ts`, and classify it in the harness: a text token in `SURFACE_TEXT_TOKENS` or `BOUND_TEXT_SURFACES` (with the surfaces it sits on), a surface in `TEXT_SURFACES` or as the bound surface of its text, a stroke or graphic in `NOT_TEXT_TOKENS` with its reason and a 3:1 row in `CONTRAST_PAIRS`. `tokens.test.ts` fails on a declaration of a theme group that `TOKENS` lacks (the shadows aside) and on a token of `TOKENS` that no list classifies, so a new token cannot skip the matrix. Add the name to `WAVE_TOKEN_NAMES` in `src/lib/waveTokens.ts` too: the parity test of `src/lib/__tests__/waveTokens.test.ts` fails on any `--wave-*` variable the tuple lacks.
+- **Adding a color token.** Declare it in every theme group of `tokens.css`, map it in the namespaced `@theme inline` block of `tokens.css` (`--color-wave-<name>`, for apps; `./utilities` generates its utilities from that block) and in the internal `src/styles/theme.css` (`--color-<name>`, for the components' `wave:` classes), regenerate the migration codemod's table (`node codemod/migrate-1.0.mjs --print-table src/styles/tokens.css`; its test compares it with `tokens.css`), add its light, dark and high-contrast values to `TOKENS` in `tokens.test.ts`, and classify it in the harness: a text token in `SURFACE_TEXT_TOKENS` or `BOUND_TEXT_SURFACES` (with the surfaces it sits on), a surface in `TEXT_SURFACES` or as the bound surface of its text, a stroke or graphic in `NOT_TEXT_TOKENS` with its reason and a 3:1 row in `CONTRAST_PAIRS`. `tokens.test.ts` fails on a declaration of a theme group that `TOKENS` lacks (the shadows aside) and on a token of `TOKENS` that no list classifies, so a new token cannot skip the matrix. Add the name to `WAVE_TOKEN_NAMES` in `src/lib/waveTokens.ts` too: the parity test of `src/lib/__tests__/waveTokens.test.ts` fails on any `--wave-*` variable the tuple lacks.
 - **Running the matrix on other values.** `forEachContrastPair(theme, scopes, callback)` walks a theme's whole matrix, every `CONTRAST_PAIRS` row and then every text token on each of its surfaces at 4.5:1, resolving each token in the theme group and then in `scopes`, and calls `callback` with the resolved colors and the ratio. `[rootConstants()]` gives the file's own values; other constants run the same pairs on other values.
 - **A brand-seed test.** `tokens.brand.test.ts` merges a seed's ramp (`createBrandTokens(seed)`, each `brandN` written as `--wave-brand-N`) over `rootConstants()` and asserts that no pair of the light and dark matrix falls below its threshold, and that every high-contrast token resolves unchanged. To cover a new kind of seed, add it to `BRAND_SEEDS` in the harness: that runs it through the whole matrix there and through `src/lib/__tests__/brand.test.ts` (each stop at the default ramp's luminance, in order, rounded on its safe side). The sweep over many more seeds checks only the pairs that read a brand stop: `brandPairs()` finds them by resolving the matrix with a marker color per stop (`brandMarker`), which no token resolves to. `brand.test.ts` derives `ROUNDS_DARKER` from the same pairs and checks `BRAND_CONTRAST_PAIRS` against `tokens.css`, so a theme token that starts reading another stop fails there until `src/lib/brand.ts` follows.
 
@@ -890,7 +921,7 @@ The set every component gets:
 
 - **The pin.** Each part's markup without `slotProps`, captured once from the dist of the commit before the parts landed and written as a literal: `sortAttributes(renderToString(…))` for parts in the server HTML, `openingTags(…)` or `normaliseIds(sortAttributes(document.body))` after an open client render for parts in a portal (Portal renders nothing on the server). Change a pin only for an intended markup change.
 - **Inertness.** `expectInertSlotProps` on several configurations that together draw every part (open and closed, disabled, selected, right to left, a kept-mounted surface).
-- **Class, style, `data-*` and ref** on every part: the stable class first (`element.classList[0]`), yours last, a conflicting class of the part replaced, the style merged, and the ref attached beside the component's `ref` (and beside `controlRef` on ColorArea, `Table.SelectionCell` and `DataGrid.SelectionCell`, the only components that keep it in 1.0). Read the class from its constant (`switchClassNames.track`), never a literal.
+- **Class, style, `data-*` and ref** on every part: the stable class first (`element.classList[0]`), yours last, a conflicting class of the part replaced (yours unprefixed, the part's `wave:` class gone), the style merged, and the ref attached beside the component's `ref` (and beside `controlRef` on ColorArea, `Table.SelectionCell` and `DataGrid.SelectionCell`, the only components that keep it in 1.0). Read the class from its constant (`switchClassNames.track`), never a literal.
 - **Handlers.** The order (record `['part', 'onClick', 'toggle']`), `preventDefault()` in the part's handler skipping the component's handling and its own `on…` prop, and a StrictMode test that each callback still fires once per interaction.
 - **Locks.** One attempt object per part that tries every locked attribute at once (`id`, `role`, `type`, `tabIndex`, `disabled`, `hidden`, `inert`, `aria-hidden`, the markers), then the component's values asserted (or the pin still matching), and the id lists joined (`aria-labelledby` is the component's ids, then yours). **State-off locks**: an attribute a spread adds only while it is set (`aria-activedescendant` while an option is active, `data-selected`, the `inert` of an exiting surface) needs an explicit `undefined` lock; try it while the state is off, and check that the test fails without the lock.
 - **Must-run work.** A part handler that prevents the default, then the bookkeeping asserted anyway: the tab stop follows the focused cell, a drag ends on pointer up, a held key is forgotten on its release.
@@ -1015,7 +1046,7 @@ describe('Tooltip openDelay', () => {
 - Multi-character typeahead tests (`user.keyboard('Item 42')`) set up `userEvent.setup({ delay: null })`: the 500 ms typeahead buffer is a real timer that a slow runner exceeds between keys typed with the default delay, and without a delay every key of one `keyboard()` call runs in one task, before the timer can fire (strict fake timers would hang the awaited call).
 - `queueMicrotask` stays real (never add it to `toFake`). Focus moves that run in a microtask (a removed toast moving focus on, a focus trap returning focus that landed outside it) are asserted after `await act(async () => {})` or a `userEvent` action: after `act(() => el.focus())` on an element outside an open Dialog, Drawer or DatePicker calendar, flush before asserting where focus ended up. Focus-outside dismissal is decided in a microtask too: after focusing an element outside an open Menu, listbox popup, AvatarGroup popup or InfoLabel popup with a synchronous `act(() => el.focus())`, flush (or write `await act(async () => el.focus())`) before asserting that it closed.
 - Switch back to real timers (or keep `shouldAdvanceTime`) before an axe audit.
-- Tooltip's 0.6 `delay` prop is deprecated and warns: write `openDelay` (and `closeDelay`); keep `delay` only in a test that asserts the deprecation warning.
+- Tooltip's delays are `openDelay` and `closeDelay` (the 0.6 `delay` was removed in 1.0).
 
 ### Hover and the safe zone
 
@@ -1142,20 +1173,28 @@ Warnings go through `src/lib/dev.ts` as `console.warn('[WaveUI] …')` and are d
 
 ```tsx
 // src/components/input/__tests__/Switch.test.tsx
+import * as React from 'react';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { Switch } from '../Switch';
 
-it('still calls the deprecated onChange and warns once', async () => {
+const CHILDREN_WARNING = '[WaveUI] Switch: children are not rendered. Pass the label in `label`.';
+
+it('does not render children and warns once that the label goes in `label`', () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  const onChange = vi.fn();
-  const user = userEvent.setup();
   try {
-    render(<Switch label="Wi-Fi" onChange={onChange} />);
-    await user.click(screen.getByRole('switch', { name: 'Wi-Fi' }));
-    expect(onChange).toHaveBeenCalledWith(true);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain('[WaveUI] Switch: `onChange` is deprecated');
+    const { rerender } = render(
+      <React.StrictMode>
+        <Switch label="Wi-Fi">Ignored text</Switch>
+      </React.StrictMode>,
+    );
+    rerender(
+      <React.StrictMode>
+        <Switch label="Wi-Fi">Ignored text</Switch>
+      </React.StrictMode>,
+    );
+    expect(screen.queryByText('Ignored text')).not.toBeInTheDocument();
+    expect(screen.getByRole('switch')).toHaveAccessibleName('Wi-Fi');
+    expect(warn.mock.calls).toEqual([[CHILDREN_WARNING]]);
   } finally {
     warn.mockRestore();
   }
@@ -1199,7 +1238,7 @@ A passing test prints nothing, the stories gate (`src/__tests__/stories.a11y.tes
 
 - Query by role and accessible name (`getByRole('switch', { name: 'Wi-Fi' })`), and relationships (`toHaveAccessibleDescription`, `toHaveAttribute('aria-controls', …)`), not by class or DOM structure.
 - No presence-only variant tests (`toBeInTheDocument()` as the only assertion); assert the observable difference (a class, an attribute, a state).
-- No hex-color class assertions; components use tokens (`toHaveClass('bg-primary')` when a class is the contract).
+- No hex-color class assertions; components use tokens (`toHaveClass('wave:bg-primary')` when a class is the contract: [Wave's utility classes in tests](#waves-utility-classes-in-tests)).
 - Never write expectations against a literal React id: ids from `useId` are opaque.
 - Popups: open-state axe, dismissal (Escape, outside press) and focus-return tests. Portaled content is not in `container`: query it with `screen`.
 - A click on a link inside a `<label>` (a rich Checkbox, Switch or Radio `label`): user-event forwards every click inside a label to the label's control, which browsers do not do for interactive content. Test "clicking the link does not toggle" with `fireEvent.click(link)` (jsdom's own label activation skips interactive descendants, as browsers do) and say why in a comment; click the label text with `userEvent`.
@@ -1224,13 +1263,13 @@ it('types anchor props when rendered as a link', () => {
 
 ## 11. Repo-level suites
 
-- `src/__tests__/conventions.test.ts` — the conventions gate: one test per source file of `src/components` and for `src/lib/motion.ts` (raw colors also in `stories/`), reporting `file:line [rule]` for raw colors, physical utilities, `translate-x` without a `wave-rtl:` counterpart, Tailwind's bare `rtl:`/`ltr:` variants (use `wave-rtl:`), `focus:outline-none`, arbitrary animations, `forwardRef`, `enabled:` variants, `<button>` without `type`, transitions or animations without a `motion-reduce:` variant, a `data-[presence=…]` class outside `src/lib/motion.ts` (`presence-class`), a `starting:` class not gated on `data-[presence=entering]` (`starting-gate`), and a module that sets a registered component's `displayName` without applying its class-name constant's `root` (`class-names`). The rest of `src/hooks` and `src/lib` is not scanned. Filter with `-t "<path>"`.
+- `src/__tests__/conventions.test.ts` — the conventions gate: one test per source file of `src/components` and for `src/lib/motion.ts` (raw colors also in `stories/`), reading a `wave:`-prefixed class as its unprefixed form, reporting `file:line [rule]` for raw colors, physical utilities, `translate-x` without a `wave-rtl:` counterpart, Tailwind's bare `rtl:`/`ltr:` variants (use `wave-rtl:`), `focus:outline-none`, arbitrary animations, `forwardRef`, `enabled:` variants, `<button>` without `type`, transitions or animations without a `motion-reduce:` variant, a `data-[presence=…]` class outside `src/lib/motion.ts` (`presence-class`), a `starting:` class not gated on `data-[presence=entering]` (`starting-gate`), and a module that sets a registered component's `displayName` without applying its class-name constant's `root` (`class-names`). The rest of `src/hooks` and `src/lib` is not scanned. Filter with `-t "<path>"`.
 - `src/__tests__/stories.a11y.test.tsx` — renders every story with the Storybook preview (WaveProvider, light theme) and audits it with the shared axe instance. Opt-out only with `parameters: { a11y: { test: 'todo' } }` and a comment explaining why.
 - `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`, Tab from a shown Tooltip or open InfoLabel inside a dialog's focus trap, a Popover inside a `Menu.Item`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)). When a release is built in parallel work packages with disjoint files (see `docs/ROADMAP.md`, "Process per release"), a component's own tests use only the shared foundation and its own files: a stand-in with the same attributes (`renderWithFieldContext` for a Field state, a plain `<button aria-disabled="true">` for a focusable disabled button inside `Menu.Trigger`). Every case that needs the real components of two packages at once goes here, once both have landed: in 0.6, a Toolbar with a `disabledFocusable` Button and its Tooltip, `Menu.Trigger` around a `disabledFocusable` MenuButton and SplitButton, a Field warning around Input, Checkbox, Combobox, ColorPicker and a native `<input>`, ProgressBar in a Field, an alert Dialog with a Toaster, a long form with a sticky `Dialog.Footer`, and a SpinButton in a Dialog and in a Drawer whose typed value a backdrop press commits (the component files keep the same mechanism with a plain `<input onBlur>`). In 0.7 the Menu item kinds were tested through the harness of section 5, and the integration suite holds the real popup menus: checkable items in a submenu sharing the root's `checkedValues`, links closing the chain, a context menu with checkable items and a submenu, a Toolbar with a radio group, an Input, a Combobox and a MenuButton, a Popover or Dialog opened from a menu item (a root menu of its own), an exiting `Menu.Popover` inside a Dialog, and a hover-opened submenu inside a click-opened root.
 - `src/__tests__/public-types.test.ts` — every named type that a public declaration refers to (a prop type, an `extends` base, a parameter or return type) is exported from `src/index.ts`. Export a new component's prop types from the entry; only the structural helpers in its `INTERNAL_HELPERS` list may stay internal, and that list must stay current.
 - `src/__tests__/classNames.test.ts` — the class-name registry: every component-like export of the entry (and every compound member) has a constant or is on `NO_ELEMENT`; every constant follows the formula (`wave-<kebab name>`, `__<kebab part>`, no repeated string, no reserved scope class); every export is exported by the entry with the same value; the registry imports nothing; every value is applied as `<constant>.<key>` in some module of `src/components`, except the entries of `PENDING_CLASS_NAMES`, which a phase fills for the parts its parallel packages add and INTEGRATION empties. `public-types.test.ts` has the same kind of bridge, `PENDING_PUBLIC_TYPES`, for public types that become reachable before the barrels export them.
 - `src/__tests__/slotParts.test.ts` — the completeness gate of the parts: every part key of the class-name registry is a `slotProps` key of its component (`SLOT_PROPS_KEYS`, checked against each owner's `slotProps` type through `SlotPropsOwners`), a named slot or an exclusion with a reason (see [Testing `slotProps` and the context hooks](#testing-slotprops-and-the-context-hooks)).
-- `src/__tests__/deprecations.test.tsx` — the 1.0 inventory (`src/lib/deprecations.ts`): every row is announced in the CHANGELOG section of its version and is a line of a table of `docs/UPGRADING-TO-1.0.md`, every row that warns fires its warning once, and the `warnDeprecated` and `resolveDeprecatedProp` call sites of `src` are the warning rows, so a new alias cannot be added without a row. The task that removes an alias sets `done: true` on its row (Phase 14, R2), and the checks turn round for it: the call-site count ignores the row, it has no warning case and no `warnOnce` of its key is left, a file it deleted must not exist (`absent.file`), and the exports, registry classes and stylesheet text its `absent` lists are gone; the removed prop itself is a `// @ts-expect-error` case in the component's own suite. The fixture-row tests at the end of the file show each check turning round without flagging a real row.
+- `src/__tests__/removedApi.test.ts` — what 1.0 removed stays removed: the entry exports none of the removed values and `Table` has no `Head` or `HeadCell` member, the removed types are `// @ts-expect-error` cases, `package.json` exports and `src/styles` hold neither `legacy-tokens` nor `animations`, no stylesheet holds the 0.4 names or the `.dark` and `.high-contrast` selectors, the registry holds neither removed TagPicker class, and no library module names a removed export. A removed prop itself is a `// @ts-expect-error` case in the component's own suite. (It replaced the 0.18 inventory `src/lib/deprecations.ts` and its test, which Phase 14 retired.)
 - `src/__tests__/test-utils.test.tsx` — tests of the helpers themselves.
 - `src/styles/__tests__/tokens.test.ts` — every theme declares every token, and every contrast pair of the matrix in `tokensHarness.ts` meets its WCAG threshold (unrounded; see [Tokens: the contrast matrix and brand seeds](#tokens-the-contrast-matrix-and-brand-seeds), with `tokens.brand.test.ts` for generated brand ramps); it also pins `base.css` and the style entries and tests `scripts/build-css.mjs`. It runs in the node environment (`// @vitest-environment node`): it needs no DOM, and under jsdom Vite's client transform could not load the gate scripts.
 
