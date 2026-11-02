@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { inputClassNames } from '../../lib/classNames';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -87,7 +87,7 @@ export function useControlErrorMessage(
       role="alert"
       {...messageRest}
       id={messageId}
-      className={cn(partClassName, 'mt-1 block text-caption-1 text-error', messageClassName)}
+      className={wcn(partClassName, 'mt-1 block text-caption-1 text-error', messageClassName)}
     >
       {error}
     </span>
@@ -326,7 +326,7 @@ export const Input = ({
     // hide it; `ref`, `id`, `aria-*`, `data-*`, handlers and native attributes go to the input.
     const { hidden, ...inputProps } = controlPropsWithoutStyle;
     const rootProps = mergeSlotProps(slotProps?.root, {
-      className: cn(
+      className: wcn(
         inputClassNames.root,
         'inline-flex w-full items-center',
         inputHeightClasses[size],
@@ -352,11 +352,11 @@ export const Input = ({
           renderSlot(
             contentBefore,
             'span',
-            cn(inputClassNames.contentBefore, 'shrink-0', SLOT_PADDING[size].before),
+            wcn(inputClassNames.contentBefore, 'shrink-0', SLOT_PADDING[size].before),
           )}
         <input
           {...mergeSlotProps(slotProps?.input, {
-            className: cn(
+            className: wcn(
               inputClassNames.input,
               'h-full w-full min-w-0 bg-transparent',
               SLOT_PADDING[size].input,
@@ -375,7 +375,7 @@ export const Input = ({
           renderSlot(
             contentAfter,
             'span',
-            cn(inputClassNames.contentAfter, 'shrink-0', SLOT_PADDING[size].after),
+            wcn(inputClassNames.contentAfter, 'shrink-0', SLOT_PADDING[size].after),
           )}
       </span>
     );
@@ -384,7 +384,7 @@ export const Input = ({
     control = (
       <input
         {...mergeSlotProps([slotProps?.root, slotProps?.input], {
-          className: cn(
+          className: wcn(
             inputClassNames.root,
             inputClassNames.input,
             inputHeightClasses[size],

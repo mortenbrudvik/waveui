@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { listboxClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { isOwnEvent } from '../../lib/events';
@@ -418,7 +418,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       // Bookkeeping that mirrors the DOM: it runs even when a consumer handler prevents the event.
       onFocus={composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false })}
       onBlur={composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false })}
-      className={cn(
+      className={wcn(
         listboxClassNames.root,
         // The list's own margin, padding and markers are set here, not left to the native reset
         // (C-NATIVE).

@@ -6,6 +6,11 @@
  *   src/styles/styles.css    -> <out>/styles.css     (`@mortenbrudvik/waveui/styles`)
  *   src/styles/preflight.css -> <out>/preflight.css  (`@mortenbrudvik/waveui/preflight.css`)
  *
+ * styles.css compiles the utilities against src/styles/theme.css, the internal, unnamespaced
+ * theme (`--color-primary: var(--wave-primary)`, the type ramp, the shadows, …), which only it
+ * imports: an `@theme inline reference` block, so no theme variable of it is emitted (1.0, spec
+ * R6 of Phase 14; apps get the namespaced keys of tokens.css).
+ *
  * Both files are minified and unlayered. The assertions on styles.css:
  *   - every theme rule of tokens.css (ramps, three theme groups, color-scheme rules) is present
  *     with the same properties, so every `--wave-*` variable ships, and no rule selects `.dark`

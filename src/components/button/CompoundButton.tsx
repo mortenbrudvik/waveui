@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { buttonClassNames, compoundButtonClassNames } from '../../lib/classNames';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -191,7 +191,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
         size={size}
         icon={withPartClass(icon, compoundButtonClassNames.icon)}
         iconPosition={iconPosition}
-        className={cn(compoundButtonClassNames.root, className)}
+        className={wcn(compoundButtonClassNames.root, className)}
       />
     );
   }
@@ -199,7 +199,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
   const iconElement = renderSlot(
     slotRendersContent(icon) ? icon : undefined,
     'span',
-    cn(
+    wcn(
       buttonClassNames.icon,
       compoundButtonClassNames.icon,
       'inline-flex shrink-0 items-center justify-center [&>svg]:size-full',
@@ -213,7 +213,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
   const content = (
     <span
       {...mergeSlotProps(slotProps?.contentContainer, {
-        className: cn(
+        className: wcn(
           compoundButtonClassNames.contentContainer,
           'flex min-w-0 flex-col items-start',
         ),
@@ -223,7 +223,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
     >
       <span
         {...mergeSlotProps(slotProps?.primaryText, {
-          className: cn(compoundButtonClassNames.primaryText, 'font-bold'),
+          className: wcn(compoundButtonClassNames.primaryText, 'font-bold'),
           // The text names the button: a part neither renames nor hides it.
           locked: TEXT_PART_LOCKS,
           blockHandlers,
@@ -234,7 +234,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
       {hasSecondary && (
         <span
           {...mergeSlotProps(slotProps?.secondaryText, {
-            className: cn(
+            className: wcn(
               compoundButtonClassNames.secondaryText,
               'text-caption-1 font-normal',
               appearance === 'primary' ? 'text-primary-foreground' : 'text-muted-foreground',
@@ -254,7 +254,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
       {...rest}
       appearance={appearance}
       size={size}
-      className={cn(
+      className={wcn(
         compoundButtonClassNames.root,
         'h-auto items-center justify-start gap-3 text-start',
         paddingClasses[size],

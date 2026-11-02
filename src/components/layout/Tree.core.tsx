@@ -2,7 +2,7 @@ import * as React from 'react';
 import { joinIds } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { treeClassNames, treeItemClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -461,7 +461,7 @@ export const TreeRoot = ({
             role="tree"
             data-selection-mode={selectionMode}
             aria-multiselectable={selectionMode === 'multiple' ? true : undefined}
-            className={cn(treeClassNames.root, 'text-body-1', className)}
+            className={wcn(treeClassNames.root, 'text-body-1', className)}
             {...rest}
             data-roving-container=""
             onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
@@ -785,7 +785,7 @@ const TreeItemActions = ({
   // the container (which would hand its stamped tab stops back).
   const toolbarRef = useMergedRefs<HTMLSpanElement>(rovingRef, part?.ref);
   const focusInPopup = popupFocus === null ? undefined : '';
-  const className = cn(
+  const className = wcn(
     treeItemClassNames.actions,
     'inline-flex items-center gap-1',
     ACTIONS_VISIBILITY,
@@ -939,13 +939,13 @@ export const TreeItem = ({
   // to the row. The check does not consume a generator: renderSlot still renders its items.
   const iconNode =
     icon && slotRendersContent(icon)
-      ? renderSlot(icon, 'span', cn(treeItemClassNames.icon, 'inline-flex shrink-0'), {
+      ? renderSlot(icon, 'span', wcn(treeItemClassNames.icon, 'inline-flex shrink-0'), {
           'aria-hidden': true,
         })
       : null;
   const iconAfterNode =
     iconAfter && slotRendersContent(iconAfter)
-      ? renderSlot(iconAfter, 'span', cn(treeItemClassNames.iconAfter, 'inline-flex shrink-0'), {
+      ? renderSlot(iconAfter, 'span', wcn(treeItemClassNames.iconAfter, 'inline-flex shrink-0'), {
           'aria-hidden': true,
         })
       : null;
@@ -978,7 +978,7 @@ export const TreeItem = ({
   if (hasChildren && (expandIcon === undefined || expandIcon === null)) {
     chevron = (
       <ChevronRightIcon
-        className={cn(
+        className={wcn(
           treeItemClassNames.expandIcon,
           'shrink-0 transition-transform motion-reduce:transition-none',
           isExpanded ? 'rotate-90' : 'wave-rtl:-scale-x-100',
@@ -989,7 +989,7 @@ export const TreeItem = ({
     chevron = renderSlot(
       expandIcon,
       'span',
-      cn(treeItemClassNames.expandIcon, 'inline-flex shrink-0'),
+      wcn(treeItemClassNames.expandIcon, 'inline-flex shrink-0'),
       { 'aria-hidden': true },
     );
   }
@@ -1130,13 +1130,13 @@ export const TreeItem = ({
   const checkboxClasses =
     checkState === undefined
       ? undefined
-      : cn(
+      : wcn(
           treeItemClassNames.indicator,
           // Checkbox's box: 16px inside a 24px target (the pseudo-element), WCAG 2.5.8.
           'relative inline-flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none',
           'before:absolute before:-inset-1',
           checkState === 'unchecked'
-            ? cn('border-stroke-accessible bg-transparent', forcedColors.control)
+            ? wcn('border-stroke-accessible bg-transparent', forcedColors.control)
             : 'border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]',
         );
   const checkbox =
@@ -1178,12 +1178,12 @@ export const TreeItem = ({
   // it is a click on the row, so it activates the item.
   const radioClasses =
     ctx.selectionMode === 'single'
-      ? cn(
+      ? wcn(
           treeItemClassNames.indicator,
           'inline-flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors motion-reduce:transition-none',
           isSelected
             ? 'border-2 border-primary forced-colors:border-[Highlight]'
-            : cn('border-stroke-accessible', forcedColors.control),
+            : wcn('border-stroke-accessible', forcedColors.control),
         )
       : undefined;
   const radio =
@@ -1198,7 +1198,9 @@ export const TreeItem = ({
           }))}
       >
         {isSelected && (
-          <span className={cn('block size-2 rounded-full bg-primary', forcedColors.selectedLeaf)} />
+          <span
+            className={wcn('block size-2 rounded-full bg-primary', forcedColors.selectedLeaf)}
+          />
         )}
       </span>
     ) : null;
@@ -1208,26 +1210,26 @@ export const TreeItem = ({
   // Items in this item's group are checked when the list checks this item or an ancestor.
   const groupListed = ancestorListed || (multiple && ctx.checked.has(value));
 
-  const rowClasses = cn(
+  const rowClasses = wcn(
     treeItemClassNames.row,
     'flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-subtle-hover',
     hasActions && 'group/row',
-    isSelected && cn('bg-subtle-selected font-semibold', forcedColors.selectedContainer),
+    isSelected && wcn('bg-subtle-selected font-semibold', forcedColors.selectedContainer),
   );
   // The label shrinks (and truncates) when the row has content after it.
-  const labelClasses = cn(
+  const labelClasses = wcn(
     treeItemClassNames.label,
     'truncate',
     (iconAfterNode || hasAside || hasActions) && 'min-w-0',
   );
   const asideClasses = hasAside
-    ? cn(
+    ? wcn(
         treeItemClassNames.aside,
         'inline-flex items-center text-caption-1 text-muted-foreground',
         hasActions && ASIDE_OFF_WITH_ACTIONS,
       )
     : undefined;
-  const groupClasses = isGroupMounted ? cn(treeItemClassNames.group, 'ps-4') : undefined;
+  const groupClasses = isGroupMounted ? wcn(treeItemClassNames.group, 'ps-4') : undefined;
 
   return (
     <div
@@ -1236,7 +1238,7 @@ export const TreeItem = ({
       aria-current={isCurrent ? true : undefined}
       data-checked={checkState === 'checked' ? '' : undefined}
       data-mixed={checkState === 'mixed' ? '' : undefined}
-      className={cn(
+      className={wcn(
         treeItemClassNames.root,
         // The focus ring is drawn on the row: an outline on the treeitem would surround its
         // whole subtree.
@@ -1317,7 +1319,7 @@ export const TreeItem = ({
         {(hasAside || hasActions) && (
           <span
             data-tree-end=""
-            className={cn(
+            className={wcn(
               'group/end ms-auto inline-grid shrink-0 items-center gap-1',
               hasAside && hasActions && END_CELL_SHARED,
             )}
@@ -1367,7 +1369,7 @@ export const TreeItem = ({
               <div
                 ref={collapseRef}
                 {...collapsePresenceProps}
-                className={cn(treeItemClassNames.collapse, collapseClassName)}
+                className={wcn(treeItemClassNames.collapse, collapseClassName)}
               >
                 <div
                   role="group"

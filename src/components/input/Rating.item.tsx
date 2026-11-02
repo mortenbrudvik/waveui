@@ -4,7 +4,7 @@ import {
   ratingDisplayClassNames,
   ratingItemClassNames,
 } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
@@ -190,7 +190,7 @@ function GlyphLayer({
   className: string;
 }) {
   if (glyph != null) {
-    return renderSlot(glyph, 'span', cn('inline-flex shrink-0 [&>svg]:size-full', className), {
+    return renderSlot(glyph, 'span', wcn('inline-flex shrink-0 [&>svg]:size-full', className), {
       'aria-hidden': true,
     });
   }
@@ -255,17 +255,21 @@ export const StarGlyph = ({
       <span
         {...rest}
         ref={ref}
-        className={cn(starClassName, 'relative inline-flex', unfilled.colorClass, className)}
+        className={wcn(starClassName, 'relative inline-flex', unfilled.colorClass, className)}
       >
-        <GlyphLayer filled={false} glyph={unfilled.glyph} className={cn(iconClassName, starSize)} />
+        <GlyphLayer
+          filled={false}
+          glyph={unfilled.glyph}
+          className={wcn(iconClassName, starSize)}
+        />
         <span
-          className={cn('absolute inset-y-0 start-0 flex overflow-hidden', filled.colorClass)}
+          className={wcn('absolute inset-y-0 start-0 flex overflow-hidden', filled.colorClass)}
           style={{ width: `${percent}%` }}
         >
           <GlyphLayer
             filled
             glyph={filled.glyph}
-            className={cn(iconClassName, starSize, 'shrink-0')}
+            className={wcn(iconClassName, starSize, 'shrink-0')}
           />
         </span>
       </span>
@@ -277,9 +281,9 @@ export const StarGlyph = ({
     <span
       {...rest}
       ref={ref}
-      className={cn(starClassName, 'inline-flex', look.colorClass, className)}
+      className={wcn(starClassName, 'inline-flex', look.colorClass, className)}
     >
-      <GlyphLayer filled={filled} glyph={look.glyph} className={cn(iconClassName, starSize)} />
+      <GlyphLayer filled={filled} glyph={look.glyph} className={wcn(iconClassName, starSize)} />
     </span>
   );
 };
@@ -522,12 +526,12 @@ export const RatingItem = ({
   // rendered inside another, D5), whether the root generated the item or the consumer passed it.
   const starClassName =
     ctx.kind === 'display'
-      ? cn(ratingItemClassNames.root, ratingDisplayClassNames.star)
-      : cn(ratingItemClassNames.root, ratingClassNames.star);
+      ? wcn(ratingItemClassNames.root, ratingDisplayClassNames.star)
+      : wcn(ratingItemClassNames.root, ratingClassNames.star);
   const iconClassName =
     ctx.kind === 'display'
-      ? cn(ratingItemClassNames.icon, ratingDisplayClassNames.icon)
-      : cn(ratingItemClassNames.icon, ratingClassNames.icon);
+      ? wcn(ratingItemClassNames.icon, ratingDisplayClassNames.icon)
+      : wcn(ratingItemClassNames.icon, ratingClassNames.icon);
 
   // `rest` keeps every consumer handler: a star without handlers of its own (a display star)
   // spreads them all, and a star that composes one takes that one out of `rest` itself.
@@ -571,7 +575,7 @@ export const RatingItem = ({
       <span
         {...starProps}
         ref={ref as React.Ref<HTMLSpanElement>}
-        className={cn(
+        className={wcn(
           starClassName,
           'relative inline-flex cursor-pointer rounded',
           targetPaddingMap[ctx.size],
@@ -616,7 +620,7 @@ export const RatingItem = ({
               data-roving-value={radioKey}
               tabIndex={ctx.disabled ? -1 : ctx.getTabIndex(radioKey)}
               disabled={ctx.disabled}
-              className={cn(
+              className={wcn(
                 'pointer-events-none absolute inset-y-0 w-1/2 border-0 bg-transparent p-0 opacity-0',
                 index === 0 ? 'start-0' : 'end-0',
               )}
@@ -648,7 +652,7 @@ export const RatingItem = ({
       data-roving-value={key}
       tabIndex={ctx.disabled ? -1 : ctx.getTabIndex(key)}
       disabled={ctx.disabled}
-      className={cn(
+      className={wcn(
         starClassName,
         'inline-flex cursor-pointer rounded border-0 bg-transparent transition-colors motion-reduce:transition-none disabled:cursor-not-allowed',
         targetPaddingMap[ctx.size],
@@ -668,7 +672,7 @@ export const RatingItem = ({
       <GlyphLayer
         filled={filled}
         glyph={look.glyph}
-        className={cn(iconClassName, sizeMap[ctx.size])}
+        className={wcn(iconClassName, sizeMap[ctx.size])}
       />
     </button>
   );

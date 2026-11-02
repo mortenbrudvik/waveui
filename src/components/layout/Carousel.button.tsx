@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { carouselButtonClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../lib/icons';
@@ -45,7 +45,7 @@ export const CarouselButton = ({
       {...focusableDisabledProps(disabled)}
       ref={ref}
       onClick={preventIfDisabled(disabled, composeEventHandlers(onClick, go))}
-      className={cn(
+      className={wcn(
         carouselButtonClassNames.root,
         CAROUSEL_CONTROL_BASE,
         CAROUSEL_CONTROL_LAYOUT[carousel.controlsLayout][direction],

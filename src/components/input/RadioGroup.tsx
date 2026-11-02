@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
 import { radioGroupClassNames, radioGroupItemClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
@@ -162,7 +162,7 @@ const RadioGroupRoot = ({
         {...fieldProps}
         aria-orientation={orientation}
         aria-disabled={disabled || undefined}
-        className={cn(
+        className={wcn(
           radioGroupClassNames.root,
           'relative flex',
           orientation === 'vertical' ? 'flex-col gap-2' : 'flex-row gap-4',
@@ -333,7 +333,7 @@ export function RadioItem({
   // The item's `style` is the part's own style, which a part style is merged over.
   const { style, ...restWithoutStyle } = rest;
   const indicatorProps = mergeSlotProps(slotProps?.indicator, {
-    className: cn(
+    className: wcn(
       radioGroupItemClassNames.indicator,
       // p-0 and bg-transparent are set here, not left to the native reset, which any app button
       // style overrides (C-NATIVE).
@@ -375,13 +375,13 @@ export function RadioItem({
     },
   });
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: cn(radioGroupItemClassNames.label, 'text-body-1 text-foreground', labelClassName),
+    className: wcn(radioGroupItemClassNames.label, 'text-body-1 text-foreground', labelClassName),
     // The text names the control through aria-labelledby: an aria-label would replace it.
     locked: { id: labelTextId, 'aria-label': undefined },
     blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
   });
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(
+    className: wcn(
       radioGroupItemClassNames.root,
       // items-start: the radio lines up with the first line of a label that wraps or has a
       // second line, not with its middle.
@@ -410,7 +410,7 @@ export function RadioItem({
         {selected && (
           <span
             aria-hidden="true"
-            className={cn(
+            className={wcn(
               'block h-2 w-2 rounded-full bg-primary',
               isDisabled ? disabledDot : forcedColors.selectedLeaf,
             )}

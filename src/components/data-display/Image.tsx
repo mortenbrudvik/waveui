@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { imageClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import type { Shape } from '../../lib/types';
@@ -115,7 +115,7 @@ export const Image = ({
     <img
       ref={ref}
       alt={alt}
-      className={cn(
+      className={wcn(
         imageClassNames.root,
         fitMap[fit],
         shapeMap[shape],

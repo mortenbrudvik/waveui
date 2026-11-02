@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { isElementOfType } from './children';
-import { cn } from './cn';
+import { wcn } from './cn';
 import { warnOnce } from './dev';
 
 /**
@@ -361,9 +361,9 @@ export function resolveWiredSlot(
     : { Component: type, props, children: undefined };
 }
 
-/** `cn(base, own)`, or `undefined` when there are no classes, so no empty `class=""` renders. */
+/** `wcn(base, own)`, or `undefined` when there are no classes, so no empty `class=""` renders. */
 function mergeClassName(baseClassName: string | undefined, className: unknown): string | undefined {
-  return cn(baseClassName, className as string | undefined) || undefined;
+  return wcn(baseClassName, className as string | undefined) || undefined;
 }
 
 /**

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { spinnerClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { Size } from '../../lib/types';
@@ -180,7 +180,7 @@ export const Spinner = ({
   // The parts merge only when given.
   const ringPart = slotProps?.spinner;
   const ringClassName = shown
-    ? cn(
+    ? wcn(
         spinnerClassNames.spinner,
         'rounded-full border-2 animate-wave-spin motion-reduce:animate-wave-spin-slow',
         colors.ring,
@@ -189,9 +189,9 @@ export const Spinner = ({
       )
     : undefined;
   const labelPart = slotProps?.label;
-  const labelClassName = cn(
+  const labelClassName = wcn(
     spinnerClassNames.label,
-    labelVisible ? cn('text-body-1', colors.label) : 'sr-only',
+    labelVisible ? wcn('text-body-1', colors.label) : 'sr-only',
   );
 
   return (
@@ -202,7 +202,7 @@ export const Spinner = ({
       role={role}
       aria-label={nameFromLabel ? label : rest['aria-label']}
       ref={ref}
-      className={cn(spinnerClassNames.root, 'inline-flex items-center gap-2', className)}
+      className={wcn(spinnerClassNames.root, 'inline-flex items-center gap-2', className)}
     >
       {shown ? (
         <span

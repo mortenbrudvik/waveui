@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { splitButtonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
@@ -219,7 +219,7 @@ export const SplitButton = ({
       ref={ref}
       {...props}
       role={role ?? 'group'}
-      className={cn(splitButtonClassNames.root, 'inline-flex items-stretch', className)}
+      className={wcn(splitButtonClassNames.root, 'inline-flex items-stretch', className)}
     >
       <Button
         {...primary}
@@ -229,7 +229,7 @@ export const SplitButton = ({
         disabledFocusable={primaryFocusable}
         icon={withPartClass(icon, splitButtonClassNames.icon)}
         iconPosition={iconPosition}
-        className={cn(
+        className={wcn(
           splitButtonClassNames.primaryActionButton,
           halfClasses,
           'rounded-e-none border-e-0',
@@ -248,7 +248,7 @@ export const SplitButton = ({
           menuIconRenders ? menuGlyph : <ChevronDownIcon />,
           splitButtonClassNames.menuIcon,
         )}
-        className={cn(
+        className={wcn(
           splitButtonClassNames.menuButton,
           halfClasses,
           menuButtonSizeClasses[size],

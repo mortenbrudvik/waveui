@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { menuDividerClassNames, menuItemClassNames } from '../../lib/classNames';
 import type { Slot } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
@@ -187,14 +187,14 @@ export function MenuItemRow({
       ? renderSlot(
           icon,
           'span',
-          cn(partClassNames?.icon, 'flex h-5 w-5 shrink-0 items-center justify-center'),
+          wcn(partClassNames?.icon, 'flex h-5 w-5 shrink-0 items-center justify-center'),
           { 'aria-hidden': true, 'data-menu-icon': '' },
         )
       : null;
-  const contentClasses = cn(partClassNames?.content, 'flex-1');
+  const contentClasses = wcn(partClassNames?.content, 'flex-1');
   const labelMarker = markLabel && hasLabel && typeof label !== 'string' ? '' : undefined;
   const shortcutClasses =
-    shortcut && cn(partClassNames?.shortcut, 'ms-4 text-caption-1 text-muted-foreground');
+    shortcut && wcn(partClassNames?.shortcut, 'ms-4 text-caption-1 text-muted-foreground');
 
   return (
     <>
@@ -202,7 +202,7 @@ export function MenuItemRow({
         <span
           aria-hidden="true"
           data-menu-checkmark=""
-          className={cn(
+          className={wcn(
             partClassNames?.checkmark,
             'inline-flex w-4 shrink-0 items-center justify-center',
           )}
@@ -458,7 +458,7 @@ export const MenuItem = ({
       data-has-submenu={isSubmenuTrigger ? '' : undefined}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
-      className={cn(menuItemClassNames.root, menuItemClasses, className)}
+      className={wcn(menuItemClassNames.root, menuItemClasses, className)}
     >
       <MenuItemRow
         icon={icon}
@@ -491,7 +491,7 @@ function renderSubmenuIndicator(
   part: SlotPart<'svg'> | undefined,
   disabled: boolean,
 ): React.ReactElement {
-  const className = cn(
+  const className = wcn(
     menuItemClassNames.submenuIndicator,
     'ms-auto shrink-0 wave-rtl:-scale-x-100',
   );
@@ -520,7 +520,7 @@ export const MenuDivider = ({ className, ref, ...rest }: MenuDividerProps) => {
       role="separator"
       {...rest}
       ref={ref}
-      className={cn(menuDividerClassNames.root, 'my-1 border-t border-border', className)}
+      className={wcn(menuDividerClassNames.root, 'my-1 border-t border-border', className)}
     />
   );
 };

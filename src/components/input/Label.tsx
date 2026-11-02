@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { labelClassNames } from '../../lib/classNames';
 import { markFieldLabel } from './fieldLabel';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
@@ -79,13 +79,13 @@ export const Label = ({
   ...rest
 }: LabelProps) => {
   const requiredProps = mergeSlotProps(slotProps?.required, {
-    className: cn(labelClassNames.required, 'ms-1 text-error'),
+    className: wcn(labelClassNames.required, 'ms-1 text-error'),
     locked: { 'aria-hidden': 'true', tabIndex: undefined },
   });
   return (
     <label
       ref={ref}
-      className={cn(
+      className={wcn(
         labelClassNames.root,
         disabled ? 'text-muted-foreground' : 'text-foreground',
         sizeMap[size],

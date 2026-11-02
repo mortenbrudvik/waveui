@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { stepperClassNames, stepperStepClassNames } from '../../lib/classNames';
 import { reportMissingContext } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
@@ -328,7 +328,7 @@ const indicatorSlotClasses = 'inline-flex items-center justify-center';
  * Canvas, so it opts out there: a completed one is painted `Highlight` (`forcedColors.fill`), the
  * others `CanvasText`, like a Slider rail.
  */
-const connectorCompletedClasses = cn('bg-success', forcedColors.fill);
+const connectorCompletedClasses = wcn('bg-success', forcedColors.fill);
 const connectorPendingClasses =
   'bg-border forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none';
 
@@ -471,7 +471,7 @@ const StepperStep = ({
   } else if (isCompleted && !hasIcon) {
     indicator = <CheckIcon />;
   } else if (hasIcon) {
-    indicator = renderSlot(icon, 'span', cn(stepperStepClassNames.icon, indicatorSlotClasses), {
+    indicator = renderSlot(icon, 'span', wcn(stepperStepClassNames.icon, indicatorSlotClasses), {
       'aria-hidden': true,
     });
   } else {
@@ -501,12 +501,12 @@ const StepperStep = ({
     onKeyDown: handleKeyDown,
     onKeyUp: handleKeyUp,
   } as const;
-  const listItemClassName = cn(
+  const listItemClassName = wcn(
     stepperStepClassNames.listItem,
     'flex min-w-0',
     horizontal && !isLast && 'flex-1',
   );
-  const buttonClassName = cn(
+  const buttonClassName = wcn(
     stepperStepClassNames.button,
     'relative flex rounded',
     horizontal ? 'flex-col items-center gap-1' : 'items-center gap-3',
@@ -514,25 +514,25 @@ const StepperStep = ({
     isClickable ? 'cursor-pointer' : 'cursor-default',
     disabled && 'opacity-50',
   );
-  const indicatorClassName = cn(
+  const indicatorClassName = wcn(
     stepperStepClassNames.indicator,
     'flex size-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors motion-reduce:transition-none',
     error
       ? 'border-error bg-error-tint text-error-tint-foreground'
       : isActive
-        ? cn('border-primary bg-primary text-primary-foreground', forcedColors.selectedLeaf)
+        ? wcn('border-primary bg-primary text-primary-foreground', forcedColors.selectedLeaf)
         : isCompleted
           ? 'border-success bg-success-tint text-success-tint-foreground'
           : 'border-border bg-background text-muted-foreground',
   );
-  const labelClassName = cn(
+  const labelClassName = wcn(
     stepperStepClassNames.label,
     'font-semibold',
     horizontal ? 'text-caption-1 whitespace-nowrap' : 'text-body-1',
     toneClass,
   );
   const descriptionClassName = description
-    ? cn(
+    ? wcn(
         stepperStepClassNames.description,
         'text-muted-foreground',
         horizontal ? 'text-caption-2 whitespace-nowrap' : 'text-caption-1',
@@ -540,7 +540,7 @@ const StepperStep = ({
     : undefined;
   const connectorClassName = isLast
     ? undefined
-    : cn(
+    : wcn(
         stepperStepClassNames.connector,
         'transition-colors motion-reduce:transition-none',
         // Vertical: centred under the size-8 circle, (8 - 0.5) / 2 spacing units in, so the
@@ -566,7 +566,7 @@ const StepperStep = ({
         data-error={error ? '' : undefined}
         data-disabled={disabled ? '' : undefined}
         {...rest}
-        className={cn(
+        className={wcn(
           stepperStepClassNames.root,
           horizontal ? 'flex flex-1 items-center' : 'flex flex-1 flex-col',
           className,
@@ -594,7 +594,7 @@ const StepperStep = ({
           >
             {indicator}
           </span>
-          <span className={cn('flex flex-col', horizontal && 'items-center text-center')}>
+          <span className={wcn('flex flex-col', horizontal && 'items-center text-center')}>
             <span
               id={labelId}
               className={labelClassName}
@@ -719,7 +719,7 @@ const StepperRoot = ({
   );
 
   const horizontal = orientation === 'horizontal';
-  const listClassName = cn(
+  const listClassName = wcn(
     stepperClassNames.list,
     'm-0 flex list-none p-0',
     horizontal ? 'flex-1 flex-row items-start' : 'flex-col',
@@ -733,7 +733,7 @@ const StepperRoot = ({
         aria-label="Progress"
         data-orientation={orientation}
         {...rest}
-        className={cn(
+        className={wcn(
           stepperClassNames.root,
           'flex',
           horizontal ? 'flex-row items-start' : 'flex-col',

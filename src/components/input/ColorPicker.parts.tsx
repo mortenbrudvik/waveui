@@ -9,7 +9,7 @@ import {
   colorPickerPreviewClassNames,
   colorPickerSwatchesClassNames,
 } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -471,7 +471,7 @@ export const ColorPickerHexField = ({
   );
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(colorPickerHexFieldClassNames.root, 'flex min-w-0 flex-col gap-1', className),
+    className: wcn(colorPickerHexFieldClassNames.root, 'flex min-w-0 flex-col gap-1', className),
     style,
     locked: {
       // The label labels the input it holds: a part's `for` would send the caption's clicks to
@@ -490,7 +490,7 @@ export const ColorPickerHexField = ({
     <label {...rootProps}>
       <span
         {...mergeSlotProps(slotProps?.label, {
-          className: cn(
+          className: wcn(
             colorPickerHexFieldClassNames.label,
             'text-caption-1 text-muted-foreground',
           ),
@@ -500,7 +500,7 @@ export const ColorPickerHexField = ({
       </span>
       <input
         {...mergeSlotProps(slotProps?.input, {
-          className: cn(
+          className: wcn(
             colorPickerHexFieldClassNames.input,
             'w-24 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1 text-body-1 text-foreground',
             inputFocus,
@@ -553,7 +553,7 @@ export const ColorPickerHexField = ({
       {draftInvalid && (
         <span
           {...mergeSlotProps(slotProps?.errorMessage, {
-            className: cn(colorPickerHexFieldClassNames.errorMessage, 'text-caption-1 text-error'),
+            className: wcn(colorPickerHexFieldClassNames.errorMessage, 'text-caption-1 text-error'),
             locked: { id: errorId },
           })}
         >
@@ -594,7 +594,7 @@ export const ColorPickerSwatches = ({
       size={size}
       shape={shape}
       {...rest}
-      className={cn(colorPickerSwatchesClassNames.root, className)}
+      className={wcn(colorPickerSwatchesClassNames.root, className)}
       items={picker.presetItems}
       value={picker.parsed ? picker.parsed.rgb : ''}
       onValueChange={picker.pickPreset}
@@ -625,7 +625,7 @@ export const ColorPickerPreview = ({ className, style, ref, ...rest }: ColorPick
       aria-hidden="true"
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         colorPickerPreviewClassNames.root,
         'h-10 w-10 shrink-0 rounded border border-border forced-colors:forced-color-adjust-none',
         picker.shape === 'square' && 'rounded-none',

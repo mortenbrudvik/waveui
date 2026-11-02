@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { getElementType, isElementOfType } from '../../lib/children';
 import { searchBoxClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon, SearchIcon } from '../../lib/icons';
@@ -306,7 +306,7 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
     const iconNode = renderSlot(
       props.icon as Slot<'span'>,
       'span',
-      cn(searchBoxClassNames.dismissIcon, 'inline-flex'),
+      wcn(searchBoxClassNames.dismissIcon, 'inline-flex'),
       { 'aria-hidden': true },
     );
     const buttonContent =
@@ -387,7 +387,7 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss'], size: CoreSize): Dis
   const iconProps = {
     'aria-hidden': true,
     ...contentProps,
-    className: cn(searchBoxClassNames.dismissIcon, contentProps.className as string | undefined),
+    className: wcn(searchBoxClassNames.dismissIcon, contentProps.className as string | undefined),
   };
   const content =
     contentChildren === undefined
@@ -590,14 +590,14 @@ export const SearchBox = ({
       type: 'button',
       disabled,
       'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_CLEAR_LABEL,
-      className: cn(
+      className: wcn(
         searchBoxClassNames.dismissButton,
         // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill it.
         'me-1 flex shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground',
         SEARCH_SIZE[size].clear,
         // hitAreaLayer needs a positioned element: unlike the picker buttons, the small clear
         // button sits in the row without its own position, so it sets one here.
-        size === 'small' && cn('relative', hitAreaLayer),
+        size === 'small' && wcn('relative', hitAreaLayer),
         'not-disabled:not-aria-disabled:hover:text-foreground',
         focusRing,
         'disabled:cursor-not-allowed',
@@ -660,7 +660,7 @@ export const SearchBox = ({
   const hasAfter = slotRendersContent(contentAfter);
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(
+    className: wcn(
       searchBoxClassNames.root,
       // The root draws the field; the slots, the text and the clear button are laid out side by
       // side inside it, so a slot never covers the text.
@@ -695,7 +695,7 @@ export const SearchBox = ({
   return (
     <div {...rootProps}>
       <span
-        className={cn(
+        className={wcn(
           searchBoxClassNames.contentBefore,
           'flex shrink-0 items-center',
           SEARCH_SIZE[size].before,
@@ -710,7 +710,7 @@ export const SearchBox = ({
 
       <input
         {...mergeSlotProps(slotProps?.input, {
-          className: cn(
+          className: wcn(
             searchBoxClassNames.input,
             'h-full min-w-0 flex-1 appearance-none border-none bg-transparent text-foreground',
             SEARCH_SIZE[size].input,
@@ -762,7 +762,7 @@ export const SearchBox = ({
 
       {hasAfter && (
         <span
-          className={cn(
+          className={wcn(
             searchBoxClassNames.contentAfter,
             'flex shrink-0 items-center',
             SEARCH_SIZE[size].after,

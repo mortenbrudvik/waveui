@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 
@@ -85,7 +85,7 @@ export const menuSurfaceClasses =
  * variables usePopupPosition's `fitViewport` writes) and scrolls when it is taller. The limits are
  * classes, not inline styles, so a consumer `max-h-*`/`max-w-*` class replaces them (C-COMPOSE).
  */
-export const menuPopoverClasses = cn(
+export const menuPopoverClasses = wcn(
   menuSurfaceClasses,
   'max-h-(--wave-popup-available-height) max-w-(--wave-popup-available-width) overflow-y-auto overscroll-contain',
 );
@@ -96,7 +96,7 @@ export const menuPopoverClasses = cn(
  * mirrors in RTL; the 4px bar plus `ps-2` keeps the `px-3` inset), which cannot be mistaken for
  * the focus ring's inset outline.
  */
-export const menuItemClasses = cn(
+export const menuItemClasses = wcn(
   'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground',
   'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   // Gated like hover: a disabled item can still take focus from a mouse click (tabindex -1).

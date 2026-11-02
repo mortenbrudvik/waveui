@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   dataGridBodyClassNames,
   dataGridCellClassNames,
@@ -1305,7 +1305,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                       ref={containerRef}
                       aria-label={containerHasRole ? containerLabel : undefined}
                       aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
-                      className={cn(
+                      className={wcn(
                         dataGridClassNames.container,
                         'overflow-x-auto rounded-md border border-border',
                         // The window lays the rows out: the browser's scroll anchoring only
@@ -1323,7 +1323,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                         data-selection-appearance={selectionAppearance}
                         data-subtle-selection={subtleSelection ? '' : undefined}
                         data-resizing={sizing.resizing ? '' : undefined}
-                        className={cn(
+                        className={wcn(
                           dataGridClassNames.root,
                           'w-full border-separate border-spacing-0',
                           // The group whose hover or focus draws the subtle select-all checkbox.
@@ -1481,7 +1481,7 @@ const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyPro
 
   return (
     <DataGridSectionContext.Provider value="body">
-      <tbody ref={ref} className={cn(dataGridBodyClassNames.root, className)} {...rest}>
+      <tbody ref={ref} className={wcn(dataGridBodyClassNames.root, className)} {...rest}>
         {content}
       </tbody>
     </DataGridSectionContext.Provider>
@@ -1725,7 +1725,7 @@ const DataGridRow = ({
     <DataGridRowContext.Provider value={rowContext}>
       <tr
         ref={ref}
-        className={cn(
+        className={wcn(
           dataGridRowClassNames.root,
           // The group whose hover or focus draws a subtle selection control (its own name: a
           // Tree in a cell keys its actions on its rows' `group/row`).
@@ -1791,7 +1791,7 @@ function DataGridBodySelectionCell({
       {...rest}
       ref={ref}
       data-selection-cell=""
-      className={cn(
+      className={wcn(
         stableClassName,
         dataGridRowClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
@@ -1888,7 +1888,7 @@ const DataGridSelectionCell = ({
         stableClassName={dataGridSelectionCellClassNames.root}
         cellProps={{
           ...rest,
-          className: cn(rowProps?.className, className),
+          className: wcn(rowProps?.className, className),
           disabled: disabled ?? rowProps?.disabled,
           invisible: invisible ?? rowProps?.invisible,
           'aria-label': ariaLabel ?? rowProps?.['aria-label'],
@@ -1929,7 +1929,7 @@ const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) 
     <td
       ref={ref}
       role="gridcell"
-      className={cn(
+      className={wcn(
         dataGridCellClassNames.root,
         cellBase,
         'relative text-body-1',

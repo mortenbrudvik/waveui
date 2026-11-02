@@ -401,10 +401,36 @@ const TABLED_MINIMUMS = ['presence-available', 'presence-busy', 'presence-away',
 // Shared lookups
 // ---------------------------------------------------------------------------------------------
 
-function themeBlock(): CssNode {
-  const block = tokensNodes().find((node) => /^@theme\b/.test(node.prelude));
-  if (!block || !block.children) throw new Error('tokens.css has no @theme block');
+/** The `@theme` blocks of a style file, in order. */
+function themeBlocks(name: string): CssNode[] {
+  return parseFile(name).filter((node) => /^@theme\b/.test(node.prelude) && node.children);
+}
+
+/** The `@theme` block of a style file that declares `key`. */
+function themeBlockDeclaring(name: string, key: string): CssNode {
+  const block = themeBlocks(name).find((node) => declarations(node.children ?? []).has(key));
+  if (!block || !block.children) {
+    throw new Error(`src/styles/${name} has no @theme block declaring ${key}`);
+  }
   return block;
+}
+
+/** The namespaced theme keys apps use (`--color-wave-*`, `--text-wave-*`, …), in tokens.css. */
+function themeBlock(): CssNode {
+  return themeBlockDeclaring('tokens.css', '--color-wave-background');
+}
+
+/** The unnamespaced theme that Wave's own utilities compile against: theme.css (internal). */
+function internalThemeBlock(): CssNode {
+  return themeBlockDeclaring('theme.css', '--color-background');
+}
+
+/**
+ * The transitional block of tokens.css: the unnamespaced colour, type-ramp and shadow keys the
+ * `./tailwind` entry needs while it generates the components' classes from dist.
+ */
+function transitionalThemeBlock(): CssNode {
+  return themeBlockDeclaring('tokens.css', '--color-background');
 }
 
 function allRules(nodes: CssNode[]): CssNode[] {
@@ -612,17 +638,30 @@ describe('tokens.css — per-theme shadows (0.17)', () => {
     expect(names).toEqual([]);
   });
 
-  it('maps --shadow-N in @theme inline to the runtime tokens and declares no literal shadow', () => {
-    const decls = declarations(themeBlock().children ?? []);
+  it('maps --shadow-wave-N (apps) and --shadow-N (internal) to the runtime tokens, no literal shadow', () => {
+    const blocks = {
+      'tokens.css': [themeBlock(), transitionalThemeBlock()],
+      'theme.css': [internalThemeBlock()],
+    };
+    const namespaced = declarations(themeBlock().children ?? []);
+    const internal = declarations(internalThemeBlock().children ?? []);
     for (const level of LEVELS) {
-      expect(decls.get(`--shadow-${level}`), `--shadow-${level}`).toBe(
+      expect(namespaced.get(`--shadow-wave-${level}`), `--shadow-wave-${level}`).toBe(
+        `var(--wave-shadow-${level})`,
+      );
+      expect(internal.get(`--shadow-${level}`), `--shadow-${level}`).toBe(
         `var(--wave-shadow-${level})`,
       );
     }
-    const literals = [...decls.entries()].filter(
-      ([name, value]) => name.startsWith('--shadow') && !/^var\(--wave-shadow-\d+\)$/.test(value),
-    );
-    expect(literals).toEqual([]);
+    for (const [file, nodes] of Object.entries(blocks)) {
+      const literals = nodes
+        .flatMap((node) => [...declarations(node.children ?? []).entries()])
+        .filter(
+          ([name, value]) =>
+            name.startsWith('--shadow') && !/^var\(--wave-shadow-\d+\)$/.test(value),
+        );
+      expect(literals, file).toEqual([]);
+    }
   });
 
   it.each(THEMES)('resolves every shadow token in a nested %s theme', (theme) => {
@@ -959,41 +998,59 @@ describe('tokens.css — Tailwind mapping (@theme inline)', () => {
     return declarations(themeBlock().children ?? []);
   }
 
-  it('uses @theme inline', () => {
+  function internalDeclarations(): Decls {
+    return declarations(internalThemeBlock().children ?? []);
+  }
+
+  it('uses @theme inline for the namespaced keys and @theme inline reference internally', () => {
     expect(themeBlock().prelude).toMatch(/^@theme\s+inline$/);
+    // `reference`: a build with Tailwind's prefix emits none of the internal keys (spec R6).
+    expect(themeBlocks('theme.css').map((node) => node.prelude)).toEqual([
+      '@theme inline reference',
+    ]);
   });
 
-  it('maps every token to a --color-* utility color', () => {
+  it('maps every token to a --color-wave-* key for apps and a --color-* key internally', () => {
     const decls = themeDeclarations();
+    const internal = internalDeclarations();
     for (const token of Object.keys(TOKENS)) {
-      expect(decls.get(`--color-${token}`)).toBe(`var(--wave-${token})`);
+      expect(decls.get(`--color-wave-${token}`), token).toBe(`var(--wave-${token})`);
+      expect(internal.get(`--color-${token}`), token).toBe(`var(--wave-${token})`);
     }
   });
 
-  it('exposes the brand ramp as --color-brand-*', () => {
+  it('exposes the brand ramp as --color-wave-brand-* (and --color-brand-* internally)', () => {
     const decls = themeDeclarations();
+    const internal = internalDeclarations();
     for (const step of Object.keys(BRAND_RAMP)) {
-      expect(decls.get(`--color-brand-${step}`)).toBe(`var(--wave-brand-${step})`);
+      expect(decls.get(`--color-wave-brand-${step}`)).toBe(`var(--wave-brand-${step})`);
+      expect(internal.get(`--color-brand-${step}`)).toBe(`var(--wave-brand-${step})`);
     }
   });
 
   it('maps font-wave to the runtime font token and keeps the type ramp and shadows', () => {
-    const decls = themeDeclarations();
-    expect(decls.get('--font-wave')).toBe('var(--wave-font-family)');
-    expect(decls.get('--font-wave-mono')).toBe('var(--wave-font-family-monospace)');
-    expect(decls.get('--font-wave-numeric')).toBe('var(--wave-font-family-numeric)');
-    expect(decls.get('--text-body-1')).toBe('14px');
-    expect(decls.get('--text-body-1--line-height')).toBe('20px');
-    expect(decls.get('--text-display')).toBe('68px');
-    for (const size of ['2', '4', '8', '16', '28', '64']) {
-      expect(decls.has(`--shadow-${size}`)).toBe(true);
+    for (const [decls, ns] of [
+      [themeDeclarations(), 'wave-'],
+      [internalDeclarations(), ''],
+    ] as const) {
+      expect(decls.get('--font-wave')).toBe('var(--wave-font-family)');
+      expect(decls.get('--font-wave-mono')).toBe('var(--wave-font-family-monospace)');
+      expect(decls.get('--font-wave-numeric')).toBe('var(--wave-font-family-numeric)');
+      expect(decls.get(`--text-${ns}body-1`)).toBe('14px');
+      expect(decls.get(`--text-${ns}body-1--line-height`)).toBe('20px');
+      expect(decls.get(`--text-${ns}display`)).toBe('68px');
+      for (const size of ['2', '4', '8', '16', '28', '64']) {
+        expect(decls.has(`--shadow-${ns}${size}`)).toBe(true);
+      }
     }
   });
 
   it('does not override Tailwind radius or font-sans defaults (repo-level#7, repo-level#8)', () => {
-    const source = stripComments(readCss('tokens.css'));
-    expect(source).not.toMatch(/--radius/);
-    expect(source).not.toMatch(/--font-sans/);
+    for (const name of ['tokens.css', 'theme.css']) {
+      const source = stripComments(readCss(name));
+      expect(source, name).not.toMatch(/--radius/);
+      expect(source, name).not.toMatch(/--font-sans/);
+    }
   });
 
   it('declares the animation tokens (repo-level#6, repo-level#12, repo-level#13)', () => {
@@ -1031,6 +1088,100 @@ describe('tokens.css — Tailwind mapping (@theme inline)', () => {
     expect(steps).toEqual([
       ['0%', 'translateX(100%)'],
       ['100%', 'translateX(-350%)'],
+    ]);
+  });
+});
+
+describe('the namespaced theme keys (1.0, spec R6): parity with the internal theme', () => {
+  /** The prefixes of a namespaced key: the Wave namespace sits right after the theme namespace. */
+  const NAMESPACED = /^--(?:color|text|shadow|font|transition-duration|ease|animate)-wave(?:-|$)/;
+
+  /** The internal key a namespaced key stands for (`--color-wave-primary` → `--color-primary`). */
+  function internalKey(key: string): string {
+    return key.replace(/^--(color|text|shadow)-wave-/, '--$1-');
+  }
+
+  /** The declarations (not the keyframes) of a block. */
+  function keys(block: CssNode): Decls {
+    return declarations(block.children ?? []);
+  }
+
+  /** The keyframes of a block, each as its name and its serialised steps. */
+  function keyframes(block: CssNode): Map<string, string> {
+    const text = (nodes: CssNode[]): string =>
+      nodes
+        .map((node) =>
+          node.children === null ? `${node.prelude};` : `${node.prelude}{${text(node.children)}}`,
+        )
+        .join('');
+    return new Map(
+      (block.children ?? [])
+        .filter((node) => node.prelude.startsWith('@keyframes'))
+        .map((node) => [node.prelude, text(node.children ?? [])]),
+    );
+  }
+
+  it('namespaces every key apps get: --color-wave-*, --text-wave-*, --shadow-wave-* and the rest', () => {
+    const plain = [...keys(themeBlock()).keys()].filter((key) => !NAMESPACED.test(key));
+    expect(plain).toEqual([]);
+  });
+
+  it('maps every namespaced key one to one to an internal key, with the same value', () => {
+    const namespaced = keys(themeBlock());
+    const internal = keys(internalThemeBlock());
+    const asInternal = new Map([...namespaced].map(([key, value]) => [internalKey(key), value]));
+    expect(asInternal.size).toBe(namespaced.size);
+    expect(Object.fromEntries(asInternal)).toEqual(Object.fromEntries(internal));
+    // The order follows too, so the two files read side by side.
+    expect([...asInternal.keys()]).toEqual([...internal.keys()]);
+  });
+
+  it('declares the same keyframes in both', () => {
+    const namespaced = keyframes(themeBlock());
+    expect([...namespaced.keys()]).toEqual([
+      '@keyframes wave-spin',
+      '@keyframes wave-pulse',
+      '@keyframes wave-indeterminate',
+      '@keyframes wave-indeterminate-rtl',
+    ]);
+    expect(Object.fromEntries(namespaced)).toEqual(
+      Object.fromEntries(keyframes(internalThemeBlock())),
+    );
+  });
+
+  it('reads only --wave-* tokens that tokens.css declares; the literals are the type ramp and the animations', () => {
+    const declared = new Set([
+      ...rootConstants().keys(),
+      ...THEMES.flatMap((theme) => [...themeDecls(theme).keys()]),
+    ]);
+    for (const block of [themeBlock(), internalThemeBlock()]) {
+      for (const [key, value] of keys(block)) {
+        const read = [...value.matchAll(/var\((--[\w-]+)\)/g)].map((match) => match[1]);
+        if (/^--(text|animate)-/.test(key)) {
+          expect(read, key).toEqual([]);
+          continue;
+        }
+        expect(value, key).toMatch(/^var\(--wave-[\w-]+\)$/);
+        expect(
+          read.filter((name) => !declared.has(name)),
+          key,
+        ).toEqual([]);
+      }
+    }
+  });
+
+  it('keeps the transitional unnamespaced keys of tokens.css equal to the internal ones', () => {
+    // The colours, type ramp and shadows of 0.x (the `./tailwind` entry still generates the
+    // components' classes from dist with them); the other keys carry `wave` in both forms.
+    const transitional = keys(transitionalThemeBlock());
+    const renamed = [...keys(internalThemeBlock())].filter(([key]) =>
+      /^--(color|text|shadow)-/.test(key),
+    );
+    expect(Object.fromEntries(transitional)).toEqual(Object.fromEntries(renamed));
+    expect(keyframes(transitionalThemeBlock()).size).toBe(0);
+    expect(themeBlocks('tokens.css').map((node) => node.prelude)).toEqual([
+      '@theme inline',
+      '@theme inline',
     ]);
   });
 });
@@ -1230,6 +1381,7 @@ describe('style entries (repo-level#1)', () => {
   it('styles.css builds the unlayered precompiled CSS with pinned sources, utilities last', () => {
     expect(statements('styles.css')).toEqual([
       "@import 'tailwindcss/theme.css' theme(inline)",
+      "@import './theme.css'",
       "@import './tokens.css'",
       "@import './base.css'",
       "@import './variants.css'",
@@ -1243,6 +1395,22 @@ describe('style entries (repo-level#1)', () => {
     ]);
     expect(parseFile('styles.css').filter((node) => node.children !== null)).toEqual([]);
     expect(readCss('styles.css')).not.toMatch(/layer\(/);
+  });
+
+  it('theme.css is internal: only the build input styles.css imports it, no export names it', () => {
+    const importers = CSS_FILE_NAMES.filter((name) =>
+      statements(name).some((statement) => /^@import '\.\/theme\.css'/.test(statement)),
+    );
+    expect(importers).toEqual(['styles.css']);
+    expect(statements('theme.css')).toEqual([]);
+    const manifest = JSON.parse(
+      readFileSync(join(import.meta.dirname, '..', '..', '..', 'package.json'), 'utf8'),
+    ) as { exports: Record<string, unknown> };
+    const targets = Object.entries(manifest.exports).flatMap(([subpath, target]) => [
+      subpath,
+      ...(typeof target === 'string' ? [target] : Object.values(target as object).map(String)),
+    ]);
+    expect(targets.filter((value) => value.includes('theme.css'))).toEqual([]);
   });
 
   it('tailwind.css joins the consumer layer order, defines wave-rtl and scans dist', () => {
@@ -2106,6 +2274,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       project = mkdtempSync(join(cache, 'wave-build-css-compile-'));
       for (const name of [
         'styles.css',
+        'theme.css',
         'tokens.css',
         'base.css',
         'variants.css',

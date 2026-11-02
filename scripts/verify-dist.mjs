@@ -604,7 +604,7 @@ export const VIRTUAL_BUDGET = {
  * budgets of {@link RECORDED_IMPORTS_0_18} (spec R23): the size measured at the end of the phase
  * (73,310 and 24,921) plus {@link BUDGET_MARGIN_0_18}; raise it only deliberately. The closure
  * imports nothing but the package's own dependencies and peers (every component reaches `clsx` and
- * `tailwind-merge` through `cn`; the grid uses `react-dom`), so a new dependency fails it.
+ * `tailwind-merge` through `wcn`; the grid uses `react-dom`), so a new dependency fails it.
  */
 export const DATA_GRID_BUDGET = {
   names: ['DataGrid'],
@@ -795,7 +795,7 @@ const POPUP_PACKAGES = ['react-dom', '@floating-ui/react-dom'];
 
 /**
  * The helper and hook probes of 0.18 (spec §5): an import of only `getNativeElementProps` or only
- * `mergeSlotProps`, server-safe helpers, holds its own module (the latter with `cn` and the
+ * `mergeSlotProps`, server-safe helpers, holds its own module (the latter with `wcn` and the
  * helpers it merges with) and no component, hook or React module; an import of only one of the
  * public context hooks holds its context module, as far as the hook needs it (the Menu hooks the
  * Menu's context, the DataGrid hooks the grid's contexts, the selection hook also the selection
@@ -885,7 +885,7 @@ export const INCLUSION_PROBES_0_18 = [
  */
 export const TEST_ONLY_MODULES = ['lib/slotParts'];
 
-/** The externals of a component's closure: `cn`'s two dependencies and React. */
+/** The externals of a component's closure: `wcn`'s two dependencies and React. */
 const COMPONENT_EXTERNALS = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
 /** The externals of a closure with a Portal, which also imports `react-dom`. */
 const PORTAL_EXTERNALS = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
@@ -1094,7 +1094,10 @@ export const INCLUSION_PROBES_0_11 = [
  * the lists of `getNativeElementProps`, the context objects and item state behind the public
  * hooks (`RadioGroupContext`, `MessageBarContext`, `MenuListElementContext`, …), the slot seams
  * of render-function children (`resolveWiredSlot`), and every export of the module that
- * only the tests read ({@link TEST_ONLY_MODULES}), so neither roll-up exports one as a type. The
+ * only the tests read ({@link TEST_ONLY_MODULES}), so neither roll-up exports one as a type; since
+ * 1.0 (Phase 14, spec R6) every export of `lib/cn` but the public `cn`: the class merge of the
+ * components, `wcn`, its factory `createWcn` and its prefix `UTILITY_PREFIX`, and `twMerge`, the
+ * configured merge behind `cn`. The
  * roll-up declares `TokenVariable` and `WAVE_TOKEN_NAMES` without exporting them (the exported
  * `waveTokens` and `WaveTokenName` refer to them), which the check accepts.
  * `verify-dist.test.mjs` reads the groups from the sources (those of 0.16, 0.17 and 0.18 with the
@@ -1272,6 +1275,7 @@ export const MODULE_ONLY_NAMES = [
   'TeachingSurface',
   'TokenVariable',
   'TreeNode',
+  'UTILITY_PREFIX',
   'UseCollapsePresenceOptions',
   'UseCollapsePresenceResult',
   'UseDataGridColumnSizingOptions',
@@ -1303,6 +1307,7 @@ export const MODULE_ONLY_NAMES = [
   'createOptionText',
   'createSelectionStore',
   'createTableFeaturePlugin',
+  'createWcn',
   'dialogBackdropMotion',
   'dialogMotion',
   'drawerBackdropMotion',
@@ -1366,6 +1371,7 @@ export const MODULE_ONLY_NAMES = [
   'tokenVariable',
   'tooltipMotion',
   'totalWidth',
+  'twMerge',
   'useBackdropAppearance',
   'useCollapsePresence',
   'useDataGridColumnSizing',
@@ -1402,6 +1408,7 @@ export const MODULE_ONLY_NAMES = [
   'useTeachingPopoverContext',
   'useToolbarNavigation',
   'visibleFlatItems',
+  'wcn',
   'withoutRenderFunction',
 ];
 
@@ -3094,7 +3101,7 @@ export async function measureImport(dist, names) {
  * Size budget probe: measures an import of `names` ({@link measureImport}). Returns the minified
  * and gzip sizes in bytes, the external ids the closure imports (sorted), an error for each budget
  * exceeded, and an error for each external id not in `allowedExternals` (a dependency outside the
- * measurement, such as tailwind-merge through `cn`, would hide its size).
+ * measurement, such as tailwind-merge through `wcn`, would hide its size).
  */
 export async function probeSizeBudget(dist, budget) {
   const size = await measureImport(dist, budget.names);

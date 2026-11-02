@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { menuItemClassNames, menuItemLinkClassNames } from '../../lib/classNames';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { SlotPart } from '../../lib/slotProps';
@@ -138,7 +138,7 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
       data-disabled={disabled ? '' : undefined}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
-      className={cn(
+      className={wcn(
         menuItemClassNames.root,
         menuItemLinkClassNames.root,
         menuItemClasses,
@@ -152,9 +152,9 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
         shortcut={shortcut}
         markLabel={!ownRovingText}
         partClassNames={{
-          icon: cn(menuItemClassNames.icon, menuItemLinkClassNames.icon),
-          content: cn(menuItemClassNames.content, menuItemLinkClassNames.content),
-          shortcut: cn(menuItemClassNames.shortcut, menuItemLinkClassNames.shortcut),
+          icon: wcn(menuItemClassNames.icon, menuItemLinkClassNames.icon),
+          content: wcn(menuItemClassNames.content, menuItemLinkClassNames.content),
+          shortcut: wcn(menuItemClassNames.shortcut, menuItemLinkClassNames.shortcut),
         }}
         parts={slotProps}
         disabled={disabled}

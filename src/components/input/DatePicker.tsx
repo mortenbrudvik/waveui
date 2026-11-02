@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flushSync } from 'react-dom';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { datePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -963,7 +963,7 @@ export const DatePicker = (props: DatePickerProps) => {
 
   const { style: positionStyle, ...placement } = floatingProps;
   const surfaceProps = mergeSlotProps(slotProps?.surface, {
-    className: cn(
+    className: wcn(
       datePickerClassNames.surface,
       'rounded-md border border-border bg-background p-3 text-foreground shadow-16',
     ),
@@ -998,7 +998,7 @@ export const DatePicker = (props: DatePickerProps) => {
   }
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(datePickerClassNames.root, 'relative inline-flex flex-col', className),
+    className: wcn(datePickerClassNames.root, 'relative inline-flex flex-col', className),
     style,
     locked: {
       'data-size': size,
@@ -1017,7 +1017,7 @@ export const DatePicker = (props: DatePickerProps) => {
       <div ref={setReference} className="relative flex items-center">
         <input
           {...mergeSlotProps(slotProps?.input, {
-            className: cn(
+            className: wcn(
               datePickerClassNames.input,
               inputHeightClasses[size],
               'w-full',
@@ -1074,7 +1074,7 @@ export const DatePicker = (props: DatePickerProps) => {
             // change it).
             type="button"
             {...mergeSlotProps(slotProps?.clearButton, {
-              className: cn(
+              className: wcn(
                 datePickerClassNames.clearButton,
                 pickerIconButtonClasses(size, appearance),
                 pickerButtonOffset(size, 2),
@@ -1096,7 +1096,7 @@ export const DatePicker = (props: DatePickerProps) => {
         <button
           type="button"
           {...mergeSlotProps(slotProps?.openCalendarButton, {
-            className: cn(
+            className: wcn(
               datePickerClassNames.openCalendarButton,
               pickerIconButtonClasses(size, appearance),
               pickerButtonOffset(size, 1),
@@ -1121,7 +1121,7 @@ export const DatePicker = (props: DatePickerProps) => {
       {showOwnError && (
         <p
           {...mergeSlotProps(slotProps?.errorMessage, {
-            className: cn(datePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error'),
+            className: wcn(datePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error'),
             locked: { id: errorId, role: 'alert' },
           })}
         >

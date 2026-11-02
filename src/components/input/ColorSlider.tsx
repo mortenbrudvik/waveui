@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { colorSliderClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getDirection } from '../../lib/direction';
@@ -282,7 +282,7 @@ export const ColorSlider = ({
   };
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(
+    className: wcn(
       colorSliderClassNames.root,
       'group/color-slider relative flex touch-none select-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
       vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
@@ -316,7 +316,7 @@ export const ColorSlider = ({
     <div {...rootProps} style={rootStyle}>
       <div
         {...mergeSlotProps(slotProps?.rail, {
-          className: cn(
+          className: wcn(
             colorSliderClassNames.rail,
             'rounded-full forced-colors:forced-color-adjust-none',
             RAIL_GRADIENT,
@@ -347,12 +347,12 @@ export const ColorSlider = ({
         onKeyDown={handleKeyDown}
         onKeyUp={onKeyUp}
         onChange={handleChange}
-        className={cn(RAIL_INPUT_CLASSES, vertical ? RAIL_INPUT_VERTICAL : RAIL_INPUT_HORIZONTAL)}
+        className={wcn(RAIL_INPUT_CLASSES, vertical ? RAIL_INPUT_VERTICAL : RAIL_INPUT_HORIZONTAL)}
       />
       <span aria-hidden="true" className={vertical ? THUMB_TRACK_VERTICAL : THUMB_TRACK_HORIZONTAL}>
         <span
           {...mergeSlotProps(slotProps?.thumb, {
-            className: cn(
+            className: wcn(
               colorSliderClassNames.thumb,
               COLOR_THUMB_CLASSES,
               vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   drawerClassNames,
   navDrawerBodyClassNames,
@@ -453,9 +453,9 @@ const NavDrawerRoot = ({
       inlineAs="div"
       trigger={inertModalTrigger}
       finalFocusRef={finalFocusRef}
-      rootClassName={cn(drawerClassNames.root, navDrawerClassNames.root)}
-      backdropClassName={cn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
-      collapseClassName={cn(drawerClassNames.collapse, navDrawerClassNames.collapse)}
+      rootClassName={wcn(drawerClassNames.root, navDrawerClassNames.root)}
+      backdropClassName={wcn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
+      collapseClassName={wcn(drawerClassNames.collapse, navDrawerClassNames.collapse)}
       backdrop={backdrop}
       motion={motion}
       backdropMotion={backdropMotion}
@@ -466,7 +466,7 @@ const NavDrawerRoot = ({
     >
       <nav
         {...mergeSlotProps(slotProps?.nav, {
-          className: cn(navDrawerClassNames.nav, 'flex min-h-0 flex-1 flex-col'),
+          className: wcn(navDrawerClassNames.nav, 'flex min-h-0 flex-1 flex-col'),
           locked: { ...NAV_SHOWN_PART_LOCKS, ...nameProps },
         })}
         ref={navMergedRef}
@@ -503,7 +503,7 @@ export const NavDrawerHeader = ({ className, children, ref, ...rest }: NavDrawer
       data-scroll-state={scrollState}
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         navDrawerHeaderClassNames.root,
         'flex shrink-0 items-center gap-2 ps-2.5 pe-2 py-2',
         scrollSeparatorClasses.header,
@@ -587,12 +587,16 @@ export const NavDrawerBody = ({
       onFocus={composeEventHandlers(onFocus, arrow ? containerProps.onFocus : undefined, {
         checkDefaultPrevented: false,
       })}
-      className={cn(navDrawerBodyClassNames.root, 'min-h-0 flex-1 overflow-y-auto py-2', className)}
+      className={wcn(
+        navDrawerBodyClassNames.root,
+        'min-h-0 flex-1 overflow-y-auto py-2',
+        className,
+      )}
     >
       <NavRovingContext.Provider value={arrow ? roving : null}>
         <ul
           {...mergeSlotProps(slotProps?.list, {
-            className: cn(navDrawerBodyClassNames.list, 'm-0 list-none p-0'),
+            className: wcn(navDrawerBodyClassNames.list, 'm-0 list-none p-0'),
             locked: NAV_SHOWN_PART_LOCKS,
           })}
           ref={listMergedRef}
@@ -626,7 +630,7 @@ export const NavDrawerFooter = ({
       data-scroll-state={scrollState}
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         navDrawerFooterClassNames.root,
         'shrink-0 py-2',
         scrollSeparatorClasses.footer,
@@ -635,7 +639,7 @@ export const NavDrawerFooter = ({
     >
       <ul
         {...mergeSlotProps(slotProps?.list, {
-          className: cn(navDrawerFooterClassNames.list, 'm-0 list-none p-0'),
+          className: wcn(navDrawerFooterClassNames.list, 'm-0 list-none p-0'),
           locked: NAV_SHOWN_PART_LOCKS,
         })}
         ref={listMergedRef}

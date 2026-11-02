@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -118,7 +118,7 @@ export const PickerExpandButton = ({
       // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
       type="button"
       {...mergeSlotProps(part, {
-        className: cn(
+        className: wcn(
           className,
           pickerIconButtonClasses(size, appearance),
           pickerButtonOffset(size, 1),
@@ -145,7 +145,7 @@ export const PickerExpandButton = ({
       {renderSlot(
         glyph,
         'span',
-        cn(
+        wcn(
           iconClassName,
           'inline-flex transition-transform motion-reduce:transition-none',
           expanded && 'rotate-180',

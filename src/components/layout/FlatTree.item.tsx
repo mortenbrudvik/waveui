@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flatTreeItemClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { isOwnEvent } from '../../lib/events';
 import type { VisibleFlatItem } from '../../lib/flatTree';
 import { CheckIcon, ChevronRightIcon, SubtractIcon } from '../../lib/icons';
@@ -108,7 +108,7 @@ export const FlatTreeItem = ({
   };
 
   const chevronClasses = isBranch
-    ? cn(
+    ? wcn(
         flatTreeItemClassNames.expandIcon,
         'shrink-0 transition-transform motion-reduce:transition-none',
         expanded ? 'rotate-90' : 'wave-rtl:-scale-x-100',
@@ -131,13 +131,13 @@ export const FlatTreeItem = ({
   const checkboxClasses =
     checkState === undefined
       ? undefined
-      : cn(
+      : wcn(
           flatTreeItemClassNames.indicator,
           // Checkbox's box: 16px inside a 24px target (the pseudo-element), WCAG 2.5.8.
           'relative inline-flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none',
           'before:absolute before:-inset-1',
           checkState === 'unchecked'
-            ? cn('border-stroke-accessible bg-transparent', forcedColors.control)
+            ? wcn('border-stroke-accessible bg-transparent', forcedColors.control)
             : 'border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]',
         );
   const checkbox =
@@ -182,12 +182,12 @@ export const FlatTreeItem = ({
   // it is a click on the row, so it activates the item.
   const radioClasses =
     ctx.selectionMode === 'single'
-      ? cn(
+      ? wcn(
           flatTreeItemClassNames.indicator,
           'inline-flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors motion-reduce:transition-none',
           isSelected
             ? 'border-2 border-primary forced-colors:border-[Highlight]'
-            : cn('border-stroke-accessible', forcedColors.control),
+            : wcn('border-stroke-accessible', forcedColors.control),
         )
       : undefined;
   const radio =
@@ -203,7 +203,9 @@ export const FlatTreeItem = ({
           }))}
       >
         {isSelected && (
-          <span className={cn('block size-2 rounded-full bg-primary', forcedColors.selectedLeaf)} />
+          <span
+            className={wcn('block size-2 rounded-full bg-primary', forcedColors.selectedLeaf)}
+          />
         )}
       </span>
     ) : null;
@@ -214,14 +216,14 @@ export const FlatTreeItem = ({
   if (level > 1) itemStyle.paddingInlineStart = `${level - 1}rem`;
   if (ctx.itemSize !== undefined) itemStyle.height = ctx.itemSize;
 
-  const rowClasses = cn(
+  const rowClasses = wcn(
     flatTreeItemClassNames.row,
     'box-border flex items-center gap-1.5 rounded px-2 py-1',
     ctx.itemSize !== undefined && 'h-full',
     disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-subtle-hover',
-    isSelected && cn('bg-subtle-selected font-semibold', forcedColors.selectedContainer),
+    isSelected && wcn('bg-subtle-selected font-semibold', forcedColors.selectedContainer),
   );
-  const labelClasses = cn(flatTreeItemClassNames.label, 'min-w-0 truncate');
+  const labelClasses = wcn(flatTreeItemClassNames.label, 'min-w-0 truncate');
 
   return (
     <div
@@ -234,7 +236,7 @@ export const FlatTreeItem = ({
       data-checked={checkState === 'checked' ? '' : undefined}
       data-mixed={checkState === 'mixed' ? '' : undefined}
       data-disabled={disabled ? '' : undefined}
-      className={cn(
+      className={wcn(
         flatTreeItemClassNames.root,
         // The focus ring is drawn on the row, inside the item's box.
         'box-border block outline-none',

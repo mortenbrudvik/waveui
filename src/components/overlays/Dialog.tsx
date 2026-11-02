@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   dialogContentClassNames,
   dialogFooterClassNames,
@@ -692,7 +692,7 @@ export const DialogContent = ({
         {...presenceProps}
         // Centres the surface and lets presses through to the backdrop (modal) or the page
         // (non-modal) around it.
-        className={cn(
+        className={wcn(
           dialogContentClassNames.positioner,
           'pointer-events-none fixed inset-0 flex items-center justify-center',
         )}
@@ -709,7 +709,7 @@ export const DialogContent = ({
           data-presence={presenceProps['data-presence']}
           style={surfaceStyle}
           onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
-          className={cn(
+          className={wcn(
             dialogContentClassNames.root,
             // The border marks the surface where the shadow cannot: in high contrast the page,
             // the backdrop and the surface are black, and forced colors drop shadows. The 1rem gap
@@ -727,7 +727,7 @@ export const DialogContent = ({
             {hasTitle && (
               <h2
                 id={propTitleId}
-                className={cn(
+                className={wcn(
                   dialogTitleClassNames.root,
                   'pe-[var(--wave-dialog-title-end-padding,2rem)] text-subtitle-1 font-semibold',
                 )}
@@ -737,7 +737,7 @@ export const DialogContent = ({
             )}
             <div
               {...mergeSlotProps(slotProps?.titleActions, {
-                className: cn(
+                className: wcn(
                   dialogContentClassNames.titleActions,
                   'absolute end-4 top-4 flex items-start gap-1',
                   size === 'full' && fullTitleActionsClasses,
@@ -750,7 +750,7 @@ export const DialogContent = ({
                 ? renderSlot(
                     titleAction,
                     'span',
-                    cn(dialogContentClassNames.titleAction, 'inline-flex items-center gap-1'),
+                    wcn(dialogContentClassNames.titleAction, 'inline-flex items-center gap-1'),
                   )
                 : null}
               {/* Each Dialog.Title action portals here, in mount order. */}
@@ -760,13 +760,13 @@ export const DialogContent = ({
                 closeButton={closeButton}
                 closeLabel={closeLabel}
                 onClose={(event) => requestOpen(false, { reason: 'close-button', event })}
-                className={cn(dialogContentClassNames.closeButton, 'text-muted-foreground')}
+                className={wcn(dialogContentClassNames.closeButton, 'text-muted-foreground')}
               />
             </div>
             <div
               {...mergeSlotProps(slotProps?.body, {
                 // The scroll padding keeps a focused field above the sticky footer (WCAG 2.4.11).
-                className: cn(
+                className: wcn(
                   dialogContentClassNames.body,
                   '-mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1',
                 ),
@@ -812,7 +812,7 @@ export const DialogTitle = ({
       {...rest}
       id={titleId}
       ref={titleRef}
-      className={cn(
+      className={wcn(
         dialogTitleClassNames.root,
         'pe-[var(--wave-dialog-title-end-padding,2rem)] text-subtitle-1 font-semibold text-foreground',
         className,
@@ -825,7 +825,7 @@ export const DialogTitle = ({
   const actionElement = renderSlot(
     action,
     'span',
-    cn(dialogTitleClassNames.action, 'inline-flex items-center gap-1'),
+    wcn(dialogTitleClassNames.action, 'inline-flex items-center gap-1'),
   );
   return (
     <>
@@ -898,7 +898,7 @@ export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooter
       ref={mergedRef}
       {...rest}
       // Sticky only where the surface reserves the footer's height (Dialog.Content).
-      className={cn(
+      className={wcn(
         dialogFooterClassNames.root,
         setFooterHeight ? stickyFooterClasses : footerRowClasses,
         className,

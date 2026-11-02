@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { ratingClassNames, ratingDisplayClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -425,7 +425,7 @@ const RatingRoot = ({
       {...fieldProps}
       aria-disabled={disabled || undefined}
       data-color={resolvedColor}
-      className={cn(
+      className={wcn(
         ratingClassNames.root,
         'relative inline-flex items-center gap-0.5',
         disabled && 'pointer-events-none opacity-50',
@@ -556,7 +556,7 @@ const RatingDisplayRoot = ({
       aria-label={name}
       data-compact={compact ? '' : undefined}
       data-color={resolvedColor}
-      className={cn(ratingDisplayClassNames.root, 'inline-flex items-center gap-0.5', className)}
+      className={wcn(ratingDisplayClassNames.root, 'inline-flex items-center gap-0.5', className)}
       {...rest}
     >
       {compact ? (
@@ -578,7 +578,7 @@ const RatingDisplayRoot = ({
       {showText && (
         <span
           {...mergeSlotProps(slotProps?.value, {
-            className: cn(
+            className: wcn(
               ratingDisplayClassNames.value,
               'ms-1 font-semibold text-foreground',
               textSize,
@@ -591,7 +591,7 @@ const RatingDisplayRoot = ({
       {formattedCount !== undefined && (
         <span
           {...mergeSlotProps(slotProps?.count, {
-            className: cn(ratingDisplayClassNames.count, 'ms-1 text-muted-foreground', textSize),
+            className: wcn(ratingDisplayClassNames.count, 'ms-1 text-muted-foreground', textSize),
           })}
         >
           ({formattedCount})

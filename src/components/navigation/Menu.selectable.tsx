@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   menuItemCheckboxClassNames,
   menuItemClassNames,
@@ -192,17 +192,17 @@ function renderSwitchIndicator(
   disabled: boolean,
   parts: MenuItemSwitchProps['slotProps'],
 ): React.ReactElement {
-  const trackClasses = cn(
+  const trackClasses = wcn(
     menuItemSwitchClassNames.track,
     'relative inline-flex h-[16px] w-[32px] shrink-0 items-center rounded-full border transition-colors duration-200 motion-reduce:transition-none',
     checked
-      ? cn('border-primary bg-primary', disabled ? switchDisabledOnTrack : switchOnTrack)
-      : cn(
+      ? wcn('border-primary bg-primary', disabled ? switchDisabledOnTrack : switchOnTrack)
+      : wcn(
           'border-stroke-accessible bg-transparent',
           disabled ? forcedColors.disabled : forcedColors.control,
         ),
   );
-  const thumbClasses = cn(
+  const thumbClasses = wcn(
     menuItemSwitchClassNames.thumb,
     'block h-[10px] w-[10px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
     checked
@@ -330,7 +330,7 @@ function SelectableMenuItem({
       data-disabled={disabled ? '' : undefined}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
-      className={cn(rootClassName, menuItemClasses, className)}
+      className={wcn(rootClassName, menuItemClasses, className)}
     >
       <MenuItemRow
         checkmark={checkColumn}
@@ -364,12 +364,12 @@ export const MenuItemCheckbox = (props: MenuItemCheckboxProps) => (
     {...props}
     kind="checkbox"
     componentName="Menu.ItemCheckbox"
-    rootClassName={cn(menuItemClassNames.root, menuItemCheckboxClassNames.root)}
+    rootClassName={wcn(menuItemClassNames.root, menuItemCheckboxClassNames.root)}
     partClassNames={{
-      checkmark: cn(menuItemClassNames.checkmark, menuItemCheckboxClassNames.checkmark),
-      icon: cn(menuItemClassNames.icon, menuItemCheckboxClassNames.icon),
-      content: cn(menuItemClassNames.content, menuItemCheckboxClassNames.content),
-      shortcut: cn(menuItemClassNames.shortcut, menuItemCheckboxClassNames.shortcut),
+      checkmark: wcn(menuItemClassNames.checkmark, menuItemCheckboxClassNames.checkmark),
+      icon: wcn(menuItemClassNames.icon, menuItemCheckboxClassNames.icon),
+      content: wcn(menuItemClassNames.content, menuItemCheckboxClassNames.content),
+      shortcut: wcn(menuItemClassNames.shortcut, menuItemCheckboxClassNames.shortcut),
     }}
   />
 );
@@ -394,12 +394,12 @@ export const MenuItemRadio = (props: MenuItemRadioProps) => (
     {...props}
     kind="radio"
     componentName="Menu.ItemRadio"
-    rootClassName={cn(menuItemClassNames.root, menuItemRadioClassNames.root)}
+    rootClassName={wcn(menuItemClassNames.root, menuItemRadioClassNames.root)}
     partClassNames={{
-      checkmark: cn(menuItemClassNames.checkmark, menuItemRadioClassNames.checkmark),
-      icon: cn(menuItemClassNames.icon, menuItemRadioClassNames.icon),
-      content: cn(menuItemClassNames.content, menuItemRadioClassNames.content),
-      shortcut: cn(menuItemClassNames.shortcut, menuItemRadioClassNames.shortcut),
+      checkmark: wcn(menuItemClassNames.checkmark, menuItemRadioClassNames.checkmark),
+      icon: wcn(menuItemClassNames.icon, menuItemRadioClassNames.icon),
+      content: wcn(menuItemClassNames.content, menuItemRadioClassNames.content),
+      shortcut: wcn(menuItemClassNames.shortcut, menuItemRadioClassNames.shortcut),
     }}
   />
 );
@@ -419,11 +419,11 @@ export const MenuItemSwitch = (props: MenuItemSwitchProps) => (
     {...props}
     kind="switch"
     componentName="Menu.ItemSwitch"
-    rootClassName={cn(menuItemClassNames.root, menuItemSwitchClassNames.root)}
+    rootClassName={wcn(menuItemClassNames.root, menuItemSwitchClassNames.root)}
     partClassNames={{
-      icon: cn(menuItemClassNames.icon, menuItemSwitchClassNames.icon),
-      content: cn(menuItemClassNames.content, menuItemSwitchClassNames.content),
-      shortcut: cn(menuItemClassNames.shortcut, menuItemSwitchClassNames.shortcut),
+      icon: wcn(menuItemClassNames.icon, menuItemSwitchClassNames.icon),
+      content: wcn(menuItemClassNames.content, menuItemSwitchClassNames.content),
+      shortcut: wcn(menuItemClassNames.shortcut, menuItemSwitchClassNames.shortcut),
     }}
   />
 );

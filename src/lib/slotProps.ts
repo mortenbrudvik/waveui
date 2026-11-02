@@ -1,6 +1,6 @@
 import type * as React from 'react';
 import { joinIds } from './aria';
-import { cn } from './cn';
+import { wcn } from './cn';
 import { composeEventHandlers } from './composeEventHandlers';
 import { ID_LIST_KEYS } from './mergeProps';
 import { mergeRefs } from './mergeRefs';
@@ -225,8 +225,8 @@ export function composeAfterPart<E extends { defaultPrevented: boolean }>(
  *   its value is `undefined`: an `aria-controls` that only exists while open stays absent).
  * - **`null` and `undefined`** from the consumer are skipped: they never erase a default, a
  *   style value or a handler (`{ id: undefined }` keeps the component's id).
- * - **`className`** is the component's classes, then the consumer's, through `cn` (the
- *   consumer wins a conflict). Without a consumer class the component's string is passed
+ * - **`className`** is the component's classes, then the consumer's, merged as `cn` merges them
+ *   (the consumer wins a conflict). Without a consumer class the component's string is passed
  *   through untouched, so the markup cannot change.
  * - **`style`** is the component's object with the consumer's keys over it; omitted when
  *   neither side has a value.
@@ -336,7 +336,7 @@ export function mergeSlotProps<E extends keyof React.JSX.IntrinsicElements = 'sp
     }
   }
 
-  const className = classes.length ? cn(own.className, classes) : own.className;
+  const className = classes.length ? wcn(own.className, classes) : own.className;
   if (className !== undefined) result.className = className;
   if (own.style || (style && Object.keys(style).length)) result.style = style;
   if (ref) result.ref = ref;

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { selectClassNames } from '../../lib/classNames';
 import {
@@ -125,7 +125,7 @@ export const Select = ({
       ref={ref}
       data-size={size}
       data-appearance={appearance}
-      className={cn(
+      className={wcn(
         selectClassNames.root,
         inputHeightClasses[size],
         'w-full appearance-none',

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { waveProviderClassNames } from '../../lib/classNames';
 import { getThemeClassName, isWaveTheme, WAVE_THEMES, type WaveTheme } from '../../lib/theme';
@@ -345,7 +345,7 @@ export const WaveProvider = ({
         ref={ref}
         dir={dir}
         data-wave-theme={resolvedTheme}
-        className={cn(
+        className={wcn(
           waveProviderClassNames.root,
           themeClassName,
           'bg-background text-foreground font-wave text-body-1',

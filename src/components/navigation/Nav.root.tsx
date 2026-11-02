@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { navClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -240,7 +240,7 @@ export const NavRoot = ({
         aria-label="Navigation"
         {...rest}
         ref={ref}
-        className={cn(
+        className={wcn(
           navClassNames.root,
           'w-60 border-e border-border bg-background py-2',
           className,
@@ -248,7 +248,7 @@ export const NavRoot = ({
       >
         <ul
           {...mergeSlotProps(slotProps?.list, {
-            className: cn(navClassNames.list, 'm-0 list-none p-0'),
+            className: wcn(navClassNames.list, 'm-0 list-none p-0'),
             locked: NAV_SHOWN_PART_LOCKS,
           })}
           ref={listMergedRef}

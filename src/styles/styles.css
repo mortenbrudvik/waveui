@@ -5,6 +5,9 @@
  *
  * - `theme(inline)` inlines Tailwind's default theme into the utilities, so no `--spacing`,
  *   `--font-sans`, `--radius-*` or palette variables are emitted.
+ * - theme.css (internal, imported only here) is Wave's unnamespaced theme the utilities compile
+ *   against, `@theme inline reference`: none of its keys is emitted as a variable, with or
+ *   without a Tailwind prefix. tokens.css adds the token rules and the namespaced keys for apps.
  * - `source(none)` disables automatic source detection; only the sources below are scanned
  *   (tests excluded, stories never included).
  * - Utilities come last so they beat the equal-specificity root rules of base.css.
@@ -19,6 +22,7 @@
  */
 
 @import 'tailwindcss/theme.css' theme(inline);
+@import './theme.css';
 @import './tokens.css';
 @import './base.css';
 @import './variants.css';

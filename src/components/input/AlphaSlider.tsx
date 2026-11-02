@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { alphaSliderClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getDirection } from '../../lib/direction';
@@ -220,7 +220,7 @@ export const AlphaSlider = ({
   };
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(
+    className: wcn(
       alphaSliderClassNames.root,
       'group/alpha-slider relative flex touch-none select-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
       vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
@@ -250,7 +250,7 @@ export const AlphaSlider = ({
     <div {...rootProps} style={rootStyle}>
       <div
         {...mergeSlotProps(slotProps?.rail, {
-          className: cn(
+          className: wcn(
             alphaSliderClassNames.rail,
             'relative overflow-hidden rounded-full bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none',
             vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
@@ -259,7 +259,7 @@ export const AlphaSlider = ({
           locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
       >
-        <span className={cn('absolute inset-0', RAIL_GRADIENT)} />
+        <span className={wcn('absolute inset-0', RAIL_GRADIENT)} />
       </div>
       <input
         type="range"
@@ -282,12 +282,12 @@ export const AlphaSlider = ({
         onKeyDown={handleKeyDown}
         onKeyUp={onKeyUp}
         onChange={handleChange}
-        className={cn(RAIL_INPUT_CLASSES, vertical ? RAIL_INPUT_VERTICAL : RAIL_INPUT_HORIZONTAL)}
+        className={wcn(RAIL_INPUT_CLASSES, vertical ? RAIL_INPUT_VERTICAL : RAIL_INPUT_HORIZONTAL)}
       />
       <span aria-hidden="true" className={vertical ? THUMB_TRACK_VERTICAL : THUMB_TRACK_HORIZONTAL}>
         <span
           {...mergeSlotProps(slotProps?.thumb, {
-            className: cn(
+            className: wcn(
               alphaSliderClassNames.thumb,
               COLOR_THUMB_CLASSES,
               vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,

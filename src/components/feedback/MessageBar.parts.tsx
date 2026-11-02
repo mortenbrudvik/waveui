@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { messageBarActionsClassNames, messageBarTitleClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 
@@ -93,7 +93,7 @@ export const MessageBarTitle = ({
       {...rest}
       ref={ref}
       id={(placed ? part.titleId : id) || undefined}
-      className={cn(messageBarTitleClassNames.root, 'font-semibold', className)}
+      className={wcn(messageBarTitleClassNames.root, 'font-semibold', className)}
     >
       <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
         {materialiseSlotContent(children)}
@@ -133,7 +133,7 @@ export const MessageBarActions = ({
     <div
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         messageBarActionsClassNames.root,
         'flex shrink-0 flex-wrap items-center gap-2',
         className,

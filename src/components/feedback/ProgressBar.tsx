@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { progressBarClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { isDev, warnOnce } from '../../lib/dev';
 import { progressIndeterminateMotion } from '../../lib/motion';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -286,12 +286,12 @@ export const ProgressBar = ({
 
   // The parts merge only when given. The fill's width shows the value, so it wins over a part's
   // style.
-  const fillClassName = cn(
+  const fillClassName = wcn(
     progressBarClassNames.bar,
     'h-full rounded-full',
     fillColorClasses[resolvedColor],
     forcedColors.selectedLeaf,
-    isIndeterminate && cn('w-full', indeterminateClasses),
+    isIndeterminate && wcn('w-full', indeterminateClasses),
   );
   const fillPart = slotProps?.bar;
   const fill: Record<string, unknown> = fillPart
@@ -303,7 +303,7 @@ export const ProgressBar = ({
     <div
       {...barProps}
       ref={ref}
-      className={cn(
+      className={wcn(
         progressBarClassNames.root,
         'h-2 overflow-hidden rounded-full bg-track',
         'forced-colors:border',
@@ -324,7 +324,7 @@ export const ProgressBar = ({
 
   if (!visibleLabel) return bar;
 
-  const labelClassName = cn(progressBarClassNames.label, 'text-body-1 text-foreground');
+  const labelClassName = wcn(progressBarClassNames.label, 'text-body-1 text-foreground');
   return (
     <div className="flex flex-col gap-1">
       <span

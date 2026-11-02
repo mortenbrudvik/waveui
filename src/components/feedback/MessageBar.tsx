@@ -2,7 +2,7 @@ import * as React from 'react';
 import { joinIds } from '../../lib/aria';
 import { isElementOfType } from '../../lib/children';
 import { messageBarClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
@@ -350,7 +350,7 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
     const icon = element.props.icon as Slot<'span'>;
     const iconNode =
       isWaveButton && slotRendersContent(icon)
-        ? renderSlot(icon, 'span', cn(messageBarClassNames.dismissIcon, dismissContentClassName), {
+        ? renderSlot(icon, 'span', wcn(messageBarClassNames.dismissIcon, dismissContentClassName), {
             'aria-hidden': true,
           })
         : null;
@@ -392,7 +392,7 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   const elementProps = {
     'aria-hidden': true,
     ...contentProps,
-    className: cn(
+    className: wcn(
       messageBarClassNames.dismissIcon,
       dismissContentClassName,
       contentProps.className as string | undefined,
@@ -431,7 +431,7 @@ const MessageBarRoot = ({
   ref,
   ...rest
 }: MessageBarProps) => {
-  const iconClassName = cn(
+  const iconClassName = wcn(
     messageBarClassNames.icon,
     'mt-0.5 inline-flex shrink-0',
     STATUS_ICON_COLOR[status],
@@ -503,7 +503,7 @@ const MessageBarRoot = ({
       {
         'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_DISMISS_LABEL,
         onClick: () => onDismiss?.(),
-        className: cn(
+        className: wcn(
           messageBarClassNames.dismissButton,
           'ms-auto inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
           'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
@@ -610,7 +610,7 @@ const MessageBarRoot = ({
     measuring ? setTextElement : undefined,
     bodyPart?.ref,
   );
-  const bodyClassName = cn(
+  const bodyClassName = wcn(
     messageBarClassNames.body,
     'min-w-0 flex-1 text-body-1',
     unwrapped && 'whitespace-nowrap',
@@ -652,7 +652,7 @@ const MessageBarRoot = ({
       data-layout={resolvedLayout}
       {...rest}
       aria-labelledby={labelledBy}
-      className={cn(
+      className={wcn(
         messageBarClassNames.root,
         'flex items-start gap-3 rounded border-s-4 px-4 py-3 text-foreground',
         tintClasses[status],
@@ -666,7 +666,7 @@ const MessageBarRoot = ({
           {hasActions ? (
             // A layout wrapper (not a part): the text column and the actions, in this DOM order.
             <div
-              className={cn(
+              className={wcn(
                 'flex min-w-0 flex-1 gap-x-3 gap-y-2',
                 resolvedLayout === 'multiline' ? 'flex-col' : 'items-start',
               )}

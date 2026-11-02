@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { textareaClassNames } from '../../lib/classNames';
 import { inputAppearanceClasses, inputFocus, inputInvalid } from '../../lib/styles';
@@ -107,7 +107,7 @@ export const Textarea = ({
       ref={ref}
       data-size={size}
       data-appearance={appearance}
-      className={cn(
+      className={wcn(
         textareaClassNames.root,
         'w-full resize-y',
         TEXTAREA_SIZE[size],

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { getElementType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { SortArrowDownIcon, SortArrowUpIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -183,7 +183,7 @@ export const TableSelectionControl = ({
     if (mixed) setMixedChanges((count) => count + 1);
     onChange?.(event);
   };
-  const classes = cn(
+  const classes = wcn(
     className,
     'accent-primary cursor-pointer disabled:cursor-not-allowed',
     focusRingInset,
@@ -286,16 +286,16 @@ export const TableSortButton = ({
   if (direction) {
     if (sortIcon == null || (button !== null && !slotRendersContent(glyph))) {
       const Arrow = direction === 'ascending' ? SortArrowUpIcon : SortArrowDownIcon;
-      icon = <Arrow data-direction={direction} className={cn(iconClassName, 'shrink-0')} />;
+      icon = <Arrow data-direction={direction} className={wcn(iconClassName, 'shrink-0')} />;
     } else if (slotRendersContent(glyph)) {
-      icon = renderSlot(glyph, 'span', cn(iconClassName, 'inline-flex shrink-0 items-center'), {
+      icon = renderSlot(glyph, 'span', wcn(iconClassName, 'inline-flex shrink-0 items-center'), {
         'aria-hidden': true,
         'data-direction': direction,
       });
     }
   }
 
-  const classes = cn(
+  const classes = wcn(
     className,
     'inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider',
     focusRingInset,

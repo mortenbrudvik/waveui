@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { stackClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Orientation } from '../../lib/types';
 
@@ -95,7 +95,7 @@ export const Stack: PolymorphicComponent<'div', StackOwnProps> = (props) => {
   return (
     <Component
       ref={ref}
-      className={cn(
+      className={wcn(
         stackClassNames.root,
         inline ? 'inline-flex' : 'flex',
         orientation === 'horizontal' ? 'flex-row' : 'flex-col',

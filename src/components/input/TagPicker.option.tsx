@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { tagPickerOptionClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -89,7 +89,7 @@ function TagPickerOptionImpl({
       // A layout wrapper (no class): the visual, then the text over its second line.
       <span className="flex items-center gap-2">
         {hasMedia &&
-          renderSlot(media, 'span', cn(tagPickerOptionClassNames.media, 'inline-flex shrink-0'), {
+          renderSlot(media, 'span', wcn(tagPickerOptionClassNames.media, 'inline-flex shrink-0'), {
             'aria-hidden': true,
           })}
         <span className="flex min-w-0 flex-col">
@@ -98,7 +98,7 @@ function TagPickerOptionImpl({
             renderSlot(
               secondaryContent,
               'span',
-              cn(
+              wcn(
                 tagPickerOptionClassNames.secondaryContent,
                 'text-caption-1 text-muted-foreground',
               ),
@@ -115,7 +115,7 @@ function TagPickerOptionImpl({
       value={value}
       label={resolved ?? value}
       textValue={textValue}
-      className={cn(tagPickerOptionClassNames.root, className)}
+      className={wcn(tagPickerOptionClassNames.root, className)}
     >
       {content}
     </Option>

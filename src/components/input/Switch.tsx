@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { focusableDisabledProps, joinIds } from '../../lib/aria';
 import { switchClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
@@ -300,7 +300,7 @@ export const Switch = ({
   // The parts inside the switch do not activate while it is unavailable, as the switch does not.
   const partBlock = unavailable ? BLOCK_CLICK : undefined;
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: cn(switchClassNames.label, 'text-body-1 text-foreground'),
+    className: wcn(switchClassNames.label, 'text-body-1 text-foreground'),
     // The text names the control through aria-labelledby: an aria-label would replace it.
     locked: { id: labelTextId, 'aria-label': undefined },
     blockHandlers: partBlock,
@@ -308,7 +308,7 @@ export const Switch = ({
   const labelText = hasLabel ? <span {...labelProps}>{materialiseSlotContent(label)}</span> : null;
   const labelFirst = labelPosition === 'before' || labelPosition === 'above';
   const trackProps = mergeSlotProps(slotProps?.track, {
-    className: cn(
+    className: wcn(
       switchClassNames.track,
       // The whole control is sized in px, like the Checkbox box and the radio circle: the
       // thumb and its offsets are px, so a track in rem would stop fitting them at any root
@@ -324,8 +324,8 @@ export const Switch = ({
       hasLabel && labelPosition !== 'above' && sizeMetrics.offset,
       focusRing,
       checked
-        ? cn('border-primary bg-primary', unavailable ? disabledOnTrack : onTrack)
-        : cn(
+        ? wcn('border-primary bg-primary', unavailable ? disabledOnTrack : onTrack)
+        : wcn(
             'border-stroke-accessible bg-transparent',
             unavailable ? forcedColors.disabled : forcedColors.control,
           ),
@@ -369,13 +369,13 @@ export const Switch = ({
     blockHandlers: disabledFocusable ? BLOCK_CLICK : undefined,
   });
   const thumbProps = mergeSlotProps(slotProps?.thumb, {
-    className: cn(
+    className: wcn(
       switchClassNames.thumb,
       'block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
       sizeMetrics.thumb,
       checked
-        ? cn(sizeMetrics.on, 'bg-primary-foreground')
-        : cn(sizeMetrics.off, 'bg-stroke-accessible'),
+        ? wcn(sizeMetrics.on, 'bg-primary-foreground')
+        : wcn(sizeMetrics.off, 'bg-stroke-accessible'),
       unavailable
         ? 'forced-colors:bg-[GrayText]'
         : checked
@@ -387,7 +387,7 @@ export const Switch = ({
     blockHandlers: partBlock,
   });
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(
+    className: wcn(
       switchClassNames.root,
       // items-start: the track lines up with the top of the label's first line, not its
       // middle, when the label wraps or has a second line; medium's 20px track matches that

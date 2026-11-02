@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { toastClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
@@ -202,7 +202,7 @@ export const ToastRoot = ({
   // The status icon: only `undefined` keeps the default; `null`, or anything that renders
   // nothing, shows none (C-SLOTS status-icon rule). The class rides in the slot's base classes,
   // so a slot object that swaps the element keeps it.
-  const iconClassName = cn(
+  const iconClassName = wcn(
     toastClassNames.icon,
     'mt-0.5 inline-flex shrink-0',
     STATUS_ICON_COLOR[status],
@@ -222,10 +222,10 @@ export const ToastRoot = ({
       ? { role: 'alert', 'aria-live': 'assertive' }
       : { role: 'status', 'aria-live': 'polite' };
   // Each part merges only when given, so a toast without `slotProps` allocates no lock object.
-  const contentClassName = cn(toastClassNames.content, 'min-w-0 flex-1');
+  const contentClassName = wcn(toastClassNames.content, 'min-w-0 flex-1');
   let dismissButton: React.ReactNode = null;
   if (dismiss) {
-    const dismissClassName = cn(
+    const dismissClassName = wcn(
       toastClassNames.dismissButton,
       'inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
       'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
@@ -259,7 +259,7 @@ export const ToastRoot = ({
       ref={ref}
       {...liveRegion}
       {...rest}
-      className={cn(
+      className={wcn(
         toastClassNames.root,
         'flex items-start gap-3 rounded border border-s-4 border-border bg-background p-3 text-foreground shadow-4',
         STATUS_BORDER[status],

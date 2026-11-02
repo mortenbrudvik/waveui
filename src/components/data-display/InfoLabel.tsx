@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { infoLabelClassNames } from '../../lib/classNames';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { MotionSlot } from '../../lib/types';
@@ -129,7 +129,7 @@ export const InfoLabel = ({
   return (
     <span
       ref={ref}
-      className={cn(infoLabelClassNames.root, 'inline-flex items-center gap-0', className)}
+      className={wcn(infoLabelClassNames.root, 'inline-flex items-center gap-0', className)}
       {...rest}
     >
       <Label

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { comboboxClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { isFocused } from '../../lib/focus';
@@ -997,7 +997,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   };
 
   const inputProps = mergeSlotProps(slotProps?.input, {
-    className: cn(
+    className: wcn(
       comboboxClassNames.input,
       inputHeightClasses[size],
       'w-full',
@@ -1062,7 +1062,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   });
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(comboboxClassNames.root, 'relative inline-flex flex-col', className),
+    className: wcn(comboboxClassNames.root, 'relative inline-flex flex-col', className),
     style,
     locked: {
       'data-size': size,
@@ -1096,7 +1096,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
             {...mergeSlotProps(slotProps?.clearButton, {
-              className: cn(
+              className: wcn(
                 comboboxClassNames.clearButton,
                 pickerIconButtonClasses(size, appearance),
                 pickerButtonOffset(size, showExpand ? 2 : 1),
@@ -1153,13 +1153,13 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         open={open}
         expanded={expanded}
         // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
-        listClassName={cn(comboboxClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
+        listClassName={wcn(comboboxClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
         surfaceClassName={comboboxClassNames.surface}
         emptyContent={
           draft ? (
             <div
               {...mergeSlotProps(slotProps?.emptyMessage, {
-                className: cn(
+                className: wcn(
                   comboboxClassNames.emptyMessage,
                   'px-3 py-1.5 text-body-1 text-muted-foreground',
                 ),

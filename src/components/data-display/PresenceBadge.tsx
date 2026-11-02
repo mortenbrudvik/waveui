@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { presenceBadgeClassNames } from '../../lib/classNames';
 import {
   PresenceAvailableIcon,
@@ -142,7 +142,7 @@ export const PresenceBadge = ({
   const size = sizeProp ?? avatarBadgeSize ?? 'medium';
   const { glyph, Icon, className: statusClassName } = statusStyles[status];
   const iconPart = slotProps?.icon;
-  const iconClassName = cn(
+  const iconClassName = wcn(
     presenceBadgeClassNames.icon,
     'size-full',
     glyph === 'arrow' && 'wave-rtl:-scale-x-100',
@@ -156,7 +156,7 @@ export const PresenceBadge = ({
       data-glyph={glyph}
       data-status={status}
       {...props}
-      className={cn(
+      className={wcn(
         presenceBadgeClassNames.root,
         'inline-flex shrink-0 items-center justify-center rounded-full ring-2 ring-background',
         'forced-colors:border',

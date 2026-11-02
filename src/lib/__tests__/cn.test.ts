@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { cn, twMerge } from '../cn';
+import { extendTailwindMerge, type ExperimentalParsedClassName } from 'tailwind-merge';
+import { cn, createWcn, twMerge, UTILITY_PREFIX, wcn } from '../cn';
+
+const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 
 describe('cn', () => {
   it('merges multiple class strings', () => {
@@ -213,5 +218,318 @@ describe('cn — Wave motion tokens', () => {
     ).toBe(
       'duration-wave-normal data-[presence=exiting]:duration-wave-fast motion-reduce:duration-0',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 1.0 (Phase 14, spec R6): the namespaced theme keys, the module-only `wcn` and its prefix mode
+// ---------------------------------------------------------------------------------------------
+
+const RAMP = [
+  'caption-2',
+  'caption-1',
+  'body-1',
+  'body-2',
+  'subtitle-2',
+  'subtitle-1',
+  'title-3',
+  'title-2',
+  'title-1',
+  'large-title',
+  'display',
+];
+const SHADOWS = ['2', '4', '8', '16', '28', '64'];
+
+describe('cn — the namespaced theme keys (1.0)', () => {
+  it.each(RAMP)('text-wave-%s is a font size: a text colour next to it is kept', (step) => {
+    expect(cn(`text-wave-${step}`, 'text-wave-foreground')).toBe(
+      `text-wave-${step} text-wave-foreground`,
+    );
+    expect(cn(`text-wave-${step} text-foreground`)).toBe(`text-wave-${step} text-foreground`);
+  });
+
+  it('a later size replaces an earlier one, namespaced, internal or Tailwind', () => {
+    expect(cn('text-wave-body-1', 'text-wave-caption-1')).toBe('text-wave-caption-1');
+    expect(cn('text-body-1', 'text-wave-body-2')).toBe('text-wave-body-2');
+    expect(cn('text-wave-body-2', 'text-body-1')).toBe('text-body-1');
+    expect(cn('text-wave-title-1', 'text-sm')).toBe('text-sm');
+  });
+
+  it.each(SHADOWS)('shadow-wave-%s is a shadow size, never a shadow colour', (level) => {
+    expect(cn(`shadow-wave-${level}`, 'shadow-wave-primary')).toBe(
+      `shadow-wave-${level} shadow-wave-primary`,
+    );
+    expect(cn('shadow-lg', `shadow-wave-${level}`)).toBe(`shadow-wave-${level}`);
+  });
+
+  it('a later shadow replaces an earlier one, namespaced or internal', () => {
+    expect(cn('shadow-wave-4', 'shadow-wave-8')).toBe('shadow-wave-8');
+    expect(cn('shadow-4', 'shadow-wave-16')).toBe('shadow-wave-16');
+    expect(cn('shadow-wave-16', 'shadow-none')).toBe('shadow-none');
+  });
+
+  it('the namespaced colours merge as colours', () => {
+    expect(cn('bg-wave-primary', 'bg-wave-error')).toBe('bg-wave-error');
+    expect(cn('bg-primary', 'bg-wave-error')).toBe('bg-wave-error');
+    expect(cn('border-2 border-wave-border', 'border-wave-stroke-accessible')).toBe(
+      'border-2 border-wave-stroke-accessible',
+    );
+  });
+
+  it('font-wave, animate-wave-*, duration-wave-* and ease-wave-* keep their groups', () => {
+    expect(cn('font-wave font-semibold', 'font-wave-mono')).toBe('font-semibold font-wave-mono');
+    expect(cn('animate-wave-spin', 'animate-wave-pulse')).toBe('animate-wave-pulse');
+    expect(cn('duration-wave-gentle ease-wave-easy-ease', 'duration-wave-fast')).toBe(
+      'ease-wave-easy-ease duration-wave-fast',
+    );
+    expect(cn('ease-wave-linear', 'ease-wave-decelerate-mid')).toBe('ease-wave-decelerate-mid');
+  });
+});
+
+/** Inputs of the merge, each the argument list of one call. */
+const MERGE_CASES: Array<Parameters<typeof cn>> = [
+  ['px-4', 'px-2'],
+  ['text-body-1 text-foreground px-3', 'text-destructive px-2'],
+  ['text-body-1', 'text-sm'],
+  ['shadow-4', 'shadow-8'],
+  ['shadow-4', 'shadow-primary'],
+  ['font-wave', 'font-semibold'],
+  ['font-wave', 'font-wave-mono'],
+  ['animate-wave-spin', 'motion-reduce:animate-wave-spin-slow'],
+  ['duration-wave-fast', 'duration-200'],
+  ['ease-wave-linear', 'ease-in'],
+  ['not-disabled:not-aria-disabled:hover:bg-primary-hover', 'hover:bg-error'],
+  ['data-[selected]:bg-selected', 'data-[selected]:bg-error'],
+  ['ps-3 pe-2', 'px-4'],
+  ['wave-button inline-flex', 'my-button'],
+  ['text-wave-body-1 text-wave-foreground', 'text-wave-caption-1'],
+  ['shadow-wave-4', 'shadow-wave-8'],
+  [['a', { b: true, c: false }], 'd', null, false, undefined],
+];
+
+describe('wcn — the module-only merge of the components, with the prefix off', () => {
+  it('has no prefix yet (the flip of Phase 14 sets it)', () => {
+    expect(UTILITY_PREFIX).toBe('');
+  });
+
+  it.each(MERGE_CASES)('merges %j exactly as cn', (...inputs) => {
+    expect(wcn(...inputs)).toBe(cn(...inputs));
+  });
+
+  it('is the merge createWcn builds for UTILITY_PREFIX', () => {
+    const built = createWcn(UTILITY_PREFIX);
+    for (const inputs of MERGE_CASES) expect(built(...inputs)).toBe(wcn(...inputs));
+  });
+
+  it('keeps the gate pitfall: a gated hover and a bare hover are different variants', () => {
+    const gatedHover = 'not-disabled:not-aria-disabled:hover:bg-primary-hover';
+    expect(wcn(`bg-primary ${gatedHover}`, 'hover:bg-error')).toBe(
+      `bg-primary ${gatedHover} hover:bg-error`,
+    );
+    expect(wcn(gatedHover, 'not-disabled:not-aria-disabled:hover:bg-error')).toBe(
+      'not-disabled:not-aria-disabled:hover:bg-error',
+    );
+  });
+
+  it('knows both the internal and the namespaced scales', () => {
+    expect(wcn('text-body-1 text-foreground', 'text-wave-body-2')).toBe(
+      'text-foreground text-wave-body-2',
+    );
+    expect(wcn('shadow-4', 'shadow-wave-16')).toBe('shadow-wave-16');
+  });
+});
+
+describe("createWcn('wave'): the prefixed merge (spec R6)", () => {
+  const prefixed = createWcn('wave');
+
+  it("a consumer's unprefixed class replaces a prefixed Wave class of the same group", () => {
+    expect(prefixed('wave:p-4', 'p-2')).toBe('p-2');
+    expect(prefixed('wave:p-4', 'wave:p-2')).toBe('wave:p-2');
+    expect(prefixed('wave:px-3 wave:py-1', 'p-2')).toBe('p-2');
+    expect(prefixed('wave:bg-primary', 'bg-wave-error')).toBe('bg-wave-error');
+    expect(prefixed('wave:rounded-md', 'rounded-none')).toBe('rounded-none');
+    // A Wave class after the consumer's (never the components' order) wins, as in 0.18.
+    expect(prefixed('p-2', 'wave:p-4')).toBe('wave:p-4');
+  });
+
+  it('the type ramp: a size and a colour are two groups, internal and namespaced sizes one', () => {
+    expect(prefixed('wave:text-body-1 wave:text-foreground')).toBe(
+      'wave:text-body-1 wave:text-foreground',
+    );
+    expect(prefixed('wave:text-body-1 wave:text-foreground', 'text-wave-body-2')).toBe(
+      'wave:text-foreground text-wave-body-2',
+    );
+    expect(prefixed('wave:text-body-1 wave:text-foreground', 'text-wave-error')).toBe(
+      'wave:text-body-1 text-wave-error',
+    );
+    expect(prefixed('wave:text-body-1', 'wave:text-caption-1')).toBe('wave:text-caption-1');
+    expect(prefixed('wave:text-body-1', 'text-sm')).toBe('text-sm');
+  });
+
+  it('shadows, font families, animations and the motion tokens', () => {
+    expect(prefixed('wave:shadow-4', 'wave:shadow-8')).toBe('wave:shadow-8');
+    expect(prefixed('wave:shadow-4', 'shadow-wave-16')).toBe('shadow-wave-16');
+    expect(prefixed('wave:shadow-4', 'shadow-wave-primary')).toBe(
+      'wave:shadow-4 shadow-wave-primary',
+    );
+    expect(prefixed('wave:font-wave wave:font-semibold', 'font-wave-mono')).toBe(
+      'wave:font-semibold font-wave-mono',
+    );
+    expect(prefixed('wave:animate-wave-spin', 'animate-wave-pulse')).toBe('animate-wave-pulse');
+    expect(
+      prefixed('wave:duration-wave-gentle wave:ease-wave-easy-ease', 'duration-wave-fast ease-in'),
+    ).toBe('duration-wave-fast ease-in');
+  });
+
+  it('keeps the gate pitfall: the gated hover stays next to a bare hover', () => {
+    const gated = 'wave:not-disabled:not-aria-disabled:hover:bg-primary-hover';
+    expect(prefixed(`wave:bg-primary ${gated}`, 'hover:bg-error')).toBe(
+      `wave:bg-primary ${gated} hover:bg-error`,
+    );
+    expect(prefixed(gated, 'not-disabled:not-aria-disabled:hover:bg-error')).toBe(
+      'not-disabled:not-aria-disabled:hover:bg-error',
+    );
+  });
+
+  it('arbitrary values and variables', () => {
+    expect(prefixed('wave:p-[3px]', 'p-[5px]')).toBe('p-[5px]');
+    expect(prefixed('wave:bg-(--option-bg)', 'bg-wave-error')).toBe('bg-wave-error');
+    expect(prefixed('wave:w-[calc(100%-2px)]', 'w-full')).toBe('w-full');
+    expect(prefixed('wave:[mask-type:luminance]', '[mask-type:alpha]')).toBe('[mask-type:alpha]');
+  });
+
+  it('the important modifier is a group of its own, in either position', () => {
+    expect(prefixed('wave:p-4', 'p-2!')).toBe('wave:p-4 p-2!');
+    expect(prefixed('wave:p-4!', 'p-2!')).toBe('p-2!');
+    expect(prefixed('wave:p-4!', '!p-2')).toBe('!p-2');
+    expect(prefixed('wave:hover:bg-primary', 'hover:bg-error!')).toBe(
+      'wave:hover:bg-primary hover:bg-error!',
+    );
+  });
+
+  it('negative values', () => {
+    expect(prefixed('wave:-mt-1', 'mt-2')).toBe('mt-2');
+    expect(prefixed('wave:mt-2', '-mt-1')).toBe('-mt-1');
+    expect(prefixed('wave:wave-rtl:-scale-x-100', 'wave-rtl:scale-x-100')).toBe(
+      'wave-rtl:scale-x-100',
+    );
+  });
+
+  it('named groups: a variant with a name, and the marker itself', () => {
+    expect(prefixed('wave:group-hover/row:opacity-100', 'group-hover/row:opacity-0')).toBe(
+      'group-hover/row:opacity-0',
+    );
+    expect(prefixed('wave:group-hover/row:opacity-100', 'group-hover:opacity-0')).toBe(
+      'wave:group-hover/row:opacity-100 group-hover:opacity-0',
+    );
+    expect(prefixed('wave:group/row wave:flex', 'group')).toBe('wave:group/row wave:flex group');
+  });
+
+  it('data variants (the presence phases, the selected state)', () => {
+    expect(
+      prefixed('wave:data-[presence=exiting]:opacity-0', 'data-[presence=exiting]:opacity-50'),
+    ).toBe('data-[presence=exiting]:opacity-50');
+    expect(prefixed('wave:data-[presence=entered]:contents', 'hidden')).toBe(
+      'wave:data-[presence=entered]:contents hidden',
+    );
+    expect(prefixed('wave:data-[selected]:bg-selected', 'data-[selected]:bg-error')).toBe(
+      'data-[selected]:bg-error',
+    );
+  });
+
+  it('keeps every class that is no utility: stable classes, app classes', () => {
+    expect(prefixed('wave-button wave:inline-flex', 'my-button')).toBe(
+      'wave-button wave:inline-flex my-button',
+    );
+  });
+
+  it("keeps a prefix(tw) app's class next to Wave's (the merge reads tw as a variant)", () => {
+    expect(prefixed('wave:p-4', 'tw:p-2')).toBe('wave:p-4 tw:p-2');
+  });
+});
+
+describe('tailwind-merge: the parse the prefix mode relies on is pinned', () => {
+  it('parses a class with and without the prefix as the prefixed merge expects', () => {
+    const seen: Array<ExperimentalParsedClassName & { className: string }> = [];
+    const probe = extendTailwindMerge({
+      prefix: 'wave',
+      experimentalParseClassName: ({ className, parseClassName }) => {
+        const parsed = parseClassName(
+          className.startsWith('wave:') ? className : `wave:${className}`,
+        );
+        seen.push({ className, ...parsed });
+        return parsed;
+      },
+    });
+    probe('wave:not-disabled:hover:bg-primary!', 'p-2/50', 'group-hover/row:-mt-1', 'tw:p-2');
+    // tailwind-merge walks the list from its end.
+    expect(
+      seen.map(({ className, modifiers, hasImportantModifier, baseClassName, isExternal }) => ({
+        className,
+        modifiers,
+        hasImportantModifier,
+        baseClassName,
+        isExternal,
+      })),
+    ).toEqual([
+      {
+        className: 'tw:p-2',
+        modifiers: ['tw'],
+        hasImportantModifier: false,
+        baseClassName: 'p-2',
+        isExternal: undefined,
+      },
+      {
+        className: 'group-hover/row:-mt-1',
+        modifiers: ['group-hover/row'],
+        hasImportantModifier: false,
+        baseClassName: '-mt-1',
+        isExternal: undefined,
+      },
+      {
+        className: 'p-2/50',
+        modifiers: [],
+        hasImportantModifier: false,
+        baseClassName: 'p-2/50',
+        isExternal: undefined,
+      },
+      {
+        className: 'wave:not-disabled:hover:bg-primary!',
+        modifiers: ['not-disabled', 'hover'],
+        hasImportantModifier: true,
+        baseClassName: 'bg-primary',
+        isExternal: undefined,
+      },
+    ]);
+  });
+
+  it('passes an unprefixed class through untouched unless the parse adds the prefix', () => {
+    const prefixOnly = extendTailwindMerge({ prefix: 'wave' });
+    expect(prefixOnly('wave:p-4', 'p-2')).toBe('wave:p-4 p-2');
+    expect(prefixOnly('wave:p-4', 'wave:p-2')).toBe('wave:p-2');
+  });
+
+  it('is pinned to the exact installed version in package.json and the lockfile', () => {
+    interface Manifest {
+      version?: string;
+      dependencies?: Record<string, string>;
+      packages?: Record<string, { version?: string; dependencies?: Record<string, string> }>;
+    }
+    const read = (path: string): Manifest =>
+      JSON.parse(readFileSync(join(REPO_ROOT, path), 'utf8')) as Manifest;
+    const installed = read('node_modules/tailwind-merge/package.json').version;
+    const lock = read('package-lock.json');
+    expect(installed).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(read('package.json').dependencies?.['tailwind-merge']).toBe(installed);
+    expect(lock.packages?.['']?.dependencies?.['tailwind-merge']).toBe(installed);
+    expect(lock.packages?.['node_modules/tailwind-merge']?.version).toBe(installed);
+  });
+});
+
+describe('cn.ts: both merge configurations are pure (tree-shaking)', () => {
+  it('marks the module-level construction of each merge /* @__PURE__ */', () => {
+    const source = readFileSync(join(REPO_ROOT, 'src/lib/cn.ts'), 'utf8');
+    expect(source).toMatch(/export const twMerge = \/\* @__PURE__ \*\/ extendTailwindMerge\(/);
+    expect(source).toMatch(/export const wcn = \/\* @__PURE__ \*\/ createWcn\(UTILITY_PREFIX\);/);
   });
 });

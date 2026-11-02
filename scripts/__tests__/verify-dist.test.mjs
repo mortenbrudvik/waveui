@@ -5179,6 +5179,28 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       expect(MODULE_ONLY_NAMES, name).not.toContain(name);
     }
   }, 60_000);
+
+  it('lists the merge of the components (1.0, spec R6): lib/cn exports cn to the entry, the rest stays module-only', () => {
+    const entry = join(repoRoot, 'src/index.ts');
+    const cnModule = join(repoRoot, 'src/lib/cn.ts');
+    const config = ts.readConfigFile(join(repoRoot, 'tsconfig.json'), ts.sys.readFile);
+    const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, repoRoot);
+    const program = ts.createProgram({
+      rootNames: [entry, cnModule],
+      options: { ...parsed.options, noEmit: true },
+    });
+    const checker = program.getTypeChecker();
+    const exportsOf = (file) =>
+      checker
+        .getExportsOfModule(checker.getSymbolAtLocation(program.getSourceFile(file)))
+        .map((symbol) => symbol.name);
+    const entryNames = new Set(exportsOf(entry));
+    expect(entryNames.has('cn')).toBe(true);
+    const moduleOnly = exportsOf(cnModule).filter((name) => !entryNames.has(name));
+    expect(moduleOnly.sort()).toEqual(['UTILITY_PREFIX', 'createWcn', 'twMerge', 'wcn']);
+    for (const name of moduleOnly) expect(MODULE_ONLY_NAMES, name).toContain(name);
+    expect(MODULE_ONLY_NAMES).not.toContain('cn');
+  }, 60_000);
 });
 
 describe('verifyDist and main', () => {

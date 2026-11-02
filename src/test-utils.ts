@@ -692,7 +692,7 @@ export function testRestSpread<P extends object>(
  *   still present next to the consumer class (a component doing `className ?? defaults` fails);
  * - with `conflictingClass` — `lets a conflicting consumer className win over the default`:
  *   `overrides` must be a default class; with `className` the consumer class is present and the
- *   default is gone (a component doing `cn(className, defaults)` fails).
+ *   default is gone (a component doing `wcn(className, defaults)` fails).
  *
  * Both renders read the element carrying `data-testid`, which must be the element that receives
  * `className`.
@@ -769,7 +769,7 @@ export function testClassName<P extends object>(
       const missing = stable.carries.filter((cls) => !target?.classList.contains(cls));
       expect(
         missing,
-        `stable classes missing where className lands: apply ${stable.constant}.root first in that element's cn() (src/lib/classNames.ts), and a variant also its base constants' roots`,
+        `stable classes missing where className lands: apply ${stable.constant}.root first in that element's wcn() (src/lib/classNames.ts), and a variant also its base constants' roots`,
       ).toEqual([]);
     });
   }

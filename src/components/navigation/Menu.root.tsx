@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { menuClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -699,7 +699,7 @@ export const MenuRoot = ({
           )}
           onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
           onPointerMove={composeEventHandlers(onPointerMove, listPointerMove)}
-          className={cn(menuClassNames.root, menuSurfaceClasses, focusRing, className)}
+          className={wcn(menuClassNames.root, menuSurfaceClasses, focusRing, className)}
         >
           <MenuListElementContext.Provider value={listElement}>
             {children}

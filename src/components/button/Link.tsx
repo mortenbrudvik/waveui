@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { linkClassNames } from '../../lib/classNames';
 import { focusRing } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
@@ -132,7 +132,7 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
       {...elementProps}
       {...handlers}
       ref={ref}
-      className={cn(
+      className={wcn(
         linkClassNames.root,
         'cursor-pointer transition-colors motion-reduce:transition-none',
         focusRing,

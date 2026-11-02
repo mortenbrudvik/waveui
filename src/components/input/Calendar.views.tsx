@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { DayOfWeek, FirstWeekOfYear } from '../../lib/types';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusableDisabledProps } from '../../lib/aria';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -210,9 +210,9 @@ export const CalendarDayGrid = ({
     onMoveFocus(next);
   };
 
-  const weekdayClassName = cn(partClassNames?.weekday, HEADER_CELL_CLASSES);
-  const weekNumberClassName = cn(partClassNames?.weekNumber, HEADER_CELL_CLASSES);
-  const markedDotClassName = cn(
+  const weekdayClassName = wcn(partClassNames?.weekday, HEADER_CELL_CLASSES);
+  const weekNumberClassName = wcn(partClassNames?.weekNumber, HEADER_CELL_CLASSES);
+  const markedDotClassName = wcn(
     partClassNames?.markedDot,
     'pointer-events-none absolute inset-x-0 bottom-0.5 mx-auto h-1 w-1 rounded-full bg-current forced-colors:forced-color-adjust-none',
   );
@@ -243,7 +243,7 @@ export const CalendarDayGrid = ({
   return (
     <table
       {...mergeSlotProps(parts?.grid, {
-        className: cn(partClassNames?.grid, 'border-collapse'),
+        className: wcn(partClassNames?.grid, 'border-collapse'),
         locked: {
           ...HIDDEN_PART_LOCKS,
           id,
@@ -262,7 +262,7 @@ export const CalendarDayGrid = ({
             // a visually hidden name (an aria-label alone on an empty header fails axe).
             <th
               {...mergeSlotProps(parts?.weekNumberHeader, {
-                className: cn(partClassNames?.weekNumberHeader, HEADER_CELL_CLASSES),
+                className: wcn(partClassNames?.weekNumberHeader, HEADER_CELL_CLASSES),
                 locked: { scope: 'col' },
               })}
             >
@@ -324,7 +324,7 @@ export const CalendarDayGrid = ({
                   if (!unavailable) onPick(day);
                 },
               };
-              const dayClassName = cn(
+              const dayClassName = wcn(
                 partClassNames?.day,
                 DAY_CLASSES,
                 focusRing,
@@ -517,7 +517,7 @@ export const CalendarPickerGrid = ({
   return (
     <table
       {...mergeSlotProps(parts?.grid, {
-        className: cn(partClassNames?.grid, 'border-collapse'),
+        className: wcn(partClassNames?.grid, 'border-collapse'),
         locked: {
           ...HIDDEN_PART_LOCKS,
           id,
@@ -548,7 +548,7 @@ export const CalendarPickerGrid = ({
                   if (!cell.unavailable) onPick(cell.date);
                 },
               };
-              const cellClassName = cn(
+              const cellClassName = wcn(
                 partClassNames?.cell,
                 PICKER_CELL_CLASSES,
                 focusRing,

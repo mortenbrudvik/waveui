@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { tableResizeHandleClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { composeAfterPart, mergeSlotProps } from '../../lib/slotProps';
@@ -278,7 +278,7 @@ const TableResizeHandle = ({
   // the public handle.
   const { slotPart: part, ...divProps } = rest as typeof rest &
     Pick<TableResizeHandlePartProps, 'slotPart'>;
-  const classes = cn(
+  const classes = wcn(
     tableResizeHandleClassNames.root,
     'absolute inset-y-0 end-0 z-1 w-2 cursor-col-resize touch-none select-none border-e-2 border-transparent',
     'hover:border-stroke-accessible focus-visible:border-primary data-[dragging]:border-primary',

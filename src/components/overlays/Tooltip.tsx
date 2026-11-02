@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { tooltipClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
@@ -481,7 +481,7 @@ export const Tooltip = ({
   let surface: React.ReactNode = null;
   if (isMounted) {
     const surfaceProps = mergeSlotProps(slotProps?.content, {
-      className: cn(
+      className: wcn(
         tooltipClassNames.content,
         surfaceClasses,
         appearanceClasses[appearance],
@@ -518,7 +518,7 @@ export const Tooltip = ({
     <span
       ref={wrapperElementRef}
       {...wrapperProps}
-      className={cn(tooltipClassNames.root, 'inline-block', className)}
+      className={wcn(tooltipClassNames.root, 'inline-block', className)}
       onMouseEnter={composeEventHandlers(onMouseEnter, showOnEnter)}
       onMouseLeave={composeEventHandlers(onMouseLeave, scheduleHide)}
       onMouseOver={composeEventHandlers(

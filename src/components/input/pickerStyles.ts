@@ -3,7 +3,7 @@
  * Component-private: not exported from the package.
  */
 
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hitAreaLayer } from '../../lib/styles';
 import type { CoreSize, InputAppearance } from '../../lib/types';
 
@@ -18,7 +18,7 @@ export const PICKER_ICON_BUTTON_CLASSES =
 
 /** The button box of each size: 20px with a 24px hit layer, 24px (the 0.7 box) or 32px. */
 const BUTTON_BOX: Readonly<Record<CoreSize, string>> = {
-  small: cn('size-5', hitAreaLayer),
+  small: wcn('size-5', hitAreaLayer),
   medium: '',
   large: 'size-8',
 };
@@ -31,7 +31,7 @@ export function pickerIconButtonClasses(
   size: CoreSize = 'medium',
   appearance: InputAppearance = 'outline',
 ): string {
-  return cn(
+  return wcn(
     PICKER_ICON_BUTTON_CLASSES,
     BUTTON_BOX[size],
     appearance === 'filled-darker' && 'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',

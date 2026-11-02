@@ -5,7 +5,7 @@ import {
   imageSwatchClassNames,
   swatchPickerClassNames,
 } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { AddIcon, CheckIcon } from '../../lib/icons';
@@ -58,13 +58,13 @@ function SwatchCheck({ colors, size }: { colors: CheckColors | null; size: numbe
       <CheckIcon
         size={size}
         strokeWidth={4}
-        className={cn('col-start-1 row-start-1', !colors && 'text-background')}
+        className={wcn('col-start-1 row-start-1', !colors && 'text-background')}
         style={colors ? { color: colors.halo } : undefined}
       />
       <CheckIcon
         size={size}
         strokeWidth={2}
-        className={cn('col-start-1 row-start-1', !colors && 'text-foreground')}
+        className={wcn('col-start-1 row-start-1', !colors && 'text-foreground')}
         style={colors ? { color: colors.glyph } : undefined}
       />
     </span>
@@ -176,7 +176,7 @@ function swatchBaseClasses(
   shape: Shape,
   spacing: 'small' | 'medium',
 ): string {
-  return cn(
+  return wcn(
     sizeMap[size],
     shapeMap[shape],
     // The padding is set here (C-NATIVE).
@@ -318,7 +318,7 @@ const SwatchRadio = ({
       data-selected={isSelected ? '' : undefined}
       tabIndex={getTabIndex(value)}
       onClick={composeEventHandlers(onClick, () => select(value))}
-      className={cn(
+      className={wcn(
         rootClassName,
         // Every swatch in a picker carries the picker's part class, children included (0.8).
         swatchPickerClassNames.swatch,
@@ -334,7 +334,7 @@ const SwatchRadio = ({
         // An image stays in forced colors, so its selection needs a sign of its own.
         isSelected && !keepsColors && 'forced-colors:border-[Highlight]',
         isSelected
-          ? cn(
+          ? wcn(
               'ring-2 ring-foreground ring-offset-2 ring-offset-background',
               keepsColors && 'forced-colors:ring-[Highlight]',
             )
@@ -348,7 +348,7 @@ const SwatchRadio = ({
       ) : (
         glyph != null &&
         slotRendersContent(glyph) &&
-        renderSlot(glyph, 'span', cn(iconClassName, 'pointer-events-none inline-flex'), {
+        renderSlot(glyph, 'span', wcn(iconClassName, 'pointer-events-none inline-flex'), {
           'aria-hidden': true,
           style: checkColors ? { color: checkColors.glyph } : undefined,
         })
@@ -538,7 +538,7 @@ export const EmptySwatch = ({
       // The row layout's root skips its arrow handling for events from here.
       data-wave-empty-swatch=""
       {...(isGrid && { 'data-roving-value': cellValue, tabIndex: getTabIndex(cellValue) })}
-      className={cn(
+      className={wcn(
         emptySwatchClassNames.root,
         swatchPickerClassNames.swatch,
         swatchBaseClasses(size, shape, spacing),
@@ -552,7 +552,7 @@ export const EmptySwatch = ({
         renderSlot(
           content,
           'span',
-          cn(emptySwatchClassNames.icon, 'pointer-events-none inline-flex'),
+          wcn(emptySwatchClassNames.icon, 'pointer-events-none inline-flex'),
           {
             'aria-hidden': true,
           },

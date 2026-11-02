@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { tagPickerClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import type { Slot } from '../../lib/slot';
@@ -1062,7 +1062,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
 
   const rootPart = slotProps?.root;
   const rootProps = mergeSlotProps(rootPart, {
-    className: cn(tagPickerClassNames.root, 'relative', className),
+    className: wcn(tagPickerClassNames.root, 'relative', className),
     style,
     locked: {
       'data-size': size,

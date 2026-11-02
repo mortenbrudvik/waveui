@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { dividerClassNames } from '../../lib/classNames';
 import { joinIds } from '../../lib/aria';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -109,7 +109,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
     const Wrapper: React.ElementType = as ?? 'div';
     // A consumer aria-label names the separator; aria-labelledby would take precedence over it.
     const labelledBy = rest['aria-label'] ? ariaLabelledBy : joinIds(ariaLabelledBy, labelId);
-    const lineClassName = cn(
+    const lineClassName = wcn(
       dividerClassNames.line,
       vertical
         ? 'w-0 min-h-2 flex-1 border-s border-border'
@@ -118,7 +118,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
     const lineProps =
       slotProps?.line &&
       mergeSlotProps(slotProps.line, { className: lineClassName, locked: LINE_PART_LOCKS });
-    const labelClasses = cn(dividerClassNames.label, labelClassName);
+    const labelClasses = wcn(dividerClassNames.label, labelClassName);
     // The label's props are the slot's defaults, its class the slot's base: a part's merged in,
     // after the id (which keeps its place in the markup).
     const labelProps = slotProps?.label
@@ -135,7 +135,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         ref={ref}
         role="separator"
         aria-orientation={vertical ? 'vertical' : undefined}
-        className={cn(
+        className={wcn(
           dividerClassNames.root,
           vertical
             ? 'inline-flex min-h-12 flex-col items-center gap-1 self-stretch'
@@ -162,7 +162,11 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         role="separator"
         aria-orientation="vertical"
         aria-labelledby={ariaLabelledBy}
-        className={cn(dividerClassNames.root, 'inline-block h-6 border-s border-border', className)}
+        className={wcn(
+          dividerClassNames.root,
+          'inline-block h-6 border-s border-border',
+          className,
+        )}
         {...rest}
       />
     );
@@ -174,7 +178,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
       ref={ref}
       role="separator"
       aria-labelledby={ariaLabelledBy}
-      className={cn(
+      className={wcn(
         dividerClassNames.root,
         'm-0 h-0 w-full border-0 border-t border-solid border-border',
         className,

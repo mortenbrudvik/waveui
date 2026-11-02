@@ -5,7 +5,7 @@ import {
   cardFooterClassNames,
   cardHeaderClassNames,
 } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
@@ -109,7 +109,7 @@ const CHECKMARK_PART_LOCKS = {
 
 /** The props of a selected card's check glyph, its `slotProps.checkmark` merged in when given. */
 function checkmarkProps(part: SlotPart<'svg'> | undefined): Record<string, unknown> {
-  const className = cn(cardClassNames.checkmark, 'absolute end-2 top-2 text-primary');
+  const className = wcn(cardClassNames.checkmark, 'absolute end-2 top-2 text-primary');
   return part ? mergeSlotProps(part, { className, locked: CHECKMARK_PART_LOCKS }) : { className };
 }
 
@@ -404,7 +404,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
             data-appearance={appearance}
             data-size={size}
             data-orientation={orientation}
-            className={cn(
+            className={wcn(
               cardClassNames.root,
               'overflow-hidden rounded-md',
               cardAppearanceClasses[appearance].surface,
@@ -413,7 +413,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
               // Positions the check glyph / checkbox; plain cards keep their 0.4 positioning.
               (selectable || selected !== undefined || hasFloatingAction) && 'relative',
               selected &&
-                cn(
+                wcn(
                   'border-primary bg-selected text-selected-foreground ring-1 ring-inset ring-primary',
                   forcedColors.selectedContainer,
                 ),
@@ -439,7 +439,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
                     ? undefined
                     : (checkboxProps?.['aria-labelledby'] ?? titleId)
                 }
-                className={cn(
+                className={wcn(
                   cardClassNames.checkbox,
                   'absolute top-3 m-0 size-4 cursor-pointer accent-primary',
                   hasFloatingAction ? 'start-3' : 'end-3',
@@ -453,7 +453,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
               renderSlot(
                 floatingAction,
                 'span',
-                cn(cardClassNames.floatingAction, 'absolute end-3 top-3 inline-flex'),
+                wcn(cardClassNames.floatingAction, 'absolute end-3 top-3 inline-flex'),
               )}
             {selected && !checkboxMode && (
               <CheckIcon size={12} {...checkmarkProps(slotProps?.checkmark)} />
@@ -584,7 +584,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
           id={titleId ?? undefined}
           {...textPartProps(
             slotProps?.title,
-            cn(cardHeaderClassNames.title, 'text-subtitle-1'),
+            wcn(cardHeaderClassNames.title, 'text-subtitle-1'),
             titleId,
           )}
         >
@@ -595,7 +595,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
         <div
           {...textPartProps(
             slotProps?.subtitle,
-            cn(cardHeaderClassNames.subtitle, 'text-caption-1 text-muted-foreground'),
+            wcn(cardHeaderClassNames.subtitle, 'text-caption-1 text-muted-foreground'),
           )}
         >
           {materialiseSlotContent(subtitle)}
@@ -608,13 +608,13 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
     // In a checkbox card the header keeps clear of the checkbox in the top end corner.
     <Component
       ref={ref}
-      className={cn(
+      className={wcn(
         cardHeaderClassNames.root,
         'p-[var(--wave-card-padding,1rem)]',
         ((titleId && !corners.checkboxAtStart) || corners.floatingAction) && 'pe-10',
         corners.checkboxAtStart && 'ps-10',
         (hasImage || hasAction) &&
-          cn(
+          wcn(
             'grid items-center gap-x-3',
             hasImage && hasAction
               ? 'grid-cols-[auto_1fr_auto]'
@@ -630,7 +630,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
         renderSlot(
           image,
           'span',
-          cn(cardHeaderClassNames.image, 'inline-flex shrink-0 items-center'),
+          wcn(cardHeaderClassNames.image, 'inline-flex shrink-0 items-center'),
         )}
       {hasImage || hasAction ? (
         <div {...textPartProps(slotProps?.text, cardHeaderClassNames.text)}>{text}</div>
@@ -641,7 +641,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
         renderSlot(
           action,
           'span',
-          cn(cardHeaderClassNames.action, 'inline-flex shrink-0 items-center'),
+          wcn(cardHeaderClassNames.action, 'inline-flex shrink-0 items-center'),
         )}
     </Component>
   );
@@ -672,7 +672,7 @@ export const CardBody: PolymorphicComponent<'div', CardBodyOwnProps> = (props) =
   return (
     <Component
       ref={ref}
-      className={cn(cardBodyClassNames.root, 'p-[var(--wave-card-padding,1rem)] pt-0', className)}
+      className={wcn(cardBodyClassNames.root, 'p-[var(--wave-card-padding,1rem)] pt-0', className)}
       {...rest}
     />
   );
@@ -699,7 +699,7 @@ export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (prop
   return (
     <Component
       ref={ref}
-      className={cn(
+      className={wcn(
         cardFooterClassNames.root,
         'flex justify-end gap-2 p-[var(--wave-card-padding,1rem)] pt-0',
         className,

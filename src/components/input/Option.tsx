@@ -4,7 +4,7 @@ import {
   optionClassNames,
   optionGroupClassNames,
 } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { CheckIcon } from '../../lib/icons';
@@ -135,12 +135,12 @@ OptionCheckContext.displayName = 'OptionCheckContext';
 
 /*
  * State is exposed as data attributes (C-CLASS): `data-active` (keyboard/pointer highlight),
- * `data-selected`, `data-disabled`. State classes come before the consumer's `className` in `cn()`.
+ * `data-selected`, `data-disabled`. State classes come before the consumer's `className` in `wcn()`.
  *
  * Backgrounds (input-pickers#20): one unconditional `bg-(--option-bg)` paints the option, and the
  * hover/selected/active variants only set `--option-bg`. A variant that set `background-color`
  * itself (class + attribute or pseudo-class) would out-specify a consumer's plain `bg-*` class in
- * the cascade even though `cn()` keeps it; instead tailwind-merge replaces `bg-(--option-bg)` with
+ * the cascade even though `wcn()` keeps it; instead tailwind-merge replaces `bg-(--option-bg)` with
  * the consumer's class, which is then the only background declaration on the option. A consumer
  * `data-[active]:bg-…` / `data-[selected]:bg-…` restyles a single state (it out-specifies the
  * unconditional reader). The active outline is the focus indicator and stays a state variant.
@@ -148,7 +148,7 @@ OptionCheckContext.displayName = 'OptionCheckContext';
  * A filtered-out option carries the `hidden` attribute; base.css's scoped `[hidden]` rule hides
  * it over `flex` and over a consumer's display class.
  */
-const OPTION_CLASSES = cn(
+const OPTION_CLASSES = wcn(
   'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground',
   'bg-(--option-bg) [--option-bg:transparent]',
   'not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)]',
@@ -158,7 +158,7 @@ const OPTION_CLASSES = cn(
   'aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground',
 );
 
-const OPTION_CONTENT_CLASSES = cn(optionClassNames.content, 'min-w-0 flex-1');
+const OPTION_CONTENT_CLASSES = wcn(optionClassNames.content, 'min-w-0 flex-1');
 
 /** The handlers the parts of a disabled option drop: the option selects nothing then. */
 const BLOCK_CLICK = ['onClick'] as const;
@@ -251,24 +251,27 @@ function renderCheck(
   indicator: SlotPart<'span'> | undefined,
 ): React.ReactNode {
   if (!multiselect) {
-    const classes = cn(optionClassNames.checkIcon, 'shrink-0', !selected && 'invisible');
+    const classes = wcn(optionClassNames.checkIcon, 'shrink-0', !selected && 'invisible');
     return glyph === undefined ? (
       <CheckIcon className={classes} />
     ) : (
-      renderSlot(glyph, 'span', cn('inline-flex', classes), { 'aria-hidden': true })
+      renderSlot(glyph, 'span', wcn('inline-flex', classes), { 'aria-hidden': true })
     );
   }
   // One class set per state, so a disabled box never carries the brand classes it replaces.
   let boxClasses: string;
   if (disabled) {
-    boxClasses = cn('border-current bg-transparent', DISABLED_BOX_FORCED_COLORS);
+    boxClasses = wcn('border-current bg-transparent', DISABLED_BOX_FORCED_COLORS);
   } else if (selected) {
-    boxClasses = cn('border-primary bg-primary text-primary-foreground', forcedColors.selectedLeaf);
+    boxClasses = wcn(
+      'border-primary bg-primary text-primary-foreground',
+      forcedColors.selectedLeaf,
+    );
   } else {
-    boxClasses = cn('border-stroke-accessible bg-transparent', forcedColors.control);
+    boxClasses = wcn('border-stroke-accessible bg-transparent', forcedColors.control);
   }
   const glyphClasses = disabled ? DISABLED_GLYPH_FORCED_COLORS : undefined;
-  const indicatorClasses = cn(
+  const indicatorClasses = wcn(
     optionClassNames.indicator,
     'flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border',
     boxClasses,
@@ -288,12 +291,12 @@ function renderCheck(
     >
       {selected &&
         (glyph === undefined ? (
-          <CheckIcon size={12} className={cn(optionClassNames.checkIcon, glyphClasses)} />
+          <CheckIcon size={12} className={wcn(optionClassNames.checkIcon, glyphClasses)} />
         ) : (
           renderSlot(
             glyph,
             'span',
-            cn(optionClassNames.checkIcon, 'inline-flex shrink-0', glyphClasses),
+            wcn(optionClassNames.checkIcon, 'inline-flex shrink-0', glyphClasses),
             {
               'aria-hidden': true,
             },
@@ -363,7 +366,7 @@ function OptionImpl(props: OptionProps) {
       onClick={composeEventHandlers(onClick, selectOption)}
       onMouseDown={composeEventHandlers(onMouseDown, pressOption)}
       onPointerMove={composeEventHandlers(onPointerMove, highlightOption)}
-      className={cn(
+      className={wcn(
         optionClassNames.root,
         OPTION_CLASSES,
         // While a multi-select option draws its box, the box carries the state, and
@@ -592,12 +595,12 @@ function OptionGroupImpl({
       ref={ref}
       role="presentation"
       hidden={hidden || empty || undefined}
-      className={cn(optionGroupClassNames.root, className)}
+      className={wcn(optionGroupClassNames.root, className)}
     >
       {hasLabel && (
         <div
           {...mergeSlotProps(slotProps?.label, {
-            className: cn(
+            className: wcn(
               optionGroupClassNames.label,
               'px-3 py-1 text-caption-1 font-semibold text-muted-foreground',
             ),
@@ -923,7 +926,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
       <ListboxProvider value={listbox.context}>
         <ul
           {...mergeSlotProps(parts?.list, {
-            className: cn(
+            className: wcn(
               listboxSurfaceClassNames.list,
               'min-h-0 max-h-60 overflow-auto',
               listClassName,
@@ -958,7 +961,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
 
   const { style: positionStyle, ...placement } = floatingProps;
   const surfaceProps = mergeSlotProps(parts?.surface, {
-    className: cn(
+    className: wcn(
       listboxSurfaceClassNames.root,
       'flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4',
       surfaceClassName,

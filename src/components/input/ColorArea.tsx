@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { colorAreaClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -418,7 +418,7 @@ export const ColorArea = ({
       role="group"
       data-disabled={part.disabled ? '' : undefined}
       {...groupProps}
-      className={cn(
+      className={wcn(
         colorAreaClassNames.root,
         'group/color-area relative h-40 w-full min-w-40 touch-none select-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
         resolvedShape === 'square' ? 'rounded-none' : 'rounded',
@@ -433,7 +433,7 @@ export const ColorArea = ({
     >
       <div
         {...mergeSlotProps(slotProps?.field, {
-          className: cn(
+          className: wcn(
             colorAreaClassNames.field,
             'absolute inset-0 rounded-[inherit] bg-(image:--wave-color-area-gradient) wave-rtl:-scale-x-100 forced-colors:forced-color-adjust-none',
           ),
@@ -444,7 +444,7 @@ export const ColorArea = ({
       />
       <span
         {...mergeSlotProps(slotProps?.thumb, {
-          className: cn(
+          className: wcn(
             colorAreaClassNames.thumb,
             COLOR_THUMB_CLASSES,
             'start-(--wave-color-area-x) bottom-(--wave-color-area-y) -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2',

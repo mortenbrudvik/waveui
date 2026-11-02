@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { focusableDisabledProps, joinIds } from '../../lib/aria';
 import { checkboxClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { CheckIcon, SubtractIcon } from '../../lib/icons';
@@ -312,7 +312,7 @@ export const Checkbox = ({
   // The glyph is the forced-colors leaf; the box stays on system colors (see `checkedBox`).
   const glyphClassName = unavailable ? disabledGlyph : forcedColors.selectedLeaf;
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: cn(checkboxClassNames.label, 'text-body-1 text-foreground'),
+    className: wcn(checkboxClassNames.label, 'text-body-1 text-foreground'),
     // The text names the control through aria-labelledby: an aria-label would replace it.
     locked: { id: labelTextId, 'aria-label': undefined },
     // The label does not activate while the checkbox is unavailable, as the checkbox does not.
@@ -320,11 +320,11 @@ export const Checkbox = ({
   });
   const labelText = hasLabel ? <span {...labelProps}>{materialiseSlotContent(label)}</span> : null;
   const indicatorProps = mergeSlotProps(slotProps?.indicator, {
-    className: cn(
+    className: wcn(
       checkboxClassNames.indicator,
       // p-0 and the unchecked bg-transparent are set here, not left to the native reset, which
       // any app button style overrides (C-NATIVE).
-      cn(
+      wcn(
         'flex shrink-0 items-center justify-center border p-0 transition-colors motion-reduce:transition-none',
         sizeMetrics.box,
         shapeClass,
@@ -333,11 +333,11 @@ export const Checkbox = ({
       hasLabel && sizeMetrics.offset,
       focusRing,
       on
-        ? cn(
+        ? wcn(
             'border-primary bg-primary text-primary-foreground',
             unavailable ? disabledCheckedBox : checkedBox,
           )
-        : cn(
+        : wcn(
             'border-stroke-accessible bg-transparent',
             unavailable ? forcedColors.disabled : forcedColors.control,
           ),
@@ -382,7 +382,7 @@ export const Checkbox = ({
     blockHandlers: disabledFocusable ? BLOCK_CLICK : undefined,
   });
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(
+    className: wcn(
       checkboxClassNames.root,
       // items-start: the box lines up with the first line of a label that wraps or has a second
       // line, not with its middle.

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { flushSync } from 'react-dom';
 import { dataGridHeaderCellClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   clampColumnWidth,
   DEFAULT_MIN_COLUMN_WIDTH,
@@ -389,7 +389,7 @@ export function DataGridColumnResizeHandle({
       minWidth={minWidths[columnId]}
       label={label}
       valueText={valueText}
-      className={cn(
+      className={wcn(
         dataGridHeaderCellClassNames.resizeHandle,
         // The cell clips what overflows it, the outer ring included.
         focusRingInset,

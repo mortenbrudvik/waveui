@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { menuSplitGroupClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -104,7 +104,7 @@ export const MenuSplitGroup = ({
       ref={ref}
       data-menu-split-group=""
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
-      className={cn(
+      className={wcn(
         menuSplitGroupClassNames.root,
         'flex items-stretch [&>:first-child]:flex-1 [&>:last-child]:border-s [&>:last-child]:border-border',
         className,

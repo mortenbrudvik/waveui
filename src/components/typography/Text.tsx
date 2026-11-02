@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { textClassNames } from '../../lib/classNames';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TextWeight, TypographyVariant } from '../../lib/types';
@@ -87,7 +87,7 @@ export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
   return (
     <Component
       {...rest}
-      className={cn(
+      className={wcn(
         textClassNames.root,
         variantClasses[variant],
         weight !== undefined && Object.hasOwn(weightClasses, weight) && weightClasses[weight],

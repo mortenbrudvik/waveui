@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flushSync } from 'react-dom';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { timePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -67,7 +67,7 @@ import type { RoutedHandlers } from './routedHandlers';
 const OPTION_CLASSES =
   'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold';
 
-const CHECK_ICON_CLASSES = cn(
+const CHECK_ICON_CLASSES = wcn(
   timePickerClassNames.checkIcon,
   'flex h-4 w-4 shrink-0 items-center justify-center',
 );
@@ -94,7 +94,7 @@ const TimePickerOption = React.memo(function TimePickerOption({
 }: TimePickerOptionProps) {
   const { selected, optionProps } = useListboxOption<HTMLLIElement>({ value, label }, part?.ref);
   const { ref: optionRef, style: optionStyle, ...optionAttributes } = optionProps;
-  const className = cn(
+  const className = wcn(
     timePickerClassNames.option,
     OPTION_CLASSES,
     selected && forcedColors.selectedContainer,
@@ -938,7 +938,7 @@ export const TimePicker = (props: TimePickerProps) => {
   const renderListbox = (hidden: boolean) => (
     <ul
       {...mergeSlotProps(slotProps?.listbox, {
-        className: cn(
+        className: wcn(
           timePickerClassNames.listbox,
           'max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden',
         ),
@@ -987,7 +987,7 @@ export const TimePicker = (props: TimePickerProps) => {
 
   const { style: positionStyle, ...placement } = floatingProps;
   const surfaceProps = mergeSlotProps(slotProps?.surface, {
-    className: cn(
+    className: wcn(
       timePickerClassNames.surface,
       'flex flex-col overflow-hidden rounded border border-border bg-background shadow-8',
     ),
@@ -1008,7 +1008,7 @@ export const TimePicker = (props: TimePickerProps) => {
   const surfaceStyle = lockPositionStyle(surfaceProps.style, positionStyle);
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(timePickerClassNames.root, 'relative inline-flex flex-col', className),
+    className: wcn(timePickerClassNames.root, 'relative inline-flex flex-col', className),
     style,
     locked: {
       'data-size': size,
@@ -1028,7 +1028,7 @@ export const TimePicker = (props: TimePickerProps) => {
         <div ref={setReference} className="relative flex items-center">
           <input
             {...mergeSlotProps(slotProps?.input, {
-              className: cn(
+              className: wcn(
                 timePickerClassNames.input,
                 inputHeightClasses[size],
                 'w-full',
@@ -1093,7 +1093,7 @@ export const TimePicker = (props: TimePickerProps) => {
               // change it).
               type="button"
               {...mergeSlotProps(slotProps?.clearButton, {
-                className: cn(
+                className: wcn(
                   timePickerClassNames.clearButton,
                   pickerIconButtonClasses(size, appearance),
                   pickerButtonOffset(size, showExpand ? 2 : 1),
@@ -1140,7 +1140,7 @@ export const TimePicker = (props: TimePickerProps) => {
         {showOwnError && (
           <p
             {...mergeSlotProps(slotProps?.errorMessage, {
-              className: cn(timePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error'),
+              className: wcn(timePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error'),
               locked: { id: errorId, role: 'alert' },
             })}
           >
@@ -1168,7 +1168,7 @@ export const TimePicker = (props: TimePickerProps) => {
               ) : (
                 <div
                   {...mergeSlotProps(slotProps?.emptyMessage, {
-                    className: cn(
+                    className: wcn(
                       timePickerClassNames.emptyMessage,
                       'px-3 py-1.5 text-body-1 text-muted-foreground',
                     ),

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { toolbarClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
@@ -140,7 +140,7 @@ const ToolbarRoot: PolymorphicComponent<'div', ToolbarOwnProps> = (props) => {
         onFocus={composeEventHandlers(onFocus, containerProps.onFocus, {
           checkDefaultPrevented: false,
         })}
-        className={cn(
+        className={wcn(
           toolbarClassNames.root,
           'inline-flex items-center gap-1 rounded border border-border',
           toolbarPaddingClasses[size],

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { skeletonClassNames, skeletonGroupClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import type { Shape } from '../../lib/types';
 
 /**
@@ -47,7 +47,7 @@ const SkeletonRoot = ({
       aria-hidden="true"
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         skeletonClassNames.root,
         'bg-skeleton animate-wave-pulse motion-reduce:animate-none',
         forcedColorsFill,
@@ -94,7 +94,7 @@ export const SkeletonGroup = ({
       {...rest}
       aria-busy={busy}
       ref={ref}
-      className={cn(skeletonGroupClassNames.root, className)}
+      className={wcn(skeletonGroupClassNames.root, className)}
     >
       {loading && <span className="sr-only">{label}</span>}
       {children}

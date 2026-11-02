@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import {
@@ -61,7 +61,7 @@ function getDrawerSizeAxis(position: DrawerPosition): DrawerSizeAxis {
 /**
  * The size classes, keyed by axis: 320px, 592px and 940px on the spacing scale (rem, so they
  * follow the user's font size), and `full` the whole axis. A width (height) class in the
- * consumer's `className` replaces the size, as the consumer's class comes last in `cn()`.
+ * consumer's `className` replaces the size, as the consumer's class comes last in `wcn()`.
  */
 const drawerSizeClasses: Readonly<Record<DrawerSizeAxis, Readonly<Record<DrawerSize, string>>>> = {
   width: { small: 'w-80', medium: 'w-148', large: 'w-235', full: 'w-full' },
@@ -191,19 +191,19 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
   /** Where focus goes when the panel closes, if it can take focus (the root's `finalFocusRef`). */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /**
-   * The panel's stable class(es), first in its `cn()`: `drawerClassNames.root`, followed by a
-   * variant's root (`cn(drawerClassNames.root, navDrawerClassNames.root)`).
+   * The panel's stable class(es), first in its `wcn()`: `drawerClassNames.root`, followed by a
+   * variant's root (`wcn(drawerClassNames.root, navDrawerClassNames.root)`).
    */
   rootClassName: string;
   /**
-   * The backdrop's stable class(es), first in its `cn()`: `drawerClassNames.backdrop`, followed by
-   * a variant's (`cn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)`).
+   * The backdrop's stable class(es), first in its `wcn()`: `drawerClassNames.backdrop`, followed by
+   * a variant's (`wcn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)`).
    */
   backdropClassName: string;
   /**
-   * The stable class(es) of the collapse element around an inline panel, first in its `cn()`:
+   * The stable class(es) of the collapse element around an inline panel, first in its `wcn()`:
    * `drawerClassNames.collapse`, followed by a variant's
-   * (`cn(drawerClassNames.collapse, navDrawerClassNames.collapse)`). Unused by an overlay.
+   * (`wcn(drawerClassNames.collapse, navDrawerClassNames.collapse)`). Unused by an overlay.
    */
   collapseClassName: string;
   /**
@@ -422,7 +422,7 @@ export const DrawerPanel = ({
       <div
         ref={presenceRef}
         {...presenceProps}
-        className={cn(
+        className={wcn(
           collapseClassName,
           inlineDrawerStructure[position],
           size === 'full' ? '' : panelMotion,
@@ -438,7 +438,7 @@ export const DrawerPanel = ({
           {...rest}
           {...presenceProps}
           onKeyDown={onKeyDown}
-          className={cn(
+          className={wcn(
             rootClassName,
             inlinePanelClasses,
             getInlinePanelClasses(position, size),
@@ -479,7 +479,7 @@ export const DrawerPanel = ({
         {...rest}
         {...presenceProps}
         onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
-        className={cn(
+        className={wcn(
           rootClassName,
           OVERLAY_PANEL_CLASSES,
           getOverlayPanelClasses(position, size),

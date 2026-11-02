@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { sliderClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Size } from '../../lib/types';
@@ -210,7 +210,7 @@ export const Slider = ({
     <input
       ref={mergedRef}
       type="range"
-      className={cn(
+      className={wcn(
         sliderClassNames.root,
         'w-full cursor-pointer appearance-none bg-transparent',
         // A 24px-tall input at the small size, the rail centred in it (D14).

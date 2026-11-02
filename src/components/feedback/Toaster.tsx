@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { toasterClassNames } from '../../lib/classNames';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
@@ -994,7 +994,7 @@ function ToastContainer({
 
   if (!isMounted) return null;
   const labelledBy = joinIds(severityId, titlePart?.id);
-  const className = cn(
+  const className = wcn(
     toasterClassNames.toast,
     'rounded',
     focusRing,
@@ -1583,7 +1583,7 @@ export const Toaster = ({
             regionPointerOverRef.current = event.nativeEvent;
           }}
           onKeyDown={(event) => composeEventHandlers(onKeyDown, handleEscape)(event)}
-          className={cn(
+          className={wcn(
             toasterClassNames.root,
             'fixed flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2',
             positionClasses[position],

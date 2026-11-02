@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { popoverContentClassNames } from '../../lib/classNames';
 import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { popupMotion } from '../../lib/motion';
@@ -1047,7 +1047,7 @@ export const PopoverContent = ({
       {hasTitle && (
         <h2
           {...mergeSlotProps(slotProps?.title, {
-            className: cn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold'),
+            className: wcn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold'),
             locked: { id: titleId },
           })}
         >
@@ -1085,7 +1085,7 @@ export const PopoverContent = ({
         onPointerLeave={
           hover ? composeEventHandlers(onPointerLeave, hover.onPointerLeave) : onPointerLeave
         }
-        className={cn(
+        className={wcn(
           popoverContentClassNames.root,
           'w-64 rounded-md border border-border bg-background p-4 text-body-1 font-normal text-foreground normal-case tracking-normal text-start shadow-4',
           motionClassName,

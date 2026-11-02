@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { tagClassNames } from '../../lib/classNames';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
@@ -407,7 +407,7 @@ function resolveDismissSlot(
     const icon = isWaveButton ? elementProps.icon : undefined;
     const { props: buttonProps, ignoredName } = withoutName(slotProps);
     const iconNode = slotRendersContent(icon)
-      ? renderSlot(icon, 'span', cn(tagClassNames.dismissIcon, iconClassName), {
+      ? renderSlot(icon, 'span', wcn(tagClassNames.dismissIcon, iconClassName), {
           'aria-hidden': true,
         })
       : null;
@@ -477,7 +477,7 @@ function resolveDismissSlot(
       content: renderSlot(
         contentProps as SlotObject<'span'>,
         'span',
-        cn(tagClassNames.dismissIcon, iconClassName),
+        wcn(tagClassNames.dismissIcon, iconClassName),
         { 'aria-hidden': true },
       ),
       warning: null,
@@ -493,7 +493,7 @@ function resolveDismissSlot(
     content: renderSlot(
       slot as Slot<'span'>,
       'span',
-      cn(tagClassNames.dismissIcon, iconClassName),
+      wcn(tagClassNames.dismissIcon, iconClassName),
       {
         'aria-hidden': true,
       },
@@ -1027,7 +1027,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   const ownButtonProps: UnknownProps = {
     type: 'button',
     'data-wave-tag-dismiss': '',
-    className: cn(
+    className: wcn(
       tagClassNames.dismissButton,
       TAG_DISMISS_BASE_CLASSES,
       tagDismissSizeClasses[size],
@@ -1066,7 +1066,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     : ownButtonProps;
 
   // The text parts merge only when given, so a tag without them allocates nothing more.
-  const primaryTextClassName = cn(
+  const primaryTextClassName = wcn(
     tagClassNames.primaryText,
     'inline-flex items-center gap-1',
     hasSecondary && TAG_PRIMARY_TEXT_TWO_LINE_CLASSES,
@@ -1088,7 +1088,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   );
   const secondaryTextPart = slotProps?.secondaryText;
   const secondaryTextClassName = hasSecondary
-    ? cn(tagClassNames.secondaryText, TAG_SECONDARY_TEXT_CLASSES)
+    ? wcn(tagClassNames.secondaryText, TAG_SECONDARY_TEXT_CLASSES)
     : undefined;
 
   return (
@@ -1104,7 +1104,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       {...rest}
       {...elementProps}
       ref={mergedRef}
-      className={cn(
+      className={wcn(
         tagClassNames.root,
         TAG_ROOT_BASE_CLASSES,
         tagSizeClasses[size],
@@ -1125,11 +1125,11 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       {hasMedia && (
         // An Avatar without its own `size` takes the tag's box; one in `children` keeps its size.
         <AvatarSizeContext.Provider value={avatarBox}>
-          {renderSlot(media, 'span', cn(tagClassNames.media, tagMediaClasses[size]))}
+          {renderSlot(media, 'span', wcn(tagClassNames.media, tagMediaClasses[size]))}
         </AvatarSizeContext.Provider>
       )}
       {hasIcon &&
-        renderSlot(icon, 'span', cn(tagClassNames.icon, tagIconClasses[size]), {
+        renderSlot(icon, 'span', wcn(tagClassNames.icon, tagIconClasses[size]), {
           'aria-hidden': true,
         })}
       {hasSecondary ? (

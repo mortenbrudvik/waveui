@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { spinButtonClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { AddIcon, SubtractIcon } from '../../lib/icons';
@@ -292,7 +292,7 @@ const SPIN_SIZE: Readonly<Record<CoreSize, { button: string; input: string; glyp
   large: { button: 'w-10', input: 'w-14', glyph: 16 },
 };
 
-const stepButtonClass = cn(
+const stepButtonClass = wcn(
   // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill them. The
   // size and, in `outline`, the separator are added per render (SPIN_SIZE, D13).
   'flex h-full shrink-0 items-center justify-center bg-transparent p-0 text-foreground',
@@ -777,7 +777,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     };
   };
   const inputProps = mergeSlotProps(slotProps?.input, {
-    className: cn(
+    className: wcn(
       spinButtonClassNames.input,
       'h-full min-w-0 flex-auto border-none bg-transparent text-center text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]',
       SPIN_SIZE[size].input,
@@ -831,7 +831,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   });
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(
+    className: wcn(
       spinButtonClassNames.root,
       'relative inline-flex items-center',
       inputHeightClasses[size],
@@ -865,7 +865,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
           -1,
           !interactive || (current !== null && current <= min),
           labels?.decrement ?? 'Decrement',
-          cn(
+          wcn(
             spinButtonClassNames.decrementButton,
             stepButtonClass,
             SPIN_SIZE[size].button,
@@ -903,7 +903,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
           1,
           !interactive || (current !== null && current >= max),
           labels?.increment ?? 'Increment',
-          cn(
+          wcn(
             spinButtonClassNames.incrementButton,
             stepButtonClass,
             SPIN_SIZE[size].button,

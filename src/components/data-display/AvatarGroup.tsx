@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { avatarGroupClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -178,7 +178,7 @@ const AvatarGroupRoot = ({
   const piePart = slotProps?.pie;
   const pieClassName =
     layout === 'pie'
-      ? cn(
+      ? wcn(
           avatarGroupClassNames.pie,
           'relative inline-block shrink-0 overflow-hidden rounded-full',
           avatarSizeClassesFor(resolvedSize),
@@ -203,7 +203,7 @@ const AvatarGroupRoot = ({
       aria-labelledby={ariaLabelledBy}
       data-layout={layout}
       {...props}
-      className={cn(
+      className={wcn(
         avatarGroupClassNames.root,
         'inline-flex items-center',
         layout !== 'stack' && 'gap-1',
@@ -222,7 +222,7 @@ const AvatarGroupRoot = ({
                   }))}
               >
                 {visible.map(({ key, node }, i) => {
-                  const itemClassName = cn(
+                  const itemClassName = wcn(
                     avatarGroupClassNames.item,
                     'absolute inset-0 inline-flex',
                     pieWedgeClasses[visible.length - 1]?.[i],
@@ -245,7 +245,7 @@ const AvatarGroupRoot = ({
               </span>
             )
           : visible.map(({ key, node }, i) => {
-              const itemClassName = cn(
+              const itemClassName = wcn(
                 avatarGroupClassNames.item,
                 'inline-flex rounded-full ring-2 ring-background',
                 layout === 'stack' && i > 0 && '-ms-2',

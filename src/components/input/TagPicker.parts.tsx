@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   tagPickerButtonClassNames,
   tagPickerClassNames,
@@ -163,7 +163,7 @@ function TagPickerClearButton({ ctx, position }: TagPickerClearButtonProps) {
       : NATIVELY_DISABLED
     : undefined;
   const props = mergeSlotProps(part, {
-    className: cn(
+    className: wcn(
       tagPickerClassNames.clearButton,
       END_BUTTON_TOP[ctx.size],
       pickerIconButtonClasses(ctx.coreSize, ctx.appearance),
@@ -277,7 +277,7 @@ function TagPickerControlImpl({
         aria-disabled={ctx.disabled || undefined}
         {...rest}
         ref={mergedRef}
-        className={cn(
+        className={wcn(
           tagPickerControlClassNames.root,
           'relative flex flex-wrap items-center',
           TAG_PICKER_SIZE[ctx.size].control,
@@ -314,7 +314,7 @@ function TagPickerControlImpl({
             size={ctx.coreSize}
             appearance={ctx.appearance}
             dimDisabled={!ctx.disabled}
-            className={cn(tagPickerClassNames.expandButton, END_BUTTON_TOP[ctx.size])}
+            className={wcn(tagPickerClassNames.expandButton, END_BUTTON_TOP[ctx.size])}
             iconClassName={tagPickerClassNames.expandIcon}
             part={ctx.slotProps?.expandButton}
           />
@@ -511,7 +511,7 @@ function TagPickerGroupImpl({
           fallbackFocusRef={ctx.triggerRef}
           {...rest}
           ref={mergedRef}
-          className={cn(
+          className={wcn(
             tagPickerGroupClassNames.root,
             'flex flex-wrap items-center gap-1',
             ctx.collapsed && 'min-w-0 flex-nowrap overflow-hidden whitespace-nowrap *:shrink-0',
@@ -531,7 +531,7 @@ function TagPickerGroupImpl({
         // The "+N" chip (D62): hidden from assistive technology, which hears the summary.
         <span
           {...mergeSlotProps(chipPart, {
-            className: cn(
+            className: wcn(
               tagPickerClassNames.overflowCount,
               tagRootClasses({
                 size: ctx.tagSize,
@@ -731,7 +731,7 @@ function TagPickerInputImpl({
       )}
       onFocus={composeEventHandlers(onFocus, inputProps.onFocus)}
       onBlur={composeEventHandlers(onBlur, inputProps.onBlur)}
-      className={cn(
+      className={wcn(
         tagPickerInputClassNames.root,
         tagPickerClassNames.input,
         'min-w-15 flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-hidden',
@@ -843,7 +843,7 @@ function TagPickerButtonImpl({
       onClick={composeEventHandlers(onClick, () => ctx.toggleOpen())}
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
-      className={cn(
+      className={wcn(
         tagPickerButtonClassNames.root,
         // Padding and background set here (C-NATIVE); the control's focus look shows its focus.
         'min-w-15 flex-1 border-0 bg-transparent px-0 text-start text-foreground focus:outline-hidden disabled:cursor-not-allowed',
@@ -932,7 +932,7 @@ function TagPickerListImpl({
   const optionPart = slotProps?.option;
   const createPart = slotProps?.createOption;
   const createLabel = ctx.showCreate ? ctx.labels.create(ctx.createText) : '';
-  const createClasses = cn(tagPickerClassNames.option, tagPickerClassNames.createOption);
+  const createClasses = wcn(tagPickerClassNames.option, tagPickerClassNames.createOption);
   const createOption = ctx.showCreate ? (
     <Option
       key={ctx.createValue}
@@ -1012,13 +1012,13 @@ function TagPickerListImpl({
       open={ctx.open}
       expanded={ctx.expanded}
       showCheck={false}
-      listClassName={cn(tagPickerListClassNames.root, tagPickerClassNames.listbox, className)}
+      listClassName={wcn(tagPickerListClassNames.root, tagPickerClassNames.listbox, className)}
       surfaceClassName={tagPickerClassNames.surface}
       emptyContent={
         ctx.emptyContent ? (
           <div
             {...mergeSlotProps(slotProps?.emptyMessage, {
-              className: cn(
+              className: wcn(
                 tagPickerClassNames.emptyMessage,
                 'px-3 py-1.5 text-body-1 text-muted-foreground',
               ),

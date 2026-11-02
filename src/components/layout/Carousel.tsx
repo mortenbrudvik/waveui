@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { carouselClassNames, carouselItemClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent } from '../../lib/direction';
@@ -756,7 +756,7 @@ const CarouselRoot = ({
         data-controls-layout={controlsLayout}
         data-appearance={appearance}
         data-motion={resolvedMotion}
-        className={cn(carouselClassNames.root, 'relative', className)}
+        className={wcn(carouselClassNames.root, 'relative', className)}
         {...rootHandlers}
         {...rest}
       />
@@ -820,7 +820,7 @@ const CarouselRoot = ({
   const layoutClasses = CAROUSEL_CONTROL_LAYOUT[controlsLayout];
   const rotationPart = slotProps?.autoPlayButton;
   const rotationLabel = stopped ? playLabel : pauseLabel;
-  const rotationClassName = cn(
+  const rotationClassName = wcn(
     carouselClassNames.autoPlayButton,
     CAROUSEL_CONTROL_BASE,
     // Above the edge strips of the wide layouts, which would dim and cover it.
@@ -831,7 +831,7 @@ const CarouselRoot = ({
   // The pointer over the control does not pause (APG): the user is operating it.
   const enterControl = () => setPointerOnControl(true);
   const leaveControl = () => setPointerOnControl(false);
-  const pickerClassName = cn(
+  const pickerClassName = wcn(
     carouselClassNames.picker,
     hasThumbnails
       ? 'relative mx-auto flex w-fit flex-wrap justify-center gap-2 p-2'
@@ -840,11 +840,11 @@ const CarouselRoot = ({
   const pickerButtonPart = slotProps?.pickerButton;
   /** The dot of a picker button without a thumbnail, its `slotProps` part merged in when given. */
   const pickerIndicator = (active: boolean) => {
-    const className = cn(
+    const className = wcn(
       carouselClassNames.pickerIndicator,
       'block h-2 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none',
       active
-        ? cn('w-5 bg-primary', forcedColors.selectedLeaf)
+        ? wcn('w-5 bg-primary', forcedColors.selectedLeaf)
         : 'w-2 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
     );
     return (
@@ -865,7 +865,7 @@ const CarouselRoot = ({
     const label = previous ? previousLabel : nextLabel;
     const part = previous ? slotProps?.previousButton : slotProps?.nextButton;
     const onClick = preventIfDisabled(disabled, previous ? goPrev : goNext);
-    const className = cn(
+    const className = wcn(
       previous ? carouselClassNames.previousButton : carouselClassNames.nextButton,
       CAROUSEL_CONTROL_BASE,
       previous ? layoutClasses.previous : layoutClasses.next,
@@ -905,7 +905,7 @@ const CarouselRoot = ({
 
   const trackPart = slotProps?.track;
   const slidePart = slotProps?.slide;
-  const trackClassName = cn(
+  const trackClassName = wcn(
     carouselClassNames.track,
     // One column with a zero minimum: the slides keep the viewport's width, whatever their
     // content's longest line.
@@ -924,7 +924,7 @@ const CarouselRoot = ({
   const viewport = (
     <div
       ref={setViewportEl}
-      className={cn(carouselClassNames.viewport, 'relative min-w-0 flex-1 overflow-hidden')}
+      className={wcn(carouselClassNames.viewport, 'relative min-w-0 flex-1 overflow-hidden')}
     >
       <div
         id={trackId}
@@ -967,7 +967,7 @@ const CarouselRoot = ({
           const label = slideLabel(i, total);
           const rovingValue = grouped && active ? String(i) : undefined;
           const tabIndex = grouped && active ? roving.getTabIndex(String(i)) : undefined;
-          const className = cn(
+          const className = wcn(
             carouselClassNames.slide,
             slideLayout,
             fading && carouselFadeMotion,
@@ -1033,7 +1033,7 @@ const CarouselRoot = ({
         data-appearance={appearance}
         data-motion={resolvedMotion}
         // A stacking context of its own: the controls' z-index cannot lift them over page headers.
-        className={cn(
+        className={wcn(
           carouselClassNames.root,
           'relative isolate overflow-hidden',
           appearance === 'elevated' && 'rounded-md shadow-4',
@@ -1104,7 +1104,7 @@ const CarouselRoot = ({
               const label = pageLabel(start);
               const current = active ? 'true' : undefined;
               const onClick = () => goTo(start);
-              const className = cn(
+              const className = wcn(
                 carouselClassNames.pickerButton,
                 'group inline-flex items-center justify-center',
                 thumbnail !== undefined ? 'rounded-md p-0.5' : 'h-6 min-w-6',
@@ -1133,11 +1133,11 @@ const CarouselRoot = ({
                     ? renderSlot(
                         thumbnailSlot(thumbnail),
                         'img',
-                        cn(
+                        wcn(
                           carouselItemClassNames.thumbnail,
                           'block h-12 w-16 rounded object-cover',
                           active
-                            ? cn('outline-2 outline-primary', forcedColors.selectedContainer)
+                            ? wcn('outline-2 outline-primary', forcedColors.selectedContainer)
                             : 'opacity-70 group-hover:opacity-100',
                         ),
                         { alt: '', draggable: false },
@@ -1166,7 +1166,7 @@ export const CarouselItem = ({
   ...rest
 }: CarouselItemProps) => {
   return (
-    <div ref={ref} className={cn(carouselItemClassNames.root, 'p-4', className)} {...rest}>
+    <div ref={ref} className={wcn(carouselItemClassNames.root, 'p-4', className)} {...rest}>
       {children}
     </div>
   );

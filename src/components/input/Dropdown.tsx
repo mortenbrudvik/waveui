@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { dropdownClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon, DismissIcon } from '../../lib/icons';
@@ -621,7 +621,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   };
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: cn(dropdownClassNames.root, 'relative inline-flex flex-col', className),
+    className: wcn(dropdownClassNames.root, 'relative inline-flex flex-col', className),
     style,
     locked: {
       'data-size': size,
@@ -643,7 +643,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
           // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
           type="button"
           {...mergeSlotProps(slotProps?.button, {
-            className: cn(
+            className: wcn(
               dropdownClassNames.button,
               // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The
               // end padding keeps the text clear of the chevron (and of the clear button while it
@@ -693,7 +693,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         >
           <span
             {...mergeSlotProps(slotProps?.value, {
-              className: cn(
+              className: wcn(
                 dropdownClassNames.value,
                 'truncate',
                 !showValue && 'text-muted-foreground',
@@ -710,7 +710,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
               renderSlot(
                 expandGlyph,
                 'span',
-                cn(
+                wcn(
                   dropdownClassNames.expandIcon,
                   'absolute inline-flex transition-transform motion-reduce:transition-none',
                   expandOffset,
@@ -721,7 +721,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             ) : (
               <ChevronDownIcon
                 size={pickerGlyphSize(size, 'chevron')}
-                className={cn(
+                className={wcn(
                   dropdownClassNames.expandIcon,
                   'absolute transition-transform motion-reduce:transition-none',
                   expandOffset,
@@ -735,7 +735,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
             {...mergeSlotProps(slotProps?.clearButton, {
-              className: cn(
+              className: wcn(
                 dropdownClassNames.clearButton,
                 pickerIconButtonClasses(size, appearance),
                 // Before the chevron while it shows, else at the end.
@@ -772,7 +772,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         open={open}
         expanded={expanded}
         // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
-        listClassName={cn(dropdownClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
+        listClassName={wcn(dropdownClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
         surfaceClassName={dropdownClassNames.surface}
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}

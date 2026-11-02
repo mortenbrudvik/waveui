@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { badgeClassNames, counterBadgeClassNames } from '../../lib/classNames';
 import type { BadgeColor } from '../../lib/types';
 import { badgeColorClasses } from './Badge.colors';
@@ -89,10 +89,10 @@ export const CounterBadge = ({
   const appearanceClasses = dot
     ? appearance === 'filled'
       ? c.dot
-      : cn('bg-transparent border', c.dotBorder)
+      : wcn('bg-transparent border', c.dotBorder)
     : appearance === 'filled'
       ? c.filled
-      : cn(
+      : wcn(
           'bg-transparent border',
           c.border,
           resolvedColor === 'brand' ? 'text-primary' : 'text-foreground',
@@ -109,7 +109,7 @@ export const CounterBadge = ({
       data-color={resolvedColor}
       data-appearance={appearance}
       data-dot={dot ? '' : undefined}
-      className={cn(
+      className={wcn(
         badgeClassNames.root,
         counterBadgeClassNames.root,
         'inline-flex items-center justify-center rounded-full',

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { badgeClassNames } from '../../lib/classNames';
 import type { BadgeAppearance, BadgeColor, Size } from '../../lib/types';
 import { badgeColorClasses } from './Badge.colors';
@@ -70,7 +70,7 @@ export const Badge = ({
       ? c.filled
       : appearance === 'tint'
         ? c.tint
-        : cn('bg-transparent border text-foreground', c.border);
+        : wcn('bg-transparent border text-foreground', c.border);
 
   // A name on a role-less <span> is not announced by screen readers: name it as an image. An empty
   // or whitespace-only name adds no role (an unnamed role="img" fails axe).
@@ -82,7 +82,7 @@ export const Badge = ({
       role={named ? 'img' : undefined}
       data-color={color}
       data-appearance={appearance}
-      className={cn(
+      className={wcn(
         badgeClassNames.root,
         'rounded-full inline-flex items-center font-semibold',
         sizeClasses[size],

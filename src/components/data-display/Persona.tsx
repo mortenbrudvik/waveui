@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { personaClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import type { PresenceStatus, Size, Slot } from '../../lib/types';
@@ -158,22 +158,22 @@ export const Persona = ({
     {
       key: 'primaryText',
       slot: primaryText ?? name,
-      className: cn(personaClassNames.primaryText, text.primary, 'font-semibold'),
+      className: wcn(personaClassNames.primaryText, text.primary, 'font-semibold'),
     },
     {
       key: 'secondaryText',
       slot: secondaryText,
-      className: cn(personaClassNames.secondaryText, text.other, 'text-muted-foreground'),
+      className: wcn(personaClassNames.secondaryText, text.other, 'text-muted-foreground'),
     },
     {
       key: 'tertiaryText',
       slot: tertiaryText,
-      className: cn(personaClassNames.tertiaryText, text.other, 'text-muted-foreground'),
+      className: wcn(personaClassNames.tertiaryText, text.other, 'text-muted-foreground'),
     },
     {
       key: 'quaternaryText',
       slot: quaternaryText,
-      className: cn(personaClassNames.quaternaryText, text.other, 'text-muted-foreground'),
+      className: wcn(personaClassNames.quaternaryText, text.other, 'text-muted-foreground'),
     },
   ] as const;
 
@@ -184,12 +184,12 @@ export const Persona = ({
       data-text-position={textPosition}
       data-text-alignment={resolvedAlignment}
       data-presence-only={presenceOnly ? '' : undefined}
-      className={cn(personaClassNames.root, positionClasses[textPosition], className)}
+      className={wcn(personaClassNames.root, positionClasses[textPosition], className)}
       {...props}
     >
       {presenceOnly ? (
         badgeNode && (
-          <span className={cn(personaClassNames.badge, 'inline-flex shrink-0')}>{badgeNode}</span>
+          <span className={wcn(personaClassNames.badge, 'inline-flex shrink-0')}>{badgeNode}</span>
         )
       ) : (
         <div className="relative inline-flex shrink-0">
@@ -205,14 +205,14 @@ export const Persona = ({
             />
           )}
           {badgeNode && (
-            <span className={cn(personaClassNames.badge, 'absolute bottom-0 end-0 inline-flex')}>
+            <span className={wcn(personaClassNames.badge, 'absolute bottom-0 end-0 inline-flex')}>
               {badgeNode}
             </span>
           )}
         </div>
       )}
       <div
-        className={cn(
+        className={wcn(
           'flex flex-col',
           resolvedAlignment === 'center' ? 'items-center text-center' : 'items-start text-start',
         )}

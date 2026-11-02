@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   toolbarButtonClassNames,
   toolbarDividerClassNames,
@@ -92,7 +92,7 @@ export const ToolbarButton: PolymorphicComponent<'button', ToolbarButtonOwnProps
         toolbarButtonClassNames.icon,
       )}
       data-vertical={vertical ? '' : undefined}
-      className={cn(toolbarButtonClassNames.root, vertical && verticalButtonClasses, className)}
+      className={wcn(toolbarButtonClassNames.root, vertical && verticalButtonClasses, className)}
     />
   );
 };
@@ -164,7 +164,7 @@ export const ToolbarToggleButton = ({
     <ToggleButton
       {...rest}
       icon={withPartClass(icon, toolbarToggleButtonClassNames.icon)}
-      className={cn(toolbarToggleButtonClassNames.root, className)}
+      className={wcn(toolbarToggleButtonClassNames.root, className)}
       appearance={appearance}
       size={size ?? toolbar.size}
       pressed={checked.isChecked(name, value)}
@@ -208,7 +208,7 @@ export const ToolbarRadioButton = ({
     <ToggleButton
       {...rest}
       icon={withPartClass(icon, toolbarRadioButtonClassNames.icon)}
-      className={cn(toolbarRadioButtonClassNames.root, className)}
+      className={wcn(toolbarRadioButtonClassNames.root, className)}
       role="radio"
       appearance={appearance}
       size={size ?? toolbar.size}
@@ -302,7 +302,7 @@ export const ToolbarRadioGroup = ({
       role="radiogroup"
       data-roving-transparent=""
       onKeyDown={composeEventHandlers(onKeyDown, handleCrossAxisKeyDown)}
-      className={cn(
+      className={wcn(
         toolbarRadioGroupClassNames.root,
         'flex gap-1',
         orientation === 'vertical' && 'flex-col',
@@ -344,7 +344,7 @@ export const ToolbarGroup = ({ role, className, ref, ...rest }: ToolbarGroupProp
       data-orientation={orientation}
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         toolbarGroupClassNames.root,
         'flex gap-1',
         orientation === 'vertical' && 'flex-col',
@@ -379,7 +379,7 @@ export const ToolbarDivider = ({ className, ref, ...rest }: ToolbarDividerProps)
       aria-orientation={vertical ? 'horizontal' : 'vertical'}
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         toolbarDividerClassNames.root,
         vertical
           ? 'my-1 h-0 shrink-0 self-stretch border-t border-border'

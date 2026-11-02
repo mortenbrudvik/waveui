@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   navCategoryClassNames,
   navItemClassNames,
@@ -430,12 +430,12 @@ function renderIcon(
   className: string | undefined,
 ): React.ReactElement | null {
   return icon && slotRendersContent(icon)
-    ? renderSlot(icon, 'span', cn(className, iconClasses), { 'aria-hidden': true })
+    ? renderSlot(icon, 'span', wcn(className, iconClasses), { 'aria-hidden': true })
     : null;
 }
 
 const itemClasses = {
-  base: cn(
+  base: wcn(
     'flex w-full items-center gap-2 px-4 py-2 text-body-1 text-start no-underline transition-colors motion-reduce:transition-none',
     focusRingInset,
     disabledStyles,
@@ -448,7 +448,7 @@ const itemClasses = {
 };
 
 const subItemClasses = {
-  base: cn(
+  base: wcn(
     'flex w-full items-center ps-11 pe-4 py-1.5 text-body-1 text-start no-underline transition-colors motion-reduce:transition-none',
     focusRingInset,
     disabledStyles,
@@ -487,7 +487,7 @@ const rowHoverClasses = 'hover:bg-subtle-hover';
  * the actions' reveal motion of `lib/motion` to these classes unless the provider's motion is
  * `'none'` (it has no slot: it is not a presence motion).
  */
-const actionsClasses = cn(
+const actionsClasses = wcn(
   'flex shrink-0 items-center gap-1 pe-2',
   '*:opacity-0 group-hover/nav-row:*:opacity-100 group-focus-within/nav-row:*:opacity-100',
   'forced-colors:*:opacity-100 [@media(hover:none)]:*:opacity-100',
@@ -495,7 +495,7 @@ const actionsClasses = cn(
   '[&>[aria-pressed=true]]:opacity-100 [&>[aria-expanded=true]]:opacity-100',
 );
 
-const categoryButtonClasses = cn(
+const categoryButtonClasses = wcn(
   'flex w-full items-center gap-2 px-4 py-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
   // A closed category that contains the current page shows the selected look of an item.
   'data-[contains-current]:bg-subtle-selected data-[contains-current]:text-primary data-[contains-current]:border-s-2 data-[contains-current]:border-s-primary',
@@ -587,7 +587,7 @@ function renderNavEntry(
 
   // The parts are merged only when given: a Nav renders many entries.
   const contentPart = slotProps?.content;
-  const contentClassName = withIcon ? cn(stable.content, 'flex-1 text-start') : undefined;
+  const contentClassName = withIcon ? wcn(stable.content, 'flex-1 text-start') : undefined;
   const content = (
     <>
       {withIcon && renderIcon(icon, stable.icon)}
@@ -609,7 +609,7 @@ function renderNavEntry(
     </>
   );
 
-  const entryClassName = cn(
+  const entryClassName = wcn(
     stable.root,
     classes.base,
     isSelected ? (hasActions ? classes.selectedInRow : classes.selected) : classes.idle,
@@ -618,7 +618,7 @@ function renderNavEntry(
   );
 
   const listItemClassName = hasActions
-    ? cn(
+    ? wcn(
         stable.listItem,
         rowClasses,
         isSelected && classes.rowSelected ? classes.rowSelected : !disabled && rowHoverClasses,
@@ -634,7 +634,7 @@ function renderNavEntry(
   let actionsGroup: React.ReactElement | null = null;
   if (hasActions) {
     const actionsPart = slotProps?.actions;
-    const actionsClassName = cn(
+    const actionsClassName = wcn(
       stable.actions,
       actionsClasses,
       motionPreference === 'none' ? undefined : navActionsReveal,
@@ -830,7 +830,7 @@ const NavCategory = ({
   if (expandGlyph === undefined || expandGlyph === null) {
     expandIconElement = (
       <ChevronDownIcon
-        className={cn(
+        className={wcn(
           navCategoryClassNames.expandIcon,
           'shrink-0',
           expandIconMotionClassName,
@@ -842,7 +842,7 @@ const NavCategory = ({
     expandIconElement = renderSlot(
       expandGlyph,
       'span',
-      cn(navCategoryClassNames.expandIcon, 'inline-flex shrink-0', expandIconMotionClassName),
+      wcn(navCategoryClassNames.expandIcon, 'inline-flex shrink-0', expandIconMotionClassName),
       { 'aria-hidden': true },
     );
   }
@@ -864,14 +864,14 @@ const NavCategory = ({
   const ariaCurrent = containsCurrent ? true : undefined;
   const containsCurrentMarker = containsCurrent ? '' : undefined;
   const rovingValue = roving ? `wave-nav-category:${value}` : undefined;
-  const buttonClassName = cn(navCategoryClassNames.button, categoryButtonClasses);
-  const labelClassName = cn(navCategoryClassNames.label, 'flex-1 text-start');
+  const buttonClassName = wcn(navCategoryClassNames.button, categoryButtonClasses);
+  const labelClassName = wcn(navCategoryClassNames.label, 'flex-1 text-start');
   const listClassName = isListMounted
-    ? cn(navCategoryClassNames.list, 'm-0 list-none p-0')
+    ? wcn(navCategoryClassNames.list, 'm-0 list-none p-0')
     : undefined;
 
   return (
-    <li ref={ref} {...rest} className={cn(navCategoryClassNames.root, className)}>
+    <li ref={ref} {...rest} className={wcn(navCategoryClassNames.root, className)}>
       <button
         type="button"
         aria-expanded={isOpen}
@@ -918,7 +918,7 @@ const NavCategory = ({
           <div
             ref={collapseRef}
             {...collapsePresenceProps}
-            className={cn(navCategoryClassNames.collapse, collapseClassName)}
+            className={wcn(navCategoryClassNames.collapse, collapseClassName)}
           >
             <ul
               id={listId}

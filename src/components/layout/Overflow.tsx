@@ -5,7 +5,7 @@ import {
   overflowItemClassNames,
 } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable } from '../../lib/focus';
 import { mergeProps } from '../../lib/mergeProps';
@@ -683,7 +683,7 @@ const OverflowRoot = ({
   const buttonRole = rest.role === 'list' ? 'listitem' : undefined;
   const buttonPinned = buttonCovers ? '' : undefined;
   const buttonClassName = showButton
-    ? cn(overflowClassNames.overflowButton, BUTTON_CLASSES[buttonPosition][orientation])
+    ? wcn(overflowClassNames.overflowButton, BUTTON_CLASSES[buttonPosition][orientation])
     : undefined;
   const buttonPart = slotProps?.overflowButton;
   const button = showButton ? (
@@ -744,7 +744,7 @@ const OverflowRoot = ({
         // row's box would then reach past its container, which a scroll container around an
         // edge-to-edge row (or the page) counts as overflow. The store measures the room without
         // the padding.
-        className={cn(
+        className={wcn(
           overflowClassNames.root,
           'flex overflow-hidden p-1',
           ROOT_ORIENTATION_CLASSES[orientation],
@@ -827,7 +827,7 @@ export const OverflowItem = ({
     if (elementRef.current) store.setItemMeta(elementRef.current, priority, pinned, groupId);
   });
 
-  const itemClassName = cn(overflowItemClassNames.root, 'shrink-0', className);
+  const itemClassName = wcn(overflowItemClassNames.root, 'shrink-0', className);
 
   if (childElement) {
     // Only a hidden item sets these (and a consumer's own values), so a shown item keeps the
@@ -898,7 +898,7 @@ export const OverflowDivider = ({
   return (
     <div
       ref={mergedRef}
-      className={cn(
+      className={wcn(
         overflowDividerClassNames.root,
         DIVIDER_ORIENTATION_CLASSES[orientation],
         className,

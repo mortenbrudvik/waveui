@@ -10,13 +10,13 @@
  *   work for `<a>` and `role="button"` elements (`Button as="a"`) and never fire on a disabled or
  *   `aria-disabled` control. The `enabled:` variant is never used (it only matches form controls).
  * - The gate raises the specificity of those classes (`:not(:disabled):not([aria-disabled="true"])
- *   :hover` is 0,4,0; a bare `hover:` class is 0,2,0), and `cn()` keeps both because their variants
+ *   :hover` is 0,4,0; a bare `hover:` class is 0,2,0), and `wcn()` keeps both because their variants
  *   differ. A consumer overrides a hover/pressed color with the same gate prefix
- *   (`not-disabled:not-aria-disabled:hover:bg-error`, which `cn()` merges over the built-in class)
+ *   (`not-disabled:not-aria-disabled:hover:bg-error`, which `wcn()` merges over the built-in class)
  *   or with the important modifier (`hover:bg-error!`).
  * - Class strings stay literal so Tailwind's scanner sees every utility.
  */
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Appearance, Size } from '../../lib/types';
 
@@ -69,7 +69,7 @@ export const buttonAppearanceClasses: Record<Appearance, string> = {
 
 /**
  * Pressed/checked colors per appearance (ToggleButton). Layer them **after** the appearance
- * classes with `cn()` (or use `buttonClassName({ pressed: true })`); tailwind-merge then replaces
+ * classes with `wcn()` (or use `buttonClassName({ pressed: true })`); tailwind-merge then replaces
  * the conflicting appearance colors. Hover keeps the pressed color so the state stays visible.
  */
 export const buttonPressedClasses: Record<Appearance, string> = {
@@ -143,10 +143,10 @@ export interface ButtonClassNameOptions {
 
 /**
  * The complete class string of a button: base, size (or icon-only size), appearance, and the
- * optional pressed and disabled layers. Consumers' `className` goes after it in `cn()`.
+ * optional pressed and disabled layers. Consumers' `className` goes after it in `wcn()`.
  *
  * @example
- * <button className={cn(buttonClassName({ appearance: 'primary', size: 'small' }), className)} />
+ * <button className={wcn(buttonClassName({ appearance: 'primary', size: 'small' }), className)} />
  */
 export function buttonClassName({
   appearance = 'outline',
@@ -156,7 +156,7 @@ export function buttonClassName({
   pressed = false,
   accessible = false,
 }: ButtonClassNameOptions = {}): string {
-  return cn(
+  return wcn(
     buttonBaseClasses,
     iconOnly ? buttonIconOnlySizeClasses[size] : buttonSizeClasses[size],
     buttonAppearanceClasses[appearance],

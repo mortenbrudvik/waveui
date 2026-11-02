@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { swatchPickerClassNames, swatchPickerRowClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { joinIds } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
@@ -189,7 +189,7 @@ export const SwatchPickerRow = ({ className, ref, ...rest }: SwatchPickerRowProp
         role={isGridRow ? 'row' : undefined}
         {...rest}
         ref={ref}
-        className={cn(
+        className={wcn(
           swatchPickerRowClassNames.root,
           // The grid's rows never wrap: Up and Down would not reach a wrapped swatch. Tab mode
           // has no arrow keys, so its rows wrap like the row layout's.
@@ -379,7 +379,7 @@ const SwatchPickerRoot = ({
       data-size={size}
       data-shape={shape}
       data-spacing={spacing}
-      className={cn(
+      className={wcn(
         swatchPickerClassNames.root,
         isGrid ? 'relative flex flex-col' : 'relative flex flex-wrap',
         swatchGap(spacing),

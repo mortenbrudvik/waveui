@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { tagGroupClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
@@ -434,7 +434,7 @@ export const TagGroup = ({
                 })
               : onFocus
           }
-          className={cn(
+          className={wcn(
             tagGroupClassNames.root,
             'relative inline-flex flex-wrap items-center',
             tagGroupGapClasses[size],

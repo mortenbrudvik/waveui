@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { paginationClassNames } from '../../lib/classNames';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { warnOnce } from '../../lib/dev';
@@ -257,7 +257,7 @@ export function getPaginationRange(
   return range;
 }
 
-const itemBaseClasses = cn(
+const itemBaseClasses = wcn(
   'inline-flex items-center justify-center rounded border cursor-pointer transition-colors motion-reduce:transition-none',
   focusRing,
   disabledStyles,
@@ -266,7 +266,7 @@ const itemBaseClasses = cn(
 const idleItemClasses =
   'border-border bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed';
 
-const currentItemClasses = cn(
+const currentItemClasses = wcn(
   'border-primary bg-primary text-primary-foreground',
   forcedColors.selectedLeaf,
 );
@@ -403,7 +403,7 @@ const Pagination = ({
   ) => {
     const label = getItemAriaLabel(type, target, false);
     const onClick = preventIfDisabled(unavailable, () => goTo(target));
-    const buttonClassName = cn(partClassName, itemBaseClasses, sizeClasses, idleItemClasses);
+    const buttonClassName = wcn(partClassName, itemBaseClasses, sizeClasses, idleItemClasses);
     return (
       <li className={paginationClassNames.listItem} {...listItemProps(LIST_PART_LOCKS)}>
         <button
@@ -421,13 +421,13 @@ const Pagination = ({
     );
   };
 
-  const listClassName = cn(paginationClassNames.list, 'm-0 flex list-none items-center gap-1 p-0');
+  const listClassName = wcn(paginationClassNames.list, 'm-0 flex list-none items-center gap-1 p-0');
   return (
     <nav
       ref={ref}
       aria-label="Pagination"
       {...rest}
-      className={cn(paginationClassNames.root, className)}
+      className={wcn(paginationClassNames.root, className)}
     >
       <ol
         className={listClassName}
@@ -455,7 +455,7 @@ const Pagination = ({
 
         {range.map((item, index) => {
           if (item === 'ellipsis') {
-            const ellipsisClassName = cn(
+            const ellipsisClassName = wcn(
               paginationClassNames.ellipsis,
               'inline-flex items-center justify-center text-muted-foreground',
               sizeClasses,
@@ -483,7 +483,7 @@ const Pagination = ({
           const label = getItemAriaLabel('page', item, item === page);
           const current = item === page ? 'page' : undefined;
           const onClick = () => goTo(item);
-          const buttonClassName = cn(
+          const buttonClassName = wcn(
             paginationClassNames.pageButton,
             itemBaseClasses,
             sizeClasses,

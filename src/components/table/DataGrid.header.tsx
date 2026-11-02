@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { dataGridHeaderCellClassNames, dataGridHeaderClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -103,7 +103,7 @@ function DataGridSelectionHeaderCell({
       {...rest}
       ref={ref}
       data-selection-cell=""
-      className={cn(
+      className={wcn(
         stableClassName,
         dataGridHeaderClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
@@ -194,7 +194,7 @@ export function DataGridSelectionHeaderSlot({
       {...rest}
       ref={mergedRef}
       data-selection-cell=""
-      className={cn(
+      className={wcn(
         stableClassName,
         dataGridHeaderClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
@@ -326,7 +326,7 @@ export const DataGridHeader = ({
         <DataGridSelectAllPartContext.Provider value={slotProps?.selectAllCheckbox}>
           <thead
             ref={mergedRef}
-            className={cn(
+            className={wcn(
               dataGridHeaderClassNames.root,
               'bg-card',
               // While a column resize handle drags, the header cells ignore the pointer.
@@ -424,7 +424,7 @@ export const DataGridHeaderCell = ({
       aria-sort={sortColumnId !== undefined ? (sortedDirection ?? 'none') : undefined}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy ?? contentId}
-      className={cn(
+      className={wcn(
         dataGridHeaderCellClassNames.root,
         cellBase,
         'text-start align-middle font-semibold text-caption-1 uppercase tracking-wider',

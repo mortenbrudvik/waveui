@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { focusElement, getLastTabbable, getTabbableElements } from '../../lib/focus';
 import { getGlobalRegistry } from '../../lib/globalRegistry';
 import { getLayerTreeElements } from '../../lib/layers';
@@ -43,7 +43,7 @@ export const PopoverBeak = ({ side, className, ref, ...rest }: PopoverBeakProps)
     ref={ref}
     aria-hidden="true"
     {...rest}
-    className={cn('size-2 rotate-45 border-inherit bg-inherit', BEAK_BORDER[side], className)}
+    className={wcn('size-2 rotate-45 border-inherit bg-inherit', BEAK_BORDER[side], className)}
   />
 );
 PopoverBeak.displayName = 'PopoverBeak';

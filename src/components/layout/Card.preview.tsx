@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { cardPreviewClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Slot } from '../../lib/types';
@@ -47,7 +47,7 @@ export const CardPreview: PolymorphicComponent<'div', CardPreviewOwnProps> = (pr
   return (
     <Component
       ref={ref}
-      className={cn(
+      className={wcn(
         cardPreviewClassNames.root,
         'relative block overflow-hidden',
         orientation === 'horizontal' ? 'shrink-0 self-stretch' : 'w-full',
@@ -60,7 +60,7 @@ export const CardPreview: PolymorphicComponent<'div', CardPreviewOwnProps> = (pr
         renderSlot(
           logo,
           'span',
-          cn(
+          wcn(
             cardPreviewClassNames.logo,
             'absolute start-3 bottom-3 inline-flex rounded-md bg-background p-1 shadow-4',
           ),

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   navAppItemClassNames,
   navAppItemStaticClassNames,
@@ -88,7 +88,7 @@ export const NavSectionHeader = ({
       <Heading
         {...rest}
         ref={ref}
-        className={cn(
+        className={wcn(
           navSectionHeaderClassNames.root,
           'm-0 px-4 pt-3 pb-1 text-caption-1 font-semibold text-muted-foreground text-start',
           className,
@@ -129,7 +129,7 @@ export const NavDivider = ({ className, ref, ...rest }: NavDividerProps) => {
       ref={ref}
       // After the rest: a consumer's `aria-hidden={false}` would bring back an invalid list child.
       aria-hidden="true"
-      className={cn(
+      className={wcn(
         navDividerClassNames.root,
         'my-1 h-0 border-t border-border forced-colors:border-[CanvasText]',
         className,
@@ -272,7 +272,7 @@ type NavAppItemRuntimeProps = NavAppItemOwnProps &
 const appItemLayoutClasses =
   'flex w-full items-center gap-2 px-4 py-2 text-subtitle-2 text-start text-foreground';
 
-const appItemClasses = cn(
+const appItemClasses = wcn(
   appItemLayoutClasses,
   'no-underline bg-transparent transition-colors motion-reduce:transition-none not-disabled:not-aria-disabled:hover:bg-subtle-hover',
   focusRingInset,
@@ -306,11 +306,11 @@ export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): Rea
   // A disabled button activates nothing: a click handler of the part inside it is not called.
   const disabled = href === undefined && !!rest.disabled;
   const contentPart = slotProps?.content;
-  const contentClassName = cn(navAppItemClassNames.content, 'flex-1 text-start');
+  const contentClassName = wcn(navAppItemClassNames.content, 'flex-1 text-start');
   const content = (
     <>
       {icon && slotRendersContent(icon)
-        ? renderSlot(icon, 'span', cn(navAppItemClassNames.icon, appIconClasses), {
+        ? renderSlot(icon, 'span', wcn(navAppItemClassNames.icon, appIconClasses), {
             'aria-hidden': true,
           })
         : null}
@@ -341,7 +341,7 @@ export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): Rea
           {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
           ref={ref as React.Ref<HTMLAnchorElement>}
           href={href}
-          className={cn(navAppItemClassNames.root, appItemClasses, className)}
+          className={wcn(navAppItemClassNames.root, appItemClasses, className)}
         >
           {content}
         </a>
@@ -357,7 +357,7 @@ export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): Rea
         type="button"
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
         ref={ref as React.Ref<HTMLButtonElement>}
-        className={cn(navAppItemClassNames.root, appItemClasses, className)}
+        className={wcn(navAppItemClassNames.root, appItemClasses, className)}
       >
         {content}
       </button>
@@ -381,7 +381,7 @@ export const NavAppItemStatic = ({
   ...rest
 }: NavAppItemStaticProps) => {
   useNavContext('Nav.AppItemStatic');
-  const contentClassName = cn(navAppItemStaticClassNames.content, 'flex-1 text-start');
+  const contentClassName = wcn(navAppItemStaticClassNames.content, 'flex-1 text-start');
   return (
     <li
       className={navAppItemStaticClassNames.listItem}
@@ -394,7 +394,7 @@ export const NavAppItemStatic = ({
       <div
         {...rest}
         ref={ref}
-        className={cn(
+        className={wcn(
           navAppItemStaticClassNames.root,
           appItemLayoutClasses,
           'cursor-default',
@@ -402,7 +402,7 @@ export const NavAppItemStatic = ({
         )}
       >
         {icon && slotRendersContent(icon)
-          ? renderSlot(icon, 'span', cn(navAppItemStaticClassNames.icon, appIconClasses), {
+          ? renderSlot(icon, 'span', wcn(navAppItemStaticClassNames.icon, appIconClasses), {
               'aria-hidden': true,
             })
           : null}

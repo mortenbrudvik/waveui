@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { infoButtonClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -438,7 +438,7 @@ export const InfoButton = ({
   let renderedNote: React.ReactNode = null;
   if (isMounted) {
     const noteProps = mergeSlotProps(slotProps?.info, {
-      className: cn(
+      className: wcn(
         infoButtonClassNames.info,
         noteClassName,
         'w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
@@ -508,7 +508,7 @@ export const InfoButton = ({
         aria-describedby={joinIds(ariaDescribedBy, infoId)}
         aria-expanded={open}
         aria-controls={open ? noteId : undefined}
-        className={cn(
+        className={wcn(
           infoButtonClassNames.root,
           'inline-flex size-6 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground',
           GLYPH[size].margin,

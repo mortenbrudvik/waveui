@@ -6,7 +6,7 @@ import {
   tabListTabClassNames,
 } from '../../lib/classNames';
 import { flattenChildren, getElementType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { tabIndicatorMotion } from '../../lib/motion';
@@ -522,14 +522,14 @@ const TabListRoot = ({
 
   return (
     <TabListContext.Provider value={context}>
-      <div className={cn(isVertical && 'flex')}>
+      <div className={wcn(isVertical && 'flex')}>
         <div
           role="tablist"
           aria-orientation={orientation}
           data-appearance={appearance}
           data-size={size}
           data-orientation={orientation}
-          className={cn(
+          className={wcn(
             tabListClassNames.root,
             isVertical ? 'flex w-40 flex-col' : 'flex',
             appearance === 'transparent'
@@ -610,15 +610,15 @@ function tabLookClasses(
     case 'subtle-circular': {
       const shape = appearance === 'subtle' ? 'rounded-md' : 'rounded-full';
       return selected
-        ? cn(shape, 'bg-subtle-selected text-foreground', forcedColors.selectedContainer)
-        : cn(
+        ? wcn(shape, 'bg-subtle-selected text-foreground', forcedColors.selectedContainer)
+        : wcn(
             shape,
             'text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-subtle-pressed',
           );
     }
     case 'filled-circular':
       return selected
-        ? cn(
+        ? wcn(
             'rounded-full bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
             forcedColors.selectedContainer,
           )
@@ -628,10 +628,10 @@ function tabLookClasses(
       // transparent one into the text color, but keep a system color): the tab's color transition
       // covers its border, so a color that changed with the selection would fade a second line in
       // under the new tab while its line slides there.
-      return cn(
+      return wcn(
         'border-transparent forced-colors:border-[Canvas]',
         selected
-          ? cn('text-primary', tabIndicatorClasses[vertical ? 'vertical' : 'horizontal'])
+          ? wcn('text-primary', tabIndicatorClasses[vertical ? 'vertical' : 'horizontal'])
           : 'text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground',
       );
   }
@@ -717,7 +717,7 @@ const Tab = ({
     <button
       type="button"
       role="tab"
-      className={cn(
+      className={wcn(
         tabListTabClassNames.root,
         'font-semibold transition-colors motion-reduce:transition-none',
         iconOnly ? tabIconOnlyPadding[ctx.size] : tabPadding[ctx.size],
@@ -791,7 +791,7 @@ const TabPanel = ({ value, id: idProp, children, className, ref, ...rest }: TabP
     <div
       role="tabpanel"
       tabIndex={0}
-      className={cn(tabListPanelClassNames.root, 'p-4', focusRing, className)}
+      className={wcn(tabListPanelClassNames.root, 'p-4', focusRing, className)}
       {...rest}
       id={id}
       aria-labelledby={tabId}
@@ -822,7 +822,7 @@ export interface TabPanelsProps extends React.HTMLAttributes<HTMLDivElement> {
 const TabPanels = ({ className, children, ref, ...rest }: TabPanelsProps) => (
   <div
     ref={ref}
-    className={cn(tabListPanelsClassNames.root, 'min-w-0 flex-1', className)}
+    className={wcn(tabListPanelsClassNames.root, 'min-w-0 flex-1', className)}
     {...rest}
   >
     {children}

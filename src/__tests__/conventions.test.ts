@@ -143,7 +143,7 @@ const HINTS: Record<RuleId, string> = {
   'starting-gate':
     'gate the start on the entering phase: `data-[presence=entering]:starting:…` (C-MOTION)',
   'class-names':
-    "apply `<name>ClassNames.root` first in the root element's `cn()`, from `src/lib/classNames.ts` (C-CLASS, stable class names)",
+    "apply `<name>ClassNames.root` first in the root element's `wcn()`, from `src/lib/classNames.ts` (C-CLASS, stable class names)",
   lexer:
     'the conventions lexer lost track of this file here, so its other findings are unreliable. This is a limitation of the gate, not necessarily an error in the code: simplify the construct (in .tsx, write type parameters the gate reads as JSX — e.g. a call signature `{ <T>(x: T): T }` or a lowercase `<t>(x: t) => t` — as `<T,>`, valid in type positions too) or fix the lexer in src/__tests__/conventions.test.ts',
 };

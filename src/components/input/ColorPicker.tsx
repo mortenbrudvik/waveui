@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { colorPickerClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hexToHsv, hsvToHex } from '../../lib/color';
 import { warnOnce } from '../../lib/dev';
 import { getFirstTabbable } from '../../lib/focus';
@@ -397,7 +397,7 @@ const ColorPickerRoot = ({
     <div
       role="group"
       {...groupProps}
-      className={cn(
+      className={wcn(
         colorPickerClassNames.root,
         'relative inline-flex flex-col gap-3 rounded border border-border bg-background p-3 shadow-4',
         className,
@@ -424,7 +424,7 @@ const ColorPickerRoot = ({
                 <div className="flex items-center gap-2">
                   <span
                     {...mergeSlotProps(slotProps?.opacityLabel, {
-                      className: cn(
+                      className: wcn(
                         colorPickerClassNames.opacityLabel,
                         'w-14 text-caption-1 text-muted-foreground',
                       ),
@@ -435,7 +435,7 @@ const ColorPickerRoot = ({
                   <AlphaSlider className="min-w-0 flex-1" />
                   <span
                     {...mergeSlotProps(slotProps?.opacityValue, {
-                      className: cn(
+                      className: wcn(
                         colorPickerClassNames.opacityValue,
                         'w-10 text-end text-caption-1 text-muted-foreground',
                       ),

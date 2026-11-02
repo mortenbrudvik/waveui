@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren, getElementType, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   drawerBodyClassNames,
   drawerClassNames,
@@ -441,7 +441,7 @@ function DrawerBuiltInHeader({
   return (
     <div
       {...mergeSlotProps(part, {
-        className: cn(
+        className: wcn(
           drawerClassNames.header,
           'flex shrink-0 items-center justify-between gap-2 p-4',
           scrollSeparatorClasses.header,
@@ -452,7 +452,7 @@ function DrawerBuiltInHeader({
       {hasTitle && (
         <h2
           id={titleId}
-          className={cn(drawerTitleClassNames.root, 'text-subtitle-1 font-semibold')}
+          className={wcn(drawerTitleClassNames.root, 'text-subtitle-1 font-semibold')}
         >
           {title}
         </h2>
@@ -461,14 +461,14 @@ function DrawerBuiltInHeader({
         ? renderSlot(
             titleAction,
             'span',
-            cn(drawerClassNames.titleAction, 'ms-auto flex shrink-0 items-center gap-1'),
+            wcn(drawerClassNames.titleAction, 'ms-auto flex shrink-0 items-center gap-1'),
           )
         : null}
       <DrawerCloseButton
         requestOpen={requestOpen}
         label={closeLabel}
         closeButton={closeButton}
-        className={cn(!hasTitleAction && 'ms-auto', 'text-muted-foreground')}
+        className={wcn(!hasTitleAction && 'ms-auto', 'text-muted-foreground')}
       />
     </div>
   );
@@ -506,7 +506,7 @@ function DrawerLayout({ header, bodyProps, content, footers }: DrawerLayoutProps
           data-scroll-state={scrollState}
           {...bodyRest}
           ref={bodyRef}
-          className={cn(
+          className={wcn(
             drawerClassNames.body,
             bodyProps && drawerBodyClassNames.root,
             'min-h-0 flex-1 overflow-y-auto p-4',

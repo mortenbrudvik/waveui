@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { menuButtonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
@@ -113,12 +113,12 @@ export const MenuButton = ({
   // chevron, as for a picker's `expandIcon`.
   const indicator =
     menuIcon == null || (menuIconButton !== null && !slotRendersContent(glyph)) ? (
-      <ChevronDownIcon className={cn(menuButtonClassNames.menuIcon, 'shrink-0')} />
+      <ChevronDownIcon className={wcn(menuButtonClassNames.menuIcon, 'shrink-0')} />
     ) : slotRendersContent(glyph) ? (
       renderSlot(
         glyph,
         'span',
-        cn(menuButtonClassNames.menuIcon, 'inline-flex shrink-0 items-center'),
+        wcn(menuButtonClassNames.menuIcon, 'inline-flex shrink-0 items-center'),
         {
           'aria-hidden': true,
         },
@@ -155,7 +155,7 @@ export const MenuButton = ({
       appearance={appearance}
       size={size}
       icon={withPartClass(icon, menuButtonClassNames.icon)}
-      className={cn(
+      className={wcn(
         menuButtonClassNames.root,
         'gap-1.5',
         unlabelled && unlabelledSizeClasses[size],

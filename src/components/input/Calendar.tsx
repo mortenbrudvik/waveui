@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { DayOfWeek, FirstWeekOfYear } from '../../lib/types';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { focusableDisabledProps, joinIds, preventIfDisabled } from '../../lib/aria';
 import { calendarClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
@@ -1000,7 +1000,7 @@ export const CalendarView = ({
     <>
       <div
         {...mergeSlotProps(parts?.header, {
-          className: cn(partClassNames?.header, 'mb-2 flex items-center justify-between gap-2'),
+          className: wcn(partClassNames?.header, 'mb-2 flex items-center justify-between gap-2'),
           locked: { ...HIDDEN_PART_LOCKS, onKeyDown: handleEscape },
         })}
         ref={headerRefs}
@@ -1010,7 +1010,7 @@ export const CalendarView = ({
           // it).
           type="button"
           {...mergeSlotProps(parts?.previousMonthButton, {
-            className: cn(
+            className: wcn(
               partClassNames?.previousMonthButton,
               NAV_BUTTON_CLASSES,
               focusRing,
@@ -1031,7 +1031,7 @@ export const CalendarView = ({
         </button>
         <Heading
           {...mergeSlotProps(parts?.heading, {
-            className: cn(partClassNames?.heading, 'text-body-1 font-semibold'),
+            className: wcn(partClassNames?.heading, 'text-body-1 font-semibold'),
             locked: { ...HIDDEN_PART_LOCKS, id: headingId, 'aria-live': 'polite' },
           })}
         >
@@ -1041,7 +1041,7 @@ export const CalendarView = ({
             <button
               type="button"
               {...mergeSlotProps(parts?.headingButton, {
-                className: cn(partClassNames?.headingButton, HEADING_BUTTON_CLASSES, focusRing),
+                className: wcn(partClassNames?.headingButton, HEADING_BUTTON_CLASSES, focusRing),
                 locked: {
                   ...BUTTON_PART_LOCKS,
                   'aria-describedby': hintId,
@@ -1063,7 +1063,7 @@ export const CalendarView = ({
         <button
           type="button"
           {...mergeSlotProps(parts?.nextMonthButton, {
-            className: cn(
+            className: wcn(
               partClassNames?.nextMonthButton,
               NAV_BUTTON_CLASSES,
               focusRing,
@@ -1086,7 +1086,7 @@ export const CalendarView = ({
       {(showGoToToday || onClose) && (
         <div
           {...mergeSlotProps(parts?.footer, {
-            className: cn(partClassNames?.footer, 'mt-2 flex items-center justify-end gap-2'),
+            className: wcn(partClassNames?.footer, 'mt-2 flex items-center justify-end gap-2'),
             locked: { ...HIDDEN_PART_LOCKS, onKeyDown: handleEscape },
           })}
         >
@@ -1094,7 +1094,7 @@ export const CalendarView = ({
             <button
               type="button"
               {...mergeSlotProps(parts?.todayButton, {
-                className: cn(
+                className: wcn(
                   partClassNames?.todayButton,
                   FOOTER_BUTTON_CLASSES,
                   focusRing,
@@ -1115,7 +1115,7 @@ export const CalendarView = ({
             <button
               type="button"
               {...mergeSlotProps(parts?.closeButton, {
-                className: cn(
+                className: wcn(
                   partClassNames?.closeButton,
                   FOOTER_BUTTON_CLASSES,
                   focusRing,
@@ -1327,7 +1327,7 @@ export const Calendar = ({
       role="group"
       {...fieldProps}
       aria-describedby={joinIds(fieldDescribedBy, showRequiredHint && requiredHintId)}
-      className={cn(
+      className={wcn(
         calendarClassNames.root,
         'relative inline-flex flex-col text-foreground',
         className,

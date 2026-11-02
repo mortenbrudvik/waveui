@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   tableBodyClassNames,
   tableCellActionsClassNames,
@@ -424,7 +424,7 @@ const TableRoot = ({
       aria-labelledby={
         isRegion ? regionLabelledBy : consumerRole !== undefined ? containerLabelledBy : undefined
       }
-      className={cn(
+      className={wcn(
         tableClassNames.container,
         'overflow-x-auto rounded-md border border-border',
         scrollable && focusRing,
@@ -434,7 +434,7 @@ const TableRoot = ({
       <table
         ref={ref}
         data-striped={striped ? '' : undefined}
-        className={cn(
+        className={wcn(
           tableClassNames.root,
           'w-full border-separate border-spacing-0',
           // `:where()` keeps the stripe at specificity 0, so any row class wins (C-CLASS).
@@ -452,7 +452,7 @@ TableRoot.displayName = 'Table';
 
 /** The table's `<thead>`. */
 const TableHeader = ({ children, className, ref, ...rest }: TableHeaderProps) => (
-  <thead ref={ref} {...rest} className={cn(tableHeaderClassNames.root, 'bg-card', className)}>
+  <thead ref={ref} {...rest} className={wcn(tableHeaderClassNames.root, 'bg-card', className)}>
     {children}
   </thead>
 );
@@ -476,7 +476,7 @@ const TableHeaderCell = ({
     ? renderSlot(
         aside,
         'span',
-        cn(
+        wcn(
           tableHeaderCellClassNames.aside,
           'inline-flex shrink-0 items-center',
           sortable && 'pe-4',
@@ -516,7 +516,7 @@ const TableHeaderCell = ({
       ref={ref}
       scope="col"
       aria-sort={sortable ? (sortDirection ?? 'none') : undefined}
-      className={cn(
+      className={wcn(
         tableHeaderCellClassNames.root,
         'px-4 py-3 text-start font-semibold text-caption-1 uppercase tracking-wider border-b border-border',
         sortable && 'p-0 hover:bg-subtle-hover',
@@ -532,7 +532,7 @@ TableHeaderCell.displayName = 'TableHeaderCell';
 
 /** The table's `<tbody>`. */
 const TableBody = ({ children, className, ref, ...rest }: TableBodyProps) => (
-  <tbody ref={ref} {...rest} className={cn(tableBodyClassNames.root, className)}>
+  <tbody ref={ref} {...rest} className={wcn(tableBodyClassNames.root, className)}>
     {children}
   </tbody>
 );
@@ -546,7 +546,7 @@ TableBody.displayName = 'TableBody';
 const TableRow = ({ children, className, ref, ...props }: TableRowProps) => (
   <tr
     ref={ref}
-    className={cn(
+    className={wcn(
       tableRowClassNames.root,
       'group/table-row',
       'hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
@@ -563,7 +563,7 @@ TableRow.displayName = 'TableRow';
 const TableCell = ({ children, className, ref, ...props }: TableCellProps) => (
   <td
     ref={ref}
-    className={cn(
+    className={wcn(
       tableCellClassNames.root,
       'relative px-4 py-3 text-body-1 border-b border-border',
       className,
@@ -681,7 +681,7 @@ const TableSelectionCell = ({
       ref={ref}
       data-type={type}
       {...rest}
-      className={cn(tableSelectionCellClassNames.root, SELECTION_CELL_CLASSES, className)}
+      className={wcn(tableSelectionCellClassNames.root, SELECTION_CELL_CLASSES, className)}
     >
       <TableSelectionControl
         ref={mergedControlRef}
@@ -765,12 +765,12 @@ const TableCellLayout = ({
   const hasMain = slotRendersContent(children);
   const hasDescription = slotRendersContent(description);
   const primary = appearance === 'primary';
-  const contentClassName = cn(
+  const contentClassName = wcn(
     tableCellLayoutClassNames.content,
     'flex flex-col',
     truncate && 'min-w-0 overflow-x-hidden',
   );
-  const mainClassName = cn(
+  const mainClassName = wcn(
     tableCellLayoutClassNames.main,
     truncate && 'truncate',
     primary && 'font-semibold',
@@ -781,7 +781,7 @@ const TableCellLayout = ({
       data-appearance={appearance}
       data-truncate={truncate ? '' : undefined}
       {...rest}
-      className={cn(
+      className={wcn(
         tableCellLayoutClassNames.root,
         'flex items-center gap-2',
         truncate && 'overflow-x-hidden',
@@ -794,7 +794,7 @@ const TableCellLayout = ({
           {renderSlot(
             media,
             'span',
-            cn(
+            wcn(
               tableCellLayoutClassNames.media,
               CELL_LAYOUT_MEDIA_CLASSES[primary ? 'primary' : 'default'],
             ),
@@ -826,7 +826,7 @@ const TableCellLayout = ({
             renderSlot(
               description,
               'span',
-              cn(
+              wcn(
                 tableCellLayoutClassNames.description,
                 'text-caption-1 text-muted-foreground',
                 truncate && 'truncate',
@@ -872,7 +872,7 @@ const TableCellActions = ({ visible = false, className, ref, ...rest }: TableCel
     ref={ref}
     data-visible={visible ? '' : undefined}
     {...rest}
-    className={cn(
+    className={wcn(
       tableCellActionsClassNames.root,
       CELL_ACTIONS_CLASSES,
       visible ? undefined : CELL_ACTIONS_REVEAL_CLASSES,

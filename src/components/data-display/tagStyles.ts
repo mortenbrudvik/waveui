@@ -288,7 +288,7 @@ export const INTERACTION_TAG_EXTRA_SMALL_HIT_CLASSES =
  * appearance and shape, without a stable class (TagPicker's count chip carries its own).
  *
  * @example
- * <span className={cn(chipClassName, tagRootClasses({ size, appearance, shape }))}>+3</span>
+ * <span className={wcn(chipClassName, tagRootClasses({ size, appearance, shape }))}>+3</span>
  */
 export function tagRootClasses(options: {
   size: TagSize;

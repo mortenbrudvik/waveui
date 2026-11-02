@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { menuPopoverClassNames } from '../../lib/classNames';
 import { popupMotion } from '../../lib/motion';
 import type {
@@ -510,7 +510,12 @@ export const MenuPopover = ({
           onPointerLeave={composeEventHandlers(onPointerLeave, hoverSurfaceHandlers.onPointerLeave)}
           onPointerMove={composeEventHandlers(onPointerMove, listPointerMove)}
           onContextMenu={composeEventHandlers(onContextMenu, contextSurfaceHandlers.onContextMenu)}
-          className={cn(menuPopoverClassNames.root, menuPopoverClasses, motionClassName, className)}
+          className={wcn(
+            menuPopoverClassNames.root,
+            menuPopoverClasses,
+            motionClassName,
+            className,
+          )}
         >
           <MenuListElementContext.Provider value={surface}>
             {children}

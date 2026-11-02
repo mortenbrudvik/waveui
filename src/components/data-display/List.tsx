@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { focusableDisabledProps } from '../../lib/aria';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { listClassNames, listItemClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -1105,7 +1105,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
         // A windowed list that navigates its items has its Tab stop on an item: the scroller is
         // none of its own (Firefox makes a scroller a Tab stop). The consumer's `tabIndex` wins.
         tabIndex={windowed && navigable ? -1 : undefined}
-        className={cn(
+        className={wcn(
           listClassNames.root,
           'm-0 list-none p-0',
           // The window lays the items out: the browser's scroll anchoring only fights it.
@@ -1163,7 +1163,7 @@ function renderCheckmark(
   glyph: Slot<'span'> | undefined,
   { selected, disabled }: { selected: boolean; disabled: boolean },
 ): React.ReactNode {
-  const classes = cn(
+  const classes = wcn(
     listItemClassNames.checkmark,
     'order-first me-2 inline-flex shrink-0 items-center justify-center',
     disabled
@@ -1390,7 +1390,7 @@ export const ListItem = ({
   const ContentCell = (mode === 'grid' ? 'div' : 'span') as React.ElementType;
   const role = mode === 'grid' ? 'row' : mode === 'listbox' ? 'option' : 'listitem';
   const contentRole = mode === 'grid' ? 'gridcell' : undefined;
-  const contentClassName = cn(listItemClassNames.content, 'min-w-0 flex-1');
+  const contentClassName = wcn(listItemClassNames.content, 'min-w-0 flex-1');
 
   const interactiveProps: Record<string, unknown> = navigable
     ? {
@@ -1442,7 +1442,7 @@ export const ListItem = ({
     <Element
       role={role}
       data-disabled-selection={selectionDisabled ? '' : undefined}
-      className={cn(
+      className={wcn(
         listItemClassNames.root,
         'flex items-center border-b border-border px-4 py-2 text-body-1',
         // A windowed item is exactly the window's item size, its bottom rule included.
@@ -1631,7 +1631,7 @@ function ListActionCell({ grid, onRemovedWithFocus, part, children }: ListAction
   const Cell = (grid ? 'div' : 'span') as React.ElementType;
   const role = grid ? 'gridcell' : undefined;
   const tabIndex = grid ? -1 : undefined;
-  const className = cn(listItemClassNames.action, 'ms-2 shrink-0', grid && focusRingInset);
+  const className = wcn(listItemClassNames.action, 'ms-2 shrink-0', grid && focusRingInset);
   return (
     <Cell
       role={role}

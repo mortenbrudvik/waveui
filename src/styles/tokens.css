@@ -1,13 +1,15 @@
 /*
  * Wave design tokens.
  *
- * - Runtime variables are prefixed `--wave-*`. Tailwind utilities keep their names
- *   (`bg-primary` -> `--color-primary: var(--wave-primary)`, see the `@theme inline` block).
+ * - Runtime variables are prefixed `--wave-*`. An app's Tailwind build gets them as namespaced
+ *   theme keys (`bg-wave-primary` -> `--color-wave-primary: var(--wave-primary)`, see the first
+ *   `@theme inline` block); Wave's own utilities compile against the unnamespaced mapping of
+ *   theme.css (internal: `--color-primary: var(--wave-primary)`).
  * - Theme classes: `.wave-light` (also `:root`), `.wave-dark`, `.wave-high-contrast`.
  * - Every theme group declares every token, including the derived ones, so a nested theme
  *   re-resolves all of them.
  * - Shadows are per-theme tokens too: `--wave-shadow-{2,4,8,16,28,64}` in each theme group, and the
- *   `shadow-N` utilities alias them (`--shadow-4: var(--wave-shadow-4)`). Light keeps Fluent's ambient
+ *   shadow keys alias them (`--shadow-wave-4: var(--wave-shadow-4)`). Light keeps Fluent's ambient
  *   0.12 / key 0.14; dark and high contrast use 0.24 / 0.28 with the same offsets and blurs.
  * - Persona palette: 12 hues (`red`, `pumpkin`, `gold`, `forest`, `teal`, `blue`, `navy`,
  *   `lavender`, `purple`, `magenta`, `brown`, `steel`; Avatar `color`, chart series), each with
@@ -637,8 +639,275 @@
 }
 
 /* ---------------------------------------------------------------------------------------------
- * Tailwind 4 mapping. No overrides of Tailwind defaults (radius, font-sans): Wave uses Tailwind's
- * default radius names and its own `font-wave` family.
+ * Tailwind 4 theme keys for apps, namespaced: `bg-wave-primary`, `text-wave-body-1`,
+ * `shadow-wave-4`, `font-wave`, and the `duration-wave-*`, `ease-wave-*` and `animate-wave-*`
+ * utilities (with a `prefix(tw)` build, `tw:bg-wave-primary`). Every key maps to a `--wave-*`
+ * token (the type ramp holds its sizes, the animations their keyframes). Wave's own utilities
+ * compile against the unnamespaced mapping of theme.css (internal). No overrides of Tailwind
+ * defaults (radius, font-sans): Wave uses Tailwind's default radius names and its own font
+ * families.
+ * ------------------------------------------------------------------------------------------- */
+@theme inline {
+  /* Colors */
+  --color-wave-background: var(--wave-background);
+  --color-wave-foreground: var(--wave-foreground);
+  --color-wave-card: var(--wave-card);
+  --color-wave-card-foreground: var(--wave-card-foreground);
+  --color-wave-secondary: var(--wave-secondary);
+  --color-wave-secondary-foreground: var(--wave-secondary-foreground);
+  --color-wave-muted: var(--wave-muted);
+  --color-wave-muted-foreground: var(--wave-muted-foreground);
+  --color-wave-muted-hover: var(--wave-muted-hover);
+  --color-wave-muted-pressed: var(--wave-muted-pressed);
+  --color-wave-primary: var(--wave-primary);
+  --color-wave-primary-foreground: var(--wave-primary-foreground);
+  --color-wave-primary-hover: var(--wave-primary-hover);
+  --color-wave-primary-pressed: var(--wave-primary-pressed);
+  --color-wave-accent: var(--wave-accent);
+  --color-wave-accent-foreground: var(--wave-accent-foreground);
+  --color-wave-destructive: var(--wave-destructive);
+  --color-wave-destructive-foreground: var(--wave-destructive-foreground);
+  --color-wave-error: var(--wave-error);
+  --color-wave-error-foreground: var(--wave-error-foreground);
+  --color-wave-subtle: var(--wave-subtle);
+  --color-wave-subtle-hover: var(--wave-subtle-hover);
+  --color-wave-subtle-pressed: var(--wave-subtle-pressed);
+  --color-wave-subtle-selected: var(--wave-subtle-selected);
+  --color-wave-selected: var(--wave-selected);
+  --color-wave-selected-foreground: var(--wave-selected-foreground);
+  --color-wave-selected-hover: var(--wave-selected-hover);
+  --color-wave-selected-pressed: var(--wave-selected-pressed);
+  --color-wave-border: var(--wave-border);
+  --color-wave-stroke: var(--wave-stroke);
+  --color-wave-stroke-hover: var(--wave-stroke-hover);
+  --color-wave-stroke-accessible: var(--wave-stroke-accessible);
+  --color-wave-input: var(--wave-input);
+  --color-wave-input-filled-darker: var(--wave-input-filled-darker);
+  --color-wave-input-filled-lighter: var(--wave-input-filled-lighter);
+  --color-wave-input-filled-stroke: var(--wave-input-filled-stroke);
+  --color-wave-ring: var(--wave-ring);
+  --color-wave-success: var(--wave-success);
+  --color-wave-success-foreground: var(--wave-success-foreground);
+  --color-wave-success-tint: var(--wave-success-tint);
+  --color-wave-success-tint-foreground: var(--wave-success-tint-foreground);
+  --color-wave-warning: var(--wave-warning);
+  --color-wave-warning-foreground: var(--wave-warning-foreground);
+  --color-wave-warning-tint: var(--wave-warning-tint);
+  --color-wave-warning-tint-foreground: var(--wave-warning-tint-foreground);
+  --color-wave-error-tint: var(--wave-error-tint);
+  --color-wave-error-tint-foreground: var(--wave-error-tint-foreground);
+  --color-wave-severe: var(--wave-severe);
+  --color-wave-severe-foreground: var(--wave-severe-foreground);
+  --color-wave-severe-tint: var(--wave-severe-tint);
+  --color-wave-severe-tint-foreground: var(--wave-severe-tint-foreground);
+  --color-wave-info: var(--wave-info);
+  --color-wave-info-foreground: var(--wave-info-foreground);
+  --color-wave-info-tint: var(--wave-info-tint);
+  --color-wave-info-tint-foreground: var(--wave-info-tint-foreground);
+  --color-wave-inverted: var(--wave-inverted);
+  --color-wave-inverted-foreground: var(--wave-inverted-foreground);
+  --color-wave-inverted-border: var(--wave-inverted-border);
+  --color-wave-track: var(--wave-track);
+  --color-wave-skeleton: var(--wave-skeleton);
+  --color-wave-rating: var(--wave-rating);
+  --color-wave-presence-available: var(--wave-presence-available);
+  --color-wave-presence-busy: var(--wave-presence-busy);
+  --color-wave-presence-away: var(--wave-presence-away);
+  --color-wave-presence-offline: var(--wave-presence-offline);
+  --color-wave-presence-oof: var(--wave-presence-oof);
+  --color-wave-presence-glyph: var(--wave-presence-glyph);
+  --color-wave-palette-red: var(--wave-palette-red);
+  --color-wave-palette-red-foreground: var(--wave-palette-red-foreground);
+  --color-wave-palette-red-tint: var(--wave-palette-red-tint);
+  --color-wave-palette-red-tint-foreground: var(--wave-palette-red-tint-foreground);
+  --color-wave-palette-red-border: var(--wave-palette-red-border);
+  --color-wave-palette-pumpkin: var(--wave-palette-pumpkin);
+  --color-wave-palette-pumpkin-foreground: var(--wave-palette-pumpkin-foreground);
+  --color-wave-palette-pumpkin-tint: var(--wave-palette-pumpkin-tint);
+  --color-wave-palette-pumpkin-tint-foreground: var(--wave-palette-pumpkin-tint-foreground);
+  --color-wave-palette-pumpkin-border: var(--wave-palette-pumpkin-border);
+  --color-wave-palette-gold: var(--wave-palette-gold);
+  --color-wave-palette-gold-foreground: var(--wave-palette-gold-foreground);
+  --color-wave-palette-gold-tint: var(--wave-palette-gold-tint);
+  --color-wave-palette-gold-tint-foreground: var(--wave-palette-gold-tint-foreground);
+  --color-wave-palette-gold-border: var(--wave-palette-gold-border);
+  --color-wave-palette-forest: var(--wave-palette-forest);
+  --color-wave-palette-forest-foreground: var(--wave-palette-forest-foreground);
+  --color-wave-palette-forest-tint: var(--wave-palette-forest-tint);
+  --color-wave-palette-forest-tint-foreground: var(--wave-palette-forest-tint-foreground);
+  --color-wave-palette-forest-border: var(--wave-palette-forest-border);
+  --color-wave-palette-teal: var(--wave-palette-teal);
+  --color-wave-palette-teal-foreground: var(--wave-palette-teal-foreground);
+  --color-wave-palette-teal-tint: var(--wave-palette-teal-tint);
+  --color-wave-palette-teal-tint-foreground: var(--wave-palette-teal-tint-foreground);
+  --color-wave-palette-teal-border: var(--wave-palette-teal-border);
+  --color-wave-palette-blue: var(--wave-palette-blue);
+  --color-wave-palette-blue-foreground: var(--wave-palette-blue-foreground);
+  --color-wave-palette-blue-tint: var(--wave-palette-blue-tint);
+  --color-wave-palette-blue-tint-foreground: var(--wave-palette-blue-tint-foreground);
+  --color-wave-palette-blue-border: var(--wave-palette-blue-border);
+  --color-wave-palette-navy: var(--wave-palette-navy);
+  --color-wave-palette-navy-foreground: var(--wave-palette-navy-foreground);
+  --color-wave-palette-navy-tint: var(--wave-palette-navy-tint);
+  --color-wave-palette-navy-tint-foreground: var(--wave-palette-navy-tint-foreground);
+  --color-wave-palette-navy-border: var(--wave-palette-navy-border);
+  --color-wave-palette-lavender: var(--wave-palette-lavender);
+  --color-wave-palette-lavender-foreground: var(--wave-palette-lavender-foreground);
+  --color-wave-palette-lavender-tint: var(--wave-palette-lavender-tint);
+  --color-wave-palette-lavender-tint-foreground: var(--wave-palette-lavender-tint-foreground);
+  --color-wave-palette-lavender-border: var(--wave-palette-lavender-border);
+  --color-wave-palette-purple: var(--wave-palette-purple);
+  --color-wave-palette-purple-foreground: var(--wave-palette-purple-foreground);
+  --color-wave-palette-purple-tint: var(--wave-palette-purple-tint);
+  --color-wave-palette-purple-tint-foreground: var(--wave-palette-purple-tint-foreground);
+  --color-wave-palette-purple-border: var(--wave-palette-purple-border);
+  --color-wave-palette-magenta: var(--wave-palette-magenta);
+  --color-wave-palette-magenta-foreground: var(--wave-palette-magenta-foreground);
+  --color-wave-palette-magenta-tint: var(--wave-palette-magenta-tint);
+  --color-wave-palette-magenta-tint-foreground: var(--wave-palette-magenta-tint-foreground);
+  --color-wave-palette-magenta-border: var(--wave-palette-magenta-border);
+  --color-wave-palette-brown: var(--wave-palette-brown);
+  --color-wave-palette-brown-foreground: var(--wave-palette-brown-foreground);
+  --color-wave-palette-brown-tint: var(--wave-palette-brown-tint);
+  --color-wave-palette-brown-tint-foreground: var(--wave-palette-brown-tint-foreground);
+  --color-wave-palette-brown-border: var(--wave-palette-brown-border);
+  --color-wave-palette-steel: var(--wave-palette-steel);
+  --color-wave-palette-steel-foreground: var(--wave-palette-steel-foreground);
+  --color-wave-palette-steel-tint: var(--wave-palette-steel-tint);
+  --color-wave-palette-steel-tint-foreground: var(--wave-palette-steel-tint-foreground);
+  --color-wave-palette-steel-border: var(--wave-palette-steel-border);
+  --color-wave-backdrop: var(--wave-backdrop);
+
+  /* Brand ramp (for designers; components use the semantic colors) */
+  --color-wave-brand-10: var(--wave-brand-10);
+  --color-wave-brand-20: var(--wave-brand-20);
+  --color-wave-brand-30: var(--wave-brand-30);
+  --color-wave-brand-40: var(--wave-brand-40);
+  --color-wave-brand-50: var(--wave-brand-50);
+  --color-wave-brand-60: var(--wave-brand-60);
+  --color-wave-brand-70: var(--wave-brand-70);
+  --color-wave-brand-80: var(--wave-brand-80);
+  --color-wave-brand-90: var(--wave-brand-90);
+  --color-wave-brand-100: var(--wave-brand-100);
+  --color-wave-brand-110: var(--wave-brand-110);
+  --color-wave-brand-120: var(--wave-brand-120);
+  --color-wave-brand-130: var(--wave-brand-130);
+  --color-wave-brand-140: var(--wave-brand-140);
+  --color-wave-brand-150: var(--wave-brand-150);
+  --color-wave-brand-160: var(--wave-brand-160);
+
+  /* Font families (utilities `font-wave`, `font-wave-mono`, `font-wave-numeric`) */
+  --font-wave: var(--wave-font-family);
+  --font-wave-mono: var(--wave-font-family-monospace);
+  --font-wave-numeric: var(--wave-font-family-numeric);
+
+  /* Type ramp */
+  --text-wave-caption-2: 10px;
+  --text-wave-caption-2--line-height: 14px;
+  --text-wave-caption-1: 12px;
+  --text-wave-caption-1--line-height: 16px;
+  --text-wave-body-1: 14px;
+  --text-wave-body-1--line-height: 20px;
+  --text-wave-body-2: 16px;
+  --text-wave-body-2--line-height: 22px;
+  --text-wave-subtitle-2: 16px;
+  --text-wave-subtitle-2--line-height: 22px;
+  --text-wave-subtitle-2--font-weight: 600;
+  --text-wave-subtitle-1: 20px;
+  --text-wave-subtitle-1--line-height: 28px;
+  --text-wave-subtitle-1--font-weight: 600;
+  --text-wave-title-3: 24px;
+  --text-wave-title-3--line-height: 32px;
+  --text-wave-title-3--font-weight: 600;
+  --text-wave-title-2: 28px;
+  --text-wave-title-2--line-height: 36px;
+  --text-wave-title-2--font-weight: 600;
+  --text-wave-title-1: 32px;
+  --text-wave-title-1--line-height: 40px;
+  --text-wave-title-1--font-weight: 600;
+  --text-wave-large-title: 40px;
+  --text-wave-large-title--line-height: 52px;
+  --text-wave-large-title--font-weight: 600;
+  --text-wave-display: 68px;
+  --text-wave-display--line-height: 92px;
+  --text-wave-display--font-weight: 600;
+
+  /* Box shadows */
+  --shadow-wave-2: var(--wave-shadow-2);
+  --shadow-wave-4: var(--wave-shadow-4);
+  --shadow-wave-8: var(--wave-shadow-8);
+  --shadow-wave-16: var(--wave-shadow-16);
+  --shadow-wave-28: var(--wave-shadow-28);
+  --shadow-wave-64: var(--wave-shadow-64);
+
+  /* Motion durations and curves (utilities `duration-wave-*`, `ease-wave-*`). No keyframes. */
+  --transition-duration-wave-ultra-fast: var(--wave-duration-ultra-fast);
+  --transition-duration-wave-faster: var(--wave-duration-faster);
+  --transition-duration-wave-fast: var(--wave-duration-fast);
+  --transition-duration-wave-normal: var(--wave-duration-normal);
+  --transition-duration-wave-gentle: var(--wave-duration-gentle);
+  --transition-duration-wave-slow: var(--wave-duration-slow);
+  --transition-duration-wave-slower: var(--wave-duration-slower);
+  --transition-duration-wave-ultra-slow: var(--wave-duration-ultra-slow);
+  --ease-wave-accelerate-max: var(--wave-curve-accelerate-max);
+  --ease-wave-accelerate-mid: var(--wave-curve-accelerate-mid);
+  --ease-wave-accelerate-min: var(--wave-curve-accelerate-min);
+  --ease-wave-decelerate-max: var(--wave-curve-decelerate-max);
+  --ease-wave-decelerate-mid: var(--wave-curve-decelerate-mid);
+  --ease-wave-decelerate-min: var(--wave-curve-decelerate-min);
+  --ease-wave-easy-ease-max: var(--wave-curve-easy-ease-max);
+  --ease-wave-easy-ease: var(--wave-curve-easy-ease);
+  --ease-wave-linear: var(--wave-curve-linear);
+
+  /* Animations. Reduced-motion alternates are applied per component (C-MOTION):
+     Spinner `motion-reduce:animate-wave-spin-slow`, indeterminate ProgressBar
+     `motion-reduce:animate-wave-pulse` at full width, Skeleton `motion-reduce:animate-none`. */
+  --animate-wave-spin: wave-spin 0.8s linear infinite;
+  --animate-wave-spin-slow: wave-spin 2.4s linear infinite;
+  --animate-wave-pulse: wave-pulse 1.5s ease-in-out infinite;
+  --animate-wave-indeterminate: wave-indeterminate 1.5s ease-in-out infinite;
+  --animate-wave-indeterminate-rtl: wave-indeterminate-rtl 1.5s ease-in-out infinite;
+
+  @keyframes wave-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes wave-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
+  }
+
+  @keyframes wave-indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(350%);
+    }
+  }
+
+  @keyframes wave-indeterminate-rtl {
+    0% {
+      transform: translateX(100%);
+    }
+    100% {
+      transform: translateX(-350%);
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Transitional (Phase 14): the unnamespaced keys of 0.x (`bg-primary`, `text-body-1`,
+ * `shadow-4`), the same as theme.css's, which the `./tailwind` entry still needs while it
+ * generates the components' classes from dist. Removed when that entry imports the precompiled
+ * utilities instead.
  * ------------------------------------------------------------------------------------------- */
 @theme inline {
   /* Colors */
@@ -789,11 +1058,6 @@
   --color-brand-150: var(--wave-brand-150);
   --color-brand-160: var(--wave-brand-160);
 
-  /* Font families (utilities `font-wave`, `font-wave-mono`, `font-wave-numeric`) */
-  --font-wave: var(--wave-font-family);
-  --font-wave-mono: var(--wave-font-family-monospace);
-  --font-wave-numeric: var(--wave-font-family-numeric);
-
   /* Type ramp */
   --text-caption-2: 10px;
   --text-caption-2--line-height: 14px;
@@ -832,66 +1096,4 @@
   --shadow-16: var(--wave-shadow-16);
   --shadow-28: var(--wave-shadow-28);
   --shadow-64: var(--wave-shadow-64);
-
-  /* Motion durations and curves (utilities `duration-wave-*`, `ease-wave-*`). No keyframes. */
-  --transition-duration-wave-ultra-fast: var(--wave-duration-ultra-fast);
-  --transition-duration-wave-faster: var(--wave-duration-faster);
-  --transition-duration-wave-fast: var(--wave-duration-fast);
-  --transition-duration-wave-normal: var(--wave-duration-normal);
-  --transition-duration-wave-gentle: var(--wave-duration-gentle);
-  --transition-duration-wave-slow: var(--wave-duration-slow);
-  --transition-duration-wave-slower: var(--wave-duration-slower);
-  --transition-duration-wave-ultra-slow: var(--wave-duration-ultra-slow);
-  --ease-wave-accelerate-max: var(--wave-curve-accelerate-max);
-  --ease-wave-accelerate-mid: var(--wave-curve-accelerate-mid);
-  --ease-wave-accelerate-min: var(--wave-curve-accelerate-min);
-  --ease-wave-decelerate-max: var(--wave-curve-decelerate-max);
-  --ease-wave-decelerate-mid: var(--wave-curve-decelerate-mid);
-  --ease-wave-decelerate-min: var(--wave-curve-decelerate-min);
-  --ease-wave-easy-ease-max: var(--wave-curve-easy-ease-max);
-  --ease-wave-easy-ease: var(--wave-curve-easy-ease);
-  --ease-wave-linear: var(--wave-curve-linear);
-
-  /* Animations. Reduced-motion alternates are applied per component (C-MOTION):
-     Spinner `motion-reduce:animate-wave-spin-slow`, indeterminate ProgressBar
-     `motion-reduce:animate-wave-pulse` at full width, Skeleton `motion-reduce:animate-none`. */
-  --animate-wave-spin: wave-spin 0.8s linear infinite;
-  --animate-wave-spin-slow: wave-spin 2.4s linear infinite;
-  --animate-wave-pulse: wave-pulse 1.5s ease-in-out infinite;
-  --animate-wave-indeterminate: wave-indeterminate 1.5s ease-in-out infinite;
-  --animate-wave-indeterminate-rtl: wave-indeterminate-rtl 1.5s ease-in-out infinite;
-
-  @keyframes wave-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes wave-pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.4;
-    }
-  }
-
-  @keyframes wave-indeterminate {
-    0% {
-      transform: translateX(-100%);
-    }
-    100% {
-      transform: translateX(350%);
-    }
-  }
-
-  @keyframes wave-indeterminate-rtl {
-    0% {
-      transform: translateX(100%);
-    }
-    100% {
-      transform: translateX(-350%);
-    }
-  }
 }

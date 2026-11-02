@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { fieldClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
@@ -499,7 +499,7 @@ function mergeIntoLabelElement(
   const own = element.props;
   const merged: FieldLabelElementProps = {
     htmlFor: state.controlId,
-    className: cn(state.className, own.className),
+    className: wcn(state.className, own.className),
   };
   if (!own.id) merged.id = state.labelId;
   // The element's own `required` (`false` included) wins; else a required Field makes it show its
@@ -520,7 +520,7 @@ const MESSAGE_ICON_CLASSES = 'mt-0.5 inline-flex shrink-0';
 function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefined) {
   if (icon !== undefined) {
     return slotRendersContent(icon)
-      ? renderSlot(icon, 'span', cn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES), {
+      ? renderSlot(icon, 'span', wcn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES), {
           'aria-hidden': true,
         })
       : null;
@@ -529,7 +529,7 @@ function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefine
   return Icon ? (
     <span
       aria-hidden="true"
-      className={cn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES)}
+      className={wcn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES)}
     >
       <Icon size={12} />
     </span>
@@ -780,9 +780,9 @@ export const Field = ({
 
   const horizontal = orientation === 'horizontal';
   // Beside the control: a third of the width, its first line lined up with LABEL_TOP.
-  const labelColumn = horizontal && cn('mb-0 shrink-0 basis-1/3', LABEL_TOP[labelSize]);
+  const labelColumn = horizontal && wcn('mb-0 shrink-0 basis-1/3', LABEL_TOP[labelSize]);
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: cn(
+    className: wcn(
       fieldClassNames.label,
       'mb-1 font-semibold text-foreground',
       LABEL_TEXT[labelSize],
@@ -791,11 +791,11 @@ export const Field = ({
     locked: { id: labelId, htmlFor: controlId },
   });
   const requiredProps = mergeSlotProps(slotProps?.required, {
-    className: cn(fieldClassNames.required, 'ms-0.5 text-error'),
+    className: wcn(fieldClassNames.required, 'ms-0.5 text-error'),
     locked: { 'aria-hidden': 'true', tabIndex: undefined },
   });
   const messageProps = mergeSlotProps(slotProps?.validationMessage, {
-    className: cn(
+    className: wcn(
       fieldClassNames.validationMessage,
       'mt-1 flex items-start gap-1 text-caption-1',
       MESSAGE_COLORS[state],
@@ -807,7 +807,7 @@ export const Field = ({
     },
   });
   const hintProps = mergeSlotProps(slotProps?.hint, {
-    className: cn(fieldClassNames.hint, 'mt-1 text-caption-1 text-muted-foreground'),
+    className: wcn(fieldClassNames.hint, 'mt-1 text-caption-1 text-muted-foreground'),
     locked: { id: hintId },
   });
   const control = (
@@ -836,7 +836,7 @@ export const Field = ({
       data-orientation={orientation}
       data-size={labelSize}
       data-validation-state={state}
-      className={cn(
+      className={wcn(
         fieldClassNames.root,
         'flex',
         horizontal ? 'flex-row items-start gap-x-3' : 'flex-col',
@@ -850,7 +850,7 @@ export const Field = ({
           labelId,
           required,
           size: labelSize,
-          className: cn(fieldClassNames.label, 'mb-1', labelColumn),
+          className: wcn(fieldClassNames.label, 'mb-1', labelColumn),
         })
       ) : hasLabel ? (
         <label {...labelProps}>
@@ -859,7 +859,7 @@ export const Field = ({
         </label>
       ) : null}
       {horizontal ? (
-        <div className={cn('flex min-w-0 flex-1 flex-col', SHORT_ROW_FIRST_CHILD[labelSize])}>
+        <div className={wcn('flex min-w-0 flex-1 flex-col', SHORT_ROW_FIRST_CHILD[labelSize])}>
           {control}
         </div>
       ) : (

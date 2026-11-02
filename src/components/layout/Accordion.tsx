@@ -6,7 +6,7 @@ import {
   accordionTriggerClassNames,
 } from '../../lib/classNames';
 import { flattenChildren, getElementType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
@@ -126,7 +126,7 @@ const BLOCK_CLICK = ['onClick'] as const;
  * Trigger renders the heading, or the Item around a wrapper of the Trigger).
  */
 function headingProps(part: SlotPart<'h3'> | undefined): Record<string, unknown> {
-  const className = cn(accordionTriggerClassNames.heading, HEADING_CLASS);
+  const className = wcn(accordionTriggerClassNames.heading, HEADING_CLASS);
   return part ? mergeSlotProps(part, { className, locked: HEADING_PART_LOCKS }) : { className };
 }
 
@@ -313,7 +313,7 @@ const AccordionRoot = (props: AccordionProps) => {
           <AccordionHeadingOutsideContext.Provider value={false}>
             <div
               ref={ref}
-              className={cn(accordionClassNames.root, 'divide-y divide-border', className)}
+              className={wcn(accordionClassNames.root, 'divide-y divide-border', className)}
               {...rest}
             >
               {children}
@@ -501,7 +501,7 @@ const AccordionItem = ({
         <div
           ref={ref}
           data-state={isOpen ? 'open' : 'closed'}
-          className={cn(accordionItemClassNames.root, className)}
+          className={wcn(accordionItemClassNames.root, className)}
           {...rest}
         >
           {hasTrigger ? null : <AccordionTrigger>{value}</AccordionTrigger>}
@@ -579,7 +579,7 @@ const AccordionTrigger = ({
   const Heading: `h${AccordionHeadingLevel}` = `h${item.headingLevel}`;
   const state = item.isOpen ? 'open' : 'closed';
   const iconPart = slotProps?.expandIcon;
-  const iconClassName = cn(
+  const iconClassName = wcn(
     accordionTriggerClassNames.expandIcon,
     'shrink-0 transition-transform motion-reduce:transition-none',
     item.isOpen && 'rotate-180',
@@ -588,7 +588,7 @@ const AccordionTrigger = ({
   const button = (
     <button
       type="button"
-      className={cn(
+      className={wcn(
         accordionTriggerClassNames.root,
         'flex w-full items-center justify-between gap-2 px-4 py-3 text-start text-body-1 font-semibold text-foreground',
         'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
@@ -707,7 +707,7 @@ const AccordionPanel = ({
     // and stays while that region is mounted, so it also stays while the region collapses.
     return (
       <div
-        className={cn(accordionPanelClassNames.root, className)}
+        className={wcn(accordionPanelClassNames.root, className)}
         {...rest}
         id={idProp || undefined}
         ref={ref}
@@ -722,11 +722,11 @@ const AccordionPanel = ({
       <div
         ref={wrapperRef}
         {...presenceProps}
-        className={cn(accordionPanelClassNames.collapse, collapseClassName)}
+        className={wcn(accordionPanelClassNames.collapse, collapseClassName)}
       >
         <div
           role="region"
-          className={cn(
+          className={wcn(
             accordionPanelClassNames.root,
             'px-4 pb-3 text-body-1 text-muted-foreground',
             className,

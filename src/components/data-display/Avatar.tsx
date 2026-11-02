@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { avatarClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -419,7 +419,7 @@ export const Avatar = ({
           src={imageSlot}
           alt={imageAlt}
           {...imageDescription}
-          className={cn(avatarClassNames.image, IMAGE_CLASS)}
+          className={wcn(avatarClassNames.image, IMAGE_CLASS)}
           onError={handleError}
         />
       );
@@ -447,7 +447,7 @@ export const Avatar = ({
         : imageProps
           ? { ...(imageSlot as object), ...overrides }
           : imageSlot;
-      imageNode = renderSlot(slot as Slot<'img'>, 'img', cn(avatarClassNames.image, IMAGE_CLASS), {
+      imageNode = renderSlot(slot as Slot<'img'>, 'img', wcn(avatarClassNames.image, IMAGE_CLASS), {
         alt: imageAlt,
         ...imageDescription,
       });
@@ -457,7 +457,7 @@ export const Avatar = ({
           src={src}
           alt={imageAlt}
           {...imageDescription}
-          className={cn(avatarClassNames.image, IMAGE_CLASS)}
+          className={wcn(avatarClassNames.image, IMAGE_CLASS)}
           onError={handleError}
         />
       );
@@ -470,12 +470,12 @@ export const Avatar = ({
   // does not consume a generator: renderSlot still renders its items.
   const iconNode =
     imageNode === null && icon && slotRendersContent(icon)
-      ? renderSlot(icon, 'span', cn(avatarClassNames.icon, 'inline-flex'), { 'aria-hidden': true })
+      ? renderSlot(icon, 'span', wcn(avatarClassNames.icon, 'inline-flex'), { 'aria-hidden': true })
       : null;
   const dir = useDirection();
   const group = React.useContext(AvatarGroupContext);
   // The wedges of a pie overlap at its centre: their initials would print over each other.
-  const initialsClass = cn(avatarClassNames.initials, group?.layout === 'pie' && 'invisible');
+  const initialsClass = wcn(avatarClassNames.initials, group?.layout === 'pie' && 'invisible');
   const resolvedColor = resolveAvatarColor(colorProp, idForColor, name);
   const showsInitials = imageNode === null && iconNode === null;
   const computedInitials = showsInitials && name ? getInitials(name, { dir }) : '';
@@ -538,7 +538,11 @@ export const Avatar = ({
   // 0.4 and like `icon`: no stray "0" in the corner, and no wrapper taking the root props.
   const badgeNode =
     badge && slotRendersContent(badge)
-      ? renderSlot(badge, 'span', cn(avatarClassNames.badge, 'absolute bottom-0 end-0 inline-flex'))
+      ? renderSlot(
+          badge,
+          'span',
+          wcn(avatarClassNames.badge, 'absolute bottom-0 end-0 inline-flex'),
+        )
       : null;
   const hasBadge = badgeNode !== null;
   // The visual's refs: the avatar's `ref` too without a badge (the visual is the root then), and
@@ -559,7 +563,7 @@ export const Avatar = ({
     'data-active': active,
     'data-active-appearance': activeAppearance,
   };
-  const visualClassName = cn(
+  const visualClassName = wcn(
     avatarClassNames.visual,
     'inline-flex items-center justify-center overflow-hidden shrink-0 font-bold',
     avatarShapeClasses(resolvedShape, pixels),
@@ -571,7 +575,7 @@ export const Avatar = ({
 
   if (!hasBadge) {
     // One element: the root is the visual, so the part applies to it after the avatar's props.
-    const rootClassName = cn(avatarClassNames.root, visualClassName, className);
+    const rootClassName = wcn(avatarClassNames.root, visualClassName, className);
     return (
       <span
         {...a11yProps}
@@ -592,7 +596,7 @@ export const Avatar = ({
       ref={ref}
       {...stateProps}
       {...rest}
-      className={cn(avatarClassNames.root, 'relative inline-flex shrink-0', className)}
+      className={wcn(avatarClassNames.root, 'relative inline-flex shrink-0', className)}
     >
       <span
         {...a11yProps}
