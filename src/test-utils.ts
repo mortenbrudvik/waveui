@@ -201,6 +201,11 @@ export interface ConflictingClass {
 export interface ControlQuery {
   /** Role of the control, queried with `getByRole(role, { name })`. */
   role: string;
+  /**
+   * Tag name of the control (`'input'`, `'button'`). Asserted only by `ref: 'control'` (see
+   * {@link TestSystemPropsConfig.ref}), on the element `ref` must reach.
+   */
+  tag?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -503,27 +508,113 @@ async function auditRender(utils: RenderResult, scope: A11yScope = 'document'): 
 // Building blocks
 // ---------------------------------------------------------------------------
 
+/** Options of {@link testForwardRef}. */
+export interface ForwardRefOptions extends RenderHelperOptions {
+  /**
+   * What `ref` must reach (Phase 14, R5): `'root'` (the default) the element that carries
+   * `data-testid`; `'control'` the focusable element inside the root that
+   * `getByRole(control.role)` finds. `'control'` needs `control`.
+   */
+  ref?: 'root' | 'control';
+  /** The control `ref` must reach with `ref: 'control'`. */
+  control?: ControlQuery;
+}
+
 /**
- * Registers `forwards ref to DOM element`: a `ref` passed to the component receives the element
- * that carries `data-testid`, and that element's tag is `expectedTag`.
+ * Registers the `ref` test of a component, by `options.ref`:
+ * - `'root'` (default), `forwards ref to DOM element`: a `ref` passed to the component receives
+ *   the element that carries `data-testid`, and that element's tag is `expectedTag`;
+ * - `'control'`, `forwards ref to the control element`: `ref.current` is the element
+ *   `getByRole(control.role)` finds (with `control.tag`, an element of that tag), the element
+ *   that carries `data-testid` is still the root (its tag is `expectedTag`) and contains the
+ *   control. A `ref` left on the root fails, unless the control is the root.
  *
  * @param Component   The component under test.
- * @param expectedTag Tag name of the root element (e.g. `'button'`).
+ * @param expectedTag Tag name of the root element (e.g. `'button'`), also with `ref: 'control'`.
  * @param props       Props every render needs (e.g. `{ children: 'Save' }`).
- * @param options     `wrapper` rendered around the component.
+ * @param options     `wrapper` rendered around the component; `ref` and `control`.
  */
 export function testForwardRef<P extends object>(
   Component: React.ComponentType<P>,
   expectedTag: string,
   props: TestProps<NoInfer<P>> = {},
-  options: RenderHelperOptions = {},
+  options: ForwardRefOptions = {},
 ): void {
+  if (options.ref === 'control') {
+    const { control } = options;
+    if (!control) {
+      throw new Error("testForwardRef: ref: 'control' needs a `control` ({ role }) to find");
+    }
+    it('forwards ref to the control element', () => {
+      const ref = React.createRef<HTMLElement>();
+      renderComponent(Component, { ...props, ref, 'data-testid': 'ref-test' }, options);
+      const root = screen.getByTestId('ref-test');
+      const found = screen.getByRole(control.role);
+      expect(
+        ref.current,
+        `ref must reach the ${control.role}${ref.current === root ? ', not the root' : ''}`,
+      ).toBe(found);
+      expect(root.contains(found), `the root must contain the ${control.role}`).toBe(true);
+      expect(root.tagName.toLowerCase()).toBe(expectedTag.toLowerCase());
+      if (control.tag !== undefined) {
+        expect(found.tagName.toLowerCase()).toBe(control.tag.toLowerCase());
+      }
+    });
+    return;
+  }
   it('forwards ref to DOM element', () => {
     const ref = React.createRef<HTMLElement>();
     renderComponent(Component, { ...props, ref, 'data-testid': 'ref-test' }, options);
     const el = screen.getByTestId('ref-test');
     expect(ref.current).toBe(el);
     expect(el.tagName.toLowerCase()).toBe(expectedTag.toLowerCase());
+  });
+}
+
+/** Options of {@link testRootPartRef}. */
+export interface RootPartRefOptions<P> extends RenderHelperOptions {
+  /** Props every render needs. */
+  props?: TestProps<P>;
+  /**
+   * The `data-testid` the helper passes (a rest prop, which lands on the root) to find the root
+   * element. @default 'root-part-ref-test'
+   */
+  rootTestId?: string;
+}
+
+/**
+ * Registers `forwards slotProps.root.ref to the root element` (Phase 14, R5): for a component
+ * whose `ref` reaches the control inside its root, the wrapper is reached through the root part.
+ * Renders the component with `data-testid` (the root, as {@link testRestSpread} requires) and
+ * `slotProps={{ root: { ref } }}`, and asserts `ref.current` is the element that carries the
+ * `data-testid`. A root part that drops the ref (`null`), or hands it to the control, fails.
+ * Parts of `props.slotProps` are kept.
+ *
+ * @example
+ * testRootPartRef(Switch, { props: { label: 'Wi-Fi' } });
+ */
+export function testRootPartRef<P extends object>(
+  Component: React.ComponentType<P>,
+  options: RootPartRefOptions<NoInfer<P>> = {},
+): void {
+  const { props = {}, rootTestId = 'root-part-ref-test', wrapper } = options;
+  it('forwards slotProps.root.ref to the root element', () => {
+    const ref = React.createRef<HTMLElement>();
+    const { slotProps } = props as { slotProps?: Record<string, object> };
+    renderComponent(
+      Component,
+      {
+        ...props,
+        'data-testid': rootTestId,
+        slotProps: { ...slotProps, root: { ...slotProps?.root, ref } },
+      },
+      { wrapper },
+    );
+    const root = screen.getByTestId(rootTestId);
+    expect(
+      ref.current,
+      'slotProps.root.ref must reach the element that carries data-testid (the root)',
+    ).toBe(root);
   });
 }
 
@@ -830,6 +921,16 @@ export interface TestSystemPropsConfig<P> {
    */
   control?: ControlQuery;
   /**
+   * What `ref` must reach (Phase 14, R5): `'root'` (default) the element that carries
+   * `data-testid`, which is also `expectedTag`'s element; `'control'` the focusable element
+   * inside that root, `ref.current` being the element `getByRole(control.role)` finds (with
+   * `control.tag`, an element of that tag), while `expectedTag` still names the root. Needs
+   * `control`. For a component with `ref: 'control'`, add {@link testRootPartRef} for its
+   * `slotProps.root.ref`.
+   * @default 'root'
+   */
+  ref?: 'root' | 'control';
+  /**
    * A consumer class that must win over a conflicting default class, e.g.
    * `{ className: 'p-8', overrides: 'p-4' }` (see {@link testClassName}).
    */
@@ -839,7 +940,8 @@ export interface TestSystemPropsConfig<P> {
 }
 
 /**
- * Registers every cross-cutting system-prop test for a component: {@link testForwardRef},
+ * Registers every cross-cutting system-prop test for a component: {@link testForwardRef} (with
+ * `ref` and `control`),
  * {@link testRestSpread} (with `control`), {@link testClassName} (with `conflictingClass`),
  * {@link testPolymorphicAs} (when `polymorphic`), {@link testDisplayName}, {@link testA11y} and one
  * `has no accessibility violations (<name>)` test per `a11yVariants` entry — all audited with
@@ -860,7 +962,11 @@ export function testSystemProps<P extends object>(
   const props: TestProps<NoInfer<P>> = config.defaultProps ?? {};
   const renderOptions: RenderHelperOptions = { wrapper: config.wrapper };
 
-  testForwardRef(Component, config.expectedTag, props, renderOptions);
+  testForwardRef(Component, config.expectedTag, props, {
+    ...renderOptions,
+    ref: config.ref,
+    control: config.control,
+  });
   testRestSpread(Component, props, { ...renderOptions, control: config.control });
   testClassName(Component, props, {
     ...renderOptions,

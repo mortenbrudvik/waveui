@@ -10,7 +10,8 @@
  * - **Guide.** Each row is a line of the table under its kind's heading in
  *   `docs/UPGRADING-TO-1.0.md` (Before, After, Announced in, Warns), and each line of those tables
  *   is a row.
- * - **Files.** Each row's `file` exists.
+ * - **Files.** Each row's `file` exists (a done row whose removal deletes its file says so with
+ *   `absent.file`, and then the file must not exist).
  * - **Warnings.** Each row that warns has a minimal case below. Rendered in StrictMode, and again,
  *   it logs its row's message once, the messages listed with it (`also`) and nothing else, under
  *   the row's `warningKey`. A key that is not `warnDeprecated`'s (a `warnOnce` of the component's
@@ -31,6 +32,14 @@
  *   own: Badge and CounterBadge `important`, the presence className rule, the button-object
  *   dismiss slots of MessageBar and SearchBox, a numeric Slider `size`, a missing `Image.alt`) are
  *   outside the count; their cases prove them.
+ * - **Done rows (Phase 14, R2).** The tasks that remove an alias set `done: true` on its row, and
+ *   the checks above turn round for it: the call-site count ignores it (so its module has no call
+ *   left), it has no warning case, no `warnOnce` of its key is left in the sources and no other
+ *   warning announces it, and what its `absent` lists is gone (the file, the entry's exports, the
+ *   registry's classes, the stylesheets' text). The row stays in the CHANGELOG and guide tables
+ *   until the inventory retires. A removed prop is proved a type error in the component's own
+ *   tests (`@ts-expect-error`), not here. `the done flag: fixture rows` shows each check turning
+ *   round on rows of its own, so no real row has to be flagged for the checks to be trusted.
  * - **1.0 warnings of their own.** A `warnOnce` call of the same modules whose message says
  *   "in 1.0" announces a change of 1.0, so its key needs a row that warns under it (a template
  *   key matches a row's key with any text in place of each interpolation). The message is read
@@ -39,13 +48,14 @@
  *   or a reference that is not a call, fails as for the two helpers above.
  */
 import * as React from 'react';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { render } from '@testing-library/react';
 import ts from 'typescript';
 import changelog from '../../CHANGELOG.md?raw';
 import upgradingGuide from '../../docs/UPGRADING-TO-1.0.md?raw';
 import * as entry from '../index';
+import * as registry from '../lib/classNames';
 import {
   Accordion,
   Badge,
@@ -256,15 +266,137 @@ function keyMatches(key: string, warningKey: string): boolean {
   return new RegExp(`^${pattern}$`).test(warningKey);
 }
 
-/** The rows a call site announces, counted per module (`file`). */
+/** The rows whose change is not made yet: the ones that still warn, announce and exist. */
+const activeRows = (rows: readonly Deprecation[]): readonly Deprecation[] =>
+  rows.filter((row) => !row.done);
+
+/** The rows a call site announces, counted per module (`file`); a done row has none. */
 function deprecatedKeyRowsByModule(rows: readonly Deprecation[]): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (const row of rows) {
+  for (const row of activeRows(rows)) {
     if (row.warns && row.warningKey.startsWith(DEPRECATED_KEY)) {
       counts[row.file] = (counts[row.file] ?? 0) + 1;
     }
   }
   return counts;
+}
+
+// ---------------------------------------------------------------------------
+// Done rows
+// ---------------------------------------------------------------------------
+
+/** Whether the sources hold a row's own `warnOnce` key (a literal, or a template and the name). */
+function warningKeyInSources(
+  row: Extract<Deprecation, { warns: true }>,
+  sources: Readonly<Record<string, string>>,
+): boolean {
+  // The library's modules, without the inventory, which names every key itself.
+  const library = Object.entries(sources)
+    .filter(([path]) => path !== INVENTORY_MODULE)
+    .map(([, source]) => source);
+  const literal = (key: string) =>
+    library.some((source) =>
+      ['"', "'", '`'].some((quote) => source.includes(`${quote}${key}${quote}`)),
+    );
+  // A key built from a name (`${name}:color:important`): the template in a module, and the
+  // name as a literal in the row's module, which passes it.
+  const templated = (key: string, file: string) => {
+    const [name, ...rest] = key.split(':');
+    const tail = rest.join(':');
+    return (
+      library.some((source) => source.includes(`}:${tail}\``)) &&
+      ["'", '"'].some((quote) => (sources[file] ?? '').includes(`${quote}${name}${quote}`))
+    );
+  };
+  return literal(row.warningKey) || templated(row.warningKey, row.file);
+}
+
+/** What the package holds right now, as far as the done rows are concerned. */
+interface World {
+  readonly exists: (path: string) => boolean;
+  readonly exportNames: ReadonlySet<string>;
+  readonly classNames: ReadonlySet<string>;
+  readonly css: readonly string[];
+  readonly sources: Readonly<Record<string, string>>;
+}
+
+/** Every class of the stable class-name registry (`src/lib/classNames.ts`), nested or not. */
+function registryClasses(value: unknown, into = new Set<string>()): Set<string> {
+  if (typeof value === 'string') {
+    for (const word of value.split(/\s+/)) into.add(word);
+  } else if (typeof value === 'object' && value !== null) {
+    for (const child of Object.values(value)) registryClasses(child, into);
+  }
+  return into;
+}
+
+/**
+ * The stylesheets of `src/styles` (not their tests), as text. Read from disk: Vitest turns the
+ * text of a stylesheet import into an empty string.
+ */
+const stylesheets = (): string[] =>
+  readdirSync(join(ROOT, 'src', 'styles'))
+    .filter((name) => name.endsWith('.css'))
+    .map((name) => readFileSync(join(ROOT, 'src', 'styles', name), 'utf8'));
+
+const realWorld = (): World => ({
+  exists: (path) => existsSync(join(ROOT, path)),
+  exportNames: new Set(Object.keys(entry)),
+  classNames: registryClasses(registry),
+  css: stylesheets(),
+  sources: SOURCES,
+});
+
+/**
+ * Where the rows and the world disagree about a file. A row that is not done names a file that
+ * exists. A done row whose removal deletes its file (`absent.file`) names one that does not; any
+ * other done row still names the module that held its code, so a vanished file is a row that
+ * forgot to say it deleted it.
+ */
+function fileProblems(rows: readonly Deprecation[], world: World): string[] {
+  return rows.flatMap((row) => {
+    const exists = world.exists(row.file);
+    if (row.done && row.absent?.file) {
+      return exists ? [`${row.id}: ${row.file} still exists, but the removal deletes it`] : [];
+    }
+    return exists
+      ? []
+      : [`${row.id}: ${row.file} does not exist${row.done ? ' (set absent.file?)' : ''}`];
+  });
+}
+
+/** What a done row removed and the package still holds (entry, registry, stylesheets, warning). */
+function leftoverProblems(rows: readonly Deprecation[], world: World): string[] {
+  return rows.flatMap((row) => {
+    if (!row.done) return [];
+    const problems: string[] = [];
+    for (const name of row.absent?.exports ?? []) {
+      if (world.exportNames.has(name)) problems.push(`${row.id}: the entry still exports ${name}`);
+    }
+    for (const name of row.absent?.classNames ?? []) {
+      if (world.classNames.has(name)) problems.push(`${row.id}: the registry still holds ${name}`);
+    }
+    for (const text of row.absent?.css ?? []) {
+      if (world.css.some((css) => css.includes(text))) {
+        problems.push(`${row.id}: a stylesheet of src/styles still holds ${text}`);
+      }
+    }
+    if (
+      row.warns &&
+      !row.warningKey.startsWith(DEPRECATED_KEY) &&
+      warningKeyInSources(row, world.sources)
+    ) {
+      problems.push(`${row.id}: ${row.warningKey} is still warned in the sources`);
+    }
+    return problems;
+  });
+}
+
+/** Where the flags themselves are wrong: `absent` belongs on a row that is done. */
+function flagProblems(rows: readonly Deprecation[]): string[] {
+  return rows
+    .filter((row) => row.absent !== undefined && !row.done)
+    .map((row) => `${row.id}: lists absent, but is not done`);
 }
 
 // ---------------------------------------------------------------------------
@@ -870,9 +1002,11 @@ const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
 // Tests
 // ---------------------------------------------------------------------------
 
-const WARNING_ROWS = DEPRECATIONS.filter(
-  (row): row is Extract<Deprecation, { warns: true }> => row.warns,
-);
+/** The rows that warn and are not done: a done row has no warning left, so no case either. */
+const warningRows = (rows: readonly Deprecation[]) =>
+  activeRows(rows).filter((row): row is Extract<Deprecation, { warns: true }> => row.warns);
+
+const WARNING_ROWS = warningRows(DEPRECATIONS);
 
 describe('the 1.0 inventory: the data', () => {
   it('gives every row a unique kebab-case id, a minor version and one-line texts', () => {
@@ -891,11 +1025,13 @@ describe('the 1.0 inventory: the data', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('names an existing file in every row', () => {
-    const missing = DEPRECATIONS.filter((row) => !existsSync(join(ROOT, row.file))).map(
-      (row) => `${row.id}: ${row.file}`,
-    );
-    expect(missing).toEqual([]);
+  it('names an existing file in every row, but the file a done row deleted', () => {
+    expect(fileProblems(DEPRECATIONS, realWorld())).toEqual([]);
+  });
+
+  it('leaves nothing of a done row in the entry, the registry, the stylesheets or the sources', () => {
+    expect(leftoverProblems(DEPRECATIONS, realWorld())).toEqual([]);
+    expect(flagProblems(DEPRECATIONS)).toEqual([]);
   });
 
   it('marks every warnDeprecated row as a removal that warns', () => {
@@ -979,7 +1115,7 @@ describe('the 1.0 inventory: the call sites of warnDeprecated and resolveDepreca
 
   it('counts as many call sites as removals that warn through warnDeprecated', () => {
     const calls = Object.values(callSitesByModule()).reduce((sum, n) => sum + n, 0);
-    const rows = DEPRECATIONS.filter(
+    const rows = activeRows(DEPRECATIONS).filter(
       (row) => row.warns && row.kind === 'removed' && row.warningKey.startsWith(DEPRECATED_KEY),
     ).length;
     expect(calls).toBe(rows);
@@ -1067,29 +1203,8 @@ describe('the 1.0 inventory: the development warnings', () => {
   });
 
   it('finds every warnOnce key of the inventory in the sources', () => {
-    // The library's modules, without the inventory, which names every key itself.
-    const library = Object.entries(SOURCES)
-      .filter(([path]) => path !== INVENTORY_MODULE)
-      .map(([, source]) => source);
-    const literal = (key: string) =>
-      library.some((source) =>
-        ['"', "'", '`'].some((quote) => source.includes(`${quote}${key}${quote}`)),
-      );
-    // A key built from a name (`${name}:color:important`): the template in a module, and the
-    // name as a literal in the row's module, which passes it.
-    const templated = (key: string, file: string) => {
-      const [name, ...rest] = key.split(':');
-      const tail = rest.join(':');
-      return (
-        library.some((source) => source.includes(`}:${tail}\``)) &&
-        ["'", '"'].some((quote) => (SOURCES[file] ?? '').includes(`${quote}${name}${quote}`))
-      );
-    };
     const missing = WARNING_ROWS.filter(
-      (row) =>
-        !row.warningKey.startsWith(DEPRECATED_KEY) &&
-        !literal(row.warningKey) &&
-        !templated(row.warningKey, row.file),
+      (row) => !row.warningKey.startsWith(DEPRECATED_KEY) && !warningKeyInSources(row, SOURCES),
     ).map((row) => `${row.id}: ${row.warningKey}`);
     expect(missing).toEqual([]);
   });
@@ -1109,4 +1224,130 @@ describe('the 1.0 inventory: the development warnings', () => {
       expect(error).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('the 1.0 inventory: the done flag (fixture rows)', () => {
+  // Rows of a component that does not exist: no real row is flagged to show a check works, so
+  // each one is shown to turn round on a row of its own.
+  const FIXTURE_FILE = 'src/components/fixture/Fixture.tsx';
+  const BASE = {
+    group: 'Fixture',
+    item: 'Fixture `old`',
+    replacement: '`new`',
+    sinceVersion: '0.5',
+    kind: 'removed',
+    changelogAnchor: 'Fixture',
+    file: FIXTURE_FILE,
+  } as const;
+  const aliasRow = {
+    ...BASE,
+    id: 'fixture-alias',
+    warns: true,
+    warningKey: 'deprecated:Fixture:old',
+  } as const satisfies Deprecation;
+  const ownKeyRow = {
+    ...BASE,
+    id: 'fixture-own-key',
+    warns: true,
+    warningKey: 'Fixture:own-key',
+  } as const satisfies Deprecation;
+  const silentRow = { ...BASE, id: 'fixture-silent', warns: false } as const satisfies Deprecation;
+
+  /** A package that still holds everything a row could have removed. */
+  const world = (over: Partial<World> = {}): World => ({
+    exists: () => true,
+    exportNames: new Set(['FixtureOld']),
+    classNames: new Set(['wave-fixture-old']),
+    css: ['.wave-fixture-old { color: red; }'],
+    sources: {
+      [FIXTURE_FILE]: "warnOnce('Fixture:own-key', 'Fixture: `old` is removed in 1.0.');",
+    },
+    ...over,
+  });
+  const removedEverything = {
+    exists: () => false,
+    exportNames: new Set<string>(),
+    classNames: new Set<string>(),
+    css: [],
+    sources: { [FIXTURE_FILE]: 'export const Fixture = () => null;' },
+  } satisfies Partial<World>;
+
+  it('call sites: a done row announces no call, so its module may have none left', () => {
+    expect(deprecatedKeyRowsByModule([aliasRow])).toEqual({ [FIXTURE_FILE]: 1 });
+    expect(deprecatedKeyRowsByModule([{ ...aliasRow, done: true }])).toEqual({});
+    // And the other way round: a call left in the module of a done row no longer balances.
+    expect(deprecatedKeyRowsByModule([{ ...aliasRow, done: true }])).not.toEqual({
+      [FIXTURE_FILE]: 1,
+    });
+  });
+
+  it('warning cases: a done row has none, and one left behind is a case without a row', () => {
+    const rows: readonly Deprecation[] = [aliasRow, { ...ownKeyRow, done: true }, silentRow];
+    expect(warningRows(rows).map((row) => row.id)).toEqual(['fixture-alias']);
+    const cases = ['fixture-alias', 'fixture-own-key'];
+    expect(cases.sort()).not.toEqual(warningRows(rows).map((row) => row.id));
+  });
+
+  it('files: a row that is not done must exist; a done row must say that it deleted its file', () => {
+    expect(fileProblems([silentRow], world())).toEqual([]);
+    expect(fileProblems([silentRow], world({ exists: () => false }))).toEqual([
+      `fixture-silent: ${FIXTURE_FILE} does not exist`,
+    ]);
+    const deletes = { ...silentRow, done: true, absent: { file: true } } as const;
+    expect(fileProblems([deletes], world())).toEqual([
+      `fixture-silent: ${FIXTURE_FILE} still exists, but the removal deletes it`,
+    ]);
+    expect(fileProblems([deletes], world({ exists: () => false }))).toEqual([]);
+    const keeps = { ...silentRow, done: true } as const;
+    expect(fileProblems([keeps], world())).toEqual([]);
+    expect(fileProblems([keeps], world({ exists: () => false }))).toEqual([
+      `fixture-silent: ${FIXTURE_FILE} does not exist (set absent.file?)`,
+    ]);
+  });
+
+  it('entry, registry and stylesheets: what a done row lists must be gone', () => {
+    const done = {
+      ...silentRow,
+      done: true,
+      absent: {
+        exports: ['FixtureOld'],
+        classNames: ['wave-fixture-old'],
+        css: ['wave-fixture-old'],
+      },
+    } as const;
+    expect(leftoverProblems([done], world())).toEqual([
+      'fixture-silent: the entry still exports FixtureOld',
+      'fixture-silent: the registry still holds wave-fixture-old',
+      'fixture-silent: a stylesheet of src/styles still holds wave-fixture-old',
+    ]);
+    expect(leftoverProblems([done], world(removedEverything))).toEqual([]);
+    // Only a done row is held to it.
+    expect(leftoverProblems([{ ...silentRow, absent: done.absent }], world())).toEqual([]);
+  });
+
+  it('warnOnce keys: a done row has none left in the sources, a row that is not done must', () => {
+    expect(warningKeyInSources(ownKeyRow, world().sources)).toBe(true);
+    expect(warningKeyInSources(ownKeyRow, removedEverything.sources)).toBe(false);
+    const done = { ...ownKeyRow, done: true } as const;
+    expect(leftoverProblems([done], world())).toEqual([
+      'fixture-own-key: Fixture:own-key is still warned in the sources',
+    ]);
+    expect(leftoverProblems([done], world(removedEverything))).toEqual([]);
+  });
+
+  it('flags: `absent` on a row that is not done is reported', () => {
+    expect(flagProblems([{ ...silentRow, absent: { file: true } }])).toEqual([
+      'fixture-silent: lists absent, but is not done',
+    ]);
+    expect(flagProblems([{ ...silentRow, done: true, absent: { file: true } }])).toEqual([]);
+  });
+
+  it('reads the registry classes, nested or not, word by word', () => {
+    expect(
+      [...registryClasses({ a: { root: 'wave-a', b: 'wave-b wave-c' }, d: ['wave-d'] })].sort(),
+    ).toEqual(['wave-a', 'wave-b', 'wave-c', 'wave-d']);
+    expect(realWorld().classNames.has('wave-button')).toBe(true);
+    expect(realWorld().exportNames.has('Button')).toBe(true);
+    expect(realWorld().css.some((css) => css.includes('--wave-primary'))).toBe(true);
+  });
 });

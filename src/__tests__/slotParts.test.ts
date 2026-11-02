@@ -587,43 +587,45 @@ describe('slotProps owners (type-level)', () => {
   });
 
   it('bites on fixtures, naming the constant and the key', () => {
-    type Listed = { readonly switchClassNames: readonly ['track', 'thumb'] };
-    type SwitchOwner = { slotProps?: { track?: { className?: string }; thumb?: object } };
-    type WithRoot = { slotProps?: { root?: object; track?: object; thumb?: object } };
+    type Listed = { readonly tagClassNames: readonly ['primaryText', 'secondaryText'] };
+    type TagOwner = {
+      slotProps?: { primaryText?: { className?: string }; secondaryText?: object };
+    };
+    type WithRoot = { slotProps?: { root?: object; primaryText?: object; secondaryText?: object } };
     expectTypeOf<
-      SlotPropsOwnerErrors<{ switchClassNames: SwitchOwner }, Listed, never>
+      SlotPropsOwnerErrors<{ tagClassNames: TagOwner }, Listed, never>
     >().toEqualTypeOf<never>();
     expectTypeOf<
       SlotPropsOwnerErrors<
-        { switchClassNames: SwitchOwner },
-        { readonly switchClassNames: readonly ['track'] },
+        { tagClassNames: TagOwner },
+        { readonly tagClassNames: readonly ['primaryText'] },
         never
       >
-    >().toEqualTypeOf<"switchClassNames.thumb: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS">();
+    >().toEqualTypeOf<"tagClassNames.secondaryText: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS">();
     expectTypeOf<
-      SlotPropsOwnerErrors<{ switchClassNames: { className?: string } }, Listed, never>
+      SlotPropsOwnerErrors<{ tagClassNames: { className?: string } }, Listed, never>
     >().toEqualTypeOf<
-      | "switchClassNames.track: listed in SLOT_PROPS_KEYS, not declared by the owner's slotProps"
-      | "switchClassNames.thumb: listed in SLOT_PROPS_KEYS, not declared by the owner's slotProps"
+      | "tagClassNames.primaryText: listed in SLOT_PROPS_KEYS, not declared by the owner's slotProps"
+      | "tagClassNames.secondaryText: listed in SLOT_PROPS_KEYS, not declared by the owner's slotProps"
     >();
     expectTypeOf<
       SlotPropsOwnerErrors<Record<never, never>, Listed, never>
-    >().toEqualTypeOf<'switchClassNames: listed in SLOT_PROPS_KEYS, but no owner in SlotPropsOwners'>();
+    >().toEqualTypeOf<'tagClassNames: listed in SLOT_PROPS_KEYS, but no owner in SlotPropsOwners'>();
     expectTypeOf<
-      SlotPropsOwnerErrors<{ switchClassNames: SwitchOwner }, Record<never, never>, never>
+      SlotPropsOwnerErrors<{ tagClassNames: TagOwner }, Record<never, never>, never>
     >().toEqualTypeOf<
-      | 'switchClassNames: an owner, but SLOT_PROPS_KEYS lists no key for it'
-      | "switchClassNames.track: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS"
-      | "switchClassNames.thumb: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS"
+      | 'tagClassNames: an owner, but SLOT_PROPS_KEYS lists no key for it'
+      | "tagClassNames.primaryText: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS"
+      | "tagClassNames.secondaryText: declared by the owner's slotProps, not listed in SLOT_PROPS_KEYS"
     >();
     expectTypeOf<
-      SlotPropsOwnerErrors<{ switchClassNames: WithRoot }, Listed, 'switchClassNames'>
+      SlotPropsOwnerErrors<{ tagClassNames: WithRoot }, Listed, 'tagClassNames'>
     >().toEqualTypeOf<never>();
     expectTypeOf<
-      SlotPropsOwnerErrors<{ switchClassNames: WithRoot }, Listed, never>
-    >().toEqualTypeOf<'switchClassNames.root: declared, but only the owners of SLOT_PROPS_ROOT_OWNERS declare root'>();
+      SlotPropsOwnerErrors<{ tagClassNames: WithRoot }, Listed, never>
+    >().toEqualTypeOf<'tagClassNames.root: declared, but only the owners of SLOT_PROPS_ROOT_OWNERS declare root'>();
     expectTypeOf<
-      SlotPropsOwnerErrors<{ switchClassNames: SwitchOwner }, Listed, 'switchClassNames'>
-    >().toEqualTypeOf<'switchClassNames.root: a root owner whose slotProps declares no root'>();
+      SlotPropsOwnerErrors<{ tagClassNames: TagOwner }, Listed, 'tagClassNames'>
+    >().toEqualTypeOf<'tagClassNames.root: a root owner whose slotProps declares no root'>();
   });
 });

@@ -37,6 +37,34 @@ interface DeprecationFields {
    * module that calls the warning (or names its component for a shared warning helper).
    */
   readonly file: string;
+  /**
+   * Set (`true`) by the task that makes the row's change in the code (Phase 14, R2): the old form
+   * is gone, not only announced. While no row is flagged the inventory describes 0.18; each flag
+   * moves the row from "must still warn" to "must be absent", and the test checks the one or the
+   * other. A done row has no call of `warnDeprecated` or `resolveDeprecatedProp` left, no warning
+   * case, no development warning that announces it (a `warnOnce` of the row's key), and its
+   * `absent` lists what else must be gone. The rows and the flag retire together with this file
+   * (the last removal task of Phase 14).
+   */
+  readonly done?: true;
+  /**
+   * What a done row's removal deletes besides code inside a module; every entry is checked absent.
+   * Left out for a row that only removes a prop, a value or a call form (the type error that
+   * proves it is a `@ts-expect-error` case in the component's own tests).
+   */
+  readonly absent?: DeprecationAbsence;
+}
+
+/** What the removal of a {@link Deprecation done} row leaves nowhere in the package. */
+export interface DeprecationAbsence {
+  /** The row's `file` itself is deleted (a stylesheet, a module): it must not exist. */
+  readonly file?: true;
+  /** Names the package entry (`src/index.ts`) must not export any more (values; types are not checked). */
+  readonly exports?: readonly string[];
+  /** Classes (`wave-…`) that no value of the stable class-name registry may hold any more. */
+  readonly classNames?: readonly string[];
+  /** Text (a selector, a custom property) that no stylesheet of `src/styles` may hold any more. */
+  readonly css?: readonly string[];
 }
 
 /**
