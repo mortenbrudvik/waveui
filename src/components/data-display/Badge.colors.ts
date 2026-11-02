@@ -1,4 +1,3 @@
-import { warnOnce } from '../../lib/dev';
 import type { BadgeColor } from '../../lib/types';
 
 /** Theme-token classes of one Badge color. */
@@ -19,21 +18,17 @@ export interface BadgeColorClasses {
   dotBorder: string;
 }
 
-/** The dark orange `severe` colors, which `important` also renders through 0.x. */
-const severeClasses: BadgeColorClasses = {
-  filled: 'bg-severe text-severe-foreground',
-  tint: 'bg-severe-tint text-severe-tint-foreground',
-  border: 'border-severe',
-  dot: 'bg-severe',
-  dotBorder: 'border-severe',
-};
-
 /**
  * Theme-token classes per color, shared by Badge and CounterBadge so a color means the same in
  * both. The foreground tokens keep text readable in every theme, and every dot color keeps 3:1
  * against the page background except `subtle` (the page color, for colored surfaces); each pair is
- * asserted in `src/styles/__tests__/tokens.test.ts`. `important` renders the severe colors
- * through 0.x.
+ * asserted in `src/styles/__tests__/tokens.test.ts`.
+ *
+ * `important` is Fluent's neutral high-emphasis color (1.0): the page's text color as the fill
+ * with the page color as its text (near black with white text in the light theme, inverted in the
+ * dark one), and for the tint the secondary text color as the fill. Contrast is symmetric, so these
+ * are the asserted pairs `foreground` and `muted-foreground` on `background`. `severe` is the dark
+ * orange that `important` rendered through 0.x.
  */
 export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   brand: {
@@ -65,8 +60,14 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
     dot: 'bg-destructive',
     dotBorder: 'border-destructive',
   },
-  // `important` gets its own (neutral) entry in 1.0; until then it is the severe look.
-  important: severeClasses,
+  important: {
+    filled: 'bg-foreground text-background',
+    tint: 'bg-muted-foreground text-background',
+    // Fluent's accessible neutral stroke (3:1 on the page).
+    border: 'border-stroke-accessible',
+    dot: 'bg-foreground',
+    dotBorder: 'border-foreground',
+  },
   informative: {
     filled: 'bg-muted text-foreground',
     tint: 'bg-muted text-foreground',
@@ -75,7 +76,13 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
     dot: 'bg-muted-foreground',
     dotBorder: 'border-muted-foreground',
   },
-  severe: severeClasses,
+  severe: {
+    filled: 'bg-severe text-severe-foreground',
+    tint: 'bg-severe-tint text-severe-tint-foreground',
+    border: 'border-severe',
+    dot: 'bg-severe',
+    dotBorder: 'border-severe',
+  },
   subtle: {
     filled: 'bg-background text-foreground',
     tint: 'bg-background text-muted-foreground border border-border',
@@ -84,27 +91,3 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
     dotBorder: 'border-border',
   },
 };
-
-/**
- * The development warning for `color="important"`, whose meaning changes in 1.0 (neutral, high
- * emphasis). It is a change of meaning, not a removal, so it has its own message instead of
- * `warnDeprecated`'s. Call it from an effect (C-DEV); it warns once per component. A production
- * bundle drops its body (the mode check is written out for the bundler to replace).
- *
- * @param name - The component that was given the color.
- */
-export function warnImportantColor(name: 'Badge' | 'CounterBadge'): void {
-  // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
-  // production bundle then drops the warning, its text and the `lib/dev` import. Without a bundler
-  // and without `process` (an unbundled import in a browser), the read throws and it is skipped.
-  try {
-    if (process.env.NODE_ENV !== 'production') {
-      warnOnce(
-        `${name}:color:important`,
-        `${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.`,
-      );
-    }
-  } catch {
-    // No `process`: see above.
-  }
-}

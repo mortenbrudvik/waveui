@@ -31,7 +31,7 @@ const COLOR_CLASSES: Array<[CounterBadgeAppearance, BadgeColor, string[]]> = [
   ['filled', 'success', ['bg-success', 'text-success-foreground']],
   ['filled', 'warning', ['bg-warning', 'text-warning-foreground']],
   ['filled', 'danger', ['bg-destructive', 'text-destructive-foreground']],
-  ['filled', 'important', ['bg-severe', 'text-severe-foreground']],
+  ['filled', 'important', ['bg-foreground', 'text-background']],
   ['filled', 'informative', ['bg-muted', 'text-foreground']],
   ['filled', 'severe', ['bg-severe', 'text-severe-foreground']],
   ['filled', 'subtle', ['bg-background', 'text-foreground']],
@@ -39,7 +39,11 @@ const COLOR_CLASSES: Array<[CounterBadgeAppearance, BadgeColor, string[]]> = [
   ['outline', 'success', ['bg-transparent', 'border', 'border-success', 'text-foreground']],
   ['outline', 'warning', ['bg-transparent', 'border', 'border-warning', 'text-foreground']],
   ['outline', 'danger', ['bg-transparent', 'border', 'border-destructive', 'text-foreground']],
-  ['outline', 'important', ['bg-transparent', 'border', 'border-severe', 'text-foreground']],
+  [
+    'outline',
+    'important',
+    ['bg-transparent', 'border', 'border-stroke-accessible', 'text-foreground'],
+  ],
   ['outline', 'informative', ['bg-transparent', 'border', 'border-border', 'text-foreground']],
   ['outline', 'severe', ['bg-transparent', 'border', 'border-severe', 'text-foreground']],
   ['outline', 'subtle', ['bg-transparent', 'border', 'border-border', 'text-foreground']],
@@ -55,7 +59,7 @@ const DOT_COLOR_CLASSES: Array<[BadgeColor, fill: string, ring: string]> = [
   ['success', 'bg-success', 'border-success'],
   ['warning', 'bg-warning-tint-foreground', 'border-warning-tint-foreground'],
   ['danger', 'bg-destructive', 'border-destructive'],
-  ['important', 'bg-severe', 'border-severe'],
+  ['important', 'bg-foreground', 'border-foreground'],
   ['informative', 'bg-muted-foreground', 'border-muted-foreground'],
   ['severe', 'bg-severe', 'border-severe'],
   ['subtle', 'bg-background', 'border-border'],
@@ -67,18 +71,15 @@ const DOT_FORCED_COLORS = [
   'forced-colors:bg-[CanvasText]',
 ];
 
-/** The development warning of `color="important"` (P13-03), which the color tables render on purpose. */
-const IMPORTANT_WARNING =
-  '[WaveUI] CounterBadge: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.';
-
 describe('CounterBadge', () => {
-  // The tables below render `important` (0.x: the severe colors); nothing else may be logged.
+  // The tables below render every color, `important` included (1.0: no warning); nothing may be
+  // logged.
   let warn: MockInstance<typeof console.warn>;
   beforeEach(() => {
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
   afterEach(() => {
-    expect(warn.mock.calls.every((call) => call[0] === IMPORTANT_WARNING)).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 

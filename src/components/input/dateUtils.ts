@@ -497,6 +497,26 @@ export function formatDayNumber(date: Date, locale?: string): string {
 /** TimePicker label style. */
 export type TimeFormat = '12h' | '24h';
 
+/**
+ * The hour cycle of a locale as a TimePicker format (the default of `format` in the browser, 1.0):
+ * `'24h'` when its hours run from 0 to 23 or 1 to 24 (`h23`, `h24`), else `'12h'` (`h11`, `h12`).
+ * An engine that resolves no `hourCycle` is read through `hour12`; a tag the engine rejects gives
+ * `'12h'`, the format TimePicker shows before it follows the locale.
+ *
+ * @param locale - A BCP 47 tag (`navigator.language`), or `undefined` for the runtime default.
+ */
+export function localeTimeFormat(locale: string | undefined): TimeFormat {
+  try {
+    const { hourCycle, hour12 } = new Intl.DateTimeFormat(locale, {
+      hour: 'numeric',
+    }).resolvedOptions();
+    if (hourCycle !== undefined) return hourCycle === 'h23' || hourCycle === 'h24' ? '24h' : '12h';
+    return hour12 === false ? '24h' : '12h';
+  } catch {
+    return '12h';
+  }
+}
+
 const TIME_24H = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
 const TIME_12H = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?$/i;
 

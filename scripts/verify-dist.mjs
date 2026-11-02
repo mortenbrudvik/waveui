@@ -1407,7 +1407,6 @@ export const MODULE_ONLY_NAMES = [
   'useTeachingPopoverContext',
   'useToolbarNavigation',
   'visibleFlatItems',
-  'warnImportantColor',
   'withoutRenderFunction',
 ];
 

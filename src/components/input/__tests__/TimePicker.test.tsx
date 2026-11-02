@@ -2289,6 +2289,177 @@ describe('TimePicker', () => {
   });
 });
 
+describe('TimePicker — format follows the browser language (1.0, P14-06)', () => {
+  const INVALID_24H = 'Enter a time in the format HH:mm.';
+
+  /** Makes `navigator.language` read `language` (jsdom's is `en-US`); restored after each test. */
+  function browserLanguage(language: string) {
+    return vi.spyOn(Navigator.prototype, 'language', 'get').mockReturnValue(language);
+  }
+
+  /** `Intl.DateTimeFormat` resolving `resolved`, so the hour cycle comes from the stub. */
+  function stubHourCycle(resolved: Partial<Intl.ResolvedDateTimeFormatOptions>) {
+    return vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
+      class {
+        resolvedOptions() {
+          return resolved;
+        }
+      } as unknown as typeof Intl.DateTimeFormat,
+    );
+  }
+
+  it.each([
+    ['en-US', '1:30 PM', '1:00 PM', INVALID_12H],
+    ['en-GB', '13:30', '13:00', INVALID_24H],
+    ['de-DE', '13:30', '13:00', INVALID_24H],
+  ])(
+    'without format, %s shows %s, lists %s and asks for its pattern',
+    async (language, display, option, invalid) => {
+      browserLanguage(language);
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Time" defaultValue="13:30" step={60} />);
+      expect(combobox('Time')).toHaveValue(display);
+      await user.click(combobox('Time'));
+      expect(screen.getByRole('option', { name: option })).toBeInTheDocument();
+      expect(screen.getAllByRole('option')).toHaveLength(24);
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), 'soon{Enter}');
+      expect(combobox('Time')).toHaveAccessibleDescription(invalid);
+    },
+  );
+
+  it.each([
+    [{ hourCycle: 'h23' }, '13:30'],
+    [{ hourCycle: 'h24' }, '13:30'],
+    [{ hourCycle: 'h11' }, '1:30 PM'],
+    [{ hourCycle: 'h12' }, '1:30 PM'],
+    [{ hour12: false }, '13:30'],
+  ] as const)(
+    'reads the hour cycle of navigator.language through Intl: %j shows %s',
+    (resolved, display) => {
+      browserLanguage('xx-XX');
+      const intl = stubHourCycle(resolved);
+      render(<TimePicker aria-label="Time" value="13:30" />);
+      expect(combobox('Time')).toHaveValue(display);
+      expect(intl).toHaveBeenCalledWith('xx-XX', { hour: 'numeric' });
+    },
+  );
+
+  it.each([
+    ['de-DE', '12h', '1:30 PM'],
+    ['en-US', '24h', '13:30'],
+  ] as const)(
+    'an explicit format wins: %s with format="%s" shows %s',
+    (language, format, display) => {
+      const languageGetter = browserLanguage(language);
+      const intl = vi.spyOn(Intl, 'DateTimeFormat');
+      render(<TimePicker aria-label="Time" value="13:30" format={format} />);
+      expect(combobox('Time')).toHaveValue(display);
+      // The language is not even read.
+      expect(languageGetter).not.toHaveBeenCalled();
+      expect(intl).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reads the language once per picker, not on every keystroke', async () => {
+    browserLanguage('de-DE');
+    const intl = vi.spyOn(Intl, 'DateTimeFormat');
+    const user = userEvent.setup();
+    render(<TimePicker aria-label="Time" defaultValue="09:00" />);
+    expect(intl).toHaveBeenCalledTimes(1);
+    await user.clear(combobox('Time'));
+    await user.type(combobox('Time'), '14');
+    expect(intl).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches when format is removed, and back when it is given again', () => {
+    browserLanguage('de-DE');
+    const { rerender } = render(<TimePicker aria-label="Time" value="13:30" format="12h" />);
+    expect(combobox('Time')).toHaveValue('1:30 PM');
+    rerender(<TimePicker aria-label="Time" value="13:30" />);
+    expect(combobox('Time')).toHaveValue('13:30');
+    rerender(<TimePicker aria-label="Time" value="13:30" format="12h" />);
+    expect(combobox('Time')).toHaveValue('1:30 PM');
+  });
+
+  it('renders 12-hour times on the server, without reading the language', () => {
+    const languageGetter = browserLanguage('de-DE');
+    const html = renderToString(<TimePicker aria-label="Time" defaultValue="13:30" step={60} />);
+    const parsed = document.createElement('div'); // detached: nothing reaches document.body
+    parsed.innerHTML = html;
+    expect(parsed.querySelector('input[role="combobox"]')).toHaveAttribute('value', '1:30 PM');
+    const options = Array.from(parsed.querySelectorAll('[role="option"]'), (o) => o.textContent);
+    expect(options).toContain('1:00 PM');
+    expect(options).not.toContain('13:00');
+    expect(languageGetter).not.toHaveBeenCalled();
+  });
+
+  it('hydrates the 12-hour server HTML without a mismatch, then follows a 24-hour language', async () => {
+    const languageGetter = browserLanguage('de-DE');
+    const element = <TimePicker aria-label="Time" defaultValue="13:30" step={60} />;
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(element);
+    document.body.appendChild(container);
+    const serverInput = container.querySelector('input');
+    // What the hydration commit shows (a parent's layout effect runs once, in that commit).
+    const firstCommit: Array<{ value: string | undefined; languageReads: number }> = [];
+    function Probe({ children }: { children: React.ReactNode }) {
+      React.useLayoutEffect(() => {
+        firstCommit.push({
+          value: container.querySelector('input')?.value,
+          languageReads: languageGetter.mock.calls.length,
+        });
+      }, []);
+      return children;
+    }
+    const error = vi.spyOn(console, 'error');
+    const onRecoverableError = vi.fn();
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await act(async () => {
+        root = hydrateRoot(container, <Probe>{element}</Probe>, { onRecoverableError });
+      });
+      expect(firstCommit).toEqual([{ value: '1:30 PM', languageReads: 0 }]);
+      expect(onRecoverableError).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+      // Hydrated in place (a mismatch would have replaced the server's elements), then switched.
+      expect(container.querySelector('input')).toBe(serverInput);
+      expect(combobox('Time')).toHaveValue('13:30');
+      expect(languageGetter).toHaveBeenCalled();
+      const listbox = container.querySelector('[role="listbox"]');
+      const options = Array.from(listbox?.querySelectorAll('[role="option"]') ?? [], (o) =>
+        o.textContent?.trim(),
+      );
+      expect(options).toContain('13:00');
+      expect(options).not.toContain('1:00 PM');
+    } finally {
+      act(() => root?.unmount());
+      container.remove();
+    }
+  });
+
+  it('a picker mounted in the browser follows the language from its first commit', () => {
+    browserLanguage('de-DE');
+    const commits: Array<string | undefined> = [];
+    function Probe({ children }: { children: React.ReactNode }) {
+      React.useLayoutEffect(() => {
+        commits.push(screen.getByRole<HTMLInputElement>('combobox').value);
+      }, []);
+      return children;
+    }
+    render(
+      <Probe>
+        <TimePicker aria-label="Time" defaultValue="13:30" />
+      </Probe>,
+    );
+    expect(commits).toEqual(['13:30']);
+  });
+
+  it('types format as the two patterns; the default is no longer a fixed value', () => {
+    expectTypeOf<TimePickerProps['format']>().toEqualTypeOf<'12h' | '24h' | undefined>();
+  });
+});
+
 describe('TimePicker — slotProps', () => {
   type TimePickerSlotProps = NonNullable<TimePickerProps['slotProps']>;
   const EVERY_PART: TimePickerSlotProps = {

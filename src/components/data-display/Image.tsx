@@ -23,11 +23,11 @@ export type ImageShape = Shape;
 /** Properties for the Image component. */
 export interface ImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   /**
-   * Text alternative of the image. Describe what the image shows, or pass `alt=""` when it is
-   * decorative (it then is hidden from assistive technology). Leaving it out logs a development
-   * warning; use {@link StrictImageProps} to require it at compile time (required in 1.0).
+   * Text alternative of the image, required. Describe what the image shows, or pass `alt=""` when
+   * it is decorative (it then is hidden from assistive technology). JavaScript code that leaves it
+   * out gets a development warning.
    */
-  alt?: string;
+  alt: string;
   /**
    * How the image fits its box: `'default'` (fills it, keeping the aspect ratio through an
    * automatic height), `'none'` (not scaled, top-left corner in view), `'center'` (not scaled,
@@ -59,16 +59,10 @@ export interface ImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
 }
 
 /**
- * {@link ImageProps} with a required `alt`: the compile-time check that every image has a text
- * alternative (`alt=""` for decorative images). `ImageProps.alt` becomes required in 1.0.
- *
- * @example
- * const Photo = (props: StrictImageProps) => <Image {...props} />;
+ * {@link ImageProps} under the name 0.18 gave its strict form, the props with a required `alt`.
+ * Since 1.0 `ImageProps.alt` is required, so the two are the same type.
  */
-export interface StrictImageProps extends Omit<ImageProps, 'alt'> {
-  /** Text alternative of the image; `''` for a decorative image. */
-  alt: string;
-}
+export type StrictImageProps = ImageProps;
 
 const fitMap: Record<ImageFit, string> = {
   // wave-allow-physical: the anchor is the image's own corner; image pixels never mirror in RTL.
@@ -88,8 +82,9 @@ const shapeMap: Record<ImageShape, string> = {
 /**
  * An `<img>` with Wave fit, shape, shadow and border options.
  *
- * Always pass `alt`: a description of the image, or `alt=""` for a decorative image. Without it
- * screen readers may announce the file name; a development warning points this out.
+ * `alt` is required: a description of the image, or `alt=""` for a decorative image. Without it
+ * screen readers may announce the file name, so JavaScript code that leaves it out gets a
+ * development warning.
  *
  * @example
  * <Image src="/team.jpg" alt="The team at the 2026 offsite" shape="rounded" />
@@ -105,12 +100,13 @@ export const Image = ({
   ref,
   ...rest
 }: ImageProps) => {
-  const missingAlt = alt === undefined;
+  // Required by the types; untyped code may still leave it out (C-DEV: from an effect, once).
+  const missingAlt = (alt as string | undefined) === undefined;
   React.useEffect(() => {
     if (missingAlt) {
       warnOnce(
-        'Image:alt',
-        'Image: `alt` is missing. Describe the image, or pass alt="" when it is decorative.',
+        'Image:alt-missing',
+        'Image: `alt` is required. Describe the image, or pass alt="" when it is decorative.',
       );
     }
   }, [missingAlt]);

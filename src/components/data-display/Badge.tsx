@@ -2,7 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { badgeClassNames } from '../../lib/classNames';
 import type { BadgeAppearance, BadgeColor, Size } from '../../lib/types';
-import { badgeColorClasses, warnImportantColor } from './Badge.colors';
+import { badgeColorClasses } from './Badge.colors';
 
 /** Properties for the Badge component. */
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -12,11 +12,10 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   appearance?: BadgeAppearance;
   /**
    * Semantic color: `brand`, `danger`, `important`, `informative`, `severe`, `subtle`, `success`,
-   * `warning`. `severe` is dark orange. `subtle` is the page background with foreground text, for
-   * colored surfaces. `important` renders the severe (orange) colors in 0.x, as in 0.5; in 1.0 it
-   * becomes Fluent's neutral high-emphasis color (near black in the light theme) — use `severe` to
-   * keep the orange look. Its meaning changes (it is not removed), so development builds log a
-   * warning once; pass `severe` to keep the orange look.
+   * `warning`. `important` is Fluent's neutral high-emphasis color: near black with white text in
+   * the light theme, inverted in the dark one (through 0.x it was the orange that `severe` draws).
+   * `severe` is dark orange. `subtle` is the page background with foreground text, for colored
+   * surfaces.
    * @default 'brand'
    */
   color?: BadgeColor;
@@ -65,11 +64,6 @@ export const Badge = ({
   ...props
 }: BadgeProps) => {
   const c = badgeColorClasses[color];
-
-  // C-DEV: `important` changes meaning in 1.0 (not a removal, so not `warnDeprecated`'s wording).
-  React.useEffect(() => {
-    if (color === 'important') warnImportantColor('Badge');
-  }, [color]);
 
   const appearanceClasses =
     appearance === 'filled'

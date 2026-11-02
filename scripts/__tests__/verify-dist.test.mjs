@@ -5086,7 +5086,6 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     // The seams 0.18 adds to modules that existed before (their older exports are not listed).
     const seams = {
       'src/components/data-display/AvatarGroup.parts.tsx': ['AVATAR_GROUP_PART_LOCKS'],
-      'src/components/data-display/Badge.colors.ts': ['warnImportantColor'],
       'src/components/data-display/TagGroup.context.ts': ['BLOCK_CLICK', 'TAG_PART_LOCKS'],
       'src/components/input/Calendar.tsx': ['CalendarViewParts'],
       'src/components/input/Calendar.views.tsx': ['CalendarDayGridParts'],

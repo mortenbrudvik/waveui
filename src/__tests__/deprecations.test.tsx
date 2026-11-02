@@ -29,8 +29,8 @@
  *   exactly, the calls in each module equal the `deprecated:` rows that name it, and the calls in
  *   `src` equal the rows with `warns: true`, `kind: 'removed'` and a `deprecated:` key: a new alias
  *   without a row fails here. The other warnings of the inventory (`warnOnce` with keys of their
- *   own: Badge and CounterBadge `important`, a missing `Image.alt`) are outside the count; their
- *   cases prove them.
+ *   own: Badge and CounterBadge `important` and a missing `Image.alt`, all done in 1.0) are outside
+ *   the count; a case proves each one whose row is not done.
  * - **Done rows (Phase 14, R2).** The tasks that remove an alias set `done: true` on its row, and
  *   the checks above turn round for it: the call-site count ignores it (so its module has no call
  *   left), it has no warning case, no `warnOnce` of its key is left in the sources and no other
@@ -55,7 +55,6 @@ import changelog from '../../CHANGELOG.md?raw';
 import upgradingGuide from '../../docs/UPGRADING-TO-1.0.md?raw';
 import * as entry from '../index';
 import * as registry from '../lib/classNames';
-import { Badge, CounterBadge, Image } from '../index';
 import { hasWarned } from '../lib/dev';
 import * as deprecations from '../lib/deprecations';
 import { DEPRECATIONS, type Deprecation, type DeprecationKind } from '../lib/deprecations';
@@ -447,9 +446,6 @@ const guideCells = (row: Deprecation): string[] => [
 // The warning cases
 // ---------------------------------------------------------------------------
 
-const importantColor = (name: string) =>
-  `[WaveUI] ${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.`;
-
 interface WarningCase {
   /** The smallest rendering that uses the row's item. */
   readonly ui: React.ReactElement;
@@ -459,22 +455,13 @@ interface WarningCase {
   readonly also?: readonly string[];
 }
 
-/** A minimal case per row that warns, by row id. */
-const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
-  'badge-important': {
-    ui: <Badge color="important">New</Badge>,
-    message: importantColor('Badge'),
-  },
-  'counterbadge-important': {
-    ui: <CounterBadge count={3} color="important" />,
-    message: importantColor('CounterBadge'),
-  },
-  'image-alt-required': {
-    ui: <Image src="photo.png" />,
-    message:
-      '[WaveUI] Image: `alt` is missing. Describe the image, or pass alt="" when it is decorative.',
-  },
-};
+/**
+ * A minimal case per row that warns and is not done, by row id. Every such row is done in 1.0
+ * (the last three, Badge and CounterBadge `important` and `Image.alt`, by Task 11), so none is
+ * left; Image's warning for JavaScript code without `alt` stays under a key of its own and is
+ * tested in `Image.test.tsx`.
+ */
+const WARNING_CASES: Readonly<Record<string, WarningCase>> = {};
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -600,8 +587,9 @@ describe('the 1.0 inventory: the call sites of warnDeprecated and resolveDepreca
   });
 
   it('has a row for every warnOnce whose message announces a change of 1.0', () => {
+    // Since every row that warned is done, no warnOnce says "in 1.0" any more; the scan itself is
+    // shown on a module of its own below (`reads the warnOnce calls that announce 1.0`).
     const announcements = Object.values(scanLibrary()).flatMap((scan) => scan.announcements);
-    expect(announcements.length).toBeGreaterThan(0);
     const ownKeys = WARNING_ROWS.map((row) => row.warningKey).filter(
       (key) => !key.startsWith(DEPRECATED_KEY),
     );

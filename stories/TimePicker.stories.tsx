@@ -30,10 +30,19 @@ type Story = StoryObj<typeof meta>;
 
 /**
  * The expand button at the end of the input (a chevron) opens and closes the list without taking
- * focus from the input; it is not a tab stop.
+ * focus from the input; it is not a tab stop. Without `format` the times follow the hour cycle of
+ * the browser's language (12-hour in `en-US`, 24-hour in `en-GB`).
  */
 export const Default: Story = {};
 
+/** `format="12h"` shows 12-hour times whatever the browser's language. */
+export const Format12h: Story = {
+  args: {
+    format: '12h',
+  },
+};
+
+/** `format="24h"` shows 24-hour times whatever the browser's language. */
 export const Format24h: Story = {
   args: {
     format: '24h',

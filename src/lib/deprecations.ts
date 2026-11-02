@@ -745,7 +745,8 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     file: 'src/styles/animations.css',
   },
 
-  // Badge and CounterBadge `important`: a meaning that changes (each warns through `warnOnce`).
+  // Badge and CounterBadge `important`: a meaning that changes (each warned through `warnOnce` in
+  // 0.18; 1.0 draws the neutral look and the warning is gone).
   {
     id: 'badge-important',
     group: IMPORTANT_COLOR,
@@ -757,6 +758,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'Badge:color:important',
     changelogAnchor: '**Badge `color="important"`** keeps its orange (severe) look through 0.x',
     file: 'src/components/data-display/Badge.tsx',
+    done: true,
   },
   {
     id: 'counterbadge-important',
@@ -769,6 +771,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'CounterBadge:color:important',
     changelogAnchor: "CounterBadge's `important` follows Badge.",
     file: 'src/components/data-display/CounterBadge.tsx',
+    done: true,
   },
 
   // Aliases of 0.7 to 0.14.
@@ -1195,6 +1198,9 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'Image:alt',
     changelogAnchor: 'required in 1.0 (`alt=""` for a decorative image)',
     file: 'src/components/data-display/Image.tsx',
+    // The type requires `alt`; the development warning for JavaScript callers stays, under a key
+    // of its own (`Image:alt-missing`) and without "in 1.0", so it no longer announces this row.
+    done: true,
   },
   {
     id: 'timepicker-format-default',
@@ -1206,6 +1212,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: "in 1.0 it follows the locale's hour cycle",
     file: 'src/components/input/TimePicker.tsx',
+    done: true,
   },
   {
     id: 'ref-placement',

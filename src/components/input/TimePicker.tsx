@@ -43,10 +43,12 @@ import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
 import {
   DEFAULT_TIME_STEP,
   generateTimeOptions,
+  localeTimeFormat,
   minutesToTime,
   minutesToValue,
   normalizeTimeStep,
   timeToMinutes,
+  type TimeFormat,
 } from './dateUtils';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
@@ -194,8 +196,14 @@ export interface TimePickerProps extends Omit<
   /** Called with the new `HH:mm` value (`''` when cleared) whenever the selected time changes. */
   onValueChange?: (value: string) => void;
   /**
-   * Time display format of the input and the options.
-   * @default '12h'
+   * Time display format of the input and the options: `'12h'` (`1:30 PM`) or `'24h'` (`13:30`).
+   * Without it, the times follow the hour cycle of the browser's language (`navigator.language`:
+   * 12-hour in `en-US`, 24-hour in `en-GB` and many other locales). The server HTML and the
+   * hydration render show 12-hour times, so hydration matches, and the picker switches to the
+   * language's cycle right after; a picker mounted in the browser follows it from its first
+   * render. Pass `format` for the same output on the server and in the browser (Fluent's
+   * `hourCycle`).
+   * @default the hour cycle of the browser's language (`'12h'` on the server and while hydrating)
    */
   format?: '12h' | '24h';
   /**
@@ -404,7 +412,12 @@ export interface TimePickerProps extends Omit<
   };
 }
 
-function displayTime(value: string, format: '12h' | '24h'): string {
+/** The browser's language; `undefined` where there is no `navigator` (the runtime default). */
+function browserLanguage(): string | undefined {
+  return typeof navigator === 'undefined' ? undefined : navigator.language;
+}
+
+function displayTime(value: string, format: TimeFormat): string {
   const minutes = timeToMinutes(value);
   return Number.isNaN(minutes) ? value : minutesToTime(minutes, format);
 }
@@ -448,7 +461,9 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   after the input. Tab from erased text clears the value first, so focus moves on past the
  *   picker instead of to the clear button that disappears.
  * - The value is `HH:mm` (24-hour) whatever the display `format`; values off the `step` grid or
- *   outside the bounds are still displayed in `format`.
+ *   outside the bounds are still displayed in `format`. Without `format` the times follow the
+ *   hour cycle of the browser's language; the server HTML and the hydration render show 12-hour
+ *   times, so a server-rendered app passes `format` for the same output on the server.
  * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
  *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
@@ -469,7 +484,7 @@ export const TimePicker = (props: TimePickerProps) => {
     value: valueProp,
     defaultValue,
     onValueChange,
-    format = '12h',
+    format: formatProp,
     step = DEFAULT_TIME_STEP,
     minTime = '00:00',
     maxTime = '23:59',
@@ -518,6 +533,18 @@ export const TimePicker = (props: TimePickerProps) => {
   } = props;
 
   const { size, appearance } = useInputLook(sizeProp, appearanceProp);
+
+  // `false` on the server and while hydrating, `true` in every other client render.
+  const isClient = useIsClient();
+  // Without `format` the times follow the browser language's hour cycle (1.0). The server HTML
+  // and the hydration render show 12-hour times, so hydration matches; the render after it
+  // switches (derived during render, C-HOOKS). Read once per picker, not on every keystroke.
+  const followsLocale = formatProp === undefined && isClient;
+  const localeFormat = React.useMemo<TimeFormat>(
+    () => (followsLocale ? localeTimeFormat(browserLanguage()) : '12h'),
+    [followsLocale],
+  );
+  const format = formatProp ?? localeFormat;
 
   const [selectedValue, setSelectedValue] = useControllable<string>(
     valueProp,
@@ -571,7 +598,6 @@ export const TimePicker = (props: TimePickerProps) => {
   // The open list lives in a portal, which renders only in the browser: until then (the server
   // HTML, hydration) the picker shows the closed inline list and reports it closed, so
   // aria-controls and aria-activedescendant never name a missing element.
-  const isClient = useIsClient();
   const open = openState && interactive && isClient;
   // A list hidden because the picker became disabled or read-only is closed for good
   // (uncontrolled), so enabling the picker again does not bring it back; onOpenChange(false)

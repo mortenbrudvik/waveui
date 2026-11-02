@@ -27,7 +27,7 @@ const COLOR_CLASSES: Array<[BadgeAppearance, BadgeColor, string[]]> = [
   ['filled', 'success', ['bg-success', 'text-success-foreground']],
   ['filled', 'warning', ['bg-warning', 'text-warning-foreground']],
   ['filled', 'danger', ['bg-destructive', 'text-destructive-foreground']],
-  ['filled', 'important', ['bg-severe', 'text-severe-foreground']],
+  ['filled', 'important', ['bg-foreground', 'text-background']],
   ['filled', 'informative', ['bg-muted', 'text-foreground']],
   ['filled', 'severe', ['bg-severe', 'text-severe-foreground']],
   ['filled', 'subtle', ['bg-background', 'text-foreground']],
@@ -35,7 +35,7 @@ const COLOR_CLASSES: Array<[BadgeAppearance, BadgeColor, string[]]> = [
   ['tint', 'success', ['bg-success-tint', 'text-success-tint-foreground']],
   ['tint', 'warning', ['bg-warning-tint', 'text-warning-tint-foreground']],
   ['tint', 'danger', ['bg-error-tint', 'text-error-tint-foreground']],
-  ['tint', 'important', ['bg-severe-tint', 'text-severe-tint-foreground']],
+  ['tint', 'important', ['bg-muted-foreground', 'text-background']],
   ['tint', 'informative', ['bg-muted', 'text-foreground']],
   ['tint', 'severe', ['bg-severe-tint', 'text-severe-tint-foreground']],
   ['tint', 'subtle', ['bg-background', 'text-muted-foreground', 'border', 'border-border']],
@@ -43,24 +43,21 @@ const COLOR_CLASSES: Array<[BadgeAppearance, BadgeColor, string[]]> = [
   ['outline', 'success', ['border-success']],
   ['outline', 'warning', ['border-warning']],
   ['outline', 'danger', ['border-destructive']],
-  ['outline', 'important', ['border-severe']],
+  ['outline', 'important', ['border-stroke-accessible']],
   ['outline', 'informative', ['border-border']],
   ['outline', 'severe', ['bg-transparent', 'border', 'border-severe', 'text-foreground']],
   ['outline', 'subtle', ['bg-transparent', 'border', 'border-border', 'text-foreground']],
 ];
 
-/** The development warning of `color="important"` (P13-03), which the color tables render on purpose. */
-const IMPORTANT_WARNING =
-  '[WaveUI] Badge: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.';
-
 describe('Badge', () => {
-  // The tables below render `important` (0.x: the severe colors); nothing else may be logged.
+  // The tables below render every color, `important` included (1.0: no warning); nothing may be
+  // logged.
   let warn: MockInstance<typeof console.warn>;
   beforeEach(() => {
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
   afterEach(() => {
-    expect(warn.mock.calls.every((call) => call[0] === IMPORTANT_WARNING)).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
@@ -94,7 +91,7 @@ describe('Badge', () => {
     expect(screen.getByTestId('badge')).toHaveClass(...classes);
   });
 
-  it('severe renders the orange colors important has in 0.x', () => {
+  it('important no longer renders the orange colors severe draws (1.0)', () => {
     for (const appearance of APPEARANCES) {
       const { unmount } = render(
         <>
@@ -106,7 +103,7 @@ describe('Badge', () => {
           </Badge>
         </>,
       );
-      expect(screen.getByTestId('severe').className).toBe(
+      expect(screen.getByTestId('severe').className).not.toBe(
         screen.getByTestId('important').className,
       );
       unmount();

@@ -3,6 +3,7 @@ import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Image } from '../Image';
 import type { ImageFit, ImageProps, ImageShape, StrictImageProps } from '../Image';
+import { hasWarned } from '../../../lib/dev';
 import type { Shape } from '../../../lib/types';
 import { testSystemProps } from '../../../test-utils';
 
@@ -28,14 +29,15 @@ describe('Image', () => {
     expect(screen.getByRole('img', { name: 'A photo' })).toHaveAttribute('src', 'photo.jpg');
   });
 
-  it('does not default the alt attribute', () => {
+  it('does not default the alt attribute for untyped code that leaves it out', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
+      // @ts-expect-error alt is required (1.0)
       render(<Image src="photo.jpg" data-testid="img" />);
       expect(screen.getByTestId('img')).not.toHaveAttribute('alt');
       // The expected warning, and nothing else.
       expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-        expect.stringMatching(/^\[WaveUI\] Image: `alt` is missing/),
+        expect.stringMatching(/^\[WaveUI\] Image: `alt` is required/),
       ]);
     } finally {
       warn.mockRestore();
@@ -44,18 +46,34 @@ describe('Image', () => {
 
   // data-display#28
   describe('alt text', () => {
-    it('warns once in development when alt is missing', () => {
+    it('warns once in development when untyped code leaves alt out (1.0: no "in 1.0" notice)', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
+        // @ts-expect-error alt is required (1.0)
         render(<Image src="a.png" />);
-        render(<Image src="b.png" />);
+        render(<Image {...({ src: 'b.png' } as ImageProps)} />);
         expect(warn.mock.calls).toEqual([
           [
-            '[WaveUI] Image: `alt` is missing. Describe the image, or pass alt="" when it is decorative.',
+            '[WaveUI] Image: `alt` is required. Describe the image, or pass alt="" when it is decorative.',
           ],
         ]);
+        expect(hasWarned('Image:alt-missing')).toBe(true);
+        // Not the key of the 0.18 notice, which 1.0 retires.
+        expect(hasWarned('Image:alt')).toBe(false);
       } finally {
         warn.mockRestore();
+      }
+    });
+
+    it('logs nothing in production', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(<Image {...({ src: 'a.png' } as ImageProps)} />);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        vi.unstubAllEnvs();
       }
     });
 
@@ -72,14 +90,25 @@ describe('Image', () => {
       }
     });
 
-    it('keeps alt optional on ImageProps and requires it on StrictImageProps', () => {
-      expectTypeOf<ImageProps['alt']>().toEqualTypeOf<string | undefined>();
-      expectTypeOf<StrictImageProps['alt']>().toEqualTypeOf<string>();
-      // @ts-expect-error StrictImageProps requires alt
-      const missing: StrictImageProps = { src: 'a.png' };
-      const decorative: StrictImageProps = { src: 'a.png', alt: '' };
-      const asImageProps: ImageProps = decorative;
-      expect([missing, asImageProps]).toHaveLength(2);
+    it('requires alt on ImageProps (1.0); StrictImageProps is the same type', () => {
+      expectTypeOf<ImageProps['alt']>().toEqualTypeOf<string>();
+      expectTypeOf<StrictImageProps>().toEqualTypeOf<ImageProps>();
+      // @ts-expect-error alt is required
+      const missing: ImageProps = { src: 'a.png' };
+      // @ts-expect-error StrictImageProps requires alt too
+      const missingStrict: StrictImageProps = { src: 'a.png' };
+      // @ts-expect-error alt takes a string, never undefined
+      const undefinedAlt: ImageProps = { src: 'a.png', alt: undefined };
+      const decorative: ImageProps = { src: 'a.png', alt: '' };
+      const asStrict: StrictImageProps = decorative;
+      expect([missing, missingStrict, undefinedAlt, asStrict]).toHaveLength(4);
+      const elements = [
+        // @ts-expect-error alt is required on the element too
+        <Image key="missing" src="a.png" />,
+        <Image key="decorative" src="a.png" alt="" />,
+        <Image key="described" src="a.png" alt="A photo" />,
+      ];
+      expect(elements).toHaveLength(3);
     });
   });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   addDays,
   addMonths,
@@ -26,6 +26,7 @@ import {
   isSameMonth,
   isValidLocaleTag,
   isYearOutOfRange,
+  localeTimeFormat,
   minutesToTime,
   minutesToValue,
   normalizeTimeStep,
@@ -460,6 +461,61 @@ describe('dateUtils — time helpers', () => {
     expect(generateTimeOptions(-1, '00:00', '01:00', '24h')).toHaveLength(3);
     expect(generateTimeOptions(30, 'nine', '17:00', '24h')).toEqual([]);
     expect(generateTimeOptions(30, '17:00', '09:00', '24h')).toEqual([]);
+  });
+});
+
+describe('dateUtils — localeTimeFormat (the TimePicker default, 1.0)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['en-US', '12h'],
+    ['en-GB', '24h'],
+    ['de-DE', '24h'],
+    ['fr-FR', '24h'],
+  ] as const)('reads the hour cycle of %s: %s', (locale, format) => {
+    expect(localeTimeFormat(locale)).toBe(format);
+  });
+
+  it('gives 12h for a tag the engine rejects', () => {
+    expect(isValidLocaleTag('de_DE')).toBe(false);
+    expect(localeTimeFormat('de_DE')).toBe('12h');
+  });
+
+  /** Replaces `Intl.DateTimeFormat` with one whose `resolvedOptions()` returns `resolved`. */
+  function stubResolvedOptions(resolved: Partial<Intl.ResolvedDateTimeFormatOptions>) {
+    return vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
+      class {
+        resolvedOptions() {
+          return resolved;
+        }
+      } as unknown as typeof Intl.DateTimeFormat,
+    );
+  }
+
+  it.each([
+    [{ hourCycle: 'h11' }, '12h'],
+    [{ hourCycle: 'h12' }, '12h'],
+    [{ hourCycle: 'h23' }, '24h'],
+    [{ hourCycle: 'h24' }, '24h'],
+    // An engine without `hourCycle` answers through `hour12`.
+    [{ hour12: false }, '24h'],
+    [{ hour12: true }, '12h'],
+    [{}, '12h'],
+    // `hourCycle` wins when both are resolved.
+    [{ hourCycle: 'h23', hour12: true }, '24h'],
+  ] as const)('maps the resolved options %j to %s', (resolved, format) => {
+    const spy = stubResolvedOptions(resolved);
+    expect(localeTimeFormat('xx-XX')).toBe(format);
+    expect(spy).toHaveBeenCalledWith('xx-XX', { hour: 'numeric' });
+  });
+
+  it('gives 12h when the engine throws', () => {
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function () {
+      throw new RangeError('Incorrect locale information provided');
+    });
+    expect(localeTimeFormat('en-US')).toBe('12h');
   });
 });
 

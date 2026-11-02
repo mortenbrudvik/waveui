@@ -784,7 +784,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'hasRenderFunction',
       'preventMouseDown',
       'resolveWiredSlot',
-      'warnImportantColor',
       'withoutRenderFunction',
     ];
     expect([...internal, ...seams].filter((name) => name in barrel)).toEqual([]);

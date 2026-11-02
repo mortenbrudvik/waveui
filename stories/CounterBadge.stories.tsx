@@ -4,13 +4,12 @@ import type { BadgeColor } from '../src';
 import { badgeColorArgType } from './_helpers';
 
 const APPEARANCES = ['filled', 'outline'] as const;
-// `important` changes meaning in 1.0 and warns in development: the matrix leaves it out (Badge's
-// "Important in 1.0" story explains it).
 const COLORS: BadgeColor[] = [
   'brand',
   'success',
   'warning',
   'danger',
+  'important',
   'informative',
   'severe',
   'subtle',
