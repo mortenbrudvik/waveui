@@ -17,9 +17,10 @@ export const focusWithinRing =
   'wave:focus-within:outline-2 wave:focus-within:outline-offset-2 wave:focus-within:outline-ring';
 
 /**
- * Base look of text-entry controls (Input, Textarea, Select, picker inputs).
- * @deprecated Compose inputHeightClasses, inputTextClasses, inputPaddingClasses and
- * inputAppearanceClasses.
+ * Base look of a text-entry control (Input, Textarea, Select, picker inputs) at the medium size
+ * with the outline appearance, as one class list. Internal and unused by the components, which
+ * compose inputHeightClasses, inputTextClasses, inputPaddingClasses and inputAppearanceClasses
+ * instead, so that `size` and `appearance` apply; new code does the same.
  */
 export const inputBase =
   'wave:h-8 wave:w-full wave:rounded wave:border wave:border-input wave:bg-background wave:px-3 wave:text-body-1 wave:text-foreground wave:placeholder:text-muted-foreground';
@@ -171,8 +172,9 @@ export const forcedColors = {
   /** Disabled text and borders. */
   disabled: 'wave:forced-colors:text-[GrayText] wave:forced-colors:border-[GrayText]',
   /**
-   * @deprecated Ambiguous: use `selectedLeaf` for leaf indicators or `selectedContainer` for
-   * containers. Kept as an alias of `selectedLeaf`.
+   * The same classes as `selectedLeaf`, under the earlier, ambiguous name: unused by the
+   * components; new code picks `selectedLeaf` for a leaf indicator or `selectedContainer` for a
+   * container.
    */
   selected: selectedLeaf,
 } as const;

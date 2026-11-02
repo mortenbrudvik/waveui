@@ -73,9 +73,11 @@ export function hasWarned(key: string): boolean {
 }
 
 /**
- * Warns once per (component, prop) that a prop or value is deprecated (§5.10 format):
+ * Warns once per (component, prop) that a prop or value is deprecated (§5.10 format, version
+ * neutral since 1.0: a renamed prop keeps its alias until the next major), e.g. for
+ * `warnDeprecated('Example', 'oldName', 'newName')`:
  *
- * `[WaveUI] TabList: \`selectedValue\` is deprecated and will be removed in 1.0. Use \`value\` instead.`
+ * `[WaveUI] Example: \`oldName\` is deprecated and will be removed in a future major version. Use \`newName\` instead.`
  *
  * @param component The public component name, e.g. `'TabList'`.
  * @param oldName   The deprecated prop or value.
@@ -89,7 +91,7 @@ export function warnDeprecated(
   extra?: string,
 ): void {
   const message =
-    `${component}: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.` +
+    `${component}: \`${oldName}\` is deprecated and will be removed in a future major version. Use \`${newName}\` instead.` +
     (extra ? ` ${extra}` : '');
   warnOnce(`deprecated:${component}:${oldName}`, message);
 }
@@ -106,7 +108,7 @@ export function warnDeprecated(
  * calls {@link warnDeprecated} in that effect.
  *
  * @example
- * const orientation = resolveDeprecatedProp('Stack', props.orientation, props.direction, 'direction', 'orientation') ?? 'vertical';
+ * const newName = resolveDeprecatedProp('Example', props.newName, props.oldName, 'oldName', 'newName') ?? 'default';
  */
 export function resolveDeprecatedProp<T>(
   component: string,
