@@ -241,14 +241,15 @@ export interface RadioItemProps extends Omit<
      * The root `<label>` around the radio and the label text (stable class
      * `wave-radio-group-item`), which the item's `className` reaches as well; its `ref` is the
      * one way to the label, since the item's `ref` and other props reach the radio. Your
-     * classes come after the item's `className`. Locked: `hidden`, `inert` and `aria-hidden`,
-     * unset (the root holds the radio, which only the item's own props hide). Your `onClick`
-     * sees every click inside the root as it bubbles: a click on the radio after the radio is
-     * selected, and a click on the label text first, before the `<label>` passes it on to the
-     * radio, so the text's click reaches your `onClick` twice (the text's own, then the
-     * radio's), as on any `<label>`; `preventDefault()` on the text's click keeps the label from
-     * passing it on (no selection). It is not called while the radio is disabled (its own
-     * `disabled` or the group's), as the radio is not selected then.
+     * classes come after the item's `className`. Locked: `htmlFor`, unset (the label labels the
+     * radio it holds, and a `for` would send its clicks to another element), and `hidden`,
+     * `inert` and `aria-hidden`, unset (the root holds the radio, which only the item's own
+     * props hide). Your `onClick` sees every click inside the root as it bubbles: a click on the
+     * radio after the radio is selected, and a click on the label text first, before the
+     * `<label>` passes it on to the radio, so the text's click reaches your `onClick` twice (the
+     * text's own, then the radio's), as on any `<label>`; `preventDefault()` on the text's click
+     * keeps the label from passing it on (no selection). It is not called while the radio is
+     * disabled (its own `disabled` or the group's), as the radio is not selected then.
      */
     root?: SlotPart<'label'>;
     /**
@@ -390,8 +391,9 @@ export function RadioItem({
       isDisabled ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100' : 'cursor-pointer',
       className,
     ),
-    // The root holds the radio: a part neither hides it nor takes it out of reach.
-    locked: HIDDEN_PART_LOCKS,
+    // The root holds the radio: a part neither hides it nor takes it out of reach, nor sends the
+    // label's clicks to another element through a `for`.
+    locked: { htmlFor: undefined, ...HIDDEN_PART_LOCKS },
     // The label passes a click to the radio, which is not selected while disabled.
     blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
   });

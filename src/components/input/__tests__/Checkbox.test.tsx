@@ -15,20 +15,12 @@ import {
   testComposedHandler,
   testNoImplicitSubmit,
   testRootPartRef,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
 /** The development warning of a Checkbox with children. */
 const CHILDREN_WARNING = '[WaveUI] Checkbox: children are not rendered. Pass the label in `label`.';
-
-/** React's development error for an unknown prop that reaches a DOM element, as logged. */
-const UNKNOWN_PROP = (name: string) => [
-  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
-    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
-    'accidentally passed it from a parent component, remove it from the DOM element.',
-  name,
-  name.toLowerCase(),
-];
 
 describe('Checkbox', () => {
   testSystemProps(Checkbox, {
@@ -1545,6 +1537,35 @@ describe('Checkbox — slotProps', () => {
       // The Checkbox's own hidden state stays its own.
       rerender(<Checkbox label="Accept" hidden slotProps={{ root: { hidden: false } }} />);
       expect(root()).toHaveAttribute('hidden');
+    });
+
+    // State-off lock: the root has no `for` of its own (it labels the box it holds), so a part's
+    // `htmlFor` would be the only one and would send the text's clicks to another element.
+    it('keeps a part from giving the root a for: a click on the text still toggles the box once', async () => {
+      const user = userEvent.setup();
+      const onCheckedChange = vi.fn();
+      const { rerender } = render(
+        <>
+          <input type="checkbox" id="decoy" aria-label="Decoy" />
+          <Checkbox
+            label="Accept"
+            onCheckedChange={onCheckedChange}
+            slotProps={{ root: { htmlFor: 'decoy' } }}
+          />
+        </>,
+      );
+      expect(root()).not.toHaveAttribute('for');
+      await user.click(screen.getByText('Accept'));
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+      expect(screen.getByRole('checkbox', { name: 'Decoy' })).not.toBeChecked();
+      // A `for` given to the Checkbox itself (untyped code) still reaches the root, as in 0.18.
+      rerender(
+        <>
+          <input type="checkbox" id="decoy" aria-label="Decoy" />
+          <Checkbox label="Accept" {...({ htmlFor: 'decoy' } as object)} />
+        </>,
+      );
+      expect(root()).toHaveAttribute('for', 'decoy');
     });
 
     it("runs your root handlers before the Checkbox's own; preventDefault() in yours skips its own", () => {

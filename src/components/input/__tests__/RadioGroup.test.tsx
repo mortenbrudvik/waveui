@@ -1819,6 +1819,26 @@ describe('RadioGroup.Item — slotProps', () => {
       }
     });
 
+    // State-off lock: the root has no `for` (it labels the radio it holds, and the item's own
+    // props reach the radio), so a part's `htmlFor` would send the text's clicks elsewhere.
+    it('keeps a part from giving the root a for: a click on the text still selects the radio once', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <>
+          <input type="checkbox" id="decoy" aria-label="Decoy" />
+          <RadioGroup aria-label="Choice" onValueChange={onValueChange}>
+            <RadioGroup.Item value="a" label="One" slotProps={{ root: { htmlFor: 'decoy' } }} />
+          </RadioGroup>
+        </>,
+      );
+      expect(rootOf('One')).not.toHaveAttribute('for');
+      await user.click(screen.getByText('One'));
+      expect(onValueChange.mock.calls.map(([value]) => value)).toEqual(['a']);
+      expect(radioNamed('One')).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Decoy' })).not.toBeChecked();
+    });
+
     // A click on the label text reaches the root, then the <label> passes it to the radio, whose
     // own click bubbles to the root again: the browser's label behaviour. It selects once.
     it('selects once per click on the text or the radio, your root onClick seeing each click as it bubbles (StrictMode)', async () => {

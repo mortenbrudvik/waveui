@@ -1263,6 +1263,26 @@ export function expectThrows(ui: React.ReactElement, message: string): void {
 }
 
 /**
+ * The arguments of React's development error for an unknown camel-case prop that reaches a DOM
+ * element (`console.error`'s format string, then the prop's name and its lowercase form), as
+ * logged: compare a `console.error` spy's calls with it. 1.0 uses it for a leftover `controlRef`
+ * on the components whose `ref` now reaches their control: no prop any more, it reaches the root
+ * through the rest props.
+ *
+ * @example
+ * const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+ * render(<Checkbox {...({ controlRef: ref } as object)} />);
+ * expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+ */
+export const UNKNOWN_PROP = (name: string): [string, string, string] => [
+  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+    'accidentally passed it from a parent component, remove it from the DOM element.',
+  name,
+  name.toLowerCase(),
+];
+
+/**
  * Markup with every element's attributes in alphabetical order, so two renders compare by their
  * attribute sets and values whatever order the attributes were written in. `markup` is an HTML
  * string (a `renderToString` result) or an element, whose content is taken (`innerHTML`); the

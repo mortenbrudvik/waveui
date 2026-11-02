@@ -2636,3 +2636,96 @@ describe('1.0: the details argument of the change callbacks is required', () => 
     expectTypeOf<TableResizeHandleBindings['onResize']>().toExtend<HandleResize>();
   });
 });
+
+// 1.0 (Phase 14, R5): the `ref` of the twelve composite controls reaches their focusable control,
+// `controlRef` is gone from them, and each of them (with `RadioGroup.Item`, whose `ref` already
+// reached its radio) takes its wrapper's props and ref through `slotProps.root`. Only what other
+// cases of this file do not pin yet: `ColorPickerHexFieldProps['ref']` and Switch's whole
+// `slotProps` are above.
+describe('1.0: ref reaches the control, slotProps.root the wrapper (R5)', () => {
+  /** The `root` part a component's `slotProps` takes. */
+  type RootOf<P extends { slotProps?: unknown }> = NonNullable<
+    NonNullable<P['slotProps']> extends { root?: infer R } ? R : never
+  >;
+
+  it('ref is typed for the focusable control', () => {
+    expectTypeOf<CheckboxProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<SwitchProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<RadioItemProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<SearchBoxProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<SpinButtonProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<ComboboxProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<ComboboxProps<true>['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<DropdownProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<DropdownProps<true>['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<TimePickerProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<DatePickerProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    // The trigger that renders: TagPicker's Input, or TagPicker.Button.
+    expectTypeOf<TagPickerProps['ref']>().toEqualTypeOf<
+      Ref<HTMLInputElement | HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<ColorSliderProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<AlphaSliderProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+  });
+
+  it('controlRef is gone from the twelve, and stays on ColorArea and the selection cells', () => {
+    expectTypeOf<CheckboxProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<SwitchProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<SearchBoxProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<SpinButtonProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<ComboboxProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<DropdownProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<TimePickerProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<DatePickerProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<TagPickerProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<ColorSliderProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<AlphaSliderProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<ColorAreaProps>().toHaveProperty('controlRef');
+    expectTypeOf<TableSelectionCellProps>().toHaveProperty('controlRef');
+    expectTypeOf<DataGridSelectionCellProps>().toHaveProperty('controlRef');
+  });
+
+  it('slotProps.root is a part of the wrapper element, its ref typed for it', () => {
+    expectTypeOf<RootOf<CheckboxProps>>().toEqualTypeOf<SlotPart<'label'>>();
+    expectTypeOf<RootOf<RadioItemProps>>().toEqualTypeOf<SlotPart<'label'>>();
+    expectTypeOf<RootOf<ColorPickerHexFieldProps>>().toEqualTypeOf<SlotPart<'label'>>();
+    expectTypeOf<RootOf<SearchBoxProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<SpinButtonProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<ComboboxProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<DropdownProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<TimePickerProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<DatePickerProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<TagPickerProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<ColorSliderProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<AlphaSliderProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<SlotPart<'label'>['ref']>().toEqualTypeOf<Ref<HTMLLabelElement> | undefined>();
+    expectTypeOf<SlotPart<'div'>['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+  });
+
+  it('a ref object typed for the wrapper no longer compiles as ref', () => {
+    const label = { current: null } as RefObject<HTMLLabelElement | null>;
+    const div = { current: null } as RefObject<HTMLDivElement | null>;
+    // @ts-expect-error Checkbox's ref reaches its <button>, not its root <label> (1.0)
+    const checkbox: CheckboxProps['ref'] = label;
+    // @ts-expect-error the hex field's ref reaches its <input>, not its root <label> (1.0)
+    const hexField: ColorPickerHexFieldProps['ref'] = label;
+    // @ts-expect-error Dropdown's ref reaches its <button>, not its root <div> (1.0)
+    const dropdown: DropdownProps['ref'] = div;
+    // @ts-expect-error Combobox's ref reaches its <input>, not its root <div> (1.0)
+    const combobox: ComboboxProps['ref'] = div;
+    // @ts-expect-error TagPicker's ref reaches its trigger, not its root <div> (1.0)
+    const tagPicker: TagPickerProps['ref'] = div;
+    // The wrapper's ref object fits its root part.
+    const checkboxRoot: RootOf<CheckboxProps>['ref'] = label;
+    const comboboxRoot: RootOf<ComboboxProps>['ref'] = div;
+    expect([
+      checkbox,
+      hexField,
+      dropdown,
+      combobox,
+      tagPicker,
+      checkboxRoot,
+      comboboxRoot,
+    ]).toHaveLength(7);
+  });
+});

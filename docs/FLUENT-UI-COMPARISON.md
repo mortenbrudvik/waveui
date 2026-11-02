@@ -380,21 +380,23 @@ While both libraries are in one app, their shared names (`Button`, `Dialog`, `Fi
 
 ### 4.3 Where `ref` goes
 
-In Fluent, a component's `ref` reaches its "primary slot", usually the native control, while `className` and `style` go to the root wrapper. WaveUI's composite controls (a wrapper around a focusable element: Checkbox, Switch, SpinButton, SearchBox and the pickers) keep `ref`, `className`, `style` and `data-*` on the wrapper and give the focusable element to `controlRef`; `id`, `aria-*`, `tabIndex`, focus and key handlers and native input attributes go to the focusable element ([README: Composite controls](../README.md#composite-controls)). Input, Textarea, Select and Slider render the control itself. Code that calls `ref.current.focus()` needs `controlRef` for these components:
+In Fluent, a component's `ref` reaches its "primary slot", usually the native control, while `className` and `style` go to the root wrapper. Since 1.0 WaveUI does the same: the `ref` of a composite control (a wrapper around a focusable element: Checkbox, Switch, SpinButton, SearchBox, the pickers, the color sliders and `ColorPicker.HexField`) reaches the focusable element, its wrapper keeps `className`, `style` and `data-*` and is reached through `slotProps.root.ref`, and `id`, the naming and validation `aria-*`, `tabIndex`, focus and key handlers and native input attributes go to the focusable element ([README: Composite controls](../README.md#composite-controls)). Input, Textarea, Select and Slider render the control itself. Code that calls `ref.current.focus()` works as in Fluent:
 
-| Component | Fluent `ref` | WaveUI `ref` | WaveUI prop that gives the element Fluent's `ref` gave |
+| Component | Fluent `ref` | WaveUI `ref` | WaveUI prop for the wrapper |
 |---|---|---|---|
-| Input | the `<input>` | the `<input>` | `ref` |
-| Textarea, Select | the `<textarea>` or `<select>` | the same element | `ref` |
-| Slider | a hidden `<input type="range">` (the thumb is another element) | the visible `<input type="range">` | `ref` |
-| Checkbox, Switch | the native `<input>` | the root `<label>` | `controlRef` (a `<button role="checkbox">` or `role="switch"`) |
-| Radio | the native `<input type="radio">` | `RadioGroup.Item`'s `<button role="radio">` | `ref` |
-| SpinButton, SearchBox, Combobox, DatePicker, TimePicker | the `<input>` | the wrapper `<div>` | `controlRef` |
-| Dropdown | the `<button>` | the wrapper `<div>` | `controlRef` |
-| TagPicker | none on the root (its parts take refs) | the wrapper `<div>` | `controlRef` (the input); with `TagPicker.Button`, the Button's own `ref` |
-| Link without `href` | a `<button>` | an `<a role="button">` | `ref` |
+| Input | the `<input>` | the `<input>` | `slotProps.root.ref` (the `<span>` drawn with `contentBefore` or `contentAfter`) |
+| Textarea, Select | the `<textarea>` or `<select>` | the same element | none (no wrapper) |
+| Slider | a hidden `<input type="range">` (the thumb is another element) | the visible `<input type="range">` | none (no wrapper) |
+| Checkbox, Switch | the native `<input>` | the `<button role="checkbox">` or `role="switch"` | `slotProps.root.ref` (the root `<label>`) |
+| Radio | the native `<input type="radio">` | `RadioGroup.Item`'s `<button role="radio">` | `slotProps.root.ref` (the root `<label>`) |
+| SpinButton, SearchBox, Combobox, DatePicker, TimePicker | the `<input>` | the `<input>` | `slotProps.root.ref` (the wrapper `<div>`) |
+| Dropdown | the `<button>` | the `<button>` | `slotProps.root.ref` (the wrapper `<div>`) |
+| TagPicker | none on the root (its parts take refs) | the trigger that renders: the `<input>`, or `TagPicker.Button`'s `<button>` | `slotProps.root.ref` (the wrapper `<div>`) |
+| ColorSlider, AlphaSlider | the `<input type="range">` | the `<input type="range">` | `slotProps.root.ref` (the wrapper `<div>`) |
+| `ColorPicker.HexField` | none (Fluent has no hex field: an Input in a ColorPicker) | the hex `<input>` | `slotProps.root.ref` (the root `<label>`) |
+| Link without `href` | a `<button>` | an `<a role="button">` | none |
 
-`className` differs for Input, Textarea, Select and Slider: Fluent puts it on a wrapper, WaveUI on the control itself. While an Input has `contentBefore` or `contentAfter`, its `className`, `style` and `hidden` move to a wrapper `<span>`, and its `ref` stays on the `<input>`. Checkbox, Switch and Radio are `role` buttons with a hidden input for the form, not native inputs, so read their state with `aria-checked` (`toBeChecked()` in tests) rather than the `checked` property. A typed ref (`useRef<HTMLInputElement>(null)`) no longer compiles where the element type changed, which catches most of these moves. 0.18 decided that nothing moves in 1.0: `ref` stays on the element that receives `className` (Input's and `RadioGroup.Item`'s excepted, as now), `controlRef` reaches the focusable element of a composite control and `slotProps.<part>.ref` a part ([Upgrading to 1.0](UPGRADING-TO-1.0.md#decided-no-change)).
+`className` differs for Input, Textarea, Select and Slider: Fluent puts it on a wrapper, WaveUI on the control itself. While an Input has `contentBefore` or `contentAfter`, its `className`, `style` and `hidden` move to a wrapper `<span>`, and its `ref` stays on the `<input>`. Checkbox, Switch and Radio are `role` buttons with a hidden input for the form, not native inputs, so read their state with `aria-checked` (`toBeChecked()` in tests) rather than the `checked` property. ColorArea (a group around two inputs) and the selection cells of Table and DataGrid keep `ref` on their container and give the focusable input to `controlRef`, the only components that still take it. In 0.x the `ref` of twelve of them (Checkbox, Switch, SpinButton, SearchBox, Combobox, Dropdown, DatePicker, TimePicker, TagPicker, ColorSlider, AlphaSlider and `ColorPicker.HexField`) reached the wrapper and `controlRef` the focusable element: a ref object typed for the wrapper (`useRef<HTMLDivElement>(null)`) no longer compiles (a callback or a state setter typed for a `<div>` still does where the control is an `<input>`), and code that measured or styled the wrapper through `ref` takes `slotProps.root.ref` instead.
 
 ### 4.4 Slots
 
@@ -797,7 +799,7 @@ There is no codemod. A type checker finds most renamed props, changed callbacks 
 
    Tokens you overrode on top of the generated theme become overrides of WaveUI's variables for that theme: `:root, .wave-light { --wave-primary: … }` for light, `.wave-dark { … }` for dark. Check the contrast of your brand against `--wave-primary-foreground`, in the dark theme too, where `primary` is brand 110 with black text ([README: Customizing tokens](../README.md#customizing-tokens)).
 5. **Replace `makeStyles`** with Tailwind classes, or with CSS that reads the `--wave-*` variables ([3.1](#31-styling), [3.2](#32-themes-and-tokens)). Write logical properties for right-to-left ([3.5](#35-right-to-left)).
-6. **Replace the components**, a screen or a family at a time, with the [component map](#5-component-map): rename the parts, move each state callback to the value-first form, and use `controlRef` where your code used a composite control's `ref`. Then go through the [defaults that differ](#46-defaults-that-differ).
+6. **Replace the components**, a screen or a family at a time, with the [component map](#5-component-map): rename the parts and move each state callback to the value-first form; a composite control's `ref` reaches its focusable element, as in Fluent ([4.3](#43-where-ref-goes)). Then go through the [defaults that differ](#46-defaults-that-differ).
 7. **Keep your icons.** `@fluentui/react-icons` work in WaveUI's icon props; see [3.5](#35-right-to-left) for their direction.
 8. **Drop Fluent's server setup** (`RendererProvider`, `createDOMRenderer`, `SSRProvider`, `renderToStyleElements`) once no Fluent component is left, and use flat part names in Server Components.
 

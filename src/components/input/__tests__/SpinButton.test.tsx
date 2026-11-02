@@ -19,6 +19,7 @@ import {
   testRootPartRef,
   testSystemProps,
   renderWithProviders,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
@@ -29,15 +30,6 @@ const decrementButton = () => screen.getByRole('button', { name: 'Decrement' });
 function spyWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => {});
 }
-
-/** React's development error for an unknown prop that reaches a DOM element, as logged. */
-const UNKNOWN_PROP = (name: string) => [
-  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
-    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
-    'accidentally passed it from a parent component, remove it from the DOM element.',
-  name,
-  name.toLowerCase(),
-];
 
 const UNNAMED_WARNING =
   '[WaveUI] SpinButton: the spinbutton has no accessible name. Pass `aria-label` or ' +

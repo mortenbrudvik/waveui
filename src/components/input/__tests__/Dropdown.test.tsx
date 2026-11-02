@@ -24,6 +24,7 @@ import {
   testNoImplicitSubmit,
   testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { dropdownClassNames } from '../../../lib/classNames';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
@@ -92,15 +93,6 @@ const CONTROLLED_TO_UNCONTROLLED =
   'switch between controlled and uncontrolled: pass `undefined` only when the component is ' +
   'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
   'value.';
-
-/** React's development error for an unknown prop that reaches a DOM element, as logged. */
-const UNKNOWN_PROP = (name: string) => [
-  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
-    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
-    'accidentally passed it from a parent component, remove it from the DOM element.',
-  name,
-  name.toLowerCase(),
-];
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -2785,6 +2777,44 @@ describe('Dropdown — slotProps', () => {
       expect(combobox()).toHaveAttribute('aria-expanded', 'false');
     });
 
+    // The second path of the Dropdown's own root ref: focus moving to an element inside the root
+    // but outside the button (the clear button) is not focus outside the popup.
+    it('keeps focus moving inside the root from dismissing the open list, also with an inline part ref', async () => {
+      const user = userEvent.setup();
+      const nodes: (HTMLDivElement | null)[] = [];
+      const ui = (pass: number) => (
+        <>
+          <Dropdown
+            aria-label="Fruit"
+            data-pass={pass}
+            defaultValue="a"
+            clearable
+            slotProps={{
+              root: {
+                ref: (node) => {
+                  nodes.push(node);
+                },
+              },
+            }}
+          >
+            {TWO}
+          </Dropdown>
+          <button type="button">Outside</button>
+        </>
+      );
+      const { rerender } = render(ui(0));
+      await user.click(combobox());
+      rerender(ui(1));
+      rerender(ui(2));
+      expect(nodes.at(-1)).toBe(root());
+      act(() => screen.getByRole('button', { name: 'Clear selection' }).focus());
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      act(() => screen.getByRole('button', { name: 'Outside' }).focus());
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    });
+
     it('has no accessibility violations with the root customised', async () => {
       render(
         <Dropdown
@@ -2800,6 +2830,7 @@ describe('Dropdown — slotProps', () => {
     });
   });
 });
+
 // 1.0 (Phase 14, R5): `ref` reaches the <button role="combobox">, the focusable control, in both
 // signatures; the root <div> is `slotProps.root.ref`, and `controlRef` is gone.
 describe('Dropdown — ref reaches the control', () => {

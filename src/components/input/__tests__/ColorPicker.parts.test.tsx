@@ -29,6 +29,7 @@ import {
   testCompoundExposure,
   testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 
 function inPicker(props: { disabled?: boolean } = {}) {
@@ -130,15 +131,6 @@ function InPicker({ children }: { children: React.ReactNode }) {
 }
 
 const hexInput = () => screen.getByRole('textbox', { name: 'Hex color value' });
-
-/** React's development error for an unknown prop that reaches a DOM element, as logged. */
-const UNKNOWN_PROP = (name: string) => [
-  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
-    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
-    'accidentally passed it from a parent component, remove it from the DOM element.',
-  name,
-  name.toLowerCase(),
-];
 
 describe('ColorPicker parts (D21)', () => {
   testCompoundExposure(ColorPicker, ['HexField', 'Swatches', 'Preview']);
@@ -982,6 +974,29 @@ describe('ColorPicker.HexField — slotProps', () => {
       expect(hiddenRoot).toHaveAttribute('hidden');
       expect(hiddenRoot).toHaveAttribute('inert');
       expect(hiddenRoot).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    // State-off lock: the root has no `for` of its own (it labels the input it holds), so a
+    // part's `htmlFor` would send the caption's clicks to another element.
+    it('keeps a part from giving the root a for: a click on the caption still focuses the hex input', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <>
+          <input id="decoy" aria-label="Decoy" />
+          {inPicker(<ColorPicker.HexField slotProps={{ root: { htmlFor: 'decoy' } }} />)}
+        </>,
+      );
+      expect(root()).not.toHaveAttribute('for');
+      await user.click(screen.getByText('Hex'));
+      expect(hexInput()).toHaveFocus();
+      // A `for` given to the field itself (untyped code) still reaches the root, as in 0.18.
+      rerender(
+        <>
+          <input id="decoy" aria-label="Decoy" />
+          {inPicker(<ColorPicker.HexField {...({ htmlFor: 'decoy' } as object)} />)}
+        </>,
+      );
+      expect(root()).toHaveAttribute('for', 'decoy');
     });
 
     it("runs your root handlers before the field's own; preventDefault() in yours skips its own", () => {

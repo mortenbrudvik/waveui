@@ -147,15 +147,16 @@ export interface SwitchProps extends Omit<
      * the Switch's `className`, `style`, `data-*` and other root props reach as well; its `ref`
      * is the way to the label, since the Switch's `ref` reaches the switch. Your classes come
      * after the Switch's `className`, your style over its `style`. Locked: every prop you give
-     * the Switch itself that reaches the root, `data-label-position`, `data-size`, and `hidden`,
-     * `inert` and `aria-hidden` (the Switch's own: the root holds the switch). Your handlers run
-     * before the Switch's own root handlers (`preventDefault()` in yours skips them). Your
-     * `onClick` sees every click inside the root as it bubbles: a click on the switch after the
-     * switch has toggled, and a click on the label text first, before the `<label>` passes it on
-     * to the switch, so the text's click reaches your `onClick` twice (the text's own, then the
-     * switch's), as on any `<label>`; `preventDefault()` on the text's click keeps the label
-     * from passing it on (no toggle). It is not called while the switch is `disabled` or
-     * `disabledFocusable`, as the switch does not toggle then.
+     * the Switch itself that reaches the root, `data-label-position`, `data-size`, `htmlFor`
+     * (unset: the label labels the switch it holds, and a `for` would send its clicks to another
+     * element), and `hidden`, `inert` and `aria-hidden` (the Switch's own: the root holds the
+     * switch). Your handlers run before the Switch's own root handlers (`preventDefault()` in
+     * yours skips them). Your `onClick` sees every click inside the root as it bubbles: a click
+     * on the switch after the switch has toggled, and a click on the label text first, before
+     * the `<label>` passes it on to the switch, so the text's click reaches your `onClick` twice
+     * (the text's own, then the switch's), as on any `<label>`; `preventDefault()` on the text's
+     * click keeps the label from passing it on (no toggle). It is not called while the switch
+     * is `disabled` or `disabledFocusable`, as the switch does not toggle then.
      */
     root?: SlotPart<'label'>;
     /**
@@ -404,6 +405,9 @@ export const Switch = ({
     locked: {
       'data-label-position': labelPosition,
       'data-size': resolvedSize,
+      // The label labels the switch it holds: a part's `for` would send the text's clicks to
+      // another element (the Switch's own, from untyped code, still wins below).
+      htmlFor: undefined,
       // The Switch's own root props, after the data attributes as in 0.18, and over the part's;
       // the root holds the switch, so only they hide it or take it out of reach.
       ...rest,

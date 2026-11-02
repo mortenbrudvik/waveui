@@ -7601,6 +7601,130 @@ describe('compounds composed in a React Server Component', () => {
         );
       },
     }),
+    // 1.0 (Phase 14, R5): the `root` part of a component whose `ref` reaches its control, given
+    // as data by the Server Component (a ref cannot cross the boundary; a client component of
+    // yours passes one): the wrapper keeps the part's class and attributes on the server,
+    // through hydration and after the interaction, and its locks hold on the server too.
+    ssrCase({
+      name: 'Checkbox (slotProps: the root <label> around the control)',
+      parts: { Box: Checkbox },
+      tree: ({ Box }) => (
+        <Box
+          label="Accept the terms"
+          slotProps={{
+            root: { className: 'mine-root', 'data-part': 'root', htmlFor: 'elsewhere' },
+          }}
+        />
+      ),
+      serverText: 'data-part="root"',
+      serverHtml: (html) => {
+        const root = partInServerHtml(html, 'root');
+        expect(root.tagName).toBe('LABEL');
+        expect(root).toHaveClass(Wave.checkboxClassNames.root, 'mine-root');
+        // Locked: the label labels the box it holds.
+        expect(root).not.toHaveAttribute('for');
+        expect(root.querySelector('[role="checkbox"]')).not.toBeNull();
+      },
+      interact: async (user) => {
+        const box = screen.getByRole('checkbox', { name: 'Accept the terms' });
+        expect(renderedPart('root')).toContainElement(box);
+        await user.click(screen.getByText('Accept the terms'));
+        expect(box).toBeChecked();
+        expect(renderedPart('root')).toHaveClass('mine-root');
+      },
+    }),
+    ssrCase({
+      name: 'Combobox (slotProps: the root <div>, beside the root ref of its own)',
+      parts: { Picker: Combobox, Option: ComboboxOption },
+      tree: ({ Picker, Option }) => (
+        <Picker
+          aria-label="Country"
+          defaultValue="no"
+          slotProps={{ root: { className: 'mine-root', 'data-part': 'root' } }}
+        >
+          <Option value="se">Sweden</Option>
+          <Option value="no">Norway</Option>
+        </Picker>
+      ),
+      serverText: 'data-part="root"',
+      serverHtml: (html) => {
+        const root = partInServerHtml(html, 'root');
+        expect(root).toHaveClass(Wave.comboboxClassNames.root, 'mine-root');
+        expect(root.querySelector('input[role="combobox"]')).toHaveAttribute('value', 'Norway');
+      },
+      interact: async (user) => {
+        const combobox = screen.getByRole('combobox', { name: 'Country' });
+        await user.click(combobox);
+        expect(combobox).toHaveAttribute('aria-expanded', 'true');
+        // A press on the root is inside the popup's tree: the list stays open.
+        fireEvent.pointerDown(renderedPart('root'));
+        await act(async () => {});
+        expect(combobox).toHaveAttribute('aria-expanded', 'true');
+        await user.click(screen.getByRole('option', { name: 'Sweden' }));
+        expect(combobox).toHaveValue('Sweden');
+      },
+    }),
+    ssrCase({
+      name: 'ColorPicker.HexField (slotProps: the root <label> around the hex input)',
+      parts: { HexField: ColorPickerHexField },
+      tree: ({ HexField }) => (
+        <ColorPicker aria-label="Accent" defaultValue="#0f6cbd">
+          <HexField slotProps={{ root: { className: 'mine-root', 'data-part': 'root' } }} />
+        </ColorPicker>
+      ),
+      serverText: 'data-part="root"',
+      serverHtml: (html) => {
+        const root = partInServerHtml(html, 'root');
+        expect(root.tagName).toBe('LABEL');
+        expect(root).toHaveClass(Wave.colorPickerHexFieldClassNames.root, 'mine-root');
+      },
+      interact: async (user) => {
+        const hex = screen.getByRole('textbox', { name: 'Hex color value' });
+        expect(renderedPart('root')).toContainElement(hex);
+        await user.click(screen.getByText('Hex'));
+        expect(hex).toHaveFocus();
+        expect(hex).toHaveValue('#0f6cbd');
+      },
+    }),
+    ssrCase({
+      name: 'TagPicker (parts; slotProps: the root <div> around the trigger)',
+      parts: {
+        Picker: TagPicker,
+        Control: TagPickerControl,
+        Group: TagPickerGroup,
+        Input: TagPickerInput,
+      },
+      tree: ({ Picker, Control, Group, Input }) => (
+        <Picker
+          aria-label="Fruits"
+          options={[
+            { value: 'apple', label: 'Apple' },
+            { value: 'banana', label: 'Banana' },
+          ]}
+          slotProps={{ root: { className: 'mine-root', 'data-part': 'root' } }}
+        >
+          <Control>
+            <Group />
+            <Input />
+          </Control>
+        </Picker>
+      ),
+      serverText: 'data-part="root"',
+      serverHtml: (html) => {
+        expect(partInServerHtml(html, 'root')).toHaveClass(
+          Wave.tagPickerClassNames.root,
+          'mine-root',
+        );
+      },
+      interact: async (user) => {
+        const input = screen.getByRole('combobox', { name: 'Fruits' });
+        expect(renderedPart('root')).toContainElement(input);
+        await user.click(input);
+        await user.click(screen.getByRole('option', { name: 'Banana' }));
+        expect(pickedTags()).toEqual(['Banana']);
+        expect(renderedPart('root')).toHaveClass('mine-root');
+      },
+    }),
   ];
 
   const hydrated: Array<{ root: Root; container: HTMLElement }> = [];
@@ -12052,5 +12176,527 @@ describe('Phase 12 theming across components (0.17)', () => {
       ),
     );
     expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.0 (Phase 14, R5): `ref` reaches the control of a composite control
+// ---------------------------------------------------------------------------
+
+/**
+ * The twelve components whose `ref` reaches their focusable control since 1.0 (spec R5), less
+ * `ColorPicker.HexField` (below), with the role and tag of that control. Each renders with a
+ * callback `ref` typed for any element, so one table holds them all; the color sliders render
+ * standalone, and TagPicker in both forms (its `ref` follows the trigger that renders).
+ */
+interface RefMoverCase {
+  name: string;
+  role: string;
+  tag: 'BUTTON' | 'INPUT';
+  control: (ref: React.RefCallback<HTMLElement>) => React.ReactElement;
+}
+
+const REF_MOVERS: RefMoverCase[] = [
+  { name: 'Checkbox', role: 'checkbox', tag: 'BUTTON', control: (ref) => <Checkbox ref={ref} /> },
+  { name: 'Switch', role: 'switch', tag: 'BUTTON', control: (ref) => <Switch ref={ref} /> },
+  {
+    name: 'SearchBox',
+    role: 'searchbox',
+    tag: 'INPUT',
+    control: (ref) => <SearchBox ref={ref} />,
+  },
+  {
+    name: 'SpinButton',
+    role: 'spinbutton',
+    tag: 'INPUT',
+    control: (ref) => <SpinButton ref={ref} />,
+  },
+  {
+    name: 'Combobox',
+    role: 'combobox',
+    tag: 'INPUT',
+    control: (ref) => <Combobox ref={ref}>{fruitOptions}</Combobox>,
+  },
+  {
+    name: 'Dropdown',
+    role: 'combobox',
+    tag: 'BUTTON',
+    control: (ref) => <Dropdown ref={ref}>{fruitOptions}</Dropdown>,
+  },
+  {
+    name: 'TimePicker',
+    role: 'combobox',
+    tag: 'INPUT',
+    control: (ref) => <TimePicker ref={ref} />,
+  },
+  {
+    name: 'DatePicker',
+    role: 'textbox',
+    tag: 'INPUT',
+    control: (ref) => <DatePicker locale="en-US" ref={ref} />,
+  },
+  {
+    name: 'TagPicker',
+    role: 'combobox',
+    tag: 'INPUT',
+    control: (ref) => <TagPicker options={P6_FRUITS} ref={ref} />,
+  },
+  {
+    name: 'TagPicker (parts, TagPicker.Button)',
+    role: 'combobox',
+    tag: 'BUTTON',
+    control: (ref) => <PartsPicker trigger="button" ref={ref} />,
+  },
+  {
+    name: 'ColorSlider',
+    role: 'slider',
+    tag: 'INPUT',
+    control: (ref) => <ColorSlider ref={ref} />,
+  },
+  {
+    name: 'AlphaSlider',
+    role: 'slider',
+    tag: 'INPUT',
+    control: (ref) => <AlphaSlider ref={ref} />,
+  },
+];
+
+/** A callback ref that keeps the element it was last given. */
+function heldRef(): { el: HTMLElement | null; ref: React.RefCallback<HTMLElement> } {
+  const held = {
+    el: null as HTMLElement | null,
+    ref: (el: HTMLElement | null) => {
+      held.el = el;
+    },
+  };
+  return held;
+}
+
+describe('1.0: ref reaches the control of a composite control (R5)', () => {
+  const html = document.documentElement;
+  beforeEach(() => {
+    // A 1024×768 viewport (jsdom has no layout), so a surface fits where it is placed.
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(html, 'clientWidth');
+    Reflect.deleteProperty(html, 'clientHeight');
+  });
+
+  /** The surface's `translate(x, y)` position (floating-ui's transform styles). */
+  function translateOf(el: HTMLElement): { x: number; y: number } {
+    const match = /translate\(\s*(-?[\d.]+)px,\s*(-?[\d.]+)px/.exec(el.style.transform);
+    return match ? { x: Number(match[1]), y: Number(match[2]) } : { x: NaN, y: NaN };
+  }
+
+  describe('a real Field around each of them', () => {
+    it.each(REF_MOVERS)(
+      '$name: ref reaches the control the Field label points at',
+      ({ role, tag, control }) => {
+        const held = heldRef();
+        render(
+          <Field label="Preference" hint="Pick one">
+            {control(held.ref)}
+          </Field>,
+        );
+        const label = screen.getByText('Preference').closest('label') as HTMLLabelElement;
+        const named = screen.getByRole(role, { name: 'Preference' });
+        expect(held.el).toBe(named);
+        expect(held.el?.tagName).toBe(tag);
+        expect(held.el?.id).toBe(label.htmlFor);
+        expect(named).toHaveAccessibleDescription(/Pick one/);
+        expect(duplicateIds()).toEqual([]);
+      },
+    );
+
+    // The twelfth, by design without a Field label: a ColorPicker's parts render in a `null`
+    // Field context, since a Field names the picker's group, not one of its parts.
+    it('ColorPicker.HexField: ref reaches the hex input, which no Field label points at', () => {
+      const held = heldRef();
+      render(
+        <Field label="Accent">
+          <ColorPicker defaultValue="#0f6cbd">
+            <ColorPickerHexField ref={held.ref} />
+          </ColorPicker>
+        </Field>,
+      );
+      const label = screen.getByText('Accent').closest('label') as HTMLLabelElement;
+      expect(screen.getByRole('group', { name: 'Accent' })).toBeInTheDocument();
+      expect(held.el).toBe(screen.getByRole('textbox', { name: 'Hex color value' }));
+      expect(held.el?.id).not.toBe(label.htmlFor);
+    });
+  });
+
+  describe('Overflow.Item asChild around one: the item measures the element ref reaches', () => {
+    let resize: ReturnType<typeof installResizeObserverMock> | null = null;
+    afterEach(() => {
+      resize?.restore();
+      resize = null;
+    });
+
+    /**
+     * Widths by `data-testid`, as a browser lays them out: an element in a hidden item (an
+     * inline `display: none` on the element that carries `data-overflow-hidden` or around it)
+     * measures 0, and the overflow button's wrapper measures `button`.
+     */
+    function stubLayout(widths: Record<string, number>): Record<string, number> {
+      const width = (el: Element) => {
+        if (el.closest('[data-overflow-hidden]')) return 0;
+        if (el.hasAttribute('data-overflow-button')) return widths.button ?? 0;
+        const id = el.getAttribute('data-testid');
+        return id !== null && id in widths ? widths[id] : 0;
+      };
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return width(this);
+      });
+      vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (
+        this: Element,
+      ) {
+        return width(this);
+      });
+      vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (
+        this: Element,
+      ) {
+        return width(this);
+      });
+      return widths;
+    }
+
+    // The component's own `data-testid` reaches its root; its control part's reaches the control.
+    const CONTROLS = [
+      {
+        name: 'SearchBox',
+        control: () => (
+          <SearchBox
+            aria-label="Search"
+            data-testid="root"
+            slotProps={{ input: { 'data-testid': 'control' } }}
+          />
+        ),
+      },
+      {
+        name: 'Checkbox',
+        control: () => (
+          <Checkbox
+            label="Archived"
+            data-testid="root"
+            slotProps={{ indicator: { 'data-testid': 'control' } }}
+          />
+        ),
+      },
+    ];
+
+    function Row({ asChild = true, children }: { asChild?: boolean; children: React.ReactNode }) {
+      return (
+        <Overflow data-testid="row" overflowButton={(count) => <Button>{`+${count}`}</Button>}>
+          <OverflowItem itemId="first" data-testid="first">
+            <Button>First</Button>
+          </OverflowItem>
+          <OverflowItem itemId="control" asChild={asChild} data-testid="item">
+            {children}
+          </OverflowItem>
+        </Overflow>
+      );
+    }
+
+    // The root is 200 wide and its control 150: next to a 100 item, only the control fits in 260.
+    it.each(CONTROLS)(
+      '$name: measures and observes the control, while the item props reach the root',
+      ({ control }) => {
+        resize = installResizeObserverMock();
+        const observe = vi.spyOn(ResizeObserver.prototype, 'observe');
+        stubLayout({ row: 260, first: 100, root: 200, control: 150, button: 40 });
+        render(<Row>{control()}</Row>);
+        const root = screen.getByTestId('root');
+        expect(root).not.toHaveAttribute('data-overflow-hidden');
+        expect(screen.queryByRole('button', { name: '+1' })).not.toBeInTheDocument();
+        const observed = observe.mock.calls.map(([el]) => el);
+        expect(observed).toContain(screen.getByTestId('control'));
+        expect(observed).not.toContain(root);
+        // The item's class and its other props go to the component, which puts them on its root.
+        expect(root).toHaveClass(Wave.overflowItemClassNames.root);
+        expect(screen.getByTestId('control')).not.toHaveClass(Wave.overflowItemClassNames.root);
+      },
+    );
+
+    it.each(CONTROLS)(
+      '$name: hides it through its root and keeps the size its control had while hidden',
+      ({ control }) => {
+        resize = installResizeObserverMock();
+        const widths = stubLayout({ row: 200, first: 100, root: 200, control: 150, button: 40 });
+        render(<Row>{control()}</Row>);
+        const root = screen.getByTestId('root');
+        const inner = screen.getByTestId('control');
+        const expectHidden = () => {
+          expect(root).toHaveAttribute('data-overflow-hidden');
+          expect(root).toHaveAttribute('aria-hidden', 'true');
+          expect(root).toHaveAttribute('inert');
+          expect(root.style.display).toBe('none');
+          expect(screen.getByRole('button', { name: '+1' })).toBeInTheDocument();
+        };
+        expectHidden();
+        // The marker is on the root, around the measured control, which never carries it.
+        expect(inner).not.toHaveAttribute('data-overflow-hidden');
+        // A browser reports the hidden control's new size (0); the store keeps its last one,
+        // so the item stays hidden instead of being shown again by a 0 width.
+        resize.trigger(inner);
+        resize.trigger();
+        expectHidden();
+        widths.row = 300;
+        resize.trigger(screen.getByTestId('row'));
+        expect(root).not.toHaveAttribute('data-overflow-hidden');
+        expect(root.style.display).toBe('');
+        expect(screen.queryByRole('button', { name: '+1' })).not.toBeInTheDocument();
+      },
+    );
+
+    // The way to measure the whole component: the item's own wrapper, which holds it.
+    it.each(CONTROLS)(
+      '$name: without asChild the item measures its wrapper, around the whole component',
+      ({ control }) => {
+        resize = installResizeObserverMock();
+        stubLayout({ row: 260, first: 100, item: 200, root: 200, control: 150, button: 40 });
+        render(<Row asChild={false}>{control()}</Row>);
+        expect(screen.getByTestId('item')).toHaveAttribute('data-overflow-hidden');
+        expect(screen.getByTestId('item')).toContainElement(screen.getByTestId('root'));
+        expect(screen.getByRole('button', { name: '+1' })).toBeInTheDocument();
+      },
+    );
+  });
+
+  describe('Presence around one: its attributes reach the root, its phases read the control', () => {
+    const CASES = [
+      {
+        name: 'Checkbox',
+        role: 'checkbox',
+        rootClass: Wave.checkboxClassNames.root,
+        child: <Checkbox label="Notify me" />,
+      },
+      {
+        name: 'Combobox',
+        role: 'combobox',
+        rootClass: Wave.comboboxClassNames.root,
+        child: <Combobox aria-label="Notify me">{fruitOptions}</Combobox>,
+      },
+    ];
+    const controlOf = (role: string) => screen.getByRole(role, { name: 'Notify me', hidden: true });
+
+    it.each(CASES)(
+      '$name: data-presence and the exit inert land on the root; the exit waits for the control',
+      async ({ role, rootClass, child }) => {
+        const motion = mockAnimations({ animated: (el) => el.getAttribute('role') === role });
+        const { rerender } = render(<Wave.Presence visible>{child}</Wave.Presence>);
+        const control = controlOf(role);
+        const root = control.closest(`.${rootClass}`) as HTMLElement;
+        expect(root).toHaveAttribute('data-presence', 'entered');
+        expect(control).not.toHaveAttribute('data-presence');
+
+        rerender(<Wave.Presence visible={false}>{child}</Wave.Presence>);
+        expect(root).toHaveAttribute('data-presence', 'exiting');
+        expect(root).toHaveAttribute('inert');
+        expect(control).toBeInTheDocument();
+        await act(async () => {
+          await motion.finishAll();
+        });
+        expect(screen.queryByRole(role, { hidden: true })).not.toBeInTheDocument();
+      },
+    );
+
+    it.each(CASES)(
+      '$name: an exit motion on the root alone is not waited for, since ref reaches the control',
+      ({ role, rootClass, child }) => {
+        mockAnimations({ animated: (el) => el.classList.contains(rootClass) });
+        const { rerender } = render(<Wave.Presence visible>{child}</Wave.Presence>);
+        expect(controlOf(role)).toBeInTheDocument();
+        rerender(<Wave.Presence visible={false}>{child}</Wave.Presence>);
+        expect(screen.queryByRole(role, { hidden: true })).not.toBeInTheDocument();
+      },
+    );
+
+    // The form for motion drawn on the root: the presence ref goes to `slotProps.root.ref`.
+    it('the render function with slotProps.root.ref: the exit waits for the root (Checkbox)', async () => {
+      const motion = mockAnimations({
+        animated: (el) => el.classList.contains(Wave.checkboxClassNames.root),
+      });
+      const ui = (visible: boolean) => (
+        <Wave.Presence visible={visible}>
+          {({ ref, presenceProps }) => (
+            <Checkbox label="Notify me" {...presenceProps} slotProps={{ root: { ref } }} />
+          )}
+        </Wave.Presence>
+      );
+      const { rerender } = render(ui(true));
+      const root = controlOf('checkbox').closest('label') as HTMLElement;
+      expect(root).toHaveAttribute('data-presence', 'entered');
+      rerender(ui(false));
+      expect(root).toHaveAttribute('data-presence', 'exiting');
+      expect(root).toHaveAttribute('inert');
+      await act(async () => {
+        await motion.finishAll();
+      });
+      expect(screen.queryByRole('checkbox', { hidden: true })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Tooltip, Popover and Menu triggers around one', () => {
+    const TOOLTIP_CASES: {
+      name: string;
+      role: string;
+      child: (ref: React.RefCallback<HTMLElement>) => React.ReactElement;
+    }[] = [
+      {
+        name: 'Checkbox',
+        role: 'checkbox',
+        child: (ref) => <Checkbox label="Notify me" ref={ref} />,
+      },
+      { name: 'Switch', role: 'switch', child: (ref) => <Switch label="Notify me" ref={ref} /> },
+      {
+        name: 'Combobox',
+        role: 'combobox',
+        child: (ref) => (
+          <Combobox aria-label="Notify me" ref={ref}>
+            {fruitOptions}
+          </Combobox>
+        ),
+      },
+      {
+        name: 'TagPicker',
+        role: 'combobox',
+        child: (ref) => <TagPicker aria-label="Notify me" options={P6_FRUITS} ref={ref} />,
+      },
+    ];
+
+    // Tooltip places its surface against its own wrapper <span> around the child (unchanged by
+    // 1.0) and gives the child its description, which the component routes to the control.
+    it.each(TOOLTIP_CASES)(
+      'a Tooltip around a $name: describes the control, keeps the child ref on it and places the surface against its own wrapper',
+      async ({ role, child }) => {
+        const user = userEvent.setup();
+        const held = heldRef();
+        render(
+          <Tooltip content="Mails you once a day" openDelay={0}>
+            {child(held.ref)}
+          </Tooltip>,
+        );
+        const control = screen.getByRole(role, { name: 'Notify me' });
+        expect(held.el).toBe(control);
+        expect(control).toHaveAccessibleDescription('Mails you once a day');
+        const wrapper = control.closest(`.${Wave.tooltipClassNames.root}`) as HTMLElement;
+        mockRect(wrapper, { x: 100, y: 300, width: 200, height: 40 });
+        mockRect(control, { x: 110, y: 310, width: 40, height: 20 });
+        await user.hover(control);
+        const surface = tooltipSurface();
+        expect(surface).not.toBeNull();
+        // Centred above the wrapper (100 + 200 / 2), 8 pixels off its top.
+        await waitFor(() => expect(translateOf(surface!)).toEqual({ x: 200, y: 292 }));
+        await expectNoA11yViolations(document.body);
+      },
+    );
+
+    // A click trigger's ref (the positioning reference, the focus return and the dismiss
+    // reference) reaches the control. Its state ARIA (aria-expanded, aria-haspopup,
+    // aria-controls) is one of the other aria-* attributes a composite control keeps on its
+    // root, as in 0.18: no valid place for it (a <label> or a <div>), so a composite control
+    // is no click trigger child; a context region (below) carries none.
+    it('a Popover.Trigger around a Switch: placed against the switch, focus returns to it; its state ARIA stays on the root', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const held = heldRef();
+      render(
+        <Popover onOpenChange={onOpenChange}>
+          <Popover.Trigger>
+            <Switch label="Alerts" ref={held.ref} />
+          </Popover.Trigger>
+          <Popover.Content title="Alert settings">
+            <button type="button">Mute</button>
+          </Popover.Content>
+        </Popover>,
+      );
+      const control = screen.getByRole('switch', { name: 'Alerts' });
+      const root = control.closest('label') as HTMLElement;
+      expect(held.el).toBe(control);
+      mockRect(root, { x: 100, y: 300, width: 200, height: 40 });
+      mockRect(control, { x: 110, y: 310, width: 40, height: 20 });
+      await user.click(control);
+      const surface = screen.getByRole('dialog', { name: 'Alert settings' });
+      // At the switch's start, 8 pixels below its bottom (310 + 20): not at the root's.
+      await waitFor(() => expect(translateOf(surface)).toEqual({ x: 110, y: 338 }));
+      expect(root).toHaveAttribute('aria-expanded', 'true');
+      expect(control).not.toHaveAttribute('aria-expanded');
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(control).toHaveFocus();
+
+      // A press on the label text is outside the trigger element since 1.0 (in 0.18 the root
+      // was): it closes the popover, then the click the <label> passes to the switch opens it.
+      await user.click(control);
+      onOpenChange.mockClear();
+      await user.click(screen.getByText('Alerts'));
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([false, true]);
+      expect(screen.getByRole('dialog', { name: 'Alert settings' })).toBeInTheDocument();
+    });
+
+    it('a Menu.Trigger around a SearchBox: placed against the input, focus returns to it; its state ARIA stays on the root', async () => {
+      const user = userEvent.setup();
+      render(
+        <Menu>
+          <Menu.Trigger>
+            <SearchBox aria-label="Find" />
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>Recent searches</Menu.Item>
+          </Menu.Popover>
+        </Menu>,
+      );
+      const control = screen.getByRole('searchbox', { name: 'Find' });
+      const root = control.closest(`.${Wave.searchBoxClassNames.root}`) as HTMLElement;
+      mockRect(root, { x: 100, y: 300, width: 200, height: 40 });
+      mockRect(control, { x: 130, y: 306, width: 150, height: 28 });
+      await user.click(control);
+      const menu = screen.getByRole('menu');
+      // At the input's start, 4 pixels below its bottom (306 + 28): not at the root's.
+      await waitFor(() => expect(translateOf(menu)).toEqual({ x: 130, y: 338 }));
+      expect(root).toHaveAttribute('aria-expanded', 'true');
+      expect(control).not.toHaveAttribute('aria-expanded');
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(control).toHaveFocus();
+    });
+
+    it('a context Menu (openOnContext) around a Switch: Shift+F10 opens it at the switch, Escape returns focus to it', async () => {
+      const user = userEvent.setup();
+      render(
+        <Menu openOnContext>
+          <Menu.Trigger>
+            <Switch label="Alerts" />
+          </Menu.Trigger>
+          <Menu.Popover aria-label="Alert actions">
+            <Menu.Item>Reset to default</Menu.Item>
+          </Menu.Popover>
+        </Menu>,
+      );
+      const control = screen.getByRole('switch', { name: 'Alerts' });
+      const root = control.closest('label') as HTMLElement;
+      mockRect(root, { x: 100, y: 300, width: 200, height: 40 });
+      mockRect(control, { x: 110, y: 310, width: 40, height: 20 });
+      act(() => control.focus());
+      await user.keyboard('{Shift>}{F10}{/Shift}');
+      const menu = screen.getByRole('menu', { name: 'Alert actions' });
+      expect(menuitem('Reset to default')).toHaveFocus();
+      // At the switch's start, 4 pixels below its bottom (310 + 20).
+      await waitFor(() => expect(translateOf(menu)).toEqual({ x: 110, y: 334 }));
+      for (const el of [root, control]) {
+        for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+          expect(el).not.toHaveAttribute(name);
+        }
+      }
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(control).toHaveFocus();
+    });
   });
 });

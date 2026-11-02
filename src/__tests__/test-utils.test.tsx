@@ -58,6 +58,7 @@ import {
   testRestSpread,
   testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
   VARIANT_BASES,
 } from '../test-utils';
 import type { TestSystemPropsConfig } from '../test-utils';
@@ -2117,6 +2118,15 @@ describe('expectThrows', () => {
     expect(console.error).toBe(original);
     expect(() => expectThrows(<Throws message="[WaveUI] Other" />, MESSAGE)).toThrow();
     expect(console.error).toBe(original);
+  });
+});
+
+describe('UNKNOWN_PROP', () => {
+  it("is the call React's development build logs for an unknown camel-case prop on an element", () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<span {...({ controlRef: { current: null } } as object)}>Text</span>);
+    expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+    expect(UNKNOWN_PROP('fooBar').slice(1)).toEqual(['fooBar', 'foobar']);
   });
 });
 

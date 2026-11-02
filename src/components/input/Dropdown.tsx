@@ -301,7 +301,7 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
      * holds the button). Your handlers run before the Dropdown's own root handlers
      * (`preventDefault()` in yours skips them). The root passes no click to the button, so your
      * `onClick` is called in every state, as the Dropdown's own `onClick` is. Your ref joins the
-     * Dropdown's own, which a press inside the root keeps from dismissing the open list.
+     * Dropdown's own, which keeps a press inside the root from dismissing the open list.
      */
     root?: SlotPart<'div'>;
     /**

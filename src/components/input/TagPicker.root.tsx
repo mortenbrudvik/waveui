@@ -328,8 +328,8 @@ export interface TagPickerProps extends Omit<
      * them); the tracking of focus inside the root, which the single-line layout reads, runs
      * after your `onFocus` and `onBlur`, also when they prevent the default. The root passes no
      * click to the trigger, so your `onClick` is called in every state, as TagPicker's own
-     * `onClick` is. Your ref joins TagPicker's own, which a press inside the root keeps from
-     * dismissing the open list and a form reset reads.
+     * `onClick` is. Your ref joins TagPicker's own, which keeps a press inside the root from
+     * dismissing the open list and which a form reset reads.
      */
     root?: SlotPart<'div'>;
     /**

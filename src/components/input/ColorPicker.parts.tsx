@@ -312,14 +312,16 @@ export interface ColorPickerHexFieldProps extends React.HTMLAttributes<HTMLEleme
      * `wave-color-picker-hex-field`), which the field's `className`, `style`, `data-*` and other
      * root props reach as well; its `ref` is the way to the label, since the field's `ref`
      * reaches the input. Your classes come after the field's `className`, your style over its
-     * `style`. Locked: every prop you give the field itself that reaches the root, and `hidden`,
-     * `inert` and `aria-hidden` (the field's own: the root holds the input). Your handlers run
-     * before the field's own root handlers (`preventDefault()` in yours skips them). Your
-     * `onClick` sees every click inside the root as it bubbles: a click on the input once, and a
-     * click on the caption or the error first, before the `<label>` passes it on to the input
-     * (focusing it), so that click reaches your `onClick` twice (its own, then the input's), as
-     * on any `<label>`; `preventDefault()` on it keeps the label from passing it on. The field
-     * has no disabled state, so your `onClick` is called in every state.
+     * `style`. Locked: every prop you give the field itself that reaches the root, `htmlFor`
+     * (unset: the label labels the input it holds, and a `for` would send its clicks to another
+     * element), and `hidden`, `inert` and `aria-hidden` (the field's own: the root holds the
+     * input). Your handlers run before the field's own root handlers (`preventDefault()` in
+     * yours skips them). Your `onClick` sees every click inside the root as it bubbles: a click
+     * on the input once, and a click on the caption or the error first, before the `<label>`
+     * passes it on to the input (focusing it), so that click reaches your `onClick` twice (its
+     * own, then the input's), as on any `<label>`; `preventDefault()` on it keeps the label from
+     * passing it on. The field has no disabled state, so your `onClick` is called in every
+     * state.
      */
     root?: SlotPart<'label'>;
     /**
@@ -472,6 +474,9 @@ export const ColorPickerHexField = ({
     className: cn(colorPickerHexFieldClassNames.root, 'flex min-w-0 flex-col gap-1', className),
     style,
     locked: {
+      // The label labels the input it holds: a part's `for` would send the caption's clicks to
+      // another element (the field's own, from untyped code, still wins below).
+      htmlFor: undefined,
       // The field's own root props, over the part's; the root holds the input, so only they hide
       // it or take it out of reach.
       ...rest,

@@ -20,6 +20,7 @@ import {
   asClientReference,
   expectInertSlotProps,
   openingTags,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
@@ -28,15 +29,6 @@ const ELEMENT_WARNING = /^\[WaveUI\] SearchBox: `dismiss` received a button elem
 /** A slot object whose `as` is a button, unwrapped (1.0: the button-object form is removed). */
 const SLOT_OBJECT_WARNING =
   /^\[WaveUI\] SearchBox: `dismiss` received a slot object that renders a button; its children render inside the built-in clear button and its props were dropped/;
-
-/** React's development error for an unknown prop that reaches a DOM element, as logged. */
-const UNKNOWN_PROP = (name: string) => [
-  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
-    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
-    'accidentally passed it from a parent component, remove it from the DOM element.',
-  name,
-  name.toLowerCase(),
-];
 
 /** Asserts that `warn` logged exactly one message per pattern (in any order) and nothing else. */
 function expectWarnings(warn: { mock: { calls: unknown[][] } }, patterns: RegExp[]) {

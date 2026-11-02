@@ -22,6 +22,7 @@ import {
   testNoImplicitSubmit,
   testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { Tag } from '../../data-display/Tag';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
@@ -3290,15 +3291,6 @@ describe('TagPicker — slotProps', () => {
     });
   });
 });
-
-/** React's development error for an unknown prop that reaches a DOM element, as logged. */
-const UNKNOWN_PROP = (name: string) => [
-  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
-    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
-    'accidentally passed it from a parent component, remove it from the DOM element.',
-  name,
-  name.toLowerCase(),
-];
 
 /** The parts form with `TagPicker.Button` in place of the Input. */
 function ButtonPicker(props: Partial<TagPickerProps>) {

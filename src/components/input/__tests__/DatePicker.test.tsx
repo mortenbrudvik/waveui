@@ -28,6 +28,7 @@ import {
   testNoImplicitSubmit,
   testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { datePickerClassNames } from '../../../lib/classNames';
@@ -84,15 +85,6 @@ function editText(text: string) {
 const RAW_COLOR_OR_ENABLED = new RegExp(
   String.raw`\[#|\b(bg|text|border)-(white|black)\b|enabled:`,
 );
-
-/** React's development error for an unknown prop that reaches a DOM element, as logged. */
-const UNKNOWN_PROP = (name: string) => [
-  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
-    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
-    'accidentally passed it from a parent component, remove it from the DOM element.',
-  name,
-  name.toLowerCase(),
-];
 
 /** Local calendar fields (TZ-agnostic). */
 function fields(date: Date | null | undefined) {
@@ -3587,6 +3579,7 @@ describe('DatePicker — slotProps', () => {
     });
   });
 });
+
 // 1.0 (Phase 14, R5): `ref` reaches the text <input>, the focusable control; the root <div> is
 // `slotProps.root.ref`, and `controlRef` is gone.
 describe('DatePicker — ref reaches the control', () => {

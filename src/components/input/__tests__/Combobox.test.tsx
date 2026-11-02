@@ -25,6 +25,7 @@ import {
   testNoImplicitSubmit,
   testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
@@ -122,15 +123,6 @@ const FREEFORM_MULTISELECT =
 const QUERY_FREEFORM =
   '[WaveUI] Combobox: `query` and `defaultQuery` are not used with `freeform`: the typed text is ' +
   'the value (`value`, `onValueChange`).';
-
-/** React's development error for an unknown prop that reaches a DOM element, as logged. */
-const UNKNOWN_PROP = (name: string) => [
-  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
-    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
-    'accidentally passed it from a parent component, remove it from the DOM element.',
-  name,
-  name.toLowerCase(),
-];
 
 afterEach(() => {
   vi.restoreAllMocks();

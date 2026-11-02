@@ -159,14 +159,15 @@ export interface CheckboxProps extends Omit<
      * `ref` is the way to the label, since the Checkbox's `ref` reaches the box. Your classes
      * come after the Checkbox's `className`, your style over its `style`. Locked: every prop you
      * give the Checkbox itself that reaches the root, `data-label-position`, `data-size`,
-     * `data-shape`, and `hidden`, `inert` and `aria-hidden` (the Checkbox's own: the root holds
-     * the box). Your handlers run before the Checkbox's own root handlers (`preventDefault()`
-     * in yours skips them). Your `onClick` sees every click inside the root as it bubbles: a
-     * click on the box after the box has toggled, and a click on the label text first, before
-     * the `<label>` passes it on to the box, so the text's click reaches your `onClick` twice
-     * (the text's own, then the box's), as on any `<label>`; `preventDefault()` on the text's
-     * click keeps the label from passing it on (no toggle). It is not called while the checkbox
-     * is `disabled` or `disabledFocusable`, as the checkbox does not toggle then.
+     * `data-shape`, `htmlFor` (unset: the label labels the box it holds, and a `for` would send
+     * its clicks to another element), and `hidden`, `inert` and `aria-hidden` (the Checkbox's
+     * own: the root holds the box). Your handlers run before the Checkbox's own root handlers
+     * (`preventDefault()` in yours skips them). Your `onClick` sees every click inside the root
+     * as it bubbles: a click on the box after the box has toggled, and a click on the label text
+     * first, before the `<label>` passes it on to the box, so the text's click reaches your
+     * `onClick` twice (the text's own, then the box's), as on any `<label>`; `preventDefault()`
+     * on the text's click keeps the label from passing it on (no toggle). It is not called while
+     * the checkbox is `disabled` or `disabledFocusable`, as the checkbox does not toggle then.
      */
     root?: SlotPart<'label'>;
     /**
@@ -398,6 +399,9 @@ export const Checkbox = ({
       'data-label-position': labelPosition,
       'data-size': resolvedSize,
       'data-shape': resolvedShape,
+      // The label labels the box it holds: a part's `for` would send the text's clicks to
+      // another element (the Checkbox's own, from untyped code, still wins below).
+      htmlFor: undefined,
       // The Checkbox's own root props, after the data attributes as in 0.18, and over the
       // part's; the root holds the box, so only they hide it or take it out of reach.
       ...rest,

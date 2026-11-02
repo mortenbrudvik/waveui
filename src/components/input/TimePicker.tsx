@@ -349,8 +349,8 @@ export interface TimePickerProps extends Omit<
      * `aria-hidden` (the TimePicker's own: the root holds the input). Your handlers run before
      * the TimePicker's own root handlers (`preventDefault()` in yours skips them). The root
      * passes no click to the input, so your `onClick` is called in every state, as the
-     * TimePicker's own `onClick` is. Your ref joins the TimePicker's own, which a press inside
-     * the root keeps from dismissing the open list.
+     * TimePicker's own `onClick` is. Your ref joins the TimePicker's own, which keeps a press
+     * inside the root from dismissing the open list.
      */
     root?: SlotPart<'div'>;
     /**
