@@ -5078,7 +5078,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     const entryNames = new Set(exportsOf(entry));
     expect(entryNames.has('cn')).toBe(true);
     const moduleOnly = exportsOf(cnModule).filter((name) => !entryNames.has(name));
-    expect(moduleOnly.sort()).toEqual(['UTILITY_PREFIX', 'createWcn', 'twMerge', 'wcn']);
+    expect(moduleOnly.sort()).toEqual(['UTILITY_PREFIX', 'createWcn', 'wcn']);
     for (const name of moduleOnly) expect(MODULE_ONLY_NAMES, name).toContain(name);
     expect(MODULE_ONLY_NAMES).not.toContain('cn');
   }, 60_000);

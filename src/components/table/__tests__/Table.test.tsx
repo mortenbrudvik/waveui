@@ -1599,7 +1599,7 @@ describe('Table.CellActions', () => {
     // Both vertical insets: the opaque background spans the cell from its top edge to its bottom
     // edge, also over wrapped text or a layout with a description.
     expect(classes).toContain('wave:inset-y-0');
-    expect(classes.filter((cls) => /^-?(top|bottom)-/.test(cls))).toEqual([]);
+    expect(classes.filter((cls) => /^wave:-?(top|bottom)-/.test(cls))).toEqual([]);
     // No centring by translation: the flex column centres the buttons instead.
     expect(classes.filter((cls) => /translate-y/.test(cls))).toEqual([]);
     expect(actions()).toHaveClass('wave:items-center');

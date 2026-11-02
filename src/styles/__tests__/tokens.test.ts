@@ -1431,11 +1431,12 @@ describe('style entries (repo-level#1)', () => {
     expect(stripComments(readCss('tailwind.css'))).not.toMatch(/@source/);
   });
 
-  it('utilities.css is the build input of dist/utilities.css: the token keys as a reference, Tailwind utilities layered, no sources', () => {
+  it('utilities.css is the build input of dist/utilities.css: the token keys as a reference, Tailwind utilities unlayered, no sources', () => {
     // scripts/build-css.mjs appends the `@source inline()` list it generates from tokens.css.
+    // Unlayered (ruling BL): a layered class would lose to the base styles of styles.css.
     expect(statements('utilities.css')).toEqual([
       "@import './tokens.css' reference",
-      "@import 'tailwindcss/utilities.css' layer(utilities) source(none)",
+      "@import 'tailwindcss/utilities.css' source(none)",
     ]);
     expect(parseFile('utilities.css').filter((node) => node.children !== null)).toEqual([]);
   });
@@ -1591,9 +1592,56 @@ function passingReport(dir: string, { compileCheckPassed = false } = {}): RegExp
   );
 }
 
+type Specificity = [number, number, number];
+
+/**
+ * The specificity of one complex selector (Selectors Level 4): `:where()` counts nothing, `:is()`,
+ * `:not()` and `:has()` their most specific argument, any other functional pseudo-class one class
+ * (its argument ignored), and the legacy one-colon pseudo-elements a minifier writes
+ * (`:before`) an element.
+ */
+function specificity(selector: string): Specificity {
+  let text = selector.replace(/\\./g, 'x');
+  const total: Specificity = [0, 0, 0];
+  const add = ([a, b, c]: Specificity) => {
+    total[0] += a;
+    total[1] += b;
+    total[2] += c;
+  };
+  for (let match = /::?([\w-]+)\(/.exec(text); match; match = /::?([\w-]+)\(/.exec(text)) {
+    let end = match.index + match[0].length;
+    for (let depth = 1; depth > 0; end++) {
+      if (text[end] === '(') depth++;
+      else if (text[end] === ')') depth--;
+    }
+    const name = match[1];
+    if (['is', 'not', 'has'].includes(name)) {
+      const args = selectorList(text.slice(match.index + match[0].length, end - 1));
+      add(args.map(specificity).reduce((a, b) => (compareSpecificity(a, b) >= 0 ? a : b)));
+    } else if (name !== 'where') {
+      add(match[0].startsWith('::') ? [0, 0, 1] : [0, 1, 0]);
+    }
+    text = text.slice(0, match.index) + text.slice(end);
+  }
+  for (const [token] of text.matchAll(/#[\w-]+|\.[\w-]+|\[[^\]]*\]|::?[\w-]+|[a-z][\w-]*/gi)) {
+    if (token.startsWith('#')) add([1, 0, 0]);
+    else if (token.startsWith('.') || token.startsWith('[')) add([0, 1, 0]);
+    else if (token.startsWith('::')) add([0, 0, 1]);
+    else if (token.startsWith(':')) {
+      add(/^:(before|after|first-line|first-letter)$/.test(token) ? [0, 0, 1] : [0, 1, 0]);
+    } else add([0, 0, 1]);
+  }
+  return total;
+}
+
+function compareSpecificity(a: Specificity, b: Specificity): number {
+  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+}
+
 /**
  * A utilities.css that passes the gate for `tokensCss`: every class `namespacedUtilities`
- * generates, in `@layer utilities`, with the keyframes of tokens.css's `@theme` block.
+ * generates, unlayered, with Tailwind's `properties` fallback and the keyframes of tokens.css's
+ * `@theme` block.
  */
 async function utilitiesCssFor(tokensCss: string): Promise<string> {
   const { namespacedUtilities, parseCss } = await loadBuildCss();
@@ -1609,9 +1657,9 @@ async function utilitiesCssFor(tokensCss: string): Promise<string> {
     .filter((node) => node.prelude.startsWith('@keyframes'));
   return (
     '@layer properties{@supports ((-webkit-hyphens:none)){*,:before,:after{--tw-ring-color:initial}}}' +
-    `@layer utilities{${namespacedUtilities(tokensCss)
+    namespacedUtilities(tokensCss)
       .map((name) => `.${name}{color:red}`)
-      .join('')}}` +
+      .join('') +
     '@property --tw-ring-color{syntax:"*";inherits:false}' +
     text(keyframes)
   );
@@ -2490,8 +2538,91 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       expect(expected).toEqual(
         expect.arrayContaining(['bg-wave-primary', 'text-wave-body-1', 'shadow-wave-4']),
       );
-      expect(utilities).toMatch(/@layer utilities\{\.animate-wave-indeterminate\{/);
+      expect(utilities).toMatch(/\}\.animate-wave-indeterminate\{/);
+      expect(utilities).not.toMatch(/@layer utilities/);
       expect(utilities).not.toMatch(/--wave-primary:/);
+    }, 60_000);
+
+    it('ships utilities.css unlayered, so its classes beat the base styles of styles.css inside the root (ruling BL)', async () => {
+      // The outputs are read whatever the gate says (it also fails on a layered utilities.css).
+      const { code } = await build();
+      const { parseCss } = await loadBuildCss();
+      /** Every style rule outside keyframes, with the `@layer` names around it. */
+      const rules = (nodes: CssNode[], layers: string[] = []): [CssNode, string[]][] =>
+        nodes.flatMap((node): [CssNode, string[]][] => {
+          if (node.children === null || node.prelude.startsWith('@keyframes')) return [];
+          if (!node.prelude.startsWith('@')) return [[node, layers]];
+          const layer = /^@layer\s+([\w-]+)$/.exec(node.prelude);
+          return rules(node.children, layer ? [...layers, layer[1]] : layers);
+        });
+      const properties = (rule: CssNode) =>
+        (rule.children ?? [])
+          .filter((node) => node.children === null && node.prelude.includes(':'))
+          .map((node) => node.prelude.slice(0, node.prelude.indexOf(':')).trim());
+      const read = (name: string) =>
+        rules(parseCss(readFileSync(join(project, 'dist', name), 'utf8')));
+
+      // The utility classes sit in no layer (Tailwind's `properties` fallback holds none).
+      const utilities = read('utilities.css').filter(([rule]) =>
+        selectorList(rule.prelude).some((selector) => selector.startsWith('.')),
+      );
+      expect(utilities.length).toBeGreaterThan(800);
+      expect(
+        utilities.filter(([, layers]) => layers.length > 0).map(([rule]) => rule.prelude),
+      ).toEqual([]);
+
+      // The base styles of styles.css for the elements inside the root and a portal: unlayered,
+      // zero-specificity resets (a native button's transparent background, inherited color and
+      // font, every element's border color).
+      const inside = /^:where\(\.wave-root, \.wave-portal\) /;
+      const base = read('styles.css').filter(([rule]) =>
+        selectorList(rule.prelude).every((selector) => inside.test(selector)),
+      );
+      expect(base.filter(([, layers]) => layers.length > 0)).toEqual([]);
+      /** The longhands a shorthand of base.css sets. */
+      const LONGHANDS: Record<string, string[]> = {
+        font: ['font-family', 'font-size', 'line-height', 'font-weight', 'font-style'],
+        border: ['border-color', 'border-width', 'border-style'],
+        background: ['background-color'],
+      };
+      const sets = (rule: CssNode) =>
+        new Set(properties(rule).flatMap((name) => [name, ...(LONGHANDS[name] ?? [])]));
+
+      // Every utility beats every base rule that sets a property it sets, by specificity alone.
+      const pairs: string[] = [];
+      const losers: string[] = [];
+      for (const [utility] of utilities) {
+        const own = properties(utility);
+        for (const [rule] of base) {
+          const reset = sets(rule);
+          const shared = own.filter((name) => reset.has(name));
+          if (shared.length === 0) continue;
+          for (const selector of selectorList(utility.prelude)) {
+            for (const target of selectorList(rule.prelude)) {
+              pairs.push(`${selector} ${shared.join(',')} / ${target}`);
+              if (compareSpecificity(specificity(selector), specificity(target)) <= 0) {
+                losers.push(`${selector} / ${target}`);
+              }
+            }
+          }
+        }
+      }
+      expect(losers).toEqual([]);
+      // The cases of the browser pass: a native button's background, color and font, and the
+      // border color of any element.
+      const button = ':where(.wave-root, .wave-portal) :where(button, input, select, textarea)';
+      const any = ':where(.wave-root, .wave-portal) :where(*)';
+      expect(pairs).toEqual(
+        expect.arrayContaining([
+          `.bg-wave-error background-color / ${button}`,
+          `.text-wave-foreground color / ${button}`,
+          `.text-wave-body-1 font-size,line-height / ${button}`,
+          `.font-wave font-family / ${button}`,
+          `.border-wave-stroke border-color / ${any}`,
+        ]),
+      );
+      expect(compareSpecificity(specificity('.bg-wave-error'), specificity(button))).toBe(1);
+      expect(code).toBe(0);
     }, 60_000);
 
     it('throws instead of shipping the tokens in components.css when styles.css renames their import', async () => {
@@ -2509,11 +2640,25 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
           'src/styles/styles.css',
           readCss('styles.css').replace("@import './tokens.css';", "@import url('./tokens.css');"),
         );
-        expect(() => main([], { projectRoot: project })).toThrow(
-          new Error(
-            "componentsSource: styles.css must @import './tokens.css' and './base.css' once each " +
-              '(found: base)',
-          ),
+        // The compile check runs first and reports; its line is the only output before the throw.
+        const printed: unknown[][] = [];
+        const error = vi
+          .spyOn(console, 'error')
+          .mockImplementation((...args) => printed.push(args));
+        const log = vi.spyOn(console, 'log').mockImplementation((...args) => printed.push(args));
+        try {
+          expect(() => main([], { projectRoot: project })).toThrow(
+            new Error(
+              "componentsSource: styles.css must @import './tokens.css' and './base.css' once " +
+                'each (found: base)',
+            ),
+          );
+        } finally {
+          error.mockRestore();
+          log.mockRestore();
+        }
+        expect(printed.map((args) => args.join(' ')).join('\n')).toMatch(
+          /^build-css: compile check passed \(prefix wave: \d+ class words in \d+ files, \d+ allowlisted pairs\)$/,
         );
         expect(existsSync(join(project, 'dist'))).toBe(true);
         expect(existsSync(join(project, 'dist', 'styles.css'))).toBe(false);
@@ -2830,8 +2975,8 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
         return assertUtilitiesCss(css, { tokensCss: KEYS, baseCss: GATE_BASE });
       }
 
-      it('passes exactly the generated classes in @layer utilities, with the keyframes', async () => {
-        expect(good).toMatch(/^@layer properties\{.*\}@layer utilities\{\.animate-wave-spin\{/);
+      it('passes exactly the generated classes, unlayered, with the keyframes', async () => {
+        expect(good).toMatch(/^@layer properties\{.*\}\}\.animate-wave-spin\{/);
         expect(await check(good)).toEqual([]);
       });
 
@@ -2840,8 +2985,8 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
           'utilities.css: missing 1 of the 11 namespaced utilities (shadow-wave-4)',
         ]);
         const extra = good.replace(
-          '@layer utilities{',
-          String.raw`@layer utilities{.hover\:bg-wave-primary:hover{color:red}.bg-primary{color:red}.p-4{padding:1rem}`,
+          '.animate-wave-spin{',
+          String.raw`.hover\:bg-wave-primary:hover{color:red}.bg-primary{color:red}.p-4{padding:1rem}.animate-wave-spin{`,
         );
         expect(await check(extra)).toEqual([
           'utilities.css: holds classes other than the namespaced token utilities ' +
@@ -2849,13 +2994,19 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
         ]);
       });
 
-      it('fails on a rule outside @layer utilities, another layer and a directive', async () => {
-        expect(await check(`${good}.bg-wave-primary{color:red}`)).toEqual([
-          'utilities.css: rules outside @layer utilities (.bg-wave-primary)',
+      it('fails on a layer, a class inside a layer and a directive (ruling BL: unlayered)', async () => {
+        // The layered sheet of the first 1.0 build: its classes lose to the base styles.
+        expect(await check(`${good}@layer utilities{.bg-wave-primary{color:red}}`)).toEqual([
+          'utilities.css: layered output (@layer utilities)',
+          'utilities.css: classes inside a @layer (.bg-wave-primary)',
+        ]);
+        // Tailwind's properties fallback is the one layer allowed, and it holds no class.
+        expect(await check(`${good}@layer properties{.bg-wave-primary{color:red}}`)).toEqual([
+          'utilities.css: classes inside a @layer (.bg-wave-primary)',
         ]);
         expect(await check(`@layer base{.x{color:red}}${good}`)).toEqual([
-          'utilities.css: a layer other than utilities (@layer base)',
-          'utilities.css: rules outside @layer utilities (.x)',
+          'utilities.css: layered output (@layer base)',
+          'utilities.css: classes inside a @layer (.x)',
           'utilities.css: holds classes other than the namespaced token utilities (x)',
         ]);
         expect(await check(`${good}@source inline('x');`)).toEqual([
@@ -2864,9 +3015,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       });
 
       it('fails on a token rule, a theme variable, another custom property and missing keyframes', async () => {
-        expect(
-          await check(`@layer utilities{:root,.wave-root{--wave-primary:#0f6cbd}}${good}`),
-        ).toEqual([
+        expect(await check(`:root,.wave-root{--wave-primary:#0f6cbd}${good}`)).toEqual([
           'utilities.css: holds a :root rule (:root)',
           'utilities.css: holds rules of tokens.css or base.css (.wave-root)',
           'utilities.css: declares the tokens --wave-primary',

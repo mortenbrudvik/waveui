@@ -24,8 +24,8 @@
  *                 `@layer` other than Tailwind's `properties` fallback, no raw Tailwind
  *                 directives; `./preflight.css` is
  *                 Preflight; `./utilities` holds the namespaced token utilities
- *                 (`.bg-wave-primary`, `.text-wave-body-1`, `.shadow-wave-4`, …) in
- *                 `@layer utilities`, without tokens, variants or component classes;
+ *                 (`.bg-wave-primary`, `.text-wave-body-1`, `.shadow-wave-4`, …), unlayered,
+ *                 without tokens, variants or component classes;
  *               - TypeScript type-checks two programs, both loading `dist/index.d.ts`: an `.mts`
  *                 file under `module` node16 (tsconfig.json) and a `.cts` file under `module`
  *                 node20 (tsconfig.cjs.json; the CommonJS file `require()`s the ES entry, which
@@ -517,16 +517,24 @@ const NAMESPACED_UTILITY =
 
 /**
  * The `./utilities` stylesheet (Phase 14 spec R6), or an app's build of it: the namespaced token
- * utilities (`UTILITIES_SAMPLE`) in `@layer utilities` (Tailwind's `properties` fallback aside),
- * no other class (no variant, no component class), no token declaration (the tokens come from
+ * utilities (`UTILITIES_SAMPLE`), unlayered (Tailwind's `properties` fallback aside, which holds
+ * no class: ruling BL, a layered class loses to the base styles of `./styles` inside the root), no
+ * other class (no variant, no component class), no token declaration (the tokens come from
  * `./styles`), no raw Tailwind directive, and the `@keyframes wave-spin` of `animate-wave-spin`.
  */
 export function checkUtilitiesCss(css) {
   const errors = [];
-  const outside = [];
+  const layers = new Set();
+  const layered = [];
   let tokenFound = false;
   let keyframesFound = false;
   visit(parseCss(css), (node, ancestors) => {
+    if (/^@layer\b/.test(node.prelude)) {
+      for (const name of node.prelude.slice('@layer'.length).split(',')) {
+        const layer = name.trim() || '<anonymous>';
+        if (layer !== 'properties') layers.add(layer);
+      }
+    }
     if (TAILWIND_DIRECTIVE.test(node.prelude)) {
       errors.push(`raw Tailwind source, not compiled CSS: "${node.prelude.slice(0, 60)}"`);
     }
@@ -535,11 +543,18 @@ export function checkUtilitiesCss(css) {
     if (!isStyleRule(node) || ancestors.some((parent) => parent.prelude.startsWith('@keyframes'))) {
       return;
     }
-    const layer = layerOf(ancestors);
-    if (layer !== 'utilities' && layer !== 'properties') outside.push(node.prelude);
+    if (layerOf(ancestors) !== undefined && selectorClasses(`${node.prelude}{}`).size > 0) {
+      layered.push(node.prelude);
+    }
   });
-  if (outside.length > 0) {
-    errors.push(`rules outside @layer utilities: ${outside.slice(0, 5).join(' ')}`);
+  if (layers.size > 0) {
+    errors.push(
+      `layered output: @layer ${[...layers].join(', ')} (./utilities must be unlayered, or the ` +
+        'base styles of ./styles beat its classes)',
+    );
+  }
+  if (layered.length > 0) {
+    errors.push(`classes inside a @layer: ${layered.slice(0, 5).join(' ')}`);
   }
   const classes = selectorClasses(css);
   const missing = UTILITIES_SAMPLE.filter((name) => !classes.has(name));

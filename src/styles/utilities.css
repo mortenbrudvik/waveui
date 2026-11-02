@@ -9,10 +9,14 @@
  *
  * - `reference`: the namespaced `@theme inline` keys of tokens.css resolve the classes, but none
  *   of its rules is emitted (the tokens come from `./styles`), and no theme variable either.
- * - `layer(utilities)`: every class sits in `@layer utilities`, so any unlayered rule of the app
- *   wins over it.
+ * - Unlayered, like `./styles` (1.0, ruling BL of the Phase 14 spec): each class is one class
+ *   selector, so it beats the zero-specificity base styles of `./styles` inside `.wave-root` and
+ *   `.wave-portal` (a native button's transparent background, inherited color and font, the border
+ *   color of every element), which a layered class would lose to. An app links it after
+ *   `./styles` and before its own CSS, whose unlayered rules of equal specificity then win by
+ *   coming later.
  * - `source(none)`: nothing is scanned; the classes are exactly the appended list.
  */
 
 @import './tokens.css' reference;
-@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@import 'tailwindcss/utilities.css' source(none);

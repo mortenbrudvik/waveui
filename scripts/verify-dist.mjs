@@ -952,8 +952,8 @@ export const INCLUSION_PROBES_0_11 = [
  * of render-function children (`resolveWiredSlot`), and every export of the module that
  * only the tests read ({@link TEST_ONLY_MODULES}), so neither roll-up exports one as a type; since
  * 1.0 (Phase 14, spec R6) every export of `lib/cn` but the public `cn`: the class merge of the
- * components, `wcn`, its factory `createWcn` and its prefix `UTILITY_PREFIX`, and `twMerge`, the
- * configured merge behind `cn`. The
+ * components, `wcn` (the public `cn` is the same merge), its factory `createWcn` and its prefix
+ * `UTILITY_PREFIX`. The
  * roll-up declares `TokenVariable` and `WAVE_TOKEN_NAMES` without exporting them (the exported
  * `waveTokens` and `WaveTokenName` refer to them), which the check accepts.
  * `verify-dist.test.mjs` reads the groups from the sources (those of 0.16, 0.17 and 0.18 with the
@@ -1227,7 +1227,6 @@ export const MODULE_ONLY_NAMES = [
   'tokenVariable',
   'tooltipMotion',
   'totalWidth',
-  'twMerge',
   'useBackdropAppearance',
   'useCollapsePresence',
   'useDataGridColumnSizing',

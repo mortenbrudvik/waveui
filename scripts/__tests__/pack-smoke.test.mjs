@@ -582,7 +582,7 @@ describe('checkTailwindCss (repo-level#1; Phase 14 spec R6)', () => {
   });
 });
 
-describe('checkUtilitiesCss (Phase 14 spec R6)', () => {
+describe('checkUtilitiesCss (Phase 14 spec R6, ruling BL)', () => {
   const SAMPLE = [
     'bg-wave-primary',
     'text-wave-foreground',
@@ -598,33 +598,46 @@ describe('checkUtilitiesCss (Phase 14 spec R6)', () => {
   ];
   const good =
     '@layer properties{@supports ((-webkit-hyphens:none)){*,:before,:after{--tw-ring-color:initial}}}' +
-    `@layer utilities{${SAMPLE.map((name) => `.${name}{color:var(--wave-primary)}`).join('')}}` +
+    SAMPLE.map((name) => `.${name}{color:var(--wave-primary)}`).join('') +
     '@property --tw-ring-color{syntax:"*";inherits:false}' +
     '@keyframes wave-spin{to{transform:rotate(360deg)}}';
 
-  it('passes the namespaced token utilities in @layer utilities, with the keyframes', () => {
+  it('passes the namespaced token utilities, unlayered, with the keyframes', () => {
     expect(checkUtilitiesCss(good)).toEqual([]);
   });
 
-  it('reports a missing utility, a rule outside the layer and another class', () => {
+  it('reports a missing utility and another class', () => {
     expect(
       checkUtilitiesCss(good.replace('.ring-wave-ring{color:var(--wave-primary)}', '')),
     ).toEqual(['missing the token utilities .ring-wave-ring']);
-    expect(checkUtilitiesCss(`${good}.bg-wave-primary{color:red}`)).toEqual([
-      'rules outside @layer utilities: .bg-wave-primary',
-    ]);
     const other = good.replace(
-      '@layer utilities{',
-      String.raw`@layer utilities{.bg-primary{color:red}.hover\:bg-wave-primary:hover{color:red}`,
+      '.bg-wave-primary{',
+      String.raw`.bg-primary{color:red}.hover\:bg-wave-primary:hover{color:red}.bg-wave-primary{`,
     );
     expect(checkUtilitiesCss(other)).toEqual([
       'holds classes other than the namespaced token utilities: bg-primary hover:bg-wave-primary',
     ]);
   });
 
+  it('reports a layer, and a class inside one, the properties fallback included', () => {
+    // The layered sheet of the first 1.0 build: inside the root, the base styles of ./styles
+    // (zero specificity, but unlayered) beat its classes.
+    const layered = good.replace(
+      /\.bg-wave-primary\{[^}]*\}/,
+      (rule) => `@layer utilities{${rule}}`,
+    );
+    expect(checkUtilitiesCss(layered)).toEqual([
+      'layered output: @layer utilities (./utilities must be unlayered, or the base styles of ' +
+        './styles beat its classes)',
+      'classes inside a @layer: .bg-wave-primary',
+    ]);
+    expect(checkUtilitiesCss(`${good}@layer properties{.bg-wave-primary{color:red}}`)).toEqual([
+      'classes inside a @layer: .bg-wave-primary',
+    ]);
+  });
+
   it('reports tokens, raw Tailwind source and missing keyframes', () => {
     expect(checkUtilitiesCss(`:root{--wave-primary:#0f6cbd}${good}`)).toEqual([
-      'rules outside @layer utilities: :root',
       'declares Wave tokens (they come from ./styles)',
     ]);
     expect(checkUtilitiesCss(`@import 'tailwindcss';${good}`)).toEqual([

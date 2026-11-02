@@ -60,9 +60,9 @@ const ANIMATE = [
 const namespaced = (values: string[]): string[] => values.map((value) => `wave-${value}`);
 
 /**
- * The Wave scales the components' merge has to know, under both names: the internal steps the
- * components write (`body-1`, `4`, prefixed with {@link UTILITY_PREFIX}) and the namespaced ones of
- * the theme keys an app passes in its `className` (the same steps after `wave-`). The font
+ * The Wave scales the merge has to know, under both names: the steps of 0.x (`body-1`, `4`), which
+ * the components write with {@link UTILITY_PREFIX} (`wave:text-body-1`), and the namespaced ones of
+ * the theme keys an app writes (the same steps after `wave-`, `text-wave-body-1`). The font
  * families, animations, durations and curves carry `wave` in both.
  */
 const WAVE_SCALES: NonNullable<ConfigExtension<string, string>['extend']> = {
@@ -77,63 +77,18 @@ const WAVE_SCALES: NonNullable<ConfigExtension<string, string>['extend']> = {
 };
 
 /**
- * tailwind-merge configured with Wave's namespaced theme keys, so an app's utilities of them are
- * grouped correctly: a `text-wave-*` step of the type ramp is a font size (not a text colour) and a
- * `shadow-wave-*` level a shadow size (not a shadow colour); `font-wave` and its monospace and
- * numeric siblings are font families (never a weight or a size), and the `animate-wave-*`,
- * `duration-wave-*` and `ease-wave-*` utilities are animations, transition durations and timing
- * functions. Unprefixed: the merge of {@link cn}.
- */
-export const twMerge = /* @__PURE__ */ extendTailwindMerge({
-  extend: {
-    classGroups: { duration: [{ duration: DURATION }] },
-    theme: {
-      ease: EASE,
-      text: /* @__PURE__ */ namespaced(TEXT),
-      shadow: /* @__PURE__ */ namespaced(SHADOW),
-      font: FONT,
-      animate: ANIMATE,
-    },
-  },
-});
-
-/**
- * Joins class names (clsx) and resolves Tailwind conflicts so the **last** class wins — pass
- * your base classes first and the overriding ones last.
- *
- * It knows Wave's namespaced theme keys, the ones an app's Tailwind build gets from
- * `@mortenbrudvik/waveui/tailwind` or `./tokens`: the `text-wave-*` type ramp is a font size, so a
- * `text-wave-*` colour next to it is kept, and `shadow-wave-*` is a shadow size. The unnamespaced
- * names of 0.x are not Wave's any more (1.0): `text-body-1` is read as a text colour, as for any
- * other unknown value, and a `text-foreground` after it replaces it.
- *
- * A later class replaces only a conflicting class **of the same variant**. Variant and state
- * classes such as the gated `not-disabled:not-aria-disabled:hover:bg-…` or `data-[selected]:bg-…`
- * are kept next to a bare `hover:bg-…`/`bg-…` and win by specificity; override them with the same
- * prefix (`not-disabled:not-aria-disabled:hover:bg-wave-error`), the same data variant, or the
- * important modifier (`hover:bg-wave-error!`).
- *
- * @example
- * cn('text-wave-body-1 text-wave-foreground', className) // "text-wave-error" keeps the size
- */
-export function cn(...inputs: ClassValue[]): string {
-  return twMerge(clsx(inputs));
-}
-
-/**
- * Builds the class merge of the components for a Tailwind `prefix` (without the colon; empty for
- * none). Module-only: the library calls {@link wcn}, built from {@link UTILITY_PREFIX}; tests build
- * it for a prefix to prove the prefixed merge.
+ * Builds the class merge for a Tailwind `prefix` (without the colon; empty for none). Module-only:
+ * the library calls {@link wcn} and apps {@link cn}, both built from {@link UTILITY_PREFIX}; tests
+ * build it for a prefix to prove the prefixed merge.
  *
  * - With a prefix it is tailwind-merge's `prefix` option plus an `experimentalParseClassName` that
- *   parses a class without the prefix as if it carried it. Wave's own classes carry the prefix and
- *   an app's `className` does not, so the app's class still replaces a conflicting Wave class
- *   of the same variant (the Tailwind padding utility of an app over Wave's own padding), as in
- *   0.x; tailwind-merge's prefix alone would pass every unprefixed class through untouched. Both
- *   scales are known, the internal names Wave's classes use and the namespaced ones an app uses,
- *   so an app's `text-wave-*` size replaces Wave's size and keeps Wave's text colour. The parse it
- *   relies on is pinned by a test (tailwind-merge marks it experimental), and the dependency is
- *   pinned to an exact version.
+ *   parses a class without the prefix as if it carried it, so a class and its prefixed twin are one
+ *   utility. Wave's own classes carry the prefix and an app's `className` does not, so the app's
+ *   class still replaces a conflicting Wave class of the same variant (the Tailwind padding utility
+ *   of an app over Wave's own padding), as in 0.x; tailwind-merge's prefix alone would pass every
+ *   unprefixed class through untouched. Both scales are known, so an app's `text-wave-*` size
+ *   replaces Wave's size and keeps Wave's text colour. The parse it relies on is pinned by a test
+ *   (tailwind-merge marks it experimental), and the dependency is pinned to an exact version.
  * - Without a prefix it is tailwind-merge with both of Wave's scales (the merge of 0.x).
  */
 export function createWcn(prefix: string): (...inputs: ClassValue[]) => string {
@@ -154,8 +109,37 @@ export function createWcn(prefix: string): (...inputs: ClassValue[]) => string {
 /**
  * The class merge every component, slot helper and part helper of the library calls: joins class
  * names (clsx) and resolves Tailwind conflicts so the last class wins, with the component's
- * classes first and the consumer's `className` last. Module-only (apps use {@link cn}); built
- * by {@link createWcn} for {@link UTILITY_PREFIX}, so a consumer's unprefixed class replaces a
- * conflicting prefixed class of the component.
+ * classes first and the consumer's `className` last. Module-only; the public {@link cn} is the
+ * same merge. Built by {@link createWcn} for {@link UTILITY_PREFIX}, so a consumer's unprefixed
+ * class replaces a conflicting prefixed class of the component.
  */
 export const wcn = /* @__PURE__ */ createWcn(UTILITY_PREFIX);
+
+/**
+ * Joins class names (clsx) and resolves Tailwind conflicts so the **last** class wins — pass
+ * your base classes first and the overriding ones last. It is the merge the components use
+ * themselves.
+ *
+ * A class the library writes carries Wave's utility prefix (`wave:`): the public recipes
+ * `focusRing`, `focusRingInset`, `inputFocus` and `inputFocusWithin` return such classes. A class
+ * and its prefixed twin are one utility here, so your unprefixed class replaces the recipe's
+ * conflicting one of the same variant: `cn(focusRing, className)` with a `className` that sets the
+ * ring's offset keeps the recipe's ring and drops its offset.
+ *
+ * It knows Wave's scales under both names: the namespaced theme keys an app's Tailwind build gets
+ * from `@mortenbrudvik/waveui/tailwind` or `./tokens` (`text-wave-body-1`, `shadow-wave-4`) and
+ * the names of 0.x (`text-body-1`, `shadow-4`). A step of the type ramp is a font size, so a text
+ * colour next to it is kept; a level of the shadow scale is a shadow size.
+ *
+ * A later class replaces only a conflicting class **of the same variant**. Variant and state
+ * classes such as the gated `not-disabled:not-aria-disabled:hover:bg-…` or `data-[selected]:bg-…`
+ * are kept next to a bare `hover:bg-…`/`bg-…` and win by specificity; override them with the same
+ * prefix (`not-disabled:not-aria-disabled:hover:bg-wave-error`), the same data variant, or the
+ * important modifier (`hover:bg-wave-error!`).
+ *
+ * @example
+ * cn('text-wave-body-1 text-wave-foreground', className) // "text-wave-error" keeps the size
+ */
+export function cn(...inputs: ClassValue[]): string {
+  return wcn(...inputs);
+}

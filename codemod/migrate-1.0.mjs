@@ -37,7 +37,9 @@
  * A utility is rewritten with its variants (`dark:`, `hover:`, `data-[…]:`), its opacity or line
  * height modifier (`/50`), its important mark (`!bg-primary`, `bg-primary!`) and as a negated or
  * arbitrary part of nothing else: `bg-primary-hover` is the token `primary-hover`, `text-wave-body-1`
- * is already migrated (a second run changes nothing), a word such as `'primary'` is no utility,
+ * is already migrated (a second run changes nothing), a class with Wave's own utility prefix
+ * (`wave:bg-primary`, `wave:hover:text-body-1`, as the library's 1.0 class strings are written) is
+ * none of the app's 0.x classes, a word such as `'primary'` is no utility,
  * and neither is a file name (`'bg-success.png'`). A theme variable use (`var(--color-primary)`,
  * `theme(--text-body-1--line-height)`, `bg-(--color-primary)`) is rewritten; a declaration
  * (`--color-primary: …` in an app's own `@theme`, a style object's `'--color-primary': x`) and a
@@ -403,11 +405,20 @@ export function declaredNames(texts) {
  * variable uses only (a CSS rule outside `@apply`, a `style` attribute), `variables: false` the
  * utilities only (an object key: `{ '--color-x': … }` is a declaration). A name of
  * SHARED_COLORS, or one `appNames` lists (see declaredNames), is rewritten only with
- * `includeShared`. Counts each rewrite and each shared use left alone in `stats`.
+ * `includeShared`. A class with Wave's utility prefix is left alone; `prefixedLead` says that the
+ * text starts inside one (template text after a substitution, `wave:${gate}bg-primary`). Counts
+ * each rewrite and each shared use left alone in `stats`.
  */
 export function rewriteText(
   text,
-  { includeShared = false, classes = true, variables = true, appNames, stats } = {},
+  {
+    includeShared = false,
+    classes = true,
+    variables = true,
+    appNames,
+    stats,
+    prefixedLead = false,
+  } = {},
 ) {
   const colors = new Set(THEME_TABLE.colors);
   const steps = new Set(THEME_TABLE.text);
@@ -428,7 +439,10 @@ export function rewriteText(
   };
   let out = text;
   if (classes) {
-    out = out.replace(UTILITY, (match, root, name) => {
+    out = out.replace(UTILITY, (match, root, name, offset, whole) => {
+      // A class with Wave's own prefix (`wave:bg-primary`, `wave:hover:text-body-1`) is a class of
+      // the library's 1.0 namespace, never an app's 0.x one: Tailwind puts the prefix first.
+      if (prefixedClass(whole, offset, prefixedLead)) return match;
       // The type ramp and the shadow levels share no name with the colors.
       const namespace =
         root === 'text' && steps.has(name)
@@ -453,6 +467,25 @@ export function rewriteText(
     if (!known) return match;
     return rewrites(name, namespace) ? `--${namespace}-wave-${name}${sub}` : match;
   });
+}
+
+/**
+ * Where the class that holds `text[offset]` starts: after the whitespace or quote before it (a
+ * class holds neither), or at the start of the text.
+ */
+function classStart(text, offset) {
+  let start = offset;
+  while (start > 0 && !/[\s'"`]/.test(text[start - 1])) start -= 1;
+  return start;
+}
+
+/**
+ * Whether the class that holds `text[offset]` carries Wave's utility prefix: it starts with
+ * `wave:`, or it starts the text and `lead` says the text continues a prefixed class.
+ */
+function prefixedClass(text, offset, lead) {
+  const start = classStart(text, offset);
+  return (start === 0 && lead) || text.startsWith('wave:', start);
 }
 
 /** Replaces the given `[start, end)` ranges of `text` by `rewrite(piece)`. */
@@ -601,12 +634,21 @@ export function rewriteScript(code, options) {
   const ranges = scriptStringRanges(code);
   let out = '';
   let last = 0;
+  // Whether the template text that ends at `last` ends inside a prefixed class, which continues
+  // after a substitution (`wave:${gate}bg-primary`, the gate a chain of variants).
+  let lead = false;
   for (const [start, end] of ranges) {
     const piece = code.slice(start, end);
     const key = isObjectKey(code, start, end);
+    const continued = lead && code.startsWith('${', last) && code[start - 1] === '}';
     out +=
       code.slice(last, start) +
-      rewriteText(piece, key ? { ...options, variables: false } : options);
+      rewriteText(piece, {
+        ...options,
+        ...(key ? { variables: false } : {}),
+        prefixedLead: continued,
+      });
+    lead = prefixedClass(piece, piece.length, continued);
     last = end;
   }
   return out + code.slice(last);

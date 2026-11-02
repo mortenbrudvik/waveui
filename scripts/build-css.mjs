@@ -21,10 +21,11 @@
  * checks 15 and 18). utilities.css is src/styles/utilities.css plus an `@source inline()` list
  * generated from the namespaced theme keys of tokens.css (see `namespacedUtilities`): the token
  * utilities of apps without Tailwind (`bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`,
- * `font-wave`, `animate-wave-spin`, …), in `@layer utilities`, without variants.
+ * `font-wave`, `animate-wave-spin`, …), without variants, unlayered (ruling BL: its class
+ * selectors beat the zero-specificity base styles of styles.css inside `.wave-root`, which a
+ * layered class would lose to; the app's own unlayered CSS after it wins by source order).
  *
- * styles.css, components.css and preflight.css are minified and unlayered; utilities.css is
- * minified and layered. The assertions on styles.css:
+ * The four outputs are minified and unlayered. The assertions on styles.css:
  *   - every theme rule of tokens.css (ramps, three theme groups, color-scheme rules) is present
  *     with the same properties, so every `--wave-*` variable ships, and no rule selects `.dark`
  *     or `.high-contrast`, the theme classes 1.0 removed (the themes are `.wave-light`,
@@ -79,8 +80,8 @@
  * The assertions on utilities.css (`assertUtilitiesCss`):
  *   - exactly the generated classes, every one of them: a namespaced theme key of tokens.css
  *     yields its utilities, nothing else ships (no variant, no unnamespaced or other utility);
- *   - every style rule sits in `@layer utilities` (Tailwind's `properties` fallback aside), no
- *     other layer, no Tailwind directive;
+ *   - unlayered: no `@layer` but Tailwind's `properties` fallback, no style rule of a class inside
+ *     one, no Tailwind directive;
  *   - no token rule and no theme variable (no `:root` rule, no custom property other than
  *     Tailwind's `--tw-*`), and the `@keyframes wave-*` of the animations;
  *   - every custom property a declaration reads (`var(--name)`) is Tailwind's `--tw-*` or one that
@@ -562,7 +563,7 @@ export function namespacedUtilities(tokensCss) {
 
 /**
  * The source of utilities.css: src/styles/utilities.css (`utilitiesCss`, which imports tokens.css
- * as a reference and Tailwind's utilities into `layer(utilities)` without sources) and an
+ * as a reference and Tailwind's utilities, unlayered, without sources) and an
  * `@source inline()` of the classes `namespacedUtilities` generates from `tokensCss`. Throws when
  * tokens.css declares no namespaced key.
  */
@@ -1245,25 +1246,26 @@ function readCustomProperties(nodes) {
 }
 
 /**
- * utilities.css (`css`): exactly the classes `namespacedUtilities` generates from `tokensCss`, in
- * `@layer utilities`, without tokens or theme variables, and, given the built styles.css
- * (`stylesCss`), reading no custom property but Tailwind's `--tw-*` and those styles.css declares.
- * See the header.
+ * utilities.css (`css`): exactly the classes `namespacedUtilities` generates from `tokensCss`,
+ * unlayered, without tokens or theme variables, and, given the built styles.css (`stylesCss`),
+ * reading no custom property but Tailwind's `--tw-*` and those styles.css declares. See the header.
  */
 export function assertUtilitiesCss(css, { tokensCss, baseCss = '', stylesCss }) {
   const errors = [];
   const nodes = parseCss(css);
-  assertLayers(nodes, 'utilities.css', ['utilities'], errors);
-  const outside = [];
+  assertUnlayered(nodes, 'utilities.css', errors);
+  // Tailwind's `properties` fallback is the one layer allowed; a class inside it, or inside any
+  // layer, would lose to the unlayered base styles of styles.css.
+  const layered = [];
   walk(nodes, (node, parents) => {
     if (!isStyleRule(node) || parents.some(isKeyframes)) return;
-    const layers = parents
-      .filter((parent) => /^@layer\b/.test(parent.prelude))
-      .map((parent) => parent.prelude.slice('@layer'.length).trim());
-    if (layers[0] !== 'utilities' && layers[0] !== 'properties') outside.push(node.prelude);
+    if (!parents.some((parent) => /^@layer\b/.test(parent.prelude))) return;
+    if (selectorList(node.prelude).some((selector) => /\.[\w\\-]/.test(selector))) {
+      layered.push(node.prelude);
+    }
   });
-  if (outside.length > 0) {
-    errors.push(`utilities.css: rules outside @layer utilities (${outside.slice(0, 8).join(' ')})`);
+  if (layered.length > 0) {
+    errors.push(`utilities.css: classes inside a @layer (${layered.slice(0, 8).join(' ')})`);
   }
   assertNoTokens(
     nodes,

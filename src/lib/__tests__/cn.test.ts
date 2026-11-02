@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { extendTailwindMerge, type ExperimentalParsedClassName } from 'tailwind-merge';
-import { cn, createWcn, twMerge, UTILITY_PREFIX, wcn } from '../cn';
+import { cn, createWcn, UTILITY_PREFIX, wcn } from '../cn';
+import { focusRing, focusRingInset, inputFocus, inputFocusWithin } from '../styles';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 
@@ -80,12 +81,14 @@ describe('cn — Wave type ramp, namespaced (table-core#1; 1.0)', () => {
     expect(cn('text-wave-body-1', 'leading-6')).toBe('text-wave-body-1 leading-6');
   });
 
-  it('no longer knows the unnamespaced names of 0.x (spec §6, Task 1, item 4)', () => {
-    // An unknown text or shadow value is a colour for tailwind-merge: a colour after it wins.
-    expect(cn('text-body-1', 'text-foreground')).toBe('text-foreground');
-    expect(cn('text-body-1', 'text-sm')).toBe('text-body-1 text-sm');
-    expect(cn('shadow-4', 'shadow-primary')).toBe('shadow-primary');
-    expect(cn('shadow-4', 'shadow-lg')).toBe('shadow-4 shadow-lg');
+  it('still knows the names of 0.x, as in 0.18 (ruling BK)', () => {
+    expect(cn('text-body-1', 'text-foreground')).toBe('text-body-1 text-foreground');
+    expect(cn('text-body-1', 'text-sm')).toBe('text-sm');
+    expect(cn('text-body-1', 'text-wave-caption-1')).toBe('text-wave-caption-1');
+    expect(cn('shadow-4', 'shadow-8')).toBe('shadow-8');
+    expect(cn('shadow-4', 'shadow-primary')).toBe('shadow-4 shadow-primary');
+    expect(cn('shadow-4', 'shadow-lg')).toBe('shadow-lg');
+    expect(cn('shadow-4', 'shadow-wave-16')).toBe('shadow-wave-16');
   });
 });
 
@@ -199,12 +202,55 @@ describe('cn — axis shorthands and logical sides (C-LOGICAL)', () => {
   });
 });
 
-describe('twMerge', () => {
-  it('is the configured merger (knows the namespaced Wave scales)', () => {
-    expect(twMerge('text-wave-body-1 text-wave-foreground')).toBe(
-      'text-wave-body-1 text-wave-foreground',
+describe('cn — the public recipes and their prefixed classes (ruling BK)', () => {
+  // The recipes return classes with Wave's prefix; your unprefixed class of the same utility and
+  // variant replaces the recipe's, and the rest of the recipe stays.
+  it.each([
+    [
+      'focusRing',
+      focusRing,
+      'focus-visible:outline-offset-0',
+      'wave:focus-visible:outline-offset-2',
+    ],
+    [
+      'focusRingInset',
+      focusRingInset,
+      'focus-visible:outline-offset-0',
+      'wave:focus-visible:-outline-offset-2',
+    ],
+    ['inputFocus', inputFocus, 'focus:border-b-wave-error', 'wave:focus:border-b-primary'],
+    [
+      'inputFocusWithin',
+      inputFocusWithin,
+      'focus-within:border-b-4',
+      'wave:focus-within:border-b-2',
+    ],
+  ])(
+    '%s: an unprefixed override replaces the conflicting class of the recipe',
+    (_, recipe, override, replaced) => {
+      const words = recipe.split(' ');
+      expect(words).toContain(replaced);
+      const merged = cn(recipe, override).split(' ');
+      expect(merged).not.toContain(replaced);
+      expect(merged).toEqual([...words.filter((word) => word !== replaced), override]);
+    },
+  );
+
+  it('merges a class and its prefixed twin in either order: the last wins', () => {
+    expect(cn('wave:p-4', 'p-2')).toBe('p-2');
+    expect(cn('p-2', 'wave:p-4')).toBe('wave:p-4');
+    expect(cn('wave:text-body-1 wave:text-foreground', 'text-wave-body-2')).toBe(
+      'wave:text-foreground text-wave-body-2',
     );
-    expect(twMerge('shadow-wave-4 shadow-lg')).toBe('shadow-lg');
+  });
+
+  it('is the merge of the components: wcn gives the same result', () => {
+    for (const inputs of [
+      ...PREFIXED_CASES,
+      ...UNPREFIXED_CASES.map(([unprefixed]) => unprefixed),
+    ] as Array<Parameters<typeof cn>>) {
+      expect(cn(...inputs)).toBe(wcn(...inputs));
+    }
   });
 });
 
@@ -574,10 +620,14 @@ describe('tailwind-merge: the parse the prefix mode relies on is pinned', () => 
   });
 });
 
-describe('cn.ts: both merge configurations are pure (tree-shaking)', () => {
-  it('marks the module-level construction of each merge /* @__PURE__ */', () => {
+describe('cn.ts: one merge configuration, pure (tree-shaking)', () => {
+  it('marks the module-level construction of the merge /* @__PURE__ */, and cn calls it', () => {
     const source = readFileSync(join(REPO_ROOT, 'src/lib/cn.ts'), 'utf8');
-    expect(source).toMatch(/export const twMerge = \/\* @__PURE__ \*\/ extendTailwindMerge\(/);
     expect(source).toMatch(/export const wcn = \/\* @__PURE__ \*\/ createWcn\(UTILITY_PREFIX\);/);
+    // One configuration: the public cn has no merge of its own (ruling BK).
+    expect(source.match(/extendTailwindMerge\(/g)).toHaveLength(1);
+    expect(source).toMatch(
+      /export function cn\(\.\.\.inputs: ClassValue\[\]\): string \{\n {2}return wcn\(\.\.\.inputs\);\n\}/,
+    );
   });
 });

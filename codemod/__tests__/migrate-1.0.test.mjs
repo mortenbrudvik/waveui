@@ -177,6 +177,26 @@ describe('rewriteText', () => {
     );
   });
 
+  it('leaves a class with Wave’s own prefix alone, and rewrites the app’s classes next to it', () => {
+    // The library's 1.0 class strings: Tailwind puts the prefix before every other variant.
+    const prefixed =
+      'wave:bg-primary wave:hover:text-body-1 wave:data-[selected]:bg-subtle-hover/50 ' +
+      'wave:shadow-4 wave:border-t-stroke wave:!bg-error wave:bg-error!';
+    const stats = { replacements: 0, shared: 0 };
+    expect(rewriteText(prefixed, { ...shared, stats })).toBe(prefixed);
+    expect(stats).toEqual({ replacements: 0, shared: 0 });
+    for (const quoted of [`'${prefixed}'`, `"${prefixed}"`, `\`${prefixed}\``]) {
+      expect(rewrite(quoted, shared)).toBe(quoted);
+    }
+    expect(rewrite('wave:bg-subtle bg-subtle\twave:text-body-1\ntext-body-1', shared)).toBe(
+      'wave:bg-subtle bg-wave-subtle\twave:text-body-1\ntext-wave-body-1',
+    );
+    // Only a leading `wave:` is the prefix: a variant that merely ends in it is not.
+    expect(rewrite('hover:bg-subtle group-wave:bg-subtle', shared)).toBe(
+      'hover:bg-wave-subtle group-wave:bg-wave-subtle',
+    );
+  });
+
   it('is idempotent', () => {
     const once = rewrite('bg-primary hover:text-body-1 shadow-4 var(--color-subtle)', shared);
     expect(rewrite(once, shared)).toBe(once);
@@ -210,6 +230,29 @@ describe('scripts', () => {
         "const p = <p>Don't use bg-subtle here</p>;",
         'const q = <div className="bg-wave-subtle" title={`text-wave-body-1`} />;',
         "const appearance = 'primary';",
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('leaves a prefixed class alone across a template substitution, and nothing after it', () => {
+    const code = [
+      "const a = 'wave:bg-subtle bg-subtle';",
+      // The substitution is a chain of variants: the text after it continues the class.
+      'const b = `wave:${gate}bg-primary-hover wave:${track}:bg-stroke-accessible`;',
+      'const c = `wave:${a}${b}text-body-1 ${x}text-body-1 bg-subtle`;',
+      // A class that ended before the substitution, or a substitution after unprefixed text.
+      'const d = `wave:p-2 ${gate}bg-subtle hover:${gate}bg-subtle`;',
+      "const e = 'wave:'; const f = `${g}bg-subtle`;",
+      '',
+    ].join('\n');
+    expect(rewriteScript(code, {})).toBe(
+      [
+        "const a = 'wave:bg-subtle bg-wave-subtle';",
+        'const b = `wave:${gate}bg-primary-hover wave:${track}:bg-stroke-accessible`;',
+        'const c = `wave:${a}${b}text-body-1 ${x}text-wave-body-1 bg-wave-subtle`;',
+        'const d = `wave:p-2 ${gate}bg-wave-subtle hover:${gate}bg-wave-subtle`;',
+        "const e = 'wave:'; const f = `${g}bg-wave-subtle`;",
         '',
       ].join('\n'),
     );
