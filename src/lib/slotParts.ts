@@ -236,12 +236,14 @@ export const SLOT_PROPS_KEYS = {
  * (Input, whose `root` and `input` are one `<input>` without content slots, and the wrapper and
  * the input with them, is the first; Checkbox, Switch and `RadioGroup.Item`, whose roots are
  * `<label>`s around a `role` button, follow, and so do SearchBox, SpinButton,
- * `ColorPicker.HexField`, ColorSlider and AlphaSlider, whose roots hold one `<input>`, and
+ * `ColorPicker.HexField`, ColorSlider and AlphaSlider, whose roots hold one `<input>`,
  * Combobox, Dropdown, TimePicker and DatePicker, whose roots hold the combobox or the date input
- * with its buttons). A component whose `ref` is its root has no need of the part and is no owner,
- * so it declares no `root` (the owners' type test requires `root` exactly for the owners listed
- * here). Each rollout task that moves a `ref` adds its component, in the change that gives it the
- * part: the type test forces an owner to declare `root`, so none is listed earlier.
+ * with its buttons, and TagPicker, whose root holds the field with its one trigger,
+ * `TagPicker.Input` or `TagPicker.Button`, which `ref` follows). A component whose `ref` is its
+ * root has no need of the part and is no owner, so it declares no `root` (the owners' type test
+ * requires `root` exactly for the owners listed here). Each rollout task that moves a `ref` adds
+ * its component, in the change that gives it the part: the type test forces an owner to declare
+ * `root`, so none is listed earlier.
  */
 export const SLOT_PROPS_ROOT_OWNERS = [
   'inputClassNames',
@@ -257,6 +259,7 @@ export const SLOT_PROPS_ROOT_OWNERS = [
   'dropdownClassNames',
   'timePickerClassNames',
   'datePickerClassNames',
+  'tagPickerClassNames',
 ] as const satisfies readonly ClassNameConstant[];
 
 /** The parts that a named slot prop already fills (R2); see the module's JSDoc for the rule. */

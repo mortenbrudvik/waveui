@@ -436,7 +436,8 @@ type SlotPropsOwners = {
   optionGroupClassNames: OptionGroupProps;
   comboboxClassNames: ComboboxProps;
   dropdownClassNames: DropdownProps;
-  // Every TagPicker key is declared on the root and read by the parts through its context.
+  // Every TagPicker key is declared on the root and read by the parts through its context; `root`
+  // is the root's own (a root owner: `ref` follows the trigger).
   tagPickerClassNames: TagPickerProps;
   timePickerClassNames: TimePickerProps;
   // The calendar view draws the parts of both, each under its own constant's keys.

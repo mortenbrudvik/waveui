@@ -865,8 +865,9 @@ describe('TagPicker parts', () => {
       expect(document.getElementById(ids[3])).toHaveTextContent('Selected: Apple');
     });
 
-    it('root maxLength, autoComplete and controlRef reach the Input only', () => {
-      const controlRef = React.createRef<HTMLInputElement>();
+    it('root maxLength and autoComplete reach the Input only; ref reaches either trigger', () => {
+      const ref = React.createRef<HTMLInputElement>();
+      const buttonRef = React.createRef<HTMLButtonElement>();
       render(
         <>
           <TagPicker
@@ -874,11 +875,17 @@ describe('TagPicker parts', () => {
             options={options}
             maxLength={5}
             autoComplete="on"
-            controlRef={controlRef}
+            ref={ref}
           >
             <TagPicker.Control />
           </TagPicker>
-          <TagPicker aria-label="Fruit button" options={options} maxLength={5} autoComplete="on">
+          <TagPicker
+            aria-label="Fruit button"
+            options={options}
+            maxLength={5}
+            autoComplete="on"
+            ref={buttonRef}
+          >
             <TagPicker.Control>
               <TagPicker.Button />
             </TagPicker.Control>
@@ -887,9 +894,10 @@ describe('TagPicker parts', () => {
       );
       expect(combobox()).toHaveAttribute('maxlength', '5');
       expect(combobox()).toHaveAttribute('autocomplete', 'on');
-      expect(controlRef.current).toBe(combobox());
+      expect(ref.current).toBe(combobox());
       expect(combobox('Fruit button')).not.toHaveAttribute('maxlength');
       expect(combobox('Fruit button')).not.toHaveAttribute('autocomplete');
+      expect(buttonRef.current).toBe(combobox('Fruit button'));
     });
 
     it('handlers compose part, then root, then internal; preventDefault() in the part skips the built-in keys', async () => {

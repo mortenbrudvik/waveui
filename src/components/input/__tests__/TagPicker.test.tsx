@@ -20,6 +20,7 @@ import {
   openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
+  testRootPartRef,
   testSystemProps,
 } from '../../../test-utils';
 import { Tag } from '../../data-display/Tag';
@@ -82,7 +83,8 @@ describe('TagPicker', () => {
   testSystemProps(TagPicker, {
     expectedTag: 'div',
     displayName: 'TagPicker',
-    control: { role: 'combobox' },
+    ref: 'control',
+    control: { role: 'combobox', tag: 'input' },
     defaultProps: { options, 'aria-label': 'Fruits' },
     conflictingClass: { className: 'static', overrides: 'relative' },
     a11yVariants: [
@@ -102,6 +104,8 @@ describe('TagPicker', () => {
       },
     ],
   });
+
+  testRootPartRef(TagPicker, { props: { options, 'aria-label': 'Fruits' } });
 
   testNoImplicitSubmit(TagPicker, {
     defaultProps: {
@@ -2272,6 +2276,7 @@ describe('TagPicker', () => {
 describe('TagPicker — slotProps', () => {
   type TagPickerSlotProps = NonNullable<TagPickerProps['slotProps']>;
   const EVERY_PART: TagPickerSlotProps = {
+    root: {},
     tag: {},
     removeButton: {},
     expandButton: {},
@@ -2354,6 +2359,18 @@ describe('TagPicker — slotProps', () => {
       { defaultValue: ['apple', 'banana'], clearable: true, disabled: true },
       { defaultValue: ['apple'], clearable: true, readOnly: true },
       { defaultValue: ['apple'], expandIcon: false, size: 'large' },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
+      // The single-line layout's data attributes.
+      { defaultValue: ['apple', 'banana'], overflow: 'count' },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -2363,6 +2380,37 @@ describe('TagPicker — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Your own data attributes on the root, the locked ones among them.
+    expectInertSlotProps(
+      (slotProps) => (
+        <TagPicker
+          aria-label="Fruit"
+          options={options}
+          data-size="large"
+          data-overflow="count"
+          data-x="1"
+          slotProps={slotProps}
+        />
+      ),
+      EVERY_PART,
+    );
+    // The Button trigger.
+    expectInertSlotProps(
+      (slotProps) => (
+        <TagPicker
+          aria-label="Fruit"
+          options={options}
+          defaultValue={['apple']}
+          slotProps={slotProps}
+        >
+          <TagPicker.Control>
+            <TagPicker.Group />
+            <TagPicker.Button />
+          </TagPicker.Control>
+        </TagPicker>
+      ),
+      EVERY_PART,
+    );
     expectInertSlotProps(
       (slotProps) => (
         <TagPicker
@@ -2941,6 +2989,7 @@ describe('TagPicker — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof TagPickerSlotProps>().toEqualTypeOf<
+      | 'root'
       | 'tag'
       | 'removeButton'
       | 'expandButton'
@@ -2950,6 +2999,9 @@ describe('TagPicker — slotProps', () => {
       | 'overflowCount'
       | 'surface'
       | 'emptyMessage'
+    >();
+    expectTypeOf<NonNullable<TagPickerSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
     >();
     expectTypeOf<NonNullable<TagPickerSlotProps['tag']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLSpanElement> | undefined
@@ -2965,5 +3017,577 @@ describe('TagPicker — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: TagPicker draws its content
     void (<TagPicker slotProps={{ tag: { children: 'Other' } }} />);
+    // @ts-expect-error -- a part takes no children: TagPicker draws its content
+    void (<TagPicker slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const root = () => part(tagPickerClassNames.root)!;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after TagPicker's className and style", () => {
+      render(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(tagPickerClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(combobox('Fruit')).not.toHaveAttribute('data-part');
+      expect(combobox('Fruit')).not.toHaveAttribute('title');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          slotProps={{ root: { className: 'static' } }}
+        />,
+      );
+      expect(root()).toHaveClass('static');
+      expect(root()).not.toHaveClass('relative');
+    });
+
+    it("keeps the props you give TagPicker over the part's", () => {
+      render(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          title="Own"
+          data-x="own"
+          data-size="large"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+      // Your own data-size reaches the root as in 0.18 (after the resolved one).
+      expect(root()).toHaveAttribute('data-size', 'large');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              'data-overflow': 'count',
+              'data-collapsed': '',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      expect(root()).toHaveAttribute('data-overflow', 'wrap');
+      expect(root()).not.toHaveAttribute('data-collapsed');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // TagPicker's own hidden state, and its single-line layout, stay its own.
+      rerender(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          defaultValue={['apple']}
+          overflow="count"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{
+            root: { 'data-overflow': 'wrap', hidden: false, inert: false, 'aria-hidden': false },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-overflow', 'count');
+      expect(root()).toHaveAttribute('data-collapsed', '');
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before TagPicker's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it('tracks focus inside the root after your onFocus and onBlur, also when they prevent the default', () => {
+      const calls: string[] = [];
+      render(
+        <>
+          <TagPicker
+            aria-label="Fruit"
+            options={TWO}
+            defaultValue={['apple']}
+            overflow="count"
+            slotProps={{
+              root: {
+                onFocus: (event) => {
+                  calls.push('focus');
+                  event.preventDefault();
+                },
+                onBlur: (event) => {
+                  calls.push('blur');
+                  event.preventDefault();
+                },
+              },
+            }}
+          />
+          <button type="button">Outside</button>
+        </>,
+      );
+      expect(root()).toHaveAttribute('data-collapsed', '');
+      // Focus inside expands the single-line layout, whatever your handler does.
+      act(() => combobox('Fruit').focus());
+      expect(root()).not.toHaveAttribute('data-collapsed');
+      act(() => screen.getByRole('button', { name: 'Outside' }).focus());
+      expect(root()).toHaveAttribute('data-collapsed', '');
+      expect(calls).toEqual(['focus', 'blur']);
+    });
+
+    it('opens on a click in the input and toggles on a press on the field, whatever your root handlers do', async () => {
+      const user = userEvent.setup();
+      render(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          slotProps={{
+            root: {
+              onClick: (event) => event.preventDefault(),
+              onMouseDown: (event) => event.preventDefault(),
+            },
+          }}
+        />,
+      );
+      // The input's opening and the field's press run before the event reaches the root.
+      await user.click(combobox('Fruit'));
+      expect(combobox('Fruit')).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.mouseDown(
+        part(tagPickerClassNames.root)!.querySelector('[data-wave-tagpicker-control]')!,
+      );
+      expect(combobox('Fruit')).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('calls your root onClick in every state, as TagPicker calls its own: the root passes no click to the trigger', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          onClick={own}
+          slotProps={{ root: { onClick } }}
+        />,
+      );
+      fireEvent.click(root());
+      rerender(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          disabled
+          onClick={own}
+          slotProps={{ root: { onClick } }}
+        />,
+      );
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps a press inside the root from dismissing the open list and the form reset working, also with an inline part ref', async () => {
+      const user = userEvent.setup();
+      const nodes: (HTMLDivElement | null)[] = [];
+      const ui = (pass: number) => (
+        <>
+          <form aria-label="Order">
+            <TagPicker
+              aria-label="Fruit"
+              options={TWO}
+              defaultValue={['apple']}
+              data-pass={pass}
+              slotProps={{
+                root: {
+                  ref: (node) => {
+                    nodes.push(node);
+                  },
+                },
+              }}
+            />
+          </form>
+          <p>Outside</p>
+        </>
+      );
+      const { rerender } = render(ui(0));
+      await user.click(combobox('Fruit'));
+      rerender(ui(1));
+      rerender(ui(2));
+      expect(nodes.at(-1)).toBe(root());
+      // A press on the root itself (no focus move): inside the popup's tree.
+      fireEvent.pointerDown(root());
+      fireEvent.click(root());
+      await act(async () => {});
+      expect(combobox('Fruit')).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.pointerDown(screen.getByText('Outside'));
+      fireEvent.click(screen.getByText('Outside'));
+      await act(async () => {});
+      expect(combobox('Fruit')).toHaveAttribute('aria-expanded', 'false');
+      // The form reset finds its form from the root's own ref.
+      await user.click(screen.getByRole('button', { name: 'Remove Apple' }));
+      expect(tags()).toEqual([]);
+      rerender(ui(3));
+      act(() => (screen.getByRole('form', { name: 'Order' }) as HTMLFormElement).reset());
+      expect(tags()).toEqual(['Apple']);
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <TagPicker
+          aria-label="Fruit"
+          options={TWO}
+          defaultValue={['apple']}
+          defaultOpen
+          slotProps={{ root: { className: 'my-root', title: 'Pick fruits' } }}
+        />,
+      );
+      await act(async () => {});
+      await expectNoA11yViolations();
+    });
+  });
+});
+
+/** React's development error for an unknown prop that reaches a DOM element, as logged. */
+const UNKNOWN_PROP = (name: string) => [
+  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+    'accidentally passed it from a parent component, remove it from the DOM element.',
+  name,
+  name.toLowerCase(),
+];
+
+/** The parts form with `TagPicker.Button` in place of the Input. */
+function ButtonPicker(props: Partial<TagPickerProps>) {
+  return (
+    <TagPicker options={options} {...props}>
+      <TagPicker.Control>
+        <TagPicker.Group />
+        <TagPicker.Button />
+      </TagPicker.Control>
+    </TagPicker>
+  );
+}
+
+// 1.0 (Phase 14, R5): `ref` reaches the trigger that renders, TagPicker.Input's
+// <input role="combobox"> (the built-in one too) or TagPicker.Button's <button role="combobox">;
+// the root <div> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('TagPicker — ref reaches the control', () => {
+  const TRIGGERS = {
+    input: (props: Partial<TagPickerProps>) => <TagPicker options={options} {...props} />,
+    button: ButtonPicker,
+  };
+
+  it('focuses the built-in input through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderPicker({ ref });
+    expect(ref.current).toBe(combobox());
+    act(() => ref.current?.focus());
+    expect(combobox()).toHaveFocus();
+  });
+
+  it("gives ref the parts form's TagPicker.Input beside its own ref, and slotProps.root.ref the root", () => {
+    const ref = React.createRef<HTMLInputElement>();
+    const own = React.createRef<HTMLInputElement>();
+    const root = React.createRef<HTMLDivElement>();
+    render(
+      <TagPicker
+        ref={ref}
+        aria-label="Fruits"
+        options={options}
+        slotProps={{ root: { ref: root } }}
+      >
+        <TagPicker.Control>
+          <TagPicker.Group />
+          <TagPicker.Input ref={own} />
+        </TagPicker.Control>
+      </TagPicker>,
+    );
+    expect(ref.current).toBe(combobox());
+    expect(own.current).toBe(combobox());
+    expect(root.current).toHaveClass(tagPickerClassNames.root);
+    expect(root.current).toContainElement(combobox());
+  });
+
+  it('gives ref TagPicker.Button beside its own ref, and focuses it', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const own = React.createRef<HTMLButtonElement>();
+    render(
+      <TagPicker ref={ref} aria-label="Fruits" options={options}>
+        <TagPicker.Control>
+          <TagPicker.Group />
+          <TagPicker.Button ref={own} />
+        </TagPicker.Control>
+      </TagPicker>,
+    );
+    expect(combobox().tagName).toBe('BUTTON');
+    expect(ref.current).toBe(combobox());
+    expect(own.current).toBe(combobox());
+    act(() => ref.current?.focus());
+    expect(combobox()).toHaveFocus();
+  });
+
+  it('follows the trigger: swapping the Input for the Button moves ref to the button, and back', () => {
+    const ref = vi.fn();
+    const ui = (trigger: 'input' | 'button') => (
+      <TagPicker ref={ref} aria-label="Fruits" options={options}>
+        <TagPicker.Control>
+          <TagPicker.Group />
+          {trigger === 'input' ? <TagPicker.Input /> : <TagPicker.Button />}
+        </TagPicker.Control>
+      </TagPicker>
+    );
+    const { rerender, unmount } = render(ui('input'));
+    const input = combobox();
+    rerender(ui('button'));
+    const button = combobox();
+    expect(button.tagName).toBe('BUTTON');
+    expect(ref.mock.calls).toEqual([[input], [null], [button]]);
+    rerender(ui('input'));
+    const next = combobox();
+    expect(next.tagName).toBe('INPUT');
+    expect(ref.mock.calls).toEqual([[input], [null], [button], [null], [next]]);
+    unmount();
+    expect(ref.mock.calls).toHaveLength(6);
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it.each(['input', 'button'] as const)(
+    'keeps the invalid focus, the clear and the form reset working with an inline ref that changes on every render (%s)',
+    async (trigger) => {
+      const user = userEvent.setup();
+      const Picker = TRIGGERS[trigger];
+      const nodes: (HTMLElement | null)[] = [];
+      const ui = (pass: number) => (
+        <form aria-label="Order">
+          <Picker
+            aria-label="Fruits"
+            ref={(node: HTMLInputElement | HTMLButtonElement | null) => {
+              nodes.push(node);
+            }}
+            name="fruit"
+            required
+            clearable
+            data-pass={pass}
+          />
+        </form>
+      );
+      const { rerender } = render(ui(0));
+      rerender(ui(1));
+      rerender(ui(2));
+      const control = combobox();
+      expect(nodes.at(-1)).toBe(control);
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      // The hidden input's invalid event focuses the trigger through TagPicker's own ref.
+      act(() => {
+        form.reportValidity();
+      });
+      expect(control).toHaveFocus();
+      await user.click(control);
+      await user.click(screen.getByRole('option', { name: 'Apple' }));
+      rerender(ui(3));
+      expect(tags()).toEqual(['Apple']);
+      expect(form.checkValidity()).toBe(true);
+      // The clear button hands focus to the trigger through TagPicker's own ref.
+      act(() => control.blur());
+      await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+      expect(tags()).toEqual([]);
+      expect(control).toHaveFocus();
+      await user.click(control);
+      await user.click(screen.getByRole('option', { name: 'Banana' }));
+      rerender(ui(4));
+      act(() => form.reset());
+      expect(tags()).toEqual([]);
+      expect(form.checkValidity()).toBe(false);
+      expect(nodes.at(-1)).toBe(control);
+    },
+  );
+
+  it('keeps the popup placed against the field with an inline ref that changes on every render', async () => {
+    const html = document.documentElement;
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+    try {
+      const user = userEvent.setup();
+      const nodes: (HTMLElement | null)[] = [];
+      const ui = (pass: number) => (
+        <TagPicker
+          aria-label="Fruits"
+          options={options}
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          data-pass={pass}
+        />
+      );
+      const { rerender } = render(ui(0));
+      const field = combobox().closest<HTMLElement>('[data-wave-tagpicker-control]')!;
+      mockRect(field, { x: 100, y: 100, width: 240, height: 32 });
+      rerender(ui(1));
+      await user.click(combobox());
+      rerender(ui(2));
+      rerender(ui(3));
+      const surface = () =>
+        screen.getByRole('listbox').closest<HTMLElement>('[data-wave-listbox-surface]')!;
+      // As wide as the field, the positioning reference, which `ref` does not reach.
+      await waitFor(() =>
+        expect(surface().style.getPropertyValue('--wave-popup-reference-width')).toBe('240px'),
+      );
+      expect(surface()).toHaveAttribute('data-side', 'bottom');
+      expect(nodes.at(-1)).toBe(combobox());
+    } finally {
+      Reflect.deleteProperty(html, 'clientWidth');
+      Reflect.deleteProperty(html, 'clientHeight');
+    }
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <TagPicker ref={ref} aria-label="Fruits" options={options} />,
+    );
+    const input = combobox();
+    rerender(
+      <TagPicker
+        ref={ref}
+        aria-label="Fruits"
+        options={options}
+        defaultValue={['apple']}
+        disabled
+      />,
+    );
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it.each(['input', 'button'] as const)(
+    'in StrictMode, attaches only the control: React detaches and attaches it again on mount, once (%s)',
+    (trigger) => {
+      const Picker = TRIGGERS[trigger];
+      const ref = vi.fn();
+      const { rerender, unmount } = render(
+        <React.StrictMode>
+          <Picker ref={ref} aria-label="Fruits" />
+        </React.StrictMode>,
+      );
+      const control = combobox();
+      rerender(
+        <React.StrictMode>
+          <Picker ref={ref} aria-label="Fruits" readOnly />
+        </React.StrictMode>,
+      );
+      expect(ref.mock.calls).toEqual([[control], [null], [control]]);
+      unmount();
+      expect(ref).toHaveBeenLastCalledWith(null);
+    },
+  );
+
+  it.each(['input', 'button'] as const)(
+    'reaches the trigger the Field label points at (%s)',
+    (trigger) => {
+      const Picker = TRIGGERS[trigger];
+      const ref = React.createRef<HTMLInputElement | HTMLButtonElement>();
+      renderWithFieldContext(<Picker ref={ref} />);
+      const fieldLabel = screen
+        .getByText(FIELD_TEST_TEXT.label)
+        .closest('label') as HTMLLabelElement;
+      expect(ref.current).toBe(combobox(FIELD_TEST_TEXT.label));
+      expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+    },
+  );
+
+  it('declares ref for the input or the button, and no controlRef', () => {
+    expectTypeOf<TagPickerProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement | HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<TagPickerProps>().not.toHaveProperty('controlRef');
+    const inputRef = React.createRef<HTMLInputElement>();
+    const buttonRef = React.createRef<HTMLButtonElement>();
+    void (<TagPicker aria-label="Fruits" ref={inputRef} />);
+    void (<TagPicker aria-label="Fruits" ref={buttonRef} />);
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the trigger; the root <div> is slotProps.root.ref
+    void (<TagPicker aria-label="Fruits" ref={divRef} />);
+    // @ts-expect-error -- a callback typed for the root <div> is rejected too: a <button> is no <div>
+    void (<TagPicker aria-label="Fruits" ref={(node: HTMLDivElement | null) => void node} />);
+    // A state setter takes the trigger when its state takes both triggers (or any element).
+    type Setter<T> = React.Dispatch<React.SetStateAction<T | null>>;
+    const setTrigger = (() => {}) as Setter<HTMLInputElement | HTMLButtonElement>;
+    const setElement = (() => {}) as Setter<HTMLElement>;
+    const setInput = (() => {}) as Setter<HTMLInputElement>;
+    void (<TagPicker aria-label="Fruits" ref={setTrigger} />);
+    void (<TagPicker aria-label="Fruits" ref={setElement} />);
+    // @ts-expect-error -- a setter of an input alone could be handed TagPicker.Button
+    void (<TagPicker aria-label="Fruits" ref={setInput} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <TagPicker
+          aria-label="Fruits"
+          options={options}
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the trigger
+          controlRef={controlRef}
+        />,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(document.querySelector(`.${tagPickerClassNames.root}`)).toHaveAttribute(
+        'controlref',
+        '[object Object]',
+      );
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

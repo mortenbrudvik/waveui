@@ -241,13 +241,13 @@ function TagPickerControlImpl({
   ref,
   ...rest
 }: ControlImplProps) {
-  const { registerTrigger, setReference, controlRef } = ctx;
+  const { registerTrigger, setReference, controlElementRef } = ctx;
   const controlContext = React.useMemo<TagPickerControlContextValue>(
     () => ({ registerTrigger }),
     [registerTrigger],
   );
   // The control is the popup's anchor: the list opens below it, as wide as it (0.10).
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, controlRef, setReference);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, controlElementRef, setReference);
 
   const glyph = expandIcon !== undefined ? expandIcon : ctx.expandIcon;
   const showExpand = showsExpandButton(glyph);
@@ -649,11 +649,8 @@ function TagPickerInputImpl({
   const { registerTrigger } = control;
   React.useLayoutEffect(() => registerTrigger('input'), [registerTrigger]);
   const { triggerProps, inputProps, listbox } = ctx;
-  const mergedRef = useMergedRefs<HTMLInputElement>(
-    ref,
-    ctx.triggerRef as React.Ref<HTMLInputElement>,
-    inputProps.controlRef,
-  );
+  // TagPicker's `ref` follows the trigger that renders: merged here, and in TagPicker.Button.
+  const mergedRef = useMergedRefs<HTMLElement>(ref, ctx.triggerRef, triggerProps.ref);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     // Read-only: no listbox keys at all (they would open the list, add or remove tags).
@@ -748,11 +745,12 @@ TagPickerInputImpl.displayName = 'TagPickerInputImpl';
 
 /**
  * The text field of a TagPicker (`TagPicker.Input`): the `<input role="combobox">` that filters
- * the options as you type, inside `TagPicker.Control`. TagPicker's `id`, name, description, Field
- * wiring and text input attributes reach it (its own `id`, `aria-label` and `aria-labelledby`
- * replace TagPicker's, and its `aria-describedby` comes first); its handlers run before
- * TagPicker's `onKeyDown` and the built-in keys. Backspace in the empty field, and Left (Right in
- * RTL) with the caret at its start, focus the last tag. The form fields are TagPicker's.
+ * the options as you type, inside `TagPicker.Control`. TagPicker's `ref`, `id`, name,
+ * description, Field wiring and text input attributes reach it (its own `ref` joins TagPicker's;
+ * its own `id`, `aria-label` and `aria-labelledby` replace TagPicker's, and its `aria-describedby`
+ * comes first); its handlers run before TagPicker's `onKeyDown` and the built-in keys. Backspace
+ * in the empty field, and Left (Right in RTL) with the caret at its start, focus the last tag.
+ * The form fields are TagPicker's.
  */
 export const TagPickerInput = (props: TagPickerInputProps) => {
   const ctx = useTagPickerContext('TagPicker.Input');
@@ -799,10 +797,8 @@ function TagPickerButtonImpl({
   const { registerTrigger } = control;
   React.useLayoutEffect(() => registerTrigger('button'), [registerTrigger]);
   const { triggerProps, listbox } = ctx;
-  const mergedRef = useMergedRefs<HTMLButtonElement>(
-    ref,
-    ctx.triggerRef as React.Ref<HTMLButtonElement>,
-  );
+  // TagPicker's `ref` follows the trigger that renders: merged here, and in TagPicker.Input.
+  const mergedRef = useMergedRefs<HTMLElement>(ref, ctx.triggerRef, triggerProps.ref);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!ctx.interactive) return;
@@ -870,10 +866,10 @@ TagPickerButtonImpl.displayName = 'TagPickerButtonImpl';
  * keep it open; Escape, Alt+Up and Tab close it; a click toggles it. Backspace and Left (Right in
  * RTL) focus the last tag. It shows the placeholder while no tag is selected, else nothing, and
  * stays the click area of the rest of the row. No query, no filter and no create option
- * (`allowCreate` needs `TagPicker.Input`). TagPicker's `id`, name, description and Field wiring
- * reach it; pass handlers and `ref` on it (TagPicker's `onKeyDown` and `controlRef` are the
- * Input's). Read-only, it renders `aria-readonly`. Fluent's TagPickerButton is visually hidden
- * once a tag is selected; this one stays.
+ * (`allowCreate` needs `TagPicker.Input`). TagPicker's `ref`, `id`, name, description and Field
+ * wiring reach it (its own `ref` joins TagPicker's); pass handlers on it (TagPicker's `onFocus`,
+ * `onBlur`, `onKeyDown` and `onKeyUp` are the Input's). Read-only, it renders `aria-readonly`.
+ * Fluent's TagPickerButton is visually hidden once a tag is selected; this one stays.
  */
 export const TagPickerButton = (props: TagPickerButtonProps) => {
   const ctx = useTagPickerContext('TagPicker.Button');
