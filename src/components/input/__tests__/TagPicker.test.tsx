@@ -858,21 +858,27 @@ describe('TagPicker', () => {
   });
 
   describe('value (input-basic#29, table-core#3, #4)', () => {
-    it('the deprecated onChange still fires and warns once', async () => {
+    it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
       const user = userEvent.setup();
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onChange = vi.fn();
-      renderPicker({ onChange });
+      const onValueChange = vi.fn();
+      render(
+        <TagPicker
+          aria-label="Fruits"
+          options={options}
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
+      );
       await user.click(combobox());
       await user.click(screen.getByRole('option', { name: 'Apple' }));
       await user.click(screen.getByRole('option', { name: 'Date' }));
-      expect(onChange.mock.calls).toEqual([[['apple']], [['apple', 'date']]]);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] TagPicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onValueChange` instead.',
-        ],
-      ]);
+      expect(onValueChange.mock.calls).toEqual([[['apple']], [['apple', 'date']]]);
+      // Untyped code that still passes it gets no value: it is never called with the tags.
+      expect(onChange).not.toHaveBeenCalledWith(expect.any(Array));
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('fires the value callback exactly once per addition in StrictMode', async () => {

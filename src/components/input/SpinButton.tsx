@@ -2,7 +2,7 @@ import * as React from 'react';
 import { spinButtonClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { AddIcon, SubtractIcon } from '../../lib/icons';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import {
@@ -169,9 +169,9 @@ export interface SpinButtonBaseProps
      * (the form submits the committed value under the SpinButton's own `name`, on its hidden
      * input, never the shown text), `hidden`, `inert` and `aria-hidden` (a focusable control is
      * never hidden). Your handlers run before the SpinButton's and `preventDefault()` in them
-     * skips its handling, its own `onChange`, `onKeyDown`, `onFocus` and `onBlur` props included
-     * (a typed character or a step key is ignored); its focus and blur work (the shown text,
-     * committing typed text) runs after them, also when they prevent the default.
+     * skips its handling, its own `onKeyDown`, `onFocus` and `onBlur` props included (a typed
+     * character or a step key is ignored); its focus and blur work (the shown text, committing
+     * typed text) runs after them, also when they prevent the default.
      */
     input?: SlotPart<'input'>;
     /**
@@ -202,11 +202,6 @@ export interface SpinButtonProps extends SpinButtonBaseProps {
    * nor when the value stays the same.
    */
   onValueChange?: (value: number) => void;
-  /**
-   * Called with the new value when it changes.
-   * @deprecated Use `onValueChange`. (`onChange` is reserved for native change events.)
-   */
-  onChange?: (value: number) => void;
 }
 
 /** SpinButton props with `allowEmpty`: the value may be `null` (an empty field). */
@@ -221,8 +216,6 @@ export interface SpinButtonAllowEmptyProps extends SpinButtonBaseProps {
   defaultValue?: number | null;
   /** Called with the new value when it changes, `null` when the field is emptied. */
   onValueChange?: (value: number | null) => void;
-  /** Not available with `allowEmpty` (the deprecated alias of `onValueChange`). */
-  onChange?: never;
 }
 
 /** Decimal numbers as a user types them: `12`, `-3`, `1.5`, `.5`, `2.`, `1e3`. */
@@ -358,14 +351,12 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     value: valueProp,
     defaultValue,
     onValueChange,
-    onChange,
     ...baseProps
   } = props as SpinButtonBaseProps & {
     allowEmpty?: boolean;
     value?: number | null;
     defaultValue?: number | null;
     onValueChange?: (value: number | null) => void;
-    onChange?: (value: number) => void;
   };
   const {
     min = -Infinity,
@@ -412,15 +403,11 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     ...rest
   } = baseProps;
 
-  if (onChange !== undefined) warnDeprecated('SpinButton', 'onChange', 'onValueChange');
   const initialValue = defaultValue !== undefined ? defaultValue : allowEmpty ? null : 0;
   const [value, setValue, isControlled] = useControllable<number | null>(
     valueProp,
     initialValue,
-    (next) => {
-      onValueChange?.(next);
-      if (next !== null) onChange?.(next);
-    },
+    onValueChange,
   );
 
   // The text is a draft while the user types (null = show the value).

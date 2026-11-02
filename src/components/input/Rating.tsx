@@ -2,7 +2,7 @@ import * as React from 'react';
 import { ratingClassNames, ratingDisplayClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { isOwnEvent } from '../../lib/events';
 import { slotRendersContent, type Slot } from '../../lib/slot';
@@ -61,12 +61,6 @@ export interface RatingProps extends Omit<
   defaultValue?: number;
   /** Called with the new rating when it changes (not when the current star is chosen again). */
   onValueChange?: (value: number) => void;
-  /**
-   * Called with the new rating, exactly like `onValueChange`: only when the rating changes (0.4
-   * also called it when the current star was clicked again, or a key was pressed at an end).
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (value: number) => void;
   /** Maximum number of stars.
    * @default 5
    */
@@ -264,7 +258,6 @@ const RatingRoot = ({
   value: valueProp,
   defaultValue,
   onValueChange,
-  onChange,
   max = 5,
   step: stepProp,
   size = 'medium',
@@ -290,12 +283,8 @@ const RatingRoot = ({
   ref,
   ...rest
 }: RatingProps) => {
-  if (onChange !== undefined) warnDeprecated('Rating', 'onChange', 'onValueChange');
   const initialValue = defaultValue ?? 0;
-  const [value, setValue] = useControllable(valueProp, initialValue, (next: number) => {
-    onValueChange?.(next);
-    onChange?.(next);
-  });
+  const [value, setValue] = useControllable(valueProp, initialValue, onValueChange);
   // The items draw whole or half stars only, so the keys move by one of the two (untyped code
   // may pass another number).
   const step: 0.5 | 1 = stepProp === 0.5 ? 0.5 : 1;
@@ -629,8 +618,8 @@ RatingDisplayRoot.displayName = 'RatingDisplay';
  *   keyboard and screen readers, and draws the focus ring of either. A controlled value between
  *   two steps checks no radio and is drawn as the step below it; the keys move it to the next or
  *   previous step.
- * - `onValueChange` (and the deprecated `onChange` alias) fire only when the rating changes, so
- *   choosing the current star again calls neither.
+ * - `onValueChange` fires only when the rating changes, so choosing the current star again does
+ *   not call it.
  * - Hovering previews a value (half stars preview by the pointer's position); the preview never
  *   outlives the hover or a disabled state.
  * - `color` colors the filled stars (`marigold`, the default, `brand` or `neutral`; the root

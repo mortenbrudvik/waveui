@@ -2,7 +2,7 @@ import * as React from 'react';
 import { dropdownClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon, DismissIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
@@ -120,12 +120,6 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    * `onOptionSelect`, under WaveUI's value/onValueChange naming).
    */
   onValueChange?: M extends true ? (value: string[]) => void : (value: string) => void;
-  /**
-   * Called on every option activation, also when the current option is selected again (every
-   * toggle with `multiselect`).
-   * @deprecated Use `onValueChange`.
-   */
-  onOptionSelect?: (value: string) => void;
   /**
    * Controlled open state of the listbox. The list renders only in the browser: an open dropdown
    * is closed in the server HTML and opens once it has hydrated.
@@ -360,7 +354,6 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     value: valueProp,
     defaultValue,
     onValueChange,
-    onOptionSelect,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -402,8 +395,6 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     slotProps,
     ...rest
   } = props;
-
-  if (onOptionSelect !== undefined) warnDeprecated('Dropdown', 'onOptionSelect', 'onValueChange');
 
   const field = useFieldContext();
   const isRequired = required ?? field?.required ?? false;
@@ -477,14 +468,11 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     selectedValues: values,
     onSelect: (next, details) => {
       if (!multiselect) {
-        // 0.7 order: the value callback first, the deprecated one after.
         setValue(next);
-        onOptionSelect?.(next);
         return;
       }
       const { values: updated, added } = toggleValue(values, next);
       setValue(updated);
-      onOptionSelect?.(next);
       // The committed option's label: the item useListbox passed in `details` (its own result,
       // `listbox`, cannot be read from inside the options object passed to it), else the label
       // read from `children` before the option registered, else the raw value. Announces a

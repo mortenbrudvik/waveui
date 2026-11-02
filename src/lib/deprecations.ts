@@ -141,6 +141,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Checkbox:onChange',
     changelogAnchor: ON_CHECKED_CHANGE_ROW,
     file: 'src/components/input/Checkbox.tsx',
+    done: true,
   },
   {
     id: 'switch-onchange',
@@ -153,6 +154,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Switch:onChange',
     changelogAnchor: ON_CHECKED_CHANGE_ROW,
     file: 'src/components/input/Switch.tsx',
+    done: true,
   },
   {
     id: 'radiogroup-onchange',
@@ -165,6 +167,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:RadioGroup:onChange',
     changelogAnchor: ON_VALUE_CHANGE_ROW,
     file: 'src/components/input/RadioGroup.tsx',
+    done: true,
   },
   {
     id: 'rating-onchange',
@@ -177,6 +180,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Rating:onChange',
     changelogAnchor: ON_VALUE_CHANGE_ROW,
     file: 'src/components/input/Rating.tsx',
+    done: true,
   },
   {
     id: 'searchbox-onchange',
@@ -189,6 +193,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:SearchBox:onChange',
     changelogAnchor: ON_VALUE_CHANGE_ROW,
     file: 'src/components/input/SearchBox.tsx',
+    done: true,
   },
   {
     id: 'spinbutton-onchange',
@@ -201,6 +206,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:SpinButton:onChange',
     changelogAnchor: ON_VALUE_CHANGE_ROW,
     file: 'src/components/input/SpinButton.tsx',
+    done: true,
   },
   {
     id: 'colorpicker-onchange',
@@ -213,6 +219,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:ColorPicker:onChange',
     changelogAnchor: ON_VALUE_CHANGE_ROW,
     file: 'src/components/input/ColorPicker.tsx',
+    done: true,
   },
   {
     id: 'swatchpicker-onchange',
@@ -225,6 +232,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:SwatchPicker:onChange',
     changelogAnchor: ON_VALUE_CHANGE_ROW,
     file: 'src/components/input/SwatchPicker.tsx',
+    done: true,
   },
   {
     id: 'tagpicker-onchange',
@@ -237,6 +245,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:TagPicker:onChange',
     changelogAnchor: ON_VALUE_CHANGE_ROW,
     file: 'src/components/input/TagPicker.root.tsx',
+    done: true,
   },
   {
     id: 'timepicker-onchange',
@@ -249,6 +258,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:TimePicker:onChange',
     changelogAnchor: ON_VALUE_CHANGE_ROW,
     file: 'src/components/input/TimePicker.tsx',
+    done: true,
   },
   {
     id: 'datepicker-onchange',
@@ -261,6 +271,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DatePicker:onChange',
     changelogAnchor: ON_VALUE_CHANGE_ROW,
     file: 'src/components/input/DatePicker.tsx',
+    done: true,
   },
   {
     id: 'combobox-onoptionselect',
@@ -273,6 +284,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Combobox:onOptionSelect',
     changelogAnchor: ON_OPTION_SELECT_ROW,
     file: 'src/components/input/Combobox.tsx',
+    done: true,
   },
   {
     id: 'dropdown-onoptionselect',
@@ -285,6 +297,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Dropdown:onOptionSelect',
     changelogAnchor: ON_OPTION_SELECT_ROW,
     file: 'src/components/input/Dropdown.tsx',
+    done: true,
   },
   {
     id: 'tablist-selectedvalue',
@@ -417,6 +430,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:List:selectionMode="multi"',
     changelogAnchor: '| List | `selectionMode="multi"` |',
     file: 'src/components/data-display/List.tsx',
+    done: true,
   },
   {
     id: 'datagrid-selectedkeys',

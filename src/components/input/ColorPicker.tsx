@@ -2,7 +2,7 @@ import * as React from 'react';
 import { colorPickerClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { hexToHsv, hsvToHex } from '../../lib/color';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { getFirstTabbable } from '../../lib/focus';
 import { slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -72,11 +72,6 @@ export interface ColorPickerProps extends Omit<
    * is not fully opaque.
    */
   onValueChange?: (color: string) => void;
-  /**
-   * Called with the new color when it changes.
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (color: string) => void;
   /**
    * Preset colors shown as quick-select swatches. Pass `{ color, label }` objects so screen reader
    * users hear a name; a plain hex string is announced by its hex code. Non-hex presets are
@@ -213,7 +208,6 @@ const ColorPickerRoot = ({
   value: valueProp,
   defaultValue,
   onValueChange,
-  onChange,
   presets = DEFAULT_PRESETS,
   showOpacity = false,
   labels,
@@ -234,17 +228,13 @@ const ColorPickerRoot = ({
   slotProps,
   ...rest
 }: ColorPickerProps) => {
-  if (onChange !== undefined) warnDeprecated('ColorPicker', 'onChange', 'onValueChange');
   // The default is written like every edit (C-FORMS): the picker shows, submits and restores it as
   // a lowercase `#rrggbb`/`#rrggbbaa`. A value that is not a hex color stays as given (warning
   // below).
   const rawDefault = defaultValue ?? DEFAULT_COLOR;
   const initialValue = normalizeHexColor(rawDefault) ?? rawDefault;
   const strings = React.useMemo(() => ({ ...DEFAULT_COLOR_PICKER_LABELS, ...labels }), [labels]);
-  const [color, setColor] = useControllable(valueProp, initialValue, (next: string) => {
-    onValueChange?.(next);
-    onChange?.(next);
-  });
+  const [color, setColor] = useControllable(valueProp, initialValue, onValueChange);
 
   const parsed = React.useMemo(() => parseHexColor(color), [color]);
   const alpha = parsed?.alpha ?? 255;

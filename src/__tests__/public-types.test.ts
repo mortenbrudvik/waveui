@@ -1308,12 +1308,10 @@ describe('Phase 4 public types', () => {
     expectTypeOf<InfoLabelProps['size']>().toEqualTypeOf<LabelProps['size']>();
     expectTypeOf<InfoLabelProps['weight']>().toEqualTypeOf<LabelProps['weight']>();
     expectTypeOf<InfoLabelProps['disabled']>().toEqualTypeOf<LabelProps['disabled']>();
-    // `never` on an optional member reads as `undefined`: the deprecated alias is unavailable
-    // with `allowEmpty`, and still readable on the component's union of props.
-    expectTypeOf<SpinButtonAllowEmptyProps['onChange']>().toEqualTypeOf<undefined>();
-    expectTypeOf<ComponentProps<typeof SpinButton>['onChange']>().toEqualTypeOf<
-      ((value: number) => void) | undefined
-    >();
+    // The 0.4 `onChange(value)` alias is removed in 1.0, from both members of the union.
+    expectTypeOf<SpinButtonProps>().not.toHaveProperty('onChange');
+    expectTypeOf<SpinButtonAllowEmptyProps>().not.toHaveProperty('onChange');
+    expectTypeOf<ComponentProps<typeof SpinButton>>().not.toHaveProperty('onChange');
   });
 
   it('rejects invalid values', () => {

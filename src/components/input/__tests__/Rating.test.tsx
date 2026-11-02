@@ -39,10 +39,6 @@ function star(n: number): HTMLElement {
   return screen.getByRole('radio', { name: n === 1 ? '1 star' : `${n} stars` });
 }
 
-const DEPRECATED_ON_CHANGE =
-  '[WaveUI] Rating: `onChange` is deprecated and will be removed in 1.0. Use `onValueChange` ' +
-  'instead.';
-
 /** Number of stars drawn filled (the rating color). */
 function filledCount(): number {
   return screen.getAllByRole('radio').filter((s) => s.classList.contains('text-rating')).length;
@@ -137,35 +133,18 @@ describe('Rating', () => {
     expect(onValueChange).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const user = userEvent.setup();
-      const onChange = vi.fn();
-      const { rerender } = render(<Rating onChange={onChange} />);
-      rerender(<Rating onChange={onChange} />);
-      await user.click(star(2));
-      expect(onChange).toHaveBeenCalledWith(2);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it('the deprecated onChange alias is change-only like onValueChange: clicking the current star calls neither', async () => {
+  it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
       const onValueChange = vi.fn();
-      render(<Rating defaultValue={3} onChange={onChange} onValueChange={onValueChange} />);
-      await user.click(star(3));
+      // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+      render(<Rating onChange={onChange} onValueChange={onValueChange} />);
+      await user.click(star(2));
+      expect(onValueChange.mock.calls).toEqual([[2]]);
       expect(onChange).not.toHaveBeenCalled();
-      expect(onValueChange).not.toHaveBeenCalled();
-      await user.click(star(4));
-      expect(onChange.mock.calls).toEqual([[4]]);
-      expect(onValueChange.mock.calls).toEqual([[4]]);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
@@ -305,45 +284,29 @@ describe('Rating — roving focus between the stars', () => {
     expect(star(1)).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('does not exceed max on ArrowRight/ArrowUp/End (no onValueChange or onChange alias, selection unchanged)', async () => {
+  it('does not exceed max on ArrowRight/ArrowUp/End (no onValueChange, selection unchanged)', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
-    const onChange = vi.fn();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      render(<Rating defaultValue={5} onValueChange={onValueChange} onChange={onChange} />);
-      act(() => star(5).focus());
-      await user.keyboard('{ArrowRight}');
-      await user.keyboard('{ArrowUp}');
-      await user.keyboard('{End}');
-      expect(onValueChange).not.toHaveBeenCalled();
-      expect(onChange).not.toHaveBeenCalled();
-      expect(star(5)).toHaveFocus();
-      expect(star(5)).toHaveAttribute('aria-checked', 'true');
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
-    } finally {
-      warn.mockRestore();
-    }
+    render(<Rating defaultValue={5} onValueChange={onValueChange} />);
+    act(() => star(5).focus());
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowUp}');
+    await user.keyboard('{End}');
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(star(5)).toHaveFocus();
+    expect(star(5)).toHaveAttribute('aria-checked', 'true');
   });
 
   it('does not go below the first star on ArrowLeft/ArrowDown: the keyboard cannot clear the rating (no onValueChange, selection unchanged)', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
-    const onChange = vi.fn();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      render(<Rating defaultValue={1} onValueChange={onValueChange} onChange={onChange} />);
-      act(() => star(1).focus());
-      await user.keyboard('{ArrowLeft}');
-      await user.keyboard('{ArrowDown}');
-      expect(onValueChange).not.toHaveBeenCalled();
-      expect(onChange).not.toHaveBeenCalled();
-      expect(star(1)).toHaveFocus();
-      expect(star(1)).toHaveAttribute('aria-checked', 'true');
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
-    } finally {
-      warn.mockRestore();
-    }
+    render(<Rating defaultValue={1} onValueChange={onValueChange} />);
+    act(() => star(1).focus());
+    await user.keyboard('{ArrowLeft}');
+    await user.keyboard('{ArrowDown}');
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(star(1)).toHaveFocus();
+    expect(star(1)).toHaveAttribute('aria-checked', 'true');
   });
 
   it('mirrors Left/Right under dir="rtl"', async () => {

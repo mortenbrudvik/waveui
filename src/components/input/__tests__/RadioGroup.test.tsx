@@ -34,9 +34,6 @@ function radio(name: string): HTMLElement {
 const CHILDREN_WARNING =
   '[WaveUI] RadioItem: children are not rendered. Pass the label in `label`.';
 
-const ONCHANGE_DEPRECATION =
-  '[WaveUI] RadioGroup: `onChange` is deprecated and will be removed in 1.0. Use `onValueChange` instead.';
-
 describe('RadioGroup', () => {
   testSystemProps(RadioGroup, {
     expectedTag: 'div',
@@ -154,32 +151,7 @@ describe('RadioGroup', () => {
     expect(onValueChange).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const user = userEvent.setup();
-      const onChange = vi.fn();
-      const onValueChange = vi.fn();
-      const { rerender } = render(
-        <RadioGroup onChange={onChange} onValueChange={onValueChange} aria-label="Options">
-          {twoItems}
-        </RadioGroup>,
-      );
-      rerender(
-        <RadioGroup onChange={onChange} onValueChange={onValueChange} aria-label="Options">
-          {twoItems}
-        </RadioGroup>,
-      );
-      await user.click(radio('Beta'));
-      expect(onChange).toHaveBeenCalledWith('b');
-      expect(onValueChange).toHaveBeenCalledWith('b');
-      expect(warn.mock.calls).toEqual([[ONCHANGE_DEPRECATION]]);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it('the deprecated onChange alias is change-only like onValueChange: re-selecting calls neither', async () => {
+  it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const user = userEvent.setup();
@@ -187,7 +159,7 @@ describe('RadioGroup', () => {
       const onValueChange = vi.fn();
       render(
         <RadioGroup
-          defaultValue="a"
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
           onChange={onChange}
           onValueChange={onValueChange}
           aria-label="Options"
@@ -195,56 +167,52 @@ describe('RadioGroup', () => {
           {twoItems}
         </RadioGroup>,
       );
-      await user.click(radio('Alpha'));
-      expect(onChange).not.toHaveBeenCalled();
-      expect(onValueChange).not.toHaveBeenCalled();
       await user.click(radio('Beta'));
-      expect(onChange.mock.calls).toEqual([['b']]);
       expect(onValueChange.mock.calls).toEqual([['b']]);
-      // A keyboard selection that changes the value fires both.
-      await user.keyboard('{ArrowUp}');
-      expect(onChange.mock.calls).toEqual([['b'], ['a']]);
-      expect(onValueChange.mock.calls).toEqual([['b'], ['a']]);
-      expect(warn.mock.calls).toEqual([[ONCHANGE_DEPRECATION]]);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
   });
 
-  it('the deprecated onChange alias matches onValueChange in a controlled group (rejected values retry)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const user = userEvent.setup();
-      const onChange = vi.fn();
-      const onValueChange = vi.fn();
-      // The parent never accepts a change, so the value stays "a".
-      render(
-        <RadioGroup
-          value="a"
-          onChange={onChange}
-          onValueChange={onValueChange}
-          aria-label="Options"
-        >
-          {twoItems}
-        </RadioGroup>,
-      );
-      // Re-selecting the controlled value is a no-op for both callbacks.
-      await user.click(radio('Alpha'));
-      expect(onChange).not.toHaveBeenCalled();
-      expect(onValueChange).not.toHaveBeenCalled();
-      // ArrowDown moves focus to Beta and requests "b"; ArrowUp returns to the selected Alpha
-      // (no change); ArrowDown requests the rejected "b" again, which fires again.
-      await user.keyboard('{ArrowDown}');
-      expect(radio('Beta')).toHaveFocus();
-      await user.keyboard('{ArrowUp}');
-      expect(radio('Alpha')).toHaveFocus();
-      await user.keyboard('{ArrowDown}');
-      expect(onChange.mock.calls).toEqual([['b'], ['b']]);
-      expect(onValueChange.mock.calls).toEqual([['b'], ['b']]);
-      expect(warn.mock.calls).toEqual([[ONCHANGE_DEPRECATION]]);
-    } finally {
-      warn.mockRestore();
-    }
+  it('onValueChange is change-only: re-selecting does not call it, a keyboard selection does', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <RadioGroup defaultValue="a" onValueChange={onValueChange} aria-label="Options">
+        {twoItems}
+      </RadioGroup>,
+    );
+    await user.click(radio('Alpha'));
+    expect(onValueChange).not.toHaveBeenCalled();
+    await user.click(radio('Beta'));
+    expect(onValueChange.mock.calls).toEqual([['b']]);
+    // A keyboard selection that changes the value fires it.
+    await user.keyboard('{ArrowUp}');
+    expect(onValueChange.mock.calls).toEqual([['b'], ['a']]);
+  });
+
+  it('onValueChange in a controlled group: rejected values retry', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    // The parent never accepts a change, so the value stays "a".
+    render(
+      <RadioGroup value="a" onValueChange={onValueChange} aria-label="Options">
+        {twoItems}
+      </RadioGroup>,
+    );
+    // Re-selecting the controlled value is a no-op.
+    await user.click(radio('Alpha'));
+    expect(onValueChange).not.toHaveBeenCalled();
+    // ArrowDown moves focus to Beta and requests "b"; ArrowUp returns to the selected Alpha
+    // (no change); ArrowDown requests the rejected "b" again, which fires again.
+    await user.keyboard('{ArrowDown}');
+    expect(radio('Beta')).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(radio('Alpha')).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(onValueChange.mock.calls).toEqual([['b'], ['b']]);
   });
 
   it('respects controlled value prop', async () => {

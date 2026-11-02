@@ -712,7 +712,8 @@ describe('List', () => {
         <List key="5" selectable selectionMode="multiple" onSelectedItemChange={() => {}} />,
       ];
       expect(elements).toHaveLength(5);
-      expectTypeOf<ListSelectionMode>().toEqualTypeOf<'single' | 'multiple' | 'multi'>();
+      expectTypeOf<ListSelectionMode>().toEqualTypeOf<'single' | 'multiple'>();
+      expectTypeOf<'multi'>().not.toExtend<ListSelectionMode>();
       interface DocumentListProps extends ListProps {
         documents: string[];
       }
@@ -792,26 +793,26 @@ describe('List', () => {
   });
 
   describe("selectionMode 'multiple' (data-display#30)", () => {
-    it("accepts the deprecated 'multi' alias with a warning", async () => {
+    it("has no 'multi' alias: the 0.4 value is removed in 1.0 and selects one item", async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
-      const onChange = vi.fn();
+      const onSelectionChange = vi.fn();
       render(
-        <List selectable selectionMode="multi" onSelectionChange={onChange} aria-label="Fruits">
+        <List
+          selectable
+          // @ts-expect-error -- `selectionMode="multi"` is removed in 1.0: use `"multiple"`
+          selectionMode="multi"
+          onSelectionChange={onSelectionChange}
+          aria-label="Fruits"
+        >
           {fruits}
         </List>,
       );
-      expect(screen.getByRole('listbox')).toHaveAttribute('aria-multiselectable', 'true');
+      expect(screen.getByRole('listbox')).not.toHaveAttribute('aria-multiselectable', 'true');
       await user.click(option('Apple'));
       await user.click(option('Banana'));
-      expect(onChange).toHaveBeenLastCalledWith(['apple', 'banana']);
-      expect(warn.mock.calls).toEqual([
-        [
-          expect.stringContaining(
-            '[WaveUI] List: `selectionMode="multi"` is deprecated and will be removed in 1.0. Use `selectionMode="multiple"` instead.',
-          ),
-        ],
-      ]);
+      expect(onSelectionChange.mock.calls).toEqual([[['apple']], [['banana']]]);
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 

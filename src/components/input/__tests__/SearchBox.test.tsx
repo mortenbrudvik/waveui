@@ -1381,25 +1381,24 @@ describe('SearchBox', () => {
       expect(onValueChange).toHaveBeenCalledWith('fixedx');
     });
 
-    it('keeps the deprecated onChange(value) alias working and warns once', async () => {
+    it('has no onChange(value) alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onChange = vi.fn();
       const onValueChange = vi.fn();
-      const { rerender } = render(
-        <SearchBox aria-label="Search" onChange={onChange} onValueChange={onValueChange} />,
+      render(
+        <SearchBox
+          aria-label="Search"
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
       );
       await user.type(screen.getByRole('searchbox', { name: 'Search' }), 'ab');
-      rerender(<SearchBox aria-label="Search" onChange={onChange} onValueChange={onValueChange} />);
-      expect(onChange).toHaveBeenCalledTimes(2);
-      expect(onChange).toHaveBeenLastCalledWith('ab');
-      expect(onValueChange).toHaveBeenLastCalledWith('ab');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] SearchBox: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onValueChange` instead.',
-        ],
-      ]);
+      expect(onValueChange.mock.calls).toEqual([['a'], ['ab']]);
+      // Untyped code that still passes it gets no value: it is never called with the text.
+      expect(onChange).not.toHaveBeenCalledWith(expect.any(String));
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('fires onValueChange once per interaction in StrictMode', async () => {

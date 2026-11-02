@@ -18,7 +18,7 @@ import type {
   InputAppearance,
   PopupPositioningOptions,
 } from '../../lib/types';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR } from '../../lib/focus';
 import { CalendarIcon, DismissIcon } from '../../lib/icons';
 import {
@@ -132,10 +132,6 @@ export interface DatePickerProps extends Omit<
   defaultValue?: Date | null;
   /** Called with the new date (local midnight) or `null` whenever the selected day changes. */
   onValueChange?: (date: Date | null) => void;
-  /**
-   * @deprecated Use `onValueChange`. Still called with the new date (warns once in development).
-   */
-  onChange?: (date: Date | null) => void;
   /**
    * Formats the selected date for the input. Supply `parseDate` as its inverse: without it, typed
    * text is parsed with the default parser for `locale` (development warning).
@@ -578,7 +574,6 @@ export const DatePicker = (props: DatePickerProps) => {
     value: valueProp,
     defaultValue,
     onValueChange,
-    onChange,
     formatDate: formatDateProp,
     parseDate: parseDateProp,
     locale,
@@ -638,8 +633,6 @@ export const DatePicker = (props: DatePickerProps) => {
     ...rest
   } = props;
 
-  if (onChange !== undefined) warnDeprecated('DatePicker', 'onChange', 'onValueChange');
-
   const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const hasCustomFormat = formatDateProp !== undefined;
@@ -668,10 +661,7 @@ export const DatePicker = (props: DatePickerProps) => {
   const [selectedDate, setSelectedDate] = useControllable<Date | null>(
     valueProp,
     defaultValue ?? null,
-    (next) => {
-      onValueChange?.(next);
-      onChange?.(next);
-    },
+    onValueChange,
   );
   const interactive = !disabled && !readOnly;
   const [openState, setOpen] = useControllable<boolean>(

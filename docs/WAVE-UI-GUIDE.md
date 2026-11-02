@@ -3821,14 +3821,10 @@ Deprecated names still work through 0.x, warn once in development and will be re
 
 | Deprecated | Use instead |
 |---|---|
-| `onChange(checked)` on Checkbox, Switch | `onCheckedChange` |
-| `onChange(value)` on RadioGroup, Rating, SearchBox, SpinButton, ColorPicker, SwatchPicker, TagPicker, TimePicker, DatePicker | `onValueChange` |
-| `onOptionSelect` on Combobox, Dropdown | `onValueChange` (fires on change only; `onOptionSelect` fired on every activation) |
 | TabList `selectedValue`, `defaultSelectedValue`, `onTabSelect`, `vertical` | `value`, `defaultValue`, `onValueChange`, `orientation` |
 | Nav `selectedValue`, `defaultSelectedValue`, `onNavItemSelect` | `value`, `defaultValue`, `onValueChange` |
 | Nav.Category label from the first string child | `label` |
 | TeachingPopover `currentStep`, `defaultCurrentStep` | `activeStep`, `defaultActiveStep` |
-| List `selectionMode="multi"` | `selectionMode="multiple"` |
 | DataGrid `selectedKeys`, `defaultSelectedKeys`, `onSelectionChange` | `selectedItems`, `defaultSelectedItems`, `onSelectedItemsChange` |
 | DataGrid `sortColumn`, `sortDirection`, `defaultSortColumn`, `defaultSortDirection` | `sort`, `defaultSort` (a grid with `items` ignores the deprecated props) |
 | `DataGridColumn` `id` | `columnId` |

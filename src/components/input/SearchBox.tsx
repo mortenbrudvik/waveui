@@ -3,7 +3,7 @@ import { getElementType, isElementOfType } from '../../lib/children';
 import { searchBoxClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { DismissIcon, SearchIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
 import { mergeProps } from '../../lib/mergeProps';
@@ -92,11 +92,6 @@ export interface SearchBoxProps
   defaultValue?: string;
   /** Called with the new search text when it changes (typing or clearing). */
   onValueChange?: (value: string) => void;
-  /**
-   * Called with the new search text when it changes.
-   * @deprecated Use `onValueChange`. (`onChange` is reserved for native change events.)
-   */
-  onChange?: (value: string) => void;
   /**
    * Called when the user clears the search: with the clear button, or with Escape while there is
    * text (after `onValueChange('')`).
@@ -438,7 +433,6 @@ export const SearchBox = ({
   value: controlledValue,
   defaultValue = '',
   onValueChange,
-  onChange,
   onClear,
   placeholder = 'Search',
   disabled,
@@ -483,12 +477,7 @@ export const SearchBox = ({
   hidden,
   ...rest
 }: SearchBoxProps) => {
-  if (onChange !== undefined) warnDeprecated('SearchBox', 'onChange', 'onValueChange');
-
-  const [value, setValue] = useControllable(controlledValue, defaultValue, (next: string) => {
-    onValueChange?.(next);
-    onChange?.(next);
-  });
+  const [value, setValue] = useControllable(controlledValue, defaultValue, onValueChange);
 
   const inputRef = React.useRef<HTMLInputElement>(null);
   const mergedInputRef = useMergedRefs(inputRef, controlRef, slotProps?.input?.ref);

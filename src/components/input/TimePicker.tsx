@@ -4,7 +4,7 @@ import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { timePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
 import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -193,10 +193,6 @@ export interface TimePickerProps extends Omit<
   defaultValue?: string;
   /** Called with the new `HH:mm` value (`''` when cleared) whenever the selected time changes. */
   onValueChange?: (value: string) => void;
-  /**
-   * @deprecated Use `onValueChange`. Still called with the new value (warns once in development).
-   */
-  onChange?: (value: string) => void;
   /**
    * Time display format of the input and the options.
    * @default '12h'
@@ -473,7 +469,6 @@ export const TimePicker = (props: TimePickerProps) => {
     value: valueProp,
     defaultValue,
     onValueChange,
-    onChange,
     format = '12h',
     step = DEFAULT_TIME_STEP,
     minTime = '00:00',
@@ -522,17 +517,12 @@ export const TimePicker = (props: TimePickerProps) => {
     ...rest
   } = props;
 
-  if (onChange !== undefined) warnDeprecated('TimePicker', 'onChange', 'onValueChange');
-
   const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const [selectedValue, setSelectedValue] = useControllable<string>(
     valueProp,
     defaultValue ?? '',
-    (next) => {
-      onValueChange?.(next);
-      onChange?.(next);
-    },
+    onValueChange,
   );
 
   /* ---- options, step and bounds ---------------------------------- */

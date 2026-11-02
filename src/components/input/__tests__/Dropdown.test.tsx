@@ -91,10 +91,6 @@ const CONTROLLED_TO_UNCONTROLLED =
   'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
   'value.';
 
-const DEPRECATED_ON_OPTION_SELECT =
-  '[WaveUI] Dropdown: `onOptionSelect` is deprecated and will be removed in 1.0. Use ' +
-  '`onValueChange` instead.';
-
 afterEach(() => {
   vi.restoreAllMocks();
   __resetAnnouncer();
@@ -637,47 +633,45 @@ describe('Dropdown', () => {
   });
 
   describe('value callbacks (input-basic#29, table-core#3)', () => {
-    it('onValueChange fires only on change; the deprecated onOptionSelect on every activation', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('onValueChange fires only on change: selecting the current option again does not call it', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
-      const onOptionSelect = vi.fn();
-      renderDropdown({ defaultValue: 'a', onValueChange, onOptionSelect });
+      renderDropdown({ defaultValue: 'a', onValueChange });
       await user.click(combobox());
       await user.click(option('Apple'));
       expect(onValueChange).not.toHaveBeenCalled();
-      expect(onOptionSelect).toHaveBeenCalledWith('a');
       await user.click(combobox());
       await user.click(option('Banana'));
-      expect(onValueChange).toHaveBeenCalledTimes(1);
-      expect(onValueChange).toHaveBeenCalledWith('b');
-      expect(onOptionSelect).toHaveBeenCalledTimes(2);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+      expect(onValueChange.mock.calls).toEqual([['b']]);
     });
 
-    it('calls onValueChange before the deprecated onOptionSelect (0.7 order)', async () => {
+    it('has no onOptionSelect alias: the 0.4 name is removed in 1.0', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const user = userEvent.setup();
-      const calls: string[] = [];
-      renderDropdown({
-        onValueChange: () => calls.push('onValueChange'),
-        onOptionSelect: () => calls.push('onOptionSelect'),
-      });
-      await user.click(combobox());
-      await user.click(option('Apple'));
-      expect(calls).toEqual(['onValueChange', 'onOptionSelect']);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
-    });
-
-    it('warns once that onOptionSelect is deprecated', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const { rerender } = renderDropdown({ onOptionSelect: () => {} });
-      rerender(
-        <Dropdown aria-label="Fruit" onOptionSelect={() => {}}>
+      const onOptionSelect = vi.fn();
+      const onValueChange = vi.fn();
+      const { container } = render(
+        <Dropdown
+          aria-label="Fruit"
+          // @ts-expect-error -- `onOptionSelect(value)` is removed in 1.0: use `onValueChange`
+          onOptionSelect={onOptionSelect}
+          onValueChange={onValueChange}
+        >
           {FRUITS}
         </Dropdown>,
       );
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+      await user.click(combobox());
+      await user.click(option('Apple'));
+      expect(onValueChange.mock.calls).toEqual([['a']]);
+      expect(onOptionSelect).not.toHaveBeenCalled();
+      // Untyped code that still passes it reaches the root as an unknown prop: React reports it
+      // and renders nothing for it.
+      expect(container.querySelector('[onoptionselect]')).toBeNull();
+      expect(error.mock.calls).toEqual([
+        ['Unknown event handler property `%s`. It will be ignored.', 'onOptionSelect'],
+      ]);
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('fires the value callback exactly once per selection in StrictMode', async () => {
@@ -1733,16 +1727,9 @@ describe('Dropdown', () => {
       });
     });
 
-    it('fires the deprecated onOptionSelect per toggle', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const user = userEvent.setup();
-      const onOptionSelect = vi.fn();
-      renderMulti({ onOptionSelect });
-      await user.click(combobox());
-      await user.click(option('Apple'));
-      await user.click(option('Apple'));
-      expect(onOptionSelect.mock.calls).toEqual([['a'], ['a']]);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+    it('has no onOptionSelect alias with multiselect either (removed in 1.0)', () => {
+      // @ts-expect-error -- `onOptionSelect(value)` is removed in 1.0: use `onValueChange`
+      void (<Dropdown aria-label="Fruit" multiselect onOptionSelect={() => {}} />);
     });
 
     it('warns once for a duplicated value and toggles the first', async () => {

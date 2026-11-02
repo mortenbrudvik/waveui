@@ -4,7 +4,7 @@ import { cn } from '../../lib/cn';
 import { listClassNames, listItemClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
+import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { INTERACTIVE_SELECTOR, isForeignEvent, type ForeignEventOptions } from '../../lib/events';
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
@@ -21,8 +21,8 @@ import { ownsArrowKeys, useRovingTabIndex } from '../../hooks/useRovingTabIndex'
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { ListRegistry, type ListFocusLoss } from './List.registry';
 
-/** Selection modes of {@link List}: the shared `SelectionMode` plus the deprecated `'multi'`. */
-export type ListSelectionMode = SelectionMode | 'multi';
+/** Selection modes of {@link List}: the shared `SelectionMode` (`'single'` or `'multiple'`). */
+export type ListSelectionMode = SelectionMode;
 
 /**
  * How the keyboard reaches the items of a {@link List} (Fluent's `navigationMode`): `'none'`, no
@@ -116,7 +116,7 @@ export interface ListProps<M extends ListSelectionMode = ListSelectionMode> exte
    */
   selectable?: boolean;
   /**
-   * Selection behavior when `selectable` is true. `'multi'` is a deprecated alias of `'multiple'`.
+   * Selection behavior when `selectable` is true.
    * @default 'single'
    */
   selectionMode?: M;
@@ -692,10 +692,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     [itemCount, itemSize],
   );
 
-  if (selectionMode === 'multi') {
-    warnDeprecated('List', 'selectionMode="multi"', 'selectionMode="multiple"');
-  }
-  const multiple = selectionMode === 'multiple' || selectionMode === 'multi';
+  const multiple = selectionMode === 'multiple';
 
   const controlledSelection = React.useMemo<readonly string[] | undefined>(() => {
     if (!multiple && selectedItem !== undefined) {

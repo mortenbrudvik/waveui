@@ -124,21 +124,24 @@ describe('Switch', () => {
     expect(onCheckedChange).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
+  it('has no onChange alias of onCheckedChange: the 0.4 name is removed in 1.0', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      const { rerender } = render(<Switch label="Dark mode" onChange={onChange} />);
-      rerender(<Switch label="Dark mode" onChange={onChange} />);
+      const onCheckedChange = vi.fn();
+      render(
+        <Switch
+          label="Dark mode"
+          // @ts-expect-error -- `onChange(checked)` is removed in 1.0: use `onCheckedChange`
+          onChange={onChange}
+          onCheckedChange={onCheckedChange}
+        />,
+      );
       await user.click(screen.getByRole('switch', { name: 'Dark mode' }));
-      expect(onChange).toHaveBeenCalledWith(true);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Switch: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onCheckedChange` instead.',
-        ],
-      ]);
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }

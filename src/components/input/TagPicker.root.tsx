@@ -2,7 +2,7 @@ import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { tagPickerClassNames } from '../../lib/classNames';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import type { Slot } from '../../lib/slot';
 import type { SlotPart } from '../../lib/slotProps';
 import type {
@@ -123,12 +123,6 @@ export interface TagPickerProps extends Omit<
    * or removed, or a form reset restores different tags. Fluent's `onOptionSelect`.
    */
   onValueChange?: (value: string[]) => void;
-  /**
-   * Called with the new selection when it changes: a tag is added or removed, or a form reset
-   * restores different tags.
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (value: string[]) => void;
   /**
    * Controlled open state of the option list. The list renders only in the browser: an open
    * picker is closed in the server HTML and opens once it has hydrated.
@@ -449,7 +443,6 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     value: valueProp,
     defaultValue,
     onValueChange,
-    onChange,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -500,7 +493,6 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     ...rest
   } = props;
 
-  if (onChange !== undefined) warnDeprecated('TagPicker', 'onChange', 'onValueChange');
   const overflow = overflowProp === 'count' ? 'count' : 'wrap';
 
   const field = useFieldContext();
@@ -541,10 +533,8 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     valueProp,
     defaultValue ?? EMPTY_VALUES,
     (next) => {
-      // The props are read only; the callbacks receive an array of their own.
-      const list = [...next];
-      onValueChange?.(list);
-      onChange?.(list);
+      // The props are read only; the callback receives an array of its own.
+      onValueChange?.([...next]);
     },
   );
   const selectedSet = React.useMemo(() => new Set(selected), [selected]);

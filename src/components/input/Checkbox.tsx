@@ -3,7 +3,7 @@ import { focusableDisabledProps, joinIds } from '../../lib/aria';
 import { checkboxClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { CheckIcon, SubtractIcon } from '../../lib/icons';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -75,11 +75,6 @@ export interface CheckboxProps extends Omit<
   indeterminate?: boolean;
   /** Called with the new checked state when it changes (not for no-op updates). */
   onCheckedChange?: (checked: boolean) => void;
-  /**
-   * Called with the new checked state when it changes.
-   * @deprecated Use `onCheckedChange`.
-   */
-  onChange?: (checked: boolean) => void;
   /** Whether the checkbox is disabled and non-interactive. */
   disabled?: boolean;
   /**
@@ -207,7 +202,6 @@ export const Checkbox = ({
   defaultChecked = false,
   indeterminate = false,
   onCheckedChange,
-  onChange,
   disabled = false,
   disabledFocusable = false,
   label,
@@ -241,7 +235,6 @@ export const Checkbox = ({
   slotProps,
   ...rest
 }: CheckboxProps) => {
-  if (onChange !== undefined) warnDeprecated('Checkbox', 'onChange', 'onCheckedChange');
   const hasChildren = slotRendersContent(children);
   React.useEffect(() => {
     if (hasChildren) {
@@ -251,10 +244,7 @@ export const Checkbox = ({
       );
     }
   }, [hasChildren]);
-  const [checked, setChecked] = useControllable(checkedProp, defaultChecked, (next: boolean) => {
-    onCheckedChange?.(next);
-    onChange?.(next);
-  });
+  const [checked, setChecked] = useControllable(checkedProp, defaultChecked, onCheckedChange);
 
   const generatedId = useId('checkbox');
   const labelTextId = useId('checkbox-label');

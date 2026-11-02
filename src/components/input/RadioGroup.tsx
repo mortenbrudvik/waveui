@@ -3,7 +3,7 @@ import { joinIds } from '../../lib/aria';
 import { radioGroupClassNames, radioGroupItemClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
+import { isDev, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
@@ -44,12 +44,6 @@ export interface RadioGroupProps extends Omit<
   /** Called with the newly selected value when the selection changes (not when re-selecting). */
   onValueChange?: (value: string) => void;
   /**
-   * Called with the newly selected value, exactly like `onValueChange`: only when the selection
-   * changes (0.4 also called it when the selected item was chosen again).
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (value: string) => void;
-  /**
    * Layout of the radio items (also `aria-orientation`). Arrow keys follow the APG radio pattern
    * in both layouts: Down/Right select the next item, Up/Left the previous one (Left/Right
    * mirrored under `dir="rtl"`).
@@ -76,7 +70,6 @@ const RadioGroupRoot = ({
   value: valueProp,
   defaultValue,
   onValueChange,
-  onChange,
   orientation = 'vertical',
   disabled = false,
   name,
@@ -95,12 +88,8 @@ const RadioGroupRoot = ({
   ref,
   ...rest
 }: RadioGroupProps) => {
-  if (onChange !== undefined) warnDeprecated('RadioGroup', 'onChange', 'onValueChange');
   const initialValue = defaultValue ?? '';
-  const [value, setValue] = useControllable(valueProp, initialValue, (next: string) => {
-    onValueChange?.(next);
-    onChange?.(next);
-  });
+  const [value, setValue] = useControllable(valueProp, initialValue, onValueChange);
 
   const { containerProps, getTabIndex } = useRovingTabIndex({
     activeValue: value,

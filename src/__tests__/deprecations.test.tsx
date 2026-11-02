@@ -59,44 +59,29 @@ import * as registry from '../lib/classNames';
 import {
   Accordion,
   Badge,
-  Checkbox,
-  ColorPicker,
-  Combobox,
   CounterBadge,
   DataGrid,
-  DatePicker,
   Dialog,
   Drawer,
-  Dropdown,
-  EmptySwatch,
   Image,
   InfoLabel,
   Input,
   Link,
-  List,
   Menu,
   MessageBar,
   Nav,
   NavDrawer,
-  Option,
   PresenceBadge,
-  RadioGroup,
-  Rating,
   SearchBox,
   Select,
   Skeleton,
   Slider,
-  SpinButton,
   Stack,
-  Switch,
-  SwatchPicker,
   TabList,
   Table,
   Tag,
-  TagPicker,
   TeachingPopover,
   Text,
-  TimePicker,
   Tooltip,
   useRovingTabIndex,
 } from '../index';
@@ -557,74 +542,6 @@ const steps = [{ title: 'Welcome', body: 'Step one.' }];
 
 /** A minimal case per row that warns, by row id. */
 const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
-  'checkbox-onchange': {
-    ui: <Checkbox aria-label="Accept" onChange={noop} />,
-    message: deprecated('Checkbox', 'onChange', 'onCheckedChange'),
-  },
-  'switch-onchange': {
-    ui: <Switch aria-label="Wi-Fi" onChange={noop} />,
-    message: deprecated('Switch', 'onChange', 'onCheckedChange'),
-  },
-  'radiogroup-onchange': {
-    ui: (
-      <RadioGroup aria-label="Size" onChange={noop}>
-        <RadioGroup.Item value="s" label="Small" />
-      </RadioGroup>
-    ),
-    message: deprecated('RadioGroup', 'onChange', 'onValueChange'),
-  },
-  'rating-onchange': {
-    ui: <Rating aria-label="Rating" onChange={noop} />,
-    message: deprecated('Rating', 'onChange', 'onValueChange'),
-  },
-  'searchbox-onchange': {
-    ui: <SearchBox aria-label="Search" onChange={noop} />,
-    message: deprecated('SearchBox', 'onChange', 'onValueChange'),
-  },
-  'spinbutton-onchange': {
-    ui: <SpinButton aria-label="Amount" onChange={noop} />,
-    message: deprecated('SpinButton', 'onChange', 'onValueChange'),
-  },
-  'colorpicker-onchange': {
-    ui: <ColorPicker aria-label="Color" onChange={noop} />,
-    message: deprecated('ColorPicker', 'onChange', 'onValueChange'),
-  },
-  'swatchpicker-onchange': {
-    ui: (
-      <SwatchPicker aria-label="Colors" onChange={noop}>
-        <EmptySwatch value="none" aria-label="None" />
-      </SwatchPicker>
-    ),
-    message: deprecated('SwatchPicker', 'onChange', 'onValueChange'),
-  },
-  'tagpicker-onchange': {
-    ui: <TagPicker aria-label="Tags" options={[{ value: 'a', label: 'A' }]} onChange={noop} />,
-    message: deprecated('TagPicker', 'onChange', 'onValueChange'),
-  },
-  'timepicker-onchange': {
-    ui: <TimePicker aria-label="Time" onChange={noop} />,
-    message: deprecated('TimePicker', 'onChange', 'onValueChange'),
-  },
-  'datepicker-onchange': {
-    ui: <DatePicker aria-label="Date" onChange={noop} />,
-    message: deprecated('DatePicker', 'onChange', 'onValueChange'),
-  },
-  'combobox-onoptionselect': {
-    ui: (
-      <Combobox aria-label="Fruit" onOptionSelect={noop}>
-        <Option value="apple">Apple</Option>
-      </Combobox>
-    ),
-    message: deprecated('Combobox', 'onOptionSelect', 'onValueChange'),
-  },
-  'dropdown-onoptionselect': {
-    ui: (
-      <Dropdown aria-label="Fruit" onOptionSelect={noop}>
-        <Option value="apple">Apple</Option>
-      </Dropdown>
-    ),
-    message: deprecated('Dropdown', 'onOptionSelect', 'onValueChange'),
-  },
   'tablist-selectedvalue': {
     ui: <TabList selectedValue="a">{tabs}</TabList>,
     message: deprecated('TabList', 'selectedValue', 'value'),
@@ -693,14 +610,6 @@ const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
   'teachingpopover-defaultcurrentstep': {
     ui: <TeachingPopover steps={steps} defaultCurrentStep={0} />,
     message: deprecated('TeachingPopover', 'defaultCurrentStep', 'defaultActiveStep'),
-  },
-  'list-selectionmode-multi': {
-    ui: (
-      <List aria-label="Fruits" selectionMode="multi">
-        <List.Item value="a">Apple</List.Item>
-      </List>
-    ),
-    message: deprecated('List', 'selectionMode="multi"', 'selectionMode="multiple"'),
   },
   'datagrid-selectedkeys': {
     ui: (

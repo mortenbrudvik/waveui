@@ -451,16 +451,4 @@ describe('TagPicker free tagging (allowCreate)', () => {
     expect(findDanglingIdRefs()).toEqual([]);
     await expectNoA11yViolations(document.body);
   });
-
-  it('creates with the deprecated onChange too', async () => {
-    const user = userEvent.setup();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const onChange = vi.fn();
-    render(<TagPicker aria-label="Topics" options={options} allowCreate onChange={onChange} />);
-    await user.type(combobox(), 'infra{Enter}');
-    expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith(['infra']);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toMatch(/^\[WaveUI\] TagPicker: `onChange` is deprecated/);
-  });
 });

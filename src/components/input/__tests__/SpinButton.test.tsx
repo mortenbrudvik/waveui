@@ -150,24 +150,35 @@ describe('SpinButton', () => {
     expect(onValueChange).toHaveBeenLastCalledWith(7);
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
+  it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
     const warn = spyWarn();
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      const { rerender } = render(<SpinButton aria-label="Quantity" onChange={onChange} />);
-      rerender(<SpinButton aria-label="Quantity" onChange={onChange} />);
+      const onValueChange = vi.fn();
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
+      );
       await user.click(incrementButton());
-      expect(onChange).toHaveBeenCalledWith(1);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] SpinButton: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onValueChange` instead.',
-        ],
-      ]);
+      await user.clear(spin());
+      await user.type(spin(), '7{Enter}');
+      expect(onValueChange.mock.calls).toEqual([[1], [7]]);
+      // Untyped code that still passes it gets no value: it is never called with a number.
+      expect(onChange).not.toHaveBeenCalledWith(expect.any(Number));
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('has no onChange with allowEmpty either', () => {
+    // @ts-expect-error -- `onChange` is removed in 1.0, in the allowEmpty mode too
+    void (<SpinButton aria-label="Quantity" allowEmpty onChange={() => {}} />);
   });
 });
 
@@ -1061,7 +1072,7 @@ describe('allowEmpty (Phase 4 D16, D17)', () => {
     expect(spin()).toHaveValue('');
   });
 
-  it('types: null only with allowEmpty; onChange readable on the union', () => {
+  it('types: null only with allowEmpty; no onChange on the union (removed in 1.0)', () => {
     expectTypeOf<SpinButtonProps['value']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<SpinButtonAllowEmptyProps['value']>().toEqualTypeOf<number | null | undefined>();
     expectTypeOf<React.ComponentProps<typeof SpinButton>>().toEqualTypeOf<
@@ -1074,7 +1085,9 @@ describe('allowEmpty (Phase 4 D16, D17)', () => {
       ((value: number | null) => void) | undefined
     >();
     type Props = React.ComponentProps<typeof SpinButton>;
-    expectTypeOf<Props['onChange']>().toEqualTypeOf<((value: number) => void) | undefined>();
+    expectTypeOf<Props>().not.toHaveProperty('onChange');
+    expectTypeOf<SpinButtonProps>().not.toHaveProperty('onChange');
+    expectTypeOf<SpinButtonAllowEmptyProps>().not.toHaveProperty('onChange');
     interface Wrapper extends SpinButtonProps {
       hint?: string;
     }

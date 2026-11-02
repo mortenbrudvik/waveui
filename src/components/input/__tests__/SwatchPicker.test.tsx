@@ -131,23 +131,25 @@ describe('SwatchPicker', () => {
     expect(onValueChange).toHaveBeenLastCalledWith('green');
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
+  it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
     const warn = spyWarn();
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      const { rerender } = render(
-        <SwatchPicker items={defaultItems} aria-label="Brand colors" onChange={onChange} />,
+      const onValueChange = vi.fn();
+      render(
+        <SwatchPicker
+          items={defaultItems}
+          aria-label="Brand colors"
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
       );
-      rerender(<SwatchPicker items={defaultItems} aria-label="Brand colors" onChange={onChange} />);
       await user.click(swatch('Green'));
-      expect(onChange).toHaveBeenCalledWith('green');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] SwatchPicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onValueChange` instead.',
-        ],
-      ]);
+      expect(onValueChange.mock.calls).toEqual([['green']]);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }

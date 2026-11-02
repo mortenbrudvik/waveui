@@ -2,7 +2,7 @@ import * as React from 'react';
 import { comboboxClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { isFocused } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
@@ -136,12 +136,6 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * naming.
    */
   onValueChange?: M extends true ? (value: string[]) => void : (value: string) => void;
-  /**
-   * Called on every option activation, also when the current option is selected again (every
-   * toggle with `multiselect`; with `freeform`, every text change).
-   * @deprecated Use `onValueChange`.
-   */
-  onOptionSelect?: (value: string) => void;
   /**
    * Controlled open state of the listbox. The list renders only in the browser: an open combobox
    * is closed in the server HTML and opens once it has hydrated.
@@ -468,7 +462,6 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     value: valueProp,
     defaultValue,
     onValueChange,
-    onOptionSelect,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -522,8 +515,6 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     slotProps,
     ...rest
   } = props;
-
-  if (onOptionSelect !== undefined) warnDeprecated('Combobox', 'onOptionSelect', 'onValueChange');
 
   // The multi-select signature has no `freeform` (D11); passed anyway from JavaScript, it is
   // ignored there, with a warning.
@@ -686,7 +677,6 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   const commitText = (text: string) => {
     setTypedValue(text);
     setValue(text);
-    onOptionSelect?.(text);
   };
 
   const close = () => {
@@ -720,16 +710,13 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     selectedValues: values,
     onSelect: (next, details) => {
       if (!multiselect) {
-        // 0.7 order: the value callback first, the deprecated one after.
         setValue(next);
-        onOptionSelect?.(next);
         dropDraft();
         setTypedValue(null);
         return;
       }
       const { values: updated, added } = toggleValue(values, next);
       setValue(updated);
-      onOptionSelect?.(next);
       // The toggled option's label: the item useListbox passed in `details` (its own result,
       // `listbox`, cannot be read from inside the options object passed to it), else the label
       // read from `children` before the option registered, else the raw value. Announces a
@@ -964,10 +951,9 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     inputRef.current?.focus();
   };
 
-  // Clearing is not an option activation: the state is set directly, not through `commitText`
-  // (which calls the deprecated `onOptionSelect` in freeform mode). The button disappears with the
-  // value, so focus moves to the input explicitly (C-DISABLED). An event callback, like the
-  // input's handlers that read a ref.
+  // Clearing is not typing: the state is set directly, not through `commitText` (which keeps the
+  // text as typed). The button disappears with the value, so focus moves to the input explicitly
+  // (C-DISABLED). An event callback, like the input's handlers that read a ref.
   const handleClear = useEventCallback(() => {
     setValue(multiselect ? EMPTY_VALUES : '');
     setTypedValue(null);

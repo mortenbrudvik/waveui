@@ -3,7 +3,7 @@ import { focusableDisabledProps, joinIds } from '../../lib/aria';
 import { switchClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
@@ -69,11 +69,6 @@ export interface SwitchProps extends Omit<
   defaultChecked?: boolean;
   /** Called with the new checked state when the switch is toggled (not for no-op updates). */
   onCheckedChange?: (checked: boolean) => void;
-  /**
-   * Called with the new checked state when the switch is toggled.
-   * @deprecated Use `onCheckedChange`.
-   */
-  onChange?: (checked: boolean) => void;
   /** Whether the switch is disabled and non-interactive. */
   disabled?: boolean;
   /**
@@ -203,7 +198,6 @@ export const Switch = ({
   checked: checkedProp,
   defaultChecked = false,
   onCheckedChange,
-  onChange,
   disabled = false,
   disabledFocusable = false,
   label,
@@ -236,17 +230,13 @@ export const Switch = ({
   slotProps,
   ...rest
 }: SwitchProps) => {
-  if (onChange !== undefined) warnDeprecated('Switch', 'onChange', 'onCheckedChange');
   const hasChildren = slotRendersContent(children);
   React.useEffect(() => {
     if (hasChildren) {
       warnOnce('Switch:children', 'Switch: children are not rendered. Pass the label in `label`.');
     }
   }, [hasChildren]);
-  const [checked, setChecked] = useControllable(checkedProp, defaultChecked, (next: boolean) => {
-    onCheckedChange?.(next);
-    onChange?.(next);
-  });
+  const [checked, setChecked] = useControllable(checkedProp, defaultChecked, onCheckedChange);
 
   const generatedId = useId('switch');
   const labelTextId = useId('switch-label');

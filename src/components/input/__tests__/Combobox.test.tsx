@@ -103,10 +103,6 @@ const CONTROLLED_TO_UNCONTROLLED =
   'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
   'value.';
 
-const DEPRECATED_ON_OPTION_SELECT =
-  '[WaveUI] Combobox: `onOptionSelect` is deprecated and will be removed in 1.0. Use ' +
-  '`onValueChange` instead.';
-
 const EXPAND_ICON_BUTTON =
   '[WaveUI] Combobox: `expandIcon` received a button element; its children render as the ' +
   'glyph of the built-in expand button and its props were dropped (buttons cannot be nested). ' +
@@ -984,46 +980,45 @@ describe('Combobox', () => {
   });
 
   describe('value callbacks (input-basic#29)', () => {
-    it('onValueChange fires on change only; the deprecated onOptionSelect on every activation', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('onValueChange fires on change only: selecting the current option again does not call it', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
-      const onOptionSelect = vi.fn();
-      renderCombobox({ defaultValue: 'a', onValueChange, onOptionSelect });
+      renderCombobox({ defaultValue: 'a', onValueChange });
       await user.click(combobox());
       await user.click(option('Apple'));
-      expect(onOptionSelect).toHaveBeenCalledWith('a');
       expect(onValueChange).not.toHaveBeenCalled();
       await user.click(combobox());
       await user.click(option('Beta'));
-      expect(onValueChange).toHaveBeenCalledWith('b');
-      expect(onOptionSelect).toHaveBeenCalledTimes(2);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+      expect(onValueChange.mock.calls).toEqual([['b']]);
     });
 
-    it('calls onValueChange before the deprecated onOptionSelect (0.7 order)', async () => {
+    it('has no onOptionSelect alias: the 0.4 name is removed in 1.0', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const user = userEvent.setup();
-      const calls: string[] = [];
-      renderCombobox({
-        onValueChange: () => calls.push('onValueChange'),
-        onOptionSelect: () => calls.push('onOptionSelect'),
-      });
-      await user.click(combobox());
-      await user.click(option('Apple'));
-      expect(calls).toEqual(['onValueChange', 'onOptionSelect']);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
-    });
-
-    it('warns once that onOptionSelect is deprecated', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const { rerender } = renderCombobox({ onOptionSelect: () => {} });
-      rerender(
-        <Combobox aria-label="Fruit" onOptionSelect={() => {}}>
+      const onOptionSelect = vi.fn();
+      const onValueChange = vi.fn();
+      const { container } = render(
+        <Combobox
+          aria-label="Fruit"
+          // @ts-expect-error -- `onOptionSelect(value)` is removed in 1.0: use `onValueChange`
+          onOptionSelect={onOptionSelect}
+          onValueChange={onValueChange}
+        >
           {FRUITS}
         </Combobox>,
       );
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+      await user.click(combobox());
+      await user.click(option('Apple'));
+      expect(onValueChange.mock.calls).toEqual([['a']]);
+      expect(onOptionSelect).not.toHaveBeenCalled();
+      // Untyped code that still passes it reaches the root as an unknown prop: React reports it
+      // and renders nothing for it.
+      expect(container.querySelector('[onoptionselect]')).toBeNull();
+      expect(error.mock.calls).toEqual([
+        ['Unknown event handler property `%s`. It will be ignored.', 'onOptionSelect'],
+      ]);
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('fires the value callback exactly once per selection in StrictMode', async () => {
@@ -1739,21 +1734,16 @@ describe('Combobox', () => {
       expect(visibleOptions()).toEqual(['Apple', 'Beta', 'Cherry']);
     });
 
-    it('freeform: clears the typed text without calling the deprecated onOptionSelect', async () => {
+    it('freeform: clears the typed text', async () => {
       const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onValueChange = vi.fn();
-      const onOptionSelect = vi.fn();
-      renderCombobox({ freeform: true, clearable: true, onValueChange, onOptionSelect });
+      renderCombobox({ freeform: true, clearable: true, onValueChange });
       await user.type(combobox(), 'kiwi');
       onValueChange.mockClear();
-      onOptionSelect.mockClear();
       await user.click(clearButton());
       expect(onValueChange.mock.calls).toEqual([['']]);
-      expect(onOptionSelect).not.toHaveBeenCalled();
       expect(combobox()).toHaveValue('');
       expect(combobox()).toHaveFocus();
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
     });
 
     it('is a tab stop after the input and clears from the keyboard', async () => {
@@ -2749,16 +2739,9 @@ describe('Combobox', () => {
         expect(onValueChange).toHaveBeenCalledWith(['c', 'a']);
       });
 
-      it('fires the deprecated onOptionSelect per toggle', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const user = userEvent.setup();
-        const onOptionSelect = vi.fn();
-        renderMulti({ onOptionSelect });
-        await user.click(combobox());
-        await user.click(option('Apple'));
-        await user.click(option('Apple'));
-        expect(onOptionSelect.mock.calls).toEqual([['a'], ['a']]);
-        expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+      it('has no onOptionSelect alias with multiselect either (removed in 1.0)', () => {
+        // @ts-expect-error -- `onOptionSelect(value)` is removed in 1.0: use `onValueChange`
+        void (<Combobox aria-label="Fruit" multiselect onOptionSelect={() => {}} />);
       });
 
       it('warns once that freeform is not available with multiselect, and ignores it', async () => {

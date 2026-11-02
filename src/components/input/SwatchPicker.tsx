@@ -4,7 +4,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { joinIds } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import type { FocusMode, Shape } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -68,11 +68,6 @@ export interface SwatchPickerProps extends Omit<
   defaultValue?: string;
   /** Called with the new value when the selection changes (not when the selected swatch is chosen again). */
   onValueChange?: (value: string) => void;
-  /**
-   * Called with the new value when the selection changes.
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (value: string) => void;
   // D18: an explicit C-ROUTING exception — a swatch's own ref/className/style/rest land on its
   // button, so a wrapping element's props reach the element that has focus.
   /**
@@ -249,7 +244,6 @@ const SwatchPickerRoot = ({
   value: valueProp,
   defaultValue,
   onValueChange,
-  onChange,
   children,
   layout = 'row',
   focusMode = 'arrow',
@@ -272,12 +266,8 @@ const SwatchPickerRoot = ({
   ref,
   ...rest
 }: SwatchPickerProps) => {
-  if (onChange !== undefined) warnDeprecated('SwatchPicker', 'onChange', 'onValueChange');
   const initialValue = defaultValue ?? '';
-  const [value, setValue] = useControllable(valueProp, initialValue, (next: string) => {
-    onValueChange?.(next);
-    onChange?.(next);
-  });
+  const [value, setValue] = useControllable(valueProp, initialValue, onValueChange);
   const isTab = focusMode === 'tab';
   // The grid layout's rows are visual in tab mode: the grid keys and roles belong to arrow mode.
   const isGrid = layout === 'grid';

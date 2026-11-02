@@ -29,10 +29,6 @@ function spyWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => {});
 }
 
-const DEPRECATED_ON_CHANGE =
-  '[WaveUI] ColorPicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
-  '`onValueChange` instead.';
-
 /** The development warning for a `value`/`defaultValue` that is not a hex color. */
 function invalidValueWarning(value: string) {
   return (
@@ -142,16 +138,27 @@ describe('ColorPicker', () => {
     expect(onValueChange).toHaveBeenLastCalledWith('#123456');
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
+  it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
     const warn = spyWarn();
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      const { rerender } = render(<ColorPicker presets={['#ff0000']} onChange={onChange} />);
-      rerender(<ColorPicker presets={['#ff0000']} onChange={onChange} />);
+      const onValueChange = vi.fn();
+      render(
+        <ColorPicker
+          presets={['#ff0000']}
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
+      );
       await user.click(preset('#ff0000'));
-      expect(onChange).toHaveBeenCalledWith('#ff0000');
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
+      await user.tripleClick(hexInput());
+      await user.keyboard('#123456');
+      expect(onValueChange.mock.calls).toEqual([['#ff0000'], ['#123456']]);
+      // Untyped code that still passes it gets no value: it is never called with a color.
+      expect(onChange).not.toHaveBeenCalledWith(expect.any(String));
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
@@ -926,36 +933,6 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
       'true',
     );
     expect(within(changed).getByRole('slider', { name: 'Opacity' })).toHaveValue('50');
-  });
-
-  it('deprecated onChange alias: a form reset reports only the default color, like onValueChange (C-NAMING, input-basic#12)', async () => {
-    const warn = spyWarn();
-    try {
-      const user = userEvent.setup();
-      const onChange = vi.fn();
-      const untouched = vi.fn();
-      render(
-        <form aria-label="Form">
-          <ColorPicker
-            aria-label="Changed"
-            showOpacity
-            defaultValue="#0f6cbd80"
-            onChange={onChange}
-          />
-          <ColorPicker aria-label="Untouched" onChange={untouched} />
-        </form>,
-      );
-      const changed = screen.getByRole('group', { name: 'Changed' });
-      await user.click(within(changed).getByRole('radio', { name: 'Red' }));
-      expect(onChange.mock.calls).toEqual([['#d1343880']]);
-
-      act(() => getForm().reset());
-      expect(onChange.mock.calls).toEqual([['#d1343880'], ['#0f6cbd80']]);
-      expect(untouched).not.toHaveBeenCalled();
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
-    } finally {
-      warn.mockRestore();
-    }
   });
 
   it('controlled: form reset reports only the default color (input-basic#12)', async () => {

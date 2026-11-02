@@ -2095,25 +2095,32 @@ describe('DatePicker', () => {
       expect(onValueChange).not.toHaveBeenCalled();
     });
 
-    it('keeps the deprecated onChange alias working and warns once', async () => {
+    it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
       const user = userEvent.setup();
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onChange = vi.fn();
-      const { rerender } = render(
-        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} onChange={onChange} />,
-      );
-      rerender(
-        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} onChange={onChange} />,
+      const onValueChange = vi.fn();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          // @ts-expect-error -- `onChange(date)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
       );
       await openCalendar(user);
       await user.click(dayButton('Friday, June 20, 2025'));
-      expect(fields(onChange.mock.calls[0][0] as Date)).toEqual([2025, 6, 20]);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] DatePicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onValueChange` instead.',
-        ],
+      await user.clear(textbox());
+      await user.type(textbox(), '6/25/2025{Enter}');
+      expect(onValueChange.mock.calls.map(([date]) => fields(date as Date))).toEqual([
+        [2025, 6, 20],
+        [2025, 6, 25],
       ]);
+      // Untyped code that still passes it gets no value: it is never called with a date.
+      expect(onChange).not.toHaveBeenCalledWith(expect.any(Date));
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 

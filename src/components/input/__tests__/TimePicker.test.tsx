@@ -2091,37 +2091,28 @@ describe('TimePicker', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps the deprecated onChange alias working and warns once', async () => {
+    it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
       const user = userEvent.setup();
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onChange = vi.fn();
       const onValueChange = vi.fn();
-      const { rerender } = render(
+      render(
         <TimePicker
           aria-label="Time"
           step={60}
-          onChange={onChange}
-          onValueChange={onValueChange}
-        />,
-      );
-      rerender(
-        <TimePicker
-          aria-label="Time"
-          step={60}
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
           onChange={onChange}
           onValueChange={onValueChange}
         />,
       );
       await user.click(combobox('Time'));
       await user.click(screen.getByRole('option', { name: '3:00 AM' }));
-      expect(onChange).toHaveBeenCalledWith('03:00');
-      expect(onValueChange).toHaveBeenCalledWith('03:00');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] TimePicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onValueChange` instead.',
-        ],
-      ]);
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), '4:00 AM{Enter}');
+      expect(onValueChange.mock.calls).toEqual([['03:00'], ['04:00']]);
+      // Untyped code that still passes it gets no value: it is never called with a time.
+      expect(onChange).not.toHaveBeenCalledWith(expect.any(String));
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 
