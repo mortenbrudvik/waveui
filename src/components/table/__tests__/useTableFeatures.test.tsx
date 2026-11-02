@@ -298,7 +298,7 @@ describe('useTableFeatures', () => {
       expect(names(result.current)).toEqual(['Cleo', 'Abe', 'Bea', 'Dan']);
     });
 
-    it('calls onSortChange once per change, with the event when one is given', () => {
+    it('calls onSortChange once per change, with the event given, else a sort event of its own (1.0)', () => {
       const onSortChange = vi.fn();
       const { result } = renderHook(() =>
         useTableFeatures({ items: people, columns, getRowId }, [
@@ -318,7 +318,18 @@ describe('useTableFeatures', () => {
       expect(onSortChange).toHaveBeenCalledTimes(2);
       expect(onSortChange).toHaveBeenLastCalledWith(
         { columnId: 'age', direction: 'descending' },
-        undefined,
+        { event: expect.any(Event) },
+      );
+      const own = onSortChange.mock.calls[1]![1].event as Event;
+      expect(own.type).toBe('sort');
+      expect(own.isTrusted).toBe(false);
+      expect(own.target).toBeNull();
+
+      act(() => result.current.sort.setColumnSort('name', 'ascending'));
+      expect(onSortChange).toHaveBeenCalledTimes(3);
+      expect(onSortChange).toHaveBeenLastCalledWith(
+        { columnId: 'name', direction: 'ascending' },
+        { event: expect.objectContaining({ type: 'sort', isTrusted: false, target: null }) },
       );
     });
 
@@ -336,6 +347,10 @@ describe('useTableFeatures', () => {
       act(() => result.current.sort.toggleColumnSort('name'));
       expect(onSortChange).toHaveBeenCalledTimes(2);
       expect(names(result.current)).toEqual(['Dan', 'Cleo', 'Bea', 'Abe']);
+      // Each call carries details, an event of its own here (no event was given).
+      for (const [, details] of onSortChange.mock.calls) {
+        expect(details).toEqual({ event: expect.any(Event) });
+      }
     });
   });
 
@@ -682,7 +697,7 @@ describe('useTableFeatures', () => {
       expect(onSortChange).toHaveBeenCalledTimes(1);
       expect(onSortChange).toHaveBeenCalledWith(
         { columnId: 'name', direction: 'descending' },
-        undefined,
+        { event: expect.any(Event) },
       );
       expect(result.current.sort.value).toEqual({ columnId: 'name', direction: 'descending' });
       expect(names(result.current)).toEqual(['Dan', 'Cleo', 'Bea', 'Abe']);

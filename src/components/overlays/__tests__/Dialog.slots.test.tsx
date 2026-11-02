@@ -249,7 +249,7 @@ describe('Dialog.Content backdrop (P6-06 D93)', () => {
         <Dialog
           open={open}
           onOpenChange={(next, details) => {
-            if (details?.reason !== 'outside-press') setOpen(next);
+            if (details.reason !== 'outside-press') setOpen(next);
           }}
         >
           <Dialog.Content title="Rename" backdrop={<span data-testid="backdrop-art">Pattern</span>}>

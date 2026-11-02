@@ -84,11 +84,11 @@ interface FeaturesTableArgs {
   /** Called with the ids of every selected member. */
   onSelectedItemsChange: (selectedItems: string[]) => void;
   /** Called with the new sort. */
-  onSortChange: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
+  onSortChange: (sort: DataGridSort, details: DataGridSortChangeDetails) => void;
   /** Called with the widths of the columns when one changes. */
   onColumnWidthsChange: (
     widths: Record<string, number>,
-    details?: TableColumnWidthsChangeDetails,
+    details: TableColumnWidthsChangeDetails,
   ) => void;
 }
 
@@ -131,7 +131,7 @@ function FeaturesTable({
             <Table.SelectionCell
               aria-label="Select all members"
               checked={selectAll}
-              onCheckedChange={(_checked, details) => selection.toggleAllRows(details?.event)}
+              onCheckedChange={(_checked, details) => selection.toggleAllRows(details.event)}
             />
           ) : (
             <Table.HeaderCell>
@@ -168,7 +168,7 @@ function FeaturesTable({
               name={selectionMode === 'single' ? 'team-member' : undefined}
               aria-label={`Select ${item.name}`}
               checked={selection.isRowSelected(rowId)}
-              onCheckedChange={(_checked, details) => selection.toggleRow(rowId, details?.event)}
+              onCheckedChange={(_checked, details) => selection.toggleRow(rowId, details.event)}
             />
             {COLUMNS.map((column) => (
               <Table.Cell key={column.columnId}>{CELL_TEXT[column.columnId!]!(item)}</Table.Cell>

@@ -172,12 +172,12 @@ export interface CheckedValuesChangeDetails {
 
 /**
  * Signature of `onCheckedValuesChange` (Menu, Toolbar): the new checked values first, then the
- * details. WaveUI always passes `details`; it is typed optional until 1.0 (read it as
- * `details?.name`), like `onOpenChange`'s.
+ * details, which WaveUI always passes (required since 1.0, like `onOpenChange`'s). A handler of
+ * the values alone still fits.
  */
 export type CheckedValuesChangeHandler = (
   checkedValues: Record<string, string[]>,
-  details?: CheckedValuesChangeDetails,
+  details: CheckedValuesChangeDetails,
 ) => void;
 
 /** A rectangle in viewport coordinates, as `getBoundingClientRect()` returns it (a `DOMRect` is one). */

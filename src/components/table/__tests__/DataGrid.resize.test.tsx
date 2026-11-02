@@ -158,11 +158,13 @@ afterEach(() => {
 describe('DataGrid column sizing', () => {
   describe('types', () => {
     it('reports the widths and the details of a change, and takes localizable labels', () => {
-      // `details` is optional through 0.x (C-NAMING); the grid always passes it.
+      // `details` is required (1.0, C-NAMING); the grid always passes it.
       expectTypeOf<DataGridBaseProps['onColumnWidthsChange']>().toEqualTypeOf<
-        | ((widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void)
+        | ((widths: Record<string, number>, details: TableColumnWidthsChangeDetails) => void)
         | undefined
       >();
+      // @ts-expect-error `details` is required (1.0)
+      expectTypeOf<NonNullable<DataGridBaseProps['onColumnWidthsChange']>>().toBeCallableWith({});
       expectTypeOf<DataGridLabels['resizeColumn']>().toEqualTypeOf<string | undefined>();
       expectTypeOf<DataGridLabels['columnWidth']>().toEqualTypeOf<
         ((width: number) => string) | undefined

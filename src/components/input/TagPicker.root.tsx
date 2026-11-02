@@ -719,7 +719,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     selectedValues: selected,
     onSelect: (value, details) => {
       if (value === createValue) commitCreate();
-      else addTag(value, details?.item.label ?? value);
+      else addTag(value, details.item.label ?? value);
     },
     items,
     filter: listFilter,

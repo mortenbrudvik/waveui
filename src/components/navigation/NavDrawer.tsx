@@ -95,10 +95,11 @@ export interface NavDrawerProps
   defaultOpen?: boolean;
   /**
    * Called with the new open state when it changes, with `details.reason`: `trigger` (a Hamburger
-   * inside the drawer), `escape` and `outside-press` (the backdrop; overlay only). `details` is
-   * typed optional until 1.0. A controlled drawer stays as it is until you update `open`.
+   * inside the drawer), `escape` and `outside-press` (the backdrop; overlay only), and the event
+   * as `details.event`. WaveUI always passes `details`. A controlled drawer stays as it is until
+   * you update `open`.
    */
-  onOpenChange?: (open: boolean, details?: DrawerOpenChangeDetails) => void;
+  onOpenChange?: (open: boolean, details: DrawerOpenChangeDetails) => void;
   /**
    * Called with an item's value every time an item is activated, also when the current page is
    * activated again (a disabled item, a link opened in another tab or window, and a button item

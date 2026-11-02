@@ -293,7 +293,7 @@ describe('Calendar', () => {
     it('emits the picked day as local midnight with details.range, only on change', async () => {
       const user = userEvent.setup();
       const onValueChange =
-        vi.fn<(date: Date | null, details?: CalendarValueChangeDetails) => void>();
+        vi.fn<(date: Date | null, details: CalendarValueChangeDetails) => void>();
       render(
         <Calendar
           aria-label="Date"
@@ -309,7 +309,7 @@ describe('Calendar', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
       const [date, details] = onValueChange.mock.calls[0];
       expect(date?.getTime()).toBe(new Date(2025, 5, 20).getTime());
-      expect(details?.range.map((day) => day.getTime())).toEqual([new Date(2025, 5, 20).getTime()]);
+      expect(details.range.map((day) => day.getTime())).toEqual([new Date(2025, 5, 20).getTime()]);
       expect(dayButton('Friday, June 20, 2025')).toHaveAttribute('aria-pressed', 'true');
       expect(dayButton('Sunday, June 15, 2025')).not.toHaveAttribute('aria-pressed');
       await user.click(dayButton('Friday, June 20, 2025'));
@@ -420,7 +420,7 @@ describe('Calendar', () => {
     it('resets to its default with the form and emits the restored range', async () => {
       const user = userEvent.setup();
       const onValueChange =
-        vi.fn<(date: Date | null, details?: CalendarValueChangeDetails) => void>();
+        vi.fn<(date: Date | null, details: CalendarValueChangeDetails) => void>();
       render(
         <form aria-label="Form">
           <Calendar
@@ -443,7 +443,7 @@ describe('Calendar', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
       const [date, details] = onValueChange.mock.calls[0];
       expect(date?.getTime()).toBe(new Date(2025, 5, 15).getTime());
-      expect(details?.range.map((day) => day.getTime())).toEqual([new Date(2025, 5, 15).getTime()]);
+      expect(details.range.map((day) => day.getTime())).toEqual([new Date(2025, 5, 15).getTime()]);
       expect(new FormData(form).get('due')).toBe('2025-06-15');
       expect(dayButton('Sunday, June 15, 2025')).toHaveAttribute('aria-pressed', 'true');
     });
@@ -451,7 +451,7 @@ describe('Calendar', () => {
     it('emits the restored range once per form reset in StrictMode', async () => {
       const user = userEvent.setup();
       const onValueChange =
-        vi.fn<(date: Date | null, details?: CalendarValueChangeDetails) => void>();
+        vi.fn<(date: Date | null, details: CalendarValueChangeDetails) => void>();
       render(
         <React.StrictMode>
           <form aria-label="Form">
@@ -471,13 +471,13 @@ describe('Calendar', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
       const [date, details] = onValueChange.mock.calls[0];
       expect(date?.getTime()).toBe(JUNE_15.getTime());
-      expect(details?.range.map((day) => day.getTime())).toEqual([JUNE_15.getTime()]);
+      expect(details.range.map((day) => day.getTime())).toEqual([JUNE_15.getTime()]);
     });
 
     it('a reset without a default emits null with an empty range', async () => {
       const user = userEvent.setup();
       const onValueChange =
-        vi.fn<(date: Date | null, details?: CalendarValueChangeDetails) => void>();
+        vi.fn<(date: Date | null, details: CalendarValueChangeDetails) => void>();
       render(
         <form aria-label="Form">
           <Calendar aria-label="Date" locale="en-US" today={TODAY} onValueChange={onValueChange} />

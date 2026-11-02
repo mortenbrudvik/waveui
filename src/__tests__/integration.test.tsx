@@ -3343,7 +3343,7 @@ describe('a SpinButton in a Dialog or Drawer: a backdrop press commits its typed
             surface={surface}
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason !== 'outside-press') setOpen(next);
+              if (details.reason !== 'outside-press') setOpen(next);
             }}
             onValueChange={onValueChange}
           />
@@ -11725,7 +11725,7 @@ describe('Phase 11 data at scale across components (0.16)', () => {
                 <Table.SelectionCell
                   aria-label="Select all members"
                   checked={selectAll}
-                  onCheckedChange={(_checked, details) => selection.toggleAllRows(details?.event)}
+                  onCheckedChange={(_checked, details) => selection.toggleAllRows(details.event)}
                 />
                 {MEMBER_COLUMNS.map((column) => (
                   <Table.HeaderCell
@@ -11748,7 +11748,7 @@ describe('Phase 11 data at scale across components (0.16)', () => {
                     aria-label={`Select ${item.name}`}
                     checked={selection.isRowSelected(rowId)}
                     onCheckedChange={(_checked, details) =>
-                      selection.toggleRow(rowId, details?.event)
+                      selection.toggleRow(rowId, details.event)
                     }
                   />
                   <Table.Cell>{item.name}</Table.Cell>

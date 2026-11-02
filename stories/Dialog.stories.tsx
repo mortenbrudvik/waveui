@@ -266,7 +266,7 @@ export const UnsavedChanges: Story = {
     const dirty = name !== '';
     const handleOpenChange: NonNullable<DialogProps['onOpenChange']> = (next, details) => {
       args.onOpenChange?.(next, details);
-      if (!next && dirty && details?.reason === 'outside-press') return;
+      if (!next && dirty && details.reason === 'outside-press') return;
       setOpen(next);
       if (!next) setName('');
     };
@@ -347,7 +347,12 @@ export const Controlled: Story = {
     };
     return (
       <>
-        <Button appearance="primary" onClick={() => handleOpenChange(true)}>
+        <Button
+          appearance="primary"
+          onClick={(event) =>
+            handleOpenChange(true, { reason: 'trigger', event: event.nativeEvent })
+          }
+        >
           Open controlled dialog
         </Button>
         {/* The story owns the controlled pair; every other arg is forwarded. */}
@@ -355,7 +360,12 @@ export const Controlled: Story = {
           <Dialog.Content title="Controlled dialog">
             <p>This dialog is controlled via state.</p>
             <Dialog.Footer>
-              <Button appearance="subtle" onClick={() => handleOpenChange(false)}>
+              <Button
+                appearance="subtle"
+                onClick={(event) =>
+                  handleOpenChange(false, { reason: 'close', event: event.nativeEvent })
+                }
+              >
                 Close
               </Button>
             </Dialog.Footer>

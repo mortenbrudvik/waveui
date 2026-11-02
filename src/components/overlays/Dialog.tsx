@@ -90,13 +90,12 @@ export interface DialogProps {
    * `close` (a `.Close` part), `close-button` (the built-in Close button), `escape` or
    * `outside-press` (the backdrop) — so a controlled dialog can refuse only some ways of closing
    * (for example keep a form with unsaved changes open on `outside-press`); `details.event` is the
-   * DOM event behind the request. WaveUI always passes `details`; it is typed optional until 1.0
-   * so that code which calls this prop itself keeps compiling.
+   * DOM event behind the request. WaveUI always passes `details`.
    *
    * Fires only when the value changes; a controlled dialog stays as it is until the parent updates
    * `open`.
    */
-  onOpenChange?: (open: boolean, details?: DialogOpenChangeDetails) => void;
+  onOpenChange?: (open: boolean, details: DialogOpenChangeDetails) => void;
   /**
    * `modal`: the page behind is `inert` and does not scroll; a backdrop press, Escape, the Close
    * button and `Dialog.Close` close it. `alert`: a confirmation that needs an answer —

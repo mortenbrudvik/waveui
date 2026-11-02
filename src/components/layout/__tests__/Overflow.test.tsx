@@ -1331,16 +1331,22 @@ describe('Overflow - priority, pinned items, direction and orientation (P9-01)',
     expectTypeOf<OverflowDirection>().toEqualTypeOf<'end' | 'start'>();
     expectTypeOf<OverflowProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
     expectTypeOf<OverflowGroupVisibility>().toEqualTypeOf<'visible' | 'hidden' | 'overflow'>();
-    // `details` is optional until 1.0 (C-NAMING), as for the other callbacks of the phase.
+    // `details` is required (1.0, C-NAMING): a handler of the ids alone still fits, but code
+    // that calls the prop passes `details`.
     expectTypeOf<OverflowProps['onOverflowChange']>().toEqualTypeOf<
-      ((hiddenItems: string[], details?: OverflowChangeDetails) => void) | undefined
+      ((hiddenItems: string[], details: OverflowChangeDetails) => void) | undefined
     >();
     type OnOverflowChange = NonNullable<OverflowProps['onOverflowChange']>;
-    const withDetails = (hidden: string[], details?: OverflowChangeDetails) =>
-      void [hidden, details?.visibleItems];
+    const withDetails = (hidden: string[], details: OverflowChangeDetails) =>
+      void [hidden, details.visibleItems];
     const hiddenOnly = (hidden: string[]) => void hidden;
     expectTypeOf(withDetails).toExtend<OnOverflowChange>();
     expectTypeOf(hiddenOnly).toExtend<OnOverflowChange>();
+    expectTypeOf<OnOverflowChange>().toBeCallableWith(['a'], {
+      visibleItems: [],
+      groupVisibility: {},
+    });
+    // @ts-expect-error `details` is required (1.0)
     expectTypeOf<OnOverflowChange>().toBeCallableWith(['a']);
   });
 

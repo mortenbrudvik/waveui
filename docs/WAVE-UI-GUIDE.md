@@ -1404,7 +1404,7 @@ A component that takes a `virtualWindow` (DataGrid, List, Listbox, Combobox, Dro
 - Name value callbacks after the state (`onValueChange`, `onCheckedChange`, `onOpenChange`); `onChange` is only the native change event
 - Declare `ref` in the interface; export the props type with the component (`CardHeaderProps`, `DataGridRowProps`)
 - Use shared types from `src/lib/types.ts`: `Size`, `CoreSize`, `InputAppearance`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`, `CheckedValues`, `CheckedValuesChangeHandler`, `PopupTarget`, `VirtualElement`, `DayOfWeek`, `FirstWeekOfYear`, `HeadingLevel`, `FocusMode`, `TagSize`, `TagAppearance`, `TagShape`, `SurfaceSize`, `BackdropAppearance`
-- Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`, `persistOnItemClick`, `openOnHover`, `openOnContext`, `isAccessible`); open state stays `open`/`defaultOpen`/`onOpenChange`, a state callback is named after its state (`checkedValues` → `onCheckedValuesChange`, not Fluent's `onCheckedValueChange`), and extra callback data goes in a second, optional `details` argument (`onOpenChange(open, details?)`, `onCheckedValuesChange(checkedValues, details?)`)
+- Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`, `persistOnItemClick`, `openOnHover`, `openOnContext`, `isAccessible`); open state stays `open`/`defaultOpen`/`onOpenChange`, a state callback is named after its state (`checkedValues` → `onCheckedValuesChange`, not Fluent's `onCheckedValueChange`), and extra callback data goes in a second `details` argument, which WaveUI always passes and which is required in the callback's type (`onOpenChange(open, details)`, `onCheckedValuesChange(checkedValues, details)`); where no DOM event is behind a change (a hook action called without one), the details carry an untrusted event of their own (`sort`, `select`, `check`, `resize`)
 - One delay vocabulary: `openDelay` and `closeDelay` in milliseconds (Menu 250/250, Popover 250/500, Tooltip 200/100). Menu's and Popover's apply to mouse hover only, Tooltip's `openDelay` also to keyboard focus
 
 ---
@@ -3827,10 +3827,6 @@ Deprecated names still work through 0.x, warn once in development and will be re
 **Announced for 1.0 (no warning yet):**
 
 - Badge and CounterBadge `color="important"` renders the orange severe colors through 0.x and becomes Fluent's neutral high-emphasis color (near black in the light theme) in 1.0: use `color="severe"` to keep the orange look.
-- The `details` parameter of Dialog and Drawer `onOpenChange` becomes required: read it as `details?.reason`.
-- The `details` parameter of Menu and Toolbar `onCheckedValuesChange` becomes required: read it as `details?.name`.
-- The `details` parameter of Tree `onCheckedItemsChange` becomes required: read it as `details?.value`.
-- The `details` parameters of Overflow `onOverflowChange`, DataGrid `onSortChange` and `onSelectedItemsChange`, and `Table.SelectionCell` `onCheckedChange` become required: read them as `details?.event` (or `details?.groupVisibility`).
 
 ---
 

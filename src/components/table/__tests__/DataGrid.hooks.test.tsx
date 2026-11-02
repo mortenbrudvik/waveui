@@ -191,15 +191,15 @@ describe('useDataGridSort (P13-02, R16)', () => {
 
   it('setSort without an event reports an untrusted sort event with no target', () => {
     const probes = recorder<UseDataGridSortResult>();
-    const onSortChange = vi.fn<(sort: DataGridSort, details?: DataGridSortChangeDetails) => void>();
+    const onSortChange = vi.fn<(sort: DataGridSort, details: DataGridSortChangeDetails) => void>();
     render(<SortGrid probes={probes} defaultSort={null} onSortChange={onSortChange} />);
     act(() => probes.last('caption').setSort({ columnId: 'name', direction: 'ascending' }));
     expect(onSortChange).toHaveBeenCalledTimes(1);
     const details = onSortChange.mock.calls[0][1];
-    expect(details?.event).toBeInstanceOf(Event);
-    expect(details?.event.type).toBe('sort');
-    expect(details?.event.isTrusted).toBe(false);
-    expect(details?.event.target).toBeNull();
+    expect(details.event).toBeInstanceOf(Event);
+    expect(details.event.type).toBe('sort');
+    expect(details.event.isTrusted).toBe(false);
+    expect(details.event.target).toBeNull();
   });
 
   it('setSort of the sort the grid already has changes nothing and calls nothing', () => {

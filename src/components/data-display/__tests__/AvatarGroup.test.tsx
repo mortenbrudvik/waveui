@@ -5,7 +5,11 @@ import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { avatarGroupClassNames, avatarGroupItemClassNames } from '../../../lib/classNames';
 import { AvatarGroup, AvatarGroupItem, AvatarGroupPopover } from '../AvatarGroup';
-import type { AvatarGroupProps, AvatarGroupItemProps } from '../AvatarGroup';
+import type {
+  AvatarGroupProps,
+  AvatarGroupItemProps,
+  AvatarGroupOpenChangeDetails,
+} from '../AvatarGroup';
 import { Avatar } from '../Avatar';
 import { AvatarGroupContext } from '../AvatarGroup.context';
 import type { AvatarProps } from '../Avatar';
@@ -1165,7 +1169,7 @@ describe('AvatarGroup', () => {
       );
     });
 
-    it('calls onOpenChange once per request in StrictMode', async () => {
+    it('calls onOpenChange once per request in StrictMode, with its details', async () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
       render(
@@ -1177,6 +1181,16 @@ describe('AvatarGroup', () => {
       );
       await user.click(screen.getByRole('button', { name: '1 more' }));
       expect(onOpenChange).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).toHaveBeenCalledWith(true, {
+        reason: 'trigger',
+        event: expect.any(Event),
+      });
+      await user.keyboard('{Escape}');
+      expect(onOpenChange).toHaveBeenCalledTimes(2);
+      expect(onOpenChange).toHaveBeenLastCalledWith(false, {
+        reason: 'escape',
+        event: expect.any(Event),
+      });
     });
 
     it('is axe clean closed and open, with Items', async () => {
@@ -1199,6 +1213,10 @@ describe('AvatarGroup', () => {
       >();
       expectTypeOf<AvatarGroupProps['open']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<NonNullable<AvatarGroupProps['onOpenChange']>>().toBeFunction();
+      // `details` is required (1.0).
+      expectTypeOf<NonNullable<AvatarGroupProps['onOpenChange']>>().parameters.toEqualTypeOf<
+        [open: boolean, details: AvatarGroupOpenChangeDetails]
+      >();
       expectTypeOf<Omit<AvatarGroupItemProps, 'slotProps'>>().toEqualTypeOf<
         Omit<AvatarProps, 'slotProps'>
       >();

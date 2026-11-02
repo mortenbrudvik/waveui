@@ -70,9 +70,10 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   defaultOpen?: boolean;
   /**
    * Called when the overflow popup asks to open or close, with the reason: `trigger` (the button),
-   * `escape`, `outside-press` or `focus-outside`.
+   * `escape`, `outside-press` or `focus-outside`, and the event (`details.event`). WaveUI always
+   * passes `details`.
    */
-  onOpenChange?: (open: boolean, details?: AvatarGroupOpenChangeDetails) => void;
+  onOpenChange?: (open: boolean, details: AvatarGroupOpenChangeDetails) => void;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
   /**

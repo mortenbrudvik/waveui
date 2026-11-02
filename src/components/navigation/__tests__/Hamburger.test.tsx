@@ -220,7 +220,7 @@ describe('Hamburger', () => {
       onOpenChange = () => {},
       hamburgerProps,
     }: {
-      onOpenChange?: (open: boolean, details?: unknown) => void;
+      onOpenChange?: (open: boolean, details: unknown) => void;
       hamburgerProps?: React.ComponentProps<typeof Hamburger>;
     }) {
       return (

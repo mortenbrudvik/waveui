@@ -695,10 +695,12 @@ describe('Table.ResizeHandle', () => {
     it('has the documented props', () => {
       expectTypeOf<TableResizeHandleProps['width']>().toEqualTypeOf<number>();
       expectTypeOf<TableResizeHandleProps['maxWidth']>().toEqualTypeOf<number | undefined>();
-      // `details` is always passed; typed optional through 0.x, as every `details` argument.
+      // `details` is always passed, and required (1.0).
       expectTypeOf<TableResizeHandleProps['onResize']>().toEqualTypeOf<
-        (width: number, details?: { event: Event }) => void
+        (width: number, details: { event: Event }) => void
       >();
+      // @ts-expect-error `details` is required (1.0)
+      expectTypeOf<TableResizeHandleProps['onResize']>().toBeCallableWith(120);
       expectTypeOf<TableResizeHandleProps['onReset']>().toEqualTypeOf<
         ((details: { event: Event }) => void) | undefined
       >();

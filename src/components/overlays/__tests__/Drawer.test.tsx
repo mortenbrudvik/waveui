@@ -1578,7 +1578,7 @@ describe('Drawer', () => {
             title="Unsaved filters"
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason !== 'outside-press') setOpen(next);
+              if (details.reason !== 'outside-press') setOpen(next);
             }}
           >
             <input aria-label="Name" />
@@ -1658,18 +1658,22 @@ describe('Drawer', () => {
       warn.mockRestore();
     });
 
-    it('types details as an optional second argument with the shared reason union', () => {
+    it('types details as a required second argument (1.0) with the shared reason union', () => {
       expectTypeOf<DrawerOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
       expectTypeOf<DrawerOpenChangeDetails>().toEqualTypeOf<
         OpenChangeDetails<ModalOpenChangeReason>
       >();
       type Handler = NonNullable<DrawerProps['onOpenChange']>;
-      expectTypeOf<Parameters<Handler>[1]>().toEqualTypeOf<DrawerOpenChangeDetails | undefined>();
+      expectTypeOf<Parameters<Handler>[1]>().toEqualTypeOf<DrawerOpenChangeDetails>();
       // A 0.5 handler that takes only the value still fits.
       expectTypeOf<(open: boolean) => void>().toExtend<Handler>();
-      // Code that calls the prop itself (a wrapper, a custom Cancel button) keeps compiling.
-      const forward = (props: DrawerProps) => props.onOpenChange?.(false);
+      // Code that calls the prop itself (a wrapper, a custom Cancel button) passes `details`.
+      const forward = (props: DrawerProps, event: Event) =>
+        props.onOpenChange?.(false, { reason: 'close', event });
       expectTypeOf(forward).parameter(0).toEqualTypeOf<DrawerProps>();
+      // @ts-expect-error `details` is required (1.0)
+      const withoutDetails = (props: DrawerProps) => props.onOpenChange?.(false);
+      expect(withoutDetails).toBeTypeOf('function');
     });
   });
 
@@ -1700,7 +1704,7 @@ describe('Drawer', () => {
             title="Filters"
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason !== 'outside-press') setOpen(next);
+              if (details.reason !== 'outside-press') setOpen(next);
             }}
           >
             <input aria-label="Name" onBlur={onBlur} />

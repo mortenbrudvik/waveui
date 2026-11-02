@@ -2077,7 +2077,7 @@ describe('Dialog', () => {
           <Dialog
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason !== 'outside-press') setOpen(next);
+              if (details.reason !== 'outside-press') setOpen(next);
             }}
           >
             <Dialog.Content title="Unsaved changes">
@@ -2184,7 +2184,7 @@ describe('Dialog', () => {
       warn.mockRestore();
     });
 
-    it('types details as an optional second argument with the shared reason union', () => {
+    it('types details as a required second argument (1.0) with the shared reason union', () => {
       expectTypeOf<DialogOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
       expectTypeOf<DialogOpenChangeDetails>().toEqualTypeOf<
         OpenChangeDetails<ModalOpenChangeReason>
@@ -2193,12 +2193,16 @@ describe('Dialog', () => {
         'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press'
       >();
       type Handler = NonNullable<DialogProps['onOpenChange']>;
-      expectTypeOf<Parameters<Handler>[1]>().toEqualTypeOf<DialogOpenChangeDetails | undefined>();
+      expectTypeOf<Parameters<Handler>[1]>().toEqualTypeOf<DialogOpenChangeDetails>();
       // A 0.5 handler that takes only the value still fits.
       expectTypeOf<(open: boolean) => void>().toExtend<Handler>();
-      // Code that calls the prop itself (a wrapper, a custom Cancel button) keeps compiling.
-      const forward = (props: DialogProps) => props.onOpenChange?.(false);
+      // Code that calls the prop itself (a wrapper, a custom Cancel button) passes `details`.
+      const forward = (props: DialogProps, event: Event) =>
+        props.onOpenChange?.(false, { reason: 'close', event });
       expectTypeOf(forward).parameter(0).toEqualTypeOf<DialogProps>();
+      // @ts-expect-error `details` is required (1.0)
+      const withoutDetails = (props: DialogProps) => props.onOpenChange?.(false);
+      expect(withoutDetails).toBeTypeOf('function');
     });
   });
 
@@ -2354,7 +2358,7 @@ describe('Dialog', () => {
           <Dialog
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason !== 'outside-press') setOpen(next);
+              if (details.reason !== 'outside-press') setOpen(next);
             }}
           >
             <Dialog.Content title="Rename">
@@ -2382,7 +2386,7 @@ describe('Dialog', () => {
           <Dialog
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason === 'outside-press') saveRef.current?.focus();
+              if (details.reason === 'outside-press') saveRef.current?.focus();
               else setOpen(next);
             }}
           >
@@ -2411,7 +2415,7 @@ describe('Dialog', () => {
           <Dialog
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason === 'outside-press') setConfirming(true);
+              if (details.reason === 'outside-press') setConfirming(true);
               else setOpen(next);
             }}
           >

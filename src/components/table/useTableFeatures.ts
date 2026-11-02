@@ -18,11 +18,15 @@ export interface TableRowData<T> {
 export interface TableSortState {
   /** The sorted column and its direction, or `null` while the rows are in the order of `items`. */
   value: DataGridSort | null;
-  /** Sorts by the column `columnId` in `direction`. */
+  /**
+   * Sorts by the column `columnId` in `direction`. Without `event`, the change's details carry an
+   * untrusted `sort` event with no target.
+   */
   setColumnSort(columnId: string, direction: SortDirection, event?: Event): void;
   /**
    * Sorts by the column `columnId`, as a sortable header of DataGrid does: ascending, or descending
-   * when the column is already sorted ascending.
+   * when the column is already sorted ascending. Without `event`, the change's details carry an
+   * untrusted `sort` event with no target.
    */
   toggleColumnSort(columnId: string, event?: Event): void;
   /** The direction of the column `columnId` while the rows are sorted by it, else `undefined`. */

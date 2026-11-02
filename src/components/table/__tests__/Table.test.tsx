@@ -854,8 +854,8 @@ describe('Table.SelectionCell', () => {
     it('toggles uncontrolled from defaultChecked and reports each change with its event', async () => {
       const user = userEvent.setup();
       const onCheckedChange = vi.fn(
-        (_checked: boolean, details?: TableSelectionCellCheckedChangeDetails) => {
-          expect(details?.event).toBeInstanceOf(Event);
+        (_checked: boolean, details: TableSelectionCellCheckedChangeDetails) => {
+          expect(details.event).toBeInstanceOf(Event);
         },
       );
       render(
@@ -1191,6 +1191,30 @@ describe('Table.SelectionCell', () => {
       expect(checkbox()).not.toBeChecked();
       expect(onCheckedChange.mock.calls.map(([value]) => value)).toEqual([true, false]);
     });
+
+    it('passes details on a form reset too: the form’s reset event (1.0), once in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onCheckedChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <form aria-label="Orders">
+            <CellRow>
+              <Table.SelectionCell aria-label="Select Alpha" onCheckedChange={onCheckedChange} />
+            </CellRow>
+          </form>
+        </React.StrictMode>,
+      );
+      await user.click(checkbox());
+      expect(onCheckedChange).toHaveBeenCalledTimes(1);
+      expect(onCheckedChange).toHaveBeenLastCalledWith(true, { event: expect.any(MouseEvent) });
+      const form = screen.getByRole('form', { name: 'Orders' }) as HTMLFormElement;
+      act(() => form.reset());
+      expect(onCheckedChange).toHaveBeenCalledTimes(2);
+      expect(onCheckedChange).toHaveBeenLastCalledWith(false, { event: expect.any(Event) });
+      const event = onCheckedChange.mock.calls[1]![1].event as Event;
+      expect(event.type).toBe('reset');
+      expect(event.target).toBe(form);
+    });
   });
 
   describe('subtle and invisible', () => {
@@ -1282,8 +1306,9 @@ describe('Table.SelectionCell', () => {
     expectTypeOf<TableSelectionCellProps['defaultChecked']>().toEqualTypeOf<
       boolean | 'mixed' | undefined
     >();
+    // `details` is required (1.0), a form reset included.
     expectTypeOf<NonNullable<TableSelectionCellProps['onCheckedChange']>>().toEqualTypeOf<
-      (checked: boolean, details?: TableSelectionCellCheckedChangeDetails) => void
+      (checked: boolean, details: TableSelectionCellCheckedChangeDetails) => void
     >();
     expectTypeOf<TableSelectionCellCheckedChangeDetails['event']>().toEqualTypeOf<Event>();
     expectTypeOf<TableSelectionCellProps['controlRef']>().toEqualTypeOf<

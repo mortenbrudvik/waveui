@@ -288,7 +288,7 @@ Measured with esbuild 0.28.2 (minified ESM, gzip level 9), with `react` and `rea
 
 ### 4.1 Callbacks
 
-Fluent callbacks receive `(event, data)`. WaveUI state callbacks are named after their state and receive the new value first; extra data comes in a second `details` argument, which is typed optional until 1.0. They fire only when the value changes. `onChange` is always the native DOM change event.
+Fluent callbacks receive `(event, data)`. WaveUI state callbacks are named after their state and receive the new value first; extra data comes in a second `details` argument, which WaveUI always passes (required in the callback's type since 1.0). They fire only when the value changes. `onChange` is always the native DOM change event.
 
 | Fluent UI v9 | WaveUI 0.11 |
 |---|---|
@@ -332,7 +332,7 @@ Fluent callbacks receive `(event, data)`. WaveUI state callbacks are named after
 <Dialog
   open={open}
   onOpenChange={(next, details) => {
-    if (!next && details?.reason === 'outside-press') return; // unsaved changes: ignore the backdrop
+    if (!next && details.reason === 'outside-press') return; // unsaved changes: ignore the backdrop
     setOpen(next);
   }}
 >

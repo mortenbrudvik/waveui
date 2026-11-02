@@ -372,11 +372,20 @@ describe('useFlatTree', () => {
       expect(onCheckedItemsChange).not.toHaveBeenCalled();
     });
 
-    it('passes no details without an event, and clears the details after the change', () => {
+    it('passes details with a check event of its own without an event (1.0), and clears them after the change', () => {
       const onCheckedItemsChange = vi.fn();
       const { result } = setup(FILES, { ...multiple, onCheckedItemsChange });
       act(() => result.current.setChecked('readme', true));
-      expect(onCheckedItemsChange).toHaveBeenLastCalledWith(['readme'], undefined);
+      expect(onCheckedItemsChange).toHaveBeenCalledTimes(1);
+      expect(onCheckedItemsChange).toHaveBeenLastCalledWith(['readme'], {
+        value: 'readme',
+        checked: true,
+        event: expect.any(Event),
+      });
+      const own = onCheckedItemsChange.mock.calls[0]![1].event as Event;
+      expect(own.type).toBe('check');
+      expect(own.isTrusted).toBe(false);
+      expect(own.target).toBeNull();
       const event = clickEvent();
       act(() => result.current.setChecked('readme', false, event));
       expect(onCheckedItemsChange).toHaveBeenLastCalledWith([], {
@@ -384,6 +393,17 @@ describe('useFlatTree', () => {
         checked: false,
         event,
       });
+    });
+
+    it('fires once per change without an event in StrictMode, with the details', () => {
+      const onCheckedItemsChange = vi.fn();
+      const { result } = setup(FILES, { ...multiple, onCheckedItemsChange }, React.StrictMode);
+      act(() => result.current.setChecked('readme', true));
+      expect(onCheckedItemsChange).toHaveBeenCalledTimes(1);
+      expect(onCheckedItemsChange).toHaveBeenCalledWith(
+        ['readme'],
+        expect.objectContaining({ value: 'readme', checked: true, event: expect.any(Event) }),
+      );
     });
 
     it('adds and removes a value that matches no item, like the nested Tree', () => {
@@ -544,10 +564,11 @@ describe('useFlatTree', () => {
       expectTypeOf<FlatTreeModel['setChecked']>().toEqualTypeOf<
         (value: string, checked: boolean, event?: Event) => void
       >();
+      // `details` is required (1.0), also when `setChecked` gets no event.
       expectTypeOf<
         NonNullable<UseFlatTreeOptions['onCheckedItemsChange']>
       >().parameters.toEqualTypeOf<
-        [checkedItems: string[], details?: TreeCheckedItemsChangeDetails]
+        [checkedItems: string[], details: TreeCheckedItemsChangeDetails]
       >();
       expectTypeOf<UseFlatTreeOptions['expandedItems']>().toEqualTypeOf<
         readonly string[] | undefined

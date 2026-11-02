@@ -190,10 +190,12 @@ describe('checked-values vocabulary (Menu, Toolbar)', () => {
     }>();
   });
 
-  it('CheckedValuesChangeHandler takes the values first and optional details', () => {
+  it('CheckedValuesChangeHandler takes the values first and the details, required (1.0)', () => {
     expectTypeOf<CheckedValuesChangeHandler>().toEqualTypeOf<
-      (checkedValues: Record<string, string[]>, details?: CheckedValuesChangeDetails) => void
+      (checkedValues: Record<string, string[]>, details: CheckedValuesChangeDetails) => void
     >();
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<CheckedValuesChangeHandler>().toBeCallableWith({});
     // A handler that reads only the values, and a state setter, are handlers.
     expectTypeOf<
       (values: Record<string, string[]>) => void

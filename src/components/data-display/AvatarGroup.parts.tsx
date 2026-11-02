@@ -197,8 +197,11 @@ export interface AvatarGroupPopoverProps {
    * @default false
    */
   defaultOpen?: boolean;
-  /** Called when the popup asks to open or close, with the reason (`trigger`, `escape`, …). */
-  onOpenChange?: (open: boolean, details?: AvatarGroupOpenChangeDetails) => void;
+  /**
+   * Called when the popup asks to open or close, with the reason (`trigger`, `escape`, …) and the
+   * event in `details`, which WaveUI always passes.
+   */
+  onOpenChange?: (open: boolean, details: AvatarGroupOpenChangeDetails) => void;
   /** Extra classes for the overflow button. */
   className?: string;
   /** Ref to the overflow `<button>`. */

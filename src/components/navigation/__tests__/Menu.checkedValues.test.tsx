@@ -77,8 +77,8 @@ describe('Menu checkedValues', () => {
       checkedItems: ['grid', 'ruler'],
       event: expect.any(Event),
     });
-    expect(details?.event.type).toBe('click');
-    expect(details?.checkedItems).toBe(values.view);
+    expect(details.event.type).toBe('click');
+    expect(details.checkedItems).toBe(values.view);
 
     await user.click(box('grid'));
     expect(box('grid')).toHaveAttribute('aria-checked', 'false');

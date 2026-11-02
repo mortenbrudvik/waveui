@@ -78,11 +78,10 @@ export interface UseListboxOptions {
   /**
    * Called when a key (or a commit) wants to open or close the listbox. `details.reason` says why
    * (`'keyboard'`, `'select'` — a commit that closes the list —, `'escape'` or `'tab'`) and
-   * `details.event` is the key or click event behind it. WaveUI always passes `details`; it is
-   * typed optional until 1.0 so that code which calls this prop itself keeps compiling. Never
+   * `details.event` is the key or click event behind it. WaveUI always passes `details`. Never
    * called in standalone mode.
    */
-  onOpenChange?: (open: boolean, details?: OpenChangeDetails<ListboxOpenChangeReason>) => void;
+  onOpenChange?: (open: boolean, details: OpenChangeDetails<ListboxOpenChangeReason>) => void;
   /**
    * `'editable'`: a text input combobox (Combobox, TagPicker, TimePicker).
    * `'select-only'`: a button/div combobox without text entry (Dropdown).
@@ -105,10 +104,9 @@ export interface UseListboxOptions {
    * Called when an option is committed: click, Enter/Space, and in single-select select-only mode
    * also Tab and Alt+ArrowUp (with `multiselect` they close without committing). `details.item` is
    * the committed option and `details.event` the key or click event behind the commit. WaveUI
-   * always passes `details`; it is typed optional until 1.0 so that code which calls this prop
-   * itself keeps compiling.
+   * always passes `details`.
    */
-  onSelect: (value: string, details?: ListboxSelectDetails) => void;
+  onSelect: (value: string, details: ListboxSelectDetails) => void;
   /**
    * Data mode: the options, in list order. Omit it for registration mode, where the options
    * register themselves in DOM order: `Option`s, or option components of your own on

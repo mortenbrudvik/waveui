@@ -149,8 +149,9 @@ export interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElem
 /** Second argument of `Table.SelectionCell`'s `onCheckedChange`: the event behind the change. */
 export interface TableSelectionCellCheckedChangeDetails {
   /**
-   * The DOM event behind the change: the click of the control (Space clicks it too), or, for an
-   * uncontrolled radio, the click that checked another radio of its group.
+   * The DOM event behind the change: the click of the control (Space clicks it too), for an
+   * uncontrolled radio the click that checked another radio of its group, or the form's `reset`
+   * event when a form reset restores `defaultChecked`.
    */
   event: Event;
 }
@@ -184,9 +185,10 @@ export interface TableSelectionCellProps extends Omit<
   /**
    * Called with the new checked state when the user checks or unchecks the control (not for no-op
    * updates), and when a form reset restores a `true` or `false` `defaultChecked`. The second
-   * argument holds the event. The table keeps no selection: update your rows' state here.
+   * argument holds the event; WaveUI always passes it. The table keeps no selection: update your
+   * rows' state here.
    */
-  onCheckedChange?: (checked: boolean, details?: TableSelectionCellCheckedChangeDetails) => void;
+  onCheckedChange?: (checked: boolean, details: TableSelectionCellCheckedChangeDetails) => void;
   /**
    * The native change event of the control, called before `onCheckedChange`;
    * `event.preventDefault()` in it cancels the change.
@@ -624,10 +626,11 @@ const TableSelectionCell = ({
     defaultChecked,
     (next) => {
       // Only a form reset to a mixed `defaultChecked` sets `'mixed'`; the callback reports booleans.
-      if (next !== 'mixed') onCheckedChange?.(next, detailsRef.current);
+      const details = detailsRef.current;
+      if (next !== 'mixed' && details) onCheckedChange?.(next, details);
     },
   );
-  const changeChecked = useEventCallback((next: boolean, event: Event) => {
+  const changeChecked = useEventCallback((next: boolean | 'mixed', event: Event) => {
     detailsRef.current = { event };
     try {
       setChecked(next);
@@ -638,7 +641,8 @@ const TableSelectionCell = ({
 
   const inputRef = React.useRef<HTMLInputElement>(null);
   const mergedControlRef = useMergedRefs<HTMLInputElement>(inputRef, controlRef);
-  useFormReset(inputRef, () => setChecked(defaultChecked), form);
+  // A form reset reports the form's `reset` event.
+  useFormReset(inputRef, (event) => changeChecked(defaultChecked, event), form);
 
   // A native radio group unchecks its other radios without an event, so an uncontrolled radio
   // listens for the click that checks another radio of its group: in the capture phase, before

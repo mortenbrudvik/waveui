@@ -144,7 +144,7 @@ export interface CalendarProps extends Omit<
    * or a form reset (Fluent's `onSelectDate` fires on every pick). Picking the selected day again
    * does nothing. WaveUI always passes `details`.
    */
-  onValueChange?: (date: Date | null, details?: CalendarValueChangeDetails) => void;
+  onValueChange?: (date: Date | null, details: CalendarValueChangeDetails) => void;
   /** Earliest available day (the whole day is included). */
   minDate?: Date;
   /** Latest available day (the whole day is included). */

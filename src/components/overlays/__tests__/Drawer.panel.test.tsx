@@ -47,7 +47,7 @@ interface ShellProps extends ShellPanelProps {
   /** Controlled open state (else uncontrolled from `defaultOpen`). */
   open?: boolean;
   defaultOpen?: boolean;
-  onOpenChange?: (open: boolean, details?: ModalOpenChangeDetails) => void;
+  onOpenChange?: (open: boolean, details: ModalOpenChangeDetails) => void;
   /** Replaces the root's request function (the shell then cannot change the open state). */
   requestOpenOverride?: ModalRequestOpen;
   /** `'trigger'`: a toggle button on the root's triggers; `'inert'`: `inertModalTrigger`, no button. */

@@ -65,7 +65,7 @@ export interface ToolbarOwnProps {
   /**
    * Called when a toggle or radio changes them (only on change): the new checked values first,
    * then `details` with the group's `name`, its `checkedItems` and the `event` (Fluent's
-   * `onCheckedValueChange(event, { name, checkedItems })`; always passed, typed optional until 1.0).
+   * `onCheckedValueChange(event, { name, checkedItems })`; WaveUI always passes `details`).
    */
   onCheckedValuesChange?: CheckedValuesChangeHandler;
 }

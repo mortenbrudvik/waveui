@@ -986,6 +986,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DIALOG_DRAWER_DETAILS_ANCHOR,
     file: 'src/components/overlays/Dialog.tsx',
+    done: true,
   },
   {
     id: 'details-drawer-onopenchange',
@@ -997,6 +998,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DIALOG_DRAWER_DETAILS_ANCHOR,
     file: 'src/components/overlays/Drawer.root.tsx',
+    done: true,
   },
   {
     id: 'details-oncheckedvalueschange',
@@ -1009,6 +1011,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     changelogAnchor:
       'the `details` parameter of `onCheckedValuesChange` (Menu, Toolbar) becomes required in 1.0',
     file: 'src/lib/types.ts',
+    done: true,
   },
   {
     id: 'details-tree-oncheckeditemschange',
@@ -1021,6 +1024,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     changelogAnchor:
       'the `details` parameter of Tree `onCheckedItemsChange` becomes required in 1.0',
     file: 'src/components/layout/Tree.core.tsx',
+    done: true,
   },
   {
     id: 'details-calendar-onvaluechange',
@@ -1032,6 +1036,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: LISTBOX_DETAILS_ANCHOR,
     file: 'src/components/input/Calendar.tsx',
+    done: true,
   },
   {
     id: 'details-uselistbox',
@@ -1043,6 +1048,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: LISTBOX_DETAILS_ANCHOR,
     file: 'src/hooks/useListbox.ts',
+    done: true,
   },
   {
     id: 'details-navdrawer-onopenchange',
@@ -1054,6 +1060,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: '`onOpenChange(open, details?)` of Dialog, Drawer and NavDrawer included',
     file: 'src/components/navigation/NavDrawer.tsx',
+    done: true,
   },
   {
     id: 'details-overflow-onoverflowchange',
@@ -1065,6 +1072,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_0_14_ANCHOR,
     file: 'src/components/layout/Overflow.tsx',
+    done: true,
   },
   {
     id: 'details-datagrid-onsortchange',
@@ -1076,6 +1084,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_0_14_ANCHOR,
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'details-datagrid-onselecteditemschange',
@@ -1087,6 +1096,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_0_14_ANCHOR,
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'details-selectioncell-oncheckedchange',
@@ -1098,6 +1108,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_0_14_ANCHOR,
     file: TABLE,
+    done: true,
   },
   {
     id: 'details-avatargroup-onopenchange',
@@ -1109,6 +1120,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_NOW_ANCHOR,
     file: 'src/components/data-display/AvatarGroup.tsx',
+    done: true,
   },
   {
     id: 'details-oncolumnwidthschange',
@@ -1120,6 +1132,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_NOW_ANCHOR,
     file: 'src/components/table/useTableColumnSizing.ts',
+    done: true,
   },
   {
     id: 'details-resizehandle-onresize',
@@ -1131,6 +1144,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_NOW_ANCHOR,
     file: 'src/components/table/Table.resize.tsx',
+    done: true,
   },
   {
     id: 'details-usetablesort-onsortchange',
@@ -1142,6 +1156,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_NOW_ANCHOR,
     file: 'src/components/table/useTableSort.ts',
+    done: true,
   },
   {
     id: 'details-useselection-onselecteditemschange',
@@ -1153,6 +1168,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_NOW_ANCHOR,
     file: 'src/hooks/useSelection.ts',
+    done: true,
   },
   {
     id: 'details-useflattree-oncheckeditemschange',
@@ -1164,6 +1180,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: DETAILS_NOW_ANCHOR,
     file: 'src/components/layout/useFlatTree.ts',
+    done: true,
   },
 
   // The other changes that 0.18 announces.

@@ -172,7 +172,11 @@ export interface TreeCheckedItemsChangeDetails {
   value: string;
   /** Its new state (a toggle never leaves it mixed). */
   checked: boolean;
-  /** The DOM event of the toggle: a keyboard event for Space, a mouse event for a click. */
+  /**
+   * The DOM event of the toggle: a keyboard event for Space, a mouse event for a click (for
+   * `useFlatTree`'s `setChecked`, the event it got, else an untrusted `check` event with no
+   * target).
+   */
   event: Event;
 }
 
@@ -219,9 +223,9 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
   defaultCheckedItems?: readonly string[];
   /**
    * Called with every checked item (in tree order) when a check changes (Fluent's `onCheckedChange`).
-   * WaveUI always passes `details`; it is typed optional until 1.0.
+   * WaveUI always passes `details`.
    */
-  onCheckedItemsChange?: (checkedItems: string[], details?: TreeCheckedItemsChangeDetails) => void;
+  onCheckedItemsChange?: (checkedItems: string[], details: TreeCheckedItemsChangeDetails) => void;
   /**
    * `'tree'`: Tab from a focused item enters its actions. `'treegrid'`: the "next" arrow
    * (ArrowRight, ArrowLeft in RTL) moves into an item's actions and "previous" returns; on an
@@ -305,7 +309,10 @@ export const TreeRoot = ({
   const [checkedList, setCheckedList] = useControllable<readonly string[]>(
     checkedItems,
     initialChecked,
-    (next) => onCheckedItemsChange?.([...next], pendingDetails.current),
+    (next) => {
+      const details = pendingDetails.current;
+      if (details) onCheckedItemsChange?.([...next], details);
+    },
   );
   const checked = React.useMemo(() => new Set(checkedList), [checkedList]);
 

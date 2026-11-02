@@ -59,11 +59,10 @@ export interface TableResizeHandleProps extends Omit<
   /**
    * Called with the width the user asks for, in whole pixels, held between `minWidth` and
    * `maxWidth`: while a pointer drags (at most once per animation frame) and for every handled
-   * key, then `details` with the event behind it. The handle always passes `details`; it is typed
-   * optional through 0.x, as every `details` argument. The handle keeps no width of its own, so a
-   * parent that ignores the call leaves the column where it is.
+   * key, then `details` with the event behind it. The handle always passes `details`. The handle
+   * keeps no width of its own, so a parent that ignores the call leaves the column where it is.
    */
-  onResize: (width: number, details?: { event: Event }) => void;
+  onResize: (width: number, details: { event: Event }) => void;
   /** Called with the event when the handle is double-clicked: reset the column's width. */
   onReset?: (details: { event: Event }) => void;
   /**

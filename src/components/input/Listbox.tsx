@@ -305,7 +305,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       setValue(updated);
       // A toggle the user made (D41): a controlled change and a form reset never reach this
       // callback. `details` carries the registered option (or the item), whose label is its text.
-      announceToggle(labels, details?.item.label ?? next, added, updated.length);
+      announceToggle(labels, details.item.label ?? next, added, updated.length);
     },
     onActiveValueChange: onActiveOptionChange,
     idPrefix: 'listbox',

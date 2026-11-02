@@ -313,7 +313,7 @@ describe('useCheckedValues', () => {
         emitted.push(values);
         values.view.push('mutated');
         values.sort.push('mutated');
-        details?.checkedItems.push('mutated');
+        details.checkedItems.push('mutated');
         values.added = ['mutated'];
       }),
     );

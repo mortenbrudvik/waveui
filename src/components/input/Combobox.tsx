@@ -724,7 +724,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       // which reach this callback.
       announceToggle(
         labels,
-        details?.item.label ?? optionLabels.get(next) ?? next,
+        details.item.label ?? optionLabels.get(next) ?? next,
         added,
         updated.length,
       );

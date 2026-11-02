@@ -23,6 +23,7 @@ import {
   navDrawerFooterClassNames,
 } from '../../../lib/classNames';
 import { getTopmostLayer } from '../../../lib/layers';
+import type { DrawerOpenChangeDetails } from '../../overlays/Drawer';
 import type { ModalType } from '../../../lib/types';
 import {
   asClientReference,
@@ -578,6 +579,16 @@ describe('NavDrawer', () => {
 
   // 6. Open state.
   describe('open state', () => {
+    it('types details as a required second argument of onOpenChange (1.0)', () => {
+      type Handler = NonNullable<NavDrawerProps['onOpenChange']>;
+      expectTypeOf<Handler>().parameter(1).toEqualTypeOf<DrawerOpenChangeDetails>();
+      // A handler of the value alone still fits.
+      expectTypeOf<(open: boolean) => void>().toExtend<Handler>();
+      // @ts-expect-error `details` is required (1.0)
+      const withoutDetails = (props: NavDrawerProps) => props.onOpenChange?.(false);
+      expect(withoutDetails).toBeTypeOf('function');
+    });
+
     it('is uncontrolled with defaultOpen and controlled with open', () => {
       const { rerender } = render(
         <NavDrawer type="inline" open={false}>

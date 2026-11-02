@@ -272,7 +272,7 @@ export const FormInDrawer: Story = {
       event.preventDefault();
       const name = new FormData(event.currentTarget).get('displayName');
       setSaved(typeof name === 'string' ? name : '');
-      handleOpenChange(false);
+      handleOpenChange(false, { reason: 'close', event: event.nativeEvent });
     };
     return (
       <div className="flex flex-col items-start gap-2">
@@ -472,14 +472,24 @@ export const Controlled: Story = {
     };
     return (
       <>
-        <Button appearance="primary" onClick={() => handleOpenChange(true)}>
+        <Button
+          appearance="primary"
+          onClick={(event) =>
+            handleOpenChange(true, { reason: 'trigger', event: event.nativeEvent })
+          }
+        >
           Open
         </Button>
         {/* The story owns the controlled pair; every other arg is forwarded. */}
         <Drawer {...args} open={open} onOpenChange={handleOpenChange}>
           <p>{children}</p>
           <Drawer.Footer>
-            <Button appearance="primary" onClick={() => handleOpenChange(false)}>
+            <Button
+              appearance="primary"
+              onClick={(event) =>
+                handleOpenChange(false, { reason: 'close', event: event.nativeEvent })
+              }
+            >
               Done
             </Button>
           </Drawer.Footer>

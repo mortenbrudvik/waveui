@@ -2008,7 +2008,7 @@ describe('DataGrid.HeaderCell sortIcon', () => {
 describe('DataGrid callback details', () => {
   it('passes the click to onSortChange, also for Enter on the sort button', async () => {
     const user = userEvent.setup();
-    const onSortChange = vi.fn<(sort: DataGridSort, details?: DataGridSortChangeDetails) => void>();
+    const onSortChange = vi.fn<(sort: DataGridSort, details: DataGridSortChangeDetails) => void>();
     renderGrid({ defaultSort: null, onSortChange });
     await user.click(sortButton('Name'));
     const [, clickDetails] = onSortChange.mock.calls[0];
@@ -2027,7 +2027,7 @@ describe('DataGrid callback details', () => {
   it('passes the event to onSelectedItemsChange: a control’s click, Space on a row, select-all', async () => {
     const user = userEvent.setup();
     const onSelectedItemsChange =
-      vi.fn<(items: string[], details?: DataGridSelectedItemsChangeDetails) => void>();
+      vi.fn<(items: string[], details: DataGridSelectedItemsChangeDetails) => void>();
     renderGrid({ selectionMode: 'multiple', onSelectedItemsChange });
 
     await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
@@ -5810,7 +5810,7 @@ describe('DataGrid types', () => {
     expect(elements).toHaveLength(7);
     // Every member of the union takes the object form, or no callback at all.
     expectTypeOf<NonNullable<DataGridProps['onSortChange']>>().toEqualTypeOf<
-      (sort: DataGridSort, details?: DataGridSortChangeDetails) => void
+      (sort: DataGridSort, details: DataGridSortChangeDetails) => void
     >();
     // @ts-expect-error -- `DataGridLegacySortProps` (the positional form's props) is removed in 1.0
     expectTypeOf<Wave.DataGridLegacySortProps>().toBeAny();
@@ -5827,14 +5827,14 @@ describe('DataGrid types', () => {
         items={PEOPLE}
         onSortChange={(sort, details) => {
           expectTypeOf(sort).toEqualTypeOf<DataGridSort>();
-          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails | undefined>();
-          expectTypeOf<NonNullable<typeof details>['event']>().toEqualTypeOf<Event>();
+          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails>();
+          expectTypeOf(details.event).toEqualTypeOf<Event>();
           setSort(sort);
         }}
         onSelectedItemsChange={(items, details) => {
           expectTypeOf(items).toEqualTypeOf<string[]>();
-          expectTypeOf(details).toEqualTypeOf<DataGridSelectedItemsChangeDetails | undefined>();
-          expectTypeOf<NonNullable<typeof details>['event']>().toEqualTypeOf<Event>();
+          expectTypeOf(details).toEqualTypeOf<DataGridSelectedItemsChangeDetails>();
+          expectTypeOf(details.event).toEqualTypeOf<Event>();
         }}
       />,
       <DataGrid key="items-setter" aria-label="People" items={PEOPLE} onSortChange={setSort} />,
@@ -5851,7 +5851,7 @@ describe('DataGrid types', () => {
         aria-label="People"
         defaultSort={null}
         onSortChange={(sort, details) => {
-          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails | undefined>();
+          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails>();
           setSort(sort);
         }}
       >
@@ -5937,7 +5937,7 @@ describe('DataGrid types', () => {
         defaultSort={null}
         onSortChange={(sort, details) => {
           expectTypeOf(sort).toEqualTypeOf<DataGridSort>();
-          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails | undefined>();
+          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails>();
         }}
       >
         {null}

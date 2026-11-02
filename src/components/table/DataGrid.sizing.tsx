@@ -46,8 +46,7 @@ export interface UseDataGridColumnSizingOptions {
   columnWidths: Record<string, number> | undefined;
   defaultColumnWidths: Record<string, number> | undefined;
   onColumnWidthsChange:
-    | ((widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void)
-    | undefined;
+    ((widths: Record<string, number>, details: TableColumnWidthsChangeDetails) => void) | undefined;
   /** `labels.resizeColumn` of the grid. */
   resizeColumnLabel: string | undefined;
   /** `labels.columnWidth` of the grid. */
@@ -397,10 +396,7 @@ export function DataGridColumnResizeHandle({
         // The header ignores the pointer while the grid resizes; the dragged handle does not.
         'data-[dragging]:pointer-events-auto',
       )}
-      onResize={(next, details) =>
-        // The handle always passes `details`; typed optional, as every `details` argument.
-        setColumnWidth(columnId, next, details?.event ?? new Event('resize'))
-      }
+      onResize={(next, { event }) => setColumnWidth(columnId, next, event)}
       onReset={({ event }) => resetColumnWidth(columnId, event)}
       onLeave={() => {
         if (handleRef.current) returnFocusToGridCell(handleRef.current);

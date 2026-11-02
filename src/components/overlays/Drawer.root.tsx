@@ -72,15 +72,14 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * `close` (a `.Close` part), `close-button` (the built-in Close button), `escape` or
    * `outside-press` (the backdrop) — so a controlled drawer can refuse only some ways of closing
    * (for example keep a form with unsaved changes open on `outside-press`); `details.event` is the
-   * DOM event behind the request. WaveUI always passes `details`; it is typed optional until 1.0
-   * so that code which calls this prop itself keeps compiling. An inline drawer asks only with
+   * DOM event behind the request. WaveUI always passes `details`. An inline drawer asks only with
    * `trigger` (its `Drawer.Trigger` toggles it), `close` and `close-button`: Escape and presses
    * outside it never close it.
    *
    * Fires only when the value changes; a controlled drawer stays as it is until the parent updates
    * `open`.
    */
-  onOpenChange?: (open: boolean, details?: DrawerOpenChangeDetails) => void;
+  onOpenChange?: (open: boolean, details: DrawerOpenChangeDetails) => void;
   /**
    * How the drawer sits on the page (Fluent's `type`).
    * - `overlay`: a panel over the page, rendered in a portal while open: modal by default (focus

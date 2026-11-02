@@ -604,9 +604,10 @@ describe('Tree - selectionMode="multiple"', () => {
     expectTypeOf<NonNullable<TreeProps['onCheckedItemsChange']>>()
       .parameter(0)
       .toEqualTypeOf<string[]>();
+    // `details` is required (1.0).
     expectTypeOf<NonNullable<TreeProps['onCheckedItemsChange']>>()
       .parameter(1)
-      .toEqualTypeOf<TreeCheckedItemsChangeDetails | undefined>();
+      .toEqualTypeOf<TreeCheckedItemsChangeDetails>();
     expectTypeOf<TreeCheckedItemsChangeDetails>().toEqualTypeOf<{
       value: string;
       checked: boolean;

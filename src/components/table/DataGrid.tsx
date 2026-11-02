@@ -317,13 +317,12 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    * Called with the width of every column (by `columnId`) whenever a width changes, at every step
    * of a drag (at most once per animation frame) or key press, then `details`: `{ columnId,
    * width, event }`, the resized column, its new width and the event behind it. The grid always
-   * passes `details`; it is typed optional through 0.x, as every `details` argument. Setting the
-   * width a column already has does not call it once a width is state. Fluent's `onColumnResize`,
-   * whose data is in `details`.
+   * passes `details`. Setting the width a column already has does not call it once a width is
+   * state. Fluent's `onColumnResize`, whose data is in `details`.
    */
   onColumnWidthsChange?: (
     widths: Record<string, number>,
-    details?: TableColumnWidthsChangeDetails,
+    details: TableColumnWidthsChangeDetails,
   ) => void;
   /**
    * Renders only the body rows in view, plus an overscan, of a grid with many `items`: pass the
@@ -434,7 +433,7 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    */
   onSelectedItemsChange?: (
     selectedItems: string[],
-    details?: DataGridSelectedItemsChangeDetails,
+    details: DataGridSelectedItemsChangeDetails,
   ) => void;
   /**
    * Props for the wrapper `<div>` around the `<table>`: a horizontally scrollable container
@@ -466,7 +465,7 @@ export interface DataGridControlledSortProps {
    * With `items`, the grid orders its rows by the sorted column's `compare` (see
    * `DataGridColumn.compare`), also while `sort` is controlled; otherwise the consumer orders them.
    */
-  onSortChange?: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
+  onSortChange?: (sort: DataGridSort, details: DataGridSortChangeDetails) => void;
 }
 
 /** The 0.5 sort API, uncontrolled: `defaultSort` (`null` for none) + `onSortChange(sort, details)`. */
@@ -480,7 +479,7 @@ export interface DataGridUncontrolledSortProps {
    * With `items`, the grid orders its rows by the sorted column's `compare` (see
    * `DataGridColumn.compare`); otherwise the consumer orders them.
    */
-  onSortChange?: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
+  onSortChange?: (sort: DataGridSort, details: DataGridSortChangeDetails) => void;
 }
 
 /**
@@ -499,7 +498,7 @@ export interface DataGridItemsSortProps<T = unknown> extends DataGridItemsProps<
    * `useDataGridSort` is called), then `details` (`{ event }`).
    * The grid orders its rows by the sorted column's `compare` (see `DataGridColumn.compare`).
    */
-  onSortChange?: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
+  onSortChange?: (sort: DataGridSort, details: DataGridSortChangeDetails) => void;
 }
 
 /**
@@ -857,7 +856,8 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   // Every grid reports `onSortChange(sort, details)`. The types offer the callback only next to
   // `items`, `sort` or `defaultSort`; untyped code that passes one without them gets the same form.
   const emitSortChange = (next: DataGridSort | null) => {
-    if (next) onSortChange?.(next, sortDetailsRef.current);
+    const details = sortDetailsRef.current;
+    if (next && details) onSortChange?.(next, details);
   };
 
   // Unsorted at first without `defaultSort` (a grid with `items` too).
@@ -914,7 +914,8 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   );
 
   const emitSelectionChange = (next: readonly string[]) => {
-    onSelectedItemsChange?.([...next], selectionDetailsRef.current);
+    const details = selectionDetailsRef.current;
+    if (details) onSelectedItemsChange?.([...next], details);
   };
 
   const [selected, setSelectedValue] = useControllable<readonly string[]>(

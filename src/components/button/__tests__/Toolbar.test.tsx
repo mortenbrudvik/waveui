@@ -964,8 +964,8 @@ describe('Toolbar', () => {
         ],
       ]);
       const [values, details] = onCheckedValuesChange.mock.calls[0];
-      expect(details?.event.type).toBe('click');
-      expect(details?.checkedItems).toBe(values.format);
+      expect(details.event.type).toBe('click');
+      expect(details.checkedItems).toBe(values.format);
     });
 
     it('controlled: follows the prop, and a parent that ignores the callback keeps its value', async () => {
