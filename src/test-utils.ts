@@ -193,7 +193,10 @@ export interface RenderHelperOptions {
 export interface ConflictingClass {
   /** The consumer class passed as `className`, e.g. `'p-8'`. */
   className: string;
-  /** The default class it conflicts with, e.g. `'p-4'` — must be present without `className`. */
+  /**
+   * The default class it conflicts with, with Wave's prefix, e.g. `'wave:p-4'` — must be present
+   * without `className`.
+   */
   overrides: string;
 }
 

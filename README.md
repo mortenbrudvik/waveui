@@ -84,8 +84,8 @@ This adds Wave's tokens and its namespaced theme keys to `layer(theme)` (your ow
 **The cascade.** The entry declares `@layer theme, base, components, utilities;`, so across layers the layer decides, not the specificity:
 
 - Any utility of yours, and any unlayered rule of yours, wins over Wave's classes. A bare background class of yours on a Wave component (`className="bg-wave-error"`) therefore also covers its hover, pressed, selected and disabled backgrounds; give those states their colors too, with Wave's gate ([Buttons](#buttons)).
-- A class of yours in `@layer components` competes with Wave's utilities by source order: the later rule wins.
-- Your own `@layer base` rules share the layer with Wave's scoped base styles, which have no specificity: an element rule of yours (`h2 { … }`) wins, and a `*` rule wins when it comes later. A token override of yours in `@layer base` (`:root { --wave-primary: … }`) wins over Wave's tokens in `theme`.
+- A class of yours in `@layer components` shares the layer with Wave's utilities, so specificity decides, then source order: a one-class rule of yours that comes later wins over Wave's resting classes, while Wave's gated hover and pressed classes (specificity 0,4,0) and its state classes (`data-[selected]:…`, 0,2,0) still win over it.
+- Your own `@layer base` rules share the layer with Wave's scoped base styles, which have no specificity: an element rule of yours (`h2 { … }`) wins, and a `*` rule wins when it comes later. A token override of yours in `@layer base` wins over Wave's tokens in `theme` when it targets the theme selectors, as in [Customizing tokens](#customizing-tokens) (`:root, .wave-light { --wave-primary: … }`): a provider root carries its theme class, which declares the theme's tokens again, so an override on `:root` alone reaches only the theme-independent tokens there (the ramps: `:root { --wave-brand-80: … }`).
 - An unlayered reset of yours (`*{margin:0}`, normalize, Bootstrap's reboot) wins over the components' utilities too, and strips them: put it in `@layer base`, as Tailwind puts its Preflight.
 
 **Wave's 0.x names.** Your Tailwind theme gets Wave's colors, type ramp and shadows under the `wave` namespace only: without a theme of your own, `bg-primary`, `text-foreground`, `border-border`, `text-body-1` and `shadow-4` no longer resolve. Write `bg-wave-primary`, `text-wave-foreground`, `border-wave-border`, `text-wave-body-1` and `shadow-wave-4`; the migration codemod rewrites them ([Upgrading to 1.0](#upgrading-to-10)).
@@ -113,7 +113,7 @@ The other side of this: **layered** app CSS loses to the unlayered `./styles` wh
 
 ### Custom Tailwind setups
 
-`./tailwind` is built from entries you can import yourself, for a Tailwind entry with a layer order of your own. `./tokens` gives your build Wave's tokens and the namespaced theme keys, and `./variants.css` the `wave-rtl:` variant, for your own classes. Your build compiles none of the components (it scans nothing of the package): they come from `./styles`, which holds the tokens again, the base styles and the components' utilities. Unlayered, `./styles` would beat every rule of your layered build (inside a provider its base styles would reset your own headings, lists and buttons, and win over your utilities on Wave's components), so import it into a layer between Tailwind's `base` and `components`, with the `@layer` statement first:
+For a Tailwind entry with a layer order of your own, assemble it from the entries that are exports (`./tailwind` itself imports files that are not: Wave's base styles and the components' utilities without the tokens). `./tokens` gives your build Wave's tokens and the namespaced theme keys, and `./variants.css` the `wave-rtl:` variant, for your own classes. Your build compiles none of the components (it scans nothing of the package): they come from `./styles`, which holds the tokens again, the base styles and the components' utilities. Unlayered, `./styles` would beat every rule of your layered build (inside a provider its base styles would reset your own headings, lists and buttons, and win over your utilities on Wave's components), so import it into a layer between Tailwind's `base` and `components`, with the `@layer` statement first:
 
 ```css
 /* app.css */
@@ -232,7 +232,7 @@ export const App = ({ children }: { children: React.ReactNode }) => <WaveProvide
 
 Every color is a runtime CSS variable prefixed `--wave-`. The color utilities of your Tailwind build (on `./tailwind` or `./tokens`) and of `./utilities` use the same name with `wave-` after the utility: `--wave-muted-foreground` is `text-wave-muted-foreground`, `--wave-primary` is `bg-wave-primary`, `border-wave-primary`, `ring-wave-primary`, and so on.
 
-Override a token for one theme by targeting its theme selector. With `./styles`, load your CSS after Wave's (the selectors have the same specificity); on the Tailwind path any unlayered rule wins over Wave's `theme` layer. A provider's `tokens` win over these rules on the elements that carry them (an inline style beats a stylesheet rule on the same element).
+Override a token for one theme by targeting its theme selector, never `:root` alone for a token a theme declares: every provider root carries its theme class, which declares the theme's tokens again. With `./styles`, load your CSS after Wave's (the selectors have the same specificity); on the Tailwind path any unlayered rule, and any rule in a layer after `theme` (`@layer base`), wins over Wave's `theme` layer. A provider's `tokens` win over these rules on the elements that carry them (an inline style beats a stylesheet rule on the same element).
 
 ```css
 /* All light surfaces */
@@ -2285,11 +2285,17 @@ import {
   useRestoreFocus,
 } from '@mortenbrudvik/waveui';
 
+interface CommandPaletteProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  triggerRef: React.RefObject<HTMLElement | null>;
+}
+
 // A modal command palette: the page behind it is inert, Tab stays inside.
-function CommandPalette({ open, onOpenChange, triggerRef }) {
+export function CommandPalette({ open, onOpenChange, triggerRef }: CommandPaletteProps) {
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
-  const mergedRef = useMergedRefs(surfaceRef, setSurface);
+  const mergedRef = useMergedRefs<HTMLDivElement>(surfaceRef, setSurface);
   const { layerId } = useModalLayer({
     open,
     container: surface,
@@ -2308,7 +2314,7 @@ function CommandPalette({ open, onOpenChange, triggerRef }) {
 }
 
 // A non-modal popup placed against its button.
-function Details() {
+export function Details() {
   const [open, setOpen] = React.useState(false);
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
@@ -2321,11 +2327,11 @@ function Details() {
     anchorRef: triggerRef,
   });
   useRestoreFocus({ enabled: open, container: surface, triggerRef });
-  const buttonRef = useMergedRefs(triggerRef, setReference);
-  const popupRef = useMergedRefs(surfaceRef, setSurface, setFloating);
+  const buttonRef = useMergedRefs<HTMLButtonElement>(triggerRef, setReference);
+  const popupRef = useMergedRefs<HTMLDivElement>(surfaceRef, setSurface, setFloating);
   return (
     <>
-      <button ref={buttonRef} onClick={() => setOpen((o) => !o)}>
+      <button type="button" ref={buttonRef} onClick={() => setOpen((o) => !o)}>
         Details
       </button>
       {open && (
@@ -3441,8 +3447,8 @@ Typeahead (Menu, a selectable or navigable List, Tree, Dropdown, Listbox) accept
    The 17 names a stock shadcn/ui theme defines too (`bg-primary`, `border-border`, `ring-ring`, …), and the names your own theme declares, are left alone and counted unless you pass `--include-shared` (pass it when those classes meant Wave's tokens). What no codemod finds: CSS or test selectors of Wave's 0.x utility classes (`.bg-primary`, `querySelector('.flex')`: use the stable `wave-*` classes or `data-*` attributes), a Tailwind class that worked without Tailwind because Wave's sheet happened to define it (`p-2`), and the cascade of `./tailwind`, where a class of yours on a component now wins over its hover, pressed and selected colors too.
 3. **`ref` reaches the control** of Checkbox, Switch, SearchBox, SpinButton, ColorSlider, AlphaSlider, `ColorPicker.HexField`, Combobox, Dropdown, TimePicker, DatePicker and TagPicker, which lose `controlRef`; their root is `slotProps.root.ref` ([`ref` and `controlRef`](#ref-and-controlref)).
 4. **Removed**: every prop, value, call form, export, class and stylesheet that 0.x deprecated, among them the 0.4 names renamed in 0.5 (`onChange` of the value controls, `onOptionSelect`), the positional `useRovingTabIndex(containerRef, options)` and DataGrid `onSortChange(columnId, direction)`, the `[presence=` className rule that turned a default motion off (pass the part's `motion` instead), `legacy-tokens.css`, `animations.css`, the `.dark` and `.high-contrast` theme classes and the 0.4 variable names (an override of `--brand-80` or `--grey-38` included). TypeScript reports a removed prop or export, and an import of a removed stylesheet fails to resolve; a removed class or variable in your CSS no longer matches or applies, without a message.
-5. **Required**: the `details` argument of `onOpenChange`, `onCheckedValuesChange` and `onCheckedItemsChange` (code that calls such a prop itself passes it), and `Image`'s `alt`.
-6. **Defaults and meanings**: Badge and CounterBadge `color="important"` is the neutral high-emphasis look (`color="severe"` keeps the orange), and a TimePicker without `format` follows the hour cycle of the browser's language (pass `format` for the same server and client output).
+5. **Required**: the `details` argument of the change callbacks, among them `onOpenChange`, `onCheckedValuesChange`, `onCheckedItemsChange`, Calendar's `onValueChange`, DataGrid's `onSortChange`, `onSelectedItemsChange` and `onColumnWidthsChange`, and the callbacks of `useListbox`, `useTableSort`, `useSelection` and `useFlatTree` (code that calls such a prop itself passes it; the [guide's table](docs/UPGRADING-TO-1.0.md#arguments-and-props-that-become-required) lists every one), and `Image`'s `alt`.
+6. **Defaults and meanings**: Badge and CounterBadge `color="important"` is the neutral high-emphasis look (`color="severe"` keeps the orange; 0.18 warned about it). Two changes no warning announced: TeachingPopover's Done calls only `onFinish`, never `onDismiss` (handle Done in `onFinish`), and a TimePicker without `format` follows the hour cycle of the browser's language (pass `format` for 12-hour times, or for the same server and client output).
 
 The sections below describe each 0.x release as it shipped, for an app that upgrades from an older 0.x: a prop or name they call deprecated, or say still works, was removed in 1.0 (item 4), and the classes they name are written with 0.x's names.
 
