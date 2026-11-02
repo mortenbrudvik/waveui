@@ -13,7 +13,7 @@ import {
   tableSelectionCellClassNames,
 } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
+import { isDev, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { mergeSlotProps } from '../../lib/slotProps';
@@ -121,12 +121,6 @@ export interface TableHeaderCellProps extends React.ThHTMLAttributes<HTMLTableCe
   /** Ref to the `<th>` element. */
   ref?: React.Ref<HTMLTableCellElement>;
 }
-
-/** @deprecated Use `TableHeaderProps` (`Table.Header`). */
-export type TableHeadProps = TableHeaderProps;
-
-/** @deprecated Use `TableHeaderCellProps` (`Table.HeaderCell`). */
-export type TableHeadCellProps = TableHeaderCellProps;
 
 /** Properties for the TableBody sub-component. */
 export interface TableBodyProps extends React.HTMLAttributes<HTMLTableSectionElement> {
@@ -534,20 +528,6 @@ const TableHeaderCell = ({
 };
 TableHeaderCell.displayName = 'TableHeaderCell';
 
-/** @deprecated Use `Table.Header` (`TableHeader`). */
-const TableHead = (props: TableHeadProps) => {
-  warnDeprecated('Table', 'Table.Head', 'Table.Header');
-  return <TableHeader {...props} />;
-};
-TableHead.displayName = 'TableHead';
-
-/** @deprecated Use `Table.HeaderCell` (`TableHeaderCell`). */
-const TableHeadCell = (props: TableHeadCellProps) => {
-  warnDeprecated('Table', 'Table.HeadCell', 'Table.HeaderCell');
-  return <TableHeaderCell {...props} />;
-};
-TableHeadCell.displayName = 'TableHeadCell';
-
 /** The table's `<tbody>`. */
 const TableBody = ({ children, className, ref, ...rest }: TableBodyProps) => (
   <tbody ref={ref} {...rest} className={cn(tableBodyClassNames.root, className)}>
@@ -901,8 +881,6 @@ TableCellActions.displayName = 'TableCellActions';
 export {
   TableHeader,
   TableHeaderCell,
-  TableHead,
-  TableHeadCell,
   TableBody,
   TableRow,
   TableCell,
@@ -928,16 +906,11 @@ export type { TableResizeHandleProps };
  * `Table.ResizeHandle` (the separator that resizes a column, for a header cell's `aside`) in client
  * components, and as the flat exports `TableHeader`, `TableHeaderCell`, `TableBody`, `TableRow`,
  * `TableCell`, `TableSelectionCell`, `TableCellLayout`, `TableCellActions` and
- * `TableResizeHandle` (the form React Server Components can import). `Table.Head`/`Table.HeadCell`
- * (`TableHead`/`TableHeadCell`) are deprecated aliases.
+ * `TableResizeHandle` (the form React Server Components can import).
  */
 export const Table = /* @__PURE__ */ Object.assign(TableRoot, {
   Header: TableHeader,
   HeaderCell: TableHeaderCell,
-  /** @deprecated Use `Table.Header`. */
-  Head: TableHead,
-  /** @deprecated Use `Table.HeaderCell`. */
-  HeadCell: TableHeadCell,
   Body: TableBody,
   Row: TableRow,
   Cell: TableCell,

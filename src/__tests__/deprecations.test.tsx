@@ -24,8 +24,8 @@
  *   JSDoc examples, strings and import lines never count; an aliased import or a reference that is
  *   not a call fails the test, so a call cannot hide behind another name. Each call announces one
  *   row: a row whose `warningKey` starts with `deprecated:` (the key `warnDeprecated` builds) and
- *   whose `file` is the call's module. A call that warns for several values (Text's numeric
- *   weights, PresenceBadge's `dnd` and `oof`) is one row, keyed by the value its case renders. So,
+ *   whose `file` is the call's module. A call that warns for several values (PresenceBadge's
+ *   `dnd` and `oof`) is one row, keyed by the value its case renders. So,
  *   exactly, the calls in each module equal the `deprecated:` rows that name it, and the calls in
  *   `src` equal the rows with `warns: true`, `kind: 'removed'` and a `deprecated:` key: a new alias
  *   without a row fails here. The other warnings of the inventory (`warnOnce` with keys of their
@@ -65,7 +65,6 @@ import {
   Image,
   InfoLabel,
   Input,
-  Link,
   Menu,
   MessageBar,
   Nav,
@@ -73,11 +72,8 @@ import {
   PresenceBadge,
   SearchBox,
   Select,
-  Skeleton,
   Slider,
-  Table,
   Tag,
-  Text,
   Tooltip,
   useRovingTabIndex,
 } from '../index';
@@ -520,117 +516,9 @@ const gridContent = (
     </DataGrid.Body>
   </>
 );
-const tableBody = (
-  <Table.Body>
-    <Table.Row>
-      <Table.Cell>Cell</Table.Cell>
-    </Table.Row>
-  </Table.Body>
-);
 
 /** A minimal case per row that warns, by row id. */
 const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
-  'datagrid-selectedkeys': {
-    ui: (
-      <DataGrid aria-label="People" selectionMode="multiple" selectedKeys={new Set(['1'])}>
-        {gridContent}
-      </DataGrid>
-    ),
-    message: deprecated('DataGrid', 'selectedKeys', 'selectedItems'),
-  },
-  'datagrid-defaultselectedkeys': {
-    ui: (
-      <DataGrid aria-label="People" selectionMode="multiple" defaultSelectedKeys={new Set(['1'])}>
-        {gridContent}
-      </DataGrid>
-    ),
-    message: deprecated('DataGrid', 'defaultSelectedKeys', 'defaultSelectedItems'),
-  },
-  'datagrid-onselectionchange': {
-    ui: (
-      <DataGrid aria-label="People" selectionMode="multiple" onSelectionChange={noop}>
-        {gridContent}
-      </DataGrid>
-    ),
-    message: deprecated('DataGrid', 'onSelectionChange', 'onSelectedItemsChange'),
-  },
-  // Each half of the 0.4 controlled sort alone also warns about mixed control: both are given.
-  'datagrid-sortcolumn': {
-    ui: (
-      <DataGrid aria-label="People" sortColumn="name" sortDirection="ascending">
-        {gridContent}
-      </DataGrid>
-    ),
-    message: deprecated('DataGrid', 'sortColumn', 'sort'),
-    also: [deprecated('DataGrid', 'sortDirection', 'sort')],
-  },
-  'datagrid-sortdirection': {
-    ui: (
-      <DataGrid aria-label="People" sortColumn="name" sortDirection="ascending">
-        {gridContent}
-      </DataGrid>
-    ),
-    message: deprecated('DataGrid', 'sortDirection', 'sort'),
-    also: [deprecated('DataGrid', 'sortColumn', 'sort')],
-  },
-  'datagrid-defaultsortcolumn': {
-    ui: (
-      <DataGrid aria-label="People" defaultSortColumn="name">
-        {gridContent}
-      </DataGrid>
-    ),
-    message: deprecated('DataGrid', 'defaultSortColumn', 'defaultSort'),
-  },
-  'datagrid-defaultsortdirection': {
-    ui: (
-      <DataGrid aria-label="People" defaultSortDirection="descending">
-        {gridContent}
-      </DataGrid>
-    ),
-    message: deprecated('DataGrid', 'defaultSortDirection', 'defaultSort'),
-  },
-  'table-head': {
-    ui: (
-      <Table aria-label="People">
-        <Table.Head>
-          <Table.Row>
-            <Table.HeaderCell>Name</Table.HeaderCell>
-          </Table.Row>
-        </Table.Head>
-        {tableBody}
-      </Table>
-    ),
-    message: deprecated('Table', 'Table.Head', 'Table.Header'),
-  },
-  'table-headcell': {
-    ui: (
-      <Table aria-label="People">
-        <Table.Header>
-          <Table.Row>
-            <Table.HeadCell>Name</Table.HeadCell>
-          </Table.Row>
-        </Table.Header>
-        {tableBody}
-      </Table>
-    ),
-    message: deprecated('Table', 'Table.HeadCell', 'Table.HeaderCell'),
-  },
-  'skeleton-variant': {
-    ui: <Skeleton variant="circular" />,
-    message: deprecated('Skeleton', 'variant', 'shape'),
-  },
-  'text-numeric-weight': {
-    ui: <Text weight={400}>Text</Text>,
-    message: deprecated('Text', 'weight={400}', 'weight="regular"'),
-  },
-  'link-variant': {
-    ui: (
-      <Link href="#a" variant="subtle">
-        Link
-      </Link>
-    ),
-    message: deprecated('Link', 'variant', 'appearance'),
-  },
   'messagebar-dismiss-button-object': {
     ui: <MessageBar dismiss={{ as: 'button', onClick: noop }}>Saved</MessageBar>,
     message:

@@ -6,9 +6,6 @@ import type { SkeletonGroupProps, SkeletonProps } from '../Skeleton';
 import type { Shape } from '../../../lib/types';
 import { testCompoundExposure, testSystemProps } from '../../../test-utils';
 
-const VARIANT_DEPRECATION =
-  '[WaveUI] Skeleton: `variant` is deprecated and will be removed in 1.0. Use `shape` instead.';
-
 describe('Skeleton', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -88,49 +85,28 @@ describe('Skeleton', () => {
     });
   });
 
-  describe('deprecated `variant` alias (layout#16)', () => {
-    it('applies circular variant class and warns once', () => {
+  describe('the 0.4 `variant` is removed in 1.0 (layout#16)', () => {
+    // Untyped code that still passes it: an unknown attribute of the placeholder element, which
+    // React renders as it is, and the placeholder keeps the default rounded shape.
+    it('has no variant alias of shape: variant="circular" stays rounded', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       render(
-        <>
-          <Skeleton variant="circular" data-testid="skel" />
-          <Skeleton variant="circular" />
-        </>,
+        <Skeleton
+          // @ts-expect-error -- `variant` is removed in 1.0: use `shape`
+          variant="circular"
+          data-testid="skel"
+        />,
       );
       const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded-full');
-      expect(el).not.toHaveClass('rounded');
-      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
-    });
-
-    it('applies text variant class (the 0.4 look: rounded)', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<Skeleton variant="text" data-testid="skel" />);
-      const el = screen.getByTestId('skel');
       expect(el).toHaveClass('rounded');
       expect(el).not.toHaveClass('rounded-full');
-      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
+      expect(el).toHaveAttribute('variant', 'circular');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
 
-    it('applies rectangular variant class (the 0.4 look: rounded)', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<Skeleton variant="rectangular" data-testid="skel" />);
-      const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded');
-      expect(el).not.toHaveClass('rounded-full');
-      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
-    });
-
-    it('lets shape win when both are given, and still warns about variant', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<Skeleton shape="square" variant="circular" data-testid="skel" />);
-      const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded-none');
-      expect(el).not.toHaveClass('rounded-full');
-      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
-    });
-
-    it('does not warn for shape alone', () => {
+    it('does not warn for shape', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<Skeleton shape="circular" />);
       expect(warn).not.toHaveBeenCalled();
@@ -141,6 +117,7 @@ describe('Skeleton', () => {
     it('SkeletonProps carries ref (C-REF) and the shared Shape type', () => {
       expectTypeOf<SkeletonProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
       expectTypeOf<SkeletonProps['shape']>().toEqualTypeOf<Shape | undefined>();
+      expectTypeOf<SkeletonProps>().not.toHaveProperty('variant');
       expectTypeOf<SkeletonGroupProps['ref']>().toEqualTypeOf<
         React.Ref<HTMLDivElement> | undefined
       >();

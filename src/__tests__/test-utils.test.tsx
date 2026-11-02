@@ -961,8 +961,6 @@ describe('getStableClassNames', () => {
     expect(getStableClassNames('Tab')?.constant).toBe('tabListTabClassNames');
     expect(getStableClassNames('TabPanel')?.constant).toBe('tabListPanelClassNames');
     expect(getStableClassNames('TabPanels')?.constant).toBe('tabListPanelsClassNames');
-    expect(getStableClassNames('TableHead')?.constant).toBe('tableHeaderClassNames');
-    expect(getStableClassNames('TableHeadCell')?.constant).toBe('tableHeaderCellClassNames');
   });
 
   it("puts a variant's base roots before its own in carries (VARIANT_BASES)", () => {

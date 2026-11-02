@@ -128,21 +128,28 @@ describe('Text', () => {
       expect(warn).not.toHaveBeenCalled();
     });
 
-    it.each([
-      [400, 'regular', 'font-normal'],
-      [600, 'semibold', 'font-semibold'],
-      [700, 'bold', 'font-bold'],
-    ] as const)(
-      'the deprecated numeric weight %s still applies and warns once (use "%s")',
-      (numeric, name, cls) => {
+    // Untyped code that still passes a 0.4 number: no weight class (the variant's own weight
+    // applies), nothing reaches the element and nothing is logged.
+    it.each([400, 600, 700] as const)(
+      'has no numeric weight %s (removed in 1.0): no weight class, no warning',
+      (numeric) => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const { rerender } = render(<Text weight={numeric}>Content</Text>);
-        rerender(<Text weight={numeric}>Content again</Text>);
-        expect(screen.getByText('Content again')).toHaveClass(cls);
-        const messages = warn.mock.calls.map((call) => String(call[0]));
-        expect(messages).toEqual([
-          `[WaveUI] Text: \`weight={${numeric}}\` is deprecated and will be removed in 1.0. Use \`weight="${name}"\` instead.`,
-        ]);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(
+          <Text
+            // @ts-expect-error -- removed in 1.0: use "regular", "semibold" or "bold"
+            weight={numeric}
+          >
+            Content
+          </Text>,
+        );
+        const text = screen.getByText('Content');
+        for (const cls of ['font-normal', 'font-medium', 'font-semibold', 'font-bold']) {
+          expect(text).not.toHaveClass(cls);
+        }
+        expect(text).not.toHaveAttribute('weight');
+        expect(warn).not.toHaveBeenCalled();
+        expect(error).not.toHaveBeenCalled();
       },
     );
 
@@ -262,7 +269,7 @@ describe('Text', () => {
         <Text key="1" as="a" href="/docs" />,
         // @ts-expect-error href does not exist on <span>
         <Text key="2" href="/nope" />,
-        // @ts-expect-error weight uses the TextWeight vocabulary (or the deprecated 400/600/700)
+        // @ts-expect-error weight uses the TextWeight vocabulary
         <Text key="3" weight={500} />,
         // @ts-expect-error variant keeps its literal type
         <Text key="4" variant="headline" />,
@@ -279,7 +286,7 @@ describe('Text', () => {
       expectTypeOf<TextProps>().toEqualTypeOf<TextProps<'span'>>();
       expectTypeOf<TextProps['ref']>().toEqualTypeOf<React.Ref<HTMLSpanElement> | undefined>();
       expectTypeOf<keyof TextOwnProps>().toEqualTypeOf<'variant' | 'weight' | 'font'>();
-      expectTypeOf<TextWeight>().toMatchTypeOf<NonNullable<TextOwnProps['weight']>>();
+      expectTypeOf<NonNullable<TextOwnProps['weight']>>().toEqualTypeOf<TextWeight>();
     });
   });
 });

@@ -202,7 +202,7 @@ function publicComponents(): Map<string, object> {
 
 /**
  * The constant of a public component: by its flat name, else by its displayName (the alias table
- * of `getStableClassNames`: `RadioItem`, `TableHead`, and `ComboboxOption`, whose value is Option).
+ * of `getStableClassNames`: `RadioItem`, and `ComboboxOption`, whose value is Option).
  */
 function constantOf(flatName: string, value: object): string | undefined {
   const byName = `${flatName[0].toLowerCase()}${flatName.slice(1)}ClassNames`;

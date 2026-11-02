@@ -453,6 +453,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DataGrid:selectedKeys',
     changelogAnchor: DATA_GRID_SELECTION_ROW,
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'datagrid-defaultselectedkeys',
@@ -465,6 +466,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DataGrid:defaultSelectedKeys',
     changelogAnchor: DATA_GRID_SELECTION_ROW,
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'datagrid-onselectionchange',
@@ -477,6 +479,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DataGrid:onSelectionChange',
     changelogAnchor: DATA_GRID_SELECTION_ROW,
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'datagrid-sortcolumn',
@@ -489,6 +492,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DataGrid:sortColumn',
     changelogAnchor: DATA_GRID_SORT_ROW,
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'datagrid-sortdirection',
@@ -501,6 +505,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DataGrid:sortDirection',
     changelogAnchor: DATA_GRID_SORT_ROW,
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'datagrid-defaultsortcolumn',
@@ -513,6 +518,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DataGrid:defaultSortColumn',
     changelogAnchor: DATA_GRID_SORT_ROW,
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'datagrid-defaultsortdirection',
@@ -525,6 +531,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DataGrid:defaultSortDirection',
     changelogAnchor: DATA_GRID_SORT_ROW,
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'table-head',
@@ -537,6 +544,8 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Table:Table.Head',
     changelogAnchor: TABLE_HEAD_ROW,
     file: TABLE,
+    done: true,
+    absent: { exports: ['TableHead'] },
   },
   {
     id: 'table-headcell',
@@ -549,6 +558,8 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Table:Table.HeadCell',
     changelogAnchor: TABLE_HEAD_ROW,
     file: TABLE,
+    done: true,
+    absent: { exports: ['TableHeadCell'] },
   },
   {
     id: 'stack-direction',
@@ -574,6 +585,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Skeleton:variant',
     changelogAnchor: '| Skeleton | `variant`',
     file: 'src/components/feedback/Skeleton.tsx',
+    done: true,
   },
   {
     id: 'text-numeric-weight',
@@ -586,6 +598,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Text:weight={400}',
     changelogAnchor: '| Text | `weight={400 \\| 600 \\| 700}` |',
     file: 'src/components/typography/Text.tsx',
+    done: true,
   },
   {
     id: 'link-variant',
@@ -598,6 +611,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Link:variant',
     changelogAnchor: '| Link | `variant` (type `LinkVariant`) |',
     file: 'src/components/button/Link.tsx',
+    done: true,
   },
   {
     id: 'tooltip-variant',

@@ -9,8 +9,6 @@ import {
   TableCell,
   TableCellActions,
   TableCellLayout,
-  TableHead,
-  TableHeadCell,
   TableHeader,
   TableHeaderCell,
   TableRow,
@@ -24,6 +22,8 @@ import type {
   TableSelectionCellCheckedChangeDetails,
   TableSelectionCellProps,
 } from '../Table';
+import * as TableModule from '../Table';
+import type * as Wave from '../../../index';
 import { DataGrid } from '../DataGrid';
 import { Avatar } from '../../data-display/Avatar';
 import type { SlotPart } from '../../../lib/slotProps';
@@ -97,13 +97,11 @@ describe('Table', () => {
     a11yVariants: [{ name: 'striped', props: { striped: true } }],
   });
 
-  testCompoundExposure(Table, ['Header', 'HeaderCell', 'Head', 'HeadCell', 'Body', 'Row', 'Cell']);
+  testCompoundExposure(Table, ['Header', 'HeaderCell', 'Body', 'Row', 'Cell']);
 
   it('exports every sub-component under a flat name bound to the dotted member', () => {
     expect(TableHeader).toBe(Table.Header);
     expect(TableHeaderCell).toBe(Table.HeaderCell);
-    expect(TableHead).toBe(Table.Head);
-    expect(TableHeadCell).toBe(Table.HeadCell);
     expect(TableBody).toBe(Table.Body);
     expect(TableRow).toBe(Table.Row);
     expect(TableCell).toBe(Table.Cell);
@@ -142,36 +140,22 @@ describe('Table', () => {
     );
   });
 
-  describe('deprecated Head / HeadCell', () => {
-    it('render the same header and warn once', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(
-        <Table>
-          <Table.Head data-testid="thead">
-            <tr>
-              <Table.HeadCell>Name</Table.HeadCell>
-              <Table.HeadCell>Value</Table.HeadCell>
-            </tr>
-          </Table.Head>
-          <Table.Body>
-            <Table.Row>
-              <Table.Cell>Alpha</Table.Cell>
-              <Table.Cell>1</Table.Cell>
-            </Table.Row>
-          </Table.Body>
-        </Table>,
-      );
-      expect(screen.getByTestId('thead').tagName.toLowerCase()).toBe('thead');
-      expect(screen.getAllByRole('columnheader')).toHaveLength(2);
-      expect(screen.getAllByRole('columnheader')[0]).toHaveAttribute('scope', 'col');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Table: `Table.Head` is deprecated and will be removed in 1.0. Use `Table.Header` instead.',
-        ],
-        [
-          '[WaveUI] Table: `Table.HeadCell` is deprecated and will be removed in 1.0. Use `Table.HeaderCell` instead.',
-        ],
-      ]);
+  describe('the 0.4 Head / HeadCell are removed in 1.0', () => {
+    // Untyped code that still writes `<Table.Head>` renders an element whose type is undefined,
+    // which React rejects: it fails loudly, as the missing flat exports do on import.
+    it('has no Head and HeadCell members, flat exports or prop types', () => {
+      expect(Object.keys(Table)).not.toContain('Head');
+      expect(Object.keys(Table)).not.toContain('HeadCell');
+      // @ts-expect-error -- `Table.Head` is removed in 1.0: use `Table.Header`
+      expect(Table.Head).toBeUndefined();
+      // @ts-expect-error -- `Table.HeadCell` is removed in 1.0: use `Table.HeaderCell`
+      expect(Table.HeadCell).toBeUndefined();
+      expect(Object.keys(TableModule)).not.toContain('TableHead');
+      expect(Object.keys(TableModule)).not.toContain('TableHeadCell');
+      // @ts-expect-error -- `TableHeadProps` is removed in 1.0: use `TableHeaderProps`
+      expectTypeOf<Wave.TableHeadProps>().toBeAny();
+      // @ts-expect-error -- `TableHeadCellProps` is removed in 1.0: use `TableHeaderCellProps`
+      expectTypeOf<Wave.TableHeadCellProps>().toBeAny();
     });
 
     it('Table.Header does not warn', () => {
@@ -413,27 +397,6 @@ describe('Table sub-component refs', () => {
     expect(ref.current!.tagName.toLowerCase()).toBe('thead');
   });
 
-  it('Table.Head (deprecated) forwards ref to thead', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const ref = React.createRef<HTMLTableSectionElement>();
-    render(
-      <table>
-        <Table.Head ref={ref} data-testid="thead">
-          <tr>
-            <th>H</th>
-          </tr>
-        </Table.Head>
-      </table>,
-    );
-    expect(ref.current).toBe(screen.getByTestId('thead'));
-    expect(ref.current!.tagName.toLowerCase()).toBe('thead');
-    expect(warn.mock.calls).toEqual([
-      [
-        '[WaveUI] Table: `Table.Head` is deprecated and will be removed in 1.0. Use `Table.Header` instead.',
-      ],
-    ]);
-  });
-
   it('Table.HeaderCell forwards ref to th', () => {
     const ref = React.createRef<HTMLTableCellElement>();
     render(
@@ -449,29 +412,6 @@ describe('Table sub-component refs', () => {
     );
     expect(ref.current).toBe(screen.getByTestId('th'));
     expect(ref.current!.tagName.toLowerCase()).toBe('th');
-  });
-
-  it('Table.HeadCell (deprecated) forwards ref to th', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const ref = React.createRef<HTMLTableCellElement>();
-    render(
-      <table>
-        <thead>
-          <tr>
-            <Table.HeadCell ref={ref} data-testid="th">
-              H
-            </Table.HeadCell>
-          </tr>
-        </thead>
-      </table>,
-    );
-    expect(ref.current).toBe(screen.getByTestId('th'));
-    expect(ref.current!.tagName.toLowerCase()).toBe('th');
-    expect(warn.mock.calls).toEqual([
-      [
-        '[WaveUI] Table: `Table.HeadCell` is deprecated and will be removed in 1.0. Use `Table.HeaderCell` instead.',
-      ],
-    ]);
   });
 
   it('Table.Body forwards ref to tbody', () => {

@@ -18,7 +18,7 @@ import {
   tableRowClassNames,
 } from '../../../lib/classNames';
 import { DataGrid } from '../DataGrid';
-import { Table, TableHead, TableHeadCell } from '../Table';
+import { Table } from '../Table';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -81,30 +81,6 @@ describe('stable class names (P3-00): table folder', () => {
       renderToString(<Table.ResizeHandle width={200} onResize={() => {}} />),
     );
     expect(host.querySelector('[role="separator"]')).toHaveClass(tableResizeHandleClassNames.root);
-  });
-
-  it('the deprecated Table.Head and Table.HeadCell carry the classes of their replacements', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    render(
-      <Table>
-        <TableHead>
-          <Table.Row>
-            <TableHeadCell>Item</TableHeadCell>
-          </Table.Row>
-        </TableHead>
-      </Table>,
-    );
-    const header = screen.getByRole('columnheader', { name: 'Item' });
-    expect(header).toHaveClass(tableHeaderCellClassNames.root);
-    expect(header.closest('thead')).toHaveClass(tableHeaderClassNames.root);
-    expect(warn.mock.calls).toEqual([
-      [
-        '[WaveUI] Table: `Table.Head` is deprecated and will be removed in 1.0. Use `Table.Header` instead.',
-      ],
-      [
-        '[WaveUI] Table: `Table.HeadCell` is deprecated and will be removed in 1.0. Use `Table.HeaderCell` instead.',
-      ],
-    ]);
   });
 
   it('DataGrid: root, container, header with its selection cells, sortable header cell, body, row and cell', () => {

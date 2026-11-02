@@ -441,12 +441,6 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
     selectedItems: string[],
     details?: DataGridSelectedItemsChangeDetails,
   ) => void;
-  /** @deprecated Use `selectedItems` (an array). A `Set` or an array is accepted. */
-  selectedKeys?: ReadonlySet<string> | readonly string[];
-  /** @deprecated Use `defaultSelectedItems` (an array). A `Set` or an array is accepted. */
-  defaultSelectedKeys?: ReadonlySet<string> | readonly string[];
-  /** @deprecated Use `onSelectedItemsChange`, which receives an array. Both are called. */
-  onSelectionChange?: (keys: Set<string>) => void;
   /**
    * Props for the wrapper `<div>` around the `<table>`: a horizontally scrollable container
    * (`overflow-x-auto`). Use it for its className, style (e.g. a max height) or ref. With a
@@ -465,15 +459,8 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
   ref?: React.Ref<HTMLTableElement>;
 }
 
-interface NoDeprecatedSortProps {
-  sortColumn?: never;
-  defaultSortColumn?: never;
-  sortDirection?: never;
-  defaultSortDirection?: never;
-}
-
 /** The 0.5 sort API, controlled: `sort` + `onSortChange(sort, details)`. */
-export interface DataGridControlledSortProps extends NoDeprecatedSortProps {
+export interface DataGridControlledSortProps {
   /** The controlled sort, or `null` for an unsorted grid. */
   sort: DataGridSort | null;
   /** Initial sort while `sort` is not given yet. */
@@ -488,7 +475,7 @@ export interface DataGridControlledSortProps extends NoDeprecatedSortProps {
 }
 
 /** The 0.5 sort API, uncontrolled: `defaultSort` (`null` for none) + `onSortChange(sort, details)`. */
-export interface DataGridUncontrolledSortProps extends NoDeprecatedSortProps {
+export interface DataGridUncontrolledSortProps {
   sort?: undefined;
   /** The initial sort, or `null` for an initially unsorted grid. */
   defaultSort: DataGridSort | null;
@@ -503,11 +490,10 @@ export interface DataGridUncontrolledSortProps extends NoDeprecatedSortProps {
 
 /**
  * The sort props of a grid with `items`: the 0.5 sort API, whether or not `sort` or `defaultSort`
- * is given (unsorted at first without them). The 0.4 positional `onSortChange` and the deprecated
- * sort props do not apply to such a grid.
+ * is given (unsorted at first without them). The 0.4 positional `onSortChange` does not apply to
+ * such a grid.
  */
-export interface DataGridItemsSortProps<T = unknown>
-  extends DataGridItemsProps<T>, NoDeprecatedSortProps {
+export interface DataGridItemsSortProps<T = unknown> extends DataGridItemsProps<T> {
   /** The grid's data (see `DataGridItemsProps.items`). */
   items: readonly T[];
   /** The controlled sort, or `null` for an unsorted grid; `undefined` leaves the sort to the grid. */
@@ -523,31 +509,14 @@ export interface DataGridItemsSortProps<T = unknown>
 }
 
 /**
- * The 0.4 sort API: `onSortChange(columnId, direction)` and the deprecated `sortColumn`/
- * `sortDirection` props. It applies whenever none of `items`, `sort` and `defaultSort` is given.
- * As in 0.4, the column and the direction can be controlled independently: the half that is not
- * controlled is kept internally and follows every sort request (mixed control, warned in
- * development).
+ * The 0.4 sort API: `onSortChange(columnId, direction)`. It applies whenever none of `items`,
+ * `sort` and `defaultSort` is given; the grid then keeps the sort itself, unsorted at first.
  */
 export interface DataGridLegacySortProps {
   /** A grid with `items` uses the 0.5 sort API (`DataGridItemsSortProps`). */
   items?: undefined;
   sort?: undefined;
   defaultSort?: undefined;
-  /**
-   * @deprecated Use `sort` (`{ columnId, direction }` or `null`). Without `sortDirection`, the
-   * direction is kept internally (it toggles on repeated clicks).
-   */
-  sortColumn?: string;
-  /** @deprecated Use `defaultSort`. */
-  defaultSortColumn?: string;
-  /**
-   * @deprecated Use `sort`. Without `sortColumn`, the column is kept internally (it follows the
-   * clicked header, starting from `defaultSortColumn`).
-   */
-  sortDirection?: SortDirection;
-  /** @deprecated Use `defaultSort`. */
-  defaultSortDirection?: SortDirection;
   /**
    * Called when a sortable header is activated (or `setSort` of `useDataGridSort` is called),
    * with the 0.4 arguments (deprecated: removed in 1.0, with a development warning). Pass
@@ -564,9 +533,8 @@ export interface DataGridLegacySortProps {
 /**
  * Properties for the DataGrid component, whose `items` are of type `T`. The sort props form a
  * union: `sort`/`defaultSort` with `onSortChange(sort, details)` (0.5, also the form of every grid
- * with `items`), or the 0.4 form `onSortChange(columnId, direction)` with the deprecated
- * `sortColumn`/`sortDirection`/`defaultSortColumn`/`defaultSortDirection`, for a grid without
- * `items`. The two cannot be mixed.
+ * with `items`), or the 0.4 form `onSortChange(columnId, direction)`, for a grid without `items`,
+ * `sort` and `defaultSort`.
  */
 export type DataGridProps<T = unknown> = DataGridBaseProps<T> &
   (
@@ -786,12 +754,6 @@ export interface DataGridCellProps extends React.TdHTMLAttributes<HTMLTableCellE
 const EMPTY_ITEMS: readonly string[] = [];
 const NO_COLUMN_IDS: readonly (string | undefined)[] = [];
 
-function toItems(
-  keys: ReadonlySet<string> | readonly string[] | undefined,
-): readonly string[] | undefined {
-  return keys === undefined ? undefined : Array.from(keys);
-}
-
 function sameItems(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((item, index) => item === b[index]);
 }
@@ -881,18 +843,11 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     isSelectionDisabled,
     sort: sortProp,
     defaultSort,
-    sortColumn: sortColumnProp,
-    defaultSortColumn,
-    sortDirection: sortDirectionProp,
-    defaultSortDirection,
     onSortChange,
     selectionMode = 'none',
     selectedItems: selectedItemsProp,
     defaultSelectedItems,
     onSelectedItemsChange,
-    selectedKeys,
-    defaultSelectedKeys,
-    onSelectionChange,
     labels,
     selectOnRowClick = false,
     selectionAppearance = 'brand',
@@ -918,32 +873,14 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
 
   // --- sort -----------------------------------------------------------------
   const hasItems = items !== undefined;
-  /** The 0.5 sort props, which win over the deprecated ones. */
+  /** The 0.5 sort props. */
   const usesSortApi = sortProp !== undefined || defaultSort !== undefined;
-  /**
-   * The 0.4 rules (the deprecated sort props, the positional callback) apply without `items`,
-   * `sort` and `defaultSort`.
-   */
+  /** The 0.4 rule (the positional callback) applies without `items`, `sort` and `defaultSort`. */
   const legacySort = !usesSortApi && !hasItems;
   /** `onSortChange(sort, details)`; sticky, so the form never changes under the consumer. */
   const [objectMode, setObjectMode] = React.useState(!legacySort);
   if (!legacySort && !objectMode) setObjectMode(true);
   const objectCallbacks = objectMode || !legacySort;
-
-  const legacySortControlled = sortColumnProp !== undefined || sortDirectionProp !== undefined;
-  if (sortColumnProp !== undefined) warnDeprecated('DataGrid', 'sortColumn', 'sort');
-  if (sortDirectionProp !== undefined) warnDeprecated('DataGrid', 'sortDirection', 'sort');
-  if (defaultSortColumn !== undefined) {
-    warnDeprecated('DataGrid', 'defaultSortColumn', 'defaultSort');
-  }
-  if (defaultSortDirection !== undefined) {
-    warnDeprecated('DataGrid', 'defaultSortDirection', 'defaultSort');
-  }
-  const deprecatedSortProps =
-    legacySortControlled || defaultSortColumn !== undefined || defaultSortDirection !== undefined;
-  const mixedSortApi = usesSortApi && deprecatedSortProps;
-  /** A grid with `items` (and no `sort`/`defaultSort`) ignores the deprecated sort props. */
-  const ignoredSortProps = !legacySort && !usesSortApi && deprecatedSortProps;
 
   // C-DEV: the positional callback of the 0.4 sort API is removed in 1.0.
   const positionalSortCallback = !objectCallbacks && onSortChange !== undefined;
@@ -966,89 +903,12 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     }
   }, [positionalSortCallback]);
 
-  React.useEffect(() => {
-    if (mixedSortApi) {
-      warnOnce(
-        'DataGrid:mixed-sort',
-        'DataGrid: do not mix `sort`/`defaultSort` with the deprecated `sortColumn`/`sortDirection`/' +
-          '`defaultSortColumn`/`defaultSortDirection`. `sort`/`defaultSort` win.',
-      );
-    } else if (ignoredSortProps) {
-      warnOnce(
-        'DataGrid:items-deprecated-sort',
-        'DataGrid: the deprecated `sortColumn`/`sortDirection`/`defaultSortColumn`/' +
-          '`defaultSortDirection` do not apply to a grid with `items` and are ignored. Pass `sort` ' +
-          'or `defaultSort`.',
-      );
-    }
-  }, [mixedSortApi, ignoredSortProps]);
-  // 0.4 mixed control: `sortColumn` and `sortDirection` are controlled independently. The half the
-  // parent does not control is kept here (seeded from its default) and follows every sort request,
-  // as 0.4 did, so repeated clicks still alternate and aria-sort shows what was reported.
-  React.useEffect(() => {
-    if (!legacySort) return;
-    if (sortColumnProp !== undefined && sortDirectionProp === undefined) {
-      warnOnce(
-        'DataGrid:sortColumn-without-sortDirection',
-        'DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control). The ' +
-          'direction is kept internally and toggles on repeated clicks, as in 0.4. Pass `sort` ' +
-          '(`{ columnId, direction }`) to control both.',
-      );
-    } else if (sortDirectionProp !== undefined && sortColumnProp === undefined) {
-      warnOnce(
-        'DataGrid:sortDirection-without-sortColumn',
-        'DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control). The ' +
-          'column is kept internally and follows the clicked header, as in 0.4. Pass `sort` ' +
-          '(`{ columnId, direction }`) to control both.',
-      );
-    }
-  }, [legacySort, sortColumnProp, sortDirectionProp]);
-
-  /** The uncontrolled halves of the 0.4 sort props (used while the other half is controlled). */
-  const [legacyHalves, setLegacyHalves] = React.useState<{
-    column: string;
-    direction: SortDirection;
-  }>(() => ({
-    column: defaultSortColumn ?? '',
-    direction: defaultSortDirection ?? 'ascending',
-  }));
-
-  const legacyControlledSort = React.useMemo<DataGridSort | null | undefined>(() => {
-    if (sortColumnProp === undefined && sortDirectionProp === undefined) return undefined;
-    const column = sortColumnProp ?? legacyHalves.column;
-    return column === ''
-      ? null
-      : { columnId: column, direction: sortDirectionProp ?? legacyHalves.direction };
-  }, [sortColumnProp, sortDirectionProp, legacyHalves]);
-
-  const legacyDefaultSort = React.useMemo<DataGridSort | null>(
-    () =>
-      defaultSortColumn
-        ? { columnId: defaultSortColumn, direction: defaultSortDirection ?? 'ascending' }
-        : null,
-    [defaultSortColumn, defaultSortDirection],
-  );
-
-  const controlledSort = legacySort ? legacyControlledSort : sortProp;
-  // A grid with `items` and no `defaultSort` starts unsorted: the deprecated defaults are ignored.
-  let initialSort = legacyDefaultSort;
-  if (defaultSort !== undefined) initialSort = defaultSort;
-  else if (ignoredSortProps) initialSort = null;
-
   // The details of the sort being requested, set around the setter: useControllable calls its
   // onChange synchronously inside it, and only on change (the useCheckedValues pattern).
   const sortDetailsRef = React.useRef<DataGridSortChangeDetails | undefined>(undefined);
 
   const emitSortChange = (next: DataGridSort | null) => {
-    if (!next) return;
-    if (legacySort) {
-      setLegacyHalves((previous) =>
-        previous.column === next.columnId && previous.direction === next.direction
-          ? previous
-          : { column: next.columnId, direction: next.direction },
-      );
-    }
-    if (!onSortChange) return;
+    if (!next || !onSortChange) return;
     if (objectCallbacks) {
       const objectForm = onSortChange as NonNullable<DataGridItemsSortProps['onSortChange']>;
       objectForm(next, sortDetailsRef.current);
@@ -1058,9 +918,10 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     }
   };
 
+  // Unsorted at first without `defaultSort` (a grid with `items` too).
   const [sort, setSort] = useControllable<DataGridSort | null>(
-    controlledSort,
-    initialSort,
+    sortProp,
+    defaultSort ?? null,
     emitSortChange,
   );
 
@@ -1105,30 +966,6 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   );
 
   // --- selection ------------------------------------------------------------
-  if (onSelectionChange !== undefined) {
-    warnDeprecated('DataGrid', 'onSelectionChange', 'onSelectedItemsChange');
-  }
-  const legacySelected = React.useMemo(() => toItems(selectedKeys), [selectedKeys]);
-  const legacyDefaultSelected = React.useMemo(
-    () => toItems(defaultSelectedKeys),
-    [defaultSelectedKeys],
-  );
-  const controlledSelected = resolveDeprecatedProp(
-    'DataGrid',
-    selectedItemsProp,
-    legacySelected,
-    'selectedKeys',
-    'selectedItems',
-  );
-  const defaultSelected =
-    resolveDeprecatedProp(
-      'DataGrid',
-      defaultSelectedItems,
-      legacyDefaultSelected,
-      'defaultSelectedKeys',
-      'defaultSelectedItems',
-    ) ?? EMPTY_ITEMS;
-
   // The details of the change being made, set around the setter (as `sortDetailsRef`).
   const selectionDetailsRef = React.useRef<DataGridSelectedItemsChangeDetails | undefined>(
     undefined,
@@ -1136,12 +973,11 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
 
   const emitSelectionChange = (next: readonly string[]) => {
     onSelectedItemsChange?.([...next], selectionDetailsRef.current);
-    onSelectionChange?.(new Set(next));
   };
 
   const [selected, setSelectedValue] = useControllable<readonly string[]>(
-    controlledSelected,
-    defaultSelected,
+    selectedItemsProp,
+    defaultSelectedItems ?? EMPTY_ITEMS,
     emitSelectionChange,
   );
 

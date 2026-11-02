@@ -340,7 +340,7 @@ Fluent callbacks receive `(event, data)`. WaveUI state callbacks are named after
 
 `modalType="alert"` never closes on a backdrop press, as in Fluent.
 
-A WaveUI callback that needs the event gets it in `details` where there is one (Dialog, Drawer, Menu and Toolbar checked values, Tree checked items); the others do not receive it. Some WaveUI components still accept an older callback name as a deprecated alias, sometimes a Fluent name with a different signature (DataGrid's `onSelectionChange`): use the names above. The [CHANGELOG](../CHANGELOG.md) lists every deprecated alias.
+A WaveUI callback that needs the event gets it in `details` where there is one (Dialog, Drawer, Menu and Toolbar checked values, Tree checked items); the others do not receive it.
 
 ### 4.2 Parts and names
 

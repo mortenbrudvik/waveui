@@ -3821,13 +3821,7 @@ Deprecated names still work through 0.x, warn once in development and will be re
 
 | Deprecated | Use instead |
 |---|---|
-| DataGrid `selectedKeys`, `defaultSelectedKeys`, `onSelectionChange` | `selectedItems`, `defaultSelectedItems`, `onSelectedItemsChange` |
-| DataGrid `sortColumn`, `sortDirection`, `defaultSortColumn`, `defaultSortDirection` | `sort`, `defaultSort` (a grid with `items` ignores the deprecated props) |
 | `DataGridColumn` `id` | `columnId` |
-| `Table.Head`, `Table.HeadCell` (and the flat `TableHead`, `TableHeadCell`, deprecated from their introduction in 0.5) | `Table.Header`, `Table.HeaderCell` (`TableHeader`, `TableHeaderCell`) |
-| Skeleton `variant` | `shape` |
-| Text `weight={400 \| 600 \| 700}` | `weight="regular" \| "semibold" \| "bold"` |
-| Link `variant` | `appearance` |
 | Theme classes `dark`, `high-contrast` | `wave-dark`, `wave-high-contrast` |
 | `@mortenbrudvik/waveui/legacy-tokens.css` (0.4 variable names) | `--wave-*` variables |
 | Button objects in `MessageBar.dismiss`, `SearchBox.dismiss`, `Tag.dismissIcon` | Icon content, plus `onDismiss` / `onClear` |

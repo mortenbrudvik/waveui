@@ -415,8 +415,6 @@ export const DISPLAY_NAME_ALIASES: Readonly<Record<string, string>> = {
   Tab: 'tabListTabClassNames',
   TabPanel: 'tabListPanelClassNames',
   TabPanels: 'tabListPanelsClassNames',
-  TableHead: 'tableHeaderClassNames',
-  TableHeadCell: 'tableHeaderCellClassNames',
 };
 
 /**

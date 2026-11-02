@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { linkClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp } from '../../lib/dev';
 import { focusRing } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import { useButtonSemantics } from './Button.semantics';
@@ -18,9 +17,6 @@ import { useButtonSemantics } from './Button.semantics';
  */
 export type LinkAppearance = 'inline' | 'standalone' | 'subtle';
 
-/** @deprecated Use {@link LinkAppearance}. */
-export type LinkVariant = LinkAppearance;
-
 /**
  * The Link's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
  * Every other prop comes from the rendered element (`as`, default `'a'`).
@@ -30,8 +26,6 @@ export interface LinkOwnProps {
    * @default 'inline'
    */
   appearance?: LinkAppearance;
-  /** @deprecated Use `appearance` (same values). */
-  variant?: LinkVariant;
   /**
    * Makes the link unavailable. An `<a>` drops its `href` (no navigation by middle-click, the
    * context menu or drag), keeps `role="link"` (`role="button"` when it had no `href`), and gets
@@ -101,7 +95,6 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
   const {
     as,
     appearance: appearanceProp,
-    variant,
     disabled = false,
     disabledFocusable = false,
     className,
@@ -113,8 +106,7 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
     ...rest
   } = props as LinkImplProps;
 
-  const appearance =
-    resolveDeprecatedProp('Link', appearanceProp, variant, 'variant', 'appearance') ?? 'inline';
+  const appearance = appearanceProp ?? 'inline';
 
   const Component: React.ElementType = as ?? 'a';
   const tag = typeof Component === 'string' ? Component : null;

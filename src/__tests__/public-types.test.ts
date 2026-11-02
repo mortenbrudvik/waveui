@@ -583,8 +583,6 @@ const INTERNAL_HELPERS: Record<string, string> = {
     'mask: link-only attributes are a type error on items without `href`',
   'components/navigation/Nav.context.ts#NoAnchorOnlyAttributes':
     'mask: link-only attributes are a type error on items without `href`',
-  'components/table/DataGrid.tsx#NoDeprecatedSortProps':
-    'mask: the 0.4 sort props are a type error next to the 0.5 sort API',
   'lib/slotProps.ts#SlotPartProps':
     'member: the props half of the `SlotPart` union, named only so that a call infers the part element',
   'lib/tokens.ts#TokenVariable':

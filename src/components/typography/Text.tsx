@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { warnDeprecated } from '../../lib/dev';
 import { textClassNames } from '../../lib/classNames';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TextWeight, TypographyVariant } from '../../lib/types';
@@ -18,10 +17,9 @@ export interface TextOwnProps {
    * Font weight: `'regular'`, `'medium'`, `'semibold'` or `'bold'`. Unset, the variant's own
    * weight applies: semibold for `'subtitle-2'` and every larger variant (`'subtitle-1'`, the
    * titles, `'large-title'`, `'display'`), inherited for the caption and body variants. Pass
-   * `'regular'` for a title at regular weight. The numeric 0.4 values `400`, `600` and `700` still
-   * work but are deprecated.
+   * `'regular'` for a title at regular weight.
    */
-  weight?: TextWeight | 400 | 600 | 700;
+  weight?: TextWeight;
   /**
    * Font family: `'base'` keeps the inherited family (the Wave sans-serif), `'monospace'` sets the
    * Wave monospace stack for code and identifiers, `'numeric'` the stack for figures that should
@@ -30,12 +28,6 @@ export interface TextOwnProps {
    */
   font?: 'base' | 'monospace' | 'numeric';
 }
-
-/**
- * The 0.4 numeric weights, kept as deprecated aliases of {@link TextWeight} (written out in
- * {@link TextOwnProps}, not a public name).
- */
-type DeprecatedNumericWeight = Exclude<NonNullable<TextOwnProps['weight']>, TextWeight>;
 
 /**
  * Props of {@link Text} rendered as `C` (default `'span'`). `TextProps` without a type argument
@@ -75,12 +67,6 @@ const fontClasses: Record<Exclude<NonNullable<TextOwnProps['font']>, 'base'>, st
   numeric: 'font-wave-numeric',
 };
 
-const numericWeights: Record<DeprecatedNumericWeight, TextWeight> = {
-  400: 'regular',
-  600: 'semibold',
-  700: 'bold',
-};
-
 /**
  * Text in the Wave type ramp. Renders a `<span>` by default; `as` renders any element with
  * correctly typed props (`<Text as="h1" variant="title-1">`, `<Text as="label" htmlFor="…">`).
@@ -97,15 +83,6 @@ const numericWeights: Record<DeprecatedNumericWeight, TextWeight> = {
 export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
   const { as, variant = 'body-1', weight, font, className, ...rest } = props as TextImplProps;
 
-  let resolvedWeight: TextWeight | undefined;
-  if (typeof weight === 'number') {
-    resolvedWeight = Object.hasOwn(numericWeights, weight) ? numericWeights[weight] : undefined;
-    // Warn-once during render is the sanctioned alias pattern (C-DEV).
-    if (resolvedWeight) warnDeprecated('Text', `weight={${weight}}`, `weight="${resolvedWeight}"`);
-  } else if (weight !== undefined && Object.hasOwn(weightClasses, weight)) {
-    resolvedWeight = weight;
-  }
-
   const Component: React.ElementType = as ?? 'span';
   return (
     <Component
@@ -113,7 +90,7 @@ export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
       className={cn(
         textClassNames.root,
         variantClasses[variant],
-        resolvedWeight && weightClasses[resolvedWeight],
+        weight !== undefined && Object.hasOwn(weightClasses, weight) && weightClasses[weight],
         font && font !== 'base' && Object.hasOwn(fontClasses, font) && fontClasses[font],
         className,
       )}
