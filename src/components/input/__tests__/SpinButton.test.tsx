@@ -16,6 +16,7 @@ import {
   sortAttributes,
   expectNoA11yViolations,
   testFocusEvents,
+  testRootPartRef,
   testSystemProps,
   renderWithProviders,
 } from '../../../test-utils';
@@ -29,6 +30,15 @@ function spyWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => {});
 }
 
+/** React's development error for an unknown prop that reaches a DOM element, as logged. */
+const UNKNOWN_PROP = (name: string) => [
+  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+    'accidentally passed it from a parent component, remove it from the DOM element.',
+  name,
+  name.toLowerCase(),
+];
+
 const UNNAMED_WARNING =
   '[WaveUI] SpinButton: the spinbutton has no accessible name. Pass `aria-label` or ' +
   '`aria-labelledby`, use a <label htmlFor>, or render it inside a Field.';
@@ -38,7 +48,8 @@ describe('SpinButton', () => {
     expectedTag: 'div',
     displayName: 'SpinButton',
     defaultProps: { 'aria-label': 'Quantity' },
-    control: { role: 'spinbutton' },
+    ref: 'control',
+    control: { role: 'spinbutton', tag: 'input' },
     a11yVariants: [
       { name: 'disabled', props: { disabled: true } },
       { name: 'at its bounds', props: { min: 0, max: 0, defaultValue: 0 } },
@@ -46,6 +57,8 @@ describe('SpinButton', () => {
       { name: 'in a form', props: { name: 'qty', required: true } },
     ],
   });
+
+  testRootPartRef(SpinButton, { props: { 'aria-label': 'Quantity' } });
 
   testFocusEvents(SpinButton, { 'aria-label': 'Quantity' }, 'input');
 
@@ -538,14 +551,14 @@ describe('SpinButton — naming, routing and styling', () => {
   it('routes id, ARIA, input attributes and focus/keyboard handlers to the input (C-ROUTING)', async () => {
     const user = userEvent.setup();
     const onKeyDown = vi.fn();
-    const ref = React.createRef<HTMLDivElement>();
-    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLInputElement>();
+    const rootRef = React.createRef<HTMLDivElement>();
     render(
       <>
         <span id="qty-help">Between 1 and 5</span>
         <SpinButton
           ref={ref}
-          controlRef={controlRef}
+          slotProps={{ root: { ref: rootRef } }}
           id="qty"
           aria-label="Quantity"
           aria-describedby="qty-help"
@@ -560,9 +573,9 @@ describe('SpinButton — naming, routing and styling', () => {
     expect(input).toHaveAttribute('id', 'qty');
     expect(input).toHaveAccessibleDescription('Between 1 and 5');
     expect(input).toHaveAttribute('placeholder', 'Amount');
-    expect(controlRef.current).toBe(input);
+    expect(ref.current).toBe(input);
     const root = screen.getByTestId('root');
-    expect(ref.current).toBe(root);
+    expect(rootRef.current).toBe(root);
     expect(root).toHaveClass('custom-root');
     expect(root).not.toHaveAttribute('id');
     await user.click(input);
@@ -1651,7 +1664,12 @@ describe('press-and-hold (Phase 4 D18)', () => {
 
 describe('SpinButton — slotProps', () => {
   type SpinSlotProps = NonNullable<SpinButtonProps['slotProps']>;
-  const EVERY_PART: SpinSlotProps = { decrementButton: {}, input: {}, incrementButton: {} };
+  const EVERY_PART: SpinSlotProps = {
+    root: {},
+    decrementButton: {},
+    input: {},
+    incrementButton: {},
+  };
 
   it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
     // Captured from 17abc07: the merged props may put the class before the locked attributes.
@@ -1688,6 +1706,17 @@ describe('SpinButton — slotProps', () => {
       { 'aria-label': 'Quantity', readOnly: true, placeholder: 'p', maxLength: 3, tabIndex: 0 },
       { 'aria-label': 'Quantity', value: 3, displayValue: '$3', labels: { increment: 'Up' } },
       { id: 'own', 'aria-label': 'Quantity', 'aria-describedby': 'd', 'aria-invalid': true },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        'aria-label': 'Quantity',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -1695,6 +1724,13 @@ describe('SpinButton — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Both members of the props union.
+    expectInertSlotProps(
+      (slotProps) => (
+        <SpinButton aria-label="Quantity" allowEmpty name="qty" required slotProps={slotProps} />
+      ),
+      EVERY_PART,
+    );
   });
 
   it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
@@ -1721,16 +1757,18 @@ describe('SpinButton — slotProps', () => {
     }
   });
 
-  it('attaches your refs to the parts, beside controlRef', () => {
+  it('attaches your refs to the parts, beside ref', () => {
+    const root = React.createRef<HTMLDivElement>();
     const minus = React.createRef<HTMLButtonElement>();
     const input = React.createRef<HTMLInputElement>();
     const plus = React.createRef<HTMLButtonElement>();
-    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       <SpinButton
         aria-label="Quantity"
-        controlRef={controlRef}
+        ref={ref}
         slotProps={{
+          root: { ref: root },
           decrementButton: { ref: minus },
           input: { ref: input },
           incrementButton: { ref: plus },
@@ -1739,8 +1777,10 @@ describe('SpinButton — slotProps', () => {
     );
     expect(minus.current).toBe(decrementButton());
     expect(input.current).toBe(spin());
-    expect(controlRef.current).toBe(spin());
+    expect(ref.current).toBe(spin());
     expect(plus.current).toBe(incrementButton());
+    expect(root.current).toBe(spin().parentElement);
+    expect(root.current).toHaveClass(spinButtonClassNames.root);
   });
 
   it('runs your step button onClick first; preventDefault() skips the step', async () => {
@@ -2063,7 +2103,10 @@ describe('SpinButton — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof SpinSlotProps>().toEqualTypeOf<
-      'decrementButton' | 'input' | 'incrementButton'
+      'root' | 'decrementButton' | 'input' | 'incrementButton'
+    >();
+    expectTypeOf<NonNullable<SpinSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
     >();
     expectTypeOf<SpinButtonAllowEmptyProps['slotProps']>().toEqualTypeOf<
       SpinButtonProps['slotProps']
@@ -2076,5 +2119,292 @@ describe('SpinButton — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the SpinButton draws its glyphs
     void (<SpinButton aria-label="Quantity" slotProps={{ incrementButton: { children: '+' } }} />);
+    // @ts-expect-error -- a part takes no children: the SpinButton draws its content
+    void (<SpinButton aria-label="Quantity" slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const root = () => spin().parentElement as HTMLElement;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the SpinButton's className and style", () => {
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(spinButtonClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(spin()).not.toHaveAttribute('data-part');
+      expect(spin()).not.toHaveAttribute('title');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(
+        <SpinButton aria-label="Quantity" slotProps={{ root: { className: 'items-start' } }} />,
+      );
+      expect(root()).toHaveClass('items-start');
+      expect(root()).not.toHaveClass('items-center');
+    });
+
+    it("keeps the props you give the SpinButton over the part's", () => {
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          title="Own"
+          data-x="own"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <SpinButton
+          aria-label="Quantity"
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The SpinButton's own hidden state stays its own.
+      rerender(
+        <SpinButton
+          aria-label="Quantity"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        />,
+      );
+      const hiddenRoot = screen.getByRole('spinbutton', { hidden: true }).parentElement;
+      expect(hiddenRoot).toHaveAttribute('hidden');
+      expect(hiddenRoot).toHaveAttribute('inert');
+      expect(hiddenRoot).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before the SpinButton's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <SpinButton
+          aria-label="Quantity"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <SpinButton
+          aria-label="Quantity"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it("steps on a button click whatever your root onClick does: the step is the button's own, before the click reaches the root", async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          onValueChange={onValueChange}
+          slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+        />,
+      );
+      await user.click(incrementButton());
+      expect(onValueChange.mock.calls).toEqual([[1]]);
+    });
+
+    it('calls your root onClick in every state, as the SpinButton calls its own: the root passes no click to the input', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <SpinButton aria-label="Quantity" onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(root());
+      rerender(
+        <SpinButton
+          aria-label="Quantity"
+          disabled
+          onClick={own}
+          slotProps={{ root: { onClick } }}
+        />,
+      );
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          slotProps={{ root: { className: 'my-root', title: 'How many' } }}
+        />,
+      );
+      await expectNoA11yViolations();
+    });
+  });
+});
+
+// 1.0 (Phase 14, R5): `ref` reaches the <input role="spinbutton">, the focusable control, in both
+// members of the props union; the root <div> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('SpinButton — ref reaches the control', () => {
+  it('focuses the spinbutton through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(<SpinButton ref={ref} aria-label="Quantity" />);
+    act(() => ref.current?.focus());
+    expect(spin()).toHaveFocus();
+  });
+
+  it('gives ref, and slotProps.root.ref the root, with allowEmpty too', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    const root = React.createRef<HTMLDivElement>();
+    const input = React.createRef<HTMLInputElement>();
+    render(
+      <SpinButton
+        ref={ref}
+        allowEmpty
+        aria-label="Quantity"
+        slotProps={{ root: { ref: root }, input: { ref: input } }}
+      />,
+    );
+    expect(ref.current).toBe(spin());
+    expect(input.current).toBe(spin());
+    expect(root.current).toBe(spin().parentElement);
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Order">
+        <SpinButton
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          allowEmpty
+          name="qty"
+          required
+          aria-label="Quantity"
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const input = spin();
+    expect(nodes.at(-1)).toBe(input);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    // The hidden input's invalid event focuses the spinbutton through the SpinButton's own ref.
+    act(() => {
+      form.reportValidity();
+    });
+    expect(input).toHaveFocus();
+    await user.keyboard('{ArrowUp}{ArrowUp}');
+    rerender(ui(3));
+    expect(input).toHaveValue('2');
+    act(() => form.reset());
+    expect(input).toHaveValue('');
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<SpinButton ref={ref} aria-label="Quantity" />);
+    const input = spin();
+    rerender(<SpinButton ref={ref} aria-label="Quantity" defaultValue={3} disabled />);
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <SpinButton ref={ref} aria-label="Quantity" />
+      </React.StrictMode>,
+    );
+    const input = spin();
+    rerender(
+      <React.StrictMode>
+        <SpinButton ref={ref} aria-label="Quantity" readOnly />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderWithFieldContext(<SpinButton ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(spin(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('declares ref (for the input) in both members of the props union, and no controlRef', () => {
+    expectTypeOf<SpinButtonProps['ref']>().toEqualTypeOf<React.Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<SpinButtonAllowEmptyProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<SpinButtonProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<SpinButtonAllowEmptyProps>().not.toHaveProperty('controlRef');
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the input; the root <div> is slotProps.root.ref
+    void (<SpinButton aria-label="Quantity" ref={divRef} />);
+    // @ts-expect-error -- the same with allowEmpty
+    void (<SpinButton aria-label="Quantity" allowEmpty ref={divRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the input
+          controlRef={controlRef}
+        />,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(spin().parentElement).toHaveAttribute('controlref', '[object Object]');
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

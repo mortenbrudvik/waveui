@@ -158,30 +158,45 @@ export interface SearchBoxProps
    * counts as the label, so give a button with a responsive label an explicit `aria-label`.
    */
   dismiss?: Slot<'span'>;
-  /** Ref to the root `<div>`. */
-  ref?: React.Ref<HTMLDivElement>;
-  /** Ref to the `<input type="search">` (the focusable control). */
-  controlRef?: React.Ref<HTMLInputElement>;
   /**
-   * Props for the elements the SearchBox draws inside its root, by part, merged into each part's
-   * own (Fluent UI's `input` and `dismiss` slot props): your classes after the part's (yours win
-   * a conflict), your styles over its styles, your handlers before its handlers
-   * (`preventDefault()` in yours skips the SearchBox's handling of the event, its own `on…` prop
-   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
-   * `aria-describedby`. Every attribute the SearchBox sets on a part is locked and keeps the
-   * SearchBox's value (set it through its own props); you add the attributes it does not set. A
-   * part takes no `children` (`dismiss` fills the clear button).
+   * Ref to the `<input type="search">`, the focusable control (Fluent UI's `ref`, on its primary
+   * element). The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
+  /**
+   * Props for the elements the SearchBox draws, by part, merged into each part's own (Fluent UI's
+   * `root`, `input` and `dismiss` slot props): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers before its handlers (`preventDefault()`
+   * in yours skips the SearchBox's handling of the event, its own `on…` prop included), your ref
+   * beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every
+   * attribute the SearchBox sets on a part is locked and keeps the SearchBox's value (set it
+   * through its own props); you add the attributes it does not set. A part takes no `children`
+   * (`dismiss` fills the clear button).
    */
   slotProps?: {
     /**
+     * The root `<div>` that draws the field around the icon (or `contentBefore`), the input,
+     * `contentAfter` and the clear button (stable class `wave-search-box`), which the SearchBox's
+     * `className`, `style`, `data-*` and other root props reach as well; its `ref` is the way to
+     * the root, since the SearchBox's `ref` reaches the input. Your classes come after the
+     * SearchBox's `className`, your style over its `style`. Locked: every prop you give the
+     * SearchBox itself that reaches the root, `data-size`, `data-appearance`, and `hidden`,
+     * `inert` and `aria-hidden` (the SearchBox's own: the root holds the input). Your handlers
+     * run before the SearchBox's own root handlers: `preventDefault()` in your `onMouseDown`
+     * skips the SearchBox's `onMouseDown` and the press that moves focus to the input. The root
+     * passes no click to the input, so your `onClick` is called in every state, as the
+     * SearchBox's own `onClick` is.
+     */
+    root?: SlotPart<'div'>;
+    /**
      * The `<input type="search">`, the focusable control (stable class `wave-search-box__input`;
-     * `controlRef` reaches it as well). Locked: `type`, `value` (and, unset, `defaultValue`: the
-     * SearchBox controls the text), `id`, the naming and Field attributes (`aria-label`,
-     * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `required`,
-     * `disabled`, `placeholder`, every input prop routed to it (`name`, `form`, `readOnly`,
-     * `tabIndex`, `maxLength`, …), `hidden`, `inert` and `aria-hidden` (a focusable control is
-     * never hidden). Your handlers run before the SearchBox's: `preventDefault()` in your
-     * `onChange` ignores the typed text, in your `onKeyDown` keeps the text on Escape.
+     * the SearchBox's `ref` reaches it as well). Locked: `type`, `value` (and, unset,
+     * `defaultValue`: the SearchBox controls the text), `id`, the naming and Field attributes
+     * (`aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`),
+     * `required`, `disabled`, `placeholder`, every input prop routed to it (`name`, `form`,
+     * `readOnly`, `tabIndex`, `maxLength`, …), `hidden`, `inert` and `aria-hidden` (a focusable
+     * control is never hidden). Your handlers run before the SearchBox's: `preventDefault()` in
+     * your `onChange` ignores the typed text, in your `onKeyDown` keeps the text on Escape.
      */
     input?: SlotPart<'input'>;
     /**
@@ -398,10 +413,10 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss'], size: CoreSize): Dis
  * - **Clearing**: the clear button clears the text and moves focus back to the input. Escape
  *   clears the text too while there is any, and is then consumed, so an enclosing Dialog, Drawer
  *   or Popover stays open; in an empty field Escape reaches them. Both call `onClear`.
- * - **Routing**: `id`, ARIA and native input attributes and the focus/keyboard handlers go to the
- *   `<input type="search">` (role `searchbox`); `className`, `style`, `data-*`, other handlers and
- *   `ref` stay on the root `<div>` (`controlRef` reaches the input). Inside a `Field` it picks up
- *   the label, hint, error and required state automatically.
+ * - **Routing**: `ref`, `id`, ARIA and native input attributes and the focus/keyboard handlers
+ *   go to the `<input type="search">` (role `searchbox`); `className`, `style`, `data-*` and other
+ *   handlers stay on the root `<div>` (`slotProps.root.ref` reaches it). Inside a `Field` it picks
+ *   up the label, hint, error and required state automatically.
  * - **Forms**: with `name` the text is submitted with the form; a form reset restores
  *   `defaultValue`.
  * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
@@ -425,8 +440,8 @@ export const SearchBox = ({
   contentAfter,
   dismiss,
   className,
+  style,
   ref,
-  controlRef,
   slotProps,
   // Routed to the input (C-ROUTING)
   id,
@@ -463,7 +478,7 @@ export const SearchBox = ({
   const [value, setValue] = useControllable(controlledValue, defaultValue, onValueChange);
 
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const mergedInputRef = useMergedRefs(inputRef, controlRef, slotProps?.input?.ref);
+  const mergedInputRef = useMergedRefs(inputRef, ref, slotProps?.input?.ref);
   // The input is always React-controlled, so the browser's own reset would put the current text
   // back: restore the default here instead (C-FORMS).
   useFormReset(inputRef, () => setValue(defaultValue), form);
@@ -517,8 +532,10 @@ export const SearchBox = ({
   };
 
   // The whole box is the field: pressing the icon, a slot or the padding around the text focuses
-  // the input, as it does in a native search field. A control inside a slot keeps its press.
-  const handleRootMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+  // the input, as it does in a native search field. A control inside a slot keeps its press. An
+  // event callback, so the root part's props merged during render hold no function that reads a
+  // ref.
+  const handleRootMouseDown = useEventCallback((event: React.MouseEvent<HTMLDivElement>) => {
     const input = inputRef.current;
     const root = event.currentTarget;
     const target = event.target;
@@ -529,7 +546,7 @@ export const SearchBox = ({
     if (control && root.contains(control)) return;
     event.preventDefault(); // keeps the press from moving focus to the page
     input.focus();
-  };
+  });
 
   // The slot's onClick runs before the clear (preventDefault() cancels it). The slot's ref joins
   // ours through a stable merged ref (never a new callback per render).
@@ -642,33 +659,41 @@ export const SearchBox = ({
   const hasBefore = slotRendersContent(contentBefore);
   const hasAfter = slotRendersContent(contentAfter);
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: cn(
+      searchBoxClassNames.root,
+      // The root draws the field; the slots, the text and the clear button are laid out side by
+      // side inside it, so a slot never covers the text.
+      'relative inline-flex w-full items-center',
+      inputHeightClasses[size],
+      inputTextClasses[size],
+      inputAppearanceClasses[appearance],
+      'text-foreground',
+      inputFocusWithin,
+      invalidLook && inputInvalidWithin,
+      // The dimmed look lifts while a focus ring shows inside the root (a clear button kept
+      // focusable by a merged `disabledFocusable` Button, focusable slot content; the disabled
+      // input never takes focus): opacity would dim the ring below 3:1.
+      disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
+      className,
+    ),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // The SearchBox's own root props, after the data attributes as in 0.18, and over the
+      // part's; the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+      // After a part's onMouseDown, whose preventDefault() skips both.
+      onMouseDown: composeEventHandlers(onMouseDown, handleRootMouseDown),
+    },
+  });
+
   return (
-    <div
-      ref={ref}
-      data-size={size}
-      data-appearance={appearance}
-      className={cn(
-        searchBoxClassNames.root,
-        // The root draws the field; the slots, the text and the clear button are laid out side by
-        // side inside it, so a slot never covers the text.
-        'relative inline-flex w-full items-center',
-        inputHeightClasses[size],
-        inputTextClasses[size],
-        inputAppearanceClasses[appearance],
-        'text-foreground',
-        inputFocusWithin,
-        invalidLook && inputInvalidWithin,
-        // The dimmed look lifts while a focus ring shows inside the root (a clear button kept
-        // focusable by a merged `disabledFocusable` Button, focusable slot content; the disabled
-        // input never takes focus): opacity would dim the ring below 3:1.
-        disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
-        className,
-      )}
-      hidden={hidden}
-      {...rest}
-      // Composed at press time, like the clear button's click: the handler reads the input ref.
-      onMouseDown={(event) => composeEventHandlers(onMouseDown, handleRootMouseDown)(event)}
-    >
+    <div {...rootProps}>
       <span
         className={cn(
           searchBoxClassNames.contentBefore,

@@ -1499,9 +1499,11 @@ describe('0.8 notifications, color, trees and class names from the package entry
     expectTypeOf<ColorPickerLabels['valueText']>().toEqualTypeOf<
       ((color: HsvColor, channel: 'hue' | 'saturation' | 'value' | 'alpha') => string) | undefined
     >();
-    expectTypeOf<ColorPickerHexFieldProps['controlRef']>().toEqualTypeOf<
+    // 1.0 (R5): `ref` reaches the hex input, and `controlRef` is gone.
+    expectTypeOf<ColorPickerHexFieldProps['ref']>().toEqualTypeOf<
       Ref<HTMLInputElement> | undefined
     >();
+    expectTypeOf<ColorPickerHexFieldProps>().not.toHaveProperty('controlRef');
     expectTypeOf<ColorPickerSwatchesProps>().not.toHaveProperty('items');
     expectTypeOf<ColorPickerPreviewProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
     expectTypeOf<Entry['ColorPicker']['HexField']>().toEqualTypeOf<Entry['ColorPickerHexField']>();

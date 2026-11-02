@@ -284,27 +284,44 @@ function hasAlphaDigits(text: string): boolean {
  * Properties for the ColorPickerHexField sub-component. `id`, the labelling and validation
  * `aria-*` (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`,
  * `aria-errormessage`, `aria-details`, `aria-required`), `autoFocus`, `tabIndex`, the focus and key
- * handlers and the text-entry attributes (`inputMode`, `enterKeyHint`, `autoCapitalize`,
- * `autoCorrect`, `spellCheck`) go to the `<input>`; everything else stays on the outer label.
+ * handlers, the text-entry attributes (`inputMode`, `enterKeyHint`, `autoCapitalize`,
+ * `autoCorrect`, `spellCheck`) and `ref` go to the `<input>`; everything else stays on the outer
+ * label.
  */
 export interface ColorPickerHexFieldProps extends React.HTMLAttributes<HTMLElement> {
-  /** Ref to the hex `<input>`. */
-  controlRef?: React.Ref<HTMLInputElement>;
-  /** Ref to the field's outer element: the label around the caption, the input and the error. */
-  ref?: React.Ref<HTMLLabelElement>;
   /**
-   * Props for the elements the field draws inside its root, by part, merged into each part's
-   * own: your classes after the part's (yours win a conflict), your styles over its styles, your
-   * handlers before its handlers (`preventDefault()` in yours skips the field's handling of the
-   * event, its own `on…` prop included), your ref beside its ref, and your ids added to the
-   * input's `aria-labelledby` and `aria-describedby`. Every attribute the field sets on a part
-   * is locked and keeps the field's value (set it through the field's own props); you add the
-   * attributes it does not set. A part takes no `children`. The field's root is a `<label>`
-   * around the caption, the input and the error, so a click on the `label` or `errorMessage`
-   * part focuses the input after your handler, as a click on a label does: `preventDefault()` in
-   * your `onClick` there cancels that.
+   * Ref to the hex `<input>`, the focusable control (Fluent UI's `ref`, on its primary element).
+   * The outer `<label>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
+  /**
+   * Props for the elements the field draws, by part, merged into each part's own: your classes
+   * after the part's (yours win a conflict), your styles over its styles, your handlers before
+   * its handlers (`preventDefault()` in yours skips the field's handling of the event, its own
+   * `on…` prop included), your ref beside its ref, and your ids added to the input's
+   * `aria-labelledby` and `aria-describedby`. Every attribute the field sets on a part is locked
+   * and keeps the field's value (set it through the field's own props); you add the attributes
+   * it does not set. A part takes no `children`. The field's root is a `<label>` around the
+   * caption, the input and the error, so a click on the `label` or `errorMessage` part focuses
+   * the input after your handler, as a click on a label does: `preventDefault()` in your
+   * `onClick` there cancels that.
    */
   slotProps?: {
+    /**
+     * The root `<label>` around the caption, the input and the error (stable class
+     * `wave-color-picker-hex-field`), which the field's `className`, `style`, `data-*` and other
+     * root props reach as well; its `ref` is the way to the label, since the field's `ref`
+     * reaches the input. Your classes come after the field's `className`, your style over its
+     * `style`. Locked: every prop you give the field itself that reaches the root, and `hidden`,
+     * `inert` and `aria-hidden` (the field's own: the root holds the input). Your handlers run
+     * before the field's own root handlers (`preventDefault()` in yours skips them). Your
+     * `onClick` sees every click inside the root as it bubbles: a click on the input once, and a
+     * click on the caption or the error first, before the `<label>` passes it on to the input
+     * (focusing it), so that click reaches your `onClick` twice (its own, then the input's), as
+     * on any `<label>`; `preventDefault()` on it keeps the label from passing it on. The field
+     * has no disabled state, so your `onClick` is called in every state.
+     */
+    root?: SlotPart<'label'>;
     /**
      * The `<span>` of the visible caption, `labels.hex` (stable class
      * `wave-color-picker-hex-field__label`). It sets no attribute of its own, so none is locked.
@@ -312,17 +329,17 @@ export interface ColorPickerHexFieldProps extends React.HTMLAttributes<HTMLEleme
      */
     label?: SlotPart<'span'>;
     /**
-     * The hex text `<input>` (stable class `wave-color-picker-hex-field__input`; `controlRef`
-     * reaches it as well). Locked: `type`, `value` (and, unset, `defaultValue`: the field controls
-     * the text), `id`, `maxLength`, `autoComplete`, the naming and validation attributes
-     * (`aria-label`, `aria-invalid`, `aria-errormessage`, `aria-details`, `aria-required`),
-     * `autoFocus`, `tabIndex` and the text-entry attributes the field routes to it (`inputMode`,
-     * `enterKeyHint`, `autoCapitalize`, `autoCorrect`, `spellCheck`); `name`, `form` and
-     * `required`, which it never sets (the picker submits the color under its own `name`, never
-     * the typed text); `hidden`, `inert` and `aria-hidden` (a focusable control is never
-     * hidden). Your handlers run first: `preventDefault()` in your `onChange` rejects the edit
-     * (the text stays), and in your `onFocus`, `onBlur`, `onKeyDown` or `onKeyUp` it skips the
-     * field's own handler of that event, so in `onBlur` or on Enter the typed text is neither
+     * The hex text `<input>` (stable class `wave-color-picker-hex-field__input`; the field's
+     * `ref` reaches it as well). Locked: `type`, `value` (and, unset, `defaultValue`: the field
+     * controls the text), `id`, `maxLength`, `autoComplete`, the naming and validation
+     * attributes (`aria-label`, `aria-invalid`, `aria-errormessage`, `aria-details`,
+     * `aria-required`), `autoFocus`, `tabIndex` and the text-entry attributes the field routes to
+     * it (`inputMode`, `enterKeyHint`, `autoCapitalize`, `autoCorrect`, `spellCheck`); `name`,
+     * `form` and `required`, which it never sets (the picker submits the color under its own
+     * `name`, never the typed text); `hidden`, `inert` and `aria-hidden` (a focusable control is
+     * never hidden). Your handlers run first: `preventDefault()` in your `onChange` rejects the
+     * edit (the text stays), and in your `onFocus`, `onBlur`, `onKeyDown` or `onKeyUp` it skips
+     * the field's own handler of that event, so in `onBlur` or on Enter the typed text is neither
      * applied nor flagged.
      */
     input?: SlotPart<'input'>;
@@ -365,8 +382,8 @@ export const ColorPickerHexField = ({
   autoCapitalize,
   autoCorrect,
   spellCheck,
-  controlRef,
   className,
+  style,
   ref,
   slotProps,
   ...rest
@@ -404,7 +421,7 @@ export const ColorPickerHexField = ({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const mergedInputRef = useMergedRefs(
     inputRef,
-    controlRef,
+    ref,
     picker.registerHexInput,
     slotProps?.input?.ref,
   );
@@ -451,12 +468,21 @@ export const ColorPickerHexField = ({
     },
   );
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: cn(colorPickerHexFieldClassNames.root, 'flex min-w-0 flex-col gap-1', className),
+    style,
+    locked: {
+      // The field's own root props, over the part's; the root holds the input, so only they hide
+      // it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
-    <label
-      ref={ref}
-      className={cn(colorPickerHexFieldClassNames.root, 'flex min-w-0 flex-col gap-1', className)}
-      {...rest}
-    >
+    <label {...rootProps}>
       <span
         {...mergeSlotProps(slotProps?.label, {
           className: cn(

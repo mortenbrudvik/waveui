@@ -136,22 +136,34 @@ export interface SpinButtonBaseProps
    * appearances have none.
    */
   appearance?: InputAppearance;
-  /** Ref to the root `<div>`. */
-  ref?: React.Ref<HTMLDivElement>;
-  /** Ref to the `<input role="spinbutton">` (the focusable control). */
-  controlRef?: React.Ref<HTMLInputElement>;
   /**
-   * Props for the elements the SpinButton draws inside its root, by part, merged into each
-   * part's own (Fluent UI's `decrementButton`, `input` and `incrementButton` slot props): your
-   * classes after the part's (yours win a conflict), your styles over its styles, your handlers
-   * before its handlers (`preventDefault()` in yours skips the SpinButton's handling of the
-   * event, its own `on…` prop included, but never the work that ends a hold or tracks focus),
-   * your ref beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`.
-   * Every attribute the SpinButton sets on a part is locked and keeps the SpinButton's value
-   * (set it through its own props); you add the attributes it does not set. A part takes no
-   * `children`.
+   * Ref to the `<input role="spinbutton">`, the focusable control (Fluent UI's `ref`, on its
+   * primary element). The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
+  /**
+   * Props for the elements the SpinButton draws, by part, merged into each part's own (Fluent
+   * UI's `root`, `decrementButton`, `input` and `incrementButton` slot props): your classes after
+   * the part's (yours win a conflict), your styles over its styles, your handlers before its
+   * handlers (`preventDefault()` in yours skips the SpinButton's handling of the event, its own
+   * `on…` prop included, but never the work that ends a hold or tracks focus), your ref beside
+   * its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every attribute
+   * the SpinButton sets on a part is locked and keeps the SpinButton's value (set it through its
+   * own props); you add the attributes it does not set. A part takes no `children`.
    */
   slotProps?: {
+    /**
+     * The root `<div>` that draws the field around the step buttons and the input (stable class
+     * `wave-spin-button`), which the SpinButton's `className`, `style`, `data-*` and other root
+     * props reach as well; its `ref` is the way to the root, since the SpinButton's `ref` reaches
+     * the input. Your classes come after the SpinButton's `className`, your style over its
+     * `style`. Locked: every prop you give the SpinButton itself that reaches the root,
+     * `data-size`, `data-appearance`, and `hidden`, `inert` and `aria-hidden` (the SpinButton's
+     * own: the root holds the input). Your handlers run before the SpinButton's own root
+     * handlers (`preventDefault()` in yours skips them). The root passes no click to the input,
+     * so your `onClick` is called in every state, as the SpinButton's own `onClick` is.
+     */
+    root?: SlotPart<'div'>;
     /**
      * The − `<button>` (stable class `wave-spin-button__decrement-button`). Locked: `type`,
      * `tabIndex` (never a tab stop), `disabled` and `aria-label` (`labels.decrement`). Your
@@ -162,8 +174,8 @@ export interface SpinButtonBaseProps
     decrementButton?: SlotPart<'button'>;
     /**
      * The `<input role="spinbutton">`, the focusable control (stable class
-     * `wave-spin-button__input`; `controlRef` reaches it as well). Locked: `type`, `role`,
-     * `value` (and, unset, `defaultValue`: the SpinButton controls the text), `disabled`,
+     * `wave-spin-button__input`; the SpinButton's `ref` reaches it as well). Locked: `type`,
+     * `role`, `value` (and, unset, `defaultValue`: the SpinButton controls the text), `disabled`,
      * `readOnly`, `form`, the `aria-value*` attributes, `id`, the naming and Field attributes and
      * every other input prop routed to it (`placeholder`, `tabIndex`, `inputMode`, …), `name`
      * (the form submits the committed value under the SpinButton's own `name`, on its hidden
@@ -314,9 +326,9 @@ const stepButtonClass = cn(
  *   when that number is at `min`/`max`. Steps are rounded to the precision of `step` and of the
  *   value, so `0.1 + 0.2` is `0.3`; `precision` rounds every committed value, typed or stepped,
  *   to a fixed number of decimals instead, without padding it (pad with `displayValue`).
- * - **Routing**: `id`, ARIA, native input attributes and focus/keyboard handlers go to the
- *   `<input role="spinbutton">`; `className`, `style`, `data-*`, other handlers and `ref` stay on
- *   the root (`controlRef` reaches the input). Inside a `Field` it picks up the label, hint, error
+ * - **Routing**: `ref`, `id`, ARIA, native input attributes and focus/keyboard handlers go to the
+ *   `<input role="spinbutton">`; `className`, `style`, `data-*` and other handlers stay on the
+ *   root (`slotProps.root.ref` reaches it). Inside a `Field` it picks up the label, hint, error
  *   and required state automatically. It has no built-in name: pass `aria-label`/`aria-labelledby`
  *   or use a label (development warning otherwise).
  * - **Forms**: with `name` the committed value is submitted; `required` makes the input natively
@@ -372,9 +384,9 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     size: sizeProp,
     appearance: appearanceProp,
     className,
+    style,
     hidden,
     ref,
-    controlRef,
     slotProps,
     // Routed to the input (C-ROUTING)
     id,
@@ -592,7 +604,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   };
 
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const mergedInputRef = useMergedRefs(inputRef, controlRef, slotProps?.input?.ref);
+  const mergedInputRef = useMergedRefs(inputRef, ref, slotProps?.input?.ref);
 
   const field = useFieldContext();
   const isRequired = required ?? field?.required ?? false;
@@ -818,25 +830,33 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     },
   });
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: cn(
+      spinButtonClassNames.root,
+      'relative inline-flex items-center',
+      inputHeightClasses[size],
+      inputTextClasses[size],
+      inputAppearanceClasses[appearance],
+      inputFocusWithin,
+      invalidLook && inputInvalidWithin,
+      disabled && 'cursor-not-allowed opacity-50',
+      className,
+    ),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // The SpinButton's own root props, after the data attributes as in 0.18, and over the
+      // part's; the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
-    <div
-      ref={ref}
-      data-size={size}
-      data-appearance={appearance}
-      className={cn(
-        spinButtonClassNames.root,
-        'relative inline-flex items-center',
-        inputHeightClasses[size],
-        inputTextClasses[size],
-        inputAppearanceClasses[appearance],
-        inputFocusWithin,
-        invalidLook && inputInvalidWithin,
-        disabled && 'cursor-not-allowed opacity-50',
-        className,
-      )}
-      hidden={hidden}
-      {...rest}
-    >
+    <div {...rootProps}>
       <button
         // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
         type="button"

@@ -14,6 +14,7 @@ import {
   testSystemProps,
   testFocusEvents,
   testNoImplicitSubmit,
+  testRootPartRef,
   renderWithProviders,
   expectNoA11yViolations,
   asClientReference,
@@ -27,6 +28,15 @@ const ELEMENT_WARNING = /^\[WaveUI\] SearchBox: `dismiss` received a button elem
 /** A slot object whose `as` is a button, unwrapped (1.0: the button-object form is removed). */
 const SLOT_OBJECT_WARNING =
   /^\[WaveUI\] SearchBox: `dismiss` received a slot object that renders a button; its children render inside the built-in clear button and its props were dropped/;
+
+/** React's development error for an unknown prop that reaches a DOM element, as logged. */
+const UNKNOWN_PROP = (name: string) => [
+  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+    'accidentally passed it from a parent component, remove it from the DOM element.',
+  name,
+  name.toLowerCase(),
+];
 
 /** Asserts that `warn` logged exactly one message per pattern (in any order) and nothing else. */
 function expectWarnings(warn: { mock: { calls: unknown[][] } }, patterns: RegExp[]) {
@@ -47,7 +57,8 @@ describe('SearchBox', () => {
     expectedTag: 'div',
     displayName: 'SearchBox',
     defaultProps: { 'aria-label': 'Search' },
-    control: { role: 'searchbox' },
+    ref: 'control',
+    control: { role: 'searchbox', tag: 'input' },
     a11yVariants: [
       { name: 'with value (clear button)', props: { defaultValue: 'hello' } },
       { name: 'disabled', props: { disabled: true, defaultValue: 'hello' } },
@@ -55,16 +66,21 @@ describe('SearchBox', () => {
     conflictingClass: { className: 'w-64', overrides: 'w-full' },
   });
 
+  testRootPartRef(SearchBox, { props: { 'aria-label': 'Search' } });
+
   testFocusEvents(SearchBox, { 'aria-label': 'Search' }, 'input');
 
   testNoImplicitSubmit(SearchBox, { defaultProps: { 'aria-label': 'Search', defaultValue: 'x' } });
 
   describe('types', () => {
-    it('declares ref and controlRef in SearchBoxProps (C-REF, C-ROUTING)', () => {
-      expectTypeOf<SearchBoxProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
-      expectTypeOf<SearchBoxProps['controlRef']>().toEqualTypeOf<
+    it('declares ref (for the input) in SearchBoxProps, and no controlRef (C-REF, C-ROUTING)', () => {
+      expectTypeOf<SearchBoxProps['ref']>().toEqualTypeOf<
         React.Ref<HTMLInputElement> | undefined
       >();
+      expectTypeOf<SearchBoxProps>().not.toHaveProperty('controlRef');
+      const divRef = React.createRef<HTMLDivElement>();
+      // @ts-expect-error -- in 1.0 `ref` reaches the input; the root <div> is slotProps.root.ref
+      void (<SearchBox ref={divRef} />);
     });
 
     it("types dismiss as Slot<'span'>: no button-object form (removed in 1.0)", () => {
@@ -382,13 +398,13 @@ describe('SearchBox', () => {
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveFocus();
     });
 
-    it('focuses the input after clearing with a consumer controlRef', async () => {
+    it('focuses the input after clearing with a consumer ref', async () => {
       const user = userEvent.setup();
-      const controlRef = React.createRef<HTMLInputElement>();
-      render(<SearchBox aria-label="Search" defaultValue="abc" controlRef={controlRef} />);
+      const ref = React.createRef<HTMLInputElement>();
+      render(<SearchBox aria-label="Search" defaultValue="abc" ref={ref} />);
       await user.click(screen.getByRole('button', { name: 'Clear search' }));
-      expect(controlRef.current).toBe(screen.getByRole('searchbox', { name: 'Search' }));
-      expect(controlRef.current).toHaveFocus();
+      expect(ref.current).toBe(screen.getByRole('searchbox', { name: 'Search' }));
+      expect(ref.current).toHaveFocus();
     });
 
     it('has a 24px target beside the text, never over it (input-basic#20)', () => {
@@ -1584,12 +1600,13 @@ describe('SearchBox', () => {
       expect(onKeyUp).toHaveBeenCalledOnce();
     });
 
-    it('keeps ref on the root and exposes the input through controlRef', () => {
-      const ref = React.createRef<HTMLDivElement>();
-      const controlRef = React.createRef<HTMLInputElement>();
-      render(<SearchBox aria-label="Search" ref={ref} controlRef={controlRef} />);
-      expect(ref.current?.tagName.toLowerCase()).toBe('div');
-      expect(controlRef.current).toBe(screen.getByRole('searchbox', { name: 'Search' }));
+    it('gives ref the input and slotProps.root.ref the root', () => {
+      const ref = React.createRef<HTMLInputElement>();
+      const root = React.createRef<HTMLDivElement>();
+      render(<SearchBox aria-label="Search" ref={ref} slotProps={{ root: { ref: root } }} />);
+      expect(root.current?.tagName.toLowerCase()).toBe('div');
+      expect(ref.current).toBe(screen.getByRole('searchbox', { name: 'Search' }));
+      expect(root.current).toContainElement(ref.current);
     });
   });
 
@@ -1782,9 +1799,127 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   );
 });
 
+// 1.0 (Phase 14, R5): `ref` reaches the <input type="search">, the focusable control; the root
+// <div> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('SearchBox — ref reaches the control', () => {
+  const searchbox = (name = 'Search') => screen.getByRole('searchbox', { name });
+
+  it('focuses the searchbox through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(<SearchBox ref={ref} aria-label="Search" />);
+    act(() => ref.current?.focus());
+    expect(searchbox()).toHaveFocus();
+  });
+
+  it('gives ref and slotProps.input.ref the same input', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    const input = React.createRef<HTMLInputElement>();
+    render(<SearchBox ref={ref} aria-label="Search" slotProps={{ input: { ref: input } }} />);
+    expect(ref.current).toBe(searchbox());
+    expect(input.current).toBe(searchbox());
+  });
+
+  it('keeps the clear and its focus, the press on the field and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Form">
+        <SearchBox
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          aria-label="Search"
+          name="q"
+          defaultValue="abc"
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { container, rerender } = render(ui(0));
+    rerender(ui(1));
+    const input = searchbox();
+    expect(nodes.at(-1)).toBe(input);
+    // The clear button focuses the input through the SearchBox's own ref.
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+    rerender(ui(2));
+    // So does a press on the field outside the input.
+    act(() => input.blur());
+    expect(fireEvent.mouseDown(container.querySelector('[data-wave-icon="search"]')!)).toBe(false);
+    expect(input).toHaveFocus();
+    await user.type(input, 'xyz');
+    rerender(ui(3));
+    act(() => (screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).reset());
+    expect(input).toHaveValue('abc');
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<SearchBox ref={ref} aria-label="Search" />);
+    const input = searchbox();
+    rerender(<SearchBox ref={ref} aria-label="Search" defaultValue="abc" disabled />);
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <SearchBox ref={ref} aria-label="Search" />
+      </React.StrictMode>,
+    );
+    const input = searchbox();
+    rerender(
+      <React.StrictMode>
+        <SearchBox ref={ref} aria-label="Search" defaultValue="abc" />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderWithFieldContext(<SearchBox ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(searchbox(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <SearchBox
+          aria-label="Search"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the input
+          controlRef={controlRef}
+        />,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(searchbox().closest(`.${searchBoxClassNames.root}`)).toHaveAttribute(
+        'controlref',
+        '[object Object]',
+      );
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  });
+});
+
 describe('SearchBox — slotProps', () => {
   type SearchBoxSlotProps = NonNullable<SearchBoxProps['slotProps']>;
-  const EVERY_PART: SearchBoxSlotProps = { input: {}, dismissButton: {} };
+  const EVERY_PART: SearchBoxSlotProps = { root: {}, input: {}, dismissButton: {} };
   const clearButton = () => screen.getByRole('button', { name: 'Clear search' });
 
   it('renders the 0.17.1 parts without slotProps (opening tags, attributes sorted)', () => {
@@ -1822,6 +1957,18 @@ describe('SearchBox — slotProps', () => {
       },
       { 'aria-label': 'Search', defaultValue: 'query', readOnly: true },
       { 'aria-label': 'Search', dismiss: { className: 'my-icon' }, defaultValue: 'query' },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        'aria-label': 'Search',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+        onMouseDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -1866,12 +2013,12 @@ describe('SearchBox — slotProps', () => {
   it('puts your className, style, data-* and ref on each part, after its stable class and own classes', () => {
     const input = React.createRef<HTMLInputElement>();
     const dismissButton = React.createRef<HTMLButtonElement>();
-    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       <SearchBox
         aria-label="Search"
         defaultValue="query"
-        controlRef={controlRef}
+        ref={ref}
         slotProps={{
           input: {
             ref: input,
@@ -1890,7 +2037,7 @@ describe('SearchBox — slotProps', () => {
     );
     const searchbox = screen.getByRole('searchbox', { name: 'Search' });
     expect(input.current).toBe(searchbox);
-    expect(controlRef.current).toBe(searchbox);
+    expect(ref.current).toBe(searchbox);
     expect(dismissButton.current).toBe(clearButton());
     for (const [element, stable, mine, name] of [
       [searchbox, searchBoxClassNames.input, 'my-input', 'input'],
@@ -2173,7 +2320,10 @@ describe('SearchBox — slotProps', () => {
   });
 
   it('types each part for its element, and takes no children', () => {
-    expectTypeOf<keyof SearchBoxSlotProps>().toEqualTypeOf<'input' | 'dismissButton'>();
+    expectTypeOf<keyof SearchBoxSlotProps>().toEqualTypeOf<'root' | 'input' | 'dismissButton'>();
+    expectTypeOf<NonNullable<SearchBoxSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
     expectTypeOf<NonNullable<SearchBoxSlotProps['input']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLInputElement> | undefined
     >();
@@ -2182,5 +2332,169 @@ describe('SearchBox — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: `dismiss` fills the clear button
     void (<SearchBox slotProps={{ dismissButton: { children: 'Reset' } }} />);
+    // @ts-expect-error -- a part takes no children: the SearchBox draws its content
+    void (<SearchBox slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const control = () => screen.getByRole('searchbox', { name: 'Search', hidden: true });
+    const root = () => control().closest(`.${searchBoxClassNames.root}`) as HTMLElement;
+    const icon = () => root().querySelector('[data-wave-icon="search"]') as Element;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the SearchBox's className and style", () => {
+      render(
+        <SearchBox
+          aria-label="Search"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(searchBoxClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(control()).not.toHaveAttribute('data-part');
+      expect(control()).not.toHaveAttribute('title');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(<SearchBox aria-label="Search" slotProps={{ root: { className: 'items-start' } }} />);
+      expect(root()).toHaveClass('items-start');
+      expect(root()).not.toHaveClass('items-center');
+    });
+
+    it("keeps the props you give the SearchBox over the part's", () => {
+      render(
+        <SearchBox
+          aria-label="Search"
+          title="Own"
+          data-x="own"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <SearchBox
+          aria-label="Search"
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The SearchBox's own hidden state stays its own.
+      rerender(
+        <SearchBox
+          aria-label="Search"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before the SearchBox's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <SearchBox
+          aria-label="Search"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <SearchBox
+          aria-label="Search"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it("runs your onMouseDown first; preventDefault() in it skips the SearchBox's onMouseDown and the press that focuses the input", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <SearchBox
+          aria-label="Search"
+          onMouseDown={() => order.push('own')}
+          slotProps={{ root: { onMouseDown: () => order.push('part') } }}
+        />,
+      );
+      expect(fireEvent.mouseDown(icon())).toBe(false);
+      expect(order).toEqual(['part', 'own']);
+      expect(control()).toHaveFocus();
+      act(() => control().blur());
+      rerender(
+        <SearchBox
+          aria-label="Search"
+          onMouseDown={() => order.push('own')}
+          slotProps={{
+            root: {
+              onMouseDown: (event) => {
+                order.push('prevented');
+                event.preventDefault();
+              },
+            },
+          }}
+        />,
+      );
+      fireEvent.mouseDown(icon());
+      expect(order).toEqual(['part', 'own', 'prevented']);
+      expect(control()).not.toHaveFocus();
+    });
+
+    it('calls your root onClick in every state, as the SearchBox calls its own: the root passes no click to the input', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <SearchBox aria-label="Search" onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(icon());
+      rerender(
+        <SearchBox aria-label="Search" disabled onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(icon());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="query"
+          slotProps={{ root: { className: 'my-root', title: 'Search the docs' } }}
+        />,
+      );
+      await expectNoA11yViolations();
+    });
   });
 });
