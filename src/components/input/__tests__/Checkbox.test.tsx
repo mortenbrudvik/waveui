@@ -725,6 +725,84 @@ describe('Checkbox — native forms (C-FORMS)', () => {
   });
 });
 
+// Ruling BQ (the real-browser pass): Firefox and WebKit decide whether a <label> passes a click on
+// to the button it holds after the click's dispatch, from where the click's target is then. A
+// click on the glyph toggled the box, the glyph unmounted, and the label clicked the button again,
+// which toggled the box back. jsdom decides when the dispatch starts, as Chromium does, so these
+// tests play both steps of those engines: the hit test (an element out of pointer events, and its
+// children, pass the pointer to its parent) and the label's late check.
+describe('Checkbox — a click on the glyph toggles the box once (ruling BQ)', () => {
+  const NO_POINTER = '[class~="wave:pointer-events-none"]';
+  /** The element a pointer over `el` hits. */
+  const hitTarget = (el: Element): Element => el.closest(NO_POINTER)?.parentElement ?? el;
+  /** A click on `el` as Firefox and WebKit dispatch it inside a `<label>`. */
+  const clickAsFirefox = (el: Element) => {
+    const target = hitTarget(el);
+    const control = target.closest('label')?.querySelector('button') as HTMLButtonElement;
+    act(() => {
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    });
+    // The label's late check: a click whose target is no longer inside its button goes to it.
+    if (!control.contains(target)) act(() => control.click());
+  };
+  const glyph = () => screen.getByRole('checkbox').querySelector('path') as SVGPathElement;
+
+  it('unchecks on a click on the check glyph, and checks again on the box', () => {
+    const onCheckedChange = vi.fn();
+    render(<Checkbox label="Accept" defaultChecked onCheckedChange={onCheckedChange} />);
+    const states: (string | null)[] = [];
+    clickAsFirefox(glyph());
+    states.push(screen.getByRole('checkbox').getAttribute('aria-checked'));
+    clickAsFirefox(screen.getByRole('checkbox'));
+    states.push(screen.getByRole('checkbox').getAttribute('aria-checked'));
+    clickAsFirefox(glyph());
+    states.push(screen.getByRole('checkbox').getAttribute('aria-checked'));
+    expect(states).toEqual(['false', 'true', 'false']);
+    expect(onCheckedChange.mock.calls).toEqual([[false], [true], [false]]);
+  });
+
+  it('checks once on a click on the mixed glyph, which the check glyph replaces', () => {
+    const onCheckedChange = vi.fn();
+    function SelectAll() {
+      const [mixed, setMixed] = React.useState(true);
+      const [checked, setChecked] = React.useState(false);
+      return (
+        <Checkbox
+          label="All"
+          indeterminate={mixed}
+          checked={checked}
+          onCheckedChange={(next) => {
+            setMixed(false);
+            setChecked(next);
+            onCheckedChange(next);
+          }}
+        />
+      );
+    }
+    render(<SelectAll />);
+    expect(screen.getByRole('checkbox')).toHaveAttribute('aria-checked', 'mixed');
+    clickAsFirefox(glyph());
+    expect(onCheckedChange.mock.calls).toEqual([[true]]);
+    expect(screen.getByRole('checkbox')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it.each([
+    ['checked', { defaultChecked: true }],
+    ['mixed', { indeterminate: true }],
+    ['disabled', { defaultChecked: true, disabled: true }],
+    ['disabledFocusable', { defaultChecked: true, disabledFocusable: true }],
+    ['large', { defaultChecked: true, size: 'large' }],
+  ] as const)('takes the %s glyph out of hit testing, in either direction', (_, props) => {
+    for (const dir of ['ltr', 'rtl'] as const) {
+      const { unmount } = renderWithProviders(<Checkbox label="Accept" {...props} />, { dir });
+      const svg = screen.getByRole('checkbox', { hidden: true }).querySelector('svg');
+      expect(svg).toHaveClass('wave:pointer-events-none');
+      expect(hitTarget(glyph())).toBe(screen.getByRole('checkbox', { hidden: true }));
+      unmount();
+    }
+  });
+});
+
 describe('Checkbox — styling tokens', () => {
   it('draws the unchecked box with the accessible stroke and a 2px radius', () => {
     render(<Checkbox label="Accept" />);
@@ -1180,11 +1258,13 @@ describe('Checkbox — slotProps', () => {
 
   it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
     // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    // 1.0 (ruling BQ): the glyph's class list starts with the class that takes it out of hit
+    // testing, an intended markup change.
     expect(sortAttributes(renderToString(<Checkbox label="Accept" indeterminate />))).toBe(
       [
         '<label class="wave-checkbox wave:relative wave:inline-flex wave:items-start wave:gap-2 wave:select-none wave:cursor-pointer" data-label-position="after" data-shape="square" data-size="medium">',
         '<button aria-checked="mixed" aria-labelledby="checkbox-label-_R_0H1_" class="wave-checkbox__indicator wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:border wave:p-0 wave:transition-colors wave:motion-reduce:transition-none wave:h-[18px] wave:w-[18px] wave:rounded-xs wave:mt-px wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:border-primary wave:bg-primary wave:text-primary-foreground wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]" id="checkbox-_R_0_" role="checkbox" type="button">',
-        '<svg aria-hidden="true" class="wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none" data-wave-icon="subtract" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+        '<svg aria-hidden="true" class="wave:pointer-events-none wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none" data-wave-icon="subtract" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
         '<path d="M2.5 6h7">',
         '</path>',
         '</svg>',

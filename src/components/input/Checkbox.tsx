@@ -26,6 +26,14 @@ const disabledCheckedBox = 'wave:forced-colors:border-[GrayText] wave:forced-col
 const disabledGlyph =
   'wave:forced-colors:text-[GrayText] wave:forced-colors:forced-color-adjust-none';
 
+/**
+ * The glyphs take no pointer events, so a click on one targets the box. A glyph is drawn only while
+ * the box is checked or mixed: a click on it would toggle the box, which then draws the other glyph
+ * or none, and Firefox and WebKit, finding the click's target gone from the box, have the label
+ * pass the same click to the box again, which toggles it back.
+ */
+const glyphBase = 'wave:pointer-events-none';
+
 /** The handlers a part drops while the checkbox is unavailable: it does not activate then. */
 const BLOCK_CLICK = ['onClick'] as const;
 
@@ -315,7 +323,7 @@ export const Checkbox = ({
   // Focusable-disabled wins over `disabled`: the box stays focusable but looks and acts disabled.
   const unavailable = disabled || disabledFocusable;
   // The glyph is the forced-colors leaf; the box stays on system colors (see `checkedBox`).
-  const glyphClassName = unavailable ? disabledGlyph : forcedColors.selectedLeaf;
+  const glyphClassName = wcn(glyphBase, unavailable ? disabledGlyph : forcedColors.selectedLeaf);
   const labelProps = mergeSlotProps(slotProps?.label, {
     className: wcn(checkboxClassNames.label, 'wave:text-body-1 wave:text-foreground'),
     // The text names the control through aria-labelledby: an aria-label would replace it.

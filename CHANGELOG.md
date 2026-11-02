@@ -108,6 +108,7 @@ Every row of the 1.0 inventory of 0.18 is done (84 rows: the 61 removals below, 
 
 - **Overflow keeps an item's last visible size while the item is hidden from outside it.** It kept the size only while the measured element itself carried the hidden marker, and read 0 otherwise (an element inside `display: none` measures 0). Now it also keeps it while an element around the measured one carries the marker: a control in `Overflow.Item asChild`, whose root carries it (see `ref` placement), can stay hidden instead of measuring 0, fitting and being shown again in a loop, and an `Overflow` nested in a hidden item keeps its items' sizes instead of reading them as 0 wide.
 - The README's custom overlays sample, which did not type-check in 0.18.1, types its props and refs.
+- **A click on a Checkbox's glyph toggles it once in Firefox and WebKit** (present in 0.18.1). A click on the check or the mixed glyph of a checked Checkbox toggled it, the glyph left the box, and those engines, finding the click's target gone, had the label pass the same click to the box again, which toggled it back: a checked Checkbox could not be unchecked by a click on the centre of its check, and inside `Popover.Trigger` or `Menu.Trigger` it opened the surface and closed it again. The glyphs now take no pointer events (a class at the start of their class list), so the click's target is the box, which stays. Chromium was not affected, nor were Switch and the native checkboxes.
 
 ### Size
 
