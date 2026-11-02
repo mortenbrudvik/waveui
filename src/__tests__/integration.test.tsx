@@ -250,12 +250,11 @@ import * as flatTreeContext from '../components/layout/FlatTree.context';
 import * as tokensCore from '../lib/tokens';
 import * as waveTokensModule from '../lib/waveTokens';
 import * as brandModule from '../lib/brand';
-// The 0.18 modules: their public values reach the barrel, their seams do not, and the two modules
-// that only the tests read reach nothing.
+// The 0.18 modules: their public values reach the barrel, their seams do not, and the module
+// that only the tests read reaches nothing.
 import * as slotPropsModule from '../lib/slotProps';
 import * as nativePropsModule from '../lib/nativeProps';
 import * as slotPartsModule from '../lib/slotParts';
-import * as deprecationsModule from '../lib/deprecations';
 import * as radioGroupContextModule from '../components/input/RadioGroup.context';
 import * as menuHooksModule from '../components/navigation/Menu.hooks';
 import * as messageBarContextModule from '../components/feedback/MessageBar.context';
@@ -741,7 +740,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       ...Object.keys(slotPropsModule),
       ...Object.keys(nativePropsModule),
       ...Object.keys(slotPartsModule),
-      ...Object.keys(deprecationsModule),
       ...Object.keys(radioGroupContextModule),
       ...Object.keys(menuHooksModule),
       ...Object.keys(messageBarContextModule),
@@ -749,7 +747,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     ].filter((name) => !publicNames.includes(name));
     expect(internal.sort()).toEqual([
       'BUTTON_PART_LOCKS',
-      'DEPRECATIONS',
       'HIDDEN_PART_LOCKS',
       'MessageBarContext',
       'NAMED_SLOT_PARTS',

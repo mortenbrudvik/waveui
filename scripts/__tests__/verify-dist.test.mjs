@@ -4545,7 +4545,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     const files = goodFiles();
     expect(CUSTOMIZATION_MODULES.filter((path) => !(`dist/${path}` in files))).toEqual([]);
 
-    expect(TEST_ONLY_MODULES).toEqual(['lib/deprecations', 'lib/slotParts']);
+    expect(TEST_ONLY_MODULES).toEqual(['lib/slotParts']);
     const sources = readdirSync(join(repoRoot, 'src'), { recursive: true })
       .map((path) => String(path).replaceAll('\\', '/'))
       .filter((path) => /\.tsx?$/.test(path) && !/(^|\/)__tests__\//.test(path))
@@ -4897,14 +4897,12 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     const { dist } = fixture({
       'dist/lib/slotParts.mjs': 'export const SLOT_PROPS_KEYS = {};\n',
       'dist/lib/slotParts.mjs.map': '{}\n',
-      'dist/lib/deprecations.mjs': 'export const DEPRECATIONS = [];\n',
       // Only a module of that name counts, not one whose name starts like it.
       'dist/lib/slotPartsGuide.mjs': 'export const guide = 1;\n',
     });
     const reason = (module) =>
       `is in dist: ${module} is read by the tests only (no module of the package may import it)`;
     expect(checkTestOnlyModules(dist)).toEqual([
-      `lib/deprecations.mjs ${reason('lib/deprecations')}`,
       `lib/slotParts.mjs ${reason('lib/slotParts')}`,
       `lib/slotParts.mjs.map ${reason('lib/slotParts')}`,
     ]);
@@ -5077,7 +5075,6 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       'src/lib/slotProps.ts',
       'src/lib/nativeProps.ts',
       'src/lib/slotParts.ts',
-      'src/lib/deprecations.ts',
       'src/components/input/RadioGroup.context.ts',
       'src/components/navigation/Menu.hooks.ts',
       'src/components/feedback/MessageBar.context.ts',
@@ -5131,10 +5128,6 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     expect([...moduleOnly].sort()).toEqual([
       'BUTTON_PART_LOCKS',
       'ClassNameConstant',
-      'DEPRECATIONS',
-      'Deprecation',
-      'DeprecationAbsence',
-      'DeprecationKind',
       'HIDDEN_PART_LOCKS',
       'MessageBarContext',
       'NAMED_SLOT_PARTS',

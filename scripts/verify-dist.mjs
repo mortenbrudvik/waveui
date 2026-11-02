@@ -879,12 +879,11 @@ export const INCLUSION_PROBES_0_18 = [
 
 /**
  * Modules of `src/lib` that only the tests read, so the package holds no file of theirs (0.18):
- * the completeness gate's lists of the parts (`lib/slotParts`) and the inventory of the 1.0
- * removals (`lib/deprecations`). No module of the package imports them ({@link
- * checkTestOnlyModules}); their names are also on {@link MODULE_ONLY_NAMES}, so neither roll-up
- * exports one as a type.
+ * the completeness gate's lists of the parts (`lib/slotParts`). No module of the package imports
+ * one ({@link checkTestOnlyModules}); its names are also on {@link MODULE_ONLY_NAMES}, so neither
+ * roll-up exports one as a type.
  */
-export const TEST_ONLY_MODULES = ['lib/deprecations', 'lib/slotParts'];
+export const TEST_ONLY_MODULES = ['lib/slotParts'];
 
 /** The externals of a component's closure: `cn`'s two dependencies and React. */
 const COMPONENT_EXTERNALS = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
@@ -1094,7 +1093,7 @@ export const INCLUSION_PROBES_0_11 = [
  * the parts (`HIDDEN_PART_LOCKS`, `composeAfterPart`, the locks of each component family, …),
  * the lists of `getNativeElementProps`, the context objects and item state behind the public
  * hooks (`RadioGroupContext`, `MessageBarContext`, `MenuListElementContext`, …), the slot seams
- * of render-function children (`resolveWiredSlot`), and every export of the two modules that
+ * of render-function children (`resolveWiredSlot`), and every export of the module that
  * only the tests read ({@link TEST_ONLY_MODULES}), so neither roll-up exports one as a type. The
  * roll-up declares `TokenVariable` and `WAVE_TOKEN_NAMES` without exporting them (the exported
  * `waveTokens` and `WaveTokenName` refer to them), which the check accepts.
@@ -1117,7 +1116,6 @@ export const MODULE_ONLY_NAMES = [
   'DEFAULT_MIN_COLUMN_WIDTH',
   'DEFAULT_SELECTION_HEADER_LABEL',
   'DEFAULT_SELECT_ALL_LABEL',
-  'DEPRECATIONS',
   'DataGridColumnResizeHandle',
   'DataGridColumnSizing',
   'DataGridContext',
@@ -1147,9 +1145,6 @@ export const MODULE_ONLY_NAMES = [
   'DataGridWindowRow',
   'DataGridWindowRowContext',
   'DataGridWindowState',
-  'Deprecation',
-  'DeprecationAbsence',
-  'DeprecationKind',
   'DrawerCloseButton',
   'DrawerCloseButtonProps',
   'DrawerContext',
