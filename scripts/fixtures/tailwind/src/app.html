@@ -1,12 +1,20 @@
 <!doctype html>
 <!--
-  The consumer's own source. Its utility (p-4) proves Tailwind's automatic source detection ran;
-  Wave's component classes (bg-primary, text-body-1) appear only in the package's dist, so they
-  prove the @source of @mortenbrudvik/waveui/tailwind scanned it. The motion utilities
-  (duration-wave-normal, ease-wave-decelerate-mid) prove the Wave theme exposes the motion tokens.
+  The consumer's own source. Its utility (p-4) proves Tailwind's automatic source detection ran.
+  The namespaced token utilities (bg-wave-primary, text-wave-body-1, border-wave-border,
+  shadow-wave-4, font-wave) and the motion utilities (duration-wave-normal,
+  ease-wave-decelerate-mid) prove the Wave theme keys of ./tokens reach the app's build, and
+  wave-rtl:rotate-180, a class no component uses, that the app's build has Wave's direction
+  variant. Wave's component classes (bg-primary, text-body-1) appear only in the package, so in a
+  ./tailwind build they prove the precompiled dist/components.css was imported, never scanned.
 -->
 <html lang="en">
   <body>
     <main class="p-4 duration-wave-normal ease-wave-decelerate-mid">Consumer content</main>
+    <p
+      class="bg-wave-primary text-wave-body-1 border-wave-border shadow-wave-4 font-wave wave-rtl:rotate-180"
+    >
+      Consumer content in Wave's tokens
+    </p>
   </body>
 </html>

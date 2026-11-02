@@ -45,9 +45,11 @@ const allClassStrings: Array<[string, string]> = [
 
 const classesOf = (value: string) => value.split(/\s+/).filter(Boolean);
 
-// Vitest empties `*.css?raw` imports (CSS processing is off), so the ramp is read from disk.
-const TOKENS_CSS = readFileSync(
-  join(import.meta.dirname, '..', '..', '..', 'styles', 'tokens.css'),
+// Vitest empties `*.css?raw` imports (CSS processing is off), so the ramp is read from disk: from
+// theme.css, the internal theme the components' classes compile against (tokens.css holds only
+// the namespaced keys apps use, `--text-wave-*`).
+const THEME_CSS = readFileSync(
+  join(import.meta.dirname, '..', '..', '..', 'styles', 'theme.css'),
   'utf8',
 );
 
@@ -69,7 +71,7 @@ interface FontSize {
 
 /**
  * The font size a single class sets, or `undefined` when it sets none: a type-ramp token
- * (`text-body-2`, resolved from its `--text-*` declaration in tokens.css), an arbitrary px size
+ * (`text-body-2`, resolved from its `--text-*` declaration in theme.css), an arbitrary px size
  * (`text-[18px]`, optionally with a px line height `/[24px]`) or a Tailwind default rem size.
  */
 function fontSizeOfClass(cls: string): FontSize | undefined {
@@ -81,7 +83,7 @@ function fontSizeOfClass(cls: string): FontSize | undefined {
   if (!token) return undefined;
   const declaration = new RegExp(
     `(?:^|[\\s;{])--text-${token[1]}:\\s*(\\d+(?:\\.\\d+)?)(px|rem);`,
-  ).exec(TOKENS_CSS);
+  ).exec(THEME_CSS);
   if (!declaration) return undefined;
   const value = Number(declaration[1]);
   return declaration[2] === 'px' ? { px: value, unit: 'px' } : { px: value * 16, unit: 'rem' };

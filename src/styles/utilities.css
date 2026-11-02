@@ -1,0 +1,18 @@
+/*
+ * Build input of `dist/utilities.css` (`@mortenbrudvik/waveui/utilities`), compiled by
+ * `scripts/build-css.mjs`, which appends the class list: for every namespaced theme key of
+ * tokens.css its utilities, without variants (a color: the background, text, border, ring, fill
+ * and stroke colors, `bg-wave-primary`; a step of the type ramp: `text-wave-body-1`; a shadow
+ * level: `shadow-wave-4`; a font family: `font-wave`; an animation: `animate-wave-spin`). The
+ * token utilities for apps without Tailwind, next to `./styles`, which declares the tokens they
+ * read.
+ *
+ * - `reference`: the namespaced `@theme inline` keys of tokens.css resolve the classes, but none
+ *   of its rules is emitted (the tokens come from `./styles`), and no theme variable either.
+ * - `layer(utilities)`: every class sits in `@layer utilities`, so any unlayered rule of the app
+ *   wins over it.
+ * - `source(none)`: nothing is scanned; the classes are exactly the appended list.
+ */
+
+@import './tokens.css' reference;
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);

@@ -4,8 +4,9 @@
  * way `npm publish` would and installs it into throwaway copies of the consumer fixtures in
  * `scripts/fixtures/`. Run it after `npm run build` (`prepublishOnly` does).
  *
- *   tarball   every `exports` target is packed (and the style sources they `@import`); no tests,
- *             stories, component sources or scripts are.
+ *   tarball   every `exports` target is packed (and every file the style sources `@import`,
+ *             `dist/components.css` of `./tailwind` included); no tests, stories, component
+ *             sources or scripts are.
  *   plain     an app without Tailwind (scripts/fixtures/plain):
  *               - `import()` (smoke.mjs) and `require()` (smoke.cjs: the package ships ES modules
  *                 only, and `require(esm)` loads the entry on Node.js 22.12 and later) load the
@@ -18,7 +19,9 @@
  *                 `.text-body-1`, `--wave-primary`, `@keyframes wave-spin` and the native
  *                 reset scoped to `.wave-root`/`.wave-portal`, no `@layer` other than Tailwind's
  *                 `properties` fallback, no raw Tailwind directives; `./preflight.css` is
- *                 Preflight;
+ *                 Preflight; `./utilities` holds the namespaced token utilities
+ *                 (`.bg-wave-primary`, `.text-wave-body-1`, `.shadow-wave-4`, …) in
+ *                 `@layer utilities`, without tokens, variants or component classes;
  *               - TypeScript type-checks two programs, both loading `dist/index.d.ts`: an `.mts`
  *                 file under `module` node16 (tsconfig.json) and a `.cts` file under `module`
  *                 node20 (tsconfig.cjs.json; the CommonJS file `require()`s the ES entry, which
@@ -27,16 +30,25 @@
  *                 emitted CSS passes the `./styles` checks, and every `wave-rtl:` class of the
  *                 dist keeps Wave's direction variant. Vite minifies CSS with Lightning CSS for
  *                 its default target (Chrome 111), which rewrites a bare `:dir(rtl)` to a
- *                 `:lang()` list that a page setting only `dir` never matches.
+ *                 `:lang()` list that a page setting only `dir` never matches;
+ *               - an app importing `./utilities.css` (`utilities-entry.js`) built with Vite's
+ *                 defaults: the emitted CSS passes the `./utilities` checks.
  *   tailwind  a Tailwind 4 app (scripts/fixtures/tailwind) compiling, with @tailwindcss/cli,
- *               - `input.css`: `@import 'tailwindcss'; @import '@mortenbrudvik/waveui/tailwind';`.
- *                 The component classes are generated from the package's `dist` (its `wave-rtl:`
- *                 classes with the direction variant the entry defines), Wave's tokens sit in
- *                 `@layer theme` and its base rules in `@layer base`, and the app's own utilities
- *                 are still generated;
- *               - `tokens-input.css`: a custom setup on `./tokens` (in `layer(theme)`) with
- *                 `./variants.css` and its own `@source` for the package's `dist`, without Wave's
- *                 base: the same checks except the base rules;
+ *               - `input.css`: `@import 'tailwindcss'; @import '@mortenbrudvik/waveui/tailwind';`
+ *                 and the app's own token override in `@layer base`. Nothing of the package is
+ *                 scanned (no `@source` of `dist`): the component classes come precompiled from
+ *                 `dist/components.css` and sit in `@layer components` only (never generated
+ *                 into `utilities`), with the dist's `wave-rtl:` classes compiled with the
+ *                 direction variant; Wave's tokens sit in `@layer theme`, the app's override in
+ *                 `@layer base`, Wave's base rules in `@layer base`, and the layers come in the
+ *                 order theme, base, components, utilities, so the override and every utility
+ *                 of the app win; the app's own classes are generated from the namespaced theme
+ *                 keys (`bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`, `font-wave`,
+ *                 the motion utilities) and its own `wave-rtl:` class with the variant;
+ *               - `tokens-input.css`: the custom setup, `./tokens` (in `layer(theme)`) with
+ *                 `./variants.css` for the app's own classes (the components come from
+ *                 `./styles`): tokens in `@layer theme`, the app's classes generated as above,
+ *                 and no component class;
  *               - `input.css` built by an app with Vite's defaults and @tailwindcss/vite: the
  *                 checks of `input.css`, and the `wave-rtl:` classes as for the plain fixture.
  *
@@ -90,6 +102,8 @@ export const EXPORTED_SUBPATHS = [
   './styles',
   './styles.css',
   './preflight.css',
+  './utilities',
+  './utilities.css',
   './tailwind',
   './tailwind.css',
   './tokens',
@@ -102,6 +116,7 @@ export const EXPORTED_SUBPATHS = [
 /** Subpaths that must resolve to the same file. */
 const ALIASES = [
   ['./styles', './styles.css'],
+  ['./utilities', './utilities.css'],
   ['./tailwind', './tailwind.css'],
   ['./tokens', './tokens.css'],
   ['./variants', './variants.css'],
@@ -144,8 +159,10 @@ function isStyleRule(node) {
 
 /**
  * The tarball's file list (paths relative to the package root): every export target is packed,
- * and so is every style source a packed `src/styles` target `@import`s; tests, stories,
- * component sources and scripts are not. `readSource` reads a source file of this repository.
+ * and so is every file a packed `src/styles` target `@import`s, transitively through the style
+ * sources (a built file it imports, `./tailwind`'s `dist/components.css`, must be packed; it is
+ * not read, so this runs before a build); tests, stories, component sources and scripts are not.
+ * `readSource` reads a style source of this repository.
  */
 export function checkPackedFiles(
   paths,
@@ -185,8 +202,9 @@ export function checkPackedFiles(
     seen.add(path);
     for (const match of readSource(path).matchAll(/@import\s+(["'])(\.{1,2}\/[^"']+)\1/g)) {
       const imported = posix.join(posix.dirname(path), match[2]);
-      if (packed.has(imported)) queue.push(imported);
-      else errors.push(`${path} @imports ${imported}, which is not in the tarball`);
+      if (!packed.has(imported)) {
+        errors.push(`${path} @imports ${imported}, which is not in the tarball`);
+      } else if (imported.startsWith('src/styles/')) queue.push(imported);
     }
   }
   return errors;
@@ -237,81 +255,260 @@ export function checkPlainCss(css) {
 /** Utilities of the exported focus recipes (`focusRing`, `focusRingInset`), which apps compose. */
 const FOCUS_RECIPE_UTILITIES = ['focus-visible:outline-ring', 'focus-visible:-outline-offset-2'];
 
+/**
+ * Classes of the components that the Tailwind fixture's own source never uses: in a `./tailwind`
+ * build they come from `dist/components.css` alone.
+ */
+const COMPONENT_UTILITIES = ['bg-primary', 'text-body-1', ...FOCUS_RECIPE_UTILITIES];
+
 /** Wave motion utilities used by the Tailwind fixture's own source (`src/app.html`). */
 const MOTION_UTILITIES = ['duration-wave-normal', 'ease-wave-decelerate-mid'];
 
 /**
- * A Tailwind consumer build (repo-level#1): Wave's tokens in `@layer theme`, the component classes
- * generated from the package's `dist`, each of `directionClasses` (the `wave-rtl:` classes of the
- * dist's class strings) compiled with Wave's `wave-rtl` variant, the consumer's own utilities,
- * and the Wave motion utilities the fixture's own source uses (`duration-wave-normal`,
- * `ease-wave-decelerate-mid`: the theme maps the motion tokens for Tailwind builds). `setup`
- * names the build: `'tailwind'` (default) imports the complete
- * `./tailwind` entry, which also puts Wave's base rules in `@layer base`; `'tokens'` is a custom
- * setup on `./tokens` with `./variants.css` and its own `@source`, which brings its own base. Any
- * other `setup` throws a `TypeError`.
+ * Namespaced token utilities used by the Tailwind fixture's own source (`src/app.html`): the
+ * theme keys of `./tokens` generate them in an app's build.
  */
-export function checkTailwindCss(css, { directionClasses = [], setup = 'tailwind' } = {}) {
+const NAMESPACED_APP_UTILITIES = [
+  'bg-wave-primary',
+  'text-wave-body-1',
+  'border-wave-border',
+  'shadow-wave-4',
+  'font-wave',
+];
+
+/** The fixture source's own use of Wave's direction variant, a class no component uses. */
+export const APP_DIRECTION_CLASS = 'wave-rtl:rotate-180';
+
+/** The layers of a `./tailwind` build, in the order they must be declared. */
+const LAYER_ORDER = ['theme', 'base', 'components', 'utilities'];
+
+/** The top-level layers of a stylesheet in the order of their first statement or block. */
+function layerOrder(nodes) {
+  const order = [];
+  for (const node of nodes) {
+    if (!/^@layer\b/.test(node.prelude)) continue;
+    for (const name of node.prelude.slice('@layer'.length).split(',')) {
+      const layer = name.trim();
+      if (layer && !order.includes(layer)) order.push(layer);
+    }
+  }
+  return order;
+}
+
+/** The value of a declaration node (`--wave-primary: #c4314b` -> `#c4314b`), lowercased. */
+function declaredValue(node) {
+  return node.prelude
+    .slice(node.prelude.indexOf(':') + 1)
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * A Tailwind consumer build (repo-level#1; Phase 14 spec R6). `setup` names the build:
+ *
+ * - `'tailwind'` (default): the `./tailwind` entry. Wave's tokens (`--wave-primary`) sit in
+ *   `@layer theme` and its base rules (`.wave-root`) in `@layer base`; the component classes
+ *   (`.bg-primary`, `.text-body-1`, the focus recipes' utilities) come from the precompiled
+ *   `dist/components.css` and sit in `@layer components` only: one in `utilities` means Tailwind
+ *   scanned the package's dist, which the entry no longer does; each of `directionClasses` (the
+ *   `wave-rtl:` classes of the dist's class strings) is compiled with Wave's direction variant;
+ *   the layers are declared in the order theme, base, components, utilities; and `tokenOverride`,
+ *   when given, is the value of the app's own `--wave-primary` override, which must sit in
+ *   `@layer base` (after `theme`, so it wins over Wave's tokens).
+ * - `'tokens'`: the custom setup on `./tokens` and `./variants.css` for the app's own classes;
+ *   the components come from `./styles`, so no component class is in the build at all.
+ *
+ * Both: the app's own classes are generated, `.p-4`, the namespaced token utilities and the
+ * motion utilities from the theme keys of `./tokens`, and `APP_DIRECTION_CLASS` with Wave's
+ * direction variant. Any other `setup` throws a `TypeError`.
+ */
+export function checkTailwindCss(
+  css,
+  { directionClasses = [], setup = 'tailwind', tokenOverride } = {},
+) {
   if (setup !== 'tailwind' && setup !== 'tokens') {
     throw new TypeError(
       `checkTailwindCss: unknown setup ${JSON.stringify(setup)} (expected 'tailwind' or 'tokens')`,
     );
   }
   const errors = [];
+  const nodes = parseCss(css);
   const tokenLayers = new Set();
+  const overrideLayers = new Set();
   const baseLayers = new Set();
-  visit(parseCss(css), (node, ancestors) => {
-    if (declares(node, '--wave-primary')) tokenLayers.add(layerOf(ancestors) ?? '<unlayered>');
-    if (isStyleRule(node) && /\.wave-root\b/.test(node.prelude)) {
-      baseLayers.add(layerOf(ancestors) ?? '<unlayered>');
+  /** Every class of a style rule, with the layers its rules sit in. */
+  const classLayers = new Map();
+  visit(nodes, (node, ancestors) => {
+    const layer = layerOf(ancestors) ?? '<unlayered>';
+    if (declares(node, '--wave-primary')) {
+      const isOverride =
+        tokenOverride !== undefined && declaredValue(node) === tokenOverride.toLowerCase();
+      (isOverride ? overrideLayers : tokenLayers).add(layer);
+    }
+    if (!isStyleRule(node) || ancestors.some((parent) => parent.prelude.startsWith('@keyframes'))) {
+      return;
+    }
+    if (/\.wave-root\b/.test(node.prelude)) baseLayers.add(layer);
+    for (const name of selectorClasses(`${node.prelude}{}`)) {
+      if (!classLayers.has(name)) classLayers.set(name, new Set());
+      classLayers.get(name).add(layer);
     }
   });
+  const layersOf = (name) => [...(classLayers.get(name) ?? [])];
+
   if (tokenLayers.size === 0) errors.push('missing the Wave token --wave-primary');
   else if ([...tokenLayers].some((layer) => layer !== 'theme')) {
     errors.push(
       `Wave tokens (--wave-primary) must sit in @layer theme, found in ${[...tokenLayers].join(', ')}`,
     );
   }
-  // The custom setup on ./tokens brings its own base styles; the ./tailwind entry brings Wave's.
+
   if (setup === 'tailwind') {
+    const order = layerOrder(nodes).filter((layer) => LAYER_ORDER.includes(layer));
+    if (order.join(',') !== LAYER_ORDER.join(',')) {
+      errors.push(
+        `the layers must come in the order ${LAYER_ORDER.join(', ')} (found ${order.join(', ') || 'none'})`,
+      );
+    }
+    if (tokenOverride !== undefined) {
+      if (overrideLayers.size === 0) {
+        errors.push(`missing the app's token override (--wave-primary: ${tokenOverride})`);
+      } else if ([...overrideLayers].some((layer) => layer !== 'base')) {
+        errors.push(
+          `the app's token override must sit in @layer base, found in ${[...overrideLayers].join(', ')}`,
+        );
+      }
+    }
     if (baseLayers.size === 0) errors.push('missing the Wave base rules (.wave-root)');
     else if ([...baseLayers].some((layer) => layer !== 'base')) {
       errors.push(
         `Wave base rules (.wave-root) must sit in @layer base, found in ${[...baseLayers].join(', ')}`,
       );
     }
-  }
-  const classes = selectorClasses(css);
-  for (const name of ['bg-primary', 'text-body-1', ...FOCUS_RECIPE_UTILITIES]) {
-    if (!classes.has(name)) {
+    for (const name of COMPONENT_UTILITIES) {
+      const layers = layersOf(name);
+      if (layers.length === 0) {
+        errors.push(
+          `the component class .${name} is missing (does @mortenbrudvik/waveui/tailwind import dist/components.css?)`,
+        );
+      } else if (layers.includes('utilities')) {
+        errors.push(
+          `the component class .${name} was generated into @layer utilities: Tailwind scanned ` +
+            "the package's dist (./tailwind has no @source)",
+        );
+      } else if (layers.some((layer) => layer !== 'components')) {
+        errors.push(
+          `the component class .${name} must sit in @layer components, found in ${layers.join(', ')}`,
+        );
+      }
+    }
+    const uncompiled = missingDirectionVariant(css, directionClasses);
+    if (uncompiled.length > 0) {
       errors.push(
-        `the component class .${name} was not generated (the package's dist was not scanned)`,
+        `the dist classes ${uncompiled.slice(0, 10).join(' ')} were not compiled with Wave's ` +
+          'wave-rtl variant (is dist/components.css compiled with src/styles/variants.css?)',
+      );
+    }
+  } else {
+    const components = COMPONENT_UTILITIES.filter((name) => classLayers.has(name));
+    if (components.length > 0) {
+      errors.push(
+        `the component classes ${components.map((name) => `.${name}`).join(', ')} are in the ` +
+          'custom setup (its components come from ./styles: ./tokens must hold no unnamespaced ' +
+          "theme key, and the setup must not scan the package's dist)",
       );
     }
   }
-  const motion = MOTION_UTILITIES.filter((name) => !classes.has(name));
+
+  const namespaced = NAMESPACED_APP_UTILITIES.filter((name) => !classLayers.has(name));
+  if (namespaced.length > 0) {
+    errors.push(
+      `the namespaced token utilities ${namespaced.map((name) => `.${name}`).join(', ')} were ` +
+        'not generated (the namespaced theme keys of @mortenbrudvik/waveui/tokens are missing)',
+    );
+  }
+  const motion = MOTION_UTILITIES.filter((name) => !classLayers.has(name));
   if (motion.length > 0) {
     errors.push(
       `the motion utilities ${motion.map((name) => `.${name}`).join(', ')} were not generated ` +
         "(the Wave theme's --transition-duration-wave-* and --ease-wave-* mappings are missing)",
     );
   }
-  const uncompiled = missingDirectionVariant(css, directionClasses);
-  if (uncompiled.length > 0) {
+  if (missingDirectionVariant(css, [APP_DIRECTION_CLASS]).length > 0) {
     const hint =
       setup === 'tailwind'
         ? 'does @mortenbrudvik/waveui/tailwind import variants.css?'
         : 'does the setup import @mortenbrudvik/waveui/variants.css?';
     errors.push(
-      `the dist classes ${uncompiled.slice(0, 10).join(' ')} were not compiled with Wave's ` +
-        `wave-rtl variant (${hint})`,
+      `the app's class ${APP_DIRECTION_CLASS} was not compiled with Wave's wave-rtl variant (${hint})`,
     );
   }
-  if (!classes.has('p-4')) {
+  if (!classLayers.has('p-4')) {
     errors.push(
       "the consumer utility .p-4 was not generated (the fixture's own sources were not scanned)",
     );
   }
+  return errors;
+}
+
+/** Representatives of every kind of the namespaced token utilities of `./utilities`. */
+const UTILITIES_SAMPLE = [
+  'bg-wave-primary',
+  'text-wave-foreground',
+  'border-wave-border',
+  'ring-wave-ring',
+  'fill-wave-palette-red',
+  'stroke-wave-brand-80',
+  'text-wave-body-1',
+  'shadow-wave-4',
+  'font-wave',
+  'font-wave-mono',
+  'animate-wave-spin',
+];
+
+/** A namespaced token utility without a variant (`bg-wave-primary`, `font-wave`). */
+const NAMESPACED_UTILITY =
+  /^(?:bg|text|border|ring|fill|stroke|shadow|font|animate)-wave(?:-[\w-]+)?$/;
+
+/**
+ * The `./utilities` stylesheet (Phase 14 spec R6), or an app's build of it: the namespaced token
+ * utilities (`UTILITIES_SAMPLE`) in `@layer utilities` (Tailwind's `properties` fallback aside),
+ * no other class (no variant, no component class), no token declaration (the tokens come from
+ * `./styles`), no raw Tailwind directive, and the `@keyframes wave-spin` of `animate-wave-spin`.
+ */
+export function checkUtilitiesCss(css) {
+  const errors = [];
+  const outside = [];
+  let tokenFound = false;
+  let keyframesFound = false;
+  visit(parseCss(css), (node, ancestors) => {
+    if (TAILWIND_DIRECTIVE.test(node.prelude)) {
+      errors.push(`raw Tailwind source, not compiled CSS: "${node.prelude.slice(0, 60)}"`);
+    }
+    if (node.children === null && node.prelude.startsWith('--wave-')) tokenFound = true;
+    if (/^@keyframes\s+wave-spin$/.test(node.prelude)) keyframesFound = true;
+    if (!isStyleRule(node) || ancestors.some((parent) => parent.prelude.startsWith('@keyframes'))) {
+      return;
+    }
+    const layer = layerOf(ancestors);
+    if (layer !== 'utilities' && layer !== 'properties') outside.push(node.prelude);
+  });
+  if (outside.length > 0) {
+    errors.push(`rules outside @layer utilities: ${outside.slice(0, 5).join(' ')}`);
+  }
+  const classes = selectorClasses(css);
+  const missing = UTILITIES_SAMPLE.filter((name) => !classes.has(name));
+  if (missing.length > 0) {
+    errors.push(`missing the token utilities ${missing.map((name) => `.${name}`).join(', ')}`);
+  }
+  const other = [...classes].filter((name) => !NAMESPACED_UTILITY.test(name)).sort();
+  if (other.length > 0) {
+    errors.push(
+      `holds classes other than the namespaced token utilities: ${other.slice(0, 10).join(' ')}`,
+    );
+  }
+  if (tokenFound) errors.push('declares Wave tokens (they come from ./styles)');
+  if (!keyframesFound) errors.push('missing @keyframes wave-spin');
   return errors;
 }
 
@@ -660,18 +857,20 @@ function distDirectionClasses(dir) {
 
 /**
  * The fixture's Vite build of `entry` (see {@link viteBuildCss}), checked by `check` (the
- * checks of the fixture's own CSS) and {@link checkViteCss}; errors are labelled with `label`.
+ * checks of the fixture's own CSS) and, unless `directions` is false (a build without the
+ * components' classes), {@link checkViteCss}; errors are labelled with `label`.
  */
-async function checkViteBuild(dir, entry, { tailwind = false, label, check }) {
+async function checkViteBuild(dir, entry, { tailwind = false, directions = true, label, check }) {
   let css;
   try {
     css = await viteBuildCss(dir, entry, { tailwind });
   } catch (error) {
     return [`${label}: vite build failed: ${error.message}`];
   }
-  return [...check(css), ...checkViteCss(css, { directionClasses: distDirectionClasses(dir) })].map(
-    (error) => `${label}: ${error}`,
-  );
+  return [
+    ...check(css),
+    ...(directions ? checkViteCss(css, { directionClasses: distDirectionClasses(dir) }) : []),
+  ].map((error) => `${label}: ${error}`);
 }
 
 /** The fixture's type programs: the `.mts` file under node16 and the `.cts` file under node20. */
@@ -703,6 +902,12 @@ async function runPlain(dir, io) {
   if (preflight && existsSync(preflight)) {
     errors.push(...assertPreflightCss(readFileSync(preflight, 'utf8')));
   }
+  const utilities = esm.resolved?.['./utilities'];
+  if (utilities && existsSync(utilities)) {
+    errors.push(
+      ...checkUtilitiesCss(readFileSync(utilities, 'utf8')).map((error) => `./utilities: ${error}`),
+    );
+  }
 
   const tsc = join(dirname(require.resolve('typescript/package.json')), 'bin', 'tsc');
   for (const { project, label } of TYPE_PROGRAMS) {
@@ -721,12 +926,26 @@ async function runPlain(dir, io) {
       check: checkPlainCss,
     })),
   );
+  // An app without Tailwind that imports the token utilities, built with Vite's defaults.
+  errors.push(
+    ...(await checkViteBuild(dir, 'utilities-entry.js', {
+      directions: false,
+      label: './utilities.css (vite build)',
+      check: checkUtilitiesCss,
+    })),
+  );
   return errors;
 }
 
+/**
+ * The value of the app's own `--wave-primary` override in `@layer base` of the Tailwind
+ * fixture's `input.css`.
+ */
+export const APP_TOKEN_OVERRIDE = '#c4314b';
+
 /** The fixture's Tailwind builds: the input file, its output file and its `setup`. */
 const TAILWIND_BUILDS = [
-  { input: 'input.css', output: 'out.css', setup: 'tailwind' },
+  { input: 'input.css', output: 'out.css', setup: 'tailwind', tokenOverride: APP_TOKEN_OVERRIDE },
   { input: 'tokens-input.css', output: 'tokens-out.css', setup: 'tokens' },
 ];
 
@@ -736,7 +955,7 @@ async function runTailwind(dir) {
   const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin.tailwindcss;
   const directionClasses = distDirectionClasses(dir);
   const errors = [];
-  for (const { input, output, setup } of TAILWIND_BUILDS) {
+  for (const { input, output, setup, tokenOverride } of TAILWIND_BUILDS) {
     const result = run(
       process.execPath,
       [join(dirname(manifestPath), bin), '--input', input, '--output', output],
@@ -750,7 +969,9 @@ async function runTailwind(dir) {
     }
     const css = readFileSync(join(dir, output), 'utf8');
     errors.push(
-      ...checkTailwindCss(css, { directionClasses, setup }).map((error) => `${input}: ${error}`),
+      ...checkTailwindCss(css, { directionClasses, setup, tokenOverride }).map(
+        (error) => `${input}: ${error}`,
+      ),
     );
   }
 
@@ -760,7 +981,7 @@ async function runTailwind(dir) {
     ...(await checkViteBuild(dir, 'input.css', {
       tailwind: true,
       label: 'input.css (vite build)',
-      check: (css) => checkTailwindCss(css),
+      check: (css) => checkTailwindCss(css, { tokenOverride: APP_TOKEN_OVERRIDE }),
     })),
   );
   return errors;
@@ -769,7 +990,12 @@ async function runTailwind(dir) {
 /** CLI entry; returns the exit code. `io` receives the report (default: the console). */
 export async function main(argv = process.argv.slice(2), io = console) {
   const { fixtures, keep } = parseArgs(argv);
-  for (const file of ['dist/index.mjs', 'dist/styles.css']) {
+  for (const file of [
+    'dist/index.mjs',
+    'dist/styles.css',
+    'dist/components.css',
+    'dist/utilities.css',
+  ]) {
     if (!existsSync(join(root, file))) {
       io.error(`pack-smoke: ${file} does not exist (run npm run build first)`);
       return 1;

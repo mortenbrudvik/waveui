@@ -1,10 +1,14 @@
 /*
  * Development entry (not exported). Mirrors the Tailwind consumer path of
- * `@mortenbrudvik/waveui/tailwind`: Tailwind with its own sources, Wave tokens in the `theme`
- * layer, Wave's scoped base in the `base` layer and the `wave-rtl:` variant.
+ * `@mortenbrudvik/waveui/tailwind` from the sources: Tailwind with its own sources, Wave tokens
+ * and the namespaced keys in the `theme` layer, Wave's scoped base in the `base` layer and the
+ * `wave-rtl:` variant. The consumer entry imports the components' precompiled utilities
+ * (dist/components.css); here Tailwind compiles them from the sources, against the internal,
+ * unnamespaced theme.css that dist/styles.css compiles them with.
  */
 
 @import 'tailwindcss';
+@import './theme.css';
 @import './tokens.css' layer(theme);
 @import './base.css' layer(base);
 @import './variants.css';
