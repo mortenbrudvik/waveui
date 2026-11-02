@@ -215,7 +215,7 @@ describe('the compile check (Phase 14 spec R6)', () => {
       ok: true,
       lines: [
         expect.stringMatching(
-          /^prefix-codemod --check: 0 unprefixed word\(s\) in class contexts; 0 outside the allowlist/,
+          /^prefix-codemod --check: 0 unprefixed word\(s\) in class contexts; 0 wave: word\(s\) that compile to nothing; 0 outside the allowlist/,
         ),
       ],
     });
@@ -258,6 +258,25 @@ describe('the compile check (Phase 14 spec R6)', () => {
     const result = compileCheck(project, 'wave');
     expect(result.ok).toBe(false);
     expect(result.lines.slice(1)).toEqual(['  src/components/Box.tsx:6 fixed']);
+  }, 60_000);
+
+  // No `@source` of styles.css scans src/hooks: a class written there would ship no CSS.
+  it('reads src/hooks too, where a prefixed word fails and an unprefixed one needs the allowlist', () => {
+    write('src/components/Box.tsx', BOX);
+    write(
+      'src/hooks/useThing.ts',
+      "export const strategy = 'fixed';\nexport const look = 'wave:flex';\n",
+    );
+    try {
+      const result = compileCheck(project, 'wave');
+      expect(result.ok).toBe(false);
+      expect(result.lines.slice(1)).toEqual([
+        '  src/hooks/useThing.ts:2 wave:flex (in src/hooks, which the CSS build does not scan: it compiles to nothing)',
+        '  src/hooks/useThing.ts:1 fixed',
+      ]);
+    } finally {
+      rmSync(join(project, 'src/hooks'), { recursive: true, force: true });
+    }
   }, 60_000);
 
   it('stops build-css before any compile on a finding', () => {

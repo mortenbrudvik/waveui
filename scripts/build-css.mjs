@@ -92,10 +92,12 @@
  * text (`readUtilityPrefix`; a declaration that cannot be read stops the build). While it is
  * empty, the build says so in one line and checks nothing more. Once it is set:
  *   - the compile check runs first, before any compile: scripts/prefix-codemod.mjs `--check` over
- *     src/components and src/lib (the string literals of the TypeScript AST, in two tiers: no
- *     unprefixed utility word in a literal the class-context tracing reaches; elsewhere only the
- *     words scripts/prefix-allowlist.json names for that file). A finding fails the build, and
- *     a pass prints one line with what it read;
+ *     src/components, src/lib and src/hooks (the string literals of the TypeScript AST, in two
+ *     tiers: no unprefixed utility word, and no prefixed word that compiles to nothing, in a
+ *     literal the class-context tracing reaches; elsewhere only the words
+ *     scripts/prefix-allowlist.json names for that file; and no prefixed word at all in
+ *     src/hooks, which no `@source` scans). A finding fails the build, and a pass prints one line
+ *     with what it read;
  *   - every class of styles.css that is no selector class of the style entries (`.wave-root`,
  *     the theme classes) starts with `<prefix>:`, and the required utilities are looked up with
  *     the prefix;
@@ -180,7 +182,13 @@ const REMOVED_THEME_CLASSES = ['dark', 'high-contrast'];
 const CN_MODULE = 'src/lib/cn.ts';
 
 /** The directories the compile check reads, relative to the project root. */
-const COMPILE_CHECK_PATHS = ['src/components', 'src/lib'];
+const COMPILE_CHECK_PATHS = ['src/components', 'src/lib', 'src/hooks'];
+
+/**
+ * The directories of COMPILE_CHECK_PATHS that hold no class string: no `@source` of styles.css
+ * scans them, so a prefixed word there would compile to nothing (`--class-free`).
+ */
+const CLASS_FREE_PATHS = ['src/hooks'];
 
 /**
  * The value of `UTILITY_PREFIX` in the text of src/lib/cn.ts (`export const UTILITY_PREFIX:
@@ -222,17 +230,22 @@ export function utilityPrefixOf(projectRoot) {
 /**
  * The compile check of the project at `projectRoot` for `prefix`: runs scripts/prefix-codemod.mjs
  * `--check` (this repository's, with `--root projectRoot`; the allowlist is the project's
- * scripts/prefix-allowlist.json) over the existing directories of src/components and src/lib.
+ * scripts/prefix-allowlist.json) over the existing directories of src/components, src/lib and
+ * src/hooks, the last `--class-free` (no prefixed word: styles.css scans none of it).
  * Returns `{ ok, lines }`: the check's report, or why it could not run.
  */
 export function compileCheck(projectRoot, prefix) {
   const codemod = join(dirname(fileURLToPath(import.meta.url)), 'prefix-codemod.mjs');
   const paths = COMPILE_CHECK_PATHS.filter((path) => existsSync(join(projectRoot, path)));
   if (paths.length === 0)
-    return { ok: true, lines: ['compile check: no src/components or src/lib'] };
+    return { ok: true, lines: ['compile check: no src/components, src/lib or src/hooks'] };
+  const classFree = CLASS_FREE_PATHS.filter((path) => paths.includes(path)).flatMap((path) => [
+    '--class-free',
+    path,
+  ]);
   const result = spawnSync(
     process.execPath,
-    [codemod, '--check', '--root', projectRoot, '--prefix', prefix, ...paths],
+    [codemod, '--check', '--root', projectRoot, '--prefix', prefix, ...classFree, ...paths],
     { encoding: 'utf8' },
   );
   if (result.error) throw result.error;
@@ -249,7 +262,7 @@ export function compileCheck(projectRoot, prefix) {
 
 /**
  * The one-line summary of a passing compile check, from the report line of
- * `prefix-codemod --check`: `prefix wave: 4355 class words in 234 files, 116 allowlisted pairs`.
+ * `prefix-codemod --check`: `prefix wave: 4355 class words in 273 files, 131 allowlisted pairs`.
  */
 export function compileCheckSummary(lines, prefix) {
   const report = lines[0] ?? '';

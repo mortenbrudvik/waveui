@@ -151,8 +151,9 @@ describe('prefix-codemod --check (two tiers)', () => {
     const report = join(project, 'check-report.json');
     const { code, lines } = await run(['--check', '--report', report, 'src/components', 'src/lib']);
     expect(lines).toEqual([
-      'prefix-codemod --check: 0 unprefixed word(s) in class contexts; 0 outside the allowlist ' +
-        'elsewhere (4 word-file pair(s), 4 word(s), in other literals) of 3 file(s); 15 prefixed ' +
+      'prefix-codemod --check: 0 unprefixed word(s) in class contexts; 0 wave: word(s) that ' +
+        'compile to nothing; 0 outside the allowlist elsewhere (4 word-file pair(s), 4 word(s), ' +
+        'in other literals) of 3 file(s); 15 prefixed ' +
         'class word(s) in 8 class literal(s)',
     ]);
     expect(code).toBe(0);
@@ -177,6 +178,107 @@ describe('prefix-codemod --check (two tiers)', () => {
       expect(code).toBe(1);
     } finally {
       write('src/components/Box.tsx', box);
+    }
+  }, 60_000);
+
+  // Review B1: a prefixed word whose prefix is not first, or whose utility is unknown, compiles to
+  // nothing, and the style silently vanishes; the check reads it in a class context.
+  it.each([
+    ['hover:wave:bg-primary', 'wave: not at the start: it compiles to nothing'],
+    ['data-[selected]:wave:text-foreground', 'wave: not at the start: it compiles to nothing'],
+    ['wave-rtl:wave:-scale-x-100', 'wave: not at the start: it compiles to nothing'],
+    ['!wave:p-4', 'wave: not at the start: it compiles to nothing'],
+    ['wave:wave:p-4', 'wave: not at the start: it compiles to nothing'],
+    ['wave:bg-primry', 'compiles to nothing'],
+  ])(
+    'tier 1: %s in a wcn call fails, naming the place and the word',
+    async (word, reason) => {
+      const box = read('src/components/Box.tsx');
+      write(
+        'src/components/Box.tsx',
+        box.replace(
+          "'wave:group/row wave:relative wave:flex'",
+          `'wave:group/row wave:relative wave:flex ${word}'`,
+        ),
+      );
+      try {
+        const { code, lines } = await run(['--check', 'src/components', 'src/lib']);
+        expect(lines[0]).toMatch(/; 1 wave: word\(s\) that compile to nothing; /);
+        expect(lines.slice(1)).toEqual([`  src/components/Box.tsx:12 ${word} (${reason})`]);
+        expect(code).toBe(1);
+      } finally {
+        write('src/components/Box.tsx', box);
+      }
+    },
+    60_000,
+  );
+
+  it('tier 1: passes the prefix before every variant, markers, the important mark and a word glued to a substitution', async () => {
+    const box = read('src/components/Box.tsx');
+    const words = [
+      'wave:hover:bg-primary',
+      'wave:data-[selected]:text-foreground',
+      'wave:wave-rtl:-scale-x-100',
+      'wave:group-hover/row:bg-primary',
+      'wave:peer',
+      'wave:p-4!',
+      'wave:aria-disabled:focus-visible:opacity-100',
+    ];
+    write(
+      'src/components/Box.tsx',
+      box.replace(
+        "'wave:group/row wave:relative wave:flex'",
+        `'wave:group/row wave:relative wave:flex ${words.join(' ')}'`,
+      ),
+    );
+    try {
+      const { code, lines } = await run(['--check', 'src/components', 'src/lib']);
+      expect(lines).toEqual([
+        expect.stringMatching(
+          /^prefix-codemod --check: 0 unprefixed word\(s\) in class contexts; 0 wave: word\(s\) that compile to nothing; 0 outside .* 22 prefixed class word\(s\)/,
+        ),
+      ]);
+      expect(code).toBe(0);
+    } finally {
+      write('src/components/Box.tsx', box);
+    }
+  }, 60_000);
+
+  it('--class-free: a prefixed word in any string literal of the directory fails, traced or not', async () => {
+    write(
+      'src/hooks/useThing.ts',
+      [
+        "import { wcn } from '../lib/cn';",
+        "export const look = 'wave:p-2';",
+        "export const merged = wcn('wave:grid', 'hover:wave:p-1');",
+        '',
+      ].join('\n'),
+    );
+    try {
+      const { code, lines } = await run([
+        '--check',
+        '--class-free',
+        'src/hooks',
+        'src/components',
+        'src/lib',
+        'src/hooks',
+      ]);
+      const reason = '(in src/hooks, which the CSS build does not scan: it compiles to nothing)';
+      expect(lines[0]).toMatch(/; 3 wave: word\(s\) that compile to nothing; /);
+      expect(lines.slice(1)).toEqual([
+        `  src/hooks/useThing.ts:2 wave:p-2 ${reason}`,
+        `  src/hooks/useThing.ts:3 wave:grid ${reason}`,
+        `  src/hooks/useThing.ts:3 hover:wave:p-1 ${reason}`,
+      ]);
+      expect(code).toBe(1);
+      // Without the option the directory is checked as any other: the prefixed words pass, the
+      // misplaced one in the class context fails.
+      const plain = await run(['--check', 'src/components', 'src/lib', 'src/hooks']);
+      expect(plain.lines.slice(1)).toEqual([
+        '  src/hooks/useThing.ts:3 hover:wave:p-1 (wave: not at the start: it compiles to nothing)',
+      ]);
+    } finally {
+      rmSync(join(project, 'src/hooks'), { recursive: true, force: true });
     }
   }, 60_000);
 
@@ -233,10 +335,10 @@ describe('the committed allowlist (scripts/prefix-allowlist.json)', () => {
     expect(Object.keys(allow)).toEqual([...Object.keys(allow)].sort());
   });
 
-  it('names, for each file of src/components and src/lib, words its string literals hold', () => {
+  it('names, for each file of src/components, src/lib and src/hooks, words its string literals hold', () => {
     const ts = loadTypeScript();
     const files = new Set(
-      listFiles(ROOT, ['src/components', 'src/lib']).map((file) =>
+      listFiles(ROOT, ['src/components', 'src/lib', 'src/hooks']).map((file) =>
         file.slice(ROOT.split('\\').join('/').length + 1),
       ),
     );
@@ -287,6 +389,13 @@ describe('parseArgs', () => {
     [['--fix', 'src'], 'unknown option --fix'],
   ])('refuses %j', (argv, message) => {
     expect(() => parseArgs(argv)).toThrow(message);
+  });
+
+  it('takes --class-free directories, relative and without a trailing slash', () => {
+    expect(
+      parseArgs(['--check', '--class-free', 'src/hooks/', '--class-free', 'src/x', 'src'])
+        .classFree,
+    ).toEqual(['src/hooks', 'src/x']);
   });
 
   it('makes a usage error exit 2', async () => {

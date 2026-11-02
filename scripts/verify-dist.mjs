@@ -1981,7 +1981,8 @@ export function clientReferenceStub(path, names) {
 /**
  * The ES module run under `node --conditions=react-server` that imports each of `files` (paths
  * relative to `dir`) and prints `{ [path]: { phase, message } }` for the failures: `load` when
- * the module does not evaluate, `check` when it loads but `lib/cn.mjs` does not work,
+ * the module does not evaluate, `check` when it loads but `lib/cn.mjs` does not work (joining
+ * classes, and the prefix parse: `cn('wave:p-2', 'p-4')` is `p-4`),
  * `index.mjs` does not export the server-side `cn` and a plain `buttonClassNames`, or
  * `lib/classNames.mjs` exports anything but objects of strings.
  */
@@ -1994,6 +1995,12 @@ const check = (path, m) => {
     if (typeof m.cn !== 'function') throw new Error('cn is not exported');
     const out = m.cn('a', false, 'b');
     if (out !== 'a b') throw new Error("cn('a', false, 'b') returned " + JSON.stringify(out));
+    // The prefix parse (1.0): a class and its wave: twin are one utility, so an app's p-4
+    // replaces the library's wave:p-2.
+    const merged = m.cn('wave:p-2', 'p-4');
+    if (merged !== 'p-4') {
+      throw new Error("cn('wave:p-2', 'p-4') returned " + JSON.stringify(merged) + ", not 'p-4'");
+    }
   }
   if (/^lib\\/classNames\\.mjs$/.test(path)) {
     const names = Object.keys(m).filter((name) => name !== 'default' && name !== '__esModule');

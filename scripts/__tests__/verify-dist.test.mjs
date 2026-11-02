@@ -271,8 +271,15 @@ function createToaster() {
             dependencies: { clsx: '^2.1.1' },
             peerDependencies: { react: '^19.0.0' },
           }),
+          // The library's merge in small: a class and its wave: twin are one class, and of two
+          // steps of one scale (p-2, p-4) the last wins, so the react-server probe's prefix parse
+          // passes.
           'dist/lib/cn.mjs':
-            "export function cn(...inputs) { return inputs.filter(Boolean).join(' '); }\n",
+            'export function cn(...inputs) {\n' +
+            "  const key = (word) => { const bare = word.replace(/^wave:/, ''); return /^[a-z]+-\\d+$/.test(bare) ? bare.replace(/-\\d+$/, '') : bare; };\n" +
+            "  const words = inputs.filter(Boolean).join(' ').split(' ');\n" +
+            "  return words.filter((word, i) => !words.slice(i + 1).some((later) => key(later) === key(word))).join(' ');\n" +
+            '}\n',
           'dist/lib/classNames.mjs':
             "export const buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
             "export const dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n" +
@@ -1564,6 +1571,16 @@ describe('checkServerImport (repo-level#2)', () => {
       ),
     ).toEqual([expect.stringContaining('lib/cn.mjs')]);
   }, 60_000);
+
+  it('reports a cn that joins classes but does not read the prefix (review B4)', async () => {
+    const { dist } = fixture({
+      'dist/lib/cn.mjs':
+        "export function cn(...inputs) { return inputs.filter(Boolean).join(' '); }\n",
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringContaining(`cn('wave:p-2', 'p-4') returned "wave:p-2 p-4", not 'p-4'`),
+    ]);
+  }, 30_000);
 
   it('loads every other src/lib module the entry imports, not only cn', async () => {
     const { dist } = fixture({

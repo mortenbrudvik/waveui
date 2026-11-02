@@ -32,7 +32,10 @@
  * comments) and tests each against the unprefixed design system, in two tiers:
  *   1. a literal the class-context tracing reaches may hold no unprefixed utility word at all (no
  *      allowlist): an unprefixed `relative` in a `wcn` call fails even in a file whose style
- *      object says `position: 'relative'`;
+ *      object says `position: 'relative'`; and each of its prefixed words must compile: the
+ *      prefix first (`hover:wave:bg-primary`, `!wave:p-4` and `wave:wave:p-4` compile to
+ *      nothing), and the word without it a utility or a `group`/`peer` marker of the design system
+ *      (`wave:bg-primry` fails; a word glued to a substitution is checked for the prefix only);
  *   2. any other literal (a positioning strategy, an ARIA role, a prop value, an event name, prose)
  *      may hold one only where the allowlist names that word for that file: a JSON map of file
  *      (relative to the root) to words, `scripts/prefix-allowlist.json`, never a global word list.
@@ -40,7 +43,8 @@
  *
  * Usage:
  *   node scripts/prefix-codemod.mjs [--root <project>] [--prefix wave] [--theme <css>]...
- *        [--variants <css>] [--no-rename-cn] [--write | --check [--allow <json>] [--write-allowlist]]
+ *        [--variants <css>] [--no-rename-cn] [--write | --check [--allow <json>] [--write-allowlist]
+ *        [--class-free <dir>]...]
  *        [--report <file.json>] <files or dirs>...
  *
  *   (no mode)          a dry run: counts what `--write` would change, writes nothing
@@ -49,6 +53,9 @@
  *                      (default: <root>/scripts/prefix-allowlist.json when it exists, else none);
  *                      `--write-allowlist` writes the tier-2 pairs found to that file instead of
  *                      checking them (read every place first: a pair is a decision)
+ *   --class-free <dir> a directory (relative to the root) that holds no class string because the
+ *                      CSS build scans none of it (src/hooks): `--check` fails a prefixed word in
+ *                      any of its string literals
  *   --report <json>    writes the details (per-file counts, glued and escaped words; for `--check`
  *                      the failures, the tier-2 word-file pairs and their lines, `untracedPlaces`)
  *
@@ -93,6 +100,7 @@ export function parseArgs(argv) {
     allow: null,
     writeAllowlist: false,
     report: null,
+    classFree: [],
     paths: [],
   };
   for (let i = 0; i < argv.length; i++) {
@@ -107,6 +115,7 @@ export function parseArgs(argv) {
     else if (arg === '--allow') options.allow = resolve(argv[++i]);
     else if (arg === '--write-allowlist') options.writeAllowlist = true;
     else if (arg === '--report') options.report = resolve(argv[++i]);
+    else if (arg === '--class-free') options.classFree.push(posix(argv[++i]).replace(/\/+$/, ''));
     else if (arg.startsWith('--')) throw new Error(`unknown option ${arg}`);
     else options.paths.push(arg);
   }
@@ -930,31 +939,124 @@ export function unprefixedWords(ts, files, isUtility, prefix) {
 }
 
 /**
+ * The words of a class literal (a string, or a template's text pieces), each with `glued`: whether
+ * it touches a substitution (`p-${n}`, `${gate}bg-primary`), so that only part of it is in the
+ * source.
+ */
+export function literalWords(ts, node) {
+  const pieces = ts.isTemplateExpression(node)
+    ? [node.head.text, ...node.templateSpans.map((span) => span.literal.text)]
+    : [node.text];
+  const words = [];
+  pieces.forEach((piece, index) => {
+    const parts = piece.split(/\s+/);
+    parts.forEach((word, i) => {
+      if (!word) return;
+      const glued = (i === 0 && index > 0) || (i === parts.length - 1 && index < pieces.length - 1);
+      words.push({ word, glued });
+    });
+  });
+  return words;
+}
+
+/**
+ * The words of the string literals of `file` (comments, imports and literal types aside) that hold
+ * `<prefix>:` anywhere, each with its line.
+ */
+export function prefixedWordsOf(ts, file, prefix) {
+  const text = readFileSync(file, 'utf8');
+  const kind = file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind);
+  const found = [];
+  const visit = (node) => {
+    if (
+      (ts.isStringLiteral(node) ||
+        ts.isNoSubstitutionTemplateLiteral(node) ||
+        ts.isTemplateHead(node) ||
+        ts.isTemplateMiddle(node) ||
+        ts.isTemplateTail(node)) &&
+      !ts.isImportDeclaration(node.parent) &&
+      !ts.isExportDeclaration(node.parent) &&
+      !ts.isLiteralTypeNode(node.parent)
+    ) {
+      const line = sf.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+      for (const word of node.text.split(/\s+/)) {
+        if (word.includes(`${prefix}:`)) found.push([word, line]);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return found;
+}
+
+/**
+ * Whether `word` holds `<prefix>:` other than at its start: after a variant (`hover:wave:bg-x`,
+ * `wave:wave:p-4`), an important mark (`!wave:p-4`) or a bracket. Tailwind reads a prefix only as
+ * the first part of a class, so such a word compiles to nothing.
+ */
+export function hasMisplacedPrefix(word, prefix) {
+  const marker = `${prefix}:`;
+  for (let at = word.indexOf(marker, 1); at !== -1; at = word.indexOf(marker, at + 1)) {
+    if (!/[a-z0-9_-]/i.test(word[at - 1])) return true;
+  }
+  return false;
+}
+
+/**
  * The two-tier compile check of `files` (absolute) under `root`, for `prefix`. `allow` maps a file
- * (relative to `root`, forward slashes) to the words its untraced literals may hold. Returns the
- * tier-1 failures (`file:line word`), the tier-2 failures, the tier-2 pairs found (`untraced`:
+ * (relative to `root`, forward slashes) to the words its untraced literals may hold. Tier 1 also
+ * fails a prefixed word that compiles to nothing: one whose prefix is not at its start
+ * (`hover:wave:bg-primary`, `!wave:p-4`), or whose utility is unknown (`wave:bg-primry`), each
+ * with a reason (`prefixedFailures`; a word glued to a substitution is only checked for the
+ * first). Returns the tier-1 failures (`file:line word`), the tier-2 failures, the tier-2 pairs found (`untraced`:
  * file to sorted words, the allowlist's shape; `untracedPlaces`: the same with each word's
  * lines), the allowlist pairs that no longer occur (`stale`, reported, never a failure), and how
  * much the check read: the class literals the tracing reached and their prefixed words.
+ *
+ * `classFree` names directories (relative to `root`) that hold no class string: the CSS build
+ * scans none of them (`src/hooks`), so a prefixed word in any string literal there compiles to
+ * nothing and fails (`prefixedFailures`); their unprefixed utility words are checked as above.
  */
-export function checkFiles(ts, { root, files, isUtility, prefix, allow = {} }) {
+export function checkFiles(ts, { root, files, isUtility, prefix, allow = {}, classFree = [] }) {
   const program = createProgram(ts, root, files);
   const traced = collectClassLiterals(ts, program, files, { outside: new Set(), errors: [] });
   const tracedRanges = new Map();
   const tracedFailures = [];
+  const prefixedFailures = [];
+  const unscanned = (rel) => classFree.find((dir) => rel.startsWith(`${dir}/`));
+  for (const file of files) {
+    const rel = posix(relative(root, file));
+    const dir = unscanned(rel);
+    if (!dir) continue;
+    for (const [word, line] of prefixedWordsOf(ts, file, prefix)) {
+      prefixedFailures.push(
+        `${rel}:${line} ${word} (in ${dir}, which the CSS build does not scan: it compiles to nothing)`,
+      );
+    }
+  }
   let classWords = 0;
   for (const [node, { file }] of traced) {
     const rel = posix(relative(root, file));
     if (!tracedRanges.has(rel)) tracedRanges.set(rel, []);
     tracedRanges.get(rel).push([node.getStart(), node.end]);
     const line = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
-    const text = ts.isTemplateExpression(node)
-      ? [node.head.text, ...node.templateSpans.map((s) => s.literal.text)].join(' ')
-      : node.text;
-    for (const word of text.split(/\s+/)) {
-      if (word.startsWith(`${prefix}:`)) classWords += 1;
-      else if (word && (MARKER.test(word) || isUtility(word))) {
-        tracedFailures.push(`${rel}:${line} ${word}`);
+    for (const { word, glued } of literalWords(ts, node)) {
+      const place = `${rel}:${line} ${word}`;
+      // A prefixed word of a directory the CSS build does not scan is reported above.
+      if (unscanned(rel) && word.includes(`${prefix}:`)) continue;
+      if (hasMisplacedPrefix(word, prefix)) {
+        prefixedFailures.push(`${place} (${prefix}: not at the start: it compiles to nothing)`);
+      } else if (word.startsWith(`${prefix}:`)) {
+        classWords += 1;
+        // The word without its prefix compiles in the unprefixed design system exactly when the
+        // word compiles in the prefixed one. A word glued to a substitution cannot be read whole.
+        const utility = word.slice(prefix.length + 1);
+        if (!glued && !MARKER.test(utility) && !isUtility(utility)) {
+          prefixedFailures.push(`${place} (compiles to nothing)`);
+        }
+      } else if (MARKER.test(word) || isUtility(word)) {
+        tracedFailures.push(place);
       }
     }
   }
@@ -997,6 +1099,7 @@ export function checkFiles(ts, { root, files, isUtility, prefix, allow = {} }) {
   );
   return {
     tracedFailures,
+    prefixedFailures,
     untracedFailures,
     untraced: pairs,
     untracedPlaces,
@@ -1053,6 +1156,7 @@ export async function main(argv = process.argv.slice(2), { io = console } = {}) 
       isUtility,
       prefix: options.prefix,
       allow: options.writeAllowlist ? {} : allow,
+      classFree: options.classFree,
     });
     if (options.report) {
       writeFileSync(
@@ -1068,28 +1172,34 @@ export async function main(argv = process.argv.slice(2), { io = console } = {}) 
         return 2;
       }
       writeFileSync(allowPath, formatAllowlist(result.untraced));
+      const classFailures = [...result.tracedFailures, ...result.prefixedFailures];
       io.log(
         `prefix-codemod --check: ${result.tracedFailures.length} unprefixed word(s) in class contexts; ` +
+          `${result.prefixedFailures.length} ${options.prefix}: word(s) that compile to nothing; ` +
           `wrote ${pairCount} word-file pair(s) (${wordCount} word(s)) to ${posix(allowPath)}`,
       );
-      for (const failure of result.tracedFailures.slice(0, 40)) io.log(`  ${failure}`);
-      return result.tracedFailures.length ? 1 : 0;
+      for (const failure of classFailures.slice(0, 40)) io.log(`  ${failure}`);
+      return classFailures.length ? 1 : 0;
     }
     io.log(
       `prefix-codemod --check: ${result.tracedFailures.length} unprefixed word(s) in class contexts; ` +
+        `${result.prefixedFailures.length} ${options.prefix}: word(s) that compile to nothing; ` +
         `${result.untracedFailures.length} outside the allowlist elsewhere (${pairCount} word-file ` +
         `pair(s), ${wordCount} word(s), in other literals) of ${files.length} file(s); ` +
         `${result.classWords} prefixed class word(s) in ${result.classLiterals} class literal(s)`,
     );
-    for (const failure of [...result.tracedFailures, ...result.untracedFailures].slice(0, 40)) {
-      io.log(`  ${failure}`);
-    }
+    const failures = [
+      ...result.tracedFailures,
+      ...result.prefixedFailures,
+      ...result.untracedFailures,
+    ];
+    for (const failure of failures.slice(0, 40)) io.log(`  ${failure}`);
     if (result.stale.length > 0) {
       io.log(
         `  (${result.stale.length} allowlist pair(s) no longer occur: ${result.stale.slice(0, 10).join(', ')})`,
       );
     }
-    return result.tracedFailures.length + result.untracedFailures.length ? 1 : 0;
+    return failures.length ? 1 : 0;
   }
 
   const program = createProgram(ts, options.root, files);
