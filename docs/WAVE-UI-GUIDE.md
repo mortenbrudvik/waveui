@@ -3821,20 +3821,13 @@ Deprecated names still work through 0.x, warn once in development and will be re
 
 | Deprecated | Use instead |
 |---|---|
-| TabList `selectedValue`, `defaultSelectedValue`, `onTabSelect`, `vertical` | `value`, `defaultValue`, `onValueChange`, `orientation` |
-| Nav `selectedValue`, `defaultSelectedValue`, `onNavItemSelect` | `value`, `defaultValue`, `onValueChange` |
-| Nav.Category label from the first string child | `label` |
-| TeachingPopover `currentStep`, `defaultCurrentStep` | `activeStep`, `defaultActiveStep` |
 | DataGrid `selectedKeys`, `defaultSelectedKeys`, `onSelectionChange` | `selectedItems`, `defaultSelectedItems`, `onSelectedItemsChange` |
 | DataGrid `sortColumn`, `sortDirection`, `defaultSortColumn`, `defaultSortDirection` | `sort`, `defaultSort` (a grid with `items` ignores the deprecated props) |
 | `DataGridColumn` `id` | `columnId` |
 | `Table.Head`, `Table.HeadCell` (and the flat `TableHead`, `TableHeadCell`, deprecated from their introduction in 0.5) | `Table.Header`, `Table.HeaderCell` (`TableHeader`, `TableHeaderCell`) |
-| Stack `direction` | `orientation` |
 | Skeleton `variant` | `shape` |
 | Text `weight={400 \| 600 \| 700}` | `weight="regular" \| "semibold" \| "bold"` |
 | Link `variant` | `appearance` |
-| Tooltip `variant="dark" \| "light"` | `appearance="inverted" \| "normal"` |
-| Accordion (single mode) `openItems`, `defaultOpenItems`, `onOpenItemsChange` | `openItem`, `defaultOpenItem`, `onOpenItemChange` |
 | Theme classes `dark`, `high-contrast` | `wave-dark`, `wave-high-contrast` |
 | `@mortenbrudvik/waveui/legacy-tokens.css` (0.4 variable names) | `--wave-*` variables |
 | Button objects in `MessageBar.dismiss`, `SearchBox.dismiss`, `Tag.dismissIcon` | Icon content, plus `onDismiss` / `onClear` |

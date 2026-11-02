@@ -72,7 +72,7 @@ export interface NavContextValue {
   value: string;
   /**
    * Activation of an item: sets the value, then calls the root's `onActivate` (every activation,
-   * re-selection included; Nav's deprecated `onNavItemSelect`).
+   * re-selection included; NavDrawer's `onItemSelect`).
    */
   select: (value: string) => void;
   /** The values of the open categories. */

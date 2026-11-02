@@ -569,8 +569,8 @@ describe('NavDrawer', () => {
       }
     });
 
-    it('has none of Nav’s deprecated aliases', () => {
-      // @ts-expect-error -- NavDrawer is new: it takes `value`, not Nav's deprecated `selectedValue`.
+    it('has no selectedValue, like Nav (removed in 1.0)', () => {
+      // @ts-expect-error -- NavDrawer takes `value`; Nav's 0.4 `selectedValue` is removed in 1.0.
       const props: NavDrawerProps = { selectedValue: 'home' };
       expect(props).toBeDefined();
     });

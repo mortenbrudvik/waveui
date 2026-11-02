@@ -55,7 +55,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
-/** The `normal` appearance: the page background with a border (replaces 0.4's `variant="light"`). */
+/** The `normal` appearance: the page background with a border. */
 export const Normal: Story = {
   args: {
     content: 'Normal tooltip',

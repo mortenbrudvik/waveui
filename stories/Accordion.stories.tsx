@@ -61,10 +61,12 @@ export const Controlled: Story = {
     onOpenItemChange: fn(),
   },
   render: function ControlledAccordion(args) {
+    // A single Accordion: the props of type="multiple" stay out.
+    const { openItems, defaultOpenItems, onOpenItemsChange, ...singleArgs } = args;
     const [openItem, setOpenItem] = React.useState<string | null>('item-1');
     return (
       <Accordion
-        {...args}
+        {...singleArgs}
         type="single"
         openItem={openItem}
         onOpenItemChange={(next) => {

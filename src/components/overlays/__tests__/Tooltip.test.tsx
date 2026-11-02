@@ -659,40 +659,29 @@ describe('Tooltip', () => {
       expect(el).not.toHaveClass('bg-inverted');
     });
 
-    it.each([
-      ['light', 'bg-background'],
-      ['dark', 'bg-inverted'],
-    ] as const)(
-      'the deprecated variant="%s" still works and warns once',
-      async (variant, expected) => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const el = await showSurface(
-          <Tooltip content="Tip" variant={variant} openDelay={0}>
-            <button type="button">Target</button>
-          </Tooltip>,
-        );
-        expect(el).toHaveClass(expected);
-        expect(warn.mock.calls).toEqual([
-          [
-            '[WaveUI] Tooltip: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
-          ],
-        ]);
-      },
-    );
-
-    it('appearance wins over the deprecated variant', async () => {
+    // Untyped code that still passes it: an unknown attribute of the wrapper `<span>`, which React
+    // renders as it is, and the tooltip keeps the default look.
+    it('has no variant alias of appearance (removed in 1.0): variant="light" stays inverted', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const el = await showSurface(
-        <Tooltip content="Tip" appearance="inverted" variant="light" openDelay={0}>
+        <Tooltip
+          content="Tip"
+          // @ts-expect-error -- `variant` is removed in 1.0: use `appearance` ("normal", "inverted")
+          variant="light"
+          openDelay={0}
+        >
           <button type="button">Target</button>
         </Tooltip>,
       );
       expect(el).toHaveClass('bg-inverted');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Tooltip: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
-        ],
-      ]);
+      expect(el).not.toHaveClass('bg-background');
+      expect(screen.getByRole('button', { name: 'Target' }).parentElement).toHaveAttribute(
+        'variant',
+        'light',
+      );
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
   });
 

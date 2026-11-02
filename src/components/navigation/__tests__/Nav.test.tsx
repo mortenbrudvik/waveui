@@ -74,10 +74,6 @@ function SampleNav(props: Partial<NavProps>) {
 const button = (name: string) => screen.getByRole('button', { name });
 const toggle = () => screen.getByRole('button', { name: 'Docs' });
 
-/** The deprecation warning of a renamed Nav prop (asserted, never silenced). */
-const deprecated = (oldName: string, newName: string) =>
-  `[WaveUI] Nav: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.`;
-
 /**
  * Icons that render nothing: `icon={name && <Icon />}` with `name` '' or a count of 0, and a list
  * mapped to nothing (F2 `slotRendersContent`). A factory each, since a generator is one-shot.
@@ -366,74 +362,71 @@ describe('Nav', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
     });
 
-    describe('deprecated aliases', () => {
-      it('selectedValue still controls the selection and warns once', () => {
+    // Untyped code that still passes a 0.4 name: it lands on the <nav> element as an unknown prop,
+    // which React reports in development (once per name and page load), and changes nothing.
+    describe('the 0.4 names are removed in 1.0', () => {
+      const unknownProp = (name: string) => [
+        'React does not recognize the `%s` prop on a DOM element. If you intentionally want it ' +
+          'to appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If ' +
+          'you accidentally passed it from a parent component, remove it from the DOM element.',
+        name,
+        name.toLowerCase(),
+      ];
+
+      it('has no selectedValue alias of value: nothing is current and no category opens', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        render(<SampleNav selectedValue="settings" />);
-        expect(button('Settings')).toHaveAttribute('aria-current', 'page');
-        expect(warn.mock.calls).toEqual([[deprecated('selectedValue', 'value')]]);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(
+          <SampleNav
+            // @ts-expect-error -- `selectedValue` is removed in 1.0: use `value`
+            selectedValue="api"
+          />,
+        );
+        expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+        expect(toggle()).not.toHaveAttribute('aria-current');
+        expect(document.querySelector('[aria-current]')).toBeNull();
+        expect(screen.getByRole('navigation')).toHaveAttribute('selectedvalue', 'api');
+        expect(error.mock.calls).toEqual([unknownProp('selectedValue')]);
+        expect(warn).not.toHaveBeenCalled();
       });
 
-      it('defaultSelectedValue still sets the initial selection and warns', () => {
+      it('has no defaultSelectedValue alias of defaultValue: nothing is current', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        render(<SampleNav defaultSelectedValue="home" />);
-        expect(button('Home')).toHaveAttribute('aria-current', 'page');
-        expect(warn.mock.calls).toEqual([[deprecated('defaultSelectedValue', 'defaultValue')]]);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(
+          <SampleNav
+            // @ts-expect-error -- `defaultSelectedValue` is removed in 1.0: use `defaultValue`
+            defaultSelectedValue="home"
+          />,
+        );
+        expect(button('Home')).not.toHaveAttribute('aria-current');
+        expect(error.mock.calls).toEqual([unknownProp('defaultSelectedValue')]);
+        expect(warn).not.toHaveBeenCalled();
       });
 
-      it('value wins over selectedValue when both are given', () => {
+      it('has no onNavItemSelect alias of onValueChange: only onValueChange is called', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        render(<SampleNav value="home" selectedValue="settings" />);
-        expect(button('Home')).toHaveAttribute('aria-current', 'page');
-        expect(warn.mock.calls).toEqual([[deprecated('selectedValue', 'value')]]);
-      });
-
-      it('onNavItemSelect warns once and still fires on every activation, re-selection included', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
         const user = userEvent.setup();
         const onNavItemSelect = vi.fn();
         const onValueChange = vi.fn();
         render(
           <SampleNav
             defaultValue="home"
+            // @ts-expect-error -- `onNavItemSelect(value)` is removed in 1.0: use `onValueChange`
             onNavItemSelect={onNavItemSelect}
             onValueChange={onValueChange}
           />,
         );
         await user.click(button('Home'));
-        await user.click(button('Home'));
-        expect(onNavItemSelect).toHaveBeenCalledTimes(2);
-        expect(onNavItemSelect).toHaveBeenCalledWith('home');
-        expect(onValueChange).not.toHaveBeenCalled();
         await user.click(button('Settings'));
-        expect(onNavItemSelect).toHaveBeenLastCalledWith('settings');
-        expect(onValueChange).toHaveBeenCalledWith('settings');
-        expect(warn.mock.calls).toEqual([[deprecated('onNavItemSelect', 'onValueChange')]]);
-      });
-
-      it('onNavItemSelect does not fire when a disabled item is activated, the current one included', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const user = userEvent.setup();
-        const onNavItemSelect = vi.fn();
-        render(
-          <Nav value="docs" onNavItemSelect={onNavItemSelect}>
-            <Nav.Item value="home" disabled>
-              Home
-            </Nav.Item>
-            <Nav.Item value="docs" href="#docs" disabled>
-              Docs
-            </Nav.Item>
-            <Nav.Item value="settings">Settings</Nav.Item>
-          </Nav>,
-        );
-        await user.click(button('Home'));
-        // Re-selection fires the alias for an enabled item; a disabled current item stays silent.
-        await user.click(screen.getByRole('link', { name: 'Docs' }));
+        expect(onValueChange.mock.calls).toEqual([['settings']]);
         expect(onNavItemSelect).not.toHaveBeenCalled();
-        await user.click(button('Settings'));
-        expect(onNavItemSelect).toHaveBeenCalledTimes(1);
-        expect(onNavItemSelect).toHaveBeenCalledWith('settings');
-        expect(warn.mock.calls).toEqual([[deprecated('onNavItemSelect', 'onValueChange')]]);
+        expect(screen.getByRole('navigation')).not.toHaveAttribute('onnavitemselect');
+        expect(error.mock.calls).toEqual([
+          ['Unknown event handler property `%s`. It will be ignored.', 'onNavItemSelect'],
+        ]);
+        expect(warn).not.toHaveBeenCalled();
       });
     });
   });
@@ -507,27 +500,31 @@ describe('Nav', () => {
       expect(screen.getByRole('button', { name: 'Inbox (3)' })).toBeInTheDocument();
     });
 
-    it('deprecated: text children still label the category (all text parts) and warn', async () => {
+    // `label` is required in 1.0. Untyped code without it gets a toggle without a name, and the
+    // text children render in the list as they are, where the list-child check names them.
+    it('has no text children label: a category without label is a type error (removed in 1.0)', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const user = userEvent.setup();
-      const count = 3;
       render(
         <Nav>
+          {/* @ts-expect-error -- the text children as the label are removed in 1.0: pass `label` */}
           <Nav.Category value="inbox">
-            Inbox ({count})<Nav.SubItem value="unread">Unread</Nav.SubItem>
+            Inbox<Nav.SubItem value="unread">Unread</Nav.SubItem>
           </Nav.Category>
         </Nav>,
       );
-      const categoryButton = screen.getByRole('button', { name: 'Inbox (3)' });
+      const categoryButton = screen.getByRole('button', { expanded: false });
+      expect(categoryButton).toHaveAccessibleName('');
       await user.click(categoryButton);
       const list = button('Unread').closest('ul') as HTMLElement;
-      expect(within(list).getAllByRole('listitem')).toHaveLength(1);
-      expect(list.textContent).toBe('Unread');
+      expect(list.textContent).toBe('InboxUnread');
       expect(warn.mock.calls).toEqual([
         [
-          '[WaveUI] Nav.Category: `text children as the label` is deprecated and will be removed in 1.0. Use `label` instead. Pass the category label in `label` and only the sub-items as children.',
+          '[WaveUI] Nav.Category: its list holds text, but a list can hold only <li> elements. Use Nav.SubItem, Nav.SectionHeader and Nav.Divider as its children, or wrap your own content in an <li>.',
         ],
       ]);
+      expect(error.mock.calls).toEqual([]);
     });
 
     it('defaultOpenCategories opens categories initially', () => {
@@ -547,14 +544,6 @@ describe('Nav', () => {
       render(<SampleNav value="api" />);
       expect(toggle()).toHaveAttribute('aria-expanded', 'true');
       expect(button('API')).toHaveAttribute('aria-current', 'page');
-    });
-
-    it('deprecated selectedValue also opens the category that contains it', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<SampleNav selectedValue="api" />);
-      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
-      expect(button('API')).toHaveAttribute('aria-current', 'page');
-      expect(warn.mock.calls).toEqual([[deprecated('selectedValue', 'value')]]);
     });
 
     it('defaultOpenCategories replaces the automatic opening, an empty list included', () => {
@@ -944,19 +933,17 @@ describe('Nav', () => {
     describe('a click that opens the link somewhere else', () => {
       function ReportsNav({
         onValueChange,
-        onNavItemSelect,
         onReportsClick,
         target,
         download,
       }: {
         onValueChange?: (value: string) => void;
-        onNavItemSelect?: (value: string) => void;
         onReportsClick?: React.MouseEventHandler<HTMLAnchorElement>;
         target?: string;
         download?: boolean;
       }) {
         return (
-          <Nav defaultValue="home" onValueChange={onValueChange} onNavItemSelect={onNavItemSelect}>
+          <Nav defaultValue="home" onValueChange={onValueChange}>
             <Nav.Item value="home" href="#home">
               Home
             </Nav.Item>
@@ -1002,19 +989,9 @@ describe('Nav', () => {
         async (target) => {
           const user = userEvent.setup();
           const onValueChange = vi.fn();
-          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-          const onNavItemSelect = vi.fn();
-          render(
-            <ReportsNav
-              target={target}
-              onValueChange={onValueChange}
-              onNavItemSelect={onNavItemSelect}
-            />,
-          );
+          render(<ReportsNav target={target} onValueChange={onValueChange} />);
           await user.click(link('Reports'));
           expectHomeStillCurrent(onValueChange);
-          expect(onNavItemSelect).not.toHaveBeenCalled();
-          expect(warn.mock.calls).toEqual([[deprecated('onNavItemSelect', 'onValueChange')]]);
         },
       );
 
@@ -3112,7 +3089,7 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     // @ts-expect-error -- a part takes no children: the Nav renders them
     void (<Nav slotProps={{ list: { children: 'List' } }} />);
     // @ts-expect-error -- a part takes no children: the category renders them
-    void (<Nav.Category value="docs" slotProps={{ label: { children: 'Docs' } }} />);
+    void (<Nav.Category value="docs" label="Docs" slotProps={{ label: { children: 'Docs' } }} />);
     void (
       (
         // @ts-expect-error -- a part takes no children: the item renders them

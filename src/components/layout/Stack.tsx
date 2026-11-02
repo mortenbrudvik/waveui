@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { stackClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
-import { resolveDeprecatedProp } from '../../lib/dev';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Orientation } from '../../lib/types';
 
@@ -40,11 +39,6 @@ export interface StackOwnProps {
    * @default 'vertical'
    */
   orientation?: Orientation;
-  /**
-   * @deprecated Use `orientation` (same values). Still works, warns once in development, and
-   * `orientation` wins when both are given.
-   */
-  direction?: Orientation;
   /**
    * Gap size between stack items.
    * @default 'md'
@@ -85,7 +79,6 @@ export const Stack: PolymorphicComponent<'div', StackOwnProps> = (props) => {
   const {
     as,
     orientation: orientationProp,
-    direction,
     gap = 'md',
     align,
     justify,
@@ -97,9 +90,7 @@ export const Stack: PolymorphicComponent<'div', StackOwnProps> = (props) => {
     ...rest
   } = props as StackImplProps;
   const Component: React.ElementType = as ?? 'div';
-  const orientation =
-    resolveDeprecatedProp('Stack', orientationProp, direction, 'direction', 'orientation') ??
-    'vertical';
+  const orientation = orientationProp ?? 'vertical';
 
   return (
     <Component

@@ -8,7 +8,7 @@ import {
 import type { MotionPreference, MotionSlot, Slot } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 // Aliased: `expandIconMotion` is also Nav.Category's prop.
 import {
@@ -71,10 +71,9 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
    */
   value: string;
   /**
-   * Label of the category's toggle button (any content). Without it, the text children are used
-   * as the label — deprecated: pass the label here and only the sub-items as children.
+   * Label of the category's toggle button (any content). The children are only the sub-items.
    */
-  label?: React.ReactNode;
+  label: React.ReactNode;
   /**
    * Icon displayed before the category label. Rendered with `aria-hidden="true"`. A falsy icon
    * (`''`, `0`) or a list of nothing renders no icon box.
@@ -848,22 +847,6 @@ const NavCategory = ({
     );
   }
 
-  let buttonLabel: React.ReactNode = label;
-  let items: React.ReactNode = children;
-  if (label === undefined) {
-    // Deprecated 0.4 path: the text children are the label, the other children the sub-items.
-    warnDeprecated(
-      'Nav.Category',
-      'text children as the label',
-      'label',
-      'Pass the category label in `label` and only the sub-items as children.',
-    );
-    const parts = React.Children.toArray(children);
-    const isText = (part: unknown) => typeof part === 'string' || typeof part === 'number';
-    buttonLabel = parts.filter(isText).join('');
-    items = parts.filter((part) => !isText(part));
-  }
-
   // The parts are merged only when given, with the attributes the category sets on each (those it
   // sets only in some states included, as `undefined` otherwise) locked.
   const buttonPart = slotProps?.button;
@@ -926,7 +909,7 @@ const NavCategory = ({
               locked: { ...NAV_SHOWN_PART_LOCKS, 'aria-label': undefined },
             }))}
         >
-          {buttonLabel}
+          {label}
         </span>
         {expandIconElement}
       </button>
@@ -947,7 +930,7 @@ const NavCategory = ({
                 }))}
               ref={listMergedRef}
             >
-              {items}
+              {children}
             </ul>
           </div>
         </NavCategoryValueContext.Provider>
@@ -1055,10 +1038,9 @@ markNavPart(NavSubItem, 'entry');
  * collapsible categories.
  *
  * - **Selection**: `value`/`defaultValue`/`onValueChange` (`onValueChange` fires only when the
- *   value changes). The deprecated `selectedValue`/`defaultSelectedValue`/`onNavItemSelect` still
- *   work; `onNavItemSelect` keeps firing on every activation, re-selection included. A click that
- *   opens a link in another tab or window (or downloads it) selects nothing, unless the item's
- *   `onClick` prevents the default (client-side routing: then nothing opens elsewhere).
+ *   value changes). A click that opens a link in another tab or window (or downloads it) selects
+ *   nothing, unless the item's `onClick` prevents the default (client-side routing: then nothing
+ *   opens elsewhere).
  * - **Categories**: `openCategories`/`defaultOpenCategories`/`onOpenCategoriesChange`. Without
  *   `defaultOpenCategories`, the categories containing the selected item (`value` or
  *   `defaultValue`) start open. A closed category that contains the selected item marks its toggle

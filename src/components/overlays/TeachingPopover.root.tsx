@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { teachingPopoverClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { slotRendersContent } from '../../lib/slot';
 import type { SlotPart } from '../../lib/slotProps';
 import type {
@@ -62,10 +62,6 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    * @default 0
    */
   defaultActiveStep?: number;
-  /** @deprecated Use `activeStep`. */
-  currentStep?: number;
-  /** @deprecated Use `defaultActiveStep`. */
-  defaultCurrentStep?: number;
   /**
    * Called with the requested step index when Next, Back or a step button of
    * `TeachingPopover.CarouselNav` is activated (the button of the current step requests nothing),
@@ -313,10 +309,8 @@ const SURFACE_PROPS_WARNING =
 // The root of `TeachingPopover` (documented on the export in TeachingPopover.tsx).
 export const TeachingPopoverRoot = ({
   steps,
-  activeStep: activeStepProp,
+  activeStep,
   defaultActiveStep,
-  currentStep,
-  defaultCurrentStep,
   onStepChange,
   onDismiss,
   onFinish,
@@ -346,23 +340,9 @@ export const TeachingPopoverRoot = ({
   const explicitTarget = (
     targetProp !== undefined ? targetProp : positioning?.target
   ) as TeachingPopoverProps['target'];
-  const controlledStep = resolveDeprecatedProp(
-    'TeachingPopover',
-    activeStepProp,
-    currentStep,
-    'currentStep',
-    'activeStep',
-  );
-  const initialStep =
-    resolveDeprecatedProp(
-      'TeachingPopover',
-      defaultActiveStep,
-      defaultCurrentStep,
-      'defaultCurrentStep',
-      'defaultActiveStep',
-    ) ?? 0;
+  const initialStep = defaultActiveStep ?? 0;
   const [storedStep, setStep, stepControlled] = useControllable(
-    controlledStep,
+    activeStep,
     initialStep,
     onStepChange,
   );

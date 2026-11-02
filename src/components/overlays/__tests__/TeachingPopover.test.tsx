@@ -451,38 +451,46 @@ describe('TeachingPopover', () => {
     });
   });
 
-  describe('deprecated aliases (feedback-navigation#46)', () => {
-    it('currentStep still selects the step and warns once', () => {
+  // Untyped code that still passes a 0.4 name: it lands on the surface element as an unknown
+  // prop, which React reports in development (once per name and page load), and changes nothing.
+  describe('the 0.4 names are removed in 1.0 (feedback-navigation#46)', () => {
+    const unknownProp = (name: string) => [
+      'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+        'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+        'accidentally passed it from a parent component, remove it from the DOM element.',
+      name,
+      name.toLowerCase(),
+    ];
+
+    it('has no currentStep alias of activeStep: the first step shows', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<TeachingPopover steps={steps} currentStep={1} />);
-      expect(heading()).toHaveTextContent(/^Features/);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] TeachingPopover: `currentStep` is deprecated and will be removed in 1.0. Use `activeStep` instead.',
-        ],
-      ]);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        <TeachingPopover
+          steps={steps}
+          // @ts-expect-error -- `currentStep` is removed in 1.0: use `activeStep`
+          currentStep={1}
+        />,
+      );
+      expect(heading()).toHaveTextContent(/^Welcome/);
+      expect(screen.getByRole('dialog')).toHaveAttribute('currentstep', '1');
+      expect(error.mock.calls).toEqual([unknownProp('currentStep')]);
+      expect(warn).not.toHaveBeenCalled();
     });
 
-    it('defaultCurrentStep still sets the initial step and warns once', () => {
+    it('has no defaultCurrentStep alias of defaultActiveStep: the first step shows', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<TeachingPopover steps={steps} defaultCurrentStep={2} />);
-      expect(heading()).toHaveTextContent(/^Done/);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] TeachingPopover: `defaultCurrentStep` is deprecated and will be removed in 1.0. Use `defaultActiveStep` instead.',
-        ],
-      ]);
-    });
-
-    it('activeStep wins over currentStep', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<TeachingPopover steps={steps} activeStep={2} currentStep={0} />);
-      expect(heading()).toHaveTextContent(/^Done/);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] TeachingPopover: `currentStep` is deprecated and will be removed in 1.0. Use `activeStep` instead.',
-        ],
-      ]);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        <TeachingPopover
+          steps={steps}
+          // @ts-expect-error -- `defaultCurrentStep` is removed in 1.0: use `defaultActiveStep`
+          defaultCurrentStep={2}
+        />,
+      );
+      expect(heading()).toHaveTextContent(/^Welcome/);
+      expect(error.mock.calls).toEqual([unknownProp('defaultCurrentStep')]);
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 

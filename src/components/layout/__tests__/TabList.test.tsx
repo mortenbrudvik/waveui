@@ -54,17 +54,6 @@ afterEach(() => {
 const warnings = (warn: { mock: { calls: unknown[][] } }) =>
   warn.mock.calls.map(([message]) => String(message));
 
-/** A TabList deprecation warning (asserted exactly). */
-const deprecated = (oldName: string, newName: string, extra = '') =>
-  `[WaveUI] TabList: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.${extra}`;
-
-/** The deprecation warning of `onTabSelect` (asserted exactly). */
-const ON_TAB_SELECT_DEPRECATED = deprecated(
-  'onTabSelect',
-  'onValueChange',
-  ' `onValueChange` is called only when the selected tab changes.',
-);
-
 /** useControllable's warning when a value switches between controlled and uncontrolled. */
 const modeSwitch = (from: string, to: string) =>
   `[WaveUI] A component is changing from ${from} to ${to}. Components should not switch ` +
@@ -597,94 +586,106 @@ describe('TabList - parts that unmount', () => {
   });
 });
 
-describe('TabList - deprecated aliases (feedback-navigation#46, layout#16)', () => {
-  it('selectedValue, defaultSelectedValue, onTabSelect and vertical still work and warn once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onTabSelect = vi.fn();
-    const { rerender } = render(
-      <TabList defaultSelectedValue="b" onTabSelect={onTabSelect} vertical>
-        {threeTabs}
-      </TabList>,
-    );
-    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tablist')).toHaveAttribute('aria-orientation', 'vertical');
-    await user.click(tab('Tab C'));
-    expect(onTabSelect).toHaveBeenCalledWith('c');
+// Untyped code that still passes a 0.4 name: it lands on the tablist element as an unknown prop,
+// which React reports in development (once per name and page load), and changes nothing.
+describe('TabList - the 0.4 names are removed in 1.0 (feedback-navigation#46, layout#16)', () => {
+  const unknownProp = (name: string) => [
+    'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+      'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+      'accidentally passed it from a parent component, remove it from the DOM element.',
+    name,
+    name.toLowerCase(),
+  ];
 
-    rerender(
-      <TabList selectedValue="a" onTabSelect={onTabSelect}>
+  it('has no selectedValue alias of value: the first tab stays selected', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <TabList
+        // @ts-expect-error -- `selectedValue` is removed in 1.0: use `value`
+        selectedValue="b"
+      >
         {threeTabs}
       </TabList>,
     );
     expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
-
-    expect(warnings(warn)).toEqual([
-      deprecated('defaultSelectedValue', 'defaultValue'),
-      deprecated('vertical', 'orientation'),
-      ON_TAB_SELECT_DEPRECATED,
-      deprecated('selectedValue', 'value'),
-      // The rerender passes a value where the first render had none.
-      modeSwitch('uncontrolled', 'controlled'),
-    ]);
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tablist')).toHaveAttribute('selectedvalue', 'b');
+    expect(error.mock.calls).toEqual([unknownProp('selectedValue')]);
+    expect(warn).not.toHaveBeenCalled();
   });
 
-  it('the new names win over the deprecated ones', () => {
+  it('has no defaultSelectedValue alias of defaultValue: the first tab is selected', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     render(
-      <TabList value="c" selectedValue="a" orientation="horizontal" vertical>
+      <TabList
+        // @ts-expect-error -- `defaultSelectedValue` is removed in 1.0: use `defaultValue`
+        defaultSelectedValue="b"
+      >
         {threeTabs}
       </TabList>,
     );
-    expect(tab('Tab C')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tablist')).toHaveAttribute('aria-orientation', 'horizontal');
-    expect(warnings(warn)).toEqual([
-      deprecated('selectedValue', 'value'),
-      deprecated('vertical', 'orientation'),
-    ]);
+    expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'false');
+    expect(error.mock.calls).toEqual([unknownProp('defaultSelectedValue')]);
+    expect(warn).not.toHaveBeenCalled();
   });
 
-  it('onTabSelect fires when the selected tab is activated again; onValueChange does not', async () => {
+  it('has no vertical alias of orientation="vertical": the TabList stays horizontal', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <TabList
+        // @ts-expect-error -- `vertical` is removed in 1.0: use `orientation="vertical"`
+        vertical
+      >
+        {threeTabs}
+      </TabList>,
+    );
+    const tablist = screen.getByRole('tablist');
+    expect(tablist).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(tablist).toHaveAttribute('data-orientation', 'horizontal');
+    expect(tablist).not.toHaveAttribute('vertical');
+    expect(error.mock.calls).toEqual([
+      [
+        'Received `%s` for a non-boolean attribute `%s`.\n\nIf you want to write it to the DOM, ' +
+          'pass a string instead: %s="%s" or %s={value.toString()}.',
+        true,
+        'vertical',
+        'vertical',
+        true,
+        'vertical',
+      ],
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('has no onTabSelect alias of onValueChange: only onValueChange is called', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const user = userEvent.setup();
     const onTabSelect = vi.fn();
     const onValueChange = vi.fn();
     render(
-      <TabList defaultValue="a" onTabSelect={onTabSelect} onValueChange={onValueChange}>
+      <TabList
+        defaultValue="a"
+        // @ts-expect-error -- `onTabSelect(value)` is removed in 1.0: use `onValueChange`
+        onTabSelect={onTabSelect}
+        onValueChange={onValueChange}
+      >
         {threeTabs}
       </TabList>,
     );
     await user.click(tab('Tab A'));
-    expect(onTabSelect).toHaveBeenCalledTimes(1);
-    expect(onTabSelect).toHaveBeenCalledWith('a');
-    expect(onValueChange).not.toHaveBeenCalled();
     await user.click(tab('Tab B'));
-    expect(onTabSelect).toHaveBeenLastCalledWith('b');
-    expect(onValueChange).toHaveBeenCalledTimes(1);
-    expect(onValueChange).toHaveBeenCalledWith('b');
-    expect(warnings(warn)).toEqual([ON_TAB_SELECT_DEPRECATED]);
-  });
-
-  it('onTabSelect does not fire when a disabled tab is clicked (layout#13)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onTabSelect = vi.fn();
-    render(
-      <TabList defaultValue="a" onTabSelect={onTabSelect}>
-        <TabList.Tab value="a">Tab A</TabList.Tab>
-        <TabList.Tab value="b" disabled>
-          Tab B
-        </TabList.Tab>
-        <TabList.Tab value="c" aria-disabled="true">
-          Tab C
-        </TabList.Tab>
-      </TabList>,
-    );
-    await user.click(tab('Tab B'));
-    await user.click(tab('Tab C'));
+    expect(onValueChange.mock.calls).toEqual([['b']]);
     expect(onTabSelect).not.toHaveBeenCalled();
-    expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
-    expect(warnings(warn)).toEqual([ON_TAB_SELECT_DEPRECATED]);
+    expect(screen.getByRole('tablist')).not.toHaveAttribute('ontabselect');
+    expect(error.mock.calls).toEqual([
+      ['Unknown event handler property `%s`. It will be ignored.', 'onTabSelect'],
+    ]);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -1399,23 +1400,6 @@ describe('TabList - manual activation (selectTabOnFocus={false})', () => {
     await user.keyboard(' ');
     expect(onValueChange.mock.calls).toEqual([['b']]);
     expect(selected()).toBe(tab('Tab B'));
-  });
-
-  it('the deprecated onTabSelect fires on activation only, not on focus moves', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onTabSelect = vi.fn();
-    render(
-      <TabList defaultValue="a" selectTabOnFocus={false} onTabSelect={onTabSelect}>
-        {threeTabs}
-      </TabList>,
-    );
-    act(() => tab('Tab A').focus());
-    await user.keyboard('{ArrowRight}');
-    expect(onTabSelect).not.toHaveBeenCalled();
-    await user.keyboard('{Enter}');
-    expect(onTabSelect.mock.calls).toEqual([['b']]);
-    expect(warnings(warn)).toEqual([ON_TAB_SELECT_DEPRECATED]);
   });
 
   it('selectTabOnFocus={true} (the default) selects the tab focus moves to', async () => {

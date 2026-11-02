@@ -39,10 +39,6 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
    */
   appearance?: TooltipAppearance;
   /**
-   * @deprecated Use `appearance` (`'dark'` → `'inverted'`, `'light'` → `'normal'`).
-   */
-  variant?: 'dark' | 'light';
-  /**
    * Milliseconds before the tooltip appears when the pointer rests on the child or the child
    * receives keyboard focus (Fluent's `showDelay`; unlike Menu's and Popover's `openDelay`, it
    * applies to focus too).
@@ -142,11 +138,6 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
     content?: SlotPart<'span'>;
   };
 }
-
-const VARIANT_APPEARANCE: Record<'dark' | 'light', TooltipAppearance> = {
-  dark: 'inverted',
-  light: 'normal',
-};
 
 const appearanceClasses: Record<TooltipAppearance, string> = {
   inverted: 'border border-inverted-border bg-inverted text-inverted-foreground',
@@ -351,7 +342,6 @@ function useRelationshipTarget(
 export const Tooltip = ({
   content,
   appearance: appearanceProp,
-  variant,
   openDelay: openDelayProp,
   closeDelay = 100,
   delay,
@@ -373,14 +363,7 @@ export const Tooltip = ({
   slotProps,
   ...rest
 }: TooltipProps) => {
-  const appearance =
-    resolveDeprecatedProp(
-      'Tooltip',
-      appearanceProp,
-      variant === undefined ? undefined : VARIANT_APPEARANCE[variant],
-      'variant',
-      'appearance',
-    ) ?? 'inverted';
+  const appearance = appearanceProp ?? 'inverted';
   const openDelay =
     resolveDeprecatedProp('Tooltip', openDelayProp, delay, 'delay', 'openDelay') ?? 200;
   const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);

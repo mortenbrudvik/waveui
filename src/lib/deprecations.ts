@@ -310,6 +310,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:TabList:selectedValue',
     changelogAnchor: TAB_LIST_ROW,
     file: TAB_LIST,
+    done: true,
   },
   {
     id: 'tablist-defaultselectedvalue',
@@ -322,6 +323,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:TabList:defaultSelectedValue',
     changelogAnchor: TAB_LIST_ROW,
     file: TAB_LIST,
+    done: true,
   },
   {
     id: 'tablist-vertical',
@@ -334,6 +336,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:TabList:vertical',
     changelogAnchor: TAB_LIST_ROW,
     file: TAB_LIST,
+    done: true,
   },
   {
     id: 'tablist-ontabselect',
@@ -346,6 +349,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:TabList:onTabSelect',
     changelogAnchor: TAB_LIST_ROW,
     file: TAB_LIST,
+    done: true,
   },
   {
     id: 'nav-selectedvalue',
@@ -358,6 +362,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Nav:selectedValue',
     changelogAnchor: NAV_ROW,
     file: NAV_ROOT,
+    done: true,
   },
   {
     id: 'nav-defaultselectedvalue',
@@ -370,6 +375,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Nav:defaultSelectedValue',
     changelogAnchor: NAV_ROW,
     file: NAV_ROOT,
+    done: true,
   },
   {
     id: 'nav-onnavitemselect',
@@ -382,6 +388,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Nav:onNavItemSelect',
     changelogAnchor: NAV_ROW,
     file: NAV_ROOT,
+    done: true,
   },
   {
     id: 'nav-category-text-label',
@@ -394,6 +401,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Nav.Category:text children as the label',
     changelogAnchor: '| Nav.Category | label taken from the first string child |',
     file: 'src/components/navigation/Nav.tsx',
+    done: true,
   },
   {
     id: 'teachingpopover-currentstep',
@@ -406,6 +414,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:TeachingPopover:currentStep',
     changelogAnchor: TEACHING_POPOVER_ROW,
     file: TEACHING_POPOVER_ROOT,
+    done: true,
   },
   {
     id: 'teachingpopover-defaultcurrentstep',
@@ -418,6 +427,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:TeachingPopover:defaultCurrentStep',
     changelogAnchor: TEACHING_POPOVER_ROW,
     file: TEACHING_POPOVER_ROOT,
+    done: true,
   },
   {
     id: 'list-selectionmode-multi',
@@ -551,6 +561,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Stack:direction',
     changelogAnchor: '| Stack | `direction` |',
     file: 'src/components/layout/Stack.tsx',
+    done: true,
   },
   {
     id: 'skeleton-variant',
@@ -599,6 +610,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Tooltip:variant',
     changelogAnchor: '| Tooltip | `variant="dark" \\| "light"` |',
     file: TOOLTIP,
+    done: true,
   },
   {
     id: 'accordion-openitems',
@@ -611,6 +623,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Accordion:openItems',
     changelogAnchor: ACCORDION_ROW,
     file: ACCORDION,
+    done: true,
   },
   {
     id: 'accordion-defaultopenitems',
@@ -623,6 +636,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Accordion:defaultOpenItems',
     changelogAnchor: ACCORDION_ROW,
     file: ACCORDION,
+    done: true,
   },
   {
     id: 'accordion-onopenitemschange',
@@ -635,6 +649,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Accordion:onOpenItemsChange',
     changelogAnchor: ACCORDION_ROW,
     file: ACCORDION,
+    done: true,
   },
 
   // The button-object form of the dismiss and clear slots. A `<button>` or `Button` element passed

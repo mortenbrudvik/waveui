@@ -57,7 +57,6 @@ import upgradingGuide from '../../docs/UPGRADING-TO-1.0.md?raw';
 import * as entry from '../index';
 import * as registry from '../lib/classNames';
 import {
-  Accordion,
   Badge,
   CounterBadge,
   DataGrid,
@@ -76,11 +75,8 @@ import {
   Select,
   Skeleton,
   Slider,
-  Stack,
-  TabList,
   Table,
   Tag,
-  TeachingPopover,
   Text,
   Tooltip,
   useRovingTabIndex,
@@ -507,14 +503,7 @@ function RovingPositional() {
   return <div ref={ref} role="group" aria-label="Group" onKeyDown={handleKeyDown} />;
 }
 
-const tabs = <TabList.Tab value="a">A</TabList.Tab>;
 const navItems = <Nav.Item value="a">A</Nav.Item>;
-const accordionItems = (
-  <Accordion.Item value="a">
-    <Accordion.Trigger>A</Accordion.Trigger>
-    <Accordion.Panel>Panel</Accordion.Panel>
-  </Accordion.Item>
-);
 const gridContent = (
   <>
     <DataGrid.Header>
@@ -538,79 +527,9 @@ const tableBody = (
     </Table.Row>
   </Table.Body>
 );
-const steps = [{ title: 'Welcome', body: 'Step one.' }];
 
 /** A minimal case per row that warns, by row id. */
 const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
-  'tablist-selectedvalue': {
-    ui: <TabList selectedValue="a">{tabs}</TabList>,
-    message: deprecated('TabList', 'selectedValue', 'value'),
-  },
-  'tablist-defaultselectedvalue': {
-    ui: <TabList defaultSelectedValue="a">{tabs}</TabList>,
-    message: deprecated('TabList', 'defaultSelectedValue', 'defaultValue'),
-  },
-  'tablist-vertical': {
-    ui: <TabList vertical>{tabs}</TabList>,
-    message: deprecated('TabList', 'vertical', 'orientation'),
-  },
-  'tablist-ontabselect': {
-    ui: <TabList onTabSelect={noop}>{tabs}</TabList>,
-    message: deprecated(
-      'TabList',
-      'onTabSelect',
-      'onValueChange',
-      '`onValueChange` is called only when the selected tab changes.',
-    ),
-  },
-  'nav-selectedvalue': {
-    ui: (
-      <Nav aria-label="Main" selectedValue="a">
-        {navItems}
-      </Nav>
-    ),
-    message: deprecated('Nav', 'selectedValue', 'value'),
-  },
-  'nav-defaultselectedvalue': {
-    ui: (
-      <Nav aria-label="Main" defaultSelectedValue="a">
-        {navItems}
-      </Nav>
-    ),
-    message: deprecated('Nav', 'defaultSelectedValue', 'defaultValue'),
-  },
-  'nav-onnavitemselect': {
-    ui: (
-      <Nav aria-label="Main" onNavItemSelect={noop}>
-        {navItems}
-      </Nav>
-    ),
-    message: deprecated('Nav', 'onNavItemSelect', 'onValueChange'),
-  },
-  'nav-category-text-label': {
-    ui: (
-      <Nav aria-label="Main">
-        <Nav.Category value="reports">
-          Reports
-          <Nav.SubItem value="sales">Sales</Nav.SubItem>
-        </Nav.Category>
-      </Nav>
-    ),
-    message: deprecated(
-      'Nav.Category',
-      'text children as the label',
-      'label',
-      'Pass the category label in `label` and only the sub-items as children.',
-    ),
-  },
-  'teachingpopover-currentstep': {
-    ui: <TeachingPopover steps={steps} currentStep={0} />,
-    message: deprecated('TeachingPopover', 'currentStep', 'activeStep'),
-  },
-  'teachingpopover-defaultcurrentstep': {
-    ui: <TeachingPopover steps={steps} defaultCurrentStep={0} />,
-    message: deprecated('TeachingPopover', 'defaultCurrentStep', 'defaultActiveStep'),
-  },
   'datagrid-selectedkeys': {
     ui: (
       <DataGrid aria-label="People" selectionMode="multiple" selectedKeys={new Set(['1'])}>
@@ -696,10 +615,6 @@ const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
     ),
     message: deprecated('Table', 'Table.HeadCell', 'Table.HeaderCell'),
   },
-  'stack-direction': {
-    ui: <Stack direction="horizontal">Item</Stack>,
-    message: deprecated('Stack', 'direction', 'orientation'),
-  },
   'skeleton-variant': {
     ui: <Skeleton variant="circular" />,
     message: deprecated('Skeleton', 'variant', 'shape'),
@@ -715,41 +630,6 @@ const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
       </Link>
     ),
     message: deprecated('Link', 'variant', 'appearance'),
-  },
-  'tooltip-variant': {
-    ui: (
-      <Tooltip content="Tip" variant="dark">
-        <button type="button">Button</button>
-      </Tooltip>
-    ),
-    message: deprecated('Tooltip', 'variant', 'appearance'),
-  },
-  'accordion-openitems': {
-    ui: <Accordion openItems={['a']}>{accordionItems}</Accordion>,
-    message: deprecated(
-      'Accordion',
-      'openItems',
-      'openItem',
-      'In single mode the Accordion takes one value.',
-    ),
-  },
-  'accordion-defaultopenitems': {
-    ui: <Accordion defaultOpenItems={['a']}>{accordionItems}</Accordion>,
-    message: deprecated(
-      'Accordion',
-      'defaultOpenItems',
-      'defaultOpenItem',
-      'In single mode the Accordion takes one value.',
-    ),
-  },
-  'accordion-onopenitemschange': {
-    ui: <Accordion onOpenItemsChange={noop}>{accordionItems}</Accordion>,
-    message: deprecated(
-      'Accordion',
-      'onOpenItemsChange',
-      'onOpenItemChange',
-      'In single mode the Accordion reports one value.',
-    ),
   },
   'messagebar-dismiss-button-object': {
     ui: <MessageBar dismiss={{ as: 'button', onClick: noop }}>Saved</MessageBar>,

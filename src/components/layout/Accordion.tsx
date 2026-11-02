@@ -8,7 +8,7 @@ import {
 import { flattenChildren, getElementType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
+import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
@@ -186,18 +186,12 @@ export interface AccordionSingleProps extends AccordionBaseProps {
   defaultOpenItem?: string | null;
   /** Called with the new open item (`null` when it closed) when it changes. */
   onOpenItemChange?: (openItem: string | null) => void;
-  /** @deprecated Use `openItem` (single mode); `openItems` belongs to `type="multiple"`. */
-  openItems?: readonly string[];
-  /**
-   * @deprecated Use `defaultOpenItem` (single mode); `defaultOpenItems` belongs to
-   * `type="multiple"`.
-   */
-  defaultOpenItems?: readonly string[];
-  /**
-   * @deprecated Use `onOpenItemChange` (single mode); `onOpenItemsChange` belongs to
-   * `type="multiple"`.
-   */
-  onOpenItemsChange?: (openItems: string[]) => void;
+  /** `type="multiple"` only: a single Accordion takes `openItem`. */
+  openItems?: never;
+  /** `type="multiple"` only: a single Accordion takes `defaultOpenItem`. */
+  defaultOpenItems?: never;
+  /** `type="multiple"` only: a single Accordion reports through `onOpenItemChange`. */
+  onOpenItemsChange?: never;
 }
 
 /** Props of an Accordion in which any number of items can be open. */
@@ -230,6 +224,9 @@ export interface AccordionMultipleProps extends AccordionBaseProps {
  */
 export type AccordionProps = AccordionSingleProps | AccordionMultipleProps;
 
+/** The props only `type="multiple"` takes (`never` in single mode). */
+type MultipleOnly = 'openItems' | 'defaultOpenItems' | 'onOpenItemsChange';
+
 function toItems(value: string | null | undefined): readonly string[] | undefined {
   if (value === undefined) return undefined;
   return value === null ? EMPTY : [value];
@@ -237,6 +234,8 @@ function toItems(value: string | null | undefined): readonly string[] | undefine
 
 // The Accordion root, documented on the exported `Accordion` const.
 const AccordionRoot = (props: AccordionProps) => {
+  // Both modes' props, read by mode: a single Accordion ignores the multiple-mode ones (and the
+  // other way round), so neither reaches the root element.
   const {
     type,
     openItem,
@@ -250,49 +249,22 @@ const AccordionRoot = (props: AccordionProps) => {
     children,
     ref,
     ...rest
-  } = props as Omit<AccordionSingleProps, 'type'> & { type?: SelectionMode };
+  } = props as Omit<AccordionSingleProps, 'type' | MultipleOnly> &
+    Pick<AccordionMultipleProps, MultipleOnly> & { type?: SelectionMode };
   const multiple = type === 'multiple';
 
-  if (!multiple) {
-    if (openItemsProp !== undefined) {
-      warnDeprecated(
-        'Accordion',
-        'openItems',
-        'openItem',
-        'In single mode the Accordion takes one value.',
-      );
-    }
-    if (defaultOpenItems !== undefined) {
-      warnDeprecated(
-        'Accordion',
-        'defaultOpenItems',
-        'defaultOpenItem',
-        'In single mode the Accordion takes one value.',
-      );
-    }
-    if (onOpenItemsChange !== undefined) {
-      warnDeprecated(
-        'Accordion',
-        'onOpenItemsChange',
-        'onOpenItemChange',
-        'In single mode the Accordion reports one value.',
-      );
-    }
-  }
-
-  const controlledSingle = multiple ? undefined : openItem;
   const controlled = React.useMemo(
-    () => toItems(controlledSingle) ?? openItemsProp,
-    [controlledSingle, openItemsProp],
+    () => (multiple ? openItemsProp : toItems(openItem)),
+    [multiple, openItem, openItemsProp],
   );
   const [initialItems] = React.useState(
-    () => (multiple ? undefined : toItems(defaultOpenItem)) ?? defaultOpenItems ?? EMPTY,
+    () => (multiple ? defaultOpenItems : toItems(defaultOpenItem)) ?? EMPTY,
   );
 
   const handleChange = (next: readonly string[]) => {
     const list = [...next];
-    if (!multiple) onOpenItemChange?.(list[0] ?? null);
-    onOpenItemsChange?.(list);
+    if (multiple) onOpenItemsChange?.(list);
+    else onOpenItemChange?.(list[0] ?? null);
   };
 
   const [openItems, setOpenItems] = useControllable<readonly string[]>(
@@ -300,16 +272,6 @@ const AccordionRoot = (props: AccordionProps) => {
     initialItems,
     handleChange,
   );
-
-  const openCount = openItems.length;
-  React.useEffect(() => {
-    if (!multiple && openCount > 1) {
-      warnOnce(
-        'Accordion:single-multiple-open',
-        `Accordion: type="single" allows one open item, but ${openCount} are open. Pass \`openItem\`, or use type="multiple".`,
-      );
-    }
-  }, [multiple, openCount]);
 
   const toggle = React.useCallback(
     (value: string) => {

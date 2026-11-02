@@ -772,62 +772,67 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
     >().toEqualTypeOf<string[]>();
   });
 
-  it('single: the legacy openItems/defaultOpenItems/onOpenItemsChange still work and warn once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onOpenItemsChange = vi.fn();
-    render(
-      <Accordion defaultOpenItems={['2']} onOpenItemsChange={onOpenItemsChange}>
-        {items}
-      </Accordion>,
-    );
-    expect(screen.getByText('Panel 2')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Item 1' }));
-    expect(onOpenItemsChange).toHaveBeenCalledWith(['1']);
-    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-      '[WaveUI] Accordion: `defaultOpenItems` is deprecated and will be removed in 1.0. Use `defaultOpenItem` instead. In single mode the Accordion takes one value.',
-      '[WaveUI] Accordion: `onOpenItemsChange` is deprecated and will be removed in 1.0. Use `onOpenItemChange` instead. In single mode the Accordion reports one value.',
-    ]);
-  });
+  // The multiple-mode props are `never` in single mode (removed there in 1.0). Untyped code that
+  // still passes them gets nothing: a single Accordion reads only its own props, and they never
+  // reach the root element.
+  describe('single: the 0.4 openItems, defaultOpenItems and onOpenItemsChange are removed in 1.0', () => {
+    it('ignores openItems: every item stays closed', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { container } = render(
+        // @ts-expect-error -- single-mode `openItems` is removed in 1.0: use `openItem`
+        <Accordion openItems={['1']}>{items}</Accordion>,
+      );
+      expect(screen.queryByRole('region')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Item 1' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+      expect(container.firstElementChild).not.toHaveAttribute('openitems');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    });
 
-  it('single: legacy controlled openItems still controls the open item and warns once', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { rerender } = render(<Accordion openItems={['1']}>{items}</Accordion>);
-    expect(screen.getByText('Panel 1')).toBeInTheDocument();
-    expect(screen.queryByText('Panel 2')).not.toBeInTheDocument();
-    rerender(<Accordion openItems={['1']}>{items}</Accordion>);
-    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-      '[WaveUI] Accordion: `openItems` is deprecated and will be removed in 1.0. Use `openItem` instead. In single mode the Accordion takes one value.',
-    ]);
-  });
+    it('ignores defaultOpenItems: every item starts closed', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        // @ts-expect-error -- single-mode `defaultOpenItems` is removed in 1.0: use `defaultOpenItem`
+        <Accordion defaultOpenItems={['2']}>{items}</Accordion>,
+      );
+      expect(screen.queryByRole('region')).not.toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    });
 
-  it('single: calls both onOpenItemChange and its deprecated alias onOpenItemsChange (C-NAMING)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onOpenItemChange = vi.fn();
-    const onOpenItemsChange = vi.fn();
-    render(
-      <Accordion onOpenItemChange={onOpenItemChange} onOpenItemsChange={onOpenItemsChange}>
-        {items}
-      </Accordion>,
-    );
-    await user.click(screen.getByRole('button', { name: 'Item 1' }));
-    expect(onOpenItemChange).toHaveBeenCalledTimes(1);
-    expect(onOpenItemChange).toHaveBeenCalledWith('1');
-    expect(onOpenItemsChange).toHaveBeenCalledTimes(1);
-    expect(onOpenItemsChange).toHaveBeenCalledWith(['1']);
-    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-      '[WaveUI] Accordion: `onOpenItemsChange` is deprecated and will be removed in 1.0. Use `onOpenItemChange` instead. In single mode the Accordion reports one value.',
-    ]);
-  });
+    it('never calls onOpenItemsChange: only onOpenItemChange reports', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const onOpenItemChange = vi.fn();
+      const onOpenItemsChange = vi.fn();
+      render(
+        // @ts-expect-error -- single-mode `onOpenItemsChange` is removed in 1.0: use `onOpenItemChange`
+        <Accordion onOpenItemChange={onOpenItemChange} onOpenItemsChange={onOpenItemsChange}>
+          {items}
+        </Accordion>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Item 1' }));
+      expect(onOpenItemChange.mock.calls).toEqual([['1']]);
+      expect(onOpenItemsChange).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    });
 
-  it('single: warns when more than one item is open', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    render(<Accordion openItems={['1', '2']}>{items}</Accordion>);
-    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-      '[WaveUI] Accordion: `openItems` is deprecated and will be removed in 1.0. Use `openItem` instead. In single mode the Accordion takes one value.',
-      '[WaveUI] Accordion: type="single" allows one open item, but 2 are open. Pass `openItem`, or use type="multiple".',
-    ]);
+    it('rejects them in the props type too, while type="multiple" takes them', () => {
+      // @ts-expect-error -- `openItems` belongs to type="multiple"
+      const single: AccordionProps = { openItems: ['a'] };
+      // @ts-expect-error -- `onOpenItemsChange` belongs to type="multiple"
+      const singleCallback: AccordionSingleProps = { onOpenItemsChange: () => {} };
+      const multiple: AccordionProps = { type: 'multiple', defaultOpenItems: ['a'] };
+      expectTypeOf<AccordionSingleProps['openItems']>().toEqualTypeOf<undefined>();
+      expect([single, singleCallback, multiple]).toHaveLength(3);
+    });
   });
 
   it('multiple: openItems is not deprecated', async () => {

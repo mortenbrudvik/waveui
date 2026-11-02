@@ -8,12 +8,7 @@ import {
 import { flattenChildren, getElementType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import {
-  reportMissingContext,
-  resolveDeprecatedProp,
-  warnDeprecated,
-  warnOnce,
-} from '../../lib/dev';
+import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { tabIndicatorMotion } from '../../lib/motion';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { disabledStyles, focusRing, focusRingInset, forcedColors } from '../../lib/styles';
@@ -355,34 +350,19 @@ export interface TabListProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
    * @default the slide described above
    */
   motion?: MotionSlot | null;
-  /** @deprecated Use `value`. */
-  selectedValue?: string;
-  /** @deprecated Use `defaultValue`. */
-  defaultSelectedValue?: string;
-  /**
-   * @deprecated Use `onValueChange`. Unlike `onValueChange`, it is called on every activation,
-   * including a click on the tab that is already selected.
-   */
-  onTabSelect?: (value: string) => void;
-  /** @deprecated Use `orientation="vertical"`. */
-  vertical?: boolean;
   /** Ref to the `role="tablist"` element. */
   ref?: React.Ref<HTMLDivElement>;
 }
 
 const TabListRoot = ({
-  value: valueProp,
-  defaultValue: defaultValueProp,
+  value,
+  defaultValue,
   onValueChange,
   orientation: orientationProp,
   appearance = 'transparent',
   size = 'medium',
   selectTabOnFocus = true,
   motion,
-  selectedValue,
-  defaultSelectedValue,
-  onTabSelect,
-  vertical,
   className,
   children,
   onKeyDown,
@@ -390,36 +370,7 @@ const TabListRoot = ({
   ref,
   ...rest
 }: TabListProps) => {
-  const value = resolveDeprecatedProp(
-    'TabList',
-    valueProp,
-    selectedValue,
-    'selectedValue',
-    'value',
-  );
-  const defaultValue = resolveDeprecatedProp(
-    'TabList',
-    defaultValueProp,
-    defaultSelectedValue,
-    'defaultSelectedValue',
-    'defaultValue',
-  );
-  const orientation =
-    resolveDeprecatedProp<Orientation>(
-      'TabList',
-      orientationProp,
-      vertical === undefined ? undefined : vertical ? 'vertical' : 'horizontal',
-      'vertical',
-      'orientation',
-    ) ?? 'horizontal';
-  if (onTabSelect) {
-    warnDeprecated(
-      'TabList',
-      'onTabSelect',
-      'onValueChange',
-      '`onValueChange` is called only when the selected tab changes.',
-    );
-  }
+  const orientation = orientationProp ?? 'horizontal';
 
   // The sticky mode: a controlled value that becomes `undefined` clears the selection (`''`).
   const [selected, setSelected, isControlled] = useControllable(
@@ -463,7 +414,6 @@ const TabListRoot = ({
   );
 
   const select = useEventCallback((next: string) => {
-    onTabSelect?.(next);
     if (!isSelected(next)) setSelected(next);
   });
 

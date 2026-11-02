@@ -48,43 +48,30 @@ describe('Stack', () => {
     expect(el).not.toHaveClass('flex-col');
   });
 
-  describe('deprecated `direction` alias (layout#16)', () => {
-    it('still renders horizontally and warns once', () => {
+  describe('the 0.4 `direction` is removed in 1.0 (layout#16)', () => {
+    // Untyped code that still passes it: an unknown attribute of the rendered element, which
+    // React renders as it is, and the stack stays vertical.
+    it('has no direction alias of orientation: the stack stays vertical', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       render(
-        <>
-          <Stack direction="horizontal" data-testid="stack">
-            Content
-          </Stack>
-          <Stack direction="horizontal">Content</Stack>
-        </>,
-      );
-      expect(screen.getByTestId('stack')).toHaveClass('flex-row');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Stack: `direction` is deprecated and will be removed in 1.0. Use `orientation` instead.',
-        ],
-      ]);
-    });
-
-    it('lets orientation win when both are given, and still warns about direction', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(
-        <Stack orientation="vertical" direction="horizontal" data-testid="stack">
+        <Stack
+          // @ts-expect-error -- `direction` is removed in 1.0: use `orientation`
+          direction="horizontal"
+          data-testid="stack"
+        >
           Content
         </Stack>,
       );
       const el = screen.getByTestId('stack');
       expect(el).toHaveClass('flex-col');
       expect(el).not.toHaveClass('flex-row');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Stack: `direction` is deprecated and will be removed in 1.0. Use `orientation` instead.',
-        ],
-      ]);
+      expect(el).toHaveAttribute('direction', 'horizontal');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
 
-    it('does not warn for orientation alone', () => {
+    it('does not warn for orientation', () => {
       const warn = vi.spyOn(console, 'warn');
       render(<Stack orientation="horizontal">Content</Stack>);
       expect(warn).not.toHaveBeenCalled();
@@ -201,7 +188,7 @@ describe('Stack', () => {
       expectTypeOf<StackProps>().toEqualTypeOf<StackProps<'div'>>();
       expectTypeOf<StackProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
       expectTypeOf<StackOwnProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
-      expectTypeOf<StackOwnProps['direction']>().toEqualTypeOf<Orientation | undefined>();
+      expectTypeOf<StackOwnProps>().not.toHaveProperty('direction');
     });
   });
 });
