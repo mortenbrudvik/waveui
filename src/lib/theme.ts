@@ -10,10 +10,8 @@ export type WaveTheme = 'light' | 'dark' | 'high-contrast';
 
 const themeClassMap: Record<WaveTheme, string> = {
   light: 'wave-light',
-  // The legacy `dark` / `high-contrast` classes stay emitted (deprecated) for consumers' `dark:`
-  // variants and 0.4 selectors.
-  dark: 'wave-dark dark',
-  'high-contrast': 'wave-high-contrast high-contrast',
+  dark: 'wave-dark',
+  'high-contrast': 'wave-high-contrast',
 };
 
 /** Every {@link WaveTheme}, in declaration order. */
@@ -25,9 +23,9 @@ export function isWaveTheme(theme: unknown): theme is WaveTheme {
 }
 
 /**
- * The classes that select a theme's tokens: `'wave-light'`, `'wave-dark dark'` or
- * `'wave-high-contrast high-contrast'`. Unknown values fall back to the light classes. Safe to call
- * from a React Server Component.
+ * The class that selects a theme's tokens: `'wave-light'`, `'wave-dark'` or
+ * `'wave-high-contrast'`. Unknown values fall back to the light class. Safe to call from a React
+ * Server Component.
  *
  * @param theme - A {@link WaveTheme}.
  */

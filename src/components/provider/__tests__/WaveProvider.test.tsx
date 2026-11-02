@@ -52,20 +52,23 @@ describe('WaveProvider', () => {
       expect(el).toHaveClass(
         'wave-root',
         'wave-dark',
-        'dark',
         'bg-background',
         'text-foreground',
         'font-wave',
         'text-body-1',
       );
+      // The 0.4 class `dark` is removed in 1.0 (deprecated since 0.5).
+      expect(el).not.toHaveClass('dark');
       expect(el).toHaveAttribute('data-wave-theme', 'dark');
     });
 
-    it('applies wave-high-contrast plus the legacy high-contrast class', () => {
+    it('applies wave-high-contrast, without the 0.4 high-contrast class (removed in 1.0)', () => {
       const { container } = render(<WaveProvider theme="high-contrast">Content</WaveProvider>);
       const el = root(container);
-      expect(el).toHaveClass('wave-root', 'wave-high-contrast', 'high-contrast');
-      for (const name of ['dark', 'wave-dark', 'wave-light']) expect(el).not.toHaveClass(name);
+      expect(el).toHaveClass('wave-root', 'wave-high-contrast');
+      for (const name of ['high-contrast', 'dark', 'wave-dark', 'wave-light']) {
+        expect(el).not.toHaveClass(name);
+      }
       expect(el).toHaveAttribute('data-wave-theme', 'high-contrast');
     });
 
@@ -114,15 +117,17 @@ describe('WaveProvider', () => {
         </WaveProvider>,
       );
       expect(screen.getByTestId('outer')).toHaveClass('wave-light');
-      expect(screen.getByTestId('inner')).toHaveClass('wave-dark', 'dark');
+      expect(screen.getByTestId('inner')).toHaveClass('wave-dark');
+      expect(screen.getByTestId('inner')).not.toHaveClass('dark');
     });
   });
 
   describe('getThemeClassName', () => {
+    // One class per theme: the 0.4 classes `dark` and `high-contrast` are removed in 1.0.
     it.each([
       ['light', 'wave-light'],
-      ['dark', 'wave-dark dark'],
-      ['high-contrast', 'wave-high-contrast high-contrast'],
+      ['dark', 'wave-dark'],
+      ['high-contrast', 'wave-high-contrast'],
     ] as const)('maps %s to "%s"', (theme, expected) => {
       expect(getThemeClassName(theme)).toBe(expected);
     });
@@ -214,11 +219,11 @@ describe('WaveProvider', () => {
         </WaveProvider>,
       );
       const el = screen.getByTestId('inner');
-      expect(el).toHaveClass('wave-root', 'wave-dark', 'dark');
+      expect(el).toHaveClass('wave-root', 'wave-dark');
       expect(el).not.toHaveClass('wave-light');
       expect(el).toHaveAttribute('data-wave-theme', 'dark');
       expect(el).toHaveAttribute('dir', 'rtl');
-      expect(inner).toMatchObject({ theme: 'dark', dir: 'rtl', themeClassName: 'wave-dark dark' });
+      expect(inner).toMatchObject({ theme: 'dark', dir: 'rtl', themeClassName: 'wave-dark' });
     });
 
     it('inherits through several levels', () => {
@@ -238,7 +243,7 @@ describe('WaveProvider', () => {
       expect(innermost).toEqual({
         theme: 'high-contrast',
         dir: 'rtl',
-        themeClassName: 'wave-high-contrast high-contrast',
+        themeClassName: 'wave-high-contrast',
         portalContainer: appRoot,
         inputDefaults: {},
         motion: 'default',
@@ -401,7 +406,7 @@ describe('useWaveTheme', () => {
     expect(value).toEqual({
       theme: 'high-contrast',
       dir: 'ltr',
-      themeClassName: 'wave-high-contrast high-contrast',
+      themeClassName: 'wave-high-contrast',
       portalContainer: portalTarget,
       inputDefaults: {},
       motion: 'default',

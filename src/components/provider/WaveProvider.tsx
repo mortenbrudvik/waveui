@@ -131,7 +131,7 @@ export interface WaveContextValue {
   /** The active text direction. */
   dir: WaveDir;
   /**
-   * Theme classes of the nearest provider (see {@link getThemeClassName}); portals put them on
+   * The theme class of the nearest provider (see {@link getThemeClassName}); portals put it on
    * their wrapper so overlays inherit the theme. `''` outside a provider (the page's own theme).
    */
   themeClassName: string;

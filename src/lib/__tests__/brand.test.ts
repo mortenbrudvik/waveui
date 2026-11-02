@@ -100,15 +100,13 @@ function fullChromaHex(degrees: number): string {
 }
 
 describe('DEFAULT_BRAND_RAMP', () => {
-  it('equals the fallbacks of the --wave-brand-N declarations of tokens.css', () => {
+  it('equals the values of the --wave-brand-N declarations of tokens.css', () => {
     const constants = rootConstants();
     const fromCss = Object.fromEntries(
       STOPS.map((stop) => {
-        const match = /^var\(--brand-(\d+), (#[0-9a-f]{6})\)$/.exec(
-          constants.get(`--wave-brand-${stop}`) ?? '',
-        );
-        expect(match?.[1], `--wave-brand-${stop}`).toBe(String(stop));
-        return [stop, match?.[2]];
+        const value = constants.get(`--wave-brand-${stop}`) ?? '';
+        expect(value, `--wave-brand-${stop}`).toMatch(/^#[0-9a-f]{6}$/);
+        return [stop, value];
       }),
     );
     expect(DEFAULT_BRAND_RAMP).toEqual(fromCss);

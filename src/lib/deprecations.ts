@@ -720,6 +720,9 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: '`@mortenbrudvik/waveui/legacy-tokens.css` (the 0.4 CSS variable names)',
     file: 'src/styles/legacy-tokens.css',
+    done: true,
+    // The file and its export go, and tokens.css no longer reads the 0.4 ramp names as fallbacks.
+    absent: { file: true, css: ['legacy-tokens', '--brand-', '--grey-'] },
   },
   {
     id: 'theme-classes-dark-high-contrast',
@@ -732,6 +735,8 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     changelogAnchor:
       'The `dark` and `high-contrast` theme classes (use `wave-dark`, `wave-high-contrast`)',
     file: 'src/lib/theme.ts',
+    done: true,
+    absent: { css: ['.dark', '.high-contrast'] },
   },
   {
     id: 'animations-css',
@@ -743,6 +748,8 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: '`src/styles/animations.css`, empty since 0.5',
     file: 'src/styles/animations.css',
+    done: true,
+    absent: { file: true, css: ['animations.css'] },
   },
 
   // Badge and CounterBadge `important`: a meaning that changes (each warned through `warnOnce` in

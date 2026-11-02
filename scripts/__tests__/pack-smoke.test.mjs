@@ -58,10 +58,19 @@ describe('package.json (spec §3.2)', () => {
       './tokens.css': './src/styles/tokens.css',
       './variants': './src/styles/variants.css',
       './variants.css': './src/styles/variants.css',
-      './legacy-tokens.css': './src/styles/legacy-tokens.css',
       './package.json': './package.json',
     });
     expect(Object.keys(pkg.exports)).toEqual(['.', ...EXPORTED_SUBPATHS]);
+  });
+
+  it('has no ./legacy-tokens.css entry and ships neither removed stylesheet (removed in 1.0)', () => {
+    // An import of the 0.4 compatibility layer fails to resolve (ERR_PACKAGE_PATH_NOT_EXPORTED,
+    // or the bundler's equivalent) instead of loading a file; animations.css was never exported.
+    expect(pkg.exports).not.toHaveProperty(['./legacy-tokens.css']);
+    expect(EXPORTED_SUBPATHS).not.toContain('./legacy-tokens.css');
+    for (const name of ['legacy-tokens.css', 'animations.css']) {
+      expect(existsSync(join(root, 'src/styles', name)), name).toBe(false);
+    }
   });
 
   it('exports the wave-rtl variant for custom Tailwind setups built on ./tokens', () => {
@@ -104,8 +113,7 @@ describe('package.json (spec §3.2)', () => {
     // profile: `node16` and `strict` fail an ES-only package by design (spec R4).
     expect(pkg.scripts['check:package']).toBe(
       'publint && node scripts/attw-pack.mjs --profile esm-only --exclude-entrypoints styles ' +
-        'styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css ' +
-        'legacy-tokens.css',
+        'styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css',
     );
   });
 
@@ -149,7 +157,6 @@ describe('checkPackedFiles', () => {
     'src/styles/tokens.css',
     'src/styles/base.css',
     'src/styles/variants.css',
-    'src/styles/legacy-tokens.css',
     'src/styles/styles.css',
   ];
 

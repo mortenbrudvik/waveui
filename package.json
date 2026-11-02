@@ -55,7 +55,6 @@
     "./tokens.css": "./src/styles/tokens.css",
     "./variants": "./src/styles/variants.css",
     "./variants.css": "./src/styles/variants.css",
-    "./legacy-tokens.css": "./src/styles/legacy-tokens.css",
     "./package.json": "./package.json"
   },
   "files": [
@@ -79,7 +78,7 @@
     "lint:fix": "eslint src/ stories/ .storybook/ scripts/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
-    "check:package": "publint && node scripts/attw-pack.mjs --profile esm-only --exclude-entrypoints styles styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css legacy-tokens.css",
+    "check:package": "publint && node scripts/attw-pack.mjs --profile esm-only --exclude-entrypoints styles styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css",
     "test:pack": "node scripts/pack-smoke.mjs",
     "prepublishOnly": "npm run typecheck && npm run build && node scripts/verify-dist.mjs --final && npm test && npm run check:package && npm run test:pack"
   },

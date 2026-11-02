@@ -126,7 +126,9 @@ describe('Portal', () => {
       </WaveProvider>,
     );
     const wrapper = getWrapper(screen.getByText('Themed'));
-    expect(wrapper).toHaveClass('wave-portal', 'wave-dark', 'dark', 'custom-portal');
+    expect(wrapper).toHaveClass('wave-portal', 'wave-dark', 'custom-portal');
+    // The 0.4 class `dark` is removed in 1.0.
+    expect(wrapper).not.toHaveClass('dark');
     expect(wrapper).toHaveAttribute('dir', 'rtl');
     expect(wrapper.className).not.toMatch(/\bbg-/);
   });

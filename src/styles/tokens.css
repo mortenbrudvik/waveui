@@ -4,7 +4,6 @@
  * - Runtime variables are prefixed `--wave-*`. Tailwind utilities keep their names
  *   (`bg-primary` -> `--color-primary: var(--wave-primary)`, see the `@theme inline` block).
  * - Theme classes: `.wave-light` (also `:root`), `.wave-dark`, `.wave-high-contrast`.
- *   `.dark` and `.high-contrast` are deprecated aliases; they set only `--wave-*` variables.
  * - Every theme group declares every token, including the derived ones, so a nested theme
  *   re-resolves all of them.
  * - Shadows are per-theme tokens too: `--wave-shadow-{2,4,8,16,28,64}` in each theme group, and the
@@ -29,14 +28,13 @@
  *   mixed toward black (light) or white (dark) until it is 4.6:1 on its three surfaces. High
  *   contrast collapses every hue: fill, tint foreground and border white, foreground and tint black.
  * - To override a semantic token, target the theme selector: `:root, .wave-light { --wave-primary: … }`.
- *   To re-brand, override the ramp on `:root` (`--wave-brand-80`, or the 0.4 name `--brand-80`).
+ *   To re-brand, override the ramp on `:root` (`--wave-brand-80`).
  * - Contrast ratios of every pair, and of every text token on every surface it can sit on (4.5:1,
  *   unrounded), are asserted by `src/styles/__tests__/tokens.test.ts`.
  */
 
 /* ---------------------------------------------------------------------------------------------
- * Theme-independent constants: ramps (read the 0.4 names as fallbacks), font family, z-index,
- * motion.
+ * Theme-independent constants: ramps, font family, z-index, motion.
  * ------------------------------------------------------------------------------------------- */
 :root {
   --wave-font-family:
@@ -72,53 +70,53 @@
   --wave-curve-linear: cubic-bezier(0, 0, 1, 1);
 
   /* Brand ramp */
-  --wave-brand-10: var(--brand-10, #061724);
-  --wave-brand-20: var(--brand-20, #082338);
-  --wave-brand-30: var(--brand-30, #0a2e4a);
-  --wave-brand-40: var(--brand-40, #0c3b5e);
-  --wave-brand-50: var(--brand-50, #0e4775);
-  --wave-brand-60: var(--brand-60, #0f548c);
-  --wave-brand-70: var(--brand-70, #115ea3);
-  --wave-brand-80: var(--brand-80, #0f6cbd);
-  --wave-brand-90: var(--brand-90, #2886de);
-  --wave-brand-100: var(--brand-100, #479ef5);
-  --wave-brand-110: var(--brand-110, #62abf5);
-  --wave-brand-120: var(--brand-120, #77b7f7);
-  --wave-brand-130: var(--brand-130, #96c6fa);
-  --wave-brand-140: var(--brand-140, #b4d6fa);
-  --wave-brand-150: var(--brand-150, #cfe4fa);
-  --wave-brand-160: var(--brand-160, #ebf3fc);
+  --wave-brand-10: #061724;
+  --wave-brand-20: #082338;
+  --wave-brand-30: #0a2e4a;
+  --wave-brand-40: #0c3b5e;
+  --wave-brand-50: #0e4775;
+  --wave-brand-60: #0f548c;
+  --wave-brand-70: #115ea3;
+  --wave-brand-80: #0f6cbd;
+  --wave-brand-90: #2886de;
+  --wave-brand-100: #479ef5;
+  --wave-brand-110: #62abf5;
+  --wave-brand-120: #77b7f7;
+  --wave-brand-130: #96c6fa;
+  --wave-brand-140: #b4d6fa;
+  --wave-brand-150: #cfe4fa;
+  --wave-brand-160: #ebf3fc;
 
   /* Neutral grey ramp */
-  --wave-grey-2: var(--grey-2, #050505);
-  --wave-grey-4: var(--grey-4, #0a0a0a);
-  --wave-grey-6: var(--grey-6, #0f0f0f);
-  --wave-grey-8: var(--grey-8, #141414);
-  --wave-grey-10: var(--grey-10, #1a1a1a);
-  --wave-grey-12: var(--grey-12, #1f1f1f);
-  --wave-grey-14: var(--grey-14, #242424);
-  --wave-grey-16: var(--grey-16, #292929);
-  --wave-grey-20: var(--grey-20, #333333);
-  --wave-grey-24: var(--grey-24, #3d3d3d);
-  --wave-grey-26: var(--grey-26, #424242);
-  --wave-grey-30: var(--grey-30, #4d4d4d);
-  --wave-grey-34: var(--grey-34, #575757);
-  --wave-grey-38: var(--grey-38, #616161);
-  --wave-grey-40: var(--grey-40, #666666);
-  --wave-grey-44: var(--grey-44, #707070);
-  --wave-grey-50: var(--grey-50, #808080);
-  --wave-grey-60: var(--grey-60, #999999);
-  --wave-grey-68: var(--grey-68, #adadad);
-  --wave-grey-74: var(--grey-74, #bdbdbd);
-  --wave-grey-78: var(--grey-78, #c7c7c7);
-  --wave-grey-82: var(--grey-82, #d1d1d1);
-  --wave-grey-86: var(--grey-86, #dbdbdb);
-  --wave-grey-88: var(--grey-88, #e0e0e0);
-  --wave-grey-90: var(--grey-90, #e6e6e6);
-  --wave-grey-92: var(--grey-92, #ebebeb);
-  --wave-grey-94: var(--grey-94, #f0f0f0);
-  --wave-grey-96: var(--grey-96, #f5f5f5);
-  --wave-grey-98: var(--grey-98, #fafafa);
+  --wave-grey-2: #050505;
+  --wave-grey-4: #0a0a0a;
+  --wave-grey-6: #0f0f0f;
+  --wave-grey-8: #141414;
+  --wave-grey-10: #1a1a1a;
+  --wave-grey-12: #1f1f1f;
+  --wave-grey-14: #242424;
+  --wave-grey-16: #292929;
+  --wave-grey-20: #333333;
+  --wave-grey-24: #3d3d3d;
+  --wave-grey-26: #424242;
+  --wave-grey-30: #4d4d4d;
+  --wave-grey-34: #575757;
+  --wave-grey-38: #616161;
+  --wave-grey-40: #666666;
+  --wave-grey-44: #707070;
+  --wave-grey-50: #808080;
+  --wave-grey-60: #999999;
+  --wave-grey-68: #adadad;
+  --wave-grey-74: #bdbdbd;
+  --wave-grey-78: #c7c7c7;
+  --wave-grey-82: #d1d1d1;
+  --wave-grey-86: #dbdbdb;
+  --wave-grey-88: #e0e0e0;
+  --wave-grey-90: #e6e6e6;
+  --wave-grey-92: #ebebeb;
+  --wave-grey-94: #f0f0f0;
+  --wave-grey-96: #f5f5f5;
+  --wave-grey-98: #fafafa;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -290,10 +288,9 @@
 }
 
 /* ---------------------------------------------------------------------------------------------
- * Dark theme (`.dark` is a deprecated alias)
+ * Dark theme
  * ------------------------------------------------------------------------------------------- */
-.wave-dark,
-.dark {
+.wave-dark {
   /* Surfaces and text */
   --wave-background: #292929;
   --wave-foreground: #ffffff;
@@ -460,10 +457,9 @@
 }
 
 /* ---------------------------------------------------------------------------------------------
- * High-contrast theme (`.high-contrast` is a deprecated alias)
+ * High-contrast theme
  * ------------------------------------------------------------------------------------------- */
-.wave-high-contrast,
-.high-contrast {
+.wave-high-contrast {
   /* Surfaces and text */
   --wave-background: #000000;
   --wave-foreground: #ffffff;

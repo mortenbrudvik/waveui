@@ -271,7 +271,7 @@ const GREY_RAMP: Record<string, string> = {
   98: '#fafafa',
 };
 
-/** The 0.4 semantic names (they collide with shadcn/ui; only legacy-tokens.css may use them). */
+/** The 0.4 semantic names (they collide with shadcn/ui; Wave neither defines nor reads them). */
 const LEGACY_SEMANTIC_NAMES = [
   'background',
   'foreground',
@@ -508,16 +508,25 @@ describe('tokens.css — theme groups (repo-level#7, button-provider#6)', () => 
     expect(names.filter((name) => !name.startsWith('--wave-'))).toEqual([]);
   });
 
-  it('never reads a 0.4 semantic name (only the ramp names, as fallbacks)', () => {
+  it('reads no 0.4 name, semantic or ramp: the ramps hold no fallbacks (removed in 1.0)', () => {
     const source = stripComments(readCss('tokens.css'));
     const reads = [...source.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]);
-    const foreign = reads.filter(
-      (name) => !name.startsWith('--wave-') && !/^--(brand|grey)-\d+$/.test(name),
-    );
-    expect(foreign).toEqual([]);
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.filter((name) => !name.startsWith('--wave-'))).toEqual([]);
     for (const name of LEGACY_SEMANTIC_NAMES) {
       expect(source).not.toMatch(new RegExp(`var\\(\\s*--${name}\\s*[,)]`));
     }
+  });
+
+  it('selects the themes by the wave-* classes only: no .dark or .high-contrast (removed in 1.0)', () => {
+    const selectors = allRules(tokensNodes())
+      .filter((rule) => !rule.prelude.startsWith('@'))
+      .flatMap((rule) => selectorList(rule.prelude));
+    expect(selectors).toContain('.wave-dark');
+    expect(selectors).toContain('.wave-high-contrast');
+    expect(
+      selectors.filter((selector) => /\.(dark|high-contrast)(?![\w-])/.test(selector)),
+    ).toEqual([]);
   });
 });
 
@@ -717,17 +726,17 @@ describe('tokens.css — palette tints, tint foregrounds and borders (0.17)', ()
 });
 
 describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)', () => {
-  it('declares the brand ramp on :root, reading the 0.4 names as fallbacks', () => {
+  it('declares the brand ramp on :root as literal colors (no 0.4 fallback, removed in 1.0)', () => {
     const constants = rootConstants();
     for (const [step, hex] of Object.entries(BRAND_RAMP)) {
-      expect(constants.get(`--wave-brand-${step}`)).toBe(`var(--brand-${step}, ${hex})`);
+      expect(constants.get(`--wave-brand-${step}`)).toBe(hex);
     }
   });
 
-  it('declares the grey ramp on :root, reading the 0.4 names as fallbacks', () => {
+  it('declares the grey ramp on :root as literal colors (no 0.4 fallback, removed in 1.0)', () => {
     const constants = rootConstants();
     for (const [step, hex] of Object.entries(GREY_RAMP)) {
-      expect(constants.get(`--wave-grey-${step}`)).toBe(`var(--grey-${step}, ${hex})`);
+      expect(constants.get(`--wave-grey-${step}`)).toBe(hex);
     }
   });
 
@@ -740,15 +749,15 @@ describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)',
     }
   });
 
-  it('re-themes when a consumer overrides a 0.4 ramp name on :root', () => {
+  it('ignores an override of a 0.4 ramp name on :root (removed in 1.0: override --wave-brand-*)', () => {
     const consumer: Decls = new Map([
       ['--brand-80', '#6b2fa0'],
       ['--brand-110', '#c89ef0'],
     ]);
     const root = merge(rootConstants(), consumer);
-    expect(resolveToken('--wave-primary', [themeDecls('light'), root])).toBe('#6b2fa0');
-    expect(resolveToken('--wave-accent', [themeDecls('light'), root])).toBe('#6b2fa0');
-    expect(resolveToken('--wave-primary', [themeDecls('dark'), root])).toBe('#c89ef0');
+    expect(resolveToken('--wave-primary', [themeDecls('light'), root])).toBe('#0f6cbd');
+    expect(resolveToken('--wave-accent', [themeDecls('light'), root])).toBe('#0f6cbd');
+    expect(resolveToken('--wave-primary', [themeDecls('dark'), root])).toBe('#62abf5');
   });
 
   it('re-themes when a consumer overrides a --wave-brand-* token', () => {
@@ -855,10 +864,8 @@ describe('tokens.css — color-scheme (repo-level#11)', () => {
     expect(colorSchemeFor('.wave-high-contrast')).toEqual(['dark']);
   });
 
-  it('never sets color-scheme on :root or on the deprecated .dark/.high-contrast aliases', () => {
+  it('never sets color-scheme on :root', () => {
     expect(colorSchemeFor(':root')).toEqual([]);
-    expect(colorSchemeFor('.dark')).toEqual([]);
-    expect(colorSchemeFor('.high-contrast')).toEqual([]);
   });
 });
 
@@ -1029,7 +1036,7 @@ describe('tokens.css — Tailwind mapping (@theme inline)', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// base.css, animations.css (button-provider#2, repo-level#7, repo-level#12)
+// base.css, reduced motion (button-provider#2, repo-level#7, repo-level#12)
 // ---------------------------------------------------------------------------------------------
 
 describe('base.css — scoped base (button-provider#2, repo-level#7)', () => {
@@ -1169,12 +1176,7 @@ describe('base.css — scoped base (button-provider#2, repo-level#7)', () => {
   });
 });
 
-describe('animations.css (repo-level#12)', () => {
-  it('is empty: keyframes live in @theme and there is no global reduced-motion override', () => {
-    expect(parseFile('animations.css')).toEqual([]);
-    expect(readCss('animations.css')).toMatch(/deprecated/i);
-  });
-
+describe('reduced motion (repo-level#12)', () => {
   it('no style entry carries a global `*` reduced-motion reset', () => {
     expect(CSS_FILE_NAMES).toContain('tokens.css');
     for (const name of CSS_FILE_NAMES) {
@@ -1302,110 +1304,6 @@ describe('style entries (repo-level#1)', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// legacy-tokens.css (repo-level#7): opt-in, deprecated, read + write compatible, cycle-free
-// ---------------------------------------------------------------------------------------------
-
-describe('legacy-tokens.css (repo-level#7)', () => {
-  const NESTED_LIGHT = ':where(.wave-dark, .dark, .wave-high-contrast, .high-contrast) .wave-light';
-
-  function legacyNodes(): CssNode[] {
-    return parseFile('legacy-tokens.css');
-  }
-
-  /** Declarations applying to an element with the given selectors: tokens.css, then legacy. */
-  function elementDecls(selectors: string[], extra: Decls = new Map()): Decls {
-    return merge(
-      declsMatching(tokensNodes(), selectors),
-      declsMatching(legacyNodes(), selectors),
-      extra,
-    );
-  }
-
-  /** `<html>` (`:root`), optionally with consumer overrides loaded after Wave. */
-  function htmlScope(consumer: Decls = new Map()): Decls {
-    return elementDecls([':root'], consumer);
-  }
-
-  const providerSelectors = PROVIDER_SELECTORS;
-
-  it('declares the 0.4 ramp names as literal constants (no var(), no cycle)', () => {
-    const root = declsMatching(legacyNodes(), [':root']);
-    for (const [step, hex] of Object.entries(BRAND_RAMP)) {
-      expect(root.get(`--brand-${step}`)).toBe(hex);
-    }
-    for (const [step, hex] of Object.entries(GREY_RAMP)) {
-      expect(root.get(`--grey-${step}`)).toBe(hex);
-    }
-    expect(stripComments(readCss('legacy-tokens.css'))).not.toMatch(
-      /--(brand|grey)-\d+\s*:\s*var\(/,
-    );
-  });
-
-  it.each(THEMES)('re-declares every 0.4 semantic name for the %s theme', (theme) => {
-    const decls =
-      theme === 'light'
-        ? declsMatching(legacyNodes(), [':root'])
-        : declsMatching(legacyNodes(), providerSelectors[theme]);
-    const missing = LEGACY_SEMANTIC_NAMES.filter((name) => !decls.has(`--${name}`));
-    expect(missing).toEqual([]);
-  });
-
-  it('re-declares the light 0.4 names on a light subtree nested inside another theme', () => {
-    const nested = declsMatching(legacyNodes(), [NESTED_LIGHT]);
-    expect(LEGACY_SEMANTIC_NAMES.filter((name) => !nested.has(`--${name}`))).toEqual([]);
-  });
-
-  it('points every matching --wave-* semantic at its 0.4 name in every theme group', () => {
-    for (const theme of THEMES) {
-      const decls = declsMatching(legacyNodes(), providerSelectors[theme]);
-      for (const name of LEGACY_SEMANTIC_NAMES) {
-        expect(decls.get(`--wave-${name}`), `${theme} --wave-${name}`).toBe(`var(--${name})`);
-      }
-    }
-  });
-
-  it.each(THEMES)('is cycle-free and keeps every %s token value', (theme) => {
-    const html = htmlScope();
-    const scopes = theme === 'light' ? [html] : [elementDecls(providerSelectors[theme]), html];
-    const column = THEMES.indexOf(theme);
-    for (const [token, values] of Object.entries(TOKENS)) {
-      expect(resolveToken(`--wave-${token}`, scopes), `${theme} ${token}`).toBe(values[column]);
-    }
-    for (const [name] of elementDecls(theme === 'light' ? [':root'] : providerSelectors[theme])) {
-      expect(() => resolveToken(name, scopes)).not.toThrow();
-    }
-  });
-
-  it('keeps the light values in a light provider nested in a dark one', () => {
-    const html = htmlScope();
-    const dark = elementDecls(providerSelectors.dark);
-    const nestedLight = elementDecls(['.wave-light', NESTED_LIGHT]);
-    for (const [token, values] of Object.entries(TOKENS)) {
-      expect(resolveToken(`--wave-${token}`, [nestedLight, dark, html]), token).toBe(values[0]);
-    }
-  });
-
-  it('a 0.4 override on :root still reaches a top-level light provider (write compatibility)', () => {
-    const html = htmlScope(new Map([['--primary', '#6b2fa0']]));
-    const provider = elementDecls(providerSelectors.light);
-    expect(resolveToken('--wave-primary', [provider, html])).toBe('#6b2fa0');
-    expect(resolveToken('--wave-accent', [provider, html])).toBe('#6b2fa0');
-  });
-
-  it('a 0.4 override on .dark still reaches a dark provider (write compatibility)', () => {
-    const provider = elementDecls(providerSelectors.dark, new Map([['--primary', '#c89ef0']]));
-    expect(resolveToken('--wave-primary', [provider, htmlScope()])).toBe('#c89ef0');
-  });
-
-  it('never sets color-scheme or a style property (variables only)', () => {
-    const names = styleRules(legacyNodes()).flatMap((rule) => [
-      ...declarations(rule.children ?? []).keys(),
-    ]);
-    expect(names.filter((name) => !name.startsWith('--'))).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------------------------
 // scripts/build-css.mjs — the dist gate's own assertions (repo-level#1)
 // ---------------------------------------------------------------------------------------------
 
@@ -1524,6 +1422,17 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
 
   it('passes a stylesheet that satisfies every assertion', async () => {
     expect(await gate(GATE_CSS)).toEqual([]);
+  });
+
+  it('fails on a rule of the theme classes 1.0 removed (.dark, .high-contrast)', async () => {
+    const removed = ':where(.dark,.high-contrast) .wave-light{--wave-primary:#0f6cbd}';
+    expect(await gate(GATE_CSS + removed)).toEqual([
+      'styles.css: selects the theme classes 1.0 removed (.dark, .high-contrast); the themes are ' +
+        '.wave-light, .wave-dark and .wave-high-contrast',
+    ]);
+    // The wave-* classes, and Tailwind's media-based dark variant, are not those classes.
+    const kept = String.raw`.wave-dark{color-scheme:dark}@media (prefers-color-scheme:dark){.dark\:bg-primary{background-color:var(--wave-primary)}}`;
+    expect(await gate(GATE_CSS + kept)).toEqual([]);
   });
 
   describe('escaped characters in class names', () => {
@@ -1918,7 +1827,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
         tokensCss: [
           '/* .border-b-2 */',
           ':root, .wave-light { --wave-primary: #0f6cbd; }',
-          '.wave-dark, .dark { color-scheme: dark; }',
+          '.wave-dark, .wave-high-contrast { color-scheme: dark; }',
           '@theme inline { --color-primary: var(--wave-primary);',
           '  @keyframes wave-pulse { 33.3% { opacity: 1; } } }',
         ].join('\n'),
@@ -1930,13 +1839,13 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
           'animate-wave-spin',
           'bg-primary-hover',
           'bg-primary-pressed',
-          'dark',
           'hover:bg-primary-hover',
           'hover:bg-primary-pressed',
           'm-0',
           'm-4',
           'm-8',
           'wave-dark',
+          'wave-high-contrast',
           'wave-light',
           'wave-portal',
           'wave-root',

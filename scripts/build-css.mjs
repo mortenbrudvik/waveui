@@ -8,7 +8,9 @@
  *
  * Both files are minified and unlayered. The assertions on styles.css:
  *   - every theme rule of tokens.css (ramps, three theme groups, color-scheme rules) is present
- *     with the same properties, so every `--wave-*` variable ships;
+ *     with the same properties, so every `--wave-*` variable ships, and no rule selects `.dark`
+ *     or `.high-contrast`, the theme classes 1.0 removed (the themes are `.wave-light`,
+ *     `.wave-dark` and `.wave-high-contrast`);
  *   - every scoped base / native-reset rule of base.css is present with the same properties
  *     (property names only: the minifier rewrites values; the declared values of both source
  *     files are asserted by src/styles/__tests__/tokens.test.ts), and a declaration that is
@@ -87,6 +89,9 @@ const REQUIRED_UTILITIES = [
 
 /** Tailwind theme variables that must never ship in the precompiled CSS. */
 const FORBIDDEN = ['--spacing:', '--font-sans:', '--color-red-500', '--radius-'];
+
+/** The 0.4 theme classes, deprecated in 0.5 and removed in 1.0: no rule may select them. */
+const REMOVED_THEME_CLASSES = ['dark', 'high-contrast'];
 
 // -------------------------------------------------------------------------------------------
 // Minimal CSS parser (rules, at-rules, declarations; escape-, string- and comment-aware)
@@ -309,7 +314,7 @@ export function expandBraces(pattern) {
 /**
  * Class names the style entries themselves put into the stylesheet: the `@source inline()`
  * safelist of styles.css (split and brace-expanded as Tailwind does; `@source not inline()` adds
- * nothing) and the selector classes of the entries (`.wave-dark`, `.dark`, `.wave-root`). Comments
+ * nothing) and the selector classes of the entries (`.wave-dark`, `.wave-root`). Comments
  * and declarations are never read, so a class that a style entry only names in a comment is not a
  * library class.
  */
@@ -714,6 +719,15 @@ export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
   // No foreign theme variables.
   for (const needle of FORBIDDEN) {
     if (css.includes(needle)) errors.push(`styles.css: contains "${needle}"`);
+  }
+
+  // No rule of a removed theme class.
+  const removedThemes = REMOVED_THEME_CLASSES.filter((name) => classes.has(name));
+  if (removedThemes.length > 0) {
+    errors.push(
+      `styles.css: selects the theme classes 1.0 removed (${removedThemes.map((name) => `.${name}`).join(', ')}); ` +
+        'the themes are .wave-light, .wave-dark and .wave-high-contrast',
+    );
   }
 
   // No class with Tailwind's bare direction variants (C-LOGICAL).

@@ -477,7 +477,7 @@ describe('WaveProvider tokens: portals', () => {
     );
     const wrapper = wrapperOf(screen.getByText('Overlay'));
     expect(customProperties(wrapper)).toEqual({});
-    expect(wrapper).toHaveClass('wave-portal', 'wave-dark', 'dark');
+    expect(wrapper).toHaveClass('wave-portal', 'wave-dark');
     expect(wrapper).toHaveAttribute('dir', 'rtl');
     expect(wrapper.style.position).toBe('relative');
     expect(wrapper.style.zIndex).toBe('calc(var(--wave-z-overlay, 1000) + 0)');

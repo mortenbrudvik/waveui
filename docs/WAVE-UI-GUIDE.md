@@ -243,7 +243,7 @@ Ramps (theme-independent)   →  Semantic tokens (per theme)  →  Tailwind util
 --wave-grey-14: #242424         --wave-foreground              text-foreground
 ```
 
-- **Ramps**: `--wave-brand-10` … `--wave-brand-160` and `--wave-grey-2` … `--wave-grey-98` on `:root`. They read the 0.4 names as fallbacks (`--wave-brand-80: var(--brand-80, #0f6cbd)`). Components never use them directly.
+- **Ramps**: `--wave-brand-10` … `--wave-brand-160` and `--wave-grey-2` … `--wave-grey-98` on `:root` (`--wave-brand-80: #0f6cbd`). Components never use them directly.
 - **Semantic tokens**: `--wave-background`, `--wave-primary`, `--wave-border`, … declared by each theme class. Components use only these, through the Tailwind color utilities.
 - **Tailwind mapping**: `@theme inline` maps `--color-<name>` to `var(--wave-<name>)`, so the utility name is the token name without the prefix (`bg-subtle-hover`, `border-stroke-accessible`, `text-error-tint-foreground`).
 - **JavaScript**: `waveTokens` holds every token as the value that reads it, under its camelCase name (`waveTokens.mutedForeground` is `'var(--wave-muted-foreground)'`; chapter 10).
@@ -1908,18 +1908,18 @@ export const Root = ({ children }: { children: React.ReactNode }) => (
 Theme classes select the tokens:
 
 - `:root` and `.wave-light` → light
-- `.wave-dark` → dark (the deprecated `.dark` still works)
-- `.wave-high-contrast` → high contrast (the deprecated `.high-contrast` still works)
+- `.wave-dark` → dark
+- `.wave-high-contrast` → high contrast
 
-`getThemeClassName(theme)` returns the classes WaveProvider uses (`'wave-dark dark'` for dark). `color-scheme` is set on the `wave-*` theme classes only.
+`getThemeClassName(theme)` returns the class WaveProvider uses (`'wave-dark'` for dark). `color-scheme` is set on the `wave-*` theme classes only.
 
 ### Theme Tokens (tokens.css)
 
 ```css
 :root {
-  /* Theme-independent: ramps (0.4 names as fallbacks), fonts, stacking, motion */
-  --wave-brand-80: var(--brand-80, #0f6cbd);
-  --wave-grey-14: var(--grey-14, #242424);
+  /* Theme-independent: ramps, fonts, stacking, motion */
+  --wave-brand-80: #0f6cbd;
+  --wave-grey-14: #242424;
   --wave-font-family: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont,
     Roboto, 'Helvetica Neue', sans-serif;
   --wave-font-family-monospace: Consolas, 'Courier New', Courier, monospace;
@@ -1938,8 +1938,7 @@ Theme classes select the tokens:
   /* … every semantic token (see the table in section 4), the palette and the shadows */
 }
 
-.wave-dark,
-.dark {
+.wave-dark {
   --wave-background: #292929;
   --wave-primary: var(--wave-brand-110);
   --wave-primary-foreground: #000000;
@@ -2053,7 +2052,7 @@ export const App = ({ children }: { children: React.ReactNode }) => (
 - **The stops the themes read.** Light: 80 (primary, focus ring), 70 (hover), 40 (pressed), 160, 150 and 140 (the selection fill and its hover and pressed states) and 60 (selected text). Dark: 110 (primary, selected text), 120 (hover), 90 (pressed), 100 (focus ring), and 20, 40 and 10 (the selection fill and its hover and pressed states). No theme reads 30, 50 or 130. The `info` status color is fixed in every theme and does not follow the brand.
 - **High contrast ignores the brand.** The high-contrast theme reads no stop: its colors are fixed (`primary` `#1aebff`, the focus ring `#ffff00`) and the same for every app, as Fluent's high-contrast theme takes no brand. A brand ramp leaves it unchanged; a semantic override such as `primary` still applies there, like everywhere it is set.
 
-The ramp can also be set in CSS, on `:root` (the 0.4 names `--brand-10` … `--brand-160` still work, read as fallbacks); a hand-made ramp there is not checked, so check it against the stops above, or have it checked by passing it to `createBrandTokens` in development:
+The ramp can also be set in CSS, on `:root`; a hand-made ramp there is not checked, so check it against the stops above, or have it checked by passing it to `createBrandTokens` in development:
 
 ```css
 :root {
@@ -2132,8 +2131,7 @@ With the precompiled stylesheet, load your overrides after Wave's (same specific
 
 ### 0.4 Variable Names
 
-- Overrides of the 0.4 ramp names (`--brand-*`, `--grey-*`) keep working: they are read as fallbacks. Reads do not: 0.5 never defines the 0.4 ramp names, so custom CSS such as `var(--brand-80)` or `var(--grey-14)` resolves to nothing. Use `var(--wave-brand-80)`, `var(--wave-grey-14)`.
-- The 0.4 semantic names (`--primary`, `--background`, `--border`, `--ring`, …) are neither read nor defined. Rename overrides **and reads** (`outline: 2px solid var(--ring)` becomes `var(--wave-ring)`) to `--wave-*`, or load the deprecated `@mortenbrudvik/waveui/legacy-tokens.css` after the Wave styles, which defines the 0.4 names again. Never load it in an app that defines shadcn/ui-style variables.
+Only the `--wave-*` names are read and defined. The 0.4 ramp names (`--brand-*`, `--grey-*`) and semantic names (`--primary`, `--background`, `--border`, `--ring`, …) are neither: an override of one has no effect and a read of one (`var(--brand-80)`, `outline: 2px solid var(--ring)`) resolves to nothing. Use `--wave-brand-80`, `--wave-ring` and the other `--wave-*` names.
 
 Spacing, radius and stroke widths are Tailwind's scales, not tokens: chapter 2 maps Fluent's names to them.
 
@@ -3735,7 +3733,6 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | `src/styles/styles.css` | Build input of the precompiled `dist/styles.css` (`./styles`) |
 | `src/styles/tailwind.css` | Tailwind consumer entry (`./tailwind`) |
 | `src/styles/variants.css` | The `wave-rtl:` direction variant |
-| `src/styles/legacy-tokens.css` | Deprecated 0.4 variable names (`./legacy-tokens.css`) |
 | `src/lib/cn.ts` | Class name merge utility |
 | `src/lib/types.ts` | Shared types (`Size`, `Appearance`, `Status`, `Orientation`, …) |
 | `src/lib/slot.ts` | Slot system for customizable sub-elements (`slotRendersContent`, `materialiseSlotContent`, `slotWrapsDefaultContent`, render-function children) |
@@ -3818,12 +3815,7 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 
 ## 16. Deprecated APIs
 
-Deprecated names still work through 0.x, warn once in development and will be removed in 1.0. The CHANGELOG has the full table with callback semantics.
-
-| Deprecated | Use instead |
-|---|---|
-| Theme classes `dark`, `high-contrast` | `wave-dark`, `wave-high-contrast` |
-| `@mortenbrudvik/waveui/legacy-tokens.css` (0.4 variable names) | `--wave-*` variables |
+None: 1.0 removed every API that 0.x deprecated. [Upgrading to 1.0](UPGRADING-TO-1.0.md) lists each removal with its replacement.
 
 ---
 

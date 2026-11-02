@@ -96,7 +96,6 @@ export const EXPORTED_SUBPATHS = [
   './tokens.css',
   './variants',
   './variants.css',
-  './legacy-tokens.css',
   './package.json',
 ];
 

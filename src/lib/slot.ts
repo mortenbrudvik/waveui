@@ -333,8 +333,12 @@ export function slotWrapsDefaultContent(
  * resolved it to; any other `resolved` is returned as given:
  * - when `isButton` accepts the element type the function receives (the object's `as` names a
  *   button), the triple has that type, the object's attributes and, as its children, what the
- *   function returns for `'span'` and no props: the component merges it into its own button as it
- *   merges such an object with content, so nothing nests a button;
+ *   function returns for `'span'` and no props, and the component treats it as it treats such an
+ *   object with content, so nothing nests a button: the close slots (`closeButton` of Dialog,
+ *   Drawer and NavDrawer, TeachingPopover's `dismissButton`) merge it into their own button, while
+ *   the `dismiss` slots of MessageBar and SearchBox unwrap it (the children are the content, the
+ *   attributes are dropped, with one development warning), as Tag's `dismissIcon` unwraps such an
+ *   object through its own path;
  * - when the function renders nothing (called with the type and the object's attributes), the
  *   triple has the type and the attributes and no children: the object without the function,
  *   which keeps the default glyph inside its element;
