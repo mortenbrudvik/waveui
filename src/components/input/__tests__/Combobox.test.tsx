@@ -20,8 +20,10 @@ import {
   findDanglingIdRefsInHtml,
   openingTags,
   renderWithProviders,
+  mockRect,
   testCompoundExposure,
   testNoImplicitSubmit,
+  testRootPartRef,
   testSystemProps,
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
@@ -121,6 +123,15 @@ const QUERY_FREEFORM =
   '[WaveUI] Combobox: `query` and `defaultQuery` are not used with `freeform`: the typed text is ' +
   'the value (`value`, `onValueChange`).';
 
+/** React's development error for an unknown prop that reaches a DOM element, as logged. */
+const UNKNOWN_PROP = (name: string) => [
+  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+    'accidentally passed it from a parent component, remove it from the DOM element.',
+  name,
+  name.toLowerCase(),
+];
+
 afterEach(() => {
   vi.restoreAllMocks();
   __resetAnnouncer();
@@ -132,7 +143,8 @@ describe('Combobox', () => {
   testSystemProps(Combobox, {
     expectedTag: 'div',
     displayName: 'Combobox',
-    control: { role: 'combobox' },
+    ref: 'control',
+    control: { role: 'combobox', tag: 'input' },
     defaultProps: { 'aria-label': 'Fruit', children: FRUITS },
     conflictingClass: { className: 'flex-row', overrides: 'flex-col' },
     a11yVariants: [
@@ -169,6 +181,8 @@ describe('Combobox', () => {
       },
     ],
   });
+
+  testRootPartRef(Combobox, { props: { 'aria-label': 'Fruit', children: FRUITS } });
 
   testNoImplicitSubmit(Combobox, {
     defaultProps: { 'aria-label': 'Fruit', defaultValue: 'a', clearable: true, children: FRUITS },
@@ -1371,14 +1385,14 @@ describe('Combobox', () => {
       );
     });
 
-    it('routes id, aria and input props to the input and keeps data-* and ref on the root', () => {
-      const ref = React.createRef<HTMLDivElement>();
-      const controlRef = React.createRef<HTMLInputElement>();
+    it('routes id, aria, input props and ref to the input and keeps data-* on the root', () => {
+      const ref = React.createRef<HTMLInputElement>();
+      const rootRef = React.createRef<HTMLDivElement>();
       const onFocus = vi.fn();
       render(
         <Combobox
           ref={ref}
-          controlRef={controlRef}
+          slotProps={{ root: { ref: rootRef } }}
           id="fruit"
           aria-label="Fruit"
           aria-describedby="help"
@@ -1392,8 +1406,8 @@ describe('Combobox', () => {
       expect(combobox()).toHaveAttribute('id', 'fruit');
       expect(combobox()).toHaveAttribute('aria-describedby', 'help');
       expect(combobox()).toHaveAttribute('maxlength', '10');
-      expect(controlRef.current).toBe(combobox());
-      expect(ref.current).toBe(screen.getByTestId('root'));
+      expect(ref.current).toBe(combobox());
+      expect(rootRef.current).toBe(screen.getByTestId('root'));
       act(() => combobox().focus());
       expect(onFocus).toHaveBeenCalled();
     });
@@ -3952,6 +3966,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
 describe('Combobox — slotProps', () => {
   type ComboboxSlotProps = NonNullable<ComboboxProps['slotProps']>;
   const EVERY_PART: ComboboxSlotProps = {
+    root: {},
     input: {},
     clearButton: {},
     expandButton: {},
@@ -4021,6 +4036,17 @@ describe('Combobox — slotProps', () => {
         defaultValue: 'a',
       },
       { 'aria-label': 'Fruit', readOnly: true, expandIcon: false, defaultValue: 'b' },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        'aria-label': 'Fruit',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -4032,6 +4058,15 @@ describe('Combobox — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Your own data attributes on the root, the locked ones among them.
+    expectInertSlotProps(
+      (slotProps) => (
+        <Combobox aria-label="Fruit" data-size="large" data-x="1" slotProps={slotProps}>
+          {TWO}
+        </Combobox>
+      ),
+      EVERY_PART,
+    );
     expectInertSlotProps(
       (slotProps) => (
         <Combobox
@@ -4134,23 +4169,25 @@ describe('Combobox — slotProps', () => {
     expect(list).not.toHaveClass('max-h-60');
   });
 
-  it('attaches your refs to the parts, beside controlRef and the positioning', async () => {
+  it('attaches your refs to the parts, beside ref and the positioning', async () => {
     const refs = {
+      root: React.createRef<HTMLDivElement>(),
       input: React.createRef<HTMLInputElement>(),
       clearButton: React.createRef<HTMLButtonElement>(),
       expandButton: React.createRef<HTMLButtonElement>(),
       listbox: React.createRef<HTMLUListElement>(),
       surface: React.createRef<HTMLDivElement>(),
     };
-    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       <Combobox
         aria-label="Fruit"
         defaultOpen
         defaultValue="a"
         clearable
-        controlRef={controlRef}
+        ref={ref}
         slotProps={{
+          root: { ref: refs.root },
           input: { ref: refs.input },
           clearButton: { ref: refs.clearButton },
           expandButton: { ref: refs.expandButton },
@@ -4164,7 +4201,8 @@ describe('Combobox — slotProps', () => {
     await act(async () => {});
     const input = screen.getByRole('combobox', { name: 'Fruit' });
     expect(refs.input.current).toBe(input);
-    expect(controlRef.current).toBe(input);
+    expect(ref.current).toBe(input);
+    expect(refs.root.current).toBe(part(comboboxClassNames.root));
     expect(refs.clearButton.current).toBe(screen.getByRole('button', { name: 'Clear selection' }));
     expect(refs.expandButton.current).toBe(part(comboboxClassNames.expandButton));
     expect(refs.listbox.current).toBe(screen.getByRole('listbox', { name: 'Fruit' }));
@@ -4594,7 +4632,10 @@ describe('Combobox — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof ComboboxSlotProps>().toEqualTypeOf<
-      'input' | 'clearButton' | 'expandButton' | 'listbox' | 'surface' | 'emptyMessage'
+      'root' | 'input' | 'clearButton' | 'expandButton' | 'listbox' | 'surface' | 'emptyMessage'
+    >();
+    expectTypeOf<NonNullable<ComboboxSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
     >();
     expectTypeOf<NonNullable<ComboboxSlotProps['input']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLInputElement> | undefined
@@ -4610,5 +4651,409 @@ describe('Combobox — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the Combobox draws its content
     void (<Combobox slotProps={{ emptyMessage: { children: 'None' } }} />);
+    // @ts-expect-error -- a part takes no children: the Combobox draws its content
+    void (<Combobox slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const root = () => part(comboboxClassNames.root)!;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the Combobox's className and style", () => {
+      render(
+        <Combobox
+          aria-label="Fruit"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        >
+          {TWO}
+        </Combobox>,
+      );
+      expect(root().classList[0]).toBe(comboboxClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(combobox()).not.toHaveAttribute('data-part');
+      expect(combobox()).not.toHaveAttribute('title');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(
+        <Combobox aria-label="Fruit" slotProps={{ root: { className: 'flex-row' } }}>
+          {TWO}
+        </Combobox>,
+      );
+      expect(root()).toHaveClass('flex-row');
+      expect(root()).not.toHaveClass('flex-col');
+    });
+
+    it("keeps the props you give the Combobox over the part's", () => {
+      render(
+        <Combobox
+          aria-label="Fruit"
+          title="Own"
+          data-x="own"
+          data-size="large"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        >
+          {TWO}
+        </Combobox>,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+      // Your own data-size reaches the root as in 0.18 (after the resolved one).
+      expect(root()).toHaveAttribute('data-size', 'large');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <Combobox
+          aria-label="Fruit"
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        >
+          {TWO}
+        </Combobox>,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The Combobox's own hidden state stays its own.
+      rerender(
+        <Combobox
+          aria-label="Fruit"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        >
+          {TWO}
+        </Combobox>,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before the Combobox's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <Combobox
+          aria-label="Fruit"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        >
+          {TWO}
+        </Combobox>,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <Combobox
+          aria-label="Fruit"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        >
+          {TWO}
+        </Combobox>,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it("opens on a click in the input whatever your root onClick does: the opening is the input's own, before the click reaches the root", async () => {
+      const user = userEvent.setup();
+      render(
+        <Combobox
+          aria-label="Fruit"
+          slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+        >
+          {TWO}
+        </Combobox>,
+      );
+      await user.click(combobox());
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('calls your root onClick in every state, as the Combobox calls its own: the root passes no click to the input', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <Combobox aria-label="Fruit" onClick={own} slotProps={{ root: { onClick } }}>
+          {TWO}
+        </Combobox>,
+      );
+      fireEvent.click(root());
+      rerender(
+        <Combobox aria-label="Fruit" disabled onClick={own} slotProps={{ root: { onClick } }}>
+          {TWO}
+        </Combobox>,
+      );
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps a press inside the root from dismissing the open list, also with an inline part ref', async () => {
+      const user = userEvent.setup();
+      const nodes: (HTMLDivElement | null)[] = [];
+      const ui = (pass: number) => (
+        <>
+          <Combobox
+            aria-label="Fruit"
+            data-pass={pass}
+            slotProps={{
+              root: {
+                ref: (node) => {
+                  nodes.push(node);
+                },
+              },
+            }}
+          >
+            {TWO}
+          </Combobox>
+          <p>Outside</p>
+        </>
+      );
+      const { rerender } = render(ui(0));
+      await user.click(combobox());
+      rerender(ui(1));
+      rerender(ui(2));
+      expect(nodes.at(-1)).toBe(root());
+      // A press on the root itself (no focus move): inside the popup's tree.
+      fireEvent.pointerDown(root());
+      fireEvent.click(root());
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.pointerDown(screen.getByText('Outside'));
+      fireEvent.click(screen.getByText('Outside'));
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <Combobox
+          aria-label="Fruit"
+          defaultOpen
+          slotProps={{ root: { className: 'my-root', title: 'Pick a fruit' } }}
+        >
+          {TWO}
+        </Combobox>,
+      );
+      await act(async () => {});
+      await expectNoA11yViolations();
+    });
+  });
+});
+
+// 1.0 (Phase 14, R5): `ref` reaches the <input role="combobox">, the focusable control, in both
+// signatures; the root <div> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('Combobox — ref reaches the control', () => {
+  it('focuses the input through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderCombobox({ ref });
+    act(() => ref.current?.focus());
+    expect(combobox()).toHaveFocus();
+  });
+
+  it('gives ref the input beside slotProps.input.ref, and slotProps.root.ref the root, with multiselect too', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    const root = React.createRef<HTMLDivElement>();
+    const input = React.createRef<HTMLInputElement>();
+    render(
+      <Combobox
+        ref={ref}
+        multiselect
+        aria-label="Fruit"
+        slotProps={{ root: { ref: root }, input: { ref: input } }}
+      >
+        {FRUITS}
+      </Combobox>,
+    );
+    expect(ref.current).toBe(combobox());
+    expect(input.current).toBe(combobox());
+    expect(root.current).toHaveClass(comboboxClassNames.root);
+    expect(root.current).toContainElement(combobox());
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Order">
+        <Combobox
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          multiselect
+          name="fruit"
+          required
+          aria-label="Fruit"
+          data-pass={pass}
+        >
+          {FRUITS}
+        </Combobox>
+      </form>
+    );
+    const { rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const input = combobox();
+    expect(nodes.at(-1)).toBe(input);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    // The hidden input's invalid event focuses the combobox through the Combobox's own ref.
+    act(() => {
+      form.reportValidity();
+    });
+    expect(input).toHaveFocus();
+    await user.click(input);
+    await user.click(option('Beta'));
+    rerender(ui(3));
+    expect(form.checkValidity()).toBe(true);
+    act(() => form.reset());
+    expect(form.checkValidity()).toBe(false);
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it('keeps the popup placed against the input with an inline ref that changes on every render', async () => {
+    const html = document.documentElement;
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+    try {
+      const user = userEvent.setup();
+      const nodes: (HTMLInputElement | null)[] = [];
+      const ui = (pass: number) => (
+        <Combobox
+          aria-label="Fruit"
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          data-pass={pass}
+        >
+          {FRUITS}
+        </Combobox>
+      );
+      const { rerender } = render(ui(0));
+      mockRect(combobox(), { x: 100, y: 100, width: 200, height: 32 });
+      rerender(ui(1));
+      await user.click(combobox());
+      rerender(ui(2));
+      rerender(ui(3));
+      const surface = () =>
+        screen.getByRole('listbox').closest<HTMLElement>('[data-wave-listbox-surface]')!;
+      // As wide as the input (the size middleware reads the reference the positioning holds).
+      await waitFor(() =>
+        expect(surface().style.getPropertyValue('--wave-popup-reference-width')).toBe('200px'),
+      );
+      expect(surface()).toHaveAttribute('data-side', 'bottom');
+      expect(nodes.at(-1)).toBe(combobox());
+    } finally {
+      Reflect.deleteProperty(html, 'clientWidth');
+      Reflect.deleteProperty(html, 'clientHeight');
+    }
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <Combobox ref={ref} aria-label="Fruit">
+        {FRUITS}
+      </Combobox>,
+    );
+    const input = combobox();
+    rerender(
+      <Combobox ref={ref} aria-label="Fruit" defaultValue="b" disabled>
+        {FRUITS}
+      </Combobox>,
+    );
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <Combobox ref={ref} aria-label="Fruit">
+          {FRUITS}
+        </Combobox>
+      </React.StrictMode>,
+    );
+    const input = combobox();
+    rerender(
+      <React.StrictMode>
+        <Combobox ref={ref} aria-label="Fruit" readOnly>
+          {FRUITS}
+        </Combobox>
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderWithFieldContext(<Combobox ref={ref}>{FRUITS}</Combobox>);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(combobox(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('declares ref (for the input) in both signatures, and no controlRef', () => {
+    expectTypeOf<ComboboxProps['ref']>().toEqualTypeOf<React.Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<ComboboxProps<true>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<ComboboxProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<ComboboxProps<true>>().not.toHaveProperty('controlRef');
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the input; the root <div> is slotProps.root.ref
+    void (<Combobox aria-label="Fruit" ref={divRef} />);
+    // @ts-expect-error -- the same with multiselect
+    void (<Combobox aria-label="Fruit" multiselect ref={divRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <Combobox
+          aria-label="Fruit"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the input
+          controlRef={controlRef}
+        >
+          {FRUITS}
+        </Combobox>,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(document.querySelector(`.${comboboxClassNames.root}`)).toHaveAttribute(
+        'controlref',
+        '[object Object]',
+      );
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

@@ -21,10 +21,12 @@ import { formatDate } from '../dateUtils';
 import {
   axe,
   expectInertSlotProps,
+  expectNoA11yViolations,
   findDanglingIdRefsInHtml,
   openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
+  testRootPartRef,
   testSystemProps,
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
@@ -83,6 +85,15 @@ const RAW_COLOR_OR_ENABLED = new RegExp(
   String.raw`\[#|\b(bg|text|border)-(white|black)\b|enabled:`,
 );
 
+/** React's development error for an unknown prop that reaches a DOM element, as logged. */
+const UNKNOWN_PROP = (name: string) => [
+  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+    'accidentally passed it from a parent component, remove it from the DOM element.',
+  name,
+  name.toLowerCase(),
+];
+
 /** Local calendar fields (TZ-agnostic). */
 function fields(date: Date | null | undefined) {
   return date ? [date.getFullYear(), date.getMonth() + 1, date.getDate()] : date;
@@ -93,11 +104,14 @@ describe('DatePicker', () => {
     expectedTag: 'div',
     displayName: 'DatePicker',
     defaultProps: { 'aria-label': 'Date picker' },
-    control: { role: 'textbox' },
+    ref: 'control',
+    control: { role: 'textbox', tag: 'input' },
     a11yVariants: [
       { name: 'disabled', props: { disabled: true, defaultValue: JUNE_15, clearable: true } },
     ],
   });
+
+  testRootPartRef(DatePicker, { props: { 'aria-label': 'Date picker' } });
 
   testNoImplicitSubmit(DatePicker, {
     defaultProps: { 'aria-label': 'Date', defaultValue: JUNE_15, clearable: true },
@@ -1815,11 +1829,11 @@ describe('DatePicker', () => {
       expect(screen.queryByText(/Enter a date/)).not.toBeInTheDocument();
     });
 
-    it('routes id, aria-describedby, focus handlers and controlRef to the input', async () => {
+    it('routes id, aria-describedby, focus handlers and ref to the input', async () => {
       const user = userEvent.setup();
       const onFocus = vi.fn();
       const onBlur = vi.fn();
-      const controlRef = React.createRef<HTMLInputElement>();
+      const ref = React.createRef<HTMLInputElement>();
       render(
         <>
           <p id="help">Your birthday</p>
@@ -1829,7 +1843,7 @@ describe('DatePicker', () => {
             aria-describedby="help"
             onFocus={onFocus}
             onBlur={onBlur}
-            controlRef={controlRef}
+            ref={ref}
             data-testid="dp"
           />
         </>,
@@ -1837,7 +1851,7 @@ describe('DatePicker', () => {
       const input = textbox('Birthday');
       expect(input).toHaveAttribute('id', 'birthday');
       expect(input).toHaveAccessibleDescription('Your birthday');
-      expect(controlRef.current).toBe(input);
+      expect(ref.current).toBe(input);
       expect(screen.getByTestId('dp')).not.toHaveAttribute('id');
       await user.click(input);
       await user.tab();
@@ -2575,6 +2589,7 @@ describe('DatePicker', () => {
 describe('DatePicker — slotProps', () => {
   type DatePickerSlotProps = NonNullable<DatePickerProps['slotProps']>;
   const EVERY_PART: DatePickerSlotProps = {
+    root: {},
     input: {},
     clearButton: {},
     openCalendarButton: {},
@@ -2771,6 +2786,17 @@ describe('DatePicker — slotProps', () => {
         appearance: 'underline',
       },
       { 'aria-label': 'Date', readOnly: true, defaultValue: JUNE_15 },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        'aria-label': 'Date',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -2778,6 +2804,13 @@ describe('DatePicker — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Your own data attributes on the root, the locked ones among them.
+    expectInertSlotProps(
+      (slotProps) => (
+        <DatePicker aria-label="Date" data-size="large" data-x="1" slotProps={slotProps} />
+      ),
+      EVERY_PART,
+    );
   });
 
   it('renders the same markup in the month and year views and with an error, with and without slotProps', async () => {
@@ -2810,6 +2843,7 @@ describe('DatePicker — slotProps', () => {
       'data-part': name,
     });
     const refs = {
+      root: React.createRef<HTMLDivElement>(),
       input: React.createRef<HTMLInputElement>(),
       clearButton: React.createRef<HTMLButtonElement>(),
       openCalendarButton: React.createRef<HTMLButtonElement>(),
@@ -2831,13 +2865,14 @@ describe('DatePicker — slotProps', () => {
       todayButton: React.createRef<HTMLButtonElement>(),
       closeButton: React.createRef<HTMLButtonElement>(),
     };
-    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       <DatePicker
         {...FULL}
         defaultOpen
-        controlRef={controlRef}
+        ref={ref}
         slotProps={{
+          root: mine('root', refs.root),
           input: mine('input', refs.input),
           clearButton: mine('clearButton', refs.clearButton),
           openCalendarButton: mine('openCalendarButton', refs.openCalendarButton),
@@ -2877,6 +2912,7 @@ describe('DatePicker — slotProps', () => {
       }
     };
     check([
+      'root',
       'input',
       'clearButton',
       'openCalendarButton',
@@ -2896,7 +2932,7 @@ describe('DatePicker — slotProps', () => {
       'todayButton',
       'closeButton',
     ]);
-    expect(controlRef.current).toBe(refs.input.current);
+    expect(ref.current).toBe(refs.input.current);
     expect(refs.heading.current?.tagName).toBe('H2');
     // The surface is still placed (the positioning holds the same element), and its trap still
     // finds the grid: focus moved to the selected day.
@@ -3340,6 +3376,7 @@ describe('DatePicker — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof DatePickerSlotProps>().toEqualTypeOf<
+      | 'root'
       | 'input'
       | 'clearButton'
       | 'openCalendarButton'
@@ -3362,6 +3399,9 @@ describe('DatePicker — slotProps', () => {
       | 'todayButton'
       | 'closeButton'
     >();
+    expectTypeOf<NonNullable<DatePickerSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
     expectTypeOf<NonNullable<DatePickerSlotProps['input']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLInputElement> | undefined
     >();
@@ -3382,5 +3422,371 @@ describe('DatePicker — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the DatePicker draws its content
     void (<DatePicker aria-label="Date" slotProps={{ closeButton: { children: 'Done' } }} />);
+    // @ts-expect-error -- a part takes no children: the DatePicker draws its content
+    void (<DatePicker aria-label="Date" slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const root = () => part(k.root)!;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the DatePicker's className and style", () => {
+      render(
+        <DatePicker
+          aria-label="Date"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(k.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(textbox()).not.toHaveAttribute('data-part');
+      expect(textbox()).not.toHaveAttribute('title');
+    });
+
+    it('reaches the root only: the open calendar, which takes the other parts, takes none of it', async () => {
+      const ref = React.createRef<HTMLDivElement>();
+      render(
+        <DatePicker
+          {...FULL}
+          defaultOpen
+          slotProps={{ root: { ref, className: 'my-root', 'data-part': 'root', title: 'R' } }}
+        />,
+      );
+      await act(async () => {});
+      expect(dialog()).toBeInTheDocument();
+      expect(ref.current).toBe(root());
+      expect(document.querySelectorAll('.my-root')).toHaveLength(1);
+      expect(document.querySelectorAll('[data-part="root"]')).toHaveLength(1);
+      expect(document.querySelectorAll('[title="R"]')).toHaveLength(1);
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(<DatePicker aria-label="Date" slotProps={{ root: { className: 'flex-row' } }} />);
+      expect(root()).toHaveClass('flex-row');
+      expect(root()).not.toHaveClass('flex-col');
+    });
+
+    it("keeps the props you give the DatePicker over the part's", () => {
+      render(
+        <DatePicker
+          aria-label="Date"
+          title="Own"
+          data-x="own"
+          data-size="large"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+      // Your own data-size reaches the root as in 0.18 (after the resolved one).
+      expect(root()).toHaveAttribute('data-size', 'large');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <DatePicker
+          aria-label="Date"
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The DatePicker's own hidden state stays its own.
+      rerender(
+        <DatePicker
+          aria-label="Date"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before the DatePicker's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <DatePicker
+          aria-label="Date"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <DatePicker
+          aria-label="Date"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it("opens the calendar from the toggle whatever your root onClick does: the toggle is the button's own, before the click reaches the root", async () => {
+      const user = userEvent.setup();
+      render(
+        <DatePicker
+          aria-label="Date"
+          slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+        />,
+      );
+      await user.click(toggle());
+      expect(dialog()).toBeInTheDocument();
+    });
+
+    it('calls your root onClick in every state, as the DatePicker calls its own: the root passes no click to the input', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <DatePicker aria-label="Date" onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(root());
+      rerender(
+        <DatePicker aria-label="Date" disabled onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <DatePicker
+          aria-label="Date"
+          defaultOpen
+          slotProps={{ root: { className: 'my-root', title: 'Pick a date' } }}
+        />,
+      );
+      await act(async () => {});
+      await expectNoA11yViolations();
+    });
+  });
+});
+// 1.0 (Phase 14, R5): `ref` reaches the text <input>, the focusable control; the root <div> is
+// `slotProps.root.ref`, and `controlRef` is gone.
+describe('DatePicker — ref reaches the control', () => {
+  it('focuses the input through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(<DatePicker ref={ref} aria-label="Date" />);
+    act(() => ref.current?.focus());
+    expect(textbox()).toHaveFocus();
+  });
+
+  it('gives ref the input beside slotProps.input.ref, and slotProps.root.ref the root', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    const root = React.createRef<HTMLDivElement>();
+    const input = React.createRef<HTMLInputElement>();
+    render(
+      <DatePicker
+        ref={ref}
+        aria-label="Date"
+        slotProps={{ root: { ref: root }, input: { ref: input } }}
+      />,
+    );
+    expect(ref.current).toBe(textbox());
+    expect(input.current).toBe(textbox());
+    expect(root.current).toHaveClass(datePickerClassNames.root);
+    expect(root.current).toContainElement(textbox());
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Order">
+        <DatePicker
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          name="due"
+          required
+          locale="en-US"
+          aria-label="Date"
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const input = textbox();
+    expect(nodes.at(-1)).toBe(input);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    // The hidden input's invalid event focuses the input through the DatePicker's own ref.
+    act(() => {
+      form.reportValidity();
+    });
+    expect(input).toHaveFocus();
+    await openCalendar(user);
+    await user.click(dayButton('Friday, June 20, 2025'));
+    rerender(ui(3));
+    expect(input).toHaveValue('06/20/2025');
+    expect(form.checkValidity()).toBe(true);
+    act(() => form.reset());
+    expect(input).toHaveValue('');
+    expect(form.checkValidity()).toBe(false);
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it("keeps the calendar's anchors with an inline ref that changes on every render: its placement and its focus return", async () => {
+    const html = document.documentElement;
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+    // The calendar is placed against the row around the input and its buttons, near the
+    // viewport's bottom: it flips above it.
+    const box = (el: Element) => {
+      if (el.getAttribute('role') === 'dialog') return { x: 0, y: 0, width: 280, height: 320 };
+      if (el instanceof HTMLDivElement && el.firstElementChild instanceof HTMLInputElement) {
+        return { x: 100, y: 700, width: 250, height: 32 };
+      }
+      return { x: 0, y: 0, width: 0, height: 0 };
+    };
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const { x, y, width, height } = box(this);
+      const rect = { x, y, left: x, top: y, width, height, right: x + width, bottom: y + height };
+      return { ...rect, toJSON: () => rect } as DOMRect;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return box(this).width;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return box(this).height;
+    });
+    try {
+      const user = userEvent.setup();
+      const nodes: (HTMLInputElement | null)[] = [];
+      const ui = (pass: number) => (
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          data-pass={pass}
+        />
+      );
+      const { rerender } = render(ui(0));
+      rerender(ui(1));
+      act(() => textbox().focus());
+      await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+      rerender(ui(2));
+      rerender(ui(3));
+      await waitFor(() => expect(dialog()).toHaveAttribute('data-side', 'top'));
+      expect(dayButton('Sunday, June 15, 2025')).toHaveFocus();
+      // Escape returns focus to where the calendar was opened from: the input.
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(textbox()).toHaveFocus();
+      // Opened from the toggle, it returns focus to the toggle.
+      await openCalendar(user);
+      rerender(ui(4));
+      await user.keyboard('{Escape}');
+      expect(toggle()).toHaveFocus();
+      expect(nodes.at(-1)).toBe(textbox());
+    } finally {
+      Reflect.deleteProperty(html, 'clientWidth');
+      Reflect.deleteProperty(html, 'clientHeight');
+    }
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<DatePicker ref={ref} aria-label="Date" />);
+    const input = textbox();
+    rerender(<DatePicker ref={ref} aria-label="Date" defaultValue={JUNE_15} disabled />);
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <DatePicker ref={ref} aria-label="Date" />
+      </React.StrictMode>,
+    );
+    const input = textbox();
+    rerender(
+      <React.StrictMode>
+        <DatePicker ref={ref} aria-label="Date" readOnly />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderWithFieldContext(<DatePicker ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(textbox(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('declares ref (for the input), and no controlRef', () => {
+    expectTypeOf<DatePickerProps['ref']>().toEqualTypeOf<React.Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<DatePickerProps>().not.toHaveProperty('controlRef');
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the input; the root <div> is slotProps.root.ref
+    void (<DatePicker aria-label="Date" ref={divRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <DatePicker
+          aria-label="Date"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the input
+          controlRef={controlRef}
+        />,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(document.querySelector(`.${datePickerClassNames.root}`)).toHaveAttribute(
+        'controlref',
+        '[object Object]',
+      );
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

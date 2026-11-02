@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
@@ -15,9 +15,11 @@ import {
   expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  mockRect,
   openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
+  testRootPartRef,
   testSystemProps,
 } from '../../../test-utils';
 import { timePickerClassNames } from '../../../lib/classNames';
@@ -61,6 +63,15 @@ const EXPAND_ICON_BUTTON =
 
 const INVALID_12H = 'Enter a time in the format h:mm AM.';
 
+/** React's development error for an unknown prop that reaches a DOM element, as logged. */
+const UNKNOWN_PROP = (name: string) => [
+  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+    'accidentally passed it from a parent component, remove it from the DOM element.',
+  name,
+  name.toLowerCase(),
+];
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -70,7 +81,8 @@ describe('TimePicker', () => {
     expectedTag: 'div',
     displayName: 'TimePicker',
     defaultProps: { 'aria-label': 'Time picker' },
-    control: { role: 'combobox' },
+    ref: 'control',
+    control: { role: 'combobox', tag: 'input' },
     a11yVariants: [
       { name: 'with value and clear button', props: { defaultValue: '09:00', clearable: true } },
       { name: 'disabled', props: { disabled: true, defaultValue: '09:00' } },
@@ -78,6 +90,8 @@ describe('TimePicker', () => {
       { name: 'open', props: { defaultOpen: true, defaultValue: '09:00', clearable: true } },
     ],
   });
+
+  testRootPartRef(TimePicker, { props: { 'aria-label': 'Time picker' } });
 
   testNoImplicitSubmit(TimePicker, {
     defaultProps: { 'aria-label': 'Time', defaultValue: '09:00', clearable: true },
@@ -1862,11 +1876,11 @@ describe('TimePicker', () => {
       expect(form.checkValidity()).toBe(true);
     });
 
-    it('routes id, aria-describedby, focus handlers and controlRef to the input', async () => {
+    it('routes id, aria-describedby, focus handlers and ref to the input', async () => {
       const user = userEvent.setup();
       const onFocus = vi.fn();
       const onBlur = vi.fn();
-      const controlRef = React.createRef<HTMLInputElement>();
+      const ref = React.createRef<HTMLInputElement>();
       render(
         <>
           <p id="help">Opening hours only</p>
@@ -1876,7 +1890,7 @@ describe('TimePicker', () => {
             aria-describedby="help"
             onFocus={onFocus}
             onBlur={onBlur}
-            controlRef={controlRef}
+            ref={ref}
             data-testid="tp"
           />
         </>,
@@ -1884,7 +1898,7 @@ describe('TimePicker', () => {
       const input = combobox('Start');
       expect(input).toHaveAttribute('id', 'start');
       expect(input).toHaveAccessibleDescription('Opening hours only');
-      expect(controlRef.current).toBe(input);
+      expect(ref.current).toBe(input);
       expect(screen.getByTestId('tp')).not.toHaveAttribute('id');
       await user.click(input);
       await user.tab();
@@ -2463,6 +2477,7 @@ describe('TimePicker — format follows the browser language (1.0, P14-06)', () 
 describe('TimePicker — slotProps', () => {
   type TimePickerSlotProps = NonNullable<TimePickerProps['slotProps']>;
   const EVERY_PART: TimePickerSlotProps = {
+    root: {},
     input: {},
     clearButton: {},
     expandButton: {},
@@ -2552,6 +2567,17 @@ describe('TimePicker — slotProps', () => {
         defaultValue: '09:00',
       },
       { 'aria-label': 'Time', readOnly: true, expandIcon: false, defaultValue: '10:00' },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        'aria-label': 'Time',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -2559,6 +2585,13 @@ describe('TimePicker — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Your own data attributes on the root, the locked ones among them.
+    expectInertSlotProps(
+      (slotProps) => (
+        <TimePicker aria-label="Time" data-size="large" data-x="1" slotProps={slotProps} />
+      ),
+      EVERY_PART,
+    );
   });
 
   it('renders the same markup with an error message and an empty list, with and without slotProps', async () => {
@@ -2584,6 +2617,7 @@ describe('TimePicker — slotProps', () => {
       'data-part': name,
     });
     const refs = {
+      root: React.createRef<HTMLDivElement>(),
       input: React.createRef<HTMLInputElement>(),
       clearButton: React.createRef<HTMLButtonElement>(),
       expandButton: React.createRef<HTMLButtonElement>(),
@@ -2592,16 +2626,17 @@ describe('TimePicker — slotProps', () => {
       checkIcon: React.createRef<HTMLSpanElement>(),
       surface: React.createRef<HTMLDivElement>(),
     };
-    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       <TimePicker
         aria-label="Time"
         defaultOpen
         defaultValue="09:30"
         clearable
-        controlRef={controlRef}
+        ref={ref}
         {...BOUNDS}
         slotProps={{
+          root: mine('root', refs.root),
           input: mine('input', refs.input),
           clearButton: mine('clearButton', refs.clearButton),
           expandButton: mine('expandButton', refs.expandButton),
@@ -2626,7 +2661,7 @@ describe('TimePicker — slotProps', () => {
       // One ref, several options: it holds the last one attached.
       expect(elements).toContain(refs[name].current);
     }
-    expect(controlRef.current).toBe(refs.input.current);
+    expect(ref.current).toBe(refs.input.current);
     expect(all(timePickerClassNames.option)).toHaveLength(3);
     // The surface is still placed: the positioning holds the same element.
     expect(refs.surface.current).toHaveStyle({ position: 'fixed' });
@@ -2996,6 +3031,7 @@ describe('TimePicker — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof TimePickerSlotProps>().toEqualTypeOf<
+      | 'root'
       | 'input'
       | 'clearButton'
       | 'expandButton'
@@ -3005,6 +3041,9 @@ describe('TimePicker — slotProps', () => {
       | 'checkIcon'
       | 'surface'
       | 'emptyMessage'
+    >();
+    expectTypeOf<NonNullable<TimePickerSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
     >();
     expectTypeOf<NonNullable<TimePickerSlotProps['input']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLInputElement> | undefined
@@ -3020,5 +3059,363 @@ describe('TimePicker — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the TimePicker draws its content
     void (<TimePicker slotProps={{ option: { children: 'Noon' } }} />);
+    // @ts-expect-error -- a part takes no children: the TimePicker draws its content
+    void (<TimePicker slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const root = () => part(timePickerClassNames.root)!;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the TimePicker's className and style", () => {
+      render(
+        <TimePicker
+          aria-label="Time"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(timePickerClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(combobox()).not.toHaveAttribute('data-part');
+      expect(combobox()).not.toHaveAttribute('title');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(<TimePicker aria-label="Time" slotProps={{ root: { className: 'flex-row' } }} />);
+      expect(root()).toHaveClass('flex-row');
+      expect(root()).not.toHaveClass('flex-col');
+    });
+
+    it("keeps the props you give the TimePicker over the part's", () => {
+      render(
+        <TimePicker
+          aria-label="Time"
+          title="Own"
+          data-x="own"
+          data-size="large"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+      // Your own data-size reaches the root as in 0.18 (after the resolved one).
+      expect(root()).toHaveAttribute('data-size', 'large');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <TimePicker
+          aria-label="Time"
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The TimePicker's own hidden state stays its own.
+      rerender(
+        <TimePicker
+          aria-label="Time"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before the TimePicker's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <TimePicker
+          aria-label="Time"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <TimePicker
+          aria-label="Time"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it("opens on a click in the input whatever your root onClick does: the opening is the input's own, before the click reaches the root", async () => {
+      const user = userEvent.setup();
+      render(
+        <TimePicker
+          aria-label="Time"
+          {...BOUNDS}
+          slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+        />,
+      );
+      await user.click(combobox());
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('calls your root onClick in every state, as the TimePicker calls its own: the root passes no click to the input', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <TimePicker aria-label="Time" onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(root());
+      rerender(
+        <TimePicker aria-label="Time" disabled onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps a press inside the root from dismissing the open list, also with an inline part ref', async () => {
+      const user = userEvent.setup();
+      const nodes: (HTMLDivElement | null)[] = [];
+      const ui = (pass: number) => (
+        <>
+          <TimePicker
+            aria-label="Time"
+            {...BOUNDS}
+            data-pass={pass}
+            slotProps={{
+              root: {
+                ref: (node) => {
+                  nodes.push(node);
+                },
+              },
+            }}
+          />
+          <p>Outside</p>
+        </>
+      );
+      const { rerender } = render(ui(0));
+      await user.click(combobox());
+      rerender(ui(1));
+      rerender(ui(2));
+      expect(nodes.at(-1)).toBe(root());
+      // A press on the root itself (no focus move): inside the popup's tree.
+      fireEvent.pointerDown(root());
+      fireEvent.click(root());
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.pointerDown(screen.getByText('Outside'));
+      fireEvent.click(screen.getByText('Outside'));
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <TimePicker
+          aria-label="Time"
+          defaultOpen
+          {...BOUNDS}
+          slotProps={{ root: { className: 'my-root', title: 'Pick a time' } }}
+        />,
+      );
+      await act(async () => {});
+      await expectNoA11yViolations();
+    });
+  });
+});
+// 1.0 (Phase 14, R5): `ref` reaches the <input role="combobox">, the focusable control; the root
+// <div> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('TimePicker — ref reaches the control', () => {
+  it('focuses the input through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(<TimePicker ref={ref} aria-label="Time" />);
+    act(() => ref.current?.focus());
+    expect(combobox('Time')).toHaveFocus();
+  });
+
+  it('gives ref the input beside slotProps.input.ref, and slotProps.root.ref the root', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    const root = React.createRef<HTMLDivElement>();
+    const input = React.createRef<HTMLInputElement>();
+    render(
+      <TimePicker
+        ref={ref}
+        aria-label="Time"
+        slotProps={{ root: { ref: root }, input: { ref: input } }}
+      />,
+    );
+    expect(ref.current).toBe(combobox('Time'));
+    expect(input.current).toBe(combobox('Time'));
+    expect(root.current).toHaveClass(timePickerClassNames.root);
+    expect(root.current).toContainElement(combobox('Time'));
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Order">
+        <TimePicker
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          name="time"
+          required
+          minTime="09:00"
+          maxTime="10:00"
+          aria-label="Time"
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const input = combobox('Time');
+    expect(nodes.at(-1)).toBe(input);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    // The hidden input's invalid event focuses the combobox through the TimePicker's own ref.
+    act(() => {
+      form.reportValidity();
+    });
+    expect(input).toHaveFocus();
+    await user.click(input);
+    await user.click(screen.getByRole('option', { name: '9:30 AM' }));
+    rerender(ui(3));
+    expect(input).toHaveValue('9:30 AM');
+    expect(form.checkValidity()).toBe(true);
+    act(() => form.reset());
+    expect(input).toHaveValue('');
+    expect(form.checkValidity()).toBe(false);
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it('keeps the popup placed against the field with an inline ref that changes on every render', async () => {
+    const html = document.documentElement;
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+    try {
+      const user = userEvent.setup();
+      const nodes: (HTMLInputElement | null)[] = [];
+      const ui = (pass: number) => (
+        <TimePicker
+          aria-label="Time"
+          minTime="09:00"
+          maxTime="10:00"
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          data-pass={pass}
+        />
+      );
+      const { rerender } = render(ui(0));
+      // The popup is placed against the row around the input and its buttons.
+      mockRect(combobox('Time').parentElement!, { x: 100, y: 100, width: 200, height: 32 });
+      rerender(ui(1));
+      await user.click(combobox('Time'));
+      rerender(ui(2));
+      rerender(ui(3));
+      const surface = () =>
+        document.querySelector<HTMLElement>(`.${timePickerClassNames.surface}`)!;
+      await waitFor(() =>
+        expect(surface().style.getPropertyValue('--wave-popup-reference-width')).toBe('200px'),
+      );
+      expect(surface()).toHaveAttribute('data-side', 'bottom');
+      expect(nodes.at(-1)).toBe(combobox('Time'));
+    } finally {
+      Reflect.deleteProperty(html, 'clientWidth');
+      Reflect.deleteProperty(html, 'clientHeight');
+    }
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<TimePicker ref={ref} aria-label="Time" />);
+    const input = combobox('Time');
+    rerender(<TimePicker ref={ref} aria-label="Time" defaultValue="09:00" disabled />);
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <TimePicker ref={ref} aria-label="Time" />
+      </React.StrictMode>,
+    );
+    const input = combobox('Time');
+    rerender(
+      <React.StrictMode>
+        <TimePicker ref={ref} aria-label="Time" readOnly />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderWithFieldContext(<TimePicker ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(combobox(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('declares ref (for the input), and no controlRef', () => {
+    expectTypeOf<TimePickerProps['ref']>().toEqualTypeOf<React.Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<TimePickerProps>().not.toHaveProperty('controlRef');
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the input; the root <div> is slotProps.root.ref
+    void (<TimePicker aria-label="Time" ref={divRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <TimePicker
+          aria-label="Time"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the input
+          controlRef={controlRef}
+        />,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(document.querySelector(`.${timePickerClassNames.root}`)).toHaveAttribute(
+        'controlref',
+        '[object Object]',
+      );
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

@@ -309,10 +309,11 @@ export interface DatePickerProps extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Key handler of the text input. */
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
-  /** Ref to the text input; `ref` stays on the root. */
-  controlRef?: React.Ref<HTMLInputElement>;
-  /** Ref to the root element. */
-  ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Ref to the text `<input>`, the focusable control (Fluent UI's `ref`, on its primary element).
+   * The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
   /**
    * Props for the elements the DatePicker draws, by part, merged into each part's own: your
    * classes after the part's (yours win a conflict), your styles over its styles, your handlers
@@ -330,11 +331,23 @@ export interface DatePickerProps extends Omit<
    */
   slotProps?: {
     /**
-     * The text `<input>`, the focusable control (stable class `wave-date-picker__input`;
-     * `controlRef` reaches it as well). Locked: `type`, `value` (and, unset, `defaultValue`: the
-     * DatePicker controls the text), `id`, the naming and Field wiring (`aria-label`,
-     * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `disabled`,
-     * `readOnly`, `placeholder`, every text input prop routed to it (`autoComplete`,
+     * The root `<div>` around the input and its buttons and the error message (stable class
+     * `wave-date-picker`), which the DatePicker's `className`, `style`, `data-*` and other root
+     * props reach as well; its `ref` is the way to the root, since the DatePicker's `ref`
+     * reaches the input. Your classes come after the DatePicker's `className`, your style over
+     * its `style`. Locked: every prop you give the DatePicker itself that reaches the root,
+     * `data-size`, `data-appearance`, and `hidden`, `inert` and `aria-hidden` (the DatePicker's
+     * own: the root holds the input). Your handlers run before the DatePicker's own root
+     * handlers (`preventDefault()` in yours skips them). The root passes no click to the input,
+     * so your `onClick` is called in every state, as the DatePicker's own `onClick` is.
+     */
+    root?: SlotPart<'div'>;
+    /**
+     * The text `<input>`, the focusable control (stable class `wave-date-picker__input`; the
+     * DatePicker's `ref` reaches it as well). Locked: `type`, `value` (and, unset,
+     * `defaultValue`: the DatePicker controls the text), `id`, the naming and Field wiring
+     * (`aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`),
+     * `disabled`, `readOnly`, `placeholder`, every text input prop routed to it (`autoComplete`,
      * `inputMode`, `tabIndex`, …), `name`, `form` and `required` (the value is submitted by the
      * DatePicker's hidden input), `hidden`, `inert` and `aria-hidden` (a focusable control is
      * never hidden). Your handlers run before the DatePicker's, and `preventDefault()` in yours
@@ -556,12 +569,13 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
  *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
  *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
  *   `data-size` and `data-appearance` on the root `<div>`. The calendar keeps its size.
- * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ * - The input receives `ref`, `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  *   `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`,
  *   `autoFocus`, `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes
  *   `autoComplete`, `autoCapitalize`, `autoCorrect`, `inputMode`, `spellCheck` and
- *   `enterKeyHint`. `ref`, `className`, `style`, other `aria-*` attributes and the remaining props
- *   stay on the root `<div>`. Inside a `Field`, the input is labelled and described by it.
+ *   `enterKeyHint`. `className`, `style`, other `aria-*` attributes and the remaining props stay
+ *   on the root `<div>` (`slotProps.root.ref` reaches it). Inside a `Field`, the input is
+ *   labelled and described by it.
  * - `name`/`required` add a hidden input for native forms (ISO `yyyy-mm-dd`); the value resets
  *   with its form.
  * - The built-in button names and error texts are English; `labels` localizes them.
@@ -626,8 +640,8 @@ export const DatePicker = (props: DatePickerProps) => {
     onBlur,
     onKeyDown,
     onKeyUp,
-    controlRef,
     className,
+    style,
     ref,
     slotProps,
     ...rest
@@ -765,7 +779,7 @@ export const DatePicker = (props: DatePickerProps) => {
   /** Where focus goes when the calendar closes (`null`: back to the toggle). */
   const restoreTargetRef = React.useRef<HTMLElement | null>(null);
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
-  const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef, slotProps?.input?.ref);
+  const inputRefs = useMergedRefs<HTMLInputElement>(ref, inputRef, slotProps?.input?.ref);
   const toggleRefs = useMergedRefs<HTMLButtonElement>(
     toggleRef,
     slotProps?.openCalendarButton?.ref,
@@ -983,14 +997,23 @@ export const DatePicker = (props: DatePickerProps) => {
     errorMessage = labels?.unavailableDate ?? 'This date is not available.';
   }
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: cn(datePickerClassNames.root, 'relative inline-flex flex-col', className),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // The DatePicker's own root props, after the data attributes as in 0.18, and over the
+      // part's; the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
-    <div
-      data-size={size}
-      data-appearance={appearance}
-      {...rest}
-      ref={ref}
-      className={cn(datePickerClassNames.root, 'relative inline-flex flex-col', className)}
-    >
+    <div {...rootProps}>
       <div ref={setReference} className="relative flex items-center">
         <input
           {...mergeSlotProps(slotProps?.input, {

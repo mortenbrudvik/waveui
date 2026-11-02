@@ -352,14 +352,15 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Called when a key is released in the `<input role="combobox">`. */
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
-  /** Ref to the `<input role="combobox">` (the focusable element). */
-  controlRef?: React.Ref<HTMLInputElement>;
-  /** Ref to the root `<div>`. */
-  ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Ref to the `<input role="combobox">`, the focusable control (Fluent UI's `ref`, on its primary
+   * element). The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
   /**
    * Props for the elements the Combobox draws, by part, merged into each part's own (Fluent UI's
-   * `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the part's
-   * (yours win a conflict), your styles over its styles, your handlers before its handlers
+   * `root`, `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers before its handlers
    * (`preventDefault()` in yours skips the Combobox's handling of the event, its own `on…` prop
    * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
    * `aria-describedby`. Every attribute the Combobox sets on a part is locked and keeps the
@@ -368,8 +369,21 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    */
   slotProps?: {
     /**
+     * The root `<div>` around the input and its buttons (stable class `wave-combobox`), which the
+     * Combobox's `className`, `style`, `data-*` and other root props reach as well; its `ref` is
+     * the way to the root, since the Combobox's `ref` reaches the input. Your classes come after
+     * the Combobox's `className`, your style over its `style`. Locked: every prop you give the
+     * Combobox itself that reaches the root, `data-size`, `data-appearance`, and `hidden`,
+     * `inert` and `aria-hidden` (the Combobox's own: the root holds the input). Your handlers run
+     * before the Combobox's own root handlers (`preventDefault()` in yours skips them). The root
+     * passes no click to the input, so your `onClick` is called in every state, as the
+     * Combobox's own `onClick` is. Your ref joins the Combobox's own, which a press inside the
+     * root keeps from dismissing the open list.
+     */
+    root?: SlotPart<'div'>;
+    /**
      * The `<input role="combobox">`, the focusable control (stable class `wave-combobox__input`;
-     * `controlRef` reaches it as well). Locked: `type`, `role`, `value` (and, unset,
+     * the Combobox's `ref` reaches it as well). Locked: `type`, `role`, `value` (and, unset,
      * `defaultValue`: the Combobox controls the text), `id`, the naming, Field and listbox wiring
      * (`aria-label`, `aria-invalid`, `aria-required`, `aria-expanded`, `aria-controls`,
      * `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`, `aria-errormessage`,
@@ -508,8 +522,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     onBlur,
     onKeyDown,
     onKeyUp,
-    controlRef,
     className,
+    style,
     children,
     ref,
     slotProps,
@@ -790,10 +804,14 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     anchorRef: inputRef,
   });
 
-  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
+  // The root part's ref joins the root's own (the popup's dismissal reads it) through a merged ref
+  // set after the part's props, so an inline part ref never detaches the root's own.
+  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, slotProps?.root?.ref);
+  // The consumer's `ref` joins the input's own, the popup's positioning reference included: an
+  // inline `ref` that changes on every render is swapped alone, and the reference stays attached.
   const inputMergedRef = useMergedRefs<HTMLInputElement>(
     inputRef,
-    controlRef,
+    ref,
     setReference,
     slotProps?.input?.ref,
   );
@@ -1043,14 +1061,23 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     },
   });
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: cn(comboboxClassNames.root, 'relative inline-flex flex-col', className),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // The Combobox's own root props, after the data attributes as in 0.18, and over the part's;
+      // the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
-    <div
-      data-size={size}
-      data-appearance={appearance}
-      {...rest}
-      ref={rootMergedRef}
-      className={cn(comboboxClassNames.root, 'relative inline-flex flex-col', className)}
-    >
+    <div {...rootProps} ref={rootMergedRef}>
       {multiselect && <PickerAnnouncer />}
       <div className="relative flex items-center">
         <input
@@ -1221,17 +1248,17 @@ export const ComboboxOptionGroup = OptionGroup;
  * tall; the active option stays rendered, and opening scrolls it (else the first selected option)
  * to the middle of the list.
  *
- * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ * The `<input>` receives `ref`, `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,
  * `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes `autoComplete`,
  * `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and `enterKeyHint`.
- * `ref`, `className`, `style`, other `aria-*` attributes and the remaining props stay on the root
- * `<div>`. Inside a `Field` the input is labelled and described by it. It shows the error look
- * whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field` error). With
- * `name`/`required` the value takes part in form submission (one hidden input per value with
- * `multiselect`), validation and reset (a `multiselect` reset is compared by content, so restoring
- * the same values reports nothing). The open listbox renders in a portal; while closed it stays
- * in the DOM, hidden.
+ * `className`, `style`, other `aria-*` attributes and the remaining props stay on the root `<div>`
+ * (`slotProps.root.ref` reaches it). Inside a `Field` the input is labelled and described by it.
+ * It shows the error look whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field`
+ * error). With `name`/`required` the value takes part in form submission (one hidden input per
+ * value with `multiselect`), validation and reset (a `multiselect` reset is compared by content,
+ * so restoring the same values reports nothing). The open listbox renders in a portal; while
+ * closed it stays in the DOM, hidden.
  *
  * **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  * `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own prop,

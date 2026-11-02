@@ -323,14 +323,15 @@ export interface TimePickerProps extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Key handler of the text input. */
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
-  /** Ref to the text input (the `role="combobox"` element); `ref` stays on the root. */
-  controlRef?: React.Ref<HTMLInputElement>;
-  /** Ref to the root element. */
-  ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Ref to the text input, the `role="combobox"` element and the focusable control (Fluent UI's
+   * `ref`, on its primary element). The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
   /**
    * Props for the elements the TimePicker draws, by part, merged into each part's own (Fluent UI's
-   * `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the part's
-   * (yours win a conflict), your styles over its styles, your handlers before its handlers
+   * `root`, `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers before its handlers
    * (`preventDefault()` in yours skips the TimePicker's handling of the event, its own `on…` prop
    * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
    * `aria-describedby`. Every attribute the TimePicker sets on a part is locked and keeps the
@@ -339,17 +340,32 @@ export interface TimePickerProps extends Omit<
    */
   slotProps?: {
     /**
+     * The root `<div>` around the input and its buttons, the error message and the list while
+     * closed (stable class `wave-time-picker`), which the TimePicker's `className`, `style`,
+     * `data-*` and other root props reach as well; its `ref` is the way to the root, since the
+     * TimePicker's `ref` reaches the input. Your classes come after the TimePicker's
+     * `className`, your style over its `style`. Locked: every prop you give the TimePicker
+     * itself that reaches the root, `data-size`, `data-appearance`, and `hidden`, `inert` and
+     * `aria-hidden` (the TimePicker's own: the root holds the input). Your handlers run before
+     * the TimePicker's own root handlers (`preventDefault()` in yours skips them). The root
+     * passes no click to the input, so your `onClick` is called in every state, as the
+     * TimePicker's own `onClick` is. Your ref joins the TimePicker's own, which a press inside
+     * the root keeps from dismissing the open list.
+     */
+    root?: SlotPart<'div'>;
+    /**
      * The `<input role="combobox">`, the focusable control (stable class
-     * `wave-time-picker__input`; `controlRef` reaches it as well). Locked: `type`, `role`,
-     * `value` (and, unset, `defaultValue`: the TimePicker controls the text), `id`, the naming,
-     * Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`, `aria-expanded`,
-     * `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`,
-     * `aria-errormessage`, `aria-details`), `disabled`, `readOnly`, `placeholder`, every text
-     * input prop routed to it (`autoComplete`, `maxLength`, `tabIndex`, …), `name`, `form` and
-     * `required` (the value is submitted by the TimePicker's hidden input), `hidden`, `inert`
-     * and `aria-hidden` (a focusable control is never hidden). Your handlers run before the
-     * TimePicker's: `preventDefault()` in your `onChange` ignores the typed text, in your
-     * `onKeyDown` skips the picker's keys, in your `onBlur` keeps the typed text uncommitted.
+     * `wave-time-picker__input`; the TimePicker's `ref` reaches it as well). Locked: `type`,
+     * `role`, `value` (and, unset, `defaultValue`: the TimePicker controls the text), `id`, the
+     * naming, Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`,
+     * `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`,
+     * `aria-autocomplete`, `aria-errormessage`, `aria-details`), `disabled`, `readOnly`,
+     * `placeholder`, every text input prop routed to it (`autoComplete`, `maxLength`,
+     * `tabIndex`, …), `name`, `form` and `required` (the value is submitted by the TimePicker's
+     * hidden input), `hidden`, `inert` and `aria-hidden` (a focusable control is never hidden).
+     * Your handlers run before the TimePicker's: `preventDefault()` in your `onChange` ignores
+     * the typed text, in your `onKeyDown` skips the picker's keys, in your `onBlur` keeps the
+     * typed text uncommitted.
      */
     input?: SlotPart<'input'>;
     /**
@@ -468,12 +484,13 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
  *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
  *   `data-size` and `data-appearance` on the root `<div>`. The time list keeps its size.
- * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ * - The input receives `ref`, `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  *   `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`,
  *   `autoFocus`, `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes
  *   `autoComplete`, `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and
- *   `enterKeyHint`. `ref`, `className`, `style`, other `aria-*` attributes and the remaining props
- *   stay on the root `<div>`. Inside a `Field`, the input is labelled and described by it.
+ *   `enterKeyHint`. `className`, `style`, other `aria-*` attributes and the remaining props stay
+ *   on the root `<div>` (`slotProps.root.ref` reaches it). Inside a `Field`, the input is
+ *   labelled and described by it.
  * - `name`/`required` add a hidden input for native forms (`HH:mm`); the value resets with its form.
  * - The built-in names, status texts and error messages are English; `labels` localizes them.
  * - The open list renders only in the browser: an open list (`defaultOpen`, `open`) is closed in
@@ -525,8 +542,8 @@ export const TimePicker = (props: TimePickerProps) => {
     onBlur,
     onKeyDown,
     onKeyUp,
-    controlRef,
     className,
+    style,
     ref,
     slotProps,
     ...rest
@@ -766,8 +783,10 @@ export const TimePicker = (props: TimePickerProps) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
-  const rootRefs = useMergedRefs<HTMLDivElement>(ref, rootRef);
-  const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef, slotProps?.input?.ref);
+  // The root part's ref joins the root's own (the dismissal reads it) through a merged ref set
+  // after the part's props, so an inline part ref never detaches the root's own.
+  const rootRefs = useMergedRefs<HTMLDivElement>(rootRef, slotProps?.root?.ref);
+  const inputRefs = useMergedRefs<HTMLInputElement>(ref, inputRef, slotProps?.input?.ref);
 
   const { layerId } = useDismiss({
     open,
@@ -988,15 +1007,24 @@ export const TimePicker = (props: TimePickerProps) => {
   // sets win.
   const surfaceStyle = lockPositionStyle(surfaceProps.style, positionStyle);
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: cn(timePickerClassNames.root, 'relative inline-flex flex-col', className),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // The TimePicker's own root props, after the data attributes as in 0.18, and over the
+      // part's; the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
     <ListboxContext.Provider value={lb.context}>
-      <div
-        data-size={size}
-        data-appearance={appearance}
-        {...rest}
-        ref={rootRefs}
-        className={cn(timePickerClassNames.root, 'relative inline-flex flex-col', className)}
-      >
+      <div {...rootProps} ref={rootRefs}>
         <div ref={setReference} className="relative flex items-center">
           <input
             {...mergeSlotProps(slotProps?.input, {

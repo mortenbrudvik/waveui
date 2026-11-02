@@ -17,10 +17,12 @@ import {
   expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  mockRect,
   openingTags,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
+  testRootPartRef,
   testSystemProps,
 } from '../../../test-utils';
 import { dropdownClassNames } from '../../../lib/classNames';
@@ -91,6 +93,15 @@ const CONTROLLED_TO_UNCONTROLLED =
   'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
   'value.';
 
+/** React's development error for an unknown prop that reaches a DOM element, as logged. */
+const UNKNOWN_PROP = (name: string) => [
+  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+    'accidentally passed it from a parent component, remove it from the DOM element.',
+  name,
+  name.toLowerCase(),
+];
+
 afterEach(() => {
   vi.restoreAllMocks();
   __resetAnnouncer();
@@ -102,7 +113,8 @@ describe('Dropdown', () => {
   testSystemProps(Dropdown, {
     expectedTag: 'div',
     displayName: 'Dropdown',
-    control: { role: 'combobox' },
+    ref: 'control',
+    control: { role: 'combobox', tag: 'button' },
     defaultProps: { 'aria-label': 'Fruit', children: FRUITS },
     conflictingClass: { className: 'flex-row', overrides: 'flex-col' },
     a11yVariants: [
@@ -137,6 +149,8 @@ describe('Dropdown', () => {
       },
     ],
   });
+
+  testRootPartRef(Dropdown, { props: { 'aria-label': 'Fruit', children: FRUITS } });
 
   testNoImplicitSubmit(Dropdown, {
     defaultProps: { 'aria-label': 'Fruit', defaultOpen: true, children: FRUITS },
@@ -931,13 +945,13 @@ describe('Dropdown', () => {
       expect(control).toHaveAttribute('id', 'own-id');
     });
 
-    it('routes id and aria props to the button and keeps data-* and ref on the root', () => {
-      const ref = React.createRef<HTMLDivElement>();
-      const controlRef = React.createRef<HTMLButtonElement>();
+    it('routes id, aria props and ref to the button and keeps data-* on the root', () => {
+      const ref = React.createRef<HTMLButtonElement>();
+      const rootRef = React.createRef<HTMLDivElement>();
       render(
         <Dropdown
           ref={ref}
-          controlRef={controlRef}
+          slotProps={{ root: { ref: rootRef } }}
           id="fruit"
           aria-label="Fruit"
           aria-describedby="help"
@@ -948,8 +962,8 @@ describe('Dropdown', () => {
       );
       expect(combobox()).toHaveAttribute('id', 'fruit');
       expect(combobox()).toHaveAttribute('aria-describedby', 'help');
-      expect(controlRef.current).toBe(combobox());
-      expect(ref.current).toBe(screen.getByTestId('root'));
+      expect(ref.current).toBe(combobox());
+      expect(rootRef.current).toBe(screen.getByTestId('root'));
       expect(screen.getByTestId('root')).not.toHaveAttribute('id');
     });
   });
@@ -2075,6 +2089,7 @@ describe('Dropdown', () => {
 describe('Dropdown — slotProps', () => {
   type DropdownSlotProps = NonNullable<DropdownProps['slotProps']>;
   const EVERY_PART: DropdownSlotProps = {
+    root: {},
     button: {},
     value: {},
     clearButton: {},
@@ -2129,6 +2144,17 @@ describe('Dropdown — slotProps', () => {
         clearable: true,
         defaultValue: 'b',
       },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        'aria-label': 'Fruit',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -2140,6 +2166,15 @@ describe('Dropdown — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Your own data attributes on the root, the locked ones among them.
+    expectInertSlotProps(
+      (slotProps) => (
+        <Dropdown aria-label="Fruit" data-size="large" data-x="1" slotProps={slotProps}>
+          {TWO}
+        </Dropdown>
+      ),
+      EVERY_PART,
+    );
     expectInertSlotProps(
       (slotProps) => (
         <Dropdown
@@ -2210,23 +2245,25 @@ describe('Dropdown — slotProps', () => {
     expect(value).not.toHaveClass('text-muted-foreground');
   });
 
-  it('attaches your refs to the parts, beside controlRef and the positioning', async () => {
+  it('attaches your refs to the parts, beside ref and the positioning', async () => {
     const refs = {
+      root: React.createRef<HTMLDivElement>(),
       button: React.createRef<HTMLButtonElement>(),
       value: React.createRef<HTMLSpanElement>(),
       clearButton: React.createRef<HTMLButtonElement>(),
       listbox: React.createRef<HTMLUListElement>(),
       surface: React.createRef<HTMLDivElement>(),
     };
-    const controlRef = React.createRef<HTMLButtonElement>();
+    const ref = React.createRef<HTMLButtonElement>();
     render(
       <Dropdown
         aria-label="Fruit"
         defaultOpen
         defaultValue="a"
         clearable
-        controlRef={controlRef}
+        ref={ref}
         slotProps={{
+          root: { ref: refs.root },
           button: { ref: refs.button },
           value: { ref: refs.value },
           clearButton: { ref: refs.clearButton },
@@ -2240,7 +2277,8 @@ describe('Dropdown — slotProps', () => {
     await act(async () => {});
     const combobox = screen.getByRole('combobox', { name: 'Fruit' });
     expect(refs.button.current).toBe(combobox);
-    expect(controlRef.current).toBe(combobox);
+    expect(ref.current).toBe(combobox);
+    expect(refs.root.current).toBe(part(dropdownClassNames.root));
     expect(refs.value.current).toBe(part(dropdownClassNames.value));
     expect(refs.clearButton.current).toBe(screen.getByRole('button', { name: 'Clear selection' }));
     expect(refs.listbox.current).toBe(screen.getByRole('listbox', { name: 'Fruit' }));
@@ -2534,7 +2572,10 @@ describe('Dropdown — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof DropdownSlotProps>().toEqualTypeOf<
-      'button' | 'value' | 'clearButton' | 'listbox' | 'surface'
+      'root' | 'button' | 'value' | 'clearButton' | 'listbox' | 'surface'
+    >();
+    expectTypeOf<NonNullable<DropdownSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
     >();
     expectTypeOf<NonNullable<DropdownSlotProps['button']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLButtonElement> | undefined
@@ -2550,5 +2591,407 @@ describe('Dropdown — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the Dropdown draws its content
     void (<Dropdown slotProps={{ value: { children: 'Other' } }} />);
+    // @ts-expect-error -- a part takes no children: the Dropdown draws its content
+    void (<Dropdown slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const root = () => part(dropdownClassNames.root)!;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the Dropdown's className and style", () => {
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root().classList[0]).toBe(dropdownClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(combobox()).not.toHaveAttribute('data-part');
+      expect(combobox()).not.toHaveAttribute('title');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(
+        <Dropdown aria-label="Fruit" slotProps={{ root: { className: 'flex-row' } }}>
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root()).toHaveClass('flex-row');
+      expect(root()).not.toHaveClass('flex-col');
+    });
+
+    it("keeps the props you give the Dropdown over the part's", () => {
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          title="Own"
+          data-x="own"
+          data-size="large"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+      // Your own data-size reaches the root as in 0.18 (after the resolved one).
+      expect(root()).toHaveAttribute('data-size', 'large');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <Dropdown
+          aria-label="Fruit"
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The Dropdown's own hidden state stays its own.
+      rerender(
+        <Dropdown
+          aria-label="Fruit"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before the Dropdown's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <Dropdown
+          aria-label="Fruit"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <Dropdown
+          aria-label="Fruit"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it("opens on a click on the button whatever your root onClick does: the toggle is the button's own, before the click reaches the root", async () => {
+      const user = userEvent.setup();
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      await user.click(combobox());
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('calls your root onClick in every state, as the Dropdown calls its own: the root passes no click to the button', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <Dropdown aria-label="Fruit" onClick={own} slotProps={{ root: { onClick } }}>
+          {TWO}
+        </Dropdown>,
+      );
+      fireEvent.click(root());
+      rerender(
+        <Dropdown aria-label="Fruit" disabled onClick={own} slotProps={{ root: { onClick } }}>
+          {TWO}
+        </Dropdown>,
+      );
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps a press inside the root from dismissing the open list, also with an inline part ref', async () => {
+      const user = userEvent.setup();
+      const nodes: (HTMLDivElement | null)[] = [];
+      const ui = (pass: number) => (
+        <>
+          <Dropdown
+            aria-label="Fruit"
+            data-pass={pass}
+            slotProps={{
+              root: {
+                ref: (node) => {
+                  nodes.push(node);
+                },
+              },
+            }}
+          >
+            {TWO}
+          </Dropdown>
+          <p>Outside</p>
+        </>
+      );
+      const { rerender } = render(ui(0));
+      await user.click(combobox());
+      rerender(ui(1));
+      rerender(ui(2));
+      expect(nodes.at(-1)).toBe(root());
+      // A press on the root itself (no focus move): inside the popup's tree.
+      fireEvent.pointerDown(root());
+      fireEvent.click(root());
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.pointerDown(screen.getByText('Outside'));
+      fireEvent.click(screen.getByText('Outside'));
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          defaultOpen
+          slotProps={{ root: { className: 'my-root', title: 'Pick a fruit' } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      await act(async () => {});
+      await expectNoA11yViolations();
+    });
+  });
+});
+// 1.0 (Phase 14, R5): `ref` reaches the <button role="combobox">, the focusable control, in both
+// signatures; the root <div> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('Dropdown — ref reaches the control', () => {
+  it('focuses the button through ref', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    renderDropdown({ ref });
+    act(() => ref.current?.focus());
+    expect(combobox()).toHaveFocus();
+  });
+
+  it('gives ref the button beside slotProps.button.ref, and slotProps.root.ref the root, with multiselect too', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const root = React.createRef<HTMLDivElement>();
+    const button = React.createRef<HTMLButtonElement>();
+    render(
+      <Dropdown
+        ref={ref}
+        multiselect
+        aria-label="Fruit"
+        slotProps={{ root: { ref: root }, button: { ref: button } }}
+      >
+        {FRUITS}
+      </Dropdown>,
+    );
+    expect(ref.current).toBe(combobox());
+    expect(button.current).toBe(combobox());
+    expect(root.current).toHaveClass(dropdownClassNames.root);
+    expect(root.current).toContainElement(combobox());
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLButtonElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Order">
+        <Dropdown
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          multiselect
+          name="fruit"
+          required
+          aria-label="Fruit"
+          data-pass={pass}
+        >
+          {FRUITS}
+        </Dropdown>
+      </form>
+    );
+    const { rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const button = combobox();
+    expect(nodes.at(-1)).toBe(button);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    // The hidden input's invalid event focuses the combobox through the Dropdown's own ref.
+    act(() => {
+      form.reportValidity();
+    });
+    expect(button).toHaveFocus();
+    await user.click(button);
+    await user.click(option('Banana'));
+    rerender(ui(3));
+    expect(form.checkValidity()).toBe(true);
+    act(() => form.reset());
+    expect(form.checkValidity()).toBe(false);
+    expect(nodes.at(-1)).toBe(button);
+  });
+
+  it('keeps the popup placed against the button with an inline ref that changes on every render', async () => {
+    const html = document.documentElement;
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+    try {
+      const user = userEvent.setup();
+      const nodes: (HTMLButtonElement | null)[] = [];
+      const ui = (pass: number) => (
+        <Dropdown
+          aria-label="Fruit"
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          data-pass={pass}
+        >
+          {FRUITS}
+        </Dropdown>
+      );
+      const { rerender } = render(ui(0));
+      mockRect(combobox(), { x: 100, y: 100, width: 200, height: 32 });
+      rerender(ui(1));
+      await user.click(combobox());
+      rerender(ui(2));
+      rerender(ui(3));
+      const surface = () => listbox().closest<HTMLElement>('[data-wave-listbox-surface]')!;
+      // As wide as the button (the size middleware reads the reference the positioning holds).
+      await waitFor(() =>
+        expect(surface().style.getPropertyValue('--wave-popup-reference-width')).toBe('200px'),
+      );
+      expect(surface()).toHaveAttribute('data-side', 'bottom');
+      expect(nodes.at(-1)).toBe(combobox());
+    } finally {
+      Reflect.deleteProperty(html, 'clientWidth');
+      Reflect.deleteProperty(html, 'clientHeight');
+    }
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <Dropdown ref={ref} aria-label="Fruit">
+        {FRUITS}
+      </Dropdown>,
+    );
+    const button = combobox();
+    rerender(
+      <Dropdown ref={ref} aria-label="Fruit" defaultValue="b" disabled>
+        {FRUITS}
+      </Dropdown>,
+    );
+    expect(ref.mock.calls).toEqual([[button]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[button], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <Dropdown ref={ref} aria-label="Fruit">
+          {FRUITS}
+        </Dropdown>
+      </React.StrictMode>,
+    );
+    const button = combobox();
+    rerender(
+      <React.StrictMode>
+        <Dropdown ref={ref} aria-label="Fruit" disabled>
+          {FRUITS}
+        </Dropdown>
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[button], [null], [button]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    renderWithFieldContext(<Dropdown ref={ref}>{FRUITS}</Dropdown>);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(combobox(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('declares ref (for the button) in both signatures, and no controlRef', () => {
+    expectTypeOf<DropdownProps['ref']>().toEqualTypeOf<React.Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<DropdownProps<true>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<DropdownProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<DropdownProps<true>>().not.toHaveProperty('controlRef');
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the button; the root <div> is slotProps.root.ref
+    void (<Dropdown aria-label="Fruit" ref={divRef} />);
+    // @ts-expect-error -- the same with multiselect
+    void (<Dropdown aria-label="Fruit" multiselect ref={divRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLButtonElement>();
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the button
+          controlRef={controlRef}
+        >
+          {FRUITS}
+        </Dropdown>,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(document.querySelector(`.${dropdownClassNames.root}`)).toHaveAttribute(
+        'controlref',
+        '[object Object]',
+      );
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

@@ -275,14 +275,15 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
   /** Called when a key is released on the `<button role="combobox">`. */
   onKeyUp?: React.KeyboardEventHandler<HTMLButtonElement>;
-  /** Ref to the `<button role="combobox">` (the focusable element). */
-  controlRef?: React.Ref<HTMLButtonElement>;
-  /** Ref to the root `<div>`. */
-  ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Ref to the `<button role="combobox">`, the focusable control (Fluent UI's `ref`, on its
+   * primary element). The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLButtonElement>;
   /**
    * Props for the elements the Dropdown draws, by part, merged into each part's own (Fluent UI's
-   * `button`, `clearButton` and `listbox` slot props): your classes after the part's (yours win
-   * a conflict), your styles over its styles, your handlers before its handlers
+   * `root`, `button`, `clearButton` and `listbox` slot props): your classes after the part's
+   * (yours win a conflict), your styles over its styles, your handlers before its handlers
    * (`preventDefault()` in yours skips the Dropdown's handling of the event, its own `on…` prop
    * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
    * `aria-describedby`. Every attribute the Dropdown sets on a part is locked and keeps the
@@ -291,16 +292,28 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    */
   slotProps?: {
     /**
+     * The root `<div>` around the combobox button and the clear button (stable class
+     * `wave-dropdown`), which the Dropdown's `className`, `style`, `data-*` and other root props
+     * reach as well; its `ref` is the way to the root, since the Dropdown's `ref` reaches the
+     * button. Your classes come after the Dropdown's `className`, your style over its `style`.
+     * Locked: every prop you give the Dropdown itself that reaches the root, `data-size`,
+     * `data-appearance`, and `hidden`, `inert` and `aria-hidden` (the Dropdown's own: the root
+     * holds the button). Your handlers run before the Dropdown's own root handlers
+     * (`preventDefault()` in yours skips them). The root passes no click to the button, so your
+     * `onClick` is called in every state, as the Dropdown's own `onClick` is. Your ref joins the
+     * Dropdown's own, which a press inside the root keeps from dismissing the open list.
+     */
+    root?: SlotPart<'div'>;
+    /**
      * The `<button role="combobox">`, the focusable control (stable class
-     * `wave-dropdown__button`; `controlRef` reaches it as well). Locked: `type`, `role`, `id`,
-     * the naming, Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`,
+     * `wave-dropdown__button`; the Dropdown's `ref` reaches it as well). Locked: `type`, `role`,
+     * `id`, the naming, Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`,
      * `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`,
      * `aria-autocomplete`, `aria-errormessage`, `aria-details`), `disabled`, `tabIndex`,
-     * `autoFocus`, `name`, `form`
-     * and `required` (the value is submitted by the Dropdown's hidden input), `hidden`, `inert`
-     * and `aria-hidden` (a focusable control is never hidden). Your handlers run before the
-     * Dropdown's: `preventDefault()` in your `onClick` keeps the list as it is, in your
-     * `onKeyDown` skips the listbox keys.
+     * `autoFocus`, `name`, `form` and `required` (the value is submitted by the Dropdown's
+     * hidden input), `hidden`, `inert` and `aria-hidden` (a focusable control is never hidden).
+     * Your handlers run before the Dropdown's: `preventDefault()` in your `onClick` keeps the
+     * list as it is, in your `onKeyDown` skips the listbox keys.
      */
     button?: SlotPart<'button'>;
     /**
@@ -388,8 +401,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     onBlur,
     onKeyDown,
     onKeyUp,
-    controlRef,
     className,
+    style,
     children,
     ref,
     slotProps,
@@ -504,10 +517,14 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     anchorRef: buttonRef,
   });
 
-  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
+  // The root part's ref joins the root's own (the popup's dismissal reads it) through a merged ref
+  // set after the part's props, so an inline part ref never detaches the root's own.
+  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, slotProps?.root?.ref);
+  // The consumer's `ref` joins the button's own, the popup's positioning reference included: an
+  // inline `ref` that changes on every render is swapped alone, and the reference stays attached.
   const buttonMergedRef = useMergedRefs<HTMLButtonElement>(
     buttonRef,
-    controlRef,
+    ref,
     setReference,
     slotProps?.button?.ref,
   );
@@ -603,14 +620,23 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     renderOption,
   };
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: cn(dropdownClassNames.root, 'relative inline-flex flex-col', className),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // The Dropdown's own root props, after the data attributes as in 0.18, and over the part's;
+      // the root holds the button, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
-    <div
-      data-size={size}
-      data-appearance={appearance}
-      {...rest}
-      ref={rootMergedRef}
-      className={cn(dropdownClassNames.root, 'relative inline-flex flex-col', className)}
-    >
+    <div {...rootProps} ref={rootMergedRef}>
       {multiselect && <PickerAnnouncer />}
       <div className="relative flex items-center">
         <button
@@ -811,16 +837,16 @@ export const DropdownOptionGroup = OptionGroup;
  * overscan, with spacers for the others, every option `itemSize` tall; the active option stays
  * rendered, and opening scrolls it to the middle of the list.
  *
- * The `<button>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ * The `<button>` receives `ref`, `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`
- * and `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp`. `ref`, `className`, `style`, other `aria-*`
- * attributes and the remaining props stay on the root `<div>`. Inside a `Field` the button is
- * labelled and described by it — otherwise give it an `aria-label`. It shows the error look
- * whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field` error). With
- * `name`/`required` the value takes part in form submission (one hidden input per value with
- * `multiselect`), validation and reset (a `multiselect` reset is compared by content, so restoring
- * the same values reports nothing). The open listbox renders in a portal; while closed it stays
- * in the DOM, hidden.
+ * and `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp`. `className`, `style`, other `aria-*` attributes
+ * and the remaining props stay on the root `<div>` (`slotProps.root.ref` reaches it). Inside a
+ * `Field` the button is labelled and described by it — otherwise give it an `aria-label`. It
+ * shows the error look whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field`
+ * error). With `name`/`required` the value takes part in form submission (one hidden input per
+ * value with `multiselect`), validation and reset (a `multiselect` reset is compared by content,
+ * so restoring the same values reports nothing). The open listbox renders in a portal; while
+ * closed it stays in the DOM, hidden.
  *
  * **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  * `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own prop,

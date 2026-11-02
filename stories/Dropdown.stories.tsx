@@ -288,11 +288,17 @@ type TenThousandOptionsArgs = DropdownProps & {
 /** A Dropdown of 10,000 people, windowed by `useVirtualWindow`, with the mounted-option count. */
 function TenThousandDropdown({ itemSize, ...args }: TenThousandOptionsArgs) {
   const virtualWindow = useVirtualWindow({ itemSize });
-  const [root, setRoot] = React.useState<HTMLDivElement | null>(null);
+  // The Dropdown's `ref` reaches its button, the combobox whose list the readout counts.
+  const [combobox, setCombobox] = React.useState<HTMLButtonElement | null>(null);
   return (
     <div className="flex flex-col gap-3">
-      <Dropdown {...args} ref={setRoot} items={TEN_THOUSAND_PEOPLE} virtualWindow={virtualWindow} />
-      <MountedOptions scope={root} total={TEN_THOUSAND_PEOPLE.length} />
+      <Dropdown
+        {...args}
+        ref={setCombobox}
+        items={TEN_THOUSAND_PEOPLE}
+        virtualWindow={virtualWindow}
+      />
+      <MountedOptions scope={combobox} total={TEN_THOUSAND_PEOPLE.length} />
     </div>
   );
 }
