@@ -14,6 +14,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  checkFloorSmoke,
   checkPackedFiles,
   checkPlainCss,
   checkPlainSmoke,
@@ -25,6 +26,7 @@ import {
   pack,
   parseArgs,
   parsePackOutput,
+  resolveFloorNode,
   viteBuildCss,
 } from '../pack-smoke.mjs';
 import { createWorkDir, removeWorkDir } from '../verify-dist.mjs';
@@ -486,26 +488,34 @@ describe('checkPlainSmoke', () => {
   const side = { names: ['Button', 'WaveProvider', 'cn', 'CardHeader'], cn: 'a b', resolved };
   const good = { esm: side, cjs: side };
 
-  it('passes when ESM and CJS load the same names and every subpath resolves', () => {
+  it('passes when import() and require() load the same names and every subpath resolves', () => {
     expect(checkPlainSmoke(good)).toEqual([]);
   });
 
-  it('reports a format that fails to load or lacks names', () => {
+  it('reports a way in that fails to load or lacks names', () => {
     const errors = checkPlainSmoke({
-      cjs: { error: "Cannot find module './dist/index.cjs'", resolved },
+      cjs: { error: 'require() cannot be used on an ESM graph with top-level await', resolved },
       esm: { ...side, names: ['cn'] },
     });
-    expect(errors.join('\n')).toMatch(/require.*Cannot find module/);
+    expect(errors.join('\n')).toMatch(/require failed: require\(\) cannot be used/);
     expect(errors.join('\n')).toMatch(/Button/);
   });
 
-  it('reports a wrong cn result and names that differ between the formats', () => {
+  it('reports a wrong cn result and names that differ between import() and require()', () => {
     const errors = checkPlainSmoke({
       esm: { ...side, cn: 'a false b' },
       cjs: { ...side, names: [...side.names, 'Extra'] },
     });
     expect(errors.join('\n')).toMatch(/cn/);
-    expect(errors.join('\n')).toMatch(/Extra/);
+    expect(errors).toContain('only require() exposes Extra');
+  });
+
+  it('reports a name only import() exposes', () => {
+    const errors = checkPlainSmoke({
+      esm: { ...side, names: [...side.names, 'Extra'] },
+      cjs: side,
+    });
+    expect(errors).toEqual(['only import() exposes Extra (require() lacks them)']);
   });
 
   it('reports a subpath that does not resolve and aliases that resolve apart', () => {
@@ -526,6 +536,78 @@ describe('checkPlainSmoke', () => {
       cjs: { ...side, resolved: { ...resolved, './variants.css': '/elsewhere/variants.css' } },
     });
     expect(errors).toEqual(['require: ./variants and ./variants.css resolve to different files']);
+  });
+});
+
+describe('the Node floor step (spec R4)', () => {
+  const resolved = Object.fromEntries(
+    EXPORTED_SUBPATHS.map((subpath) => [subpath, `/app/${subpath.replace(/\.css$/, '')}`]),
+  );
+  const side = { names: ['Button', 'WaveProvider', 'cn'], cn: 'a b', resolved };
+
+  it('passes when require() on Node 22.12 exposes the names import() does', () => {
+    expect(checkFloorSmoke({ esm: side, floor: side })).toEqual([]);
+  });
+
+  it('reports a require() that fails on the floor, such as a top-level await', () => {
+    const errors = checkFloorSmoke({
+      esm: side,
+      floor: { error: 'require() cannot be used on an ESM graph with top-level await', resolved },
+    });
+    expect(errors).toEqual([
+      'require (Node 22.12) failed: require() cannot be used on an ESM graph with top-level await',
+    ]);
+  });
+
+  it('reports names that differ from import()', () => {
+    const errors = checkFloorSmoke({ esm: side, floor: { ...side, names: ['cn'] } });
+    expect(errors).toEqual([
+      'require (Node 22.12) lacks Button, WaveProvider',
+      'only import() exposes Button, WaveProvider (require() on Node 22.12 lacks them)',
+    ]);
+  });
+
+  it('skips the step, with the reason, unless WAVE_NODE_FLOOR is a Node.js 22.12 binary', () => {
+    const versionOf = (path) => ({ '/n/22.12': 'v22.12.0\n', '/n/24': 'v24.15.0\n' })[path];
+    expect(resolveFloorNode({}, versionOf)).toEqual({
+      skip: 'WAVE_NODE_FLOOR is not set (the path of a Node.js 22.12 binary)',
+    });
+    expect(resolveFloorNode({ WAVE_NODE_FLOOR: '/n/missing' }, versionOf)).toEqual({
+      skip: 'WAVE_NODE_FLOOR (/n/missing) could not be run',
+    });
+    expect(resolveFloorNode({ WAVE_NODE_FLOOR: '/n/24' }, versionOf)).toEqual({
+      skip: 'WAVE_NODE_FLOOR (/n/24) is v24.15.0, not Node.js 22.12',
+    });
+    expect(resolveFloorNode({ WAVE_NODE_FLOOR: '/n/22.12' }, versionOf)).toEqual({
+      path: '/n/22.12',
+    });
+  });
+
+  it('runs no binary when the variable is not set', () => {
+    const versionOf = vi.fn();
+    resolveFloorNode({}, versionOf);
+    expect(versionOf).not.toHaveBeenCalled();
+  });
+});
+
+describe('the plain fixture type programs (spec R4)', () => {
+  const fixture = join(root, 'scripts/fixtures/plain');
+  const read = (name) => JSON.parse(readFileSync(join(fixture, name), 'utf8'));
+
+  it('checks the .mts file under module node16', () => {
+    expect(read('tsconfig.json').files).toEqual(['types-esm.mts']);
+    expect(read('tsconfig.json').compilerOptions.module).toBe('node16');
+  });
+
+  it('checks the .cts file under module node20 (node16 reports TS1479 for a require of an ES module)', () => {
+    expect(read('tsconfig.cjs.json').files).toEqual(['types-cjs.cts']);
+    expect(read('tsconfig.cjs.json').compilerOptions.module).toBe('node20');
+  });
+
+  it('keeps smoke.cjs as the require(esm) consumer', () => {
+    const smoke = readFileSync(join(fixture, 'smoke.cjs'), 'utf8');
+    expect(smoke).toMatch(/require\(name\)/);
+    expect(smoke).toMatch(/require\(esm\)/);
   });
 });
 

@@ -32,9 +32,9 @@ describe('getGlobalRegistry', () => {
     expect(b.name).toBe('b');
   });
 
-  it('returns a value created by another copy of the library (ESM + CJS in one app)', () => {
-    // Simulates the other build having registered the singleton first.
-    const shared = { stack: ['layer-from-cjs-build'] };
+  it('returns a value created by another copy of the library (two copies in one app)', () => {
+    // Simulates the other copy having registered the singleton first.
+    const shared = { stack: ['layer-from-other-copy'] };
     globalStore[symbolFor(KEY)] = shared;
     const create = vi.fn(() => ({ stack: [] as string[] }));
     expect(getGlobalRegistry(KEY, create)).toBe(shared);

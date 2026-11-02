@@ -136,7 +136,7 @@ describe('layers — registry and stacking', () => {
     expect(compareLayers(a, a)).toBe(0);
   });
 
-  it('shares one stack through the global registry (ESM and CJS copies)', async () => {
+  it('shares one stack through the global registry (two copies of the package)', async () => {
     vi.resetModules();
     const copy = await import('../layers');
     expect(copy.registerLayer).not.toBe(registerLayer);

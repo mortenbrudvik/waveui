@@ -7,18 +7,22 @@
  *   tarball   every `exports` target is packed (and the style sources they `@import`); no tests,
  *             stories, component sources or scripts are.
  *   plain     an app without Tailwind (scripts/fixtures/plain):
- *               - `import` and `require` load the package, expose Button, WaveProvider and cn
- *                 with the same names in both formats, and every exported subpath resolves
- *                 (the `./x` and `./x.css` aliases to one file);
+ *               - `import()` (smoke.mjs) and `require()` (smoke.cjs: the package ships ES modules
+ *                 only, and `require(esm)` loads the entry on Node.js 22.12 and later) load the
+ *                 package, expose Button, WaveProvider and cn with the same names, and every
+ *                 exported subpath resolves (the `./x` and `./x.css` aliases to one file). When
+ *                 WAVE_NODE_FLOOR names a Node.js 22.12 binary, smoke.cjs runs on it too (the
+ *                 Node floor: 22.12 prints an ExperimentalWarning, 22.13 and later do not);
+ *                 without it that step is skipped with a message (nothing is downloaded);
  *               - `./styles` is the precompiled, unlayered stylesheet: `.bg-primary`,
  *                 `.text-body-1`, `--wave-primary`, `@keyframes wave-spin` and the native
  *                 reset scoped to `.wave-root`/`.wave-portal`, no `@layer` other than Tailwind's
  *                 `properties` fallback, no raw Tailwind directives; `./preflight.css` is
  *                 Preflight;
- *               - TypeScript (`module` node20) type-checks an ES module and a CommonJS file
- *                 importing the package: both get `dist/index.d.ts` (ES modules only; the
- *                 CommonJS file `require()`s the ES entry, which `module` node16 refuses with
- *                 TS1479);
+ *               - TypeScript type-checks two programs, both loading `dist/index.d.ts`: an `.mts`
+ *                 file under `module` node16 (tsconfig.json) and a `.cts` file under `module`
+ *                 node20 (tsconfig.cjs.json; the CommonJS file `require()`s the ES entry, which
+ *                 `module` node16 and node18 refuse with TS1479);
  *               - an app importing `./styles` (`vite-entry.js`) built with Vite's defaults: the
  *                 emitted CSS passes the `./styles` checks, and every `wave-rtl:` class of the
  *                 dist keeps Wave's direction variant. Vite minifies CSS with Lightning CSS for
@@ -43,6 +47,9 @@
  * Usage: node scripts/pack-smoke.mjs [--fixture plain|tailwind]... [--keep]
  *   --fixture  run only this fixture (repeatable; default: both)
  *   --keep     keep the work directory (tarball and installed fixtures) for inspection
+ *
+ * Environment: WAVE_NODE_FLOOR, the path of a Node.js 22.12 binary, enables the floor step of
+ * the plain fixture (`require()` of the ES entry on the Node floor).
  *
  * The assertions are exported and tested by scripts/__tests__/pack-smoke.test.mjs; importing
  * the module does not run anything.
@@ -363,43 +370,99 @@ export async function viteBuildCss(dir, entry, { tailwind = false } = {}) {
 }
 
 /**
- * What the plain fixture's ESM (`esm`) and CommonJS (`cjs`) smoke scripts observed: each loads
- * the package (`names`, `cn` result) and resolves every subpath (`resolved`).
+ * What one of the plain fixture's smoke scripts observed (`side`): it loads the package
+ * (`names`, `cn` result) and resolves every subpath (`resolved`). `label` names the script's way
+ * in ('import', 'require') in the messages.
  */
-export function checkPlainSmoke({ esm, cjs }) {
+function checkSmokeSide(label, side) {
   const errors = [];
-  for (const [label, side] of [
-    ['import', esm],
-    ['require', cjs],
-  ]) {
-    if (!side) {
-      errors.push(`${label}: no result`);
-      continue;
-    }
-    if (side.error) errors.push(`${label} failed: ${side.error}`);
-    else {
-      const missing = REQUIRED_NAMES.filter((name) => !side.names?.includes(name));
-      if (missing.length > 0) errors.push(`${label} lacks ${missing.join(', ')}`);
-      if (side.cn !== 'a b')
-        errors.push(`${label}: cn('a', false, 'b') returned ${JSON.stringify(side.cn)}`);
-    }
-    const resolved = side.resolved ?? {};
-    for (const subpath of EXPORTED_SUBPATHS) {
-      if (!resolved[subpath]) errors.push(`${label}: ${subpath} does not resolve`);
-    }
-    for (const [a, b] of ALIASES) {
-      if (resolved[a] && resolved[b] && resolved[a] !== resolved[b]) {
-        errors.push(`${label}: ${a} and ${b} resolve to different files`);
-      }
-    }
+  if (!side) {
+    errors.push(`${label}: no result`);
+    return errors;
   }
-  if (esm?.names && cjs?.names) {
-    const onlyEsm = esm.names.filter((name) => !cjs.names.includes(name));
-    const onlyCjs = cjs.names.filter((name) => !esm.names.includes(name));
-    if (onlyEsm.length > 0) errors.push(`only the ESM build exports ${onlyEsm.join(', ')}`);
-    if (onlyCjs.length > 0) errors.push(`only the CommonJS build exports ${onlyCjs.join(', ')}`);
+  if (side.error) errors.push(`${label} failed: ${side.error}`);
+  else {
+    const missing = REQUIRED_NAMES.filter((name) => !side.names?.includes(name));
+    if (missing.length > 0) errors.push(`${label} lacks ${missing.join(', ')}`);
+    if (side.cn !== 'a b')
+      errors.push(`${label}: cn('a', false, 'b') returned ${JSON.stringify(side.cn)}`);
+  }
+  const resolved = side.resolved ?? {};
+  for (const subpath of EXPORTED_SUBPATHS) {
+    if (!resolved[subpath]) errors.push(`${label}: ${subpath} does not resolve`);
+  }
+  for (const [a, b] of ALIASES) {
+    if (resolved[a] && resolved[b] && resolved[a] !== resolved[b]) {
+      errors.push(`${label}: ${a} and ${b} resolve to different files`);
+    }
   }
   return errors;
+}
+
+/** `require()` and `import()` must expose the same names (one module, two ways in). */
+function checkSameNames(esm, cjs, requireLabel) {
+  const errors = [];
+  if (esm?.names && cjs?.names) {
+    const onlyImport = esm.names.filter((name) => !cjs.names.includes(name));
+    const onlyRequire = cjs.names.filter((name) => !esm.names.includes(name));
+    if (onlyImport.length > 0) {
+      errors.push(`only import() exposes ${onlyImport.join(', ')} (${requireLabel} lacks them)`);
+    }
+    if (onlyRequire.length > 0) {
+      errors.push(`only ${requireLabel} exposes ${onlyRequire.join(', ')}`);
+    }
+  }
+  return errors;
+}
+
+/**
+ * What the plain fixture's `import()` script (`esm`) and `require(esm)` script (`cjs`) observed:
+ * each loads the package and resolves every subpath, and both expose the same names (the package
+ * ships ES modules only; `require()` returns the same module).
+ */
+export function checkPlainSmoke({ esm, cjs }) {
+  return [
+    ...checkSmokeSide('import', esm),
+    ...checkSmokeSide('require', cjs),
+    ...checkSameNames(esm, cjs, 'require()'),
+  ];
+}
+
+/**
+ * What the fixture's `require(esm)` script (`floor`) observed on the Node floor (22.12): it loads
+ * the entry and exposes the names `import()` (`esm`, run on the current Node) does.
+ */
+export function checkFloorSmoke({ esm, floor }) {
+  return [
+    ...checkSmokeSide('require (Node 22.12)', floor),
+    ...checkSameNames(esm, floor, 'require() on Node 22.12'),
+  ];
+}
+
+/**
+ * The Node.js 22.12 binary of the floor step: the path in `env.WAVE_NODE_FLOOR`, when it is set.
+ * `versionOf(path)` returns the binary's `--version` text (undefined when it cannot run). Returns
+ * `{ path }` for a v22.12.x binary, else `{ skip }` with the message that tells why the step is
+ * skipped. Nothing is downloaded.
+ */
+export function resolveFloorNode(env = process.env, versionOf = nodeVersionOf) {
+  const path = env.WAVE_NODE_FLOOR;
+  if (!path) return { skip: 'WAVE_NODE_FLOOR is not set (the path of a Node.js 22.12 binary)' };
+  const version = versionOf(path)?.trim();
+  if (!version) return { skip: `WAVE_NODE_FLOOR (${path}) could not be run` };
+  if (!/^v22\.12\.\d+$/.test(version)) {
+    return { skip: `WAVE_NODE_FLOOR (${path}) is ${version}, not Node.js 22.12` };
+  }
+  return { path };
+}
+
+function nodeVersionOf(path) {
+  try {
+    const result = run(path, ['--version']);
+    return result.status === 0 ? result.stdout : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function escapeRegExp(text) {
@@ -407,9 +470,9 @@ function escapeRegExp(text) {
 }
 
 /**
- * The fixture's `tsc --listFiles` run (repo-level#5): no type errors, and the program loaded
- * this package's `dist/index.d.ts` (the declarations of every condition, spec R4) — the
- * installed `node_modules/<packageName>/dist/…`, not another dependency's `dist/index.d.*`.
+ * One of the fixture's `tsc --listFiles` runs (repo-level#5): no type errors, and the program
+ * loaded this package's `dist/index.d.ts` (the one declaration file, spec R4) — the installed
+ * `node_modules/<packageName>/dist/…`, not another dependency's `dist/index.d.*`.
  */
 export function checkTypeProgram({ status, output }, packageName = pkg.name) {
   const errors = [];
@@ -574,12 +637,10 @@ function installFixture(name, work, tarball) {
   return dir;
 }
 
-function smoke(dir, script) {
-  const { status, stdout, stderr } = run(
-    process.execPath,
-    [script, JSON.stringify(EXPORTED_SUBPATHS)],
-    { cwd: dir },
-  );
+function smoke(dir, script, node = process.execPath) {
+  const { status, stdout, stderr } = run(node, [script, JSON.stringify(EXPORTED_SUBPATHS)], {
+    cwd: dir,
+  });
   if (status !== 0) return { error: `${script} exited with ${status}: ${stderr.trim()}` };
   try {
     return JSON.parse(stdout.trim().split('\n').pop());
@@ -614,10 +675,24 @@ async function checkViteBuild(dir, entry, { tailwind = false, label, check }) {
   );
 }
 
-async function runPlain(dir) {
+/** The fixture's type programs: the `.mts` file under node16 and the `.cts` file under node20. */
+const TYPE_PROGRAMS = [
+  { project: 'tsconfig.json', label: 'types (.mts, module node16)' },
+  { project: 'tsconfig.cjs.json', label: 'types (.cts, module node20)' },
+];
+
+async function runPlain(dir, io) {
   const esm = smoke(dir, 'smoke.mjs');
   const cjs = smoke(dir, 'smoke.cjs');
   const errors = checkPlainSmoke({ esm, cjs });
+
+  const floor = resolveFloorNode();
+  if (floor.path) {
+    errors.push(...checkFloorSmoke({ esm, floor: smoke(dir, 'smoke.cjs', floor.path) }));
+    io.log('pack-smoke: smoke.cjs ran on the Node floor (22.12)');
+  } else {
+    io.log(`pack-smoke: skipped smoke.cjs on the Node floor: ${floor.skip}`);
+  }
 
   const styles = esm.resolved?.['./styles'];
   if (styles && existsSync(styles)) {
@@ -631,10 +706,14 @@ async function runPlain(dir) {
   }
 
   const tsc = join(dirname(require.resolve('typescript/package.json')), 'bin', 'tsc');
-  const types = run(process.execPath, [tsc, '-p', 'tsconfig.json', '--listFiles'], { cwd: dir });
-  errors.push(
-    ...checkTypeProgram({ status: types.status, output: `${types.stdout}${types.stderr}` }),
-  );
+  for (const { project, label } of TYPE_PROGRAMS) {
+    const types = run(process.execPath, [tsc, '-p', project, '--listFiles'], { cwd: dir });
+    errors.push(
+      ...checkTypeProgram({ status: types.status, output: `${types.stdout}${types.stderr}` }).map(
+        (error) => `${label}: ${error}`,
+      ),
+    );
+  }
 
   // An app that imports ./styles and builds with Vite's defaults.
   errors.push(
@@ -705,7 +784,7 @@ export async function main(argv = process.argv.slice(2), io = console) {
     failures.push(...checkPackedFiles(files).map((error) => `tarball: ${error}`));
     for (const name of fixtures) {
       const dir = installFixture(name, work, tarball);
-      const errors = await (name === 'plain' ? runPlain(dir) : runTailwind(dir));
+      const errors = await (name === 'plain' ? runPlain(dir, io) : runTailwind(dir));
       failures.push(...errors.map((error) => `${name}: ${error}`));
       io.log(`pack-smoke: ${name} fixture ${errors.length === 0 ? 'OK' : 'FAILED'}`);
     }

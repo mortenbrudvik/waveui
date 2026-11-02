@@ -14,7 +14,7 @@ A React component library inspired by the Fluent UI 2 design language: 80 access
 - React 19 (`react` and `react-dom` `^19.0.0`)
 - Tailwind CSS `^4.1.0` only if you use the [Tailwind path](#tailwind-css-4); the precompiled stylesheet needs no Tailwind
 - Browsers: Chrome/Edge 111+, Safari 16.4+, Firefox 128+ (the CSS uses `@property`, `color-mix()`, `:where()` and `:has()`)
-- Node.js 22.12+ (`engines`)
+- Node.js 22.12+ (`engines`); the package is ES modules only (`require()` works on Node 22.12+)
 
 ## Installation
 

@@ -219,7 +219,7 @@ interface FocusOrigin {
 /**
  * One per copy of the library, not in the global registry: every field is derived from document
  * and window events, and only this copy's hooks read it, each of which keeps this copy's
- * listeners installed from its mount on. A second copy (ESM and CJS side by side) installs its own
+ * listeners installed from its mount on. A second copy of the package installs its own
  * listeners and derives the same state; `epoch` is compared only within the copy that set it.
  */
 const focusOrigin: FocusOrigin = {
@@ -254,7 +254,8 @@ function startsAfter(el: HTMLElement, surface: HTMLElement): boolean {
  * The surfaces whose keyboard order a {@link usePopoverTabOrder} manages right now. Their content
  * takes its place after its anchor, not at the end of the document where its portal is, so none
  * of it is "the last element of the page". Kept in `getGlobalRegistry('orderedSurfaces')`, so an
- * app that loads both the ESM and the CJS copy of the library excludes the surfaces of both.
+ * app that loads two copies of the package (duplicate installs, bundler duplicates, hot reload)
+ * excludes the surfaces of both.
  */
 function getOrderedSurfaces(): Set<HTMLElement> {
   return getGlobalRegistry('orderedSurfaces', () => new Set<HTMLElement>());

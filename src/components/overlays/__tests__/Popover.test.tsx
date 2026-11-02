@@ -1261,7 +1261,7 @@ describe('Popover', () => {
     });
 
     it('with popovers of two copies of the library open, Shift+Tab from outside the page reaches the page (global registry)', async () => {
-      // A second evaluation of the module, as when an app loads both the ESM and the CJS build.
+      // A second evaluation of the module, as when an app loads two copies of the package.
       vi.resetModules();
       const copy = await import('../Popover');
       expect(copy.Popover).not.toBe(Popover);
