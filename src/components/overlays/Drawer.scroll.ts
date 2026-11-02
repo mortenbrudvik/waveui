@@ -95,7 +95,7 @@ export function useScrollState(element: HTMLElement | null): DrawerScrollState {
  */
 export const scrollSeparatorClasses: { readonly header: string; readonly footer: string } = {
   header:
-    'border-b border-transparent data-[scroll-state=middle]:border-border data-[scroll-state=bottom]:border-border forced-colors:border-[CanvasText]',
+    'wave:border-b wave:border-transparent wave:data-[scroll-state=middle]:border-border wave:data-[scroll-state=bottom]:border-border wave:forced-colors:border-[CanvasText]',
   footer:
-    'border-t border-transparent data-[scroll-state=top]:border-border data-[scroll-state=middle]:border-border forced-colors:border-[CanvasText]',
+    'wave:border-t wave:border-transparent wave:data-[scroll-state=top]:border-border wave:data-[scroll-state=middle]:border-border wave:forced-colors:border-[CanvasText]',
 };

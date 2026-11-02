@@ -2,13 +2,14 @@
  * Development entry (not exported). Mirrors the Tailwind consumer path of
  * `@mortenbrudvik/waveui/tailwind` from the sources: Tailwind with its own sources, Wave tokens
  * and the namespaced keys in the `theme` layer, Wave's scoped base in the `base` layer and the
- * `wave-rtl:` variant. The consumer entry imports the components' precompiled utilities
- * (dist/components.css); here Tailwind compiles them from the sources, against the internal,
- * unnamespaced theme.css that dist/styles.css compiles them with.
+ * `wave-rtl:` variant, for the app's own classes (`bg-wave-primary`, `text-wave-body-1`). The
+ * components' classes carry Wave's prefix (`wave:`), which an unprefixed build never generates:
+ * they come precompiled, from dist/components.css through the consumer entry or from
+ * dist/styles.css, never from this build, so it imports no internal theme.css either (its
+ * unnamespaced keys would give the app Wave's `bg-primary` again).
  */
 
 @import 'tailwindcss';
-@import './theme.css';
 @import './tokens.css' layer(theme);
 @import './base.css' layer(base);
 @import './variants.css';

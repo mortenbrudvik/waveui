@@ -90,23 +90,23 @@ describe('ColorSlider', () => {
     expect(root.style.getPropertyValue('--wave-color-slider-position')).toBe('50%');
     expect(root.style.getPropertyValue('--wave-color-thumb')).toBe('#ff8080');
     expect(railOf(input)).toHaveClass(
-      'bg-(image:--wave-color-slider-gradient)',
-      'wave-rtl:-scale-x-100',
+      'wave:bg-(image:--wave-color-slider-gradient)',
+      'wave:wave-rtl:-scale-x-100',
     );
     expect(thumbOf(input)).toHaveClass(
-      'size-6',
-      'group-has-[:focus-visible]/color-slider:outline-2',
-      'group-has-[:focus-visible]/color-slider:outline-ring',
-      'group-has-[:focus-visible]/color-slider:ring-background',
-      'forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas]',
+      'wave:size-6',
+      'wave:group-has-[:focus-visible]/color-slider:outline-2',
+      'wave:group-has-[:focus-visible]/color-slider:outline-ring',
+      'wave:group-has-[:focus-visible]/color-slider:ring-background',
+      'wave:forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas]',
     );
-    expect(root).toHaveClass('group/color-slider');
+    expect(root).toHaveClass('wave:group/color-slider');
   });
 
   it('shape="square" removes the corner radius of the rail', () => {
     render(<ColorSlider shape="square" />);
-    expect(railOf(slider())).toHaveClass('rounded-none');
-    expect(railOf(slider())).not.toHaveClass('rounded-full');
+    expect(railOf(slider())).toHaveClass('wave:rounded-none');
+    expect(railOf(slider())).not.toHaveClass('wave:rounded-full');
   });
 
   describe('keyboard', () => {
@@ -192,7 +192,7 @@ describe('ColorSlider', () => {
       const input = slider('Brightness');
       expect(input).toHaveAttribute('aria-orientation', 'vertical');
       expect(input).toHaveAttribute('dir', 'ltr');
-      expect(railOf(input)).not.toHaveClass('wave-rtl:-scale-x-100');
+      expect(railOf(input)).not.toHaveClass('wave:wave-rtl:-scale-x-100');
       act(() => input.focus());
       await user.keyboard('{ArrowUp}');
       expect(onValueChange).toHaveBeenLastCalledWith({ h: 0, s: 1, v: 0.51 });
@@ -425,7 +425,7 @@ describe('ColorSlider', () => {
       );
       const input = slider('Farbton');
       expect(input).toHaveValue('100');
-      expect(railOf(input)).toHaveClass('rounded-none');
+      expect(railOf(input)).toHaveClass('wave:rounded-none');
       act(() => input.focus());
       await user.keyboard('{ArrowRight}');
       expect(onHsvChange.mock.calls).toEqual([[{ h: 101, s: 1, v: 1 }]]);
@@ -508,8 +508,8 @@ describe('ColorSlider — slotProps', () => {
     template.innerHTML = renderToString(<ColorSlider defaultValue={DARK_BLUE} />);
     expect(openingTags(...parts(template.content))).toBe(
       [
-        '<div aria-hidden="true" class="wave-color-slider__rail rounded-full forced-colors:forced-color-adjust-none bg-(image:--wave-color-slider-gradient) mx-3 h-3 flex-1 wave-rtl:-scale-x-100">',
-        '<span class="wave-color-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] start-(--wave-color-slider-position) top-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 -translate-y-1/2 group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
+        '<div aria-hidden="true" class="wave-color-slider__rail wave:rounded-full wave:forced-colors:forced-color-adjust-none wave:bg-(image:--wave-color-slider-gradient) wave:mx-3 wave:h-3 wave:flex-1 wave:wave-rtl:-scale-x-100">',
+        '<span class="wave-color-slider__thumb wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText] wave:start-(--wave-color-slider-position) wave:top-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:-translate-y-1/2 wave:group-has-[:focus-visible]/color-slider:ring-2 wave:group-has-[:focus-visible]/color-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] wave:group-has-[:focus-visible]/color-slider:outline-2 wave:group-has-[:focus-visible]/color-slider:outline-offset-2 wave:group-has-[:focus-visible]/color-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
       ].join('\n'),
     );
     render(
@@ -522,8 +522,8 @@ describe('ColorSlider — slotProps', () => {
     );
     expect(openingTags(...parts(document))).toBe(
       [
-        '<div aria-hidden="true" class="wave-color-slider__rail forced-colors:forced-color-adjust-none bg-(image:--wave-color-slider-gradient) my-3 w-3 flex-1 rounded-none">',
-        '<span class="wave-color-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] bottom-(--wave-color-slider-position) start-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2 group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
+        '<div aria-hidden="true" class="wave-color-slider__rail wave:forced-colors:forced-color-adjust-none wave:bg-(image:--wave-color-slider-gradient) wave:my-3 wave:w-3 wave:flex-1 wave:rounded-none">',
+        '<span class="wave-color-slider__thumb wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText] wave:bottom-(--wave-color-slider-position) wave:start-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:translate-y-1/2 wave:group-has-[:focus-visible]/color-slider:ring-2 wave:group-has-[:focus-visible]/color-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] wave:group-has-[:focus-visible]/color-slider:outline-2 wave:group-has-[:focus-visible]/color-slider:outline-offset-2 wave:group-has-[:focus-visible]/color-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
       ].join('\n'),
     );
   });
@@ -573,8 +573,8 @@ describe('ColorSlider — slotProps', () => {
     );
     const input = slider();
     for (const [element, stable, own, mine, part, opacity] of [
-      [railOf(input), colorSliderClassNames.rail, 'flex-1', 'my-rail', 'rail', '0.5'],
-      [thumbOf(input), colorSliderClassNames.thumb, 'size-6', 'my-thumb', 'thumb', '0.25'],
+      [railOf(input), colorSliderClassNames.rail, 'wave:flex-1', 'my-rail', 'rail', '0.5'],
+      [thumbOf(input), colorSliderClassNames.thumb, 'wave:size-6', 'my-thumb', 'thumb', '0.25'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -590,7 +590,7 @@ describe('ColorSlider — slotProps', () => {
     );
     const rail = railOf(slider());
     expect(rail).toHaveClass('rounded-md');
-    expect(rail).not.toHaveClass('rounded-full');
+    expect(rail).not.toHaveClass('wave:rounded-full');
   });
 
   it('attaches your refs to the parts, beside ref', () => {
@@ -664,8 +664,8 @@ describe('ColorSlider — slotProps', () => {
       { dir: 'rtl' },
     );
     const input = slider();
-    expect(railOf(input)).toHaveClass('wave-rtl:-scale-x-100', 'my-rail');
-    expect(thumbOf(input)).toHaveClass('wave-rtl:translate-x-1/2', 'my-thumb');
+    expect(railOf(input)).toHaveClass('wave:wave-rtl:-scale-x-100', 'my-rail');
+    expect(thumbOf(input)).toHaveClass('wave:wave-rtl:translate-x-1/2', 'my-thumb');
   });
 
   it('has no accessibility violations with every part customised', async () => {
@@ -745,7 +745,7 @@ describe('ColorSlider — slotProps', () => {
     it('lets your class replace a conflicting class of the root', () => {
       render(<ColorSlider slotProps={{ root: { className: 'items-start' } }} />);
       expect(root()).toHaveClass('items-start');
-      expect(root()).not.toHaveClass('items-center');
+      expect(root()).not.toHaveClass('wave:items-center');
     });
 
     it("keeps the props you give the slider over the part's", () => {

@@ -44,7 +44,7 @@ describe('ProgressBar', () => {
     expectedTag: 'div',
     displayName: 'ProgressBar',
     defaultProps: { label: 'Loading' },
-    conflictingClass: { className: 'h-1', overrides: 'h-2' },
+    conflictingClass: { className: 'h-1', overrides: 'wave:h-2' },
     a11yVariants: [
       { name: 'determinate', props: { value: 40 } },
       { name: 'visible label', props: { value: 40, showLabel: true } },
@@ -167,7 +167,7 @@ describe('ProgressBar', () => {
       expect(bar).toBe(screen.getByTestId('pb'));
       expect(bar).not.toHaveAttribute('aria-label');
       const label = screen.getByText('Uploading files');
-      expect(label).not.toHaveClass('sr-only');
+      expect(label).not.toHaveClass('wave:sr-only');
       expect(bar.getAttribute('aria-labelledby')).toBe(label.id);
       expect(label.id).not.toBe('');
       // The label comes first in the DOM (above the bar).
@@ -207,7 +207,7 @@ describe('ProgressBar', () => {
       expect(bar).toHaveAttribute('aria-label', 'Photo upload');
       expect(bar).not.toHaveAttribute('aria-labelledby');
       // The label stays visible text.
-      expect(screen.getByText('Upload')).not.toHaveClass('sr-only');
+      expect(screen.getByText('Upload')).not.toHaveClass('wave:sr-only');
     });
 
     it('keeps the label-derived name when a wrapper forwards undefined name props', () => {
@@ -325,10 +325,10 @@ describe('ProgressBar', () => {
       render(<ProgressBar value={40} label="Upload" />);
       const bar = screen.getByRole('progressbar');
       expect(bar).toHaveClass(
-        'bg-track',
-        'rounded-full',
-        'forced-colors:border',
-        'forced-colors:border-[CanvasText]',
+        'wave:bg-track',
+        'wave:rounded-full',
+        'wave:forced-colors:border',
+        'wave:forced-colors:border-[CanvasText]',
       );
       expect(bar.className).not.toMatch(/\[#/);
     });
@@ -336,9 +336,9 @@ describe('ProgressBar', () => {
     it('fills with the primary token and Highlight in forced colors (leaf recipe)', () => {
       render(<ProgressBar value={40} label="Upload" />);
       expect(fillOf(screen.getByRole('progressbar'))).toHaveClass(
-        'bg-primary',
-        'forced-colors:bg-[Highlight]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:bg-primary',
+        'wave:forced-colors:bg-[Highlight]',
+        'wave:forced-colors:forced-color-adjust-none',
       );
     });
 
@@ -346,16 +346,16 @@ describe('ProgressBar', () => {
       render(<ProgressBar label="Syncing" />);
       const fill = fillOf(screen.getByRole('progressbar'));
       expect(fill).toHaveClass(
-        'w-2/5',
-        'animate-wave-indeterminate',
-        'wave-rtl:animate-wave-indeterminate-rtl',
-        'motion-reduce:w-full',
-        'motion-reduce:translate-x-0',
-        'motion-reduce:animate-wave-pulse',
-        'wave-rtl:motion-reduce:animate-wave-pulse',
+        'wave:w-2/5',
+        'wave:animate-wave-indeterminate',
+        'wave:wave-rtl:animate-wave-indeterminate-rtl',
+        'wave:motion-reduce:w-full',
+        'wave:motion-reduce:translate-x-0',
+        'wave:motion-reduce:animate-wave-pulse',
+        'wave:wave-rtl:motion-reduce:animate-wave-pulse',
       );
       // Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page (C-LOGICAL).
-      expect(fill.className).not.toMatch(/(^|\s)rtl:/);
+      expect(fill.className).not.toMatch(/(^|\s)wave:rtl:/);
       expect(fill.className).not.toMatch(/animate-\[/);
       expect(fill.style.width).toBe('');
     });
@@ -368,7 +368,7 @@ describe('ProgressBar', () => {
     describe('indeterminateMotion', () => {
       // 0.14's indeterminate class list, word for word (git show v0.14.1:ProgressBar.tsx).
       const ZERO_FOURTEEN =
-        'w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse';
+        'wave:w-2/5 wave:animate-wave-indeterminate wave:wave-rtl:animate-wave-indeterminate-rtl wave:motion-reduce:w-full wave:motion-reduce:translate-x-0 wave:motion-reduce:animate-wave-pulse wave:wave-rtl:motion-reduce:animate-wave-pulse';
       const MOTION_WORDS = motionClasses(ZERO_FOURTEEN);
       const classesOf = (el: HTMLElement) => el.className.split(/\s+/).filter(Boolean);
       const renderFill = (
@@ -384,13 +384,13 @@ describe('ProgressBar', () => {
         const fill = renderFill({});
         // The recipe ends the list, and its width class has merged the full width away.
         expect(classesOf(fill).slice(-MOTION_WORDS.length)).toEqual(MOTION_WORDS);
-        expect(fill).not.toHaveClass('w-full');
+        expect(fill).not.toHaveClass('wave:w-full');
         expect(fill.style.width).toBe('');
       });
 
       it('null draws a static full-width bar', () => {
         const fill = renderFill({ indeterminateMotion: null });
-        expect(fill).toHaveClass('w-full');
+        expect(fill).toHaveClass('wave:w-full');
         expect(fill.className).not.toMatch(/animate-/);
         expect(fill.className).not.toMatch(/w-2\/5/);
       });
@@ -398,7 +398,7 @@ describe('ProgressBar', () => {
       it('a class string replaces the whole list', () => {
         const fill = renderFill({ indeterminateMotion: 'w-2/5' });
         expect(fill).toHaveClass('w-2/5');
-        expect(fill).not.toHaveClass('w-full');
+        expect(fill).not.toHaveClass('wave:w-full');
         expect(fill.className).not.toMatch(/animate-/);
         expect(fill.className).not.toMatch(/motion-reduce:/);
       });
@@ -411,7 +411,7 @@ describe('ProgressBar', () => {
 
       it("a provider's 'none' draws a static full-width bar", () => {
         const fill = renderFill({}, { motion: 'none' });
-        expect(fill).toHaveClass('w-full');
+        expect(fill).toHaveClass('wave:w-full');
         expect(fill.className).not.toMatch(/animate-/);
       });
 
@@ -431,7 +431,7 @@ describe('ProgressBar', () => {
       renderWithProviders(<ProgressBar label="Syncing" />, { dir: 'rtl' });
       const bar = screen.getByRole('progressbar', { name: 'Syncing' });
       expect(bar.closest('[dir="rtl"]')).not.toBeNull();
-      expect(fillOf(bar)).toHaveClass('wave-rtl:animate-wave-indeterminate-rtl');
+      expect(fillOf(bar)).toHaveClass('wave:wave-rtl:animate-wave-indeterminate-rtl');
     });
 
     it('keys the RTL keyframes on its own direction, so an LTR subtree of an RTL page runs LTR', () => {
@@ -447,27 +447,31 @@ describe('ProgressBar', () => {
       // `wave-rtl:` compiles to `:dir(rtl)`, which the nearest `dir` decides (checked by the styles
       // build); Tailwind's `rtl:` would match the RTL ancestor.
       const fill = fillOf(bar);
-      expect(fill).toHaveClass('wave-rtl:animate-wave-indeterminate-rtl');
-      expect(fill.className).not.toMatch(/(^|\s)rtl:/);
+      expect(fill).toHaveClass('wave:wave-rtl:animate-wave-indeterminate-rtl');
+      expect(fill.className).not.toMatch(/(^|\s)wave:rtl:/);
     });
   });
 
   describe('color', () => {
     it.each([
-      ['brand', 'bg-primary'],
-      ['success', 'bg-success'],
+      ['brand', 'wave:bg-primary'],
+      ['success', 'wave:bg-success'],
       // The yellow warning token would be 1.02:1 on the light track: the severe orange passes 3:1.
-      ['warning', 'bg-severe'],
-      ['error', 'bg-error'],
+      ['warning', 'wave:bg-severe'],
+      ['error', 'wave:bg-error'],
     ] as const)('color="%s" fills with %s and sets data-color', (color, fillClass) => {
       render(<ProgressBar value={40} label="Upload" color={color} />);
       const bar = screen.getByRole('progressbar', { name: 'Upload' });
       expect(bar).toHaveAttribute('data-color', color);
       const fill = fillOf(bar);
-      expect(fill).toHaveClass(fillClass, 'forced-colors:bg-[Highlight]');
-      const others = ['bg-primary', 'bg-success', 'bg-severe', 'bg-error', 'bg-warning'].filter(
-        (cls) => cls !== fillClass,
-      );
+      expect(fill).toHaveClass(fillClass, 'wave:forced-colors:bg-[Highlight]');
+      const others = [
+        'wave:bg-primary',
+        'wave:bg-success',
+        'wave:bg-severe',
+        'wave:bg-error',
+        'wave:bg-warning',
+      ].filter((cls) => cls !== fillClass);
       for (const other of others) expect(fill).not.toHaveClass(other);
     });
 
@@ -475,14 +479,14 @@ describe('ProgressBar', () => {
       render(<ProgressBar value={40} label="Upload" />);
       const bar = screen.getByRole('progressbar', { name: 'Upload' });
       expect(bar).toHaveAttribute('data-color', 'brand');
-      expect(fillOf(bar)).toHaveClass('bg-primary');
+      expect(fillOf(bar)).toHaveClass('wave:bg-primary');
     });
 
     it('colors the indeterminate fill too', () => {
       render(<ProgressBar label="Syncing" color="error" />);
       const fill = fillOf(screen.getByRole('progressbar', { name: 'Syncing' }));
-      expect(fill).toHaveClass('bg-error', 'animate-wave-indeterminate');
-      expect(fill).not.toHaveClass('bg-primary');
+      expect(fill).toHaveClass('wave:bg-error', 'wave:animate-wave-indeterminate');
+      expect(fill).not.toHaveClass('wave:bg-primary');
     });
 
     it.each(['brand', 'success', 'warning', 'error'] as const)(
@@ -635,7 +639,7 @@ describe('ProgressBar', () => {
       const bar = screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
       expect(bar).toHaveAccessibleDescription(MESSAGE_AND_HINT);
       expect(bar).toHaveAttribute('data-color', 'warning');
-      expect(fillOf(bar)).toHaveClass('bg-severe');
+      expect(fillOf(bar)).toHaveClass('wave:bg-severe');
       expect(bar).not.toHaveAttribute('aria-invalid');
       expect(bar).not.toHaveAttribute('aria-required');
       expect(warn).not.toHaveBeenCalled();
@@ -649,19 +653,19 @@ describe('ProgressBar', () => {
           errorId: FIELD_TEST_IDS.errorId,
           validationMessageId: FIELD_TEST_IDS.errorId,
         },
-        'bg-error',
+        'wave:bg-error',
         FIELD_TEST_TEXT.error,
       ],
       [
         'success',
         { validationState: 'success', validationMessageId: FIELD_TEST_IDS.messageId },
-        'bg-success',
+        'wave:bg-success',
         FIELD_TEST_TEXT.message,
       ],
       [
         'none',
         { validationState: 'none', validationMessageId: FIELD_TEST_IDS.messageId },
-        'bg-primary',
+        'wave:bg-primary',
         FIELD_TEST_TEXT.message,
       ],
     ] as const)('follows the Field validation state %s', (_, field, fillClass, description) => {
@@ -695,8 +699,8 @@ describe('ProgressBar', () => {
       renderWithFieldContext(<ProgressBar value={40} color="brand" />, WARNING_FIELD);
       const bar = screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
       expect(bar).toHaveAttribute('data-color', 'brand');
-      expect(fillOf(bar)).toHaveClass('bg-primary');
-      expect(fillOf(bar)).not.toHaveClass('bg-severe');
+      expect(fillOf(bar)).toHaveClass('wave:bg-primary');
+      expect(fillOf(bar)).not.toHaveClass('wave:bg-severe');
     });
 
     it.each([
@@ -750,11 +754,11 @@ describe('ProgressBar — slotProps', () => {
     ...all(root, progressBarClassNames.bar),
     ...all(root, progressBarClassNames.label),
   ];
-  const FILL = 'wave-progress-bar__bar h-full rounded-full';
+  const FILL = 'wave-progress-bar__bar wave:h-full wave:rounded-full';
   const FORCED =
-    'forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none';
+    'wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none';
   const SWEEP =
-    'w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse';
+    'wave:w-2/5 wave:animate-wave-indeterminate wave:wave-rtl:animate-wave-indeterminate-rtl wave:motion-reduce:w-full wave:motion-reduce:translate-x-0 wave:motion-reduce:animate-wave-pulse wave:wave-rtl:motion-reduce:animate-wave-pulse';
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -776,10 +780,10 @@ describe('ProgressBar — slotProps', () => {
   // Captured from 54699b8's dist; the server writes the width without spaces.
   const pins = (width: (value: string) => string) =>
     [
-      `<div class="${FILL} bg-primary ${FORCED}" style="${width('50%')}">`,
-      `<div class="${FILL} bg-primary ${FORCED} ${SWEEP}">`,
-      `<div class="${FILL} bg-severe ${FORCED}" style="${width('10%')}">`,
-      '<span class="wave-progress-bar__label text-body-1 text-foreground" id="progress-label-_id0_">',
+      `<div class="${FILL} wave:bg-primary ${FORCED}" style="${width('50%')}">`,
+      `<div class="${FILL} wave:bg-primary ${FORCED} ${SWEEP}">`,
+      `<div class="${FILL} wave:bg-severe ${FORCED}" style="${width('10%')}">`,
+      '<span class="wave-progress-bar__label wave:text-body-1 wave:text-foreground" id="progress-label-_id0_">',
     ].join('\n');
   const CLIENT_PINS = pins((value) => `width: ${value};`);
   const SERVER_PINS = pins((value) => `width:${value}`);
@@ -846,8 +850,8 @@ describe('ProgressBar — slotProps', () => {
       />,
     );
     for (const [cls, name, mine, conflict] of [
-      [progressBarClassNames.bar, 'bar', 'my-bar', 'rounded-full'],
-      [progressBarClassNames.label, 'label', 'my-label', 'text-body-1'],
+      [progressBarClassNames.bar, 'bar', 'my-bar', 'wave:rounded-full'],
+      [progressBarClassNames.label, 'label', 'my-label', 'wave:text-body-1'],
     ] as const) {
       const [element] = all(document, cls);
       expect(element.classList[0]).toBe(cls);
@@ -922,12 +926,12 @@ describe('ProgressBar — slotProps', () => {
     expect(fill()).toHaveClass('my-bar', ...motionClasses(progressIndeterminateMotion));
     rerender(<ProgressBar label="Upload" indeterminateMotion="my-sweep" slotProps={slotProps} />);
     expect(fill()).toHaveClass('my-bar', 'my-sweep');
-    expect(fill()).not.toHaveClass('animate-wave-indeterminate');
+    expect(fill()).not.toHaveClass('wave:animate-wave-indeterminate');
     renderWithFieldContext(<ProgressBar value={10} slotProps={slotProps} />, {
       validationState: 'error',
     });
     const [, inField] = screen.getAllByRole('progressbar');
-    expect(fillOf(inField)).toHaveClass('bg-error', 'my-bar');
+    expect(fillOf(inField)).toHaveClass('wave:bg-error', 'my-bar');
     expect(fillOf(inField)).toHaveStyle({ width: '10%' });
   });
 
@@ -964,7 +968,7 @@ describe('ProgressBar — slotProps', () => {
     );
     const bar = screen.getByRole('progressbar', { name: 'Syncing' });
     expect(bar.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-    expect(fillOf(bar)).toHaveClass('my-bar', 'wave-rtl:animate-wave-indeterminate-rtl');
+    expect(fillOf(bar)).toHaveClass('my-bar', 'wave:wave-rtl:animate-wave-indeterminate-rtl');
   });
 
   it('has no axe violations with parts', async () => {

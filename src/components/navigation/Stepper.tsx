@@ -321,16 +321,16 @@ function numberChildren(children: React.ReactNode): StepperChild[] {
 // Step
 // ---------------------------------------------------------------------------
 
-const indicatorSlotClasses = 'inline-flex items-center justify-center';
+const indicatorSlotClasses = 'wave:inline-flex wave:items-center wave:justify-center';
 
 /**
  * Connector colors. A connector is drawn by its background only, which forced colors replace with
  * Canvas, so it opts out there: a completed one is painted `Highlight` (`forcedColors.fill`), the
  * others `CanvasText`, like a Slider rail.
  */
-const connectorCompletedClasses = wcn('bg-success', forcedColors.fill);
+const connectorCompletedClasses = wcn('wave:bg-success', forcedColors.fill);
 const connectorPendingClasses =
-  'bg-border forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none';
+  'wave:bg-border wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none';
 
 /**
  * The `blockHandlers` of the button and the parts inside it while the step cannot be activated:
@@ -475,16 +475,16 @@ const StepperStep = ({
       'aria-hidden': true,
     });
   } else {
-    indicator = <span className="text-caption-1 font-semibold">{index + 1}</span>;
+    indicator = <span className="wave:text-caption-1 wave:font-semibold">{index + 1}</span>;
   }
 
   const toneClass = error
-    ? 'text-error'
+    ? 'wave:text-error'
     : isActive
-      ? 'text-primary'
+      ? 'wave:text-primary'
       : isCompleted
-        ? 'text-success'
-        : 'text-foreground';
+        ? 'wave:text-success'
+        : 'wave:text-foreground';
 
   // The parts, merged only when given. While the step cannot be activated, the button and the
   // parts inside it get no click of a part, as the step's own `onClick` is not called.
@@ -503,49 +503,54 @@ const StepperStep = ({
   } as const;
   const listItemClassName = wcn(
     stepperStepClassNames.listItem,
-    'flex min-w-0',
-    horizontal && !isLast && 'flex-1',
+    'wave:flex wave:min-w-0',
+    horizontal && !isLast && 'wave:flex-1',
   );
   const buttonClassName = wcn(
     stepperStepClassNames.button,
-    'relative flex rounded',
-    horizontal ? 'flex-col items-center gap-1' : 'items-center gap-3',
+    'wave:relative wave:flex wave:rounded',
+    horizontal ? 'wave:flex-col wave:items-center wave:gap-1' : 'wave:items-center wave:gap-3',
     focusRing,
-    isClickable ? 'cursor-pointer' : 'cursor-default',
-    disabled && 'opacity-50',
+    isClickable ? 'wave:cursor-pointer' : 'wave:cursor-default',
+    disabled && 'wave:opacity-50',
   );
   const indicatorClassName = wcn(
     stepperStepClassNames.indicator,
-    'flex size-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors motion-reduce:transition-none',
+    'wave:flex wave:size-8 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border-2 wave:transition-colors wave:motion-reduce:transition-none',
     error
-      ? 'border-error bg-error-tint text-error-tint-foreground'
+      ? 'wave:border-error wave:bg-error-tint wave:text-error-tint-foreground'
       : isActive
-        ? wcn('border-primary bg-primary text-primary-foreground', forcedColors.selectedLeaf)
+        ? wcn(
+            'wave:border-primary wave:bg-primary wave:text-primary-foreground',
+            forcedColors.selectedLeaf,
+          )
         : isCompleted
-          ? 'border-success bg-success-tint text-success-tint-foreground'
-          : 'border-border bg-background text-muted-foreground',
+          ? 'wave:border-success wave:bg-success-tint wave:text-success-tint-foreground'
+          : 'wave:border-border wave:bg-background wave:text-muted-foreground',
   );
   const labelClassName = wcn(
     stepperStepClassNames.label,
-    'font-semibold',
-    horizontal ? 'text-caption-1 whitespace-nowrap' : 'text-body-1',
+    'wave:font-semibold',
+    horizontal ? 'wave:text-caption-1 wave:whitespace-nowrap' : 'wave:text-body-1',
     toneClass,
   );
   const descriptionClassName = description
     ? wcn(
         stepperStepClassNames.description,
-        'text-muted-foreground',
-        horizontal ? 'text-caption-2 whitespace-nowrap' : 'text-caption-1',
+        'wave:text-muted-foreground',
+        horizontal ? 'wave:text-caption-2 wave:whitespace-nowrap' : 'wave:text-caption-1',
       )
     : undefined;
   const connectorClassName = isLast
     ? undefined
     : wcn(
         stepperStepClassNames.connector,
-        'transition-colors motion-reduce:transition-none',
+        'wave:transition-colors wave:motion-reduce:transition-none',
         // Vertical: centred under the size-8 circle, (8 - 0.5) / 2 spacing units in, so the
         // offset scales with the circle at any root font size.
-        horizontal ? 'mx-2 h-0.5 flex-1' : 'my-1 ms-3.75 min-h-6 w-0.5',
+        horizontal
+          ? 'wave:mx-2 wave:h-0.5 wave:flex-1'
+          : 'wave:my-1 wave:ms-3.75 wave:min-h-6 wave:w-0.5',
         isCompleted ? connectorCompletedClasses : connectorPendingClasses,
       );
 
@@ -568,7 +573,9 @@ const StepperStep = ({
         {...rest}
         className={wcn(
           stepperStepClassNames.root,
-          horizontal ? 'flex flex-1 items-center' : 'flex flex-1 flex-col',
+          horizontal
+            ? 'wave:flex wave:flex-1 wave:items-center'
+            : 'wave:flex wave:flex-1 wave:flex-col',
           className,
         )}
       >
@@ -594,7 +601,12 @@ const StepperStep = ({
           >
             {indicator}
           </span>
-          <span className={wcn('flex flex-col', horizontal && 'items-center text-center')}>
+          <span
+            className={wcn(
+              'wave:flex wave:flex-col',
+              horizontal && 'wave:items-center wave:text-center',
+            )}
+          >
             <span
               id={labelId}
               className={labelClassName}
@@ -605,7 +617,7 @@ const StepperStep = ({
                   blockHandlers,
                 }))}
             >
-              <span className="sr-only">{statusText}</span> {label}
+              <span className="wave:sr-only">{statusText}</span> {label}
             </span>
             {description && (
               <span
@@ -721,8 +733,8 @@ const StepperRoot = ({
   const horizontal = orientation === 'horizontal';
   const listClassName = wcn(
     stepperClassNames.list,
-    'm-0 flex list-none p-0',
-    horizontal ? 'flex-1 flex-row items-start' : 'flex-col',
+    'wave:m-0 wave:flex wave:list-none wave:p-0',
+    horizontal ? 'wave:flex-1 wave:flex-row wave:items-start' : 'wave:flex-col',
   );
 
   return (
@@ -735,8 +747,8 @@ const StepperRoot = ({
         {...rest}
         className={wcn(
           stepperClassNames.root,
-          'flex',
-          horizontal ? 'flex-row items-start' : 'flex-col',
+          'wave:flex',
+          horizontal ? 'wave:flex-row wave:items-start' : 'wave:flex-col',
           className,
         )}
       >

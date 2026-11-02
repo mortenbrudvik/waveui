@@ -198,7 +198,14 @@ describe('NavDrawer motion slots (D5, D6)', () => {
       const expectWarnings = spyOnWarnings();
       render(openDrawer({ className: presenceClasses.join(' ') }));
       expectWarnings([]);
-      expect(panel()).toHaveClass(...motionClasses(PANEL_RECIPE), ...presenceClasses);
+      // The className's exit opacity replaces the recipe's own word of the same variant (1.0:
+      // the recipe's carries the prefix, so the two are no longer one string); the rest stays.
+      const replaced = 'wave:data-[presence=exiting]:opacity-0';
+      expect(panel()).toHaveClass(
+        ...motionClasses(PANEL_RECIPE).filter((word) => word !== replaced),
+        ...presenceClasses,
+      );
+      expect(panel()).not.toHaveClass(replaced);
       expect(Array.from(panel()!.classList).slice(-2)).toEqual(presenceClasses);
       expect(backdrop()).toHaveClass(...motionClasses(drawerBackdropMotion.small));
     });

@@ -120,7 +120,7 @@ describe('the collapse wrapper (§5.2 markup)', () => {
     ]);
 
     // The group keeps its 0.14 element; the wrapper takes nothing else.
-    expect(group).toHaveClass(treeItemClassNames.group, 'ps-4');
+    expect(group).toHaveClass(treeItemClassNames.group, 'wave:ps-4');
     expect(group.classList[0]).toBe(treeItemClassNames.group);
     expect(group.getAttributeNames().sort()).toEqual(['class', 'role']);
     expect(within(group).getByRole('treeitem', { name: 'Work' })).toBe(item('Work'));
@@ -643,13 +643,13 @@ describe('the chevron (§5.2: not a motion slot)', () => {
   ])('keeps its own transition classes under %s', (_, options, motion) => {
     renderWithProviders(<Files defaultExpandedItems={['docs']} motion={motion} />, options);
     expect(chevronOf('Documents')).toHaveClass(
-      'transition-transform',
-      'motion-reduce:transition-none',
-      'rotate-90',
+      'wave:transition-transform',
+      'wave:motion-reduce:transition-none',
+      'wave:rotate-90',
     );
     expect(chevronOf('Images')).toHaveClass(
-      'transition-transform',
-      'motion-reduce:transition-none',
+      'wave:transition-transform',
+      'wave:motion-reduce:transition-none',
     );
   });
 });

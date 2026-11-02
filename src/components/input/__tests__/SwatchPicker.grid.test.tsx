@@ -142,7 +142,7 @@ describe('SwatchPicker.Row', () => {
     );
     const row = screen.getByTestId('row-a');
     expect(row).not.toHaveAttribute('role');
-    expect(row).toHaveClass('basis-full');
+    expect(row).toHaveClass('wave:basis-full');
     expect(screen.queryByRole('row')).toBeNull();
     expect(screen.getAllByRole('radio')).toHaveLength(2);
     await user.tab();
@@ -235,8 +235,8 @@ describe('SwatchPicker grid layout — ARIA (D20)', () => {
   it('spacing="small" narrows the gap between rows and between cells', () => {
     render(<TwoRows spacing="small" />);
     const grid = screen.getByRole('grid');
-    expect(grid).toHaveClass('gap-1');
-    for (const row of screen.getAllByRole('row')) expect(row).toHaveClass('gap-1');
+    expect(grid).toHaveClass('wave:gap-1');
+    for (const row of screen.getAllByRole('row')) expect(row).toHaveClass('wave:gap-1');
   });
 
   it('warns once that an unnamed grid has no accessible name', () => {

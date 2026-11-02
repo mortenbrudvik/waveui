@@ -86,6 +86,6 @@ export const Disabled: Story = {
 /** A custom indicator replaces the chevron; `menuIcon={false}` hides it. */
 export const CustomMenuIcon: Story = {
   args: {
-    menuIcon: <span className="text-caption-1">▾</span>,
+    menuIcon: <span className="text-wave-caption-1">▾</span>,
   },
 };

@@ -7,9 +7,10 @@
  * Wave joins the consumer's own layer order: its tokens and the namespaced theme keys for the
  * app's own classes (`bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`) in `theme`, its
  * scoped base styles in `base`, and the components' precompiled utilities in `components`
- * (dist/components.css: dist/styles.css without the token and base rules, an internal file that
- * only this entry imports). So any utility or unlayered rule of the app wins over Wave's classes,
- * whichever of the two imports comes first, and the app's own `@layer base` styles and token
+ * (dist/components.css: dist/styles.css without the token and base rules, every class with
+ * Wave's prefix `wave:`, an internal file that only this entry imports). No class of Wave's
+ * shares a name with one of the app's, and any utility or unlayered rule of the app wins over
+ * them, whichever of the two imports comes first, and the app's own `@layer base` styles and token
  * overrides win over Wave's as before. variants.css defines the `wave-rtl:` variant for the app's
  * own classes (the components' rules are precompiled with it). There is no `@source`: Tailwind
  * generates the app's classes only. Import this entry, never `./styles`, in a Tailwind build.

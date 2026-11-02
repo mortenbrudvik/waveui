@@ -507,14 +507,22 @@ const TOAST_PART_LOCKS = {
  * non-modal panel covers that side or that edge (see {@link getPanelOffsets}); unset, each is `0`.
  */
 const positionClasses: Record<ToastPosition, string> = {
-  'top-start': 'top-4 start-4 ms-(--wave-toaster-offset) mt-(--wave-toaster-offset-block)',
-  'top-end': 'top-4 end-4 me-(--wave-toaster-offset) mt-(--wave-toaster-offset-block)',
-  'bottom-start': 'bottom-4 start-4 ms-(--wave-toaster-offset) mb-(--wave-toaster-offset-block)',
-  'bottom-end': 'bottom-4 end-4 me-(--wave-toaster-offset) mb-(--wave-toaster-offset-block)',
-  'top-right': 'top-4 right-4 mr-(--wave-toaster-offset) mt-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
-  'top-left': 'top-4 left-4 ml-(--wave-toaster-offset) mt-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
-  'bottom-right': 'bottom-4 right-4 mr-(--wave-toaster-offset) mb-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
-  'bottom-left': 'bottom-4 left-4 ml-(--wave-toaster-offset) mb-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
+  'top-start':
+    'wave:top-4 wave:start-4 wave:ms-(--wave-toaster-offset) wave:mt-(--wave-toaster-offset-block)',
+  'top-end':
+    'wave:top-4 wave:end-4 wave:me-(--wave-toaster-offset) wave:mt-(--wave-toaster-offset-block)',
+  'bottom-start':
+    'wave:bottom-4 wave:start-4 wave:ms-(--wave-toaster-offset) wave:mb-(--wave-toaster-offset-block)',
+  'bottom-end':
+    'wave:bottom-4 wave:end-4 wave:me-(--wave-toaster-offset) wave:mb-(--wave-toaster-offset-block)',
+  'top-right':
+    'wave:top-4 wave:right-4 wave:mr-(--wave-toaster-offset) wave:mt-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
+  'top-left':
+    'wave:top-4 wave:left-4 wave:ml-(--wave-toaster-offset) wave:mt-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
+  'bottom-right':
+    'wave:bottom-4 wave:right-4 wave:mr-(--wave-toaster-offset) wave:mb-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
+  'bottom-left':
+    'wave:bottom-4 wave:left-4 wave:ml-(--wave-toaster-offset) wave:mb-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
 };
 
 /** The toasts' distance from the window edges (`*-4`), also the tolerance for "at the edge". */
@@ -996,7 +1004,7 @@ function ToastContainer({
   const labelledBy = joinIds(severityId, titlePart?.id);
   const className = wcn(
     toasterClassNames.toast,
-    'rounded',
+    'wave:rounded',
     focusRing,
     toastStructure,
     motionClassName,
@@ -1585,16 +1593,16 @@ export const Toaster = ({
           onKeyDown={(event) => composeEventHandlers(onKeyDown, handleEscape)(event)}
           className={wcn(
             toasterClassNames.root,
-            'fixed flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2',
+            'wave:fixed wave:flex wave:w-80 wave:max-w-[calc(100vw-2rem)] wave:flex-col wave:gap-2',
             positionClasses[position],
             className,
           )}
         >
           {/* One message per toast for its first 2 s; not atomic, so only the added one is read. */}
-          <div role="status" aria-live="polite" aria-atomic="false" className="sr-only">
+          <div role="status" aria-live="polite" aria-atomic="false" className="wave:sr-only">
             {polite}
           </div>
-          <div aria-live="assertive" aria-atomic="false" className="sr-only">
+          <div aria-live="assertive" aria-atomic="false" className="wave:sr-only">
             {assertive}
           </div>
           {/* Shown toasts, exiting ones included: getFocusFallback walks the containers in this order. */}

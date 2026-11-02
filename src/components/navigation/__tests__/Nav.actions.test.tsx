@@ -31,15 +31,15 @@ afterEach(() => {
 
 /** The classes of D120 that draw the actions on hover, focus, holds, touch and forced colours. */
 const REVEAL_CLASSES = [
-  '*:opacity-0',
-  'group-hover/nav-row:*:opacity-100',
-  'group-focus-within/nav-row:*:opacity-100',
-  'forced-colors:*:opacity-100',
-  '[@media(hover:none)]:*:opacity-100',
-  '*:has-[[aria-pressed=true]]:opacity-100',
-  '*:has-[[aria-expanded=true]]:opacity-100',
-  '[&>[aria-pressed=true]]:opacity-100',
-  '[&>[aria-expanded=true]]:opacity-100',
+  'wave:*:opacity-0',
+  'wave:group-hover/nav-row:*:opacity-100',
+  'wave:group-focus-within/nav-row:*:opacity-100',
+  'wave:forced-colors:*:opacity-100',
+  'wave:[@media(hover:none)]:*:opacity-100',
+  'wave:*:has-[[aria-pressed=true]]:opacity-100',
+  'wave:*:has-[[aria-expanded=true]]:opacity-100',
+  'wave:[&>[aria-pressed=true]]:opacity-100',
+  'wave:[&>[aria-expanded=true]]:opacity-100',
 ];
 
 /** Actions that render nothing (a factory each, since a generator is one-shot). */
@@ -280,8 +280,8 @@ describe('actions that render nothing', () => {
     expect(screen.queryByRole('group')).toBeNull();
     const item = screen.getByRole('button', { name: 'Reports' });
     expect(item).not.toHaveAttribute('id');
-    expect(item).toHaveClass('bg-subtle-selected', 'border-s-2', 'border-s-primary');
-    expect(item).not.toHaveClass('min-w-0', 'flex-1');
+    expect(item).toHaveClass('wave:bg-subtle-selected', 'wave:border-s-2', 'wave:border-s-primary');
+    expect(item).not.toHaveClass('wave:min-w-0', 'wave:flex-1');
     const row = item.parentElement as HTMLElement;
     expect(row.className).toBe(navItemClassNames.listItem);
   });
@@ -327,18 +327,27 @@ describe('row look (D121) and reveal (D120)', () => {
     const row = link.parentElement as HTMLElement;
     expect(row).toHaveClass(
       navItemClassNames.listItem,
-      'group/nav-row',
-      'flex',
-      'items-center',
-      'transition-colors',
-      'motion-reduce:transition-none',
-      'bg-subtle-selected',
-      'border-s-2',
-      'border-s-primary',
+      'wave:group/nav-row',
+      'wave:flex',
+      'wave:items-center',
+      'wave:transition-colors',
+      'wave:motion-reduce:transition-none',
+      'wave:bg-subtle-selected',
+      'wave:border-s-2',
+      'wave:border-s-primary',
     );
-    expect(row).not.toHaveClass('hover:bg-subtle-hover');
-    expect(link).toHaveClass('text-primary', 'font-semibold', 'min-w-0', 'flex-1');
-    expect(link).not.toHaveClass('bg-subtle-selected', 'border-s-2', 'border-s-primary');
+    expect(row).not.toHaveClass('wave:hover:bg-subtle-hover');
+    expect(link).toHaveClass(
+      'wave:text-primary',
+      'wave:font-semibold',
+      'wave:min-w-0',
+      'wave:flex-1',
+    );
+    expect(link).not.toHaveClass(
+      'wave:bg-subtle-selected',
+      'wave:border-s-2',
+      'wave:border-s-primary',
+    );
   });
 
   it('gives an idle row the hover, and a disabled row none', () => {
@@ -354,11 +363,11 @@ describe('row look (D121) and reveal (D120)', () => {
       </Nav>,
     );
     const reportsRow = screen.getByRole('button', { name: 'Reports' }).parentElement;
-    expect(reportsRow).toHaveClass('group/nav-row', 'hover:bg-subtle-hover');
-    expect(reportsRow).not.toHaveClass('bg-subtle-selected');
+    expect(reportsRow).toHaveClass('wave:group/nav-row', 'wave:hover:bg-subtle-hover');
+    expect(reportsRow).not.toHaveClass('wave:bg-subtle-selected');
     const adminRow = screen.getByRole('button', { name: 'Admin' }).parentElement;
-    expect(adminRow).toHaveClass('group/nav-row');
-    expect(adminRow).not.toHaveClass('hover:bg-subtle-hover');
+    expect(adminRow).toHaveClass('wave:group/nav-row');
+    expect(adminRow).not.toHaveClass('wave:hover:bg-subtle-hover');
   });
 
   it('gives a sub-item row only the hover, also while it is selected', () => {
@@ -375,11 +384,16 @@ describe('row look (D121) and reveal (D120)', () => {
     const row = subItem.parentElement as HTMLElement;
     expect(row).toHaveClass(
       navSubItemClassNames.listItem,
-      'group/nav-row',
-      'hover:bg-subtle-hover',
+      'wave:group/nav-row',
+      'wave:hover:bg-subtle-hover',
     );
-    expect(row).not.toHaveClass('bg-subtle-selected', 'border-s-2');
-    expect(subItem).toHaveClass('text-primary', 'font-semibold', 'min-w-0', 'flex-1');
+    expect(row).not.toHaveClass('wave:bg-subtle-selected', 'wave:border-s-2');
+    expect(subItem).toHaveClass(
+      'wave:text-primary',
+      'wave:font-semibold',
+      'wave:min-w-0',
+      'wave:flex-1',
+    );
   });
 
   it('draws the actions by opacity, with every reveal and hold class and no invisibility', () => {
@@ -391,7 +405,7 @@ describe('row look (D121) and reveal (D120)', () => {
       </Nav>,
     );
     expect(group('Reports')).toHaveClass(navItemClassNames.actions, ...REVEAL_CLASSES);
-    expect(group('Reports')).not.toHaveClass('invisible');
+    expect(group('Reports')).not.toHaveClass('wave:invisible');
     // 0.15 (P10-NAV): the reveal fades; the reveal motion's are the group's only transitions.
     const transitions = (classes: readonly string[]) => classes.filter((c) => /transition/.test(c));
     expect(transitions(Array.from(group('Reports').classList))).toEqual(
@@ -548,10 +562,10 @@ describe('RTL', () => {
     );
     const actions = group('Reports');
     const row = actions.parentElement as HTMLElement;
-    expect(actions).toHaveClass('pe-2');
-    expect(row).toHaveClass('border-s-2');
+    expect(actions).toHaveClass('wave:pe-2');
+    expect(row).toHaveClass('wave:border-s-2');
     for (const element of [actions, row]) {
-      expect(element.className).not.toMatch(/(^|\s)(p|m)[lr]-|border-[lr]\b|border-[lr]-/);
+      expect(element.className).not.toMatch(/(^|\s)wave:(p|m)[lr]-|border-[lr]\b|border-[lr]-/);
     }
   });
 });

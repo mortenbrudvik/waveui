@@ -623,58 +623,71 @@ describe('Switch — styling tokens', () => {
     render(<Switch label="Dark mode" />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
     expect(sw).toHaveClass(
-      'bg-transparent',
-      'border-stroke-accessible',
-      'forced-colors:border-[ButtonText]',
+      'wave:bg-transparent',
+      'wave:border-stroke-accessible',
+      'wave:forced-colors:border-[ButtonText]',
     );
-    expect(getThumb(sw)).toHaveClass('bg-stroke-accessible', 'forced-colors:bg-[ButtonText]');
+    expect(getThumb(sw)).toHaveClass(
+      'wave:bg-stroke-accessible',
+      'wave:forced-colors:bg-[ButtonText]',
+    );
   });
 
   it('on: primary track with a primary-foreground thumb', () => {
     render(<Switch label="Dark mode" defaultChecked />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('bg-primary', 'border-primary', 'forced-colors:bg-[Highlight]');
+    expect(sw).toHaveClass(
+      'wave:bg-primary',
+      'wave:border-primary',
+      'wave:forced-colors:bg-[Highlight]',
+    );
     expect(getThumb(sw)).toHaveClass(
-      'bg-primary-foreground',
-      'forced-colors:bg-[HighlightText]',
-      'forced-colors:forced-color-adjust-none',
+      'wave:bg-primary-foreground',
+      'wave:forced-colors:bg-[HighlightText]',
+      'wave:forced-colors:forced-color-adjust-none',
     );
   });
 
   it('forced colors: the track keeps system colors; only the thumb opts out (leaf)', () => {
     render(<Switch label="Dark mode" defaultChecked />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('forced-colors:border-[Highlight]', 'forced-colors:bg-[Highlight]');
-    expect(sw).not.toHaveClass('forced-colors:forced-color-adjust-none');
+    expect(sw).toHaveClass(
+      'wave:forced-colors:border-[Highlight]',
+      'wave:forced-colors:bg-[Highlight]',
+    );
+    expect(sw).not.toHaveClass('wave:forced-colors:forced-color-adjust-none');
   });
 
   it('forced colors: a disabled switch that is on draws a GrayText thumb and border on Canvas', () => {
     render(<Switch label="Dark mode" defaultChecked disabled />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
-    expect(sw).not.toHaveClass('forced-colors:bg-[Highlight]');
-    expect(sw).not.toHaveClass('forced-colors:border-[Highlight]');
-    expect(getThumb(sw)).toHaveClass(
-      'forced-colors:bg-[GrayText]',
-      'forced-colors:forced-color-adjust-none',
+    expect(sw).toHaveClass(
+      'wave:forced-colors:border-[GrayText]',
+      'wave:forced-colors:bg-[Canvas]',
     );
-    expect(getThumb(sw)).not.toHaveClass('forced-colors:bg-[HighlightText]');
+    expect(sw).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
+    expect(sw).not.toHaveClass('wave:forced-colors:border-[Highlight]');
+    expect(getThumb(sw)).toHaveClass(
+      'wave:forced-colors:bg-[GrayText]',
+      'wave:forced-colors:forced-color-adjust-none',
+    );
+    expect(getThumb(sw)).not.toHaveClass('wave:forced-colors:bg-[HighlightText]');
   });
 
   it('forced colors: a disabled switch that is off draws a GrayText thumb and border', () => {
     render(<Switch label="Dark mode" disabled />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('forced-colors:border-[GrayText]');
-    expect(sw).not.toHaveClass('forced-colors:border-[ButtonText]');
-    expect(getThumb(sw)).toHaveClass('forced-colors:bg-[GrayText]');
-    expect(getThumb(sw)).not.toHaveClass('forced-colors:bg-[ButtonText]');
+    expect(sw).toHaveClass('wave:forced-colors:border-[GrayText]');
+    expect(sw).not.toHaveClass('wave:forced-colors:border-[ButtonText]');
+    expect(getThumb(sw)).toHaveClass('wave:forced-colors:bg-[GrayText]');
+    expect(getThumb(sw)).not.toHaveClass('wave:forced-colors:bg-[ButtonText]');
   });
 
   it('sizes the track and the thumb in one unit (px), so the thumb fits the track at any root font size', () => {
     /** The value of a `<utility>-[<n>px]` class (not one behind a variant). */
     function px(element: HTMLElement, utility: string): number {
       const match = element.className.match(
-        new RegExp(`(?:^|\\s)${utility}-\\[(\\d+(?:\\.\\d+)?)px\\](?=\\s|$)`),
+        new RegExp(`(?:^|\\s)wave:${utility}-\\[(\\d+(?:\\.\\d+)?)px\\](?=\\s|$)`),
       );
       if (!match) throw new Error(`no ${utility}-[…px] class in "${element.className}"`);
       return Number(match[1]);
@@ -688,8 +701,8 @@ describe('Switch — styling tokens', () => {
     const off = screen.getByRole('switch', { name: 'Off' });
     const on = screen.getByRole('switch', { name: 'On' });
     // A rem track (h-5 w-10) scales with the root font size while the px thumb does not.
-    expect(on.className).not.toMatch(/(^|\s)(h|w|size)-\d/);
-    expect(on).toHaveClass('border');
+    expect(on.className).not.toMatch(/(^|\s)wave:(h|w|size)-\d/);
+    expect(on).toHaveClass('wave:border');
     const border = 1;
     const thumb = px(getThumb(on), 'w');
     expect(px(getThumb(on), 'h')).toBe(thumb);
@@ -707,21 +720,24 @@ describe('Switch — styling tokens', () => {
         <Switch label="On" defaultChecked />
       </>,
     );
-    expect(screen.getByRole('switch', { name: 'Off' })).toHaveClass('p-0', 'bg-transparent');
-    expect(screen.getByRole('switch', { name: 'On' })).toHaveClass('p-0', 'bg-primary');
+    expect(screen.getByRole('switch', { name: 'Off' })).toHaveClass(
+      'wave:p-0',
+      'wave:bg-transparent',
+    );
+    expect(screen.getByRole('switch', { name: 'On' })).toHaveClass('wave:p-0', 'wave:bg-primary');
   });
 
   it('draws the label text on the px type ramp like Field and Label (text-body-1)', () => {
     render(<Switch label="Dark mode" />);
-    expect(screen.getByText('Dark mode')).toHaveClass('text-body-1');
-    expect(screen.getByText('Dark mode')).not.toHaveClass('text-sm');
+    expect(screen.getByText('Dark mode')).toHaveClass('wave:text-body-1');
+    expect(screen.getByText('Dark mode')).not.toHaveClass('wave:text-sm');
   });
 
   it('turns off the track and thumb transitions for reduced motion', () => {
     render(<Switch label="Dark mode" />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('motion-reduce:transition-none');
-    expect(getThumb(sw)).toHaveClass('motion-reduce:transition-none');
+    expect(sw).toHaveClass('wave:motion-reduce:transition-none');
+    expect(getThumb(sw)).toHaveClass('wave:motion-reduce:transition-none');
   });
 
   it('mirrors the thumb position under dir="rtl" (wave-rtl: variant, C-LOGICAL)', () => {
@@ -733,12 +749,12 @@ describe('Switch — styling tokens', () => {
       { dir: 'rtl' },
     );
     expect(getThumb(screen.getByRole('switch', { name: 'Off' }))).toHaveClass(
-      'translate-x-[2px]',
-      'wave-rtl:-translate-x-[2px]',
+      'wave:translate-x-[2px]',
+      'wave:wave-rtl:-translate-x-[2px]',
     );
     expect(getThumb(screen.getByRole('switch', { name: 'On' }))).toHaveClass(
-      'translate-x-[22px]',
-      'wave-rtl:-translate-x-[22px]',
+      'wave:translate-x-[22px]',
+      'wave:wave-rtl:-translate-x-[22px]',
     );
   });
 
@@ -755,11 +771,11 @@ describe('Switch — styling tokens', () => {
     for (const name of ['Off', 'On']) {
       const sw = screen.getByRole('switch', { name });
       for (const element of [sw, getThumb(sw)]) {
-        expect(element.className, name).not.toMatch(/(^|\s)rtl:/);
+        expect(element.className, name).not.toMatch(/(^|\s)wave:rtl:/);
       }
     }
     expect(getThumb(screen.getByRole('switch', { name: 'On' }))).toHaveClass(
-      'wave-rtl:-translate-x-[22px]',
+      'wave:wave-rtl:-translate-x-[22px]',
     );
   });
 });
@@ -805,7 +821,7 @@ describe('Switch — rich label and labelPosition', () => {
       control.compareDocumentPosition(screen.getByText('Dark mode')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(root).not.toHaveClass('flex-col');
+    expect(root).not.toHaveClass('wave:flex-col');
   });
 
   it.each([
@@ -820,8 +836,8 @@ describe('Switch — rich label and labelPosition', () => {
       expect(root).toHaveAttribute('data-label-position', position);
       const text = screen.getByText('Dark mode');
       expect(root.firstElementChild).toBe(text);
-      if (column) expect(root).toHaveClass('flex-col', 'items-start', 'gap-1');
-      else expect(root).not.toHaveClass('flex-col');
+      if (column) expect(root).toHaveClass('wave:flex-col', 'wave:items-start', 'wave:gap-1');
+      else expect(root).not.toHaveClass('wave:flex-col');
       const control = screen.getByRole('switch', { name: 'Dark mode' });
       await user.click(text);
       expect(control).toHaveAttribute('aria-checked', 'true');
@@ -853,9 +869,9 @@ describe('Switch — rich label and labelPosition', () => {
       );
       const root = screen.getByTestId('root');
       // The 20px track is as tall as the first line of `text-body-1`: both start at the top.
-      expect(root).toHaveClass('items-start');
-      expect(root).not.toHaveClass('items-center');
-      expect(root).not.toHaveClass('flex-col');
+      expect(root).toHaveClass('wave:items-start');
+      expect(root).not.toHaveClass('wave:items-center');
+      expect(root).not.toHaveClass('wave:flex-col');
     },
   );
 
@@ -966,10 +982,13 @@ describe('Switch — disabledFocusable', () => {
 
   it('has the disabled look, forced colors included', () => {
     render(<Switch label="Dark mode" disabledFocusable defaultChecked data-testid="root" />);
-    expect(screen.getByTestId('root')).toHaveClass('cursor-not-allowed', 'opacity-50');
+    expect(screen.getByTestId('root')).toHaveClass('wave:cursor-not-allowed', 'wave:opacity-50');
     const control = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(control).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
-    expect(getThumb(control)).toHaveClass('forced-colors:bg-[GrayText]');
+    expect(control).toHaveClass(
+      'wave:forced-colors:border-[GrayText]',
+      'wave:forced-colors:bg-[Canvas]',
+    );
+    expect(getThumb(control)).toHaveClass('wave:forced-colors:bg-[GrayText]');
   });
 
   it('keeps its focus ring at full strength: the dimmed look lifts while a focus ring shows inside it', () => {
@@ -982,8 +1001,8 @@ describe('Switch — disabledFocusable', () => {
     // The root's opacity dims the switch's outline too, which would put the ring below 3:1.
     // tailwind-merge keeps both classes (different variants); the variant wins while it matches.
     expect(screen.getByTestId('focusable')).toHaveClass(
-      'opacity-50',
-      'has-focus-visible:opacity-100',
+      'wave:opacity-50',
+      'wave:has-focus-visible:opacity-100',
     );
     expect(screen.getByTestId('available').className).not.toMatch(/opacity/);
   });
@@ -1029,12 +1048,12 @@ describe('size (Phase 4 D14)', () => {
 
   it('medium is the 0.7 look', () => {
     render(<Switch label="Wi-Fi" defaultChecked />);
-    expect(control()).toHaveClass('h-[20px]', 'w-[40px]');
+    expect(control()).toHaveClass('wave:h-[20px]', 'wave:w-[40px]');
     expect(thumb()).toHaveClass(
-      'h-[14px]',
-      'w-[14px]',
-      'translate-x-[22px]',
-      'wave-rtl:-translate-x-[22px]',
+      'wave:h-[14px]',
+      'wave:w-[14px]',
+      'wave:translate-x-[22px]',
+      'wave:wave-rtl:-translate-x-[22px]',
     );
     expect(control().closest('label')).toHaveAttribute('data-size', 'medium');
   });
@@ -1044,40 +1063,40 @@ describe('size (Phase 4 D14)', () => {
       <Switch label="Wi-Fi" size="small" checked={false} onCheckedChange={() => {}} />,
     );
     expect(control()).toHaveClass(
-      'h-[16px]',
-      'w-[32px]',
-      'mt-0.5',
-      'before:-inset-y-[5px]',
-      'before:inset-x-0',
+      'wave:h-[16px]',
+      'wave:w-[32px]',
+      'wave:mt-0.5',
+      'wave:before:-inset-y-[5px]',
+      'wave:before:inset-x-0',
     );
     expect(thumb()).toHaveClass(
-      'h-[10px]',
-      'w-[10px]',
-      'translate-x-[2px]',
-      'wave-rtl:-translate-x-[2px]',
+      'wave:h-[10px]',
+      'wave:w-[10px]',
+      'wave:translate-x-[2px]',
+      'wave:wave-rtl:-translate-x-[2px]',
     );
     rerender(<Switch label="Wi-Fi" size="small" checked onCheckedChange={() => {}} />);
-    expect(thumb()).toHaveClass('translate-x-[18px]', 'wave-rtl:-translate-x-[18px]');
+    expect(thumb()).toHaveClass('wave:translate-x-[18px]', 'wave:wave-rtl:-translate-x-[18px]');
   });
 
   it('small with the label above: no offset (the column gap alone, 4px); beside it, the offset', () => {
     const { rerender } = render(<Switch label="Wi-Fi" size="small" labelPosition="above" />);
-    expect(control().closest('label')).toHaveClass('flex-col', 'gap-1');
-    expect(control()).toHaveClass('h-[16px]', 'w-[32px]');
-    expect(control()).not.toHaveClass('mt-0.5');
+    expect(control().closest('label')).toHaveClass('wave:flex-col', 'wave:gap-1');
+    expect(control()).toHaveClass('wave:h-[16px]', 'wave:w-[32px]');
+    expect(control()).not.toHaveClass('wave:mt-0.5');
     rerender(<Switch label="Wi-Fi" size="small" labelPosition="before" />);
-    expect(control()).toHaveClass('mt-0.5');
+    expect(control()).toHaveClass('wave:mt-0.5');
   });
 
   it('mirrors the small thumb in RTL through the wave-rtl classes', () => {
     renderWithProviders(<Switch label="Wi-Fi" size="small" defaultChecked />, { dir: 'rtl' });
-    expect(thumb()).toHaveClass('wave-rtl:-translate-x-[18px]');
+    expect(thumb()).toHaveClass('wave:wave-rtl:-translate-x-[18px]');
   });
 
   it('renders and reports the default for a size from untyped code', () => {
     // @ts-expect-error Switch has no large size
     render(<Switch label="Wi-Fi" size="large" />);
-    expect(control()).toHaveClass('h-[20px]', 'w-[40px]');
+    expect(control()).toHaveClass('wave:h-[20px]', 'wave:w-[40px]');
     expect(control().closest('label')).toHaveAttribute('data-size', 'medium');
   });
 });
@@ -1122,12 +1141,12 @@ describe('Switch — slotProps', () => {
       ),
     ).toBe(
       [
-        '<label class="wave-switch relative inline-flex items-start gap-2 select-none cursor-pointer" data-label-position="after" data-size="medium">',
-        '<button aria-checked="true" aria-describedby="hint" aria-labelledby="switch-label-_R_0H1_" class="wave-switch__track relative inline-flex shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none h-[20px] w-[40px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-primary bg-primary forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" id="switch-_R_0_" role="switch" type="button">',
-        '<span aria-hidden="true" class="wave-switch__thumb block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none h-[14px] w-[14px] translate-x-[22px] wave-rtl:-translate-x-[22px] bg-primary-foreground forced-colors:bg-[HighlightText]">',
+        '<label class="wave-switch wave:relative wave:inline-flex wave:items-start wave:gap-2 wave:select-none wave:cursor-pointer" data-label-position="after" data-size="medium">',
+        '<button aria-checked="true" aria-describedby="hint" aria-labelledby="switch-label-_R_0H1_" class="wave-switch__track wave:relative wave:inline-flex wave:shrink-0 wave:items-center wave:rounded-full wave:border wave:p-0 wave:transition-colors wave:duration-200 wave:motion-reduce:transition-none wave:h-[20px] wave:w-[40px] wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:border-primary wave:bg-primary wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]" id="switch-_R_0_" role="switch" type="button">',
+        '<span aria-hidden="true" class="wave-switch__thumb wave:block wave:rounded-full wave:transition-transform wave:duration-200 wave:motion-reduce:transition-none wave:forced-colors:forced-color-adjust-none wave:h-[14px] wave:w-[14px] wave:translate-x-[22px] wave:wave-rtl:-translate-x-[22px] wave:bg-primary-foreground wave:forced-colors:bg-[HighlightText]">',
         '</span>',
         '</button>',
-        '<span class="wave-switch__label text-body-1 text-foreground" id="switch-label-_R_0H1_">Dark mode',
+        '<span class="wave-switch__label wave:text-body-1 wave:text-foreground" id="switch-label-_R_0H1_">Dark mode',
         '</span>',
         '</label>',
       ].join(''),
@@ -1173,9 +1192,9 @@ describe('Switch — slotProps', () => {
     const thumb = getThumb(track);
     const label = screen.getByText('Dark mode');
     for (const [element, stable, own, mine, part] of [
-      [track, switchClassNames.track, 'rounded-full', 'my-track', 'track'],
-      [thumb, switchClassNames.thumb, 'block', 'my-thumb', 'thumb'],
-      [label, switchClassNames.label, 'text-body-1', 'my-label', 'label'],
+      [track, switchClassNames.track, 'wave:rounded-full', 'my-track', 'track'],
+      [thumb, switchClassNames.thumb, 'wave:block', 'my-thumb', 'thumb'],
+      [label, switchClassNames.label, 'wave:text-body-1', 'my-label', 'label'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -1191,7 +1210,7 @@ describe('Switch — slotProps', () => {
     render(<Switch label="Dark mode" slotProps={{ track: { className: 'rounded-none' } }} />);
     const track = screen.getByRole('switch', { name: 'Dark mode' });
     expect(track).toHaveClass('rounded-none');
-    expect(track).not.toHaveClass('rounded-full');
+    expect(track).not.toHaveClass('wave:rounded-full');
   });
 
   it('attaches your refs to the parts, beside ref', () => {
@@ -1402,8 +1421,8 @@ describe('Switch — slotProps', () => {
       { dir: 'rtl' },
     );
     expect(getThumb(screen.getByRole('switch', { name: 'Dark mode' }))).toHaveClass(
-      'translate-x-[2px]',
-      'wave-rtl:-translate-x-[2px]',
+      'wave:translate-x-[2px]',
+      'wave:wave-rtl:-translate-x-[2px]',
       'my-thumb',
     );
   });
@@ -1533,7 +1552,7 @@ describe('Switch — slotProps', () => {
     it('lets your class replace a conflicting class of the root', () => {
       render(<Switch label="Dark mode" slotProps={{ root: { className: 'items-center' } }} />);
       expect(root()).toHaveClass('items-center');
-      expect(root()).not.toHaveClass('items-start');
+      expect(root()).not.toHaveClass('wave:items-start');
     });
 
     it("keeps the props you give the Switch over the part's", () => {

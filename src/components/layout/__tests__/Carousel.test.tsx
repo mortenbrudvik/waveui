@@ -295,8 +295,8 @@ describe('Carousel', () => {
     it('gates hover styles so aria-disabled buttons do not react to hover', () => {
       render(<Carousel>{slides(2)}</Carousel>);
       for (const button of [prevButton(), nextButton()]) {
-        expect(button).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-hover');
-        expect(button.className).not.toMatch(/(^|\s)hover:/);
+        expect(button).toHaveClass('wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover');
+        expect(button.className).not.toMatch(/(^|\s)wave:hover:/);
       }
     });
   });
@@ -317,12 +317,12 @@ describe('Carousel', () => {
     it('gives each dot a 24px hit area, a 3:1 inactive color and a wider active pill', () => {
       render(<Carousel defaultValue={1}>{threeSlides}</Carousel>);
       const [inactive, active] = dots();
-      for (const dot of dots()) expect(dot).toHaveClass('h-6', 'min-w-6');
+      for (const dot of dots()) expect(dot).toHaveClass('wave:h-6', 'wave:min-w-6');
       const inactiveMark = inactive.firstElementChild;
       const activeMark = active.firstElementChild;
-      expect(inactiveMark).toHaveClass('w-2', 'bg-stroke-accessible');
-      expect(activeMark).toHaveClass('w-5', 'bg-primary');
-      expect(activeMark).not.toHaveClass('w-2');
+      expect(inactiveMark).toHaveClass('wave:w-2', 'wave:bg-stroke-accessible');
+      expect(activeMark).toHaveClass('wave:w-5', 'wave:bg-primary');
+      expect(activeMark).not.toHaveClass('wave:w-2');
     });
   });
 
@@ -486,15 +486,17 @@ describe('Carousel', () => {
       const classes = (svg.getAttribute('class') ?? '').split(/\s+/);
       return {
         icon: svg.getAttribute('data-wave-icon'),
-        mirrored: classes.includes('-scale-x-100'),
-        cssDirectionVariant: classes.some((c) => c.startsWith('rtl:') || c.startsWith('ltr:')),
+        mirrored: classes.includes('wave:-scale-x-100'),
+        cssDirectionVariant: classes.some(
+          (c) => c.startsWith('wave:rtl:') || c.startsWith('wave:ltr:'),
+        ),
       };
     }
 
     it('places previous/next with logical insets and mirrors the chevrons', () => {
       renderWithProviders(<Carousel>{threeSlides}</Carousel>, { dir: 'rtl' });
-      expect(prevButton()).toHaveClass('start-2');
-      expect(nextButton()).toHaveClass('end-2');
+      expect(prevButton()).toHaveClass('wave:start-2');
+      expect(nextButton()).toHaveClass('wave:end-2');
       // Previous (at the start, the right edge) points right; Next points left.
       expect(chevron(prevButton())).toEqual({
         icon: 'chevron-left',
@@ -1323,9 +1325,9 @@ describe('Carousel', () => {
 
   it('isolates its stacking context, so the controls stay under page headers', () => {
     render(<Carousel aria-label="Featured">{threeSlides}</Carousel>);
-    expect(region()).toHaveClass('relative', 'isolate', 'overflow-hidden');
+    expect(region()).toHaveClass('wave:relative', 'wave:isolate', 'wave:overflow-hidden');
     // The controls' z-index is local to the carousel.
-    expect(nextButton()).toHaveClass('z-10');
+    expect(nextButton()).toHaveClass('wave:z-10');
   });
 
   describe('localizable names (C-NAMING)', () => {
@@ -1596,7 +1598,7 @@ describe('Carousel groups (0.13)', () => {
 
   it('groupSize 1 keeps the 0.12 markup: full-width slides', () => {
     render(<Carousel>{slides(3)}</Carousel>);
-    expect(slideElements()[0]).toHaveClass('w-full');
+    expect(slideElements()[0]).toHaveClass('wave:w-full');
     expect(slideElements()[0]!.style.width).toBe('');
   });
 
@@ -1852,8 +1854,8 @@ describe('Carousel groups (0.13)', () => {
 
     it('lets the slides keep their own width', () => {
       render(<Carousel groupSize="auto">{slides(4)}</Carousel>);
-      expect(slideElements()[0]).toHaveClass('w-auto', 'shrink-0');
-      expect(slideElements()[0]).not.toHaveClass('w-full');
+      expect(slideElements()[0]).toHaveClass('wave:w-auto', 'wave:shrink-0');
+      expect(slideElements()[0]).not.toHaveClass('wave:w-full');
     });
 
     it.each([
@@ -2152,13 +2154,13 @@ describe('Carousel dragging (0.13)', () => {
     });
     expect(el).toHaveAttribute('data-dragging', '');
     expect(el.style.transform).toBe('translateX(calc(0% + -60px))');
-    expect(el).not.toHaveClass('transition-transform');
+    expect(el).not.toHaveClass('wave:transition-transform');
     act(() => {
       fireEvent.pointerUp(el, pointer('mouse', 240));
     });
     expect(el).not.toHaveAttribute('data-dragging');
     expect(el.style.transform).toBe('translateX(0%)');
-    expect(el).toHaveClass('transition-transform');
+    expect(el).toHaveClass('wave:transition-transform');
   });
 
   it('does not start a drag below a few pixels', () => {
@@ -2246,12 +2248,12 @@ describe('Carousel dragging (0.13)', () => {
     drag(el, 300, 50, 40);
     expect(onValueChange).not.toHaveBeenCalled();
     expect(el).not.toHaveAttribute('data-dragging');
-    expect(el).not.toHaveClass('touch-pan-y');
+    expect(el).not.toHaveClass('wave:touch-pan-y');
   });
 
   it('lets the page scroll vertically over a draggable track', () => {
     const { el } = renderDraggable();
-    expect(el).toHaveClass('touch-pan-y');
+    expect(el).toHaveClass('wave:touch-pan-y');
   });
 
   it('pauses autoplay while dragging and resumes after', () => {
@@ -2455,8 +2457,8 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
         const viewport = region().querySelector<HTMLElement>(`.${carouselClassNames.viewport}`)!;
         expect(prevButton().parentElement).toBe(viewport);
         expect(nextButton().parentElement).toBe(viewport);
-        expect(prevButton()).toHaveClass('absolute');
-        expect(nextButton()).toHaveClass('absolute');
+        expect(prevButton()).toHaveClass('wave:absolute');
+        expect(nextButton()).toHaveClass('wave:absolute');
         expect(viewport.firstElementChild).toBe(track());
       },
     );
@@ -2470,24 +2472,24 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
         expect(viewport.nextElementSibling).toBe(nextButton());
         expect(viewport).not.toContainElement(prevButton());
         expect(viewport).not.toContainElement(nextButton());
-        expect(prevButton()).not.toHaveClass('absolute');
+        expect(prevButton()).not.toHaveClass('wave:absolute');
       },
     );
 
     it('overlay-wide makes full-height strips and overlay keeps round buttons', () => {
       const { unmount } = render(<Carousel controlsLayout="overlay-wide">{slides(3)}</Carousel>);
-      expect(prevButton()).toHaveClass('inset-y-0', 'start-0');
-      expect(nextButton()).toHaveClass('inset-y-0', 'end-0');
+      expect(prevButton()).toHaveClass('wave:inset-y-0', 'wave:start-0');
+      expect(nextButton()).toHaveClass('wave:inset-y-0', 'wave:end-0');
       unmount();
       render(<Carousel>{slides(3)}</Carousel>);
-      expect(prevButton()).toHaveClass('rounded-full', 'start-2');
-      expect(nextButton()).toHaveClass('rounded-full', 'end-2');
+      expect(prevButton()).toHaveClass('wave:rounded-full', 'wave:start-2');
+      expect(nextButton()).toHaveClass('wave:rounded-full', 'wave:end-2');
     });
 
     it('inline-wide stretches the buttons over the full height', () => {
       render(<Carousel controlsLayout="inline-wide">{slides(3)}</Carousel>);
-      expect(prevButton()).toHaveClass('self-stretch');
-      expect(nextButton()).toHaveClass('self-stretch');
+      expect(prevButton()).toHaveClass('wave:self-stretch');
+      expect(nextButton()).toHaveClass('wave:self-stretch');
     });
 
     it.each(LAYOUTS)('%s keeps the rotation control the first focusable element', (layout) => {
@@ -2505,14 +2507,14 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
     it('keeps the rotation control at the start corner, clear of an inline Previous button', () => {
       const { unmount } = render(<Carousel autoPlay>{slides(3)}</Carousel>);
       const rotation = () => screen.getByRole('button', { name: /slide rotation/ });
-      expect(rotation()).toHaveClass('top-2', 'start-2');
+      expect(rotation()).toHaveClass('wave:top-2', 'wave:start-2');
       unmount();
       render(
         <Carousel autoPlay controlsLayout="inline">
           {slides(3)}
         </Carousel>,
       );
-      expect(rotation()).toHaveClass('top-2', 'start-12');
+      expect(rotation()).toHaveClass('wave:top-2', 'wave:start-12');
     });
 
     it.each(LAYOUTS)('%s stacks the rotation control above the edge strips', (layout) => {
@@ -2522,8 +2524,8 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
         </Carousel>,
       );
       const rotation = screen.getByRole('button', { name: /slide rotation/ });
-      expect(rotation).toHaveClass('z-20');
-      expect(rotation).not.toHaveClass('z-10');
+      expect(rotation).toHaveClass('wave:z-20');
+      expect(rotation).not.toHaveClass('wave:z-10');
     });
 
     it.each(LAYOUTS)('%s has no accessibility violations', async (layout) => {
@@ -2537,7 +2539,7 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
 
     it('mirrors the chevrons in right-to-left layouts in every layout', () => {
       renderWithProviders(<Carousel controlsLayout="inline">{slides(3)}</Carousel>, { dir: 'rtl' });
-      expect(prevButton().querySelector('svg')).toHaveClass('-scale-x-100');
+      expect(prevButton().querySelector('svg')).toHaveClass('wave:-scale-x-100');
     });
 
     it('measures the viewport, not the whole carousel, for groupSize auto', () => {
@@ -2566,14 +2568,14 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
   describe('appearance', () => {
     it('flat adds no corners or shadow', () => {
       render(<Carousel>{slides(3)}</Carousel>);
-      expect(region()).not.toHaveClass('rounded-md');
-      expect(region()).not.toHaveClass('shadow-4');
+      expect(region()).not.toHaveClass('wave:rounded-md');
+      expect(region()).not.toHaveClass('wave:shadow-4');
     });
 
     it('elevated rounds the corners and adds a shadow', () => {
       render(<Carousel appearance="elevated">{slides(3)}</Carousel>);
       expect(region()).toHaveAttribute('data-appearance', 'elevated');
-      expect(region()).toHaveClass('rounded-md', 'shadow-4');
+      expect(region()).toHaveClass('wave:rounded-md', 'wave:shadow-4');
     });
 
     it('renders the data attributes on a carousel without slides too', () => {
@@ -2689,7 +2691,7 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
         </Carousel>,
         { dir: 'rtl' },
       );
-      expect(nextButton().querySelector('svg')).toHaveClass('-scale-x-100');
+      expect(nextButton().querySelector('svg')).toHaveClass('wave:-scale-x-100');
     });
 
     it('takes the place of the built-in button in the layout', () => {
@@ -2701,7 +2703,7 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
       );
       const viewport = region().querySelector(`.${carouselClassNames.viewport}`);
       expect(prevButton().nextElementSibling).toBe(viewport);
-      expect(prevButton()).toHaveClass('relative');
+      expect(prevButton()).toHaveClass('wave:relative');
     });
 
     it('keeps type="button" before the rest and the data-direction attribute', () => {
@@ -2872,18 +2874,18 @@ describe('Carousel — slotProps', () => {
 
   // Captured from ee05cf8's dist, client and server alike (styles left out).
   const BASE_PINS = [
-    '<button aria-controls="carousel-slides-_id0_" aria-label="Pause slide rotation" class="wave-carousel__auto-play-button inline-flex items-center justify-center text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 absolute z-20 h-8 w-8 rounded-full border border-border bg-background shadow-2 top-2 start-2" data-carousel-rotation="" type="button">',
-    '<div class="wave-carousel__track flex transition-transform duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none touch-pan-y" data-roving-container="" id="carousel-slides-_id0_">',
-    '<div aria-label="Slide 1 of 4" aria-roledescription="slide" class="wave-carousel__slide shrink-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" data-roving-value="0" role="group" tabindex="0">',
-    '<div aria-label="Slide 2 of 4" aria-roledescription="slide" class="wave-carousel__slide shrink-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" data-roving-value="1" role="group" tabindex="-1">',
-    '<div aria-hidden="true" aria-label="Slide 3 of 4" aria-roledescription="slide" class="wave-carousel__slide shrink-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" inert="" role="group">',
-    '<div aria-hidden="true" aria-label="Slide 4 of 4" aria-roledescription="slide" class="wave-carousel__slide shrink-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" inert="" role="group">',
-    '<button aria-controls="carousel-slides-_id0_" aria-disabled="true" aria-label="Previous slide" class="wave-carousel__previous-button z-10 inline-flex items-center justify-center text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 absolute top-1/2 start-2 -translate-y-1/2 h-8 w-8 rounded-full border border-border bg-background shadow-2" data-disabled="" type="button">',
-    '<button aria-controls="carousel-slides-_id0_" aria-label="Next slide" class="wave-carousel__next-button z-10 inline-flex items-center justify-center text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 absolute top-1/2 end-2 -translate-y-1/2 h-8 w-8 rounded-full border border-border bg-background shadow-2" type="button">',
-    '<div aria-label="Choose slide" class="wave-carousel__picker relative mx-auto flex w-fit flex-wrap justify-center gap-2 p-2" role="group">',
-    '<button aria-current="true" aria-label="Slides 1 to 2 of 4" class="wave-carousel__picker-button group inline-flex items-center justify-center h-6 min-w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
-    '<button aria-label="Slides 3 to 4 of 4" class="wave-carousel__picker-button group inline-flex items-center justify-center rounded-md p-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
-    '<span aria-hidden="true" class="wave-carousel__picker-indicator block h-2 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none w-5 bg-primary forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none">',
+    '<button aria-controls="carousel-slides-_id0_" aria-label="Pause slide rotation" class="wave-carousel__auto-play-button wave:inline-flex wave:items-center wave:justify-center wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:absolute wave:z-20 wave:h-8 wave:w-8 wave:rounded-full wave:border wave:border-border wave:bg-background wave:shadow-2 wave:top-2 wave:start-2" data-carousel-rotation="" type="button">',
+    '<div class="wave-carousel__track wave:flex wave:transition-transform wave:duration-wave-slow wave:ease-wave-easy-ease wave:motion-reduce:transition-none wave:touch-pan-y" data-roving-container="" id="carousel-slides-_id0_">',
+    '<div aria-label="Slide 1 of 4" aria-roledescription="slide" class="wave-carousel__slide wave:shrink-0 wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring" data-roving-value="0" role="group" tabindex="0">',
+    '<div aria-label="Slide 2 of 4" aria-roledescription="slide" class="wave-carousel__slide wave:shrink-0 wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring" data-roving-value="1" role="group" tabindex="-1">',
+    '<div aria-hidden="true" aria-label="Slide 3 of 4" aria-roledescription="slide" class="wave-carousel__slide wave:shrink-0 wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring" inert="" role="group">',
+    '<div aria-hidden="true" aria-label="Slide 4 of 4" aria-roledescription="slide" class="wave-carousel__slide wave:shrink-0 wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring" inert="" role="group">',
+    '<button aria-controls="carousel-slides-_id0_" aria-disabled="true" aria-label="Previous slide" class="wave-carousel__previous-button wave:z-10 wave:inline-flex wave:items-center wave:justify-center wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:absolute wave:top-1/2 wave:start-2 wave:-translate-y-1/2 wave:h-8 wave:w-8 wave:rounded-full wave:border wave:border-border wave:bg-background wave:shadow-2" data-disabled="" type="button">',
+    '<button aria-controls="carousel-slides-_id0_" aria-label="Next slide" class="wave-carousel__next-button wave:z-10 wave:inline-flex wave:items-center wave:justify-center wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:absolute wave:top-1/2 wave:end-2 wave:-translate-y-1/2 wave:h-8 wave:w-8 wave:rounded-full wave:border wave:border-border wave:bg-background wave:shadow-2" type="button">',
+    '<div aria-label="Choose slide" class="wave-carousel__picker wave:relative wave:mx-auto wave:flex wave:w-fit wave:flex-wrap wave:justify-center wave:gap-2 wave:p-2" role="group">',
+    '<button aria-current="true" aria-label="Slides 1 to 2 of 4" class="wave-carousel__picker-button wave:group wave:inline-flex wave:items-center wave:justify-center wave:h-6 wave:min-w-6 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" type="button">',
+    '<button aria-label="Slides 3 to 4 of 4" class="wave-carousel__picker-button wave:group wave:inline-flex wave:items-center wave:justify-center wave:rounded-md wave:p-0.5 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" type="button">',
+    '<span aria-hidden="true" class="wave-carousel__picker-indicator wave:block wave:h-2 wave:rounded-full wave:transition-[width,background-color] wave:duration-200 wave:motion-reduce:transition-none wave:w-5 wave:bg-primary wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none">',
   ].join('\n');
 
   it('renders the parts of ee05cf8 (attributes sorted), on the client and the server', () => {
@@ -2963,14 +2965,14 @@ describe('Carousel — slotProps', () => {
       />,
     );
     for (const [cls, name, conflict, count] of [
-      [carouselClassNames.autoPlayButton, 'auto-play-button', 'top-2', 1],
-      [carouselClassNames.track, 'track', 'flex', 1],
-      [carouselClassNames.slide, 'slide', 'shrink-0', 4],
-      [carouselClassNames.previousButton, 'previous-button', 'start-2', 1],
-      [carouselClassNames.nextButton, 'next-button', 'end-2', 1],
-      [carouselClassNames.picker, 'picker', 'gap-2', 1],
-      [carouselClassNames.pickerButton, 'picker-button', 'focus-visible:outline-2', 2],
-      [carouselClassNames.pickerIndicator, 'picker-indicator', 'h-2', 1],
+      [carouselClassNames.autoPlayButton, 'auto-play-button', 'wave:top-2', 1],
+      [carouselClassNames.track, 'track', 'wave:flex', 1],
+      [carouselClassNames.slide, 'slide', 'wave:shrink-0', 4],
+      [carouselClassNames.previousButton, 'previous-button', 'wave:start-2', 1],
+      [carouselClassNames.nextButton, 'next-button', 'wave:end-2', 1],
+      [carouselClassNames.picker, 'picker', 'wave:gap-2', 1],
+      [carouselClassNames.pickerButton, 'picker-button', 'wave:focus-visible:outline-2', 2],
+      [carouselClassNames.pickerIndicator, 'picker-indicator', 'wave:h-2', 1],
     ] as const) {
       const elements = all(document, cls);
       expect(elements).toHaveLength(count);
@@ -3498,7 +3500,7 @@ describe('Carousel — slotProps', () => {
     );
     expect(one(carouselClassNames.track)).toHaveStyle({ transform: 'translateX(100%)' });
     expect(prevButton()).toHaveClass('my-previous');
-    expect(prevButton().querySelector('svg')).toHaveClass('-scale-x-100');
+    expect(prevButton().querySelector('svg')).toHaveClass('wave:-scale-x-100');
   });
 
   it('has no accessibility violations with every part customised', async () => {

@@ -28,12 +28,12 @@ const BADGE_APPEARANCES: BadgeAppearance[] = ['filled', 'tint', 'outline'];
 const IMPORTANT_LOOK: Array<
   [BadgeAppearance, classes: string[], fill: string | null, text: string | null]
 > = [
-  ['filled', ['bg-foreground', 'text-background'], 'foreground', 'background'],
-  ['tint', ['bg-muted-foreground', 'text-background'], 'muted-foreground', 'background'],
+  ['filled', ['wave:bg-foreground', 'wave:text-background'], 'foreground', 'background'],
+  ['tint', ['wave:bg-muted-foreground', 'wave:text-background'], 'muted-foreground', 'background'],
   // The outline is Badge's transparent box with the page's text color, in the accessible stroke.
   [
     'outline',
-    ['bg-transparent', 'border', 'text-foreground', 'border-stroke-accessible'],
+    ['wave:bg-transparent', 'wave:border', 'wave:text-foreground', 'wave:border-stroke-accessible'],
     null,
     null,
   ],
@@ -41,20 +41,20 @@ const IMPORTANT_LOOK: Array<
 
 /** The orange look `severe` keeps (and `important` drew through 0.x), pinned. */
 const SEVERE_CLASSES = {
-  filled: 'bg-severe text-severe-foreground',
-  tint: 'bg-severe-tint text-severe-tint-foreground',
-  border: 'border-severe',
-  dot: 'bg-severe',
-  dotBorder: 'border-severe',
+  filled: 'wave:bg-severe wave:text-severe-foreground',
+  tint: 'wave:bg-severe-tint wave:text-severe-tint-foreground',
+  border: 'wave:border-severe',
+  dot: 'wave:bg-severe',
+  dotBorder: 'wave:border-severe',
 };
 
 /** The words of the orange look, none of which an `important` badge carries any more. */
 const SEVERE_WORDS = [
-  'bg-severe',
-  'text-severe-foreground',
-  'bg-severe-tint',
-  'text-severe-tint-foreground',
-  'border-severe',
+  'wave:bg-severe',
+  'wave:text-severe-foreground',
+  'wave:bg-severe-tint',
+  'wave:text-severe-tint-foreground',
+  'wave:border-severe',
 ];
 
 /** The neutral fill and text of the light, dark and high-contrast themes (`tokens.css`). */
@@ -78,11 +78,11 @@ describe('Badge and CounterBadge color="important" (1.0)', () => {
 
   it('maps important to the neutral tokens and severe to the unchanged orange ones', () => {
     expect(badgeColorClasses.important).toEqual({
-      filled: 'bg-foreground text-background',
-      tint: 'bg-muted-foreground text-background',
-      border: 'border-stroke-accessible',
-      dot: 'bg-foreground',
-      dotBorder: 'border-foreground',
+      filled: 'wave:bg-foreground wave:text-background',
+      tint: 'wave:bg-muted-foreground wave:text-background',
+      border: 'wave:border-stroke-accessible',
+      dot: 'wave:bg-foreground',
+      dotBorder: 'wave:border-foreground',
     });
     expect(badgeColorClasses.severe).toEqual(SEVERE_CLASSES);
   });
@@ -131,15 +131,21 @@ describe('Badge and CounterBadge color="important" (1.0)', () => {
         </>,
         { theme },
       );
-      expect(screen.getByTestId('filled')).toHaveClass('bg-foreground', 'text-background');
-      expect(screen.getByTestId('outline')).toHaveClass(
-        'bg-transparent',
-        'border',
-        'border-stroke-accessible',
-        'text-foreground',
+      expect(screen.getByTestId('filled')).toHaveClass(
+        'wave:bg-foreground',
+        'wave:text-background',
       );
-      expect(screen.getByTestId('dot')).toHaveClass('bg-foreground');
-      expect(screen.getByTestId('dot-outline')).toHaveClass('bg-transparent', 'border-foreground');
+      expect(screen.getByTestId('outline')).toHaveClass(
+        'wave:bg-transparent',
+        'wave:border',
+        'wave:border-stroke-accessible',
+        'wave:text-foreground',
+      );
+      expect(screen.getByTestId('dot')).toHaveClass('wave:bg-foreground');
+      expect(screen.getByTestId('dot-outline')).toHaveClass(
+        'wave:bg-transparent',
+        'wave:border-foreground',
+      );
       for (const id of ['filled', 'outline', 'dot', 'dot-outline']) {
         expect(screen.getByTestId(id)).toHaveAttribute('data-color', 'important');
         for (const word of SEVERE_WORDS) expect(screen.getByTestId(id)).not.toHaveClass(word);
@@ -207,7 +213,7 @@ describe('Badge and CounterBadge color="important" (1.0)', () => {
     parsed.innerHTML = renderToString(element());
     const badge = parsed.firstElementChild;
     expect(badge).toHaveAttribute('data-color', 'important');
-    expect(badge).toHaveClass('bg-foreground');
+    expect(badge).toHaveClass('wave:bg-foreground');
     expect(warn).not.toHaveBeenCalled();
   });
 

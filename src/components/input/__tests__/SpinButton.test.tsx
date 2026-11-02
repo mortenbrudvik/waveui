@@ -600,23 +600,23 @@ describe('SpinButton — naming, routing and styling', () => {
   it('shows focus with a bottom border on the wrapper (input-basic#5)', () => {
     render(<SpinButton aria-label="Quantity" data-testid="root" />);
     const root = screen.getByTestId('root');
-    expect(root).toHaveClass('focus-within:border-b-2', 'focus-within:border-b-primary');
-    expect(spin()).toHaveClass('focus:outline-hidden');
-    expect(spin()).not.toHaveClass('outline-none');
-    expect(spin()).not.toHaveClass('outline-hidden');
+    expect(root).toHaveClass('wave:focus-within:border-b-2', 'wave:focus-within:border-b-primary');
+    expect(spin()).toHaveClass('wave:focus:outline-hidden');
+    expect(spin()).not.toHaveClass('wave:outline-none');
+    expect(spin()).not.toHaveClass('wave:outline-hidden');
   });
 
   it('gates the button hover/pressed colors with the disabled state and uses tokens', () => {
     render(<SpinButton aria-label="Quantity" />);
     for (const button of [incrementButton(), decrementButton()]) {
       expect(button).toHaveClass(
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
-        'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
       );
       expect(button.className).not.toMatch(/#[0-9a-f]{3,8}/i);
     }
-    expect(decrementButton()).toHaveClass('border-e');
-    expect(incrementButton()).toHaveClass('border-s');
+    expect(decrementButton()).toHaveClass('wave:border-e');
+    expect(incrementButton()).toHaveClass('wave:border-s');
   });
 
   it('draws the step glyphs with the shared decorative icons (§5.7)', () => {
@@ -643,8 +643,8 @@ describe('SpinButton — naming, routing and styling', () => {
     expect(root).toHaveClass(...inputInvalidWithin.split(' '));
     // Keeps the destructive border and shows the focus color on the focused bottom border
     // (Phase 4 D4).
-    expect(root).toHaveClass('focus-within:border-b-primary');
-    for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
+    expect(root).toHaveClass('wave:focus-within:border-b-primary');
+    for (const replaced of ['wave:border-input', 'wave:border-b-stroke-accessible']) {
       expect(root).not.toHaveClass(replaced);
     }
   });
@@ -655,8 +655,8 @@ describe('SpinButton — naming, routing and styling', () => {
       render(<SpinButton aria-label="Quantity" aria-invalid={token} data-testid="root" />);
       expect(spin()).toHaveAttribute('aria-invalid', token);
       const root = screen.getByTestId('root');
-      expect(root).not.toHaveClass('border-destructive');
-      expect(root).toHaveClass('border-input');
+      expect(root).not.toHaveClass('wave:border-destructive');
+      expect(root).toHaveClass('wave:border-input');
     },
   );
 
@@ -667,14 +667,14 @@ describe('SpinButton — naming, routing and styling', () => {
     await user.clear(spin());
     await user.type(spin(), 'abc');
     expect(spin()).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByTestId('root')).toHaveClass('border-destructive');
+    expect(screen.getByTestId('root')).toHaveClass('wave:border-destructive');
   });
 
   it('gives the step buttons their own padding and background, so an app-wide button rule cannot fill them (C-NATIVE)', () => {
     render(<SpinButton aria-label="Quantity" />);
     for (const button of [incrementButton(), decrementButton()]) {
-      expect(button).toHaveClass('p-0');
-      expect(button).toHaveClass('bg-transparent');
+      expect(button).toHaveClass('wave:p-0');
+      expect(button).toHaveClass('wave:bg-transparent');
     }
   });
 
@@ -847,17 +847,38 @@ describe('sizes, appearances and geometry (Phase 4 D13, D20)', () => {
 
   it('medium outline: a 32px root, full-height 32px-wide buttons, a 48px flexible input', () => {
     render(<SpinButton aria-label="Quantity" />);
-    expect(root()).toHaveClass('h-8', 'text-body-1', 'border-input', 'bg-background');
+    expect(root()).toHaveClass(
+      'wave:h-8',
+      'wave:text-body-1',
+      'wave:border-input',
+      'wave:bg-background',
+    );
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-appearance', 'outline');
-    expect(incrementButton()).toHaveClass('h-full', 'w-8', 'border-s', 'border-input');
-    expect(decrementButton()).toHaveClass('h-full', 'w-8', 'border-e', 'border-input');
-    expect(spin()).toHaveClass('h-full', 'w-12', 'flex-auto', 'min-w-0', 'text-body-1');
+    expect(incrementButton()).toHaveClass(
+      'wave:h-full',
+      'wave:w-8',
+      'wave:border-s',
+      'wave:border-input',
+    );
+    expect(decrementButton()).toHaveClass(
+      'wave:h-full',
+      'wave:w-8',
+      'wave:border-e',
+      'wave:border-input',
+    );
+    expect(spin()).toHaveClass(
+      'wave:h-full',
+      'wave:w-12',
+      'wave:flex-auto',
+      'wave:min-w-0',
+      'wave:text-body-1',
+    );
   });
 
   it.each([
-    ['small', 'h-6', 'w-6', 'w-10', 'text-caption-1'],
-    ['large', 'h-10', 'w-10', 'w-14', 'text-body-2'],
+    ['small', 'wave:h-6', 'wave:w-6', 'wave:w-10', 'wave:text-caption-1'],
+    ['large', 'wave:h-10', 'wave:w-10', 'wave:w-14', 'wave:text-body-2'],
   ] as const)('size="%s"', (size, rootHeight, buttonWidth, inputWidth, text) => {
     render(<SpinButton aria-label="Quantity" size={size} />);
     expect(root()).toHaveClass(rootHeight, text);
@@ -867,13 +888,15 @@ describe('sizes, appearances and geometry (Phase 4 D13, D20)', () => {
 
   it('the separators render only in outline; on filled-darker the buttons hover one step darker', () => {
     render(<SpinButton aria-label="Quantity" appearance="filled-darker" />);
-    expect(root()).toHaveClass('bg-input-filled-darker');
-    expect(incrementButton()).not.toHaveClass('border-s');
-    expect(decrementButton()).not.toHaveClass('border-e');
-    expect(incrementButton()).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-pressed');
+    expect(root()).toHaveClass('wave:bg-input-filled-darker');
+    expect(incrementButton()).not.toHaveClass('wave:border-s');
+    expect(decrementButton()).not.toHaveClass('wave:border-e');
+    expect(incrementButton()).toHaveClass(
+      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+    );
     // tailwind-merge must not silently keep the outline hover class alongside the filled-darker one.
     expect(incrementButton()).not.toHaveClass(
-      'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
     );
   });
 
@@ -890,17 +913,17 @@ describe('sizes, appearances and geometry (Phase 4 D13, D20)', () => {
   // filled-darker, through the Field and through the control's own invalid state.
 
   it.each([
-    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+    ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+    ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
   ] as const)(
     'appearance="%s" renders its classes and attribute, with no separators',
     (appearance, classes) => {
       render(<SpinButton aria-label="Quantity" appearance={appearance} />);
       expect(root()).toHaveClass(...classes);
       expect(root()).toHaveAttribute('data-appearance', appearance);
-      expect(incrementButton()).not.toHaveClass('border-s');
-      expect(decrementButton()).not.toHaveClass('border-e');
+      expect(incrementButton()).not.toHaveClass('wave:border-s');
+      expect(decrementButton()).not.toHaveClass('wave:border-e');
     },
   );
 
@@ -933,7 +956,7 @@ describe('sizes, appearances and geometry (Phase 4 D13, D20)', () => {
       render(<SpinButton aria-label="Quantity" appearance={appearance} />);
       await user.clear(spin());
       await user.type(spin(), 'abc');
-      expect(root()).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+      expect(root()).toHaveClass('wave:border-destructive', 'wave:focus-within:border-b-primary');
     },
   );
 
@@ -946,7 +969,7 @@ describe('sizes, appearances and geometry (Phase 4 D13, D20)', () => {
       const wrapper = screen
         .getByRole('spinbutton', { name: FIELD_TEST_TEXT.label })
         .closest('[data-size]') as HTMLElement;
-      expect(wrapper).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+      expect(wrapper).toHaveClass('wave:border-destructive', 'wave:focus-within:border-b-primary');
     },
   );
 });
@@ -1646,9 +1669,9 @@ describe('press-and-hold (Phase 4 D18)', () => {
     render(<SpinButton aria-label="Quantity" />);
     for (const button of [incrementButton(), decrementButton()]) {
       expect(button).toHaveClass(
-        'touch-manipulation',
-        'select-none',
-        '[-webkit-touch-callout:none]',
+        'wave:touch-manipulation',
+        'wave:select-none',
+        'wave:[-webkit-touch-callout:none]',
       );
     }
   });
@@ -1671,15 +1694,15 @@ describe('SpinButton — slotProps', () => {
       ),
     ).toBe(
       [
-        '<div class="wave-spin-button relative inline-flex items-center h-8 text-body-1 rounded border border-input border-b-stroke-accessible bg-background focus-within:border-b-2 focus-within:border-b-primary" data-appearance="outline" data-size="medium">',
-        '<button aria-label="Decrement" class="wave-spin-button__decrement-button flex h-full shrink-0 items-center justify-center bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed disabled:pointer-events-none touch-manipulation select-none [-webkit-touch-callout:none] w-8 border-e border-input disabled:opacity-50" tabindex="-1" type="button">',
+        '<div class="wave-spin-button wave:relative wave:inline-flex wave:items-center wave:h-8 wave:text-body-1 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:focus-within:border-b-2 wave:focus-within:border-b-primary" data-appearance="outline" data-size="medium">',
+        '<button aria-label="Decrement" class="wave-spin-button__decrement-button wave:flex wave:h-full wave:shrink-0 wave:items-center wave:justify-center wave:bg-transparent wave:p-0 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave:disabled:pointer-events-none wave:touch-manipulation wave:select-none wave:[-webkit-touch-callout:none] wave:w-8 wave:border-e wave:border-input wave:disabled:opacity-50" tabindex="-1" type="button">',
         '<svg aria-hidden="true" data-wave-icon="subtract" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
         '<path d="M2.5 6h7">',
         '</path>',
         '</svg>',
         '</button>',
-        '<input aria-label="Quantity" aria-valuemax="5" aria-valuemin="0" aria-valuenow="5" autocomplete="off" class="wave-spin-button__input h-full min-w-0 flex-auto border-none bg-transparent text-center text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield] w-12 text-body-1" inputmode="numeric" role="spinbutton" type="text" value="5">',
-        '<button aria-label="Increment" class="wave-spin-button__increment-button flex h-full shrink-0 items-center justify-center bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed disabled:pointer-events-none touch-manipulation select-none [-webkit-touch-callout:none] w-8 border-s border-input disabled:opacity-50" disabled="" tabindex="-1" type="button">',
+        '<input aria-label="Quantity" aria-valuemax="5" aria-valuemin="0" aria-valuenow="5" autocomplete="off" class="wave-spin-button__input wave:h-full wave:min-w-0 wave:flex-auto wave:border-none wave:bg-transparent wave:text-center wave:text-foreground wave:focus:outline-hidden wave:disabled:cursor-not-allowed wave:[appearance:textfield] wave:w-12 wave:text-body-1" inputmode="numeric" role="spinbutton" type="text" value="5">',
+        '<button aria-label="Increment" class="wave-spin-button__increment-button wave:flex wave:h-full wave:shrink-0 wave:items-center wave:justify-center wave:bg-transparent wave:p-0 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave:disabled:pointer-events-none wave:touch-manipulation wave:select-none wave:[-webkit-touch-callout:none] wave:w-8 wave:border-s wave:border-input wave:disabled:opacity-50" disabled="" tabindex="-1" type="button">',
         '<svg aria-hidden="true" data-wave-icon="add" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
         '<path d="M6 2.5v7M2.5 6h7">',
         '</path>',
@@ -1737,9 +1760,16 @@ describe('SpinButton — slotProps', () => {
       />,
     );
     for (const [element, stable, own, mine, part, width] of [
-      [decrementButton(), spinButtonClassNames.decrementButton, 'p-0', 'my-minus', 'minus', 30],
-      [spin(), spinButtonClassNames.input, 'text-center', 'my-input', 'input', 40],
-      [incrementButton(), spinButtonClassNames.incrementButton, 'p-0', 'my-plus', 'plus', 50],
+      [
+        decrementButton(),
+        spinButtonClassNames.decrementButton,
+        'wave:p-0',
+        'my-minus',
+        'minus',
+        30,
+      ],
+      [spin(), spinButtonClassNames.input, 'wave:text-center', 'my-input', 'input', 40],
+      [incrementButton(), spinButtonClassNames.incrementButton, 'wave:p-0', 'my-plus', 'plus', 50],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -2143,7 +2173,7 @@ describe('SpinButton — slotProps', () => {
         <SpinButton aria-label="Quantity" slotProps={{ root: { className: 'items-start' } }} />,
       );
       expect(root()).toHaveClass('items-start');
-      expect(root()).not.toHaveClass('items-center');
+      expect(root()).not.toHaveClass('wave:items-center');
     });
 
     it("keeps the props you give the SpinButton over the part's", () => {

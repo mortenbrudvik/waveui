@@ -153,7 +153,9 @@ function ActiveOptionPreviewDropdown({ onActiveOptionChange, ...args }: Dropdown
         <Dropdown.Option value="fish">Fish</Dropdown.Option>
         <Dropdown.Option value="hamster">Hamster</Dropdown.Option>
       </Dropdown>
-      <p className="text-caption-1 text-muted-foreground">Active option: {active ?? 'none'}</p>
+      <p className="text-wave-caption-1 text-wave-muted-foreground">
+        Active option: {active ?? 'none'}
+      </p>
     </div>
   );
 }
@@ -194,7 +196,7 @@ export const RenderedValue: Story = {
     defaultValue: 'dog',
     renderValue: (value: string) => (
       <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden className="size-2 shrink-0 rounded-full bg-success" />
+        <span aria-hidden className="size-2 shrink-0 rounded-full bg-wave-success" />
         <span className="capitalize">{value}</span>
       </span>
     ),
@@ -253,7 +255,7 @@ function renderPerson(item: ListboxItem) {
     <Option value={item.value} label={item.label}>
       <span className="flex items-baseline justify-between gap-2">
         <span>{item.label}</span>
-        <span className="text-caption-1 text-muted-foreground">{teamOf(item.value)}</span>
+        <span className="text-wave-caption-1 text-wave-muted-foreground">{teamOf(item.value)}</span>
       </span>
     </Option>
   );

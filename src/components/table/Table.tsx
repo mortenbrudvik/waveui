@@ -426,7 +426,7 @@ const TableRoot = ({
       }
       className={wcn(
         tableClassNames.container,
-        'overflow-x-auto rounded-md border border-border',
+        'wave:overflow-x-auto wave:rounded-md wave:border wave:border-border',
         scrollable && focusRing,
         containerClassName,
       )}
@@ -436,9 +436,9 @@ const TableRoot = ({
         data-striped={striped ? '' : undefined}
         className={wcn(
           tableClassNames.root,
-          'w-full border-separate border-spacing-0',
+          'wave:w-full wave:border-separate wave:border-spacing-0',
           // `:where()` keeps the stripe at specificity 0, so any row class wins (C-CLASS).
-          striped && '[:where(&>tbody>tr:nth-child(odd))]:bg-card',
+          striped && 'wave:[:where(&>tbody>tr:nth-child(odd))]:bg-card',
           className,
         )}
         {...props}
@@ -452,7 +452,7 @@ TableRoot.displayName = 'Table';
 
 /** The table's `<thead>`. */
 const TableHeader = ({ children, className, ref, ...rest }: TableHeaderProps) => (
-  <thead ref={ref} {...rest} className={wcn(tableHeaderClassNames.root, 'bg-card', className)}>
+  <thead ref={ref} {...rest} className={wcn(tableHeaderClassNames.root, 'wave:bg-card', className)}>
     {children}
   </thead>
 );
@@ -478,8 +478,8 @@ const TableHeaderCell = ({
         'span',
         wcn(
           tableHeaderCellClassNames.aside,
-          'inline-flex shrink-0 items-center',
-          sortable && 'pe-4',
+          'wave:inline-flex wave:shrink-0 wave:items-center',
+          sortable && 'wave:pe-4',
         ),
       )
     : null;
@@ -487,7 +487,7 @@ const TableHeaderCell = ({
   let content: React.ReactNode = children;
   if (sortable) {
     content = (
-      <div className="flex items-center">
+      <div className="wave:flex wave:items-center">
         <TableSortButton
           component="Table.HeaderCell"
           direction={sortDirection}
@@ -504,7 +504,7 @@ const TableHeaderCell = ({
     );
   } else if (hasAside) {
     content = (
-      <div className="flex items-center gap-2">
+      <div className="wave:flex wave:items-center wave:gap-2">
         {children}
         {asideNode}
       </div>
@@ -518,8 +518,8 @@ const TableHeaderCell = ({
       aria-sort={sortable ? (sortDirection ?? 'none') : undefined}
       className={wcn(
         tableHeaderCellClassNames.root,
-        'px-4 py-3 text-start font-semibold text-caption-1 uppercase tracking-wider border-b border-border',
-        sortable && 'p-0 hover:bg-subtle-hover',
+        'wave:px-4 wave:py-3 wave:text-start wave:font-semibold wave:text-caption-1 wave:uppercase wave:tracking-wider wave:border-b wave:border-border',
+        sortable && 'wave:p-0 wave:hover:bg-subtle-hover',
         className,
       )}
       {...props}
@@ -548,8 +548,8 @@ const TableRow = ({ children, className, ref, ...props }: TableRowProps) => (
     ref={ref}
     className={wcn(
       tableRowClassNames.root,
-      'group/table-row',
-      'hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
+      'wave:group/table-row',
+      'wave:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none',
       className,
     )}
     {...props}
@@ -565,7 +565,7 @@ const TableCell = ({ children, className, ref, ...props }: TableCellProps) => (
     ref={ref}
     className={wcn(
       tableCellClassNames.root,
-      'relative px-4 py-3 text-body-1 border-b border-border',
+      'wave:relative wave:px-4 wave:py-3 wave:text-body-1 wave:border-b wave:border-border',
       className,
     )}
     {...props}
@@ -724,8 +724,8 @@ const CELL_LAYOUT_AVATAR_BOX: AvatarSizeContextValue = { size: 32 };
 
 /** The media box: its icon at 20px, or 24px with the primary appearance. */
 const CELL_LAYOUT_MEDIA_CLASSES = {
-  default: 'flex shrink-0 items-center [&>svg]:size-5',
-  primary: 'flex shrink-0 items-center [&>svg]:size-6',
+  default: 'wave:flex wave:shrink-0 wave:items-center wave:[&>svg]:size-5',
+  primary: 'wave:flex wave:shrink-0 wave:items-center wave:[&>svg]:size-6',
 } as const;
 
 /**
@@ -767,13 +767,13 @@ const TableCellLayout = ({
   const primary = appearance === 'primary';
   const contentClassName = wcn(
     tableCellLayoutClassNames.content,
-    'flex flex-col',
-    truncate && 'min-w-0 overflow-x-hidden',
+    'wave:flex wave:flex-col',
+    truncate && 'wave:min-w-0 wave:overflow-x-hidden',
   );
   const mainClassName = wcn(
     tableCellLayoutClassNames.main,
-    truncate && 'truncate',
-    primary && 'font-semibold',
+    truncate && 'wave:truncate',
+    primary && 'wave:font-semibold',
   );
   return (
     <div
@@ -783,8 +783,8 @@ const TableCellLayout = ({
       {...rest}
       className={wcn(
         tableCellLayoutClassNames.root,
-        'flex items-center gap-2',
-        truncate && 'overflow-x-hidden',
+        'wave:flex wave:items-center wave:gap-2',
+        truncate && 'wave:overflow-x-hidden',
         className,
       )}
     >
@@ -828,8 +828,8 @@ const TableCellLayout = ({
               'span',
               wcn(
                 tableCellLayoutClassNames.description,
-                'text-caption-1 text-muted-foreground',
-                truncate && 'truncate',
+                'wave:text-caption-1 wave:text-muted-foreground',
+                truncate && 'wave:truncate',
               ),
             )}
         </div>
@@ -849,14 +849,14 @@ TableCellLayout.displayName = 'TableCellLayout';
  * (brand and neutral appearances).
  */
 const CELL_ACTIONS_CLASSES =
-  'absolute inset-y-0 end-0 flex items-center gap-1 px-1 bg-background group-hover/table-row:bg-subtle-hover [:where([data-striped]>tbody>tr:nth-child(odd)>*)>&]:bg-card [[data-selection-appearance=brand]>tbody>[data-selected]>*>&]:bg-selected [[data-selection-appearance=neutral]>tbody>[data-selected]>*>&]:bg-subtle-selected transition-[opacity,background-color] motion-reduce:transition-none';
+  'wave:absolute wave:inset-y-0 wave:end-0 wave:flex wave:items-center wave:gap-1 wave:px-1 wave:bg-background wave:group-hover/table-row:bg-subtle-hover wave:[:where([data-striped]>tbody>tr:nth-child(odd)>*)>&]:bg-card wave:[[data-selection-appearance=brand]>tbody>[data-selected]>*>&]:bg-selected wave:[[data-selection-appearance=neutral]>tbody>[data-selected]>*>&]:bg-subtle-selected wave:transition-[opacity,background-color] wave:motion-reduce:transition-none';
 
 /**
  * Transparent until the row is hovered or holds focus, or focus is in the actions themselves;
  * forced colors and a coarse pointer (touch) always draw them.
  */
 const CELL_ACTIONS_REVEAL_CLASSES =
-  'opacity-0 group-hover/table-row:opacity-100 group-focus-within/table-row:opacity-100 focus-within:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100';
+  'wave:opacity-0 wave:group-hover/table-row:opacity-100 wave:group-focus-within/table-row:opacity-100 wave:focus-within:opacity-100 wave:forced-colors:opacity-100 wave:pointer-coarse:opacity-100';
 
 /**
  * Actions of a cell (buttons, a menu button), shown over the end of the cell while its row is

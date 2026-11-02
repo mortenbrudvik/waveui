@@ -55,7 +55,7 @@ describe('SearchBox', () => {
       { name: 'with value (clear button)', props: { defaultValue: 'hello' } },
       { name: 'disabled', props: { disabled: true, defaultValue: 'hello' } },
     ],
-    conflictingClass: { className: 'w-64', overrides: 'w-full' },
+    conflictingClass: { className: 'w-64', overrides: 'wave:w-full' },
   });
 
   testRootPartRef(SearchBox, { props: { 'aria-label': 'Search' } });
@@ -139,9 +139,9 @@ describe('SearchBox', () => {
       );
       const after = screen.getByTestId('after');
       const slot = after.parentElement;
-      expect(slot).toHaveClass('shrink-0');
-      expect(slot?.parentElement).toHaveClass('shrink-0');
-      expect(slot?.parentElement).not.toHaveClass('absolute');
+      expect(slot).toHaveClass('wave:shrink-0');
+      expect(slot?.parentElement).toHaveClass('wave:shrink-0');
+      expect(slot?.parentElement).not.toHaveClass('wave:absolute');
       expect(slot?.parentElement?.parentElement).toBe(screen.getByTestId('root'));
       const input = screen.getByRole('searchbox', { name: 'Search' });
       expect(input).not.toContainElement(after);
@@ -225,15 +225,15 @@ describe('SearchBox', () => {
       const clear = screen.getByRole('button', { name: 'Clear search' });
       // In document order, as flex items of the root: none of them is positioned over the input.
       expect(Array.from(root.children)).toEqual([before, input, after, clear]);
-      expect(root).toHaveClass('inline-flex', 'items-center');
+      expect(root).toHaveClass('wave:inline-flex', 'wave:items-center');
       for (const part of [before, input, after, clear]) {
-        expect(part).not.toHaveClass('absolute');
-        expect(part.className).not.toMatch(/(^|\s)(start|end)-\d/);
+        expect(part).not.toHaveClass('wave:absolute');
+        expect(part.className).not.toMatch(/(^|\s)wave:(start|end)-\d/);
       }
       // The text takes the room the slots and the clear button leave; they keep their size.
-      expect(input).toHaveClass('min-w-0', 'flex-1');
-      expect(input.className).not.toMatch(/(^|\s)(ps|pe)-(8|9)(\s|$)/);
-      for (const part of [before, after, clear]) expect(part).toHaveClass('shrink-0');
+      expect(input).toHaveClass('wave:min-w-0', 'wave:flex-1');
+      expect(input.className).not.toMatch(/(^|\s)wave:(ps|pe)-(8|9)(\s|$)/);
+      for (const part of [before, after, clear]) expect(part).toHaveClass('wave:shrink-0');
     });
 
     it('draws the field (border, focus and disabled look) on the root around the input', () => {
@@ -241,16 +241,20 @@ describe('SearchBox', () => {
       const root = screen.getByTestId('root');
       const input = screen.getByRole('searchbox', { name: 'Search' });
       expect(root).toHaveClass(
-        'border',
-        'border-input',
-        'border-b-stroke-accessible',
-        'bg-background',
-        'focus-within:border-b-2',
-        'focus-within:border-b-primary',
-        'opacity-50',
+        'wave:border',
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+        'wave:bg-background',
+        'wave:focus-within:border-b-2',
+        'wave:focus-within:border-b-primary',
+        'wave:opacity-50',
       );
-      expect(input).toHaveClass('border-none', 'bg-transparent', 'focus:outline-hidden');
-      for (const absent of ['outline-none', 'outline-hidden', 'border-input']) {
+      expect(input).toHaveClass(
+        'wave:border-none',
+        'wave:bg-transparent',
+        'wave:focus:outline-hidden',
+      );
+      for (const absent of ['wave:outline-none', 'wave:outline-hidden', 'wave:border-input']) {
         expect(input).not.toHaveClass(absent);
       }
     });
@@ -402,16 +406,16 @@ describe('SearchBox', () => {
     it('has a 24px target beside the text, never over it (input-basic#20)', () => {
       render(<SearchBox aria-label="Search" defaultValue="abc" />);
       const clear = screen.getByRole('button', { name: 'Clear search' });
-      expect(clear).toHaveClass('h-6', 'w-6', 'shrink-0');
-      expect(clear).not.toHaveClass('absolute');
+      expect(clear).toHaveClass('wave:h-6', 'wave:w-6', 'wave:shrink-0');
+      expect(clear).not.toHaveClass('wave:absolute');
       expect(clear.previousElementSibling).toBe(screen.getByRole('searchbox', { name: 'Search' }));
     });
 
     it('sets its own padding and background, so an app-wide button rule cannot fill it (C-NATIVE)', () => {
       render(<SearchBox aria-label="Search" defaultValue="abc" />);
       const clear = screen.getByRole('button', { name: 'Clear search' });
-      expect(clear).toHaveClass('p-0');
-      expect(clear).toHaveClass('bg-transparent');
+      expect(clear).toHaveClass('wave:p-0');
+      expect(clear).toHaveClass('wave:bg-transparent');
     });
 
     it('is disabled with the SearchBox', () => {
@@ -590,7 +594,7 @@ describe('SearchBox', () => {
       );
       expect(screen.getAllByRole('button')).toHaveLength(1);
       const clear = screen.getByRole('button', { name: 'Clear search' });
-      expect(clear).toHaveClass('custom-button', 'h-6');
+      expect(clear).toHaveClass('custom-button', 'wave:h-6');
       expect(clear).toContainElement(screen.getByTestId('inner'));
       await user.click(clear);
       expect(onClick).toHaveBeenCalledOnce();
@@ -675,10 +679,10 @@ describe('SearchBox', () => {
         expect(clear).toHaveAttribute('data-disabled', '');
         expect(clear).toHaveAttribute('data-disabled-focusable', '');
         expect(clear).toHaveClass(
-          'aria-disabled:cursor-not-allowed',
-          'aria-disabled:opacity-50',
+          'wave:aria-disabled:cursor-not-allowed',
+          'wave:aria-disabled:opacity-50',
           // The dimmed look lifts while the focus ring shows (opacity would dim the ring too).
-          'aria-disabled:focus-visible:opacity-100',
+          'wave:aria-disabled:focus-visible:opacity-100',
         );
         await user.tab();
         await user.tab();
@@ -734,8 +738,8 @@ describe('SearchBox', () => {
       // below 3:1. tailwind-merge keeps both classes (different variants); the variant wins while
       // it matches.
       expect(screen.getByTestId('disabled')).toHaveClass(
-        'opacity-50',
-        'has-focus-visible:opacity-100',
+        'wave:opacity-50',
+        'wave:has-focus-visible:opacity-100',
       );
       expect(screen.getByTestId('enabled').className).not.toMatch(/opacity/);
       expectWarnings(warn, [ELEMENT_WARNING]);
@@ -1607,13 +1611,19 @@ describe('SearchBox', () => {
       const { container } = render(
         <SearchBox data-testid="root" aria-label="Search" defaultValue="abc" />,
       );
-      expect(screen.getByTestId('root')).toHaveClass('border-input', 'border-b-stroke-accessible');
+      expect(screen.getByTestId('root')).toHaveClass(
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+      );
       const input = screen.getByRole('searchbox', { name: 'Search' });
-      expect(input).toHaveClass('placeholder:text-muted-foreground', 'focus:outline-hidden');
+      expect(input).toHaveClass(
+        'wave:placeholder:text-muted-foreground',
+        'wave:focus:outline-hidden',
+      );
       const clear = screen.getByRole('button', { name: 'Clear search' });
       expect(clear).toHaveClass(
-        'text-muted-foreground',
-        'not-disabled:not-aria-disabled:hover:text-foreground',
+        'wave:text-muted-foreground',
+        'wave:not-disabled:not-aria-disabled:hover:text-foreground',
       );
       expect(container.innerHTML).not.toMatch(/#[0-9a-f]{3,8}|outline-none|enabled:/i);
     });
@@ -1634,11 +1644,11 @@ describe('SearchBox', () => {
       expect(invalid).toHaveClass(...inputInvalidWithin.split(' '));
       // Keeps the destructive border and shows the focus color on the focused bottom border
       // (Phase 4 D4).
-      expect(invalid).toHaveClass('border-destructive', 'focus-within:border-b-primary');
-      for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
+      expect(invalid).toHaveClass('wave:border-destructive', 'wave:focus-within:border-b-primary');
+      for (const replaced of ['wave:border-input', 'wave:border-b-stroke-accessible']) {
         expect(invalid).not.toHaveClass(replaced);
       }
-      expect(screen.getByTestId('valid')).not.toHaveClass('border-destructive');
+      expect(screen.getByTestId('valid')).not.toHaveClass('wave:border-destructive');
     });
 
     it('shows the error border for the invalid state of a surrounding Field', () => {
@@ -1647,7 +1657,7 @@ describe('SearchBox', () => {
         'aria-invalid',
         'true',
       );
-      expect(screen.getByTestId('root')).toHaveClass('border-destructive');
+      expect(screen.getByTestId('root')).toHaveClass('wave:border-destructive');
     });
 
     it('positions the icon and clear button with logical utilities in RTL (C-LOGICAL)', () => {
@@ -1656,10 +1666,10 @@ describe('SearchBox', () => {
         { dir: 'rtl' },
       );
       const input = screen.getByRole('searchbox', { name: 'Search' });
-      expect(input).toHaveClass('px-2');
-      expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('me-1');
+      expect(input).toHaveClass('wave:px-2');
+      expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('wave:me-1');
       const icon = container.querySelector('[data-wave-icon="search"]');
-      expect(icon?.parentElement).toHaveClass('ps-2');
+      expect(icon?.parentElement).toHaveClass('wave:ps-2');
       expect(container.innerHTML).not.toMatch(/\b(left|right|pl|pr|ml|mr)-\d/);
     });
   });
@@ -1679,12 +1689,17 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
 
   it('renders the 0.7 classes and medium outline attributes by default', () => {
     render(<SearchBox aria-label="Search" defaultValue="x" />);
-    expect(root()).toHaveClass('h-8', 'text-body-1', 'border-input', 'bg-background');
+    expect(root()).toHaveClass(
+      'wave:h-8',
+      'wave:text-body-1',
+      'wave:border-input',
+      'wave:bg-background',
+    );
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-appearance', 'outline');
-    expect(clear()).toHaveClass('h-6', 'w-6', 'me-1');
-    expect(clear()).not.toHaveClass('relative');
-    expect(clear()).not.toHaveClass('before:absolute');
+    expect(clear()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:me-1');
+    expect(clear()).not.toHaveClass('wave:relative');
+    expect(clear()).not.toHaveClass('wave:before:absolute');
   });
 
   it('an untyped size or appearance renders the medium outline defaults (no TypeError)', () => {
@@ -1696,32 +1711,37 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
         appearance={'glass' as unknown as 'outline'}
       />,
     );
-    expect(root()).toHaveClass('h-8', 'text-body-1', 'border-input', 'bg-background');
+    expect(root()).toHaveClass(
+      'wave:h-8',
+      'wave:text-body-1',
+      'wave:border-input',
+      'wave:bg-background',
+    );
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-appearance', 'outline');
-    expect(clear()).toHaveClass('h-6', 'w-6', 'me-1');
+    expect(clear()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:me-1');
   });
 
   it('small: 20px clear button with a 24px hit area anchored on the button itself', () => {
     render(<SearchBox aria-label="Search" defaultValue="x" size="small" />);
-    expect(root()).toHaveClass('h-6', 'text-caption-1');
+    expect(root()).toHaveClass('wave:h-6', 'wave:text-caption-1');
     expect(root()).toHaveAttribute('data-size', 'small');
     expect(clear()).toHaveClass(
-      'size-5',
-      'relative',
-      'before:absolute',
-      'before:-inset-0.5',
-      'me-1',
+      'wave:size-5',
+      'wave:relative',
+      'wave:before:absolute',
+      'wave:before:-inset-0.5',
+      'wave:me-1',
     );
   });
 
   it('large: 32px clear button', () => {
     render(<SearchBox aria-label="Search" defaultValue="x" size="large" />);
-    expect(root()).toHaveClass('h-10', 'text-body-2');
+    expect(root()).toHaveClass('wave:h-10', 'wave:text-body-2');
     expect(root()).toHaveAttribute('data-size', 'large');
-    expect(clear()).toHaveClass('size-8');
-    expect(clear()).not.toHaveClass('relative');
-    expect(clear()).not.toHaveClass('before:absolute');
+    expect(clear()).toHaveClass('wave:size-8');
+    expect(clear()).not.toHaveClass('wave:relative');
+    expect(clear()).not.toHaveClass('wave:before:absolute');
   });
 
   it('takes the Field size and the provider appearance', () => {
@@ -1738,9 +1758,9 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   });
 
   it.each([
-    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+    ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+    ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
   ] as const)('appearance="%s" renders its classes', (appearance, classes) => {
     render(<SearchBox aria-label="Search" appearance={appearance} />);
     expect(root()).toHaveClass(...classes);
@@ -1773,7 +1793,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     'an invalid %s field keeps the destructive border and the focus color on its bottom (own aria-invalid)',
     (appearance) => {
       render(<SearchBox aria-label="Search" appearance={appearance} aria-invalid />);
-      expect(root()).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+      expect(root()).toHaveClass('wave:border-destructive', 'wave:focus-within:border-b-primary');
     },
   );
 
@@ -1786,7 +1806,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
       const wrapper = screen
         .getByRole('searchbox', { name: FIELD_TEST_TEXT.label })
         .closest('[data-size]') as HTMLElement;
-      expect(wrapper).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+      expect(wrapper).toHaveClass('wave:border-destructive', 'wave:focus-within:border-b-primary');
     },
   );
 });
@@ -1928,8 +1948,8 @@ describe('SearchBox — slotProps', () => {
       ),
     ).toBe(
       [
-        '<input aria-label="Search" class="wave-search-box__input h-full min-w-0 flex-1 appearance-none border-none bg-transparent text-foreground px-2 text-body-1 placeholder:text-muted-foreground focus:outline-hidden disabled:cursor-not-allowed [&amp;::-webkit-search-cancel-button]:hidden" name="q" placeholder="Search" type="search" value="query">',
-        '<button aria-label="Clear search" class="wave-search-box__dismiss-button me-1 flex shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground h-6 w-6 not-disabled:not-aria-disabled:hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+        '<input aria-label="Search" class="wave-search-box__input wave:h-full wave:min-w-0 wave:flex-1 wave:appearance-none wave:border-none wave:bg-transparent wave:text-foreground wave:px-2 wave:text-body-1 wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:disabled:cursor-not-allowed wave:[&amp;::-webkit-search-cancel-button]:hidden" name="q" placeholder="Search" type="search" value="query">',
+        '<button aria-label="Clear search" class="wave-search-box__dismiss-button wave:me-1 wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:h-6 wave:w-6 wave:not-disabled:not-aria-disabled:hover:text-foreground wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
       ].join('\n'),
     );
   });
@@ -2051,7 +2071,7 @@ describe('SearchBox — slotProps', () => {
       />,
     );
     expect(clearButton()).toHaveClass('text-foreground');
-    expect(clearButton()).not.toHaveClass('text-muted-foreground');
+    expect(clearButton()).not.toHaveClass('wave:text-muted-foreground');
   });
 
   it("runs your input handlers first; preventDefault() skips the SearchBox's handling", async () => {
@@ -2356,7 +2376,7 @@ describe('SearchBox — slotProps', () => {
     it('lets your class replace a conflicting class of the root', () => {
       render(<SearchBox aria-label="Search" slotProps={{ root: { className: 'items-start' } }} />);
       expect(root()).toHaveClass('items-start');
-      expect(root()).not.toHaveClass('items-center');
+      expect(root()).not.toHaveClass('wave:items-center');
     });
 
     it("keeps the props you give the SearchBox over the part's", () => {

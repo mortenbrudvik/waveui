@@ -101,9 +101,13 @@ describe('dist/styles.css — motion tokens', () => {
     try {
       expect(main(['--out-dir', out])).toBe(0);
       expect(error).not.toHaveBeenCalled();
-      // The compile check's line (the prefix is off until the flip) and the report.
+      // The compile check's line (the prefix is on since the flip) and the report.
       expect(log.mock.calls).toEqual([
-        [SKIPPED_COMPILE_CHECK],
+        [
+          expect.stringMatching(
+            /^build-css: compile check passed \(prefix wave: \d+ class words in \d+ files, \d+ allowlisted pairs\)$/,
+          ),
+        ],
         [expect.stringMatching(/^build-css: .* OK$/)],
       ]);
       const css = readFileSync(join(out, 'styles.css'), 'utf8');

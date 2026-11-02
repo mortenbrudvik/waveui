@@ -78,11 +78,11 @@ const layouts = ['singleline', 'multiline'] as const;
 
 /** Classes that cut text off; no layout may put them on the text column (D17, WCAG 1.4.10). */
 const CLIPPING_CLASSES = [
-  'truncate',
-  'text-ellipsis',
-  'text-clip',
-  'overflow-hidden',
-  'line-clamp-1',
+  'wave:truncate',
+  'wave:text-ellipsis',
+  'wave:text-clip',
+  'wave:overflow-hidden',
+  'wave:line-clamp-1',
 ];
 
 /** A bar with a title, a link in its text, two actions and the Dismiss button. */
@@ -122,7 +122,7 @@ describe('MessageBar parts (P3-04)', () => {
       expectedTag: 'span',
       displayName: 'MessageBarTitle',
       defaultProps: { children: 'Update available' },
-      conflictingClass: { className: 'font-normal', overrides: 'font-semibold' },
+      conflictingClass: { className: 'font-normal', overrides: 'wave:font-semibold' },
       wrapper: InBar,
     });
 
@@ -138,7 +138,7 @@ describe('MessageBar parts (P3-04)', () => {
       expectedTag: 'div',
       displayName: 'MessageBarActions',
       defaultProps: { children: <Button>Retry</Button> },
-      conflictingClass: { className: 'gap-4', overrides: 'gap-2' },
+      conflictingClass: { className: 'gap-4', overrides: 'wave:gap-2' },
       wrapper: InBar,
     });
 
@@ -255,7 +255,7 @@ describe('MessageBar parts (P3-04)', () => {
       );
       const title = screen.getByText('Heads up');
       expect(title.tagName).toBe('SPAN');
-      expect(title).toHaveClass(messageBarTitleClassNames.root, 'font-semibold');
+      expect(title).toHaveClass(messageBarTitleClassNames.root, 'wave:font-semibold');
       expect(title.id).toMatch(/^wave-message-bar-title-/);
 
       rerender(
@@ -589,9 +589,9 @@ describe('MessageBar parts (P3-04)', () => {
     it('stacks the actions under the text only in the multiline layout', () => {
       const { rerender } = render(<FullBar layout="singleline" />);
       const actions = actionsOf(screen.getByRole('button', { name: 'Update now' }));
-      expect(actions.parentElement).not.toHaveClass('flex-col');
+      expect(actions.parentElement).not.toHaveClass('wave:flex-col');
       rerender(<FullBar layout="multiline" />);
-      expect(actions.parentElement).toHaveClass('flex-col');
+      expect(actions.parentElement).toHaveClass('wave:flex-col');
     });
 
     it('keeps the focused action when the layout changes (nothing moves in the DOM)', () => {
@@ -607,7 +607,7 @@ describe('MessageBar parts (P3-04)', () => {
       render(<FullBar layout={layout} />);
       const bar = screen.getByRole('status');
       const text = textColumn(bar);
-      expect(text).not.toHaveClass('whitespace-nowrap');
+      expect(text).not.toHaveClass('wave:whitespace-nowrap');
       for (const cls of CLIPPING_CLASSES) expect(text).not.toHaveClass(cls);
       expect(bar).not.toHaveAttribute('style');
       expect(bar.querySelectorAll('[style]')).toHaveLength(0);
@@ -618,7 +618,7 @@ describe('MessageBar parts (P3-04)', () => {
       const bar = screen.getByRole('status');
       expect(bar.closest('[dir]')).toHaveAttribute('dir', 'rtl');
       const dismiss = screen.getByRole('button', { name: 'Dismiss' });
-      expect(dismiss).toHaveClass('ms-auto');
+      expect(dismiss).toHaveClass('wave:ms-auto');
       const actions = actionsOf(screen.getByRole('button', { name: 'Update now' }));
       expect(
         textColumn(bar).compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING,

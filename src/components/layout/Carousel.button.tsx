@@ -34,7 +34,7 @@ export const CarouselButton = ({
   const previous = direction === 'previous';
   const disabled = previous ? carousel.previousDisabled : carousel.nextDisabled;
   const go = previous ? carousel.goPrevious : carousel.goNext;
-  const mirror = carousel.dir === 'rtl' ? '-scale-x-100' : undefined;
+  const mirror = carousel.dir === 'rtl' ? 'wave:-scale-x-100' : undefined;
   return (
     <button
       type="button"

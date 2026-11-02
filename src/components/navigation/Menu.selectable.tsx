@@ -184,8 +184,8 @@ interface SelectableMenuItemProps extends Omit<MenuItemCheckboxProps, 'slotProps
  * size: the 1px border leaves a 30px inner track, so the thumb sits 2px from either end. Only the
  * thumb (the leaf indicator) opts out of forced colors; a disabled switch draws GrayText on Canvas.
  */
-const switchOnTrack = 'forced-colors:border-[Highlight] forced-colors:bg-[Highlight]';
-const switchDisabledOnTrack = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
+const switchOnTrack = 'wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]';
+const switchDisabledOnTrack = 'wave:forced-colors:border-[GrayText] wave:forced-colors:bg-[Canvas]';
 
 function renderSwitchIndicator(
   checked: boolean,
@@ -194,25 +194,25 @@ function renderSwitchIndicator(
 ): React.ReactElement {
   const trackClasses = wcn(
     menuItemSwitchClassNames.track,
-    'relative inline-flex h-[16px] w-[32px] shrink-0 items-center rounded-full border transition-colors duration-200 motion-reduce:transition-none',
+    'wave:relative wave:inline-flex wave:h-[16px] wave:w-[32px] wave:shrink-0 wave:items-center wave:rounded-full wave:border wave:transition-colors wave:duration-200 wave:motion-reduce:transition-none',
     checked
-      ? wcn('border-primary bg-primary', disabled ? switchDisabledOnTrack : switchOnTrack)
+      ? wcn('wave:border-primary wave:bg-primary', disabled ? switchDisabledOnTrack : switchOnTrack)
       : wcn(
-          'border-stroke-accessible bg-transparent',
+          'wave:border-stroke-accessible wave:bg-transparent',
           disabled ? forcedColors.disabled : forcedColors.control,
         ),
   );
   const thumbClasses = wcn(
     menuItemSwitchClassNames.thumb,
-    'block h-[10px] w-[10px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
+    'wave:block wave:h-[10px] wave:w-[10px] wave:rounded-full wave:transition-transform wave:duration-200 wave:motion-reduce:transition-none wave:forced-colors:forced-color-adjust-none',
     checked
-      ? 'translate-x-[18px] wave-rtl:-translate-x-[18px] bg-primary-foreground'
-      : 'translate-x-[2px] wave-rtl:-translate-x-[2px] bg-stroke-accessible',
+      ? 'wave:translate-x-[18px] wave:wave-rtl:-translate-x-[18px] wave:bg-primary-foreground'
+      : 'wave:translate-x-[2px] wave:wave-rtl:-translate-x-[2px] wave:bg-stroke-accessible',
     disabled
-      ? 'forced-colors:bg-[GrayText]'
+      ? 'wave:forced-colors:bg-[GrayText]'
       : checked
-        ? 'forced-colors:bg-[HighlightText]'
-        : 'forced-colors:bg-[ButtonText]',
+        ? 'wave:forced-colors:bg-[HighlightText]'
+        : 'wave:forced-colors:bg-[ButtonText]',
   );
   // The parts are merged only when given: a menu renders many items. A disabled item calls no
   // click handler of a part.
@@ -310,9 +310,14 @@ function SelectableMenuItem({
   let checkColumn: React.ReactNode = undefined;
   if (kind !== 'switch') {
     checkColumn = !checked ? null : customCheckmark ? (
-      renderSlot(checkmark, 'span', 'inline-flex shrink-0 items-center justify-center', {
-        'aria-hidden': true,
-      })
+      renderSlot(
+        checkmark,
+        'span',
+        'wave:inline-flex wave:shrink-0 wave:items-center wave:justify-center',
+        {
+          'aria-hidden': true,
+        },
+      )
     ) : (
       <CheckIcon size={16} />
     );

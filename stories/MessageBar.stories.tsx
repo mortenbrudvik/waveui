@@ -98,7 +98,7 @@ export const CustomDismissContent: Story = {
     dismiss: {
       children: 'Close',
       'aria-label': 'Close',
-      className: 'px-1 text-caption-1 font-semibold',
+      className: 'px-1 text-wave-caption-1 font-semibold',
     },
   },
   render: (args) => <DismissibleMessageBar {...args} />,

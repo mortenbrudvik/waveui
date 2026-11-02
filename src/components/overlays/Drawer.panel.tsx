@@ -64,8 +64,8 @@ function getDrawerSizeAxis(position: DrawerPosition): DrawerSizeAxis {
  * consumer's `className` replaces the size, as the consumer's class comes last in `wcn()`.
  */
 const drawerSizeClasses: Readonly<Record<DrawerSizeAxis, Readonly<Record<DrawerSize, string>>>> = {
-  width: { small: 'w-80', medium: 'w-148', large: 'w-235', full: 'w-full' },
-  height: { small: 'h-80', medium: 'h-148', large: 'h-235', full: 'h-full' },
+  width: { small: 'wave:w-80', medium: 'wave:w-148', large: 'wave:w-235', full: 'wave:w-full' },
+  height: { small: 'wave:h-80', medium: 'wave:h-148', large: 'wave:h-235', full: 'wave:h-full' },
 };
 
 /**
@@ -74,11 +74,11 @@ const drawerSizeClasses: Readonly<Record<DrawerSizeAxis, Readonly<Record<DrawerS
  * (which drop shadows).
  */
 const drawerEdgeClasses: Readonly<Record<DrawerPosition, string>> = {
-  start: 'border-e',
-  end: 'border-s',
-  left: 'border-r', // wave-allow-physical: the consumer asked for the physical left edge
-  right: 'border-l', // wave-allow-physical: the consumer asked for the physical right edge
-  bottom: 'border-t',
+  start: 'wave:border-e',
+  end: 'wave:border-s',
+  left: 'wave:border-r', // wave-allow-physical: the consumer asked for the physical left edge
+  right: 'wave:border-l', // wave-allow-physical: the consumer asked for the physical right edge
+  bottom: 'wave:border-t',
 };
 
 /**
@@ -86,11 +86,11 @@ const drawerEdgeClasses: Readonly<Record<DrawerPosition, string>> = {
  * width; neither grows past the window (a size larger than the screen acts as `full`).
  */
 const overlayPlacementClasses: Readonly<Record<DrawerPosition, string>> = {
-  start: 'start-0 top-0 h-full max-w-full',
-  end: 'end-0 top-0 h-full max-w-full',
-  left: 'left-0 top-0 h-full max-w-full', // wave-allow-physical: the consumer asked for the physical left edge
-  right: 'right-0 top-0 h-full max-w-full', // wave-allow-physical: the consumer asked for the physical right edge
-  bottom: 'inset-x-0 bottom-0 w-full max-h-full',
+  start: 'wave:start-0 wave:top-0 wave:h-full wave:max-w-full',
+  end: 'wave:end-0 wave:top-0 wave:h-full wave:max-w-full',
+  left: 'wave:left-0 wave:top-0 wave:h-full wave:max-w-full', // wave-allow-physical: the consumer asked for the physical left edge
+  right: 'wave:right-0 wave:top-0 wave:h-full wave:max-w-full', // wave-allow-physical: the consumer asked for the physical right edge
+  bottom: 'wave:inset-x-0 wave:bottom-0 wave:w-full wave:max-h-full',
 };
 
 /**
@@ -101,8 +101,8 @@ const overlayPlacementClasses: Readonly<Record<DrawerPosition, string>> = {
  * padded.
  */
 function getOverlayInsetClasses(position: DrawerPosition, size: DrawerSize): string {
-  if (position === 'bottom' && size !== 'full') return 'pb-[env(safe-area-inset-bottom)]';
-  return 'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]';
+  if (position === 'bottom' && size !== 'full') return 'wave:pb-[env(safe-area-inset-bottom)]';
+  return 'wave:pt-[env(safe-area-inset-top)] wave:pb-[env(safe-area-inset-bottom)]';
 }
 
 /**
@@ -126,8 +126,8 @@ function getOverlayPanelClasses(position: DrawerPosition, size: DrawerSize): str
  * colors.
  */
 const inlinePanelClasses = [
-  'relative flex min-h-0 shrink-0 flex-col max-w-full bg-background text-foreground',
-  'border-transparent data-[separator]:border-border',
+  'wave:relative wave:flex wave:min-h-0 wave:shrink-0 wave:flex-col wave:max-w-full wave:bg-background wave:text-foreground',
+  'wave:border-transparent wave:data-[separator]:border-border',
   forcedColors.border,
 ].join(' ');
 
@@ -142,7 +142,7 @@ function getInlinePanelClasses(position: DrawerPosition, size: DrawerSize): stri
   const axis = getDrawerSizeAxis(position);
   return [
     drawerEdgeClasses[position],
-    axis === 'height' ? 'w-full max-h-full' : '',
+    axis === 'height' ? 'wave:w-full wave:max-h-full' : '',
     drawerSizeClasses[axis][size],
   ]
     .filter(Boolean)
@@ -241,7 +241,7 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
  * page's background with the overlay shadow, its inner edge in the border colour.
  */
 const OVERLAY_PANEL_CLASSES =
-  'fixed flex flex-col border-border bg-background text-foreground shadow-64';
+  'wave:fixed wave:flex wave:flex-col wave:border-border wave:bg-background wave:text-foreground wave:shadow-64';
 
 /**
  * The drawer panel shell: the panel element of an overlay (in a portal, with its backdrop and the

@@ -103,7 +103,7 @@ export const DisabledFocusable: Story = {
   render: (args) => (
     <div className="flex flex-col items-start gap-1">
       <Switch {...args} />
-      <p id="updates-reason" className="text-caption-1 text-muted-foreground">
+      <p id="updates-reason" className="text-wave-caption-1 text-wave-muted-foreground">
         Managed by your organization.
       </p>
     </div>

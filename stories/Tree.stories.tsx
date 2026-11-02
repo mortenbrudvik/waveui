@@ -161,7 +161,7 @@ export const ControlledChecks: Story = {
         >
           {files}
         </Tree>
-        <p className="mt-2 text-caption-1 text-muted-foreground">
+        <p className="mt-2 text-wave-caption-1 text-wave-muted-foreground">
           Checked: {checked.length > 0 ? checked.join(', ') : 'none'}
         </p>
       </div>

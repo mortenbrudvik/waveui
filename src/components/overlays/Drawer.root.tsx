@@ -443,7 +443,7 @@ function DrawerBuiltInHeader({
       {...mergeSlotProps(part, {
         className: wcn(
           drawerClassNames.header,
-          'flex shrink-0 items-center justify-between gap-2 p-4',
+          'wave:flex wave:shrink-0 wave:items-center wave:justify-between wave:gap-2 wave:p-4',
           scrollSeparatorClasses.header,
         ),
         locked: { ...HIDDEN_PART_LOCKS, 'data-scroll-state': scrollState },
@@ -452,7 +452,7 @@ function DrawerBuiltInHeader({
       {hasTitle && (
         <h2
           id={titleId}
-          className={wcn(drawerTitleClassNames.root, 'text-subtitle-1 font-semibold')}
+          className={wcn(drawerTitleClassNames.root, 'wave:text-subtitle-1 wave:font-semibold')}
         >
           {title}
         </h2>
@@ -461,14 +461,17 @@ function DrawerBuiltInHeader({
         ? renderSlot(
             titleAction,
             'span',
-            wcn(drawerClassNames.titleAction, 'ms-auto flex shrink-0 items-center gap-1'),
+            wcn(
+              drawerClassNames.titleAction,
+              'wave:ms-auto wave:flex wave:shrink-0 wave:items-center wave:gap-1',
+            ),
           )
         : null}
       <DrawerCloseButton
         requestOpen={requestOpen}
         label={closeLabel}
         closeButton={closeButton}
-        className={wcn(!hasTitleAction && 'ms-auto', 'text-muted-foreground')}
+        className={wcn(!hasTitleAction && 'wave:ms-auto', 'wave:text-muted-foreground')}
       />
     </div>
   );
@@ -509,7 +512,7 @@ function DrawerLayout({ header, bodyProps, content, footers }: DrawerLayoutProps
           className={wcn(
             drawerClassNames.body,
             bodyProps && drawerBodyClassNames.root,
-            'min-h-0 flex-1 overflow-y-auto p-4',
+            'wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:p-4',
             focusRingInset,
             className,
           )}

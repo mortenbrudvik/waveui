@@ -20,7 +20,7 @@ type Story = StoryObj<typeof meta>;
 
 /** Demo item drawn with theme tokens. */
 const Box = ({ children }: { children: React.ReactNode }) => (
-  <div className="rounded border border-border bg-muted px-4 py-3">{children}</div>
+  <div className="rounded border border-wave-border bg-wave-muted px-4 py-3">{children}</div>
 );
 
 export const Default: Story = {
@@ -77,7 +77,7 @@ export const Centered: Story = {
   args: {
     align: 'center',
     justify: 'center',
-    className: 'border border-dashed border-border',
+    className: 'border border-dashed border-wave-border',
     style: { height: 200 },
   },
   render: (args) => (

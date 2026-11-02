@@ -1338,10 +1338,23 @@ function statements(name: string): string[] {
 }
 
 /**
+ * styles.css as an unprefixed project writes it, 0.x's form: the real file without Wave's utility
+ * prefix. The fixtures of the prefix-independent assertions use it (a fixture project without
+ * src/lib/cn.ts runs none of the prefix gates); the real entries are compiled prefixed below.
+ */
+function unprefixedStylesCss(): string {
+  const css = readCss('styles.css');
+  if (css.split(' prefix(wave)').length !== 2)
+    throw new Error('styles.css: no single prefix(wave)');
+  return css.replace(' prefix(wave)', '').replaceAll('wave:', '');
+}
+
+/**
  * Tailwind utilities that no component uses as a class, but whose names occur in the library
- * sources as words of comments, identifiers or non-class strings. styles.css
- * excludes them, so the unlayered precompiled file never restyles an app's own `.collapse`,
- * `.container` or `.table`.
+ * sources as words of comments, identifiers or non-class strings. Through 0.x styles.css excluded
+ * them (`@source not inline()`), so the unlayered precompiled file never restyled an app's own
+ * `.collapse`, `.container` or `.table`; with Wave's utility prefix (1.0) no unprefixed word
+ * generates, and none of them ships in either form.
  */
 const EXCLUDED_WORDS = [
   'blur',
@@ -1369,9 +1382,9 @@ const EXCLUDED_WORDS = [
 ];
 
 describe('style entries (repo-level#1)', () => {
-  it('styles.css builds the unlayered precompiled CSS with pinned sources, utilities last', () => {
+  it('styles.css builds the unlayered, prefixed precompiled CSS with pinned sources, utilities last', () => {
     expect(statements('styles.css')).toEqual([
-      "@import 'tailwindcss/theme.css' theme(inline)",
+      "@import 'tailwindcss/theme.css' theme(inline) prefix(wave)",
       "@import './theme.css'",
       "@import './tokens.css'",
       "@import './base.css'",
@@ -1381,18 +1394,17 @@ describe('style entries (repo-level#1)', () => {
       "@source '../lib'",
       "@source not '../components/**/__tests__'",
       "@source not '../lib/**/__tests__'",
-      "@source inline('animate-wave-spin animate-wave-spin-slow animate-wave-pulse animate-wave-indeterminate animate-wave-indeterminate-rtl')",
-      `@source not inline('${EXCLUDED_WORDS.join(' ')}')`,
+      "@source inline('wave:animate-wave-spin wave:animate-wave-spin-slow wave:animate-wave-pulse wave:animate-wave-indeterminate wave:animate-wave-indeterminate-rtl')",
     ]);
     expect(parseFile('styles.css').filter((node) => node.children !== null)).toEqual([]);
     expect(readCss('styles.css')).not.toMatch(/layer\(/);
   });
 
-  it('theme.css is internal: only the build input styles.css and the dev entry globals.css import it, no export names it', () => {
+  it('theme.css is internal: only the build input styles.css imports it, no export names it', () => {
     const importers = CSS_FILE_NAMES.filter((name) =>
       statements(name).some((statement) => /^@import '\.\/theme\.css'/.test(statement)),
     );
-    expect(importers).toEqual(['globals.css', 'styles.css']);
+    expect(importers).toEqual(['styles.css']);
     expect(statements('theme.css')).toEqual([]);
     const manifest = JSON.parse(
       readFileSync(join(import.meta.dirname, '..', '..', '..', 'package.json'), 'utf8'),
@@ -1433,11 +1445,10 @@ describe('style entries (repo-level#1)', () => {
   });
 
   it('globals.css is the dev entry mirroring the Tailwind consumer path', () => {
-    // From the sources: the internal theme.css compiles the components' classes that the
-    // consumer entry imports precompiled.
+    // For the app's own classes: an unprefixed build compiles none of the components' prefixed
+    // classes, so it imports no internal theme.css (its keys would give the app `bg-primary`).
     expect(statements('globals.css')).toEqual([
       "@import 'tailwindcss'",
-      "@import './theme.css'",
       "@import './tokens.css' layer(theme)",
       "@import './base.css' layer(base)",
       "@import './variants.css'",
@@ -1520,7 +1531,10 @@ interface BuildCss {
     css: string,
     options: { stylesCss?: string; tokensCss: string; baseCss: string },
   ): string[];
-  assertUtilitiesCss(css: string, options: { tokensCss: string; baseCss?: string }): string[];
+  assertUtilitiesCss(
+    css: string,
+    options: { tokensCss: string; baseCss?: string; stylesCss?: string },
+  ): string[];
   componentsSource(stylesCss: string): string;
   namespacedUtilities(tokensCss: string): string[];
   utilitiesSource(utilitiesCss: string, tokensCss: string): string;
@@ -1561,16 +1575,18 @@ async function loadEntryGuard(): Promise<EntryGuard> {
 /**
  * The report of a passing build-css run whose outputs are in `dir` (a regular expression source:
  * `'dist'`, or `String.raw\`\S+\`` for any directory): every output with its size, in order. With
- * `compileCheckSkipped` (a run on this repository while `UTILITY_PREFIX` is empty; a fixture
- * project has no src/lib/cn.ts), the line that says the compile check was skipped comes first.
+ * `compileCheckPassed` (a project whose src/lib/cn.ts sets `UTILITY_PREFIX` to `wave`: this
+ * repository, or the copy of the real style entries), the line of the passed compile check comes
+ * first; a fixture project without src/lib/cn.ts prints none.
  */
-function passingReport(dir: string, { compileCheckSkipped = false } = {}): RegExp {
+function passingReport(dir: string, { compileCheckPassed = false } = {}): RegExp {
   const file = (name: string) => `${dir}\\/${name.replace('.', '\\.')} \\([\\d.]+ kB\\)`;
-  const skipped = compileCheckSkipped
-    ? 'build-css: compile check skipped \\(UTILITY_PREFIX in src\\/lib\\/cn\\.ts is empty\\)\\n'
+  const check = compileCheckPassed
+    ? 'build-css: compile check passed \\(prefix wave: \\d+ class words in \\d+ files, ' +
+      '\\d+ allowlisted pairs\\)\\n'
     : '';
   return new RegExp(
-    `^${skipped}build-css: ${file('styles.css')}, ${file('components.css')}, ` +
+    `^${check}build-css: ${file('styles.css')}, ${file('components.css')}, ` +
       `${file('utilities.css')} and ${file('preflight.css')} OK$`,
   );
 }
@@ -1862,7 +1878,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       // tokens.css names the motion-reduce:* classes in a comment; that must not exempt them.
       const { styleEntryClasses } = await loadBuildCss();
       const libraryClasses = styleEntryClasses({
-        stylesCss: readCss('styles.css'),
+        stylesCss: unprefixedStylesCss(),
         tokensCss: readCss('tokens.css'),
         baseCss: readCss('base.css'),
       });
@@ -2092,7 +2108,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
           baseCss: readCss('base.css'),
         }),
       ];
-      for (const name of ['animate-wave-spin-slow', 'animate-wave-indeterminate-rtl']) {
+      for (const name of ['wave:animate-wave-spin-slow', 'wave:animate-wave-indeterminate-rtl']) {
         expect(classes).toContain(name);
       }
       for (const name of ['wave-light', 'wave-dark', 'wave-high-contrast', 'wave-root']) {
@@ -2230,7 +2246,9 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
 
     beforeAll(async () => {
       project = mkdtempSync(join(tmpdir(), 'wave-build-css-project-'));
-      for (const name of ['styles.css', 'tokens.css', 'base.css']) {
+      // An unprefixed project (no src/lib/cn.ts, so no prefix gate): styles.css without the prefix.
+      write('src/styles/styles.css', unprefixedStylesCss());
+      for (const name of ['tokens.css', 'base.css']) {
         write(`src/styles/${name}`, readCss(name));
       }
       write('dist/utilities.css', await utilitiesCssFor(readCss('tokens.css')));
@@ -2348,14 +2366,22 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
      * under the repository's node_modules/.cache, so `tailwindcss/*.css` resolves as it does here.
      */
     const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
+    /** The motion representatives as the library writes them, with Wave's utility prefix. */
+    const WAVE_MOTION_CLASSES = MOTION_CLASSES.split(' ')
+      .map((word) => `wave:${word}`)
+      .join(' ');
     const COMPONENT = [
       '/** A box that keeps its container in view; the chevron mirrors in RTL. */',
       'export function Box({ open, el }: { open: boolean; el: Element }) {',
       "  window.addEventListener('blur', close);",
       "  if (getComputedStyle(el).visibility === 'collapse') return null;",
-      "  return <i className={cn('bg-primary text-body-1 wave-rtl:-scale-x-100', open && 'grid')} />;",
+      '  return (',
+      '    <i',
+      "      className={wcn('wave:bg-primary wave:text-body-1 wave:wave-rtl:-scale-x-100', open && 'wave:grid')}",
+      '    />',
+      '  );',
       '}',
-      `export const fade = '${MOTION_CLASSES}';`,
+      `export const fade = '${WAVE_MOTION_CLASSES}';`,
       '',
     ].join('\n');
     let project = '';
@@ -2398,6 +2424,13 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       }
       write('src/components/Box.tsx', COMPONENT);
       write('stories/Box.stories.tsx', '<Box open />;\n');
+      // The prefix, as this repository declares it, so the compile check and the prefix gates run;
+      // the allowlist names the two words of Box's non-class strings.
+      write('src/lib/cn.ts', "export const UTILITY_PREFIX: string = 'wave';\n");
+      write(
+        'scripts/prefix-allowlist.json',
+        `${JSON.stringify({ 'src/components/Box.tsx': ['blur', 'collapse'] })}\n`,
+      );
     });
 
     afterAll(() => {
@@ -2408,20 +2441,23 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       const { code, output, css } = await build();
       const { selectorClasses, missingDirectionVariant } = await loadBuildCss();
       const classes = selectorClasses(css);
+      // With the prefix no unprefixed word generates: no exclusion list is needed.
+      expect(readCss('styles.css')).not.toMatch(/@source not inline/);
       for (const word of ['container', 'blur', 'collapse', 'visible']) {
         expect(classes, word).not.toContain(word);
+        expect(classes, word).not.toContain(`wave:${word}`);
       }
       for (const name of [
-        'bg-primary',
-        'text-body-1',
-        'grid',
-        'wave-rtl:-scale-x-100',
-        ...MOTION_CLASSES.split(' '),
+        'wave:bg-primary',
+        'wave:text-body-1',
+        'wave:grid',
+        'wave:wave-rtl:-scale-x-100',
+        ...WAVE_MOTION_CLASSES.split(' '),
       ]) {
         expect(classes, name).toContain(name);
       }
-      expect(missingDirectionVariant(css, ['wave-rtl:-scale-x-100'])).toEqual([]);
-      expect(output).toMatch(passingReport('dist'));
+      expect(missingDirectionVariant(css, ['wave:wave-rtl:-scale-x-100'])).toEqual([]);
+      expect(output).toMatch(passingReport('dist', { compileCheckPassed: true }));
       expect(code).toBe(0);
     }, 60_000);
 
@@ -2432,10 +2468,15 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
         await loadBuildCss();
       const components = readFileSync(join(project, 'dist', 'components.css'), 'utf8');
       const componentClasses = selectorClasses(components);
-      for (const name of ['bg-primary', 'text-body-1', 'grid', 'wave-rtl:-scale-x-100']) {
+      for (const name of [
+        'wave:bg-primary',
+        'wave:text-body-1',
+        'wave:grid',
+        'wave:wave-rtl:-scale-x-100',
+      ]) {
         expect(componentClasses, name).toContain(name);
       }
-      expect(missingDirectionVariant(components, ['wave-rtl:-scale-x-100'])).toEqual([]);
+      expect(missingDirectionVariant(components, ['wave:wave-rtl:-scale-x-100'])).toEqual([]);
       // No token rule, no base rule: the classes of tokens.css and base.css are not there.
       for (const name of ['wave-light', 'wave-dark', 'wave-high-contrast', 'wave-root']) {
         expect(componentClasses, name).not.toContain(name);
@@ -2481,23 +2522,20 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       }
     }, 60_000);
 
-    it('fails on a comment word that styles.css does not exclude', async () => {
-      write(
-        'src/styles/styles.css',
-        readCss('styles.css').replace(/@source not inline\([^)]*\);/, ''),
-      );
+    it('fails on a prefixed class that only a comment names (an unprefixed one never generates)', async () => {
+      write('src/components/Box.tsx', `/** Sits in a wave:container box. */\n${COMPONENT}`);
       try {
         const { code, output, css } = await build();
         const { selectorClasses } = await loadBuildCss();
-        expect(selectorClasses(css)).toContain('container');
+        expect(selectorClasses(css)).toContain('wave:container');
         expect(output.split('\n')).toContain(
           '  - styles.css: contains classes that no class string of src/components or src/lib ' +
             'uses (words of comments, identifiers or other files; exclude them in ' +
-            'src/styles/styles.css with @source not inline()): container',
+            'src/styles/styles.css with @source not inline()): wave:container',
         );
         expect(code).toBe(1);
       } finally {
-        write('src/styles/styles.css', readCss('styles.css'));
+        write('src/components/Box.tsx', COMPONENT);
       }
     }, 60_000);
 
@@ -2512,7 +2550,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
           "styles.css: not compiled with Wave's wave-rtl variant " +
             '(:where(:nth-child(n of :dir(rtl))) under @supports selector(:nth-child(n of ' +
             ':dir(rtl))) and the [dir=rtl] fallback; is src/styles/variants.css imported?): ' +
-            'wave-rtl:-scale-x-100',
+            'wave:wave-rtl:-scale-x-100',
         );
         expect(code).toBe(1);
       } finally {
@@ -2535,11 +2573,21 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     try {
       const code = main(['--out-dir', out]);
       const output = printed.map((args) => args.join(' ')).join('\n');
-      expect(output).toMatch(passingReport(String.raw`\S+`, { compileCheckSkipped: true }));
+      expect(output).toMatch(passingReport(String.raw`\S+`, { compileCheckPassed: true }));
       expect(code).toBe(0);
       const classes = selectorClasses(readFileSync(join(out, 'styles.css'), 'utf8'));
-      expect(classes).toContain('bg-primary');
-      expect(EXCLUDED_WORDS.filter((word) => classes.has(word))).toEqual([]);
+      expect(classes).toContain('wave:bg-primary');
+      expect(
+        EXCLUDED_WORDS.filter((word) => classes.has(word) || classes.has(`wave:${word}`)),
+      ).toEqual([]);
+      // No class without the prefix but the selector classes of the style entries.
+      expect([...classes].filter((name) => !name.startsWith('wave:')).sort()).toEqual([
+        'wave-dark',
+        'wave-high-contrast',
+        'wave-light',
+        'wave-portal',
+        'wave-root',
+      ]);
     } finally {
       for (const spy of spies) spy.mockRestore();
       rmSync(out, { recursive: true, force: true });
@@ -2839,6 +2887,33 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
           'utilities.css: missing @keyframes wave-pulse',
         ]);
       });
+
+      it('given styles.css, fails on a custom property it reads that styles.css does not declare (Task 20 review)', async () => {
+        const { assertUtilitiesCss } = await loadBuildCss();
+        // The styles.css of a plain app: the tokens, and Tailwind's own --tw-* registrations.
+        const stylesCss =
+          ':root,.wave-light{--wave-primary:#0f6cbd;--wave-error:#c50f1f}' +
+          '@property --tw-shadow{syntax:"*";inherits:false}';
+        const check = (css: string) =>
+          assertUtilitiesCss(css, { tokensCss: KEYS, baseCss: GATE_BASE, stylesCss });
+        // A token read through var(), and a --tw-* property: both resolve in a plain app.
+        const reading = good.replace(
+          '.bg-wave-primary{color:red}',
+          '.bg-wave-primary{background-color:var(--wave-primary);box-shadow:var(--tw-shadow)}',
+        );
+        expect(check(reading)).toEqual([]);
+        // A key mapped to a theme variable instead of a token: nothing declares it without Tailwind.
+        const theme = good.replace(
+          '.bg-wave-primary{color:red}',
+          '.bg-wave-primary{background-color:var(--color-wave-primary);color:var(--wave-gone, red)}',
+        );
+        expect(check(theme)).toEqual([
+          'utilities.css: reads custom properties that styles.css does not declare (a namespaced ' +
+            'key mapped to a theme variable, not a token?): --color-wave-primary, --wave-gone',
+        ]);
+        // Without styles.css the rule is not checked (the unit fixtures above pass none).
+        expect(assertUtilitiesCss(theme, { tokensCss: KEYS, baseCss: GATE_BASE })).toEqual([]);
+      });
     });
   });
 
@@ -2927,7 +3002,9 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       }
       expect(existsSync(link)).toBe(false);
       expect(existsSync(BUILD_CSS_PATH)).toBe(true);
-    });
+      // The run reads the repository's UTILITY_PREFIX, so the compile check (a TypeScript program
+      // over src) runs before the outputs are checked: seconds, more under a loaded suite.
+    }, 60_000);
 
     it('fails closed when invoked as build-css.mjs but not recognised as this script', async () => {
       const { entryStatus } = await loadEntryGuard();

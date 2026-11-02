@@ -5,16 +5,22 @@ import { getTabbableAfter, getTabbableThrough, PopoverBeak } from '../Popover.sh
 
 describe('PopoverBeak', () => {
   it.each([
-    ['top', ['border-b', 'border-r']],
-    ['bottom', ['border-t', 'border-l']],
-    ['left', ['border-t', 'border-r']],
-    ['right', ['border-b', 'border-l']],
+    ['top', ['wave:border-b', 'wave:border-r']],
+    ['bottom', ['wave:border-t', 'wave:border-l']],
+    ['left', ['wave:border-t', 'wave:border-r']],
+    ['right', ['wave:border-b', 'wave:border-l']],
   ] as const)('draws the borders that face the anchor for side="%s"', (side, borders) => {
     render(<PopoverBeak side={side} data-testid="beak" style={{ top: 4 }} />);
     const beak = screen.getByTestId('beak');
     expect(beak).toHaveAttribute('aria-hidden', 'true');
     // It inherits the surface's colors, so a className override on the surface reaches it.
-    expect(beak).toHaveClass('size-2', 'rotate-45', 'border-inherit', 'bg-inherit', ...borders);
+    expect(beak).toHaveClass(
+      'wave:size-2',
+      'wave:rotate-45',
+      'wave:border-inherit',
+      'wave:bg-inherit',
+      ...borders,
+    );
     expect(beak).toHaveStyle({ top: '4px' });
   });
 

@@ -36,7 +36,7 @@ export function MountedOptions({ scope, total }: { scope: HTMLElement | null; to
     () => 0,
   );
   return (
-    <p className="text-body-1 text-foreground">
+    <p className="text-wave-body-1 text-wave-foreground">
       Mounted options: {mounted} of {total.toLocaleString('en')}
     </p>
   );

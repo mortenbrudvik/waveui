@@ -171,7 +171,11 @@ export const MessageBarGroup = ({
       ref={ref}
       data-animate={animate}
       {...rest}
-      className={wcn(messageBarGroupClassNames.root, 'flex flex-col gap-2', className)}
+      className={wcn(
+        messageBarGroupClassNames.root,
+        'wave:flex wave:flex-col wave:gap-2',
+        className,
+      )}
     >
       {entries.map((entry) => (
         <MessageBarGroupItem

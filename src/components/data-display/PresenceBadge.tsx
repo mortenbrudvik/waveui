@@ -71,32 +71,32 @@ const statusStyles: Record<
   available: {
     glyph: 'check',
     Icon: PresenceAvailableIcon,
-    className: 'bg-presence-available text-presence-glyph',
+    className: 'wave:bg-presence-available wave:text-presence-glyph',
   },
   busy: {
     glyph: 'solid',
     Icon: PresenceBusyIcon,
-    className: 'bg-presence-busy text-presence-busy',
+    className: 'wave:bg-presence-busy wave:text-presence-busy',
   },
   away: {
     glyph: 'clock',
     Icon: PresenceAwayIcon,
-    className: 'bg-presence-away text-presence-glyph',
+    className: 'wave:bg-presence-away wave:text-presence-glyph',
   },
   offline: {
     glyph: 'ring-x',
     Icon: PresenceOfflineIcon,
-    className: 'bg-background text-presence-offline',
+    className: 'wave:bg-background wave:text-presence-offline',
   },
   'do-not-disturb': {
     glyph: 'bar',
     Icon: PresenceDndIcon,
-    className: 'bg-presence-busy text-presence-glyph',
+    className: 'wave:bg-presence-busy wave:text-presence-glyph',
   },
   'out-of-office': {
     glyph: 'arrow',
     Icon: PresenceOofIcon,
-    className: 'bg-presence-oof text-presence-glyph',
+    className: 'wave:bg-presence-oof wave:text-presence-glyph',
   },
 };
 
@@ -110,11 +110,11 @@ const statusLabels: Record<PresenceStatus, string> = {
 };
 
 const sizeClasses: Record<Size, string> = {
-  'extra-small': 'size-2', // 8px
-  small: 'size-2.5', // 10px
-  medium: 'size-3', // 12px
-  large: 'size-4', // 16px
-  'extra-large': 'size-5', // 20px
+  'extra-small': 'wave:size-2', // 8px
+  small: 'wave:size-2.5', // 10px
+  medium: 'wave:size-3', // 12px
+  large: 'wave:size-4', // 16px
+  'extra-large': 'wave:size-5', // 20px
 };
 
 /**
@@ -144,8 +144,8 @@ export const PresenceBadge = ({
   const iconPart = slotProps?.icon;
   const iconClassName = wcn(
     presenceBadgeClassNames.icon,
-    'size-full',
-    glyph === 'arrow' && 'wave-rtl:-scale-x-100',
+    'wave:size-full',
+    glyph === 'arrow' && 'wave:wave-rtl:-scale-x-100',
   );
 
   return (
@@ -158,8 +158,8 @@ export const PresenceBadge = ({
       {...props}
       className={wcn(
         presenceBadgeClassNames.root,
-        'inline-flex shrink-0 items-center justify-center rounded-full ring-2 ring-background',
-        'forced-colors:border',
+        'wave:inline-flex wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:ring-2 wave:ring-background',
+        'wave:forced-colors:border',
         forcedColors.border,
         sizeClasses[size],
         statusClassName,

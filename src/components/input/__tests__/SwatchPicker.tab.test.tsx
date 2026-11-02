@@ -234,7 +234,7 @@ describe('SwatchPicker — D4 follow-ups', () => {
         </SwatchPicker.Row>
       </SwatchPicker>,
     );
-    expect(screen.getByRole('radiogroup')).toHaveClass('gap-1');
-    expect(screen.getByTestId('row')).toHaveClass('gap-1');
+    expect(screen.getByRole('radiogroup')).toHaveClass('wave:gap-1');
+    expect(screen.getByTestId('row')).toHaveClass('wave:gap-1');
   });
 });

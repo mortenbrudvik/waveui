@@ -1,8 +1,10 @@
 /*
  * Internal, not exported: the unnamespaced Tailwind theme that Wave's own utilities compile
  * against (`--color-primary: var(--wave-primary)`, the type ramp, the shadows, the font families,
- * the motion durations and curves, the animations and their keyframes). Only the build input
- * src/styles/styles.css imports it (scripts/build-css.mjs compiles it into dist/styles.css).
+ * the motion durations and curves, the animations and their keyframes), each utility written with
+ * the prefix `wave:`. Only the build input src/styles/styles.css imports it (scripts/build-css.mjs
+ * compiles it into dist/styles.css and dist/components.css); the dev entry globals.css, an
+ * unprefixed build for the app's own classes, does not.
  *
  * `reference`: the keys resolve the utilities but are never emitted as theme variables, so a build
  * with Tailwind's prefix (spec R6 of Phase 14) emits none, in particular no `--wave-shadow-N` that

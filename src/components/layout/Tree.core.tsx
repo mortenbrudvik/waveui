@@ -109,11 +109,11 @@ const ACTION_ITEM_SELECTOR = 'button, [href], input, select, textarea, [role="bu
  * can take focus, and a hidden action refuses it.
  */
 const ACTIONS_ON_ITEM_FOCUS =
-  '[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible';
+  'wave:[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible';
 
 /** Makes the aside invisible while its actions show for focus, where they take its place. */
 const ASIDE_OFF_ON_ITEM_FOCUS =
-  '[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible';
+  'wave:[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible';
 
 /**
  * The actions stay invisible until the row is hovered or the item or an action has focus, and
@@ -123,14 +123,15 @@ const ASIDE_OFF_ON_ITEM_FOCUS =
  * runs after its trigger already reports it closed, reaches the action.
  */
 const ACTIONS_VISIBILITY =
-  'invisible group-hover/row:visible focus-within:visible forced-colors:visible [@media(hover:none)]:visible has-[[aria-expanded=true]]:visible data-[focus-in-popup]:visible';
+  'wave:invisible wave:group-hover/row:visible wave:focus-within:visible wave:forced-colors:visible wave:[@media(hover:none)]:visible wave:has-[[aria-expanded=true]]:visible wave:data-[focus-in-popup]:visible';
 
 /** The aside gives way to the actions where the two share one place. */
 const ASIDE_OFF_WITH_ACTIONS =
-  'not-forced-colors:group-hover/row:invisible [@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible [@media(hover:hover)]:not-forced-colors:group-has-[[aria-expanded=true]]/end:invisible [@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible';
+  'wave:not-forced-colors:group-hover/row:invisible wave:[@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible wave:[@media(hover:hover)]:not-forced-colors:group-has-[[aria-expanded=true]]/end:invisible wave:[@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible';
 
 /** Aside and actions share one cell, and sit side by side where the actions always show. */
-const END_CELL_SHARED = '[&>*]:[grid-area:1/1] forced-colors:flex [@media(hover:none)]:flex';
+const END_CELL_SHARED =
+  'wave:[&>*]:[grid-area:1/1] wave:forced-colors:flex wave:[@media(hover:none)]:flex';
 
 /**
  * Focuses the first action of an item's own row that takes focus, trying them in order and
@@ -461,7 +462,7 @@ export const TreeRoot = ({
             role="tree"
             data-selection-mode={selectionMode}
             aria-multiselectable={selectionMode === 'multiple' ? true : undefined}
-            className={wcn(treeClassNames.root, 'text-body-1', className)}
+            className={wcn(treeClassNames.root, 'wave:text-body-1', className)}
             {...rest}
             data-roving-container=""
             onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
@@ -787,7 +788,7 @@ const TreeItemActions = ({
   const focusInPopup = popupFocus === null ? undefined : '';
   const className = wcn(
     treeItemClassNames.actions,
-    'inline-flex items-center gap-1',
+    'wave:inline-flex wave:items-center wave:gap-1',
     ACTIONS_VISIBILITY,
   );
 
@@ -939,15 +940,20 @@ export const TreeItem = ({
   // to the row. The check does not consume a generator: renderSlot still renders its items.
   const iconNode =
     icon && slotRendersContent(icon)
-      ? renderSlot(icon, 'span', wcn(treeItemClassNames.icon, 'inline-flex shrink-0'), {
+      ? renderSlot(icon, 'span', wcn(treeItemClassNames.icon, 'wave:inline-flex wave:shrink-0'), {
           'aria-hidden': true,
         })
       : null;
   const iconAfterNode =
     iconAfter && slotRendersContent(iconAfter)
-      ? renderSlot(iconAfter, 'span', wcn(treeItemClassNames.iconAfter, 'inline-flex shrink-0'), {
-          'aria-hidden': true,
-        })
+      ? renderSlot(
+          iconAfter,
+          'span',
+          wcn(treeItemClassNames.iconAfter, 'wave:inline-flex wave:shrink-0'),
+          {
+            'aria-hidden': true,
+          },
+        )
       : null;
   // No empty aside and no empty toolbar (`actions={cond && <Button />}` with `cond` false).
   const hasAside = slotRendersContent(aside);
@@ -974,14 +980,14 @@ export const TreeItem = ({
   // The optional-indicator slot rule (C-SLOTS): `null`/`undefined` keep the chevron, `false` or
   // content that renders nothing hides it (the spacer keeps the column), and a custom glyph is
   // rendered as given, not rotated.
-  let chevron: React.ReactNode = <span className="w-3 shrink-0" aria-hidden="true" />;
+  let chevron: React.ReactNode = <span className="wave:w-3 wave:shrink-0" aria-hidden="true" />;
   if (hasChildren && (expandIcon === undefined || expandIcon === null)) {
     chevron = (
       <ChevronRightIcon
         className={wcn(
           treeItemClassNames.expandIcon,
-          'shrink-0 transition-transform motion-reduce:transition-none',
-          isExpanded ? 'rotate-90' : 'wave-rtl:-scale-x-100',
+          'wave:shrink-0 wave:transition-transform wave:motion-reduce:transition-none',
+          isExpanded ? 'wave:rotate-90' : 'wave:wave-rtl:-scale-x-100',
         )}
       />
     );
@@ -989,7 +995,7 @@ export const TreeItem = ({
     chevron = renderSlot(
       expandIcon,
       'span',
-      wcn(treeItemClassNames.expandIcon, 'inline-flex shrink-0'),
+      wcn(treeItemClassNames.expandIcon, 'wave:inline-flex wave:shrink-0'),
       { 'aria-hidden': true },
     );
   }
@@ -1133,11 +1139,11 @@ export const TreeItem = ({
       : wcn(
           treeItemClassNames.indicator,
           // Checkbox's box: 16px inside a 24px target (the pseudo-element), WCAG 2.5.8.
-          'relative inline-flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none',
-          'before:absolute before:-inset-1',
+          'wave:relative wave:inline-flex wave:size-4 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-xs wave:border wave:transition-colors wave:motion-reduce:transition-none',
+          'wave:before:absolute wave:before:-inset-1',
           checkState === 'unchecked'
-            ? wcn('border-stroke-accessible bg-transparent', forcedColors.control)
-            : 'border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]',
+            ? wcn('wave:border-stroke-accessible wave:bg-transparent', forcedColors.control)
+            : 'wave:border-primary wave:bg-primary wave:text-primary-foreground wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]',
         );
   const checkbox =
     checkState === undefined ? null : (
@@ -1180,10 +1186,10 @@ export const TreeItem = ({
     ctx.selectionMode === 'single'
       ? wcn(
           treeItemClassNames.indicator,
-          'inline-flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors motion-reduce:transition-none',
+          'wave:inline-flex wave:size-4 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border wave:transition-colors wave:motion-reduce:transition-none',
           isSelected
-            ? 'border-2 border-primary forced-colors:border-[Highlight]'
-            : wcn('border-stroke-accessible', forcedColors.control),
+            ? 'wave:border-2 wave:border-primary wave:forced-colors:border-[Highlight]'
+            : wcn('wave:border-stroke-accessible', forcedColors.control),
         )
       : undefined;
   const radio =
@@ -1199,7 +1205,10 @@ export const TreeItem = ({
       >
         {isSelected && (
           <span
-            className={wcn('block size-2 rounded-full bg-primary', forcedColors.selectedLeaf)}
+            className={wcn(
+              'wave:block wave:size-2 wave:rounded-full wave:bg-primary',
+              forcedColors.selectedLeaf,
+            )}
           />
         )}
       </span>
@@ -1212,24 +1221,24 @@ export const TreeItem = ({
 
   const rowClasses = wcn(
     treeItemClassNames.row,
-    'flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-subtle-hover',
-    hasActions && 'group/row',
-    isSelected && wcn('bg-subtle-selected font-semibold', forcedColors.selectedContainer),
+    'wave:flex wave:cursor-pointer wave:items-center wave:gap-1.5 wave:rounded wave:px-2 wave:py-1 wave:hover:bg-subtle-hover',
+    hasActions && 'wave:group/row',
+    isSelected && wcn('wave:bg-subtle-selected wave:font-semibold', forcedColors.selectedContainer),
   );
   // The label shrinks (and truncates) when the row has content after it.
   const labelClasses = wcn(
     treeItemClassNames.label,
-    'truncate',
-    (iconAfterNode || hasAside || hasActions) && 'min-w-0',
+    'wave:truncate',
+    (iconAfterNode || hasAside || hasActions) && 'wave:min-w-0',
   );
   const asideClasses = hasAside
     ? wcn(
         treeItemClassNames.aside,
-        'inline-flex items-center text-caption-1 text-muted-foreground',
+        'wave:inline-flex wave:items-center wave:text-caption-1 wave:text-muted-foreground',
         hasActions && ASIDE_OFF_WITH_ACTIONS,
       )
     : undefined;
-  const groupClasses = isGroupMounted ? wcn(treeItemClassNames.group, 'ps-4') : undefined;
+  const groupClasses = isGroupMounted ? wcn(treeItemClassNames.group, 'wave:ps-4') : undefined;
 
   return (
     <div
@@ -1242,8 +1251,8 @@ export const TreeItem = ({
         treeItemClassNames.root,
         // The focus ring is drawn on the row: an outline on the treeitem would surround its
         // whole subtree.
-        'block outline-none',
-        '[&:focus-visible>[data-tree-row]]:outline-2 [&:focus-visible>[data-tree-row]]:-outline-offset-2 [&:focus-visible>[data-tree-row]]:outline-ring',
+        'wave:block wave:outline-none',
+        'wave:[&:focus-visible>[data-tree-row]]:outline-2 wave:[&:focus-visible>[data-tree-row]]:-outline-offset-2 wave:[&:focus-visible>[data-tree-row]]:outline-ring',
         hasActions && ACTIONS_ON_ITEM_FOCUS,
         hasActions && hasAside && ASIDE_OFF_ON_ITEM_FOCUS,
         className,
@@ -1320,7 +1329,7 @@ export const TreeItem = ({
           <span
             data-tree-end=""
             className={wcn(
-              'group/end ms-auto inline-grid shrink-0 items-center gap-1',
+              'wave:group/end wave:ms-auto wave:inline-grid wave:shrink-0 wave:items-center wave:gap-1',
               hasAside && hasActions && END_CELL_SHARED,
             )}
           >

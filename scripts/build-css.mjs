@@ -36,7 +36,8 @@
  *   - the `@keyframes wave-*` rules and the `animate-wave-*`, `bg-primary` and `text-body-1`
  *     utilities are present (the sources were scanned), and so are three representatives of the
  *     motion recipes of src/lib/motion.ts (`duration-wave-gentle`,
- *     `data-[presence=exiting]:opacity-0`, `data-[presence=entered]:contents`);
+ *     `data-[presence=exiting]:opacity-0`, `data-[presence=entered]:contents`), each with the
+ *     utility prefix when one is set (`wave:bg-primary`);
  *   - no top-level `@layer` other than Tailwind's `properties` fallback (the output is
  *     unlayered), and no Tailwind directive or `@import` survived;
  *   - no Tailwind theme variables leak (`--spacing:`, `--font-sans:`, `--color-red-500`,
@@ -53,9 +54,10 @@
  *     is a whitespace-separated word of a string literal of a library script, a class of the
  *     style entries (safelist, selectors) or story-only (reported above). Tailwind reads every
  *     word of its sources, so a word of a comment or an identifier (`container`, `.filter(`)
- *     would otherwise ship as a global, unlayered utility; styles.css excludes such words with
- *     `@source not inline()`, and also the words of non-class strings, which this check cannot
- *     tell from classes;
+ *     would otherwise ship as a global, unlayered utility. With the utility prefix only a word
+ *     that carries it generates (a comment naming a `wave:` class that no string uses); without
+ *     one, styles.css excluded such words with `@source not inline()`, and also the words of
+ *     non-class strings, which this check cannot tell from classes;
  *   - every `wave-rtl:` class of a library class string is compiled with Wave's direction
  *     variant (src/styles/variants.css, C-LOGICAL): `:where(:nth-child(n of :dir(rtl)))` under
  *     `@supports selector(:nth-child(n of :dir(rtl)))` and the `[dir=rtl]` fallback under its
@@ -80,7 +82,10 @@
  *   - every style rule sits in `@layer utilities` (Tailwind's `properties` fallback aside), no
  *     other layer, no Tailwind directive;
  *   - no token rule and no theme variable (no `:root` rule, no custom property other than
- *     Tailwind's `--tw-*`), and the `@keyframes wave-*` of the animations.
+ *     Tailwind's `--tw-*`), and the `@keyframes wave-*` of the animations;
+ *   - every custom property a declaration reads (`var(--name)`) is Tailwind's `--tw-*` or one that
+ *     styles.css declares (a token): a namespaced key mapped to a theme variable instead of a
+ *     token would read a `var(--color-wave-*)` that no stylesheet of a plain app declares.
  *
  * The utility prefix (Phase 14 spec R6): `UTILITY_PREFIX` of src/lib/cn.ts, read from the file's
  * text (`readUtilityPrefix`; a declaration that cannot be read stops the build). While it is
@@ -1228,11 +1233,24 @@ export function assertComponentsCss(css, { stylesCss, tokensCss, baseCss }) {
   return errors;
 }
 
+/** The custom properties the declarations of a stylesheet read (`var(--name…)`), sorted. */
+function readCustomProperties(nodes) {
+  const names = new Set();
+  walk(nodes, (node) => {
+    if (node.children !== null || node.prelude.startsWith('@')) return;
+    const value = emptyStrings(node.prelude.slice(node.prelude.indexOf(':') + 1));
+    for (const match of value.matchAll(/var\(\s*(--[\w-]+)/g)) names.add(match[1]);
+  });
+  return [...names].sort();
+}
+
 /**
  * utilities.css (`css`): exactly the classes `namespacedUtilities` generates from `tokensCss`, in
- * `@layer utilities`, without tokens or theme variables. See the header.
+ * `@layer utilities`, without tokens or theme variables, and, given the built styles.css
+ * (`stylesCss`), reading no custom property but Tailwind's `--tw-*` and those styles.css declares.
+ * See the header.
  */
-export function assertUtilitiesCss(css, { tokensCss, baseCss = '' }) {
+export function assertUtilitiesCss(css, { tokensCss, baseCss = '', stylesCss }) {
   const errors = [];
   const nodes = parseCss(css);
   assertLayers(nodes, 'utilities.css', ['utilities'], errors);
@@ -1285,6 +1303,19 @@ export function assertUtilitiesCss(css, { tokensCss, baseCss = '' }) {
   const animated = expected.some((name) => name.startsWith('animate-wave-'));
   for (const name of animated ? KEYFRAMES : []) {
     if (!keyframes.has(name)) errors.push(`utilities.css: missing @keyframes ${name}`);
+  }
+
+  if (stylesCss !== undefined) {
+    const declared = new Set(declaredCustomProperties(parseCss(stylesCss)));
+    const unread = readCustomProperties(nodes).filter(
+      (name) => !name.startsWith('--tw-') && !declared.has(name),
+    );
+    if (unread.length > 0) {
+      errors.push(
+        'utilities.css: reads custom properties that styles.css does not declare (a namespaced ' +
+          `key mapped to a theme variable, not a token?): ${unread.slice(0, 8).join(', ')}`,
+      );
+    }
   }
   return errors;
 }
@@ -1391,7 +1422,7 @@ export function main(argv = process.argv.slice(2), { projectRoot = root } = {}) 
       prefix: prefix ?? '',
     }),
     ...assertComponentsCss(read('components.css'), { stylesCss, tokensCss, baseCss }),
-    ...assertUtilitiesCss(read('utilities.css'), { tokensCss, baseCss }),
+    ...assertUtilitiesCss(read('utilities.css'), { tokensCss, baseCss, stylesCss }),
     ...assertPreflightCss(read('preflight.css')),
   ];
 

@@ -122,7 +122,7 @@ export const Controlled: Story = {
             args.onValueChange?.(next);
           }}
         />
-        <p className="mt-2 text-body-1">Selected: {value || '(none)'}</p>
+        <p className="mt-2 text-wave-body-1">Selected: {value || '(none)'}</p>
       </div>
     );
   },

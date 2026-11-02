@@ -129,7 +129,11 @@ export const InfoLabel = ({
   return (
     <span
       ref={ref}
-      className={wcn(infoLabelClassNames.root, 'inline-flex items-center gap-0', className)}
+      className={wcn(
+        infoLabelClassNames.root,
+        'wave:inline-flex wave:items-center wave:gap-0',
+        className,
+      )}
       {...rest}
     >
       <Label

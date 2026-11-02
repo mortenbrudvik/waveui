@@ -1,0 +1,16 @@
+/*
+ * The documented Tailwind 4 consumer entry in an app that prefixes its own utilities
+ * (`prefix(tw)`): its classes are `tw:p-4`, `tw:bg-wave-primary`; Wave's precompiled components
+ * keep their own `wave:` prefix next to them, and the app's token override in its base layer wins
+ * over Wave's tokens as in `input.css`. Compiled by scripts/pack-smoke.mjs with @tailwindcss/cli
+ * inside an installed copy of this fixture.
+ */
+@import 'tailwindcss' prefix(tw);
+@import '@mortenbrudvik/waveui/tailwind';
+
+@layer base {
+  :root,
+  .wave-light {
+    --wave-primary: #c4314b;
+  }
+}

@@ -201,7 +201,7 @@ describe('DataGrid', () => {
     expectedTag: 'table',
     displayName: 'DataGrid',
     defaultProps: { 'aria-label': 'People', children: gridContent() },
-    conflictingClass: { className: 'border-collapse', overrides: 'border-separate' },
+    conflictingClass: { className: 'border-collapse', overrides: 'wave:border-separate' },
     a11yVariants: [
       {
         name: 'multiple selection',
@@ -249,7 +249,7 @@ describe('DataGrid', () => {
 
   it('merges custom className', () => {
     renderGrid({ className: 'my-custom' });
-    expect(screen.getByRole('grid')).toHaveClass('my-custom', 'w-full');
+    expect(screen.getByRole('grid')).toHaveClass('my-custom', 'wave:w-full');
   });
 
   describe('aria-multiselectable', () => {
@@ -268,9 +268,14 @@ describe('DataGrid', () => {
     it('wraps the grid in a horizontally scrollable container that is not a tab stop', () => {
       renderGrid();
       const wrapper = screen.getByRole('grid').parentElement!;
-      expect(wrapper).toHaveClass('overflow-x-auto', 'rounded-md', 'border', 'border-border');
-      expect(wrapper).not.toHaveClass('overflow-hidden');
-      expect(wrapper).not.toHaveClass('rounded-lg');
+      expect(wrapper).toHaveClass(
+        'wave:overflow-x-auto',
+        'wave:rounded-md',
+        'wave:border',
+        'wave:border-border',
+      );
+      expect(wrapper).not.toHaveClass('wave:overflow-hidden');
+      expect(wrapper).not.toHaveClass('wave:rounded-lg');
       expect(wrapper).not.toHaveAttribute('tabindex');
       expect(wrapper).not.toHaveAttribute('role');
     });
@@ -288,8 +293,8 @@ describe('DataGrid', () => {
       const wrapper = screen.getByTestId('wrapper');
       expect(wrapper).toBe(screen.getByRole('grid').parentElement);
       expect(ref.current).toBe(wrapper);
-      expect(wrapper).toHaveClass('max-w-md', 'rounded-none', 'overflow-x-auto');
-      expect(wrapper).not.toHaveClass('rounded-md');
+      expect(wrapper).toHaveClass('max-w-md', 'rounded-none', 'wave:overflow-x-auto');
+      expect(wrapper).not.toHaveClass('wave:rounded-md');
       expect(wrapper).toHaveStyle({ maxHeight: '200px' });
     });
 
@@ -2149,7 +2154,7 @@ describe('DataGrid selection', () => {
       renderGrid({ selectionMode: 'single', labels });
       const [selectionHeader] = screen.getAllByRole('columnheader');
       expect(selectionHeader).toHaveAccessibleName('Utvalg');
-      expect(within(selectionHeader).getByText('Utvalg')).toHaveClass('sr-only');
+      expect(within(selectionHeader).getByText('Utvalg')).toHaveClass('wave:sr-only');
     });
 
     it('keeps the English text for the members labels leaves out', () => {
@@ -2541,7 +2546,7 @@ describe('DataGrid selection', () => {
     renderGrid({ selectionMode: 'single' });
     const th = screen.getAllByRole('columnheader')[0];
     expect(th).toHaveTextContent('Selection');
-    expect(within(th).getByText('Selection')).toHaveClass('sr-only');
+    expect(within(th).getByText('Selection')).toHaveClass('wave:sr-only');
   });
 
   it('names each row checkbox after the row’s first cell', () => {
@@ -2727,7 +2732,7 @@ describe('DataGrid selection', () => {
   it('uses the theme accent color for the native controls', () => {
     renderGrid({ selectionMode: 'multiple' });
     for (const checkbox of screen.getAllByRole('checkbox')) {
-      expect(checkbox).toHaveClass('accent-primary');
+      expect(checkbox).toHaveClass('wave:accent-primary');
     }
   });
 
@@ -2816,7 +2821,7 @@ describe('DataGrid selection', () => {
     renderGrid({ selectionMode: 'multiple', defaultSelectedItems: ['2'] });
     const row = bodyRows()[1];
     expect(row).toHaveAttribute('data-selected');
-    expect(row).toHaveClass('data-[selected]:bg-selected');
+    expect(row).toHaveClass('wave:data-[selected]:bg-selected');
     expect(bodyRows()[0]).not.toHaveAttribute('data-selected');
   });
 
@@ -4994,8 +4999,8 @@ describe('DataGrid selectionAppearance', () => {
     renderGrid({ selectionMode: 'multiple', defaultSelectedItems: ['2'] });
     expect(screen.getByRole('grid')).toHaveAttribute('data-selection-appearance', 'brand');
     const row = bodyRows()[1];
-    expect(row).toHaveClass('data-[selected]:bg-selected', 'hover:bg-subtle-hover');
-    expect(row).not.toHaveClass('data-[selected]:bg-subtle-selected');
+    expect(row).toHaveClass('wave:data-[selected]:bg-selected', 'wave:hover:bg-subtle-hover');
+    expect(row).not.toHaveClass('wave:data-[selected]:bg-subtle-selected');
   });
 
   it('renders the attribute in every selection mode, none included', () => {
@@ -5012,8 +5017,11 @@ describe('DataGrid selectionAppearance', () => {
     expect(screen.getByRole('grid')).toHaveAttribute('data-selection-appearance', 'neutral');
     const row = bodyRows()[1];
     expect(row).toHaveAttribute('data-selected');
-    expect(row).toHaveClass('data-[selected]:bg-subtle-selected', 'hover:bg-subtle-hover');
-    expect(row).not.toHaveClass('data-[selected]:bg-selected');
+    expect(row).toHaveClass(
+      'wave:data-[selected]:bg-subtle-selected',
+      'wave:hover:bg-subtle-hover',
+    );
+    expect(row).not.toHaveClass('wave:data-[selected]:bg-selected');
   });
 
   it('gives a selected row no fill for none; aria-selected, the control and the forced-colors outline stay', () => {
@@ -5026,10 +5034,10 @@ describe('DataGrid selectionAppearance', () => {
     const row = bodyRows()[1];
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(row).toHaveAttribute('data-selected');
-    expect(row).not.toHaveClass('data-[selected]:bg-selected');
-    expect(row).not.toHaveClass('data-[selected]:bg-subtle-selected');
-    expect(row.className).not.toMatch(/(^|\s)data-\[selected\]:bg-/);
-    expect(row).toHaveClass('forced-colors:outline-[Highlight]', 'hover:bg-subtle-hover');
+    expect(row).not.toHaveClass('wave:data-[selected]:bg-selected');
+    expect(row).not.toHaveClass('wave:data-[selected]:bg-subtle-selected');
+    expect(row.className).not.toMatch(/(^|\s)wave:data-\[selected\]:bg-/);
+    expect(row).toHaveClass('wave:forced-colors:outline-[Highlight]', 'wave:hover:bg-subtle-hover');
     expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
   });
 
@@ -5044,22 +5052,22 @@ describe('DataGrid selectionAppearance', () => {
 
 describe('DataGrid subtleSelection', () => {
   const SUBTLE_ROW = [
-    'opacity-0',
-    'group-hover/table-row:opacity-100',
-    'group-focus-within/table-row:opacity-100',
-    'forced-colors:opacity-100',
-    'pointer-coarse:opacity-100',
-    'transition-opacity',
-    'motion-reduce:transition-none',
+    'wave:opacity-0',
+    'wave:group-hover/table-row:opacity-100',
+    'wave:group-focus-within/table-row:opacity-100',
+    'wave:forced-colors:opacity-100',
+    'wave:pointer-coarse:opacity-100',
+    'wave:transition-opacity',
+    'wave:motion-reduce:transition-none',
   ];
   const SUBTLE_GRID = [
-    'opacity-0',
-    'group-hover/grid:opacity-100',
-    'group-focus-within/grid:opacity-100',
-    'forced-colors:opacity-100',
-    'pointer-coarse:opacity-100',
-    'transition-opacity',
-    'motion-reduce:transition-none',
+    'wave:opacity-0',
+    'wave:group-hover/grid:opacity-100',
+    'wave:group-focus-within/grid:opacity-100',
+    'wave:forced-colors:opacity-100',
+    'wave:pointer-coarse:opacity-100',
+    'wave:transition-opacity',
+    'wave:motion-reduce:transition-none',
   ];
 
   it('names every row’s group table-row, never row (a Tree’s rows use that name)', () => {
@@ -5078,8 +5086,8 @@ describe('DataGrid subtleSelection', () => {
       </DataGrid>,
     );
     for (const row of screen.getAllByRole('row')) {
-      expect(row).toHaveClass('group/table-row');
-      expect(row).not.toHaveClass('group/row');
+      expect(row).toHaveClass('wave:group/table-row');
+      expect(row).not.toHaveClass('wave:group/row');
     }
   });
 
@@ -5105,67 +5113,67 @@ describe('DataGrid subtleSelection', () => {
     );
     const actions = screen.getByRole('toolbar', { name: 'Documents', hidden: true });
     // The Tree's own classes, keyed on its rows' group.
-    expect(actions).toHaveClass('invisible', 'group-hover/row:visible');
+    expect(actions).toHaveClass('wave:invisible', 'wave:group-hover/row:visible');
     // The only element of that group around the actions is the Tree's own row.
     const groups = [];
     for (let el = actions.parentElement; el; el = el.parentElement) {
-      if (el.classList.contains('group/row')) groups.push(el);
+      if (el.classList.contains('wave:group/row')) groups.push(el);
     }
     expect(groups).toHaveLength(1);
     expect(screen.getByRole('tree')).toContainElement(groups[0]);
-    expect(bodyRows()[0]).toHaveClass('group/table-row');
+    expect(bodyRows()[0]).toHaveClass('wave:group/table-row');
   });
 
   it('is off by default: no data-subtle-selection and every control drawn (0.13)', () => {
     renderGrid({ selectionMode: 'multiple' });
     expect(screen.getByRole('grid')).not.toHaveAttribute('data-subtle-selection');
     for (const checkbox of screen.getAllByRole('checkbox')) {
-      expect(checkbox).not.toHaveClass('opacity-0');
+      expect(checkbox).not.toHaveClass('wave:opacity-0');
     }
   });
 
   it('hides an unchecked row control until its row is hovered or holds focus; forced colors and a coarse pointer always draw it', () => {
     renderGrid({ selectionMode: 'multiple', subtleSelection: true, defaultSelectedItems: ['2'] });
     expect(screen.getByRole('grid')).toHaveAttribute('data-subtle-selection', '');
-    expect(bodyRows()[0]).toHaveClass('group/table-row');
+    expect(bodyRows()[0]).toHaveClass('wave:group/table-row');
     expect(screen.getByRole('checkbox', { name: 'Alice' })).toHaveClass(...SUBTLE_ROW);
     // A checked control is always drawn.
     const bob = screen.getByRole('checkbox', { name: 'Bob' });
     expect(bob).toBeChecked();
-    expect(bob).not.toHaveClass('opacity-0');
+    expect(bob).not.toHaveClass('wave:opacity-0');
   });
 
   it('hides the select-all checkbox while nothing is selected, until the grid is hovered or holds focus', async () => {
     const user = userEvent.setup();
     renderGrid({ selectionMode: 'multiple', subtleSelection: true });
     const grid = screen.getByRole('grid');
-    expect(grid).toHaveClass('group/grid');
+    expect(grid).toHaveClass('wave:group/grid');
     const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
     expect(selectAll).toHaveClass(...SUBTLE_GRID);
     await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
     expect(selectAll).toBePartiallyChecked();
-    expect(selectAll).not.toHaveClass('opacity-0');
+    expect(selectAll).not.toHaveClass('wave:opacity-0');
     await user.click(selectAll);
     expect(selectAll).toBeChecked();
-    expect(selectAll).not.toHaveClass('opacity-0');
+    expect(selectAll).not.toHaveClass('wave:opacity-0');
   });
 
   it('draws a subtle control while it has keyboard focus', () => {
     renderGrid({ selectionMode: 'multiple', subtleSelection: true });
     expect(screen.getByRole('checkbox', { name: 'Alice' })).toHaveClass(
-      'opacity-0',
-      'focus-visible:opacity-100',
+      'wave:opacity-0',
+      'wave:focus-visible:opacity-100',
     );
     expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toHaveClass(
-      'opacity-0',
-      'focus-visible:opacity-100',
+      'wave:opacity-0',
+      'wave:focus-visible:opacity-100',
     );
   });
 
   it('applies to the radios of single mode', () => {
     renderGrid({ selectionMode: 'single', subtleSelection: true, defaultSelectedItems: ['1'] });
     expect(screen.getByRole('radio', { name: 'Bob' })).toHaveClass(...SUBTLE_ROW);
-    expect(screen.getByRole('radio', { name: 'Alice' })).not.toHaveClass('opacity-0');
+    expect(screen.getByRole('radio', { name: 'Alice' })).not.toHaveClass('wave:opacity-0');
   });
 
   it('keeps a transparent control named and focusable: the grid focuses it', async () => {
@@ -5192,7 +5200,7 @@ describe('DataGrid subtleSelection', () => {
     await user.click(cell('Alice'));
     expect(onSelectedItemsChange).toHaveBeenCalledWith(['1'], CLICK_DETAILS);
     expect(alice).toBeChecked();
-    expect(alice).not.toHaveClass('opacity-0');
+    expect(alice).not.toHaveClass('wave:opacity-0');
     await user.click(cell('Alice'));
     expect(alice).not.toBeChecked();
     expect(alice).toHaveClass(...SUBTLE_ROW);
@@ -5311,8 +5319,8 @@ describe('DataGrid.Row selectionCellProps', () => {
       children: contentWithRowProps({ '1': { selectionCellProps: { invisible: true } } }),
     });
     const control = within(bodyRows()[0]).getByRole('checkbox', { hidden: true });
-    expect(control).toHaveClass('invisible');
-    expect(screen.getByRole('checkbox', { name: 'Bob' })).not.toHaveClass('invisible');
+    expect(control).toHaveClass('wave:invisible');
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).not.toHaveClass('wave:invisible');
     await user.click(cell('Alice'));
     expect(onSelectedItemsChange).toHaveBeenCalledWith(['1'], CLICK_DETAILS);
   });
@@ -5327,7 +5335,7 @@ describe('DataGrid.Row selectionCellProps', () => {
     });
     const alice = screen.getByRole('checkbox', { name: 'Choose Alice' });
     expect(alice).not.toHaveAttribute('aria-labelledby');
-    expect(cellOf(alice)).toHaveClass('bg-muted', dataGridRowClassNames.selectionCell, 'w-10');
+    expect(cellOf(alice)).toHaveClass('bg-muted', dataGridRowClassNames.selectionCell, 'wave:w-10');
     expect(alice).not.toHaveClass('bg-muted');
     expect(screen.getByRole('checkbox', { name: 'Choose Bob' })).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: 'Bob row' })).toBeNull();
@@ -5385,7 +5393,7 @@ describe('DataGrid.SelectionCell', () => {
     expectedTag: 'td',
     displayName: 'DataGridSelectionCell',
     control: { role: 'checkbox' },
-    conflictingClass: { className: 'w-12', overrides: 'w-10' },
+    conflictingClass: { className: 'w-12', overrides: 'wave:w-10' },
     wrapper: SelectionCellRow,
   });
 
@@ -5468,17 +5476,17 @@ describe('DataGrid.SelectionCell', () => {
     await user.keyboard('{ArrowRight}');
     const bob = screen.getByRole('checkbox', { name: 'Bob' });
     expect(bob).toHaveFocus();
-    expect(bob).toHaveClass('opacity-0', 'group-focus-within/table-row:opacity-100');
+    expect(bob).toHaveClass('wave:opacity-0', 'wave:group-focus-within/table-row:opacity-100');
     await user.click(cell('Carol'));
     expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3'], CLICK_DETAILS);
-    expect(screen.getByRole('checkbox', { name: 'Carol' })).not.toHaveClass('opacity-0');
+    expect(screen.getByRole('checkbox', { name: 'Carol' })).not.toHaveClass('wave:opacity-0');
   });
 
   it('is the hidden "Selection" header text in a single-mode header row, and a radio in a body row', () => {
     render(<TrailingCells selectionMode="single" defaultSelectedItems={['2']} />);
     const [headerRow] = screen.getAllByRole('row') as HTMLTableRowElement[];
     expect(headerRow.cells).toHaveLength(2);
-    expect(within(headerRow.cells[1]).getByText('Selection')).toHaveClass('sr-only');
+    expect(within(headerRow.cells[1]).getByText('Selection')).toHaveClass('wave:sr-only');
     expect(screen.getByRole('radio', { name: 'Bob' })).toBeChecked();
   });
 
@@ -5517,7 +5525,9 @@ describe('DataGrid.SelectionCell', () => {
     expect(alice).toBeEnabled();
     expect(cellOf(alice)).toHaveClass('from-row', 'own');
     expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeDisabled();
-    expect(within(bodyRows()[2]).getByRole('checkbox', { hidden: true })).toHaveClass('invisible');
+    expect(within(bodyRows()[2]).getByRole('checkbox', { hidden: true })).toHaveClass(
+      'wave:invisible',
+    );
     await user.click(screen.getByRole('checkbox', { name: 'Choose all' }));
     expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1', '3'], DETAILS);
   });
@@ -5726,7 +5736,7 @@ describe('DataGrid.SelectionCell', () => {
     expect(headerCell.tagName.toLowerCase()).toBe('th');
     expect(ref.current).toBe(headerCell);
     expect(headerCell).toHaveClass('w-12', dataGridSelectionCellClassNames.root);
-    expect(headerCell).not.toHaveClass('w-10');
+    expect(headerCell).not.toHaveClass('wave:w-10');
     expect(controlRef.current).toBe(screen.getByRole('checkbox', { name: 'Select all rows' }));
   });
 
@@ -6167,9 +6177,9 @@ describe('DataGrid parts — slotProps', () => {
   // Captured from 6f6b500's dist: the server markup, and the client one after the grid's
   // navigation wrote its tab stops.
   const FOCUS =
-    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
-  const CONTROL = `accent-primary cursor-pointer disabled:cursor-not-allowed ${FOCUS}`;
-  const BUTTON = `inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider ${FOCUS}`;
+    'wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring';
+  const CONTROL = `wave:accent-primary wave:cursor-pointer wave:disabled:cursor-not-allowed ${FOCUS}`;
+  const BUTTON = `wave:inline-flex wave:w-full wave:cursor-pointer wave:select-none wave:items-center wave:gap-1 wave:border-0 wave:bg-transparent wave:px-4 wave:py-3 wave:text-start wave:text-inherit wave:[font:inherit] wave:uppercase wave:tracking-wider ${FOCUS}`;
   const pins = (stamps: boolean) =>
     [
       `<input aria-label="Select all rows" class="wave-data-grid-header__select-all-checkbox ${CONTROL}"${stamps ? ' tabindex="0"' : ''} type="checkbox">`,
@@ -6301,9 +6311,9 @@ describe('DataGrid parts — slotProps', () => {
       </DataGrid>,
     );
     for (const [cls, name, conflict, count] of [
-      [dataGridHeaderClassNames.selectAllCheckbox, 'select-all', 'cursor-pointer', 1],
-      [dataGridHeaderCellClassNames.button, 'button', 'px-4', 1],
-      [dataGridRowClassNames.selectionControl, 'control', 'cursor-pointer', 2],
+      [dataGridHeaderClassNames.selectAllCheckbox, 'select-all', 'wave:cursor-pointer', 1],
+      [dataGridHeaderCellClassNames.button, 'button', 'wave:px-4', 1],
+      [dataGridRowClassNames.selectionControl, 'control', 'wave:cursor-pointer', 2],
     ] as const) {
       const elements = all(document, cls);
       expect(elements).toHaveLength(count);

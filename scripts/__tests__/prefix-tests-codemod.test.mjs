@@ -339,7 +339,8 @@ describe('the run order, kept negatives and subjects (fix round 1)', () => {
     const testsFirst = makeProject();
     const srcFirst = makeProject();
     projects.push(testsFirst, srcFirst);
-    const src = ['src/components', 'src/lib', 'src/hooks'].slice(0, 2);
+    // The fixture's sources (it has no src/hooks).
+    const src = ['src/components', 'src/lib'];
     // Tests first, then src.
     expect(
       await main(['--root', testsFirst, '--write', '--allow-unprefixed-src', 'src'], quiet()),

@@ -26,7 +26,7 @@ describe('Input', () => {
       { name: 'error message', props: { error: 'Required' } },
       { name: 'error flag', props: { error: true } },
     ],
-    conflictingClass: { className: 'px-4', overrides: 'px-3' },
+    conflictingClass: { className: 'px-4', overrides: 'wave:px-3' },
   });
 
   testFocusEvents(Input, { 'aria-label': 'test' }, 'input');
@@ -51,7 +51,7 @@ describe('Input', () => {
   describe('slots', () => {
     it('renders contentBefore as ReactNode shorthand', () => {
       render(<Input contentBefore={<span data-testid="before">$</span>} aria-label="Price" />);
-      expect(screen.getByTestId('before').parentElement).toHaveClass('ps-2');
+      expect(screen.getByTestId('before').parentElement).toHaveClass('wave:ps-2');
     });
 
     it('renders contentBefore as SlotObject', () => {
@@ -69,7 +69,7 @@ describe('Input', () => {
 
     it('renders contentAfter as ReactNode shorthand', () => {
       render(<Input contentAfter={<span data-testid="after">kg</span>} aria-label="Weight" />);
-      expect(screen.getByTestId('after').parentElement).toHaveClass('pe-2');
+      expect(screen.getByTestId('after').parentElement).toHaveClass('wave:pe-2');
     });
 
     it('renders contentAfter as SlotObject', () => {
@@ -86,8 +86,13 @@ describe('Input', () => {
       const { container } = render(<Input aria-label="Price" contentBefore={<span>$</span>} />);
       const wrapper = container.firstElementChild;
       expect(wrapper?.tagName.toLowerCase()).toBe('span');
-      expect(wrapper).toHaveClass('focus-within:border-b-2', 'focus-within:border-b-primary');
-      expect(screen.getByRole('textbox', { name: 'Price' })).toHaveClass('focus:outline-hidden');
+      expect(wrapper).toHaveClass(
+        'wave:focus-within:border-b-2',
+        'wave:focus-within:border-b-primary',
+      );
+      expect(screen.getByRole('textbox', { name: 'Price' })).toHaveClass(
+        'wave:focus:outline-hidden',
+      );
     });
 
     it('puts className, style and hidden on the bordered wrapper; ref, id, aria-* and data-* on the input', () => {
@@ -134,8 +139,8 @@ describe('Input', () => {
       // ring below 3:1 (the disabled input never takes focus). tailwind-merge keeps both classes
       // (different variants); the variant wins while it matches.
       expect(screen.getByRole('textbox', { name: 'Price' }).parentElement).toHaveClass(
-        'opacity-50',
-        'has-focus-visible:opacity-100',
+        'wave:opacity-50',
+        'wave:has-focus-visible:opacity-100',
       );
       expect(screen.getByRole('textbox', { name: 'Weight' }).parentElement?.className).not.toMatch(
         /opacity/,
@@ -161,7 +166,7 @@ describe('Input', () => {
       for (const name of ['Search', 'Weight']) {
         const input = screen.getByRole('textbox', { name });
         expect(input.parentElement).toBe(container);
-        expect(input).toHaveClass('w-40', 'px-3');
+        expect(input).toHaveClass('w-40', 'wave:px-3');
       }
       expect(container.querySelector('span')).toBeNull();
     });
@@ -186,8 +191,8 @@ describe('Input', () => {
         />,
         { dir: 'rtl' },
       );
-      expect(screen.getByTestId('before').parentElement).toHaveClass('shrink-0', 'ps-2');
-      expect(screen.getByTestId('after').parentElement).toHaveClass('shrink-0', 'pe-2');
+      expect(screen.getByTestId('before').parentElement).toHaveClass('wave:shrink-0', 'wave:ps-2');
+      expect(screen.getByTestId('after').parentElement).toHaveClass('wave:shrink-0', 'wave:pe-2');
       const className = screen.getByTestId('before').parentElement?.parentElement?.className ?? '';
       expect(className).not.toMatch(/\b(pl|pr|ml|mr)-/);
     });
@@ -198,20 +203,23 @@ describe('Input', () => {
       render(<Input aria-label="Name" />);
       const input = screen.getByRole('textbox', { name: 'Name' });
       expect(input).toHaveClass(
-        'border-input',
-        'border-b-stroke-accessible',
-        'placeholder:text-muted-foreground',
-        'focus:outline-hidden',
-        'focus:border-b-primary',
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+        'wave:placeholder:text-muted-foreground',
+        'wave:focus:outline-hidden',
+        'wave:focus:border-b-primary',
       );
       expect(input.className).not.toMatch(/#[0-9a-f]{3,8}|outline-none/i);
     });
 
     it('uses the accessible stroke on the slot wrapper', () => {
       const { container } = render(<Input aria-label="Price" contentBefore="$" />);
-      expect(container.firstElementChild).toHaveClass('border-input', 'border-b-stroke-accessible');
+      expect(container.firstElementChild).toHaveClass(
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+      );
       expect(screen.getByRole('textbox', { name: 'Price' })).toHaveClass(
-        'placeholder:text-muted-foreground',
+        'wave:placeholder:text-muted-foreground',
       );
     });
   });
@@ -223,7 +231,7 @@ describe('Input', () => {
       const alert = screen.getByRole('alert');
       expect(alert).toHaveTextContent('Email is required');
       expect(alert.tagName.toLowerCase()).toBe('span');
-      expect(alert).toHaveClass('text-caption-1', 'text-error');
+      expect(alert).toHaveClass('wave:text-caption-1', 'wave:text-error');
       expect(input).toHaveAttribute('aria-invalid', 'true');
       expect(input).toHaveAccessibleDescription('Email is required');
       expect(input).toHaveAttribute('aria-errormessage', alert.id);
@@ -237,7 +245,7 @@ describe('Input', () => {
       render(<Input ref={ref} aria-label="Email" className="w-64" error="Required" />);
       const input = screen.getByRole('textbox', { name: 'Email' });
       expect(ref.current).toBe(input);
-      expect(input).toHaveClass('w-64', 'border-destructive');
+      expect(input).toHaveClass('w-64', 'wave:border-destructive');
       expect(screen.getByRole('alert')).not.toHaveClass('w-64');
     });
 
@@ -274,7 +282,7 @@ describe('Input', () => {
       );
       const alert = screen.getByRole('alert');
       expect(alert).toHaveAttribute('id', 'email-error');
-      expect(alert).toHaveClass('font-semibold', 'text-error');
+      expect(alert).toHaveClass('font-semibold', 'wave:text-error');
       expect(screen.getByRole('textbox', { name: 'Email' })).toHaveAttribute(
         'aria-describedby',
         'email-error',
@@ -285,7 +293,7 @@ describe('Input', () => {
       render(<Input aria-label="Email" error />);
       const input = screen.getByRole('textbox', { name: 'Email' });
       expect(input).toHaveAttribute('aria-invalid', 'true');
-      expect(input).toHaveClass('border-destructive');
+      expect(input).toHaveClass('wave:border-destructive');
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(input).not.toHaveAttribute('aria-describedby');
     });
@@ -303,12 +311,12 @@ describe('Input', () => {
           <Input aria-label="Spelling" aria-invalid="spelling" />
         </>,
       );
-      expect(screen.getByRole('textbox', { name: 'Plain' })).toHaveClass('border-destructive');
+      expect(screen.getByRole('textbox', { name: 'Plain' })).toHaveClass('wave:border-destructive');
       expect(screen.getByRole('textbox', { name: 'Slotted' }).parentElement).toHaveClass(
-        'border-destructive',
+        'wave:border-destructive',
       );
       expect(screen.getByRole('textbox', { name: 'Spelling' })).not.toHaveClass(
-        'border-destructive',
+        'wave:border-destructive',
       );
     });
 
@@ -327,9 +335,9 @@ describe('Input', () => {
       expect(price).toHaveAttribute('aria-invalid', 'false');
       expect(name).toHaveAttribute('aria-invalid', 'false');
       // The look matches the state assistive technology reports (valid).
-      expect(email).not.toHaveClass('border-destructive');
-      expect(price.parentElement).not.toHaveClass('border-destructive');
-      expect(name).not.toHaveClass('border-destructive');
+      expect(email).not.toHaveClass('wave:border-destructive');
+      expect(price.parentElement).not.toHaveClass('wave:border-destructive');
+      expect(name).not.toHaveClass('wave:border-destructive');
       // No error message is rendered, announced or referenced for a valid control.
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.queryByText('Checking')).not.toBeInTheDocument();
@@ -344,7 +352,7 @@ describe('Input', () => {
       render(<Input aria-label="Title" error="Check the spelling" aria-invalid="spelling" />);
       const input = screen.getByRole('textbox', { name: 'Title' });
       expect(input).toHaveAttribute('aria-invalid', 'spelling');
-      expect(input).toHaveClass('border-destructive');
+      expect(input).toHaveClass('wave:border-destructive');
       expect(input).toHaveAccessibleDescription('Check the spelling');
       expect(input).toHaveAttribute('aria-errormessage', screen.getByRole('alert').id);
     });
@@ -404,23 +412,23 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   it('renders the 0.7 classes and medium outline attributes by default', () => {
     render(<Input aria-label="Name" />);
     expect(field()).toHaveClass(
-      'h-8',
-      'w-full',
-      'px-3',
-      'text-body-1',
-      'rounded',
-      'border',
-      'border-input',
-      'border-b-stroke-accessible',
-      'bg-background',
+      'wave:h-8',
+      'wave:w-full',
+      'wave:px-3',
+      'wave:text-body-1',
+      'wave:rounded',
+      'wave:border',
+      'wave:border-input',
+      'wave:border-b-stroke-accessible',
+      'wave:bg-background',
     );
     expect(field()).toHaveAttribute('data-size', 'medium');
     expect(field()).toHaveAttribute('data-appearance', 'outline');
   });
 
   it.each([
-    ['small', ['h-6', 'px-2', 'text-caption-1']],
-    ['large', ['h-10', 'px-4', 'text-body-2']],
+    ['small', ['wave:h-6', 'wave:px-2', 'wave:text-caption-1']],
+    ['large', ['wave:h-10', 'wave:px-4', 'wave:text-body-2']],
   ] as const)('size="%s" renders its height, padding and type ramp', (size, classes) => {
     render(<Input aria-label="Name" size={size} />);
     expect(field()).toHaveClass(...classes);
@@ -428,9 +436,9 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   });
 
   it.each([
-    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+    ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+    ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
   ] as const)('appearance="%s" renders its classes', (appearance, classes) => {
     render(<Input aria-label="Name" appearance={appearance} />);
     expect(field()).toHaveClass(...classes);
@@ -458,8 +466,8 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   it('updates classes and attributes when size and appearance change (Review Focus 2)', () => {
     const { rerender } = render(<Input aria-label="Name" size="small" />);
     rerender(<Input aria-label="Name" size="large" appearance="filled-darker" />);
-    expect(field()).toHaveClass('h-10', 'bg-input-filled-darker');
-    expect(field()).not.toHaveClass('h-6', 'bg-background');
+    expect(field()).toHaveClass('wave:h-10', 'wave:bg-input-filled-darker');
+    expect(field()).not.toHaveClass('wave:h-6', 'wave:bg-background');
     expect(field()).toHaveAttribute('data-size', 'large');
     expect(field()).toHaveAttribute('data-appearance', 'filled-darker');
   });
@@ -468,7 +476,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     'an invalid %s field keeps the destructive border and the focus color on its bottom',
     (appearance) => {
       render(<Input aria-label="Name" appearance={appearance} error />);
-      expect(field()).toHaveClass('border-destructive', 'focus:border-b-primary');
+      expect(field()).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
     },
   );
 
@@ -479,8 +487,8 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
         errorId: FIELD_TEST_IDS.errorId,
       });
       expect(field(FIELD_TEST_TEXT.label)).toHaveClass(
-        'border-destructive',
-        'focus:border-b-primary',
+        'wave:border-destructive',
+        'wave:focus:border-b-primary',
       );
     },
   );
@@ -488,10 +496,10 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   it('with slots, the wrapper carries the size, the appearance and their attributes', () => {
     render(<Input aria-label="Name" size="large" appearance="filled-lighter" contentBefore="@" />);
     const wrapper = field().parentElement as HTMLElement;
-    expect(wrapper).toHaveClass('h-10', 'text-body-2', 'bg-input-filled-lighter');
+    expect(wrapper).toHaveClass('wave:h-10', 'wave:text-body-2', 'wave:bg-input-filled-lighter');
     expect(wrapper).toHaveAttribute('data-size', 'large');
     expect(wrapper).toHaveAttribute('data-appearance', 'filled-lighter');
-    expect(field()).toHaveClass('px-3', 'text-body-2');
+    expect(field()).toHaveClass('wave:px-3', 'wave:text-body-2');
     expect(field()).not.toHaveAttribute('data-size');
   });
 });
@@ -513,7 +521,7 @@ describe('htmlSize (Phase 4 D10), and no numeric size (removed in 1.0)', () => {
       );
       expect(field()).not.toHaveAttribute('size');
       expect(field()).toHaveAttribute('data-size', 'medium');
-      expect(field()).toHaveClass('h-8', 'px-3', 'text-body-1');
+      expect(field()).toHaveClass('wave:h-8', 'wave:px-3', 'wave:text-body-1');
       // Next to htmlSize, which alone reaches the native attribute.
       rerender(
         // @ts-expect-error -- a numeric `size` is removed in 1.0: use `htmlSize`
@@ -545,7 +553,7 @@ describe('htmlSize (Phase 4 D10), and no numeric size (removed in 1.0)', () => {
     expect(field()).not.toHaveAttribute('size');
     expect(field()).toHaveAttribute('data-size', 'medium');
     expect(field()).toHaveAttribute('data-appearance', 'outline');
-    expect(field()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input');
+    expect(field()).toHaveClass('wave:h-8', 'wave:px-3', 'wave:text-body-1', 'wave:border-input');
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -570,8 +578,8 @@ describe('Input — slotProps', () => {
       ),
     ).toBe(
       [
-        '<input aria-describedby="error-_R_0_" aria-errormessage="error-_R_0_" aria-invalid="true" aria-label="Name" class="wave-input wave-input__input h-8 w-full px-3 text-body-1 rounded border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 border-destructive" data-appearance="outline" data-size="medium" placeholder="p" style="width:10px">',
-        '<span class="wave-input__error-message mt-1 block text-caption-1 text-error" id="error-_R_0_" role="alert">Wrong',
+        '<input aria-describedby="error-_R_0_" aria-errormessage="error-_R_0_" aria-invalid="true" aria-label="Name" class="wave-input wave-input__input wave:h-8 wave:w-full wave:px-3 wave:text-body-1 wave:rounded wave:border wave:bg-background wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:border-destructive" data-appearance="outline" data-size="medium" placeholder="p" style="width:10px">',
+        '<span class="wave-input__error-message wave:mt-1 wave:block wave:text-caption-1 wave:text-error" id="error-_R_0_" role="alert">Wrong',
         '</span>',
       ].join(''),
     );
@@ -581,10 +589,10 @@ describe('Input — slotProps', () => {
       ),
     ).toBe(
       [
-        '<span class="wave-input inline-flex w-full items-center h-8 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground focus-within:border-b-2 focus-within:border-b-primary" data-appearance="outline" data-size="medium" style="width:10px">',
-        '<span class="wave-input__content-before shrink-0 ps-2">@',
+        '<span class="wave-input wave:inline-flex wave:w-full wave:items-center wave:h-8 wave:text-body-1 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:text-foreground wave:focus-within:border-b-2 wave:focus-within:border-b-primary" data-appearance="outline" data-size="medium" style="width:10px">',
+        '<span class="wave-input__content-before wave:shrink-0 wave:ps-2">@',
         '</span>',
-        '<input aria-label="Name" class="wave-input__input h-full w-full min-w-0 bg-transparent px-2 text-body-1 text-foreground placeholder:text-muted-foreground focus:outline-hidden disabled:cursor-not-allowed">',
+        '<input aria-label="Name" class="wave-input__input wave:h-full wave:w-full wave:min-w-0 wave:bg-transparent wave:px-2 wave:text-body-1 wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:disabled:cursor-not-allowed">',
         '</span>',
       ].join(''),
     );

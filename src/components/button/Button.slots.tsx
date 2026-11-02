@@ -96,7 +96,7 @@ export const MERGED_DISABLED_FOCUSABLE_PROPS = {
  * it shows its focus ring, which `opacity` would dim too.
  */
 export const mergedAriaDisabledClasses =
-  'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100';
+  'wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100';
 
 /**
  * `slot` as a slot object whose element also carries `className`: a variant's part class on the

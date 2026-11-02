@@ -128,33 +128,41 @@ describe('TimePicker', () => {
     it('gives the clear button a 24px target and pads the input logically (input-datetime#15)', () => {
       const { unmount } = render(<TimePicker aria-label="Time" defaultValue="09:00" clearable />);
       // Next to the expand button at the end.
-      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass('h-6', 'w-6', 'end-7');
-      expect(expandButton()).toHaveClass('h-6', 'w-6', 'end-1');
-      expect(combobox('Time')).toHaveClass('pe-14');
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass(
+        'wave:h-6',
+        'wave:w-6',
+        'wave:end-7',
+      );
+      expect(expandButton()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-1');
+      expect(combobox('Time')).toHaveClass('wave:pe-14');
       unmount();
       render(<TimePicker aria-label="Time" defaultValue="09:00" clearable expandIcon={false} />);
-      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass('h-6', 'w-6', 'end-1');
-      expect(combobox('Time')).toHaveClass('pe-8');
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass(
+        'wave:h-6',
+        'wave:w-6',
+        'wave:end-1',
+      );
+      expect(combobox('Time')).toHaveClass('wave:pe-8');
     });
 
     it('gives the clear button its own padding and background (C-NATIVE)', () => {
       render(<TimePicker aria-label="Time" defaultValue="09:00" clearable />);
       const clear = screen.getByRole('button', { name: 'Clear time' });
-      expect(clear).toHaveClass('p-0');
-      expect(clear).toHaveClass('bg-transparent');
+      expect(clear).toHaveClass('wave:p-0');
+      expect(clear).toHaveClass('wave:bg-transparent');
     });
 
     it('uses theme tokens and gates hover on the clear button (button-provider#3)', async () => {
       const user = userEvent.setup();
       render(<TimePicker aria-label="Time" defaultValue="09:00" clearable step={60} />);
       const clear = screen.getByRole('button', { name: 'Clear time' });
-      expect(clear).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-hover');
+      expect(clear).toHaveClass('wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover');
       await user.click(combobox('Time'));
       const listbox = screen.getByRole('listbox');
       for (const el of [clear, combobox('Time'), listbox, ...screen.getAllByRole('option')]) {
         expect(el.className).not.toMatch(RAW_COLOR_OR_ENABLED);
       }
-      expect(combobox('Time')).toHaveClass('focus:outline-hidden');
+      expect(combobox('Time')).toHaveClass('wave:focus:outline-hidden');
     });
 
     it('renders on the server with the label and a hidden inline list', () => {
@@ -214,19 +222,19 @@ describe('TimePicker', () => {
     });
 
     it('draws the destructive border while the input is invalid', () => {
-      const invalidClasses = ['border-destructive'];
+      const invalidClasses = ['wave:border-destructive'];
       const { unmount } = render(<TimePicker aria-label="Time" />);
-      expect(combobox('Time')).toHaveClass('border-input', 'border-b-stroke-accessible');
+      expect(combobox('Time')).toHaveClass('wave:border-input', 'wave:border-b-stroke-accessible');
       for (const name of invalidClasses) expect(combobox('Time')).not.toHaveClass(name);
       unmount();
 
       const field = renderWithFieldContext(<TimePicker />, { errorId: FIELD_TEST_IDS.errorId });
       expect(combobox(FIELD_TEST_TEXT.label)).toHaveClass(...invalidClasses);
-      expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass('border-input');
-      expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass('border-b-stroke-accessible');
+      expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass('wave:border-input');
+      expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass('wave:border-b-stroke-accessible');
       // Keeps the destructive border and shows the focus color on the focused bottom border
       // (Phase 4 D4).
-      expect(combobox(FIELD_TEST_TEXT.label)).toHaveClass('focus:border-b-primary');
+      expect(combobox(FIELD_TEST_TEXT.label)).toHaveClass('wave:focus:border-b-primary');
       field.rerender(<TimePicker aria-invalid={false} />);
       for (const name of invalidClasses) {
         expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass(name);
@@ -242,8 +250,8 @@ describe('TimePicker', () => {
         dir: 'rtl',
       });
       const clear = screen.getByRole('button', { name: 'Clear time' });
-      expect(clear).toHaveClass('end-7');
-      expect(expandButton()).toHaveClass('end-1');
+      expect(clear).toHaveClass('wave:end-7');
+      expect(expandButton()).toHaveClass('wave:end-1');
       for (const button of [clear, expandButton()]) {
         expect(button.className).not.toMatch(/\b(left|right)-/);
       }
@@ -1043,8 +1051,8 @@ describe('TimePicker', () => {
       render(<TimePicker aria-label="Time" defaultValue="09:00" clearable readOnly />);
       expect(screen.queryByRole('button', { name: 'Clear time' })).not.toBeInTheDocument();
       // Room for the (disabled) expand button only.
-      expect(combobox('Time')).not.toHaveClass('pe-14');
-      expect(combobox('Time')).toHaveClass('pe-8');
+      expect(combobox('Time')).not.toHaveClass('wave:pe-14');
+      expect(combobox('Time')).toHaveClass('wave:pe-8');
     });
 
     it('shows the controlled value again when the parent rejects the clear', async () => {
@@ -1166,10 +1174,13 @@ describe('TimePicker', () => {
       render(<TimePicker aria-label="Time" step={60} />);
       const glyph = () => expandButton().firstElementChild;
       expect(glyph()).toHaveAttribute('aria-hidden', 'true');
-      expect(glyph()).toHaveClass('transition-transform', 'motion-reduce:transition-none');
+      expect(glyph()).toHaveClass(
+        'wave:transition-transform',
+        'wave:motion-reduce:transition-none',
+      );
       expect(glyph()?.querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
       await user.click(expandButton());
-      expect(glyph()).toHaveClass('rotate-180');
+      expect(glyph()).toHaveClass('wave:rotate-180');
     });
 
     it('keeps the chevron with expandIcon null and hides the button with false', () => {
@@ -1238,7 +1249,11 @@ describe('TimePicker', () => {
       expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
       expect(combobox('Time')).toHaveAccessibleDescription(INVALID_12H);
       expect(screen.getByRole('alert')).toHaveTextContent(INVALID_12H);
-      expect(screen.getByRole('alert')).toHaveClass('mt-1', 'text-caption-1', 'text-error');
+      expect(screen.getByRole('alert')).toHaveClass(
+        'wave:mt-1',
+        'wave:text-caption-1',
+        'wave:text-error',
+      );
       expect(onInvalidInput.mock.calls).toEqual([['soon', 'unparseable']]);
       expect(onValueChange).not.toHaveBeenCalled();
       expect(onSubmit).not.toHaveBeenCalled();
@@ -1813,17 +1828,17 @@ describe('TimePicker', () => {
       expect(selected).not.toHaveAttribute('data-active');
       expect(selected.querySelector('[data-wave-icon="check"]')).not.toBeNull();
       expect(selected).toHaveClass(
-        'data-[selected]:font-semibold',
-        'data-[selected]:bg-subtle-selected',
+        'wave:data-[selected]:font-semibold',
+        'wave:data-[selected]:bg-subtle-selected',
       );
       expect(active).toHaveAttribute('data-active');
       expect(active).toHaveAttribute('aria-selected', 'false');
       expect(active.querySelector('[data-wave-icon="check"]')).toBeNull();
       expect(active).toHaveClass(
-        'data-[active]:bg-subtle-hover',
-        'data-[active]:outline-2',
-        'data-[active]:outline-ring',
-        'data-[active]:-outline-offset-2',
+        'wave:data-[active]:bg-subtle-hover',
+        'wave:data-[active]:outline-2',
+        'wave:data-[active]:outline-ring',
+        'wave:data-[active]:-outline-offset-2',
       );
     });
 
@@ -2144,40 +2159,50 @@ describe('TimePicker', () => {
 
     it('keeps the 0.7 classes and renders the medium outline attributes', () => {
       renderPicker();
-      expect(input()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input', 'pe-14');
-      expect(expand()).toHaveClass('h-6', 'w-6', 'end-1');
-      expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+      expect(input()).toHaveClass(
+        'wave:h-8',
+        'wave:px-3',
+        'wave:text-body-1',
+        'wave:border-input',
+        'wave:pe-14',
+      );
+      expect(expand()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-1');
+      expect(clear()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-7');
       expect(root()).toHaveAttribute('data-size', 'medium');
       expect(root()).toHaveAttribute('data-appearance', 'outline');
     });
 
     it('small: 24px field, 20px buttons with hit layers at end-1 and end-7, pe-13', () => {
       renderPicker({ size: 'small' });
-      expect(input()).toHaveClass('h-6', 'px-2', 'text-caption-1', 'pe-13');
-      expect(expand()).toHaveClass('size-5', 'before:-inset-0.5', 'end-1');
-      expect(clear()).toHaveClass('size-5', 'before:-inset-0.5', 'end-7');
+      expect(input()).toHaveClass('wave:h-6', 'wave:px-2', 'wave:text-caption-1', 'wave:pe-13');
+      expect(expand()).toHaveClass('wave:size-5', 'wave:before:-inset-0.5', 'wave:end-1');
+      expect(clear()).toHaveClass('wave:size-5', 'wave:before:-inset-0.5', 'wave:end-7');
     });
 
     it('large: 40px field, 32px buttons at end-1 and end-9, pe-18', () => {
       renderPicker({ size: 'large' });
-      expect(input()).toHaveClass('h-10', 'px-4', 'text-body-2', 'pe-18');
-      expect(expand()).toHaveClass('size-8', 'end-1');
-      expect(clear()).toHaveClass('size-8', 'end-9');
+      expect(input()).toHaveClass('wave:h-10', 'wave:px-4', 'wave:text-body-2', 'wave:pe-18');
+      expect(expand()).toHaveClass('wave:size-8', 'wave:end-1');
+      expect(clear()).toHaveClass('wave:size-8', 'wave:end-9');
     });
 
     it('an appearance styles the input; the time list does not change', async () => {
       const user = userEvent.setup();
       renderPicker({ appearance: 'filled-darker', size: 'large' });
-      expect(input()).toHaveClass('bg-input-filled-darker');
+      expect(input()).toHaveClass('wave:bg-input-filled-darker');
       await user.click(expand());
-      expect(screen.getAllByRole('option')[0]).toHaveClass('px-3', 'py-1.5', 'text-body-1');
+      expect(screen.getAllByRole('option')[0]).toHaveClass(
+        'wave:px-3',
+        'wave:py-1.5',
+        'wave:text-body-1',
+      );
     });
 
     it('takes the Field size', () => {
       renderWithFieldContext(<TimePicker />, { size: 'large' });
       const el = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
       expect(el.closest('[data-size]')).toHaveAttribute('data-size', 'large');
-      expect(el).toHaveClass('h-10', 'text-body-2');
+      expect(el).toHaveClass('wave:h-10', 'wave:text-body-2');
     });
 
     // Spec cases added beyond the brief (§2.1's Tests paragraph, binding via §2.2's "as §2.1 for
@@ -2187,9 +2212,9 @@ describe('TimePicker', () => {
     // widths per size for both buttons; the expandIcon rule (Phase 1 D21) at every size; RTL.
 
     it.each([
-      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-      ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+      ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+      ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+      ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
     ] as const)(
       'appearance="%s" renders its classes and data-appearance',
       (appearance, classes) => {
@@ -2226,7 +2251,7 @@ describe('TimePicker', () => {
           errorId: FIELD_TEST_IDS.errorId,
         });
         const byName = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
-        expect(byName).toHaveClass('border-destructive', 'focus:border-b-primary');
+        expect(byName).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
       },
     );
 
@@ -2239,7 +2264,7 @@ describe('TimePicker', () => {
         await user.type(input(), 'zz');
         await user.keyboard('{Enter}');
         expect(input()).toHaveAttribute('aria-invalid', 'true');
-        expect(input()).toHaveClass('border-destructive', 'focus:border-b-primary');
+        expect(input()).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
       },
     );
 
@@ -2289,8 +2314,8 @@ describe('TimePicker', () => {
         <TimePicker aria-label="Start" size="large" clearable defaultValue="09:30" />,
         { dir: 'rtl' },
       );
-      expect(screen.getByRole('button', { name: 'Show times' })).toHaveClass('end-1');
-      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass('end-9');
+      expect(screen.getByRole('button', { name: 'Show times' })).toHaveClass('wave:end-1');
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass('wave:end-9');
     });
   });
 });
@@ -2508,17 +2533,17 @@ describe('TimePicker — slotProps', () => {
       ),
     ).toBe(
       [
-        '<input aria-activedescendant="timepicker-listbox-_id0_-opt-0" aria-autocomplete="list" aria-controls="timepicker-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Time" autocomplete="off" class="wave-time-picker__input h-8 w-full px-3 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 pe-14" placeholder="Select a time" role="combobox" type="text" value="9:30 AM">',
-        '<button aria-label="Clear time" class="wave-time-picker__clear-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
-        '<button aria-controls="timepicker-listbox-_id0_" aria-expanded="true" aria-label="Show times" class="wave-time-picker__expand-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
-        '<div class="wave-time-picker__surface flex flex-col overflow-hidden rounded border border-border bg-background shadow-8" data-align="start" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
-        '<ul aria-label="Time" class="wave-time-picker__listbox max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden" id="timepicker-listbox-_id0_" role="listbox" tabindex="-1">',
-        '<li aria-selected="false" class="wave-time-picker__option flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold" id="timepicker-listbox-_id0_-opt-1" role="option">',
-        '<li aria-selected="true" class="wave-time-picker__option flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold forced-colors:outline-2 forced-colors:outline-[Highlight] forced-colors:-outline-offset-2" data-active="" data-selected="" id="timepicker-listbox-_id0_-opt-0" role="option">',
-        '<li aria-selected="false" class="wave-time-picker__option flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold" id="timepicker-listbox-_id0_-opt-2" role="option">',
-        '<span class="wave-time-picker__check-icon flex h-4 w-4 shrink-0 items-center justify-center">',
-        '<span class="wave-time-picker__check-icon flex h-4 w-4 shrink-0 items-center justify-center">',
-        '<span class="wave-time-picker__check-icon flex h-4 w-4 shrink-0 items-center justify-center">',
+        '<input aria-activedescendant="timepicker-listbox-_id0_-opt-0" aria-autocomplete="list" aria-controls="timepicker-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Time" autocomplete="off" class="wave-time-picker__input wave:h-8 wave:w-full wave:px-3 wave:text-body-1 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:pe-14" placeholder="Select a time" role="combobox" type="text" value="9:30 AM">',
+        '<button aria-label="Clear time" class="wave-time-picker__clear-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-7 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
+        '<button aria-controls="timepicker-listbox-_id0_" aria-expanded="true" aria-label="Show times" class="wave-time-picker__expand-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-1 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+        '<div class="wave-time-picker__surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8" data-align="start" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<ul aria-label="Time" class="wave-time-picker__listbox wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden" id="timepicker-listbox-_id0_" role="listbox" tabindex="-1">',
+        '<li aria-selected="false" class="wave-time-picker__option wave:flex wave:cursor-pointer wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground wave:hover:bg-subtle-hover wave:data-[active]:bg-subtle-hover wave:data-[active]:outline-2 wave:data-[active]:outline-ring wave:data-[active]:-outline-offset-2 wave:data-[selected]:bg-subtle-selected wave:data-[selected]:font-semibold" id="timepicker-listbox-_id0_-opt-1" role="option">',
+        '<li aria-selected="true" class="wave-time-picker__option wave:flex wave:cursor-pointer wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground wave:hover:bg-subtle-hover wave:data-[active]:bg-subtle-hover wave:data-[active]:outline-2 wave:data-[active]:outline-ring wave:data-[active]:-outline-offset-2 wave:data-[selected]:bg-subtle-selected wave:data-[selected]:font-semibold wave:forced-colors:outline-2 wave:forced-colors:outline-[Highlight] wave:forced-colors:-outline-offset-2" data-active="" data-selected="" id="timepicker-listbox-_id0_-opt-0" role="option">',
+        '<li aria-selected="false" class="wave-time-picker__option wave:flex wave:cursor-pointer wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground wave:hover:bg-subtle-hover wave:data-[active]:bg-subtle-hover wave:data-[active]:outline-2 wave:data-[active]:outline-ring wave:data-[active]:-outline-offset-2 wave:data-[selected]:bg-subtle-selected wave:data-[selected]:font-semibold" id="timepicker-listbox-_id0_-opt-2" role="option">',
+        '<span class="wave-time-picker__check-icon wave:flex wave:h-4 wave:w-4 wave:shrink-0 wave:items-center wave:justify-center">',
+        '<span class="wave-time-picker__check-icon wave:flex wave:h-4 wave:w-4 wave:shrink-0 wave:items-center wave:justify-center">',
+        '<span class="wave-time-picker__check-icon wave:flex wave:h-4 wave:w-4 wave:shrink-0 wave:items-center wave:justify-center">',
       ].join('\n'),
     );
     unmount();
@@ -2527,8 +2552,8 @@ describe('TimePicker — slotProps', () => {
     await typeRejected(false);
     expect(openingTags(...[surface, timePickerClassNames.emptyMessage].flatMap(all))).toBe(
       [
-        '<div class="wave-time-picker__surface flex flex-col overflow-hidden rounded border border-border bg-background shadow-8" data-align="start" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
-        '<div aria-hidden="true" class="wave-time-picker__empty-message px-3 py-1.5 text-body-1 text-muted-foreground">',
+        '<div class="wave-time-picker__surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8" data-align="start" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<div aria-hidden="true" class="wave-time-picker__empty-message wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground">',
       ].join('\n'),
     );
     second.unmount();
@@ -2537,9 +2562,9 @@ describe('TimePicker — slotProps', () => {
     await typeRejected(true);
     expect(openingTags(...[input, timePickerClassNames.errorMessage, listbox].flatMap(all))).toBe(
       [
-        '<input aria-autocomplete="list" aria-controls="timepicker-listbox-_id0_" aria-describedby="timepicker-error-_id1_" aria-expanded="false" aria-haspopup="listbox" aria-invalid="true" aria-label="Time" autocomplete="off" class="wave-time-picker__input h-8 w-full px-3 text-body-1 rounded border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 border-destructive pe-8" placeholder="Select a time" role="combobox" type="text" value="zz">',
-        '<p class="wave-time-picker__error-message mt-1 text-caption-1 text-error" id="timepicker-error-_id1_" role="alert">',
-        '<ul aria-label="Time" class="wave-time-picker__listbox max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden" hidden="" id="timepicker-listbox-_id0_" role="listbox" tabindex="-1">',
+        '<input aria-autocomplete="list" aria-controls="timepicker-listbox-_id0_" aria-describedby="timepicker-error-_id1_" aria-expanded="false" aria-haspopup="listbox" aria-invalid="true" aria-label="Time" autocomplete="off" class="wave-time-picker__input wave:h-8 wave:w-full wave:px-3 wave:text-body-1 wave:rounded wave:border wave:bg-background wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:border-destructive wave:pe-8" placeholder="Select a time" role="combobox" type="text" value="zz">',
+        '<p class="wave-time-picker__error-message wave:mt-1 wave:text-caption-1 wave:text-error" id="timepicker-error-_id1_" role="alert">',
+        '<ul aria-label="Time" class="wave-time-picker__listbox wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden" hidden="" id="timepicker-listbox-_id0_" role="listbox" tabindex="-1">',
       ].join('\n'),
     );
   });
@@ -3081,7 +3106,7 @@ describe('TimePicker — slotProps', () => {
     it('lets your class replace a conflicting class of the root', () => {
       render(<TimePicker aria-label="Time" slotProps={{ root: { className: 'flex-row' } }} />);
       expect(root()).toHaveClass('flex-row');
-      expect(root()).not.toHaveClass('flex-col');
+      expect(root()).not.toHaveClass('wave:flex-col');
     });
 
     it("keeps the props you give the TimePicker over the part's", () => {

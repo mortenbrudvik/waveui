@@ -114,7 +114,7 @@ describe('Nav', () => {
         props: { defaultValue: 'intro', defaultOpenCategories: [] },
       },
     ],
-    conflictingClass: { className: 'w-72', overrides: 'w-60' },
+    conflictingClass: { className: 'w-72', overrides: 'wave:w-60' },
   });
 
   testCompoundExposure(Nav, [
@@ -670,10 +670,10 @@ describe('Nav', () => {
     it('gives the marked toggle the selected look of an item, with logical classes', () => {
       render(<SampleNav defaultValue="api" defaultOpenCategories={[]} />);
       expect(toggle()).toHaveClass(
-        'data-[contains-current]:bg-subtle-selected',
-        'data-[contains-current]:text-primary',
-        'data-[contains-current]:border-s-2',
-        'data-[contains-current]:border-s-primary',
+        'wave:data-[contains-current]:bg-subtle-selected',
+        'wave:data-[contains-current]:text-primary',
+        'wave:data-[contains-current]:border-s-2',
+        'wave:data-[contains-current]:border-s-primary',
       );
       expect(toggle().className).not.toMatch(/border-(l|r)\b|border-(l|r)-/);
     });
@@ -1360,7 +1360,7 @@ describe('Nav', () => {
       // The current value belongs to the app: disabling the entry does not hide where the user is.
       expect(button('Home')).toBeDisabled();
       expect(button('Home')).toHaveAttribute('aria-current', 'page');
-      expect(button('Home')).toHaveClass('bg-subtle-selected', 'border-s-primary');
+      expect(button('Home')).toHaveClass('wave:bg-subtle-selected', 'wave:border-s-primary');
       await user.click(button('Home'));
       expect(onValueChange).not.toHaveBeenCalled();
       expect(screen.getByRole('link', { name: 'Docs' })).not.toHaveAttribute('aria-current');
@@ -1409,9 +1409,9 @@ describe('Nav', () => {
       render(<SampleNav defaultOpenCategories={['docs']} />);
       for (const name of ['Home', 'Docs', 'Introduction']) {
         expect(button(name)).toHaveClass(
-          'focus-visible:outline-2',
-          'focus-visible:outline-ring',
-          'focus-visible:-outline-offset-2',
+          'wave:focus-visible:outline-2',
+          'wave:focus-visible:outline-ring',
+          'wave:focus-visible:-outline-offset-2',
         );
       }
     });
@@ -1425,39 +1425,46 @@ describe('Nav', () => {
         </Nav>,
       );
       expect(screen.getByRole('link', { name: 'Home' })).toHaveClass(
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
       );
     });
 
     it('gates the category toggle hover like the items (C-TOKENS)', () => {
       render(<SampleNav />);
-      expect(toggle()).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-hover');
-      expect(toggle()).not.toHaveClass('hover:bg-subtle-hover');
+      expect(toggle()).toHaveClass('wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover');
+      expect(toggle()).not.toHaveClass('wave:hover:bg-subtle-hover');
     });
 
     it('uses a token background and a logical indicator for the selected item', () => {
       render(<SampleNav defaultValue="home" />);
-      expect(button('Home')).toHaveClass('bg-subtle-selected', 'border-s-2', 'border-s-primary');
+      expect(button('Home')).toHaveClass(
+        'wave:bg-subtle-selected',
+        'wave:border-s-2',
+        'wave:border-s-primary',
+      );
       expect(button('Home').className).not.toMatch(/border-l|#[0-9a-f]{3,6}/i);
     });
 
     it('reduces the chevron and color transitions for reduced motion (C-MOTION)', () => {
       render(<SampleNav />);
-      expect(button('Home')).toHaveClass('motion-reduce:transition-none');
+      expect(button('Home')).toHaveClass('wave:motion-reduce:transition-none');
       const chevron = toggle().querySelector('svg');
-      expect(chevron).toHaveClass('transition-transform', 'motion-reduce:transition-none');
+      expect(chevron).toHaveClass(
+        'wave:transition-transform',
+        'wave:motion-reduce:transition-none',
+      );
     });
 
     it('RTL: uses logical utilities for the indicator, indent, alignment and border', () => {
       renderWithProviders(<SampleNav defaultValue="intro" />, { dir: 'rtl' });
       const nav = screen.getByRole('navigation');
       expect(nav.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-      expect(nav).toHaveClass('border-e');
-      expect(nav).not.toHaveClass('border-r');
+      expect(nav).toHaveClass('wave:border-e');
+      expect(nav).not.toHaveClass('wave:border-r');
       const intro = button('Introduction');
-      expect(intro).toHaveClass('ps-11', 'pe-4', 'text-start');
+      expect(intro).toHaveClass('wave:ps-11', 'wave:pe-4', 'wave:text-start');
       expect(intro.className).not.toMatch(/\b(pl|pr)-/);
-      expect(button('Home')).toHaveClass('text-start');
+      expect(button('Home')).toHaveClass('wave:text-start');
     });
 
     it('icon slot is aria-hidden and accepts a slot object with className (C-SLOTS)', () => {
@@ -1521,7 +1528,7 @@ describe('Nav', () => {
         wrapper: NavWrapper,
         defaultProps: { value: 'home', children: 'Home' },
         a11yVariants: [{ name: 'disabled', props: { disabled: true } }],
-        conflictingClass: { className: 'px-8', overrides: 'px-4' },
+        conflictingClass: { className: 'px-8', overrides: 'wave:px-4' },
       });
     });
 
@@ -1540,7 +1547,7 @@ describe('Nav', () => {
         displayName: 'NavSubItem',
         wrapper: NavWrapper,
         defaultProps: { value: 'intro', children: 'Introduction' },
-        conflictingClass: { className: 'py-3', overrides: 'py-1.5' },
+        conflictingClass: { className: 'py-3', overrides: 'wave:py-1.5' },
       });
     });
 
@@ -2134,21 +2141,21 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
   };
 
   const ACTIONS_CLASSES =
-    'flex shrink-0 items-center gap-1 pe-2 *:opacity-0 group-hover/nav-row:*:opacity-100 group-focus-within/nav-row:*:opacity-100 forced-colors:*:opacity-100 [@media(hover:none)]:*:opacity-100 *:has-[[aria-pressed=true]]:opacity-100 *:has-[[aria-expanded=true]]:opacity-100 [&amp;>[aria-pressed=true]]:opacity-100 [&amp;>[aria-expanded=true]]:opacity-100 *:transition *:duration-wave-fast *:ease-wave-easy-ease motion-reduce:*:transition-none';
+    'wave:flex wave:shrink-0 wave:items-center wave:gap-1 wave:pe-2 wave:*:opacity-0 wave:group-hover/nav-row:*:opacity-100 wave:group-focus-within/nav-row:*:opacity-100 wave:forced-colors:*:opacity-100 wave:[@media(hover:none)]:*:opacity-100 wave:*:has-[[aria-pressed=true]]:opacity-100 wave:*:has-[[aria-expanded=true]]:opacity-100 wave:[&amp;>[aria-pressed=true]]:opacity-100 wave:[&amp;>[aria-expanded=true]]:opacity-100 wave:*:transition wave:*:duration-wave-fast wave:*:ease-wave-easy-ease wave:motion-reduce:*:transition-none';
   const BUTTON_CLASSES =
-    'flex w-full items-center gap-2 px-4 py-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover transition-colors motion-reduce:transition-none data-[contains-current]:bg-subtle-selected data-[contains-current]:text-primary data-[contains-current]:border-s-2 data-[contains-current]:border-s-primary focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
+    'wave:flex wave:w-full wave:items-center wave:gap-2 wave:px-4 wave:py-2 wave:text-body-1 wave:font-semibold wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none wave:data-[contains-current]:bg-subtle-selected wave:data-[contains-current]:text-primary wave:data-[contains-current]:border-s-2 wave:data-[contains-current]:border-s-primary wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring';
   // Captured from 73e9b81's dist (client and server agree).
   const BASE_PINS = [
-    '<ul class="wave-nav__list m-0 list-none p-0">',
-    '<li class="wave-nav-item__list-item group/nav-row flex items-center transition-colors motion-reduce:transition-none bg-subtle-selected border-s-2 border-s-primary">',
-    '<span class="wave-nav-item__content flex-1 text-start">',
+    '<ul class="wave-nav__list wave:m-0 wave:list-none wave:p-0">',
+    '<li class="wave-nav-item__list-item wave:group/nav-row wave:flex wave:items-center wave:transition-colors wave:motion-reduce:transition-none wave:bg-subtle-selected wave:border-s-2 wave:border-s-primary">',
+    '<span class="wave-nav-item__content wave:flex-1 wave:text-start">',
     `<span aria-labelledby="wave-nav-item-_id0_" class="wave-nav-item__actions ${ACTIONS_CLASSES}" data-wave-nav-actions="" role="group">`,
     '<li class="wave-nav-item__list-item">',
-    '<span class="wave-nav-item__content flex-1 text-start">',
+    '<span class="wave-nav-item__content wave:flex-1 wave:text-start">',
     `<button aria-controls="wave-nav-category-_id1_" aria-expanded="true" class="wave-nav-category__button ${BUTTON_CLASSES}" type="button">`,
-    '<span class="wave-nav-category__label flex-1 text-start">',
-    '<ul class="wave-nav-category__list m-0 list-none p-0" id="wave-nav-category-_id1_">',
-    '<li class="wave-nav-sub-item__list-item group/nav-row flex items-center transition-colors motion-reduce:transition-none hover:bg-subtle-hover">',
+    '<span class="wave-nav-category__label wave:flex-1 wave:text-start">',
+    '<ul class="wave-nav-category__list wave:m-0 wave:list-none wave:p-0" id="wave-nav-category-_id1_">',
+    '<li class="wave-nav-sub-item__list-item wave:group/nav-row wave:flex wave:items-center wave:transition-colors wave:motion-reduce:transition-none wave:hover:bg-subtle-hover">',
     `<span aria-labelledby="wave-nav-item-_id2_" class="wave-nav-sub-item__actions ${ACTIONS_CLASSES}" data-wave-nav-actions="" role="group">`,
     '<li class="wave-nav-sub-item__list-item">',
   ].join('\n');
@@ -2293,15 +2300,15 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     );
     const parts = partsOf();
     for (const [name, mine, theirs] of [
-      ['navList', 'p-2', 'p-0'],
-      ['home', 'items-start', 'items-center'],
-      ['homeContent', 'flex-none', 'flex-1'],
-      ['homeActions', 'gap-2', 'gap-1'],
-      ['button', 'px-6', 'px-4'],
-      ['label', 'text-end', 'text-start'],
-      ['list', 'p-1', 'p-0'],
-      ['intro', 'items-end', 'items-center'],
-      ['introActions', 'gap-3', 'gap-1'],
+      ['navList', 'p-2', 'wave:p-0'],
+      ['home', 'items-start', 'wave:items-center'],
+      ['homeContent', 'flex-none', 'wave:flex-1'],
+      ['homeActions', 'gap-2', 'wave:gap-1'],
+      ['button', 'px-6', 'wave:px-4'],
+      ['label', 'text-end', 'wave:text-start'],
+      ['list', 'p-1', 'wave:p-0'],
+      ['intro', 'items-end', 'wave:items-center'],
+      ['introActions', 'gap-3', 'wave:gap-1'],
     ] as const) {
       expect(parts[name]).toHaveClass(mine);
       expect(parts[name]).not.toHaveClass(theirs);

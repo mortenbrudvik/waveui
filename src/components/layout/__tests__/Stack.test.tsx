@@ -16,7 +16,7 @@ describe('Stack', () => {
     displayName: 'Stack',
     polymorphic: true,
     defaultProps: { children: <p>Stack item</p> },
-    conflictingClass: { className: 'gap-8', overrides: 'gap-3' },
+    conflictingClass: { className: 'gap-8', overrides: 'wave:gap-3' },
   });
 
   it('renders without crashing', () => {
@@ -32,9 +32,9 @@ describe('Stack', () => {
   it('renders as vertical flex-col by default (exact tokens, feedback-navigation#21)', () => {
     render(<Stack data-testid="stack">Content</Stack>);
     const el = screen.getByTestId('stack');
-    expect(el).toHaveClass('flex', 'flex-col');
-    expect(el).not.toHaveClass('inline-flex');
-    expect(el).not.toHaveClass('flex-row');
+    expect(el).toHaveClass('wave:flex', 'wave:flex-col');
+    expect(el).not.toHaveClass('wave:inline-flex');
+    expect(el).not.toHaveClass('wave:flex-row');
   });
 
   it('renders as horizontal flex-row when orientation is horizontal', () => {
@@ -44,8 +44,8 @@ describe('Stack', () => {
       </Stack>,
     );
     const el = screen.getByTestId('stack');
-    expect(el).toHaveClass('flex-row');
-    expect(el).not.toHaveClass('flex-col');
+    expect(el).toHaveClass('wave:flex-row');
+    expect(el).not.toHaveClass('wave:flex-col');
   });
 
   describe('the 0.4 `direction` is removed in 1.0 (layout#16)', () => {
@@ -64,8 +64,8 @@ describe('Stack', () => {
         </Stack>,
       );
       const el = screen.getByTestId('stack');
-      expect(el).toHaveClass('flex-col');
-      expect(el).not.toHaveClass('flex-row');
+      expect(el).toHaveClass('wave:flex-col');
+      expect(el).not.toHaveClass('wave:flex-row');
       expect(el).toHaveAttribute('direction', 'horizontal');
       expect(warn).not.toHaveBeenCalled();
       expect(error).not.toHaveBeenCalled();
@@ -80,15 +80,15 @@ describe('Stack', () => {
 
   it('applies default md gap', () => {
     render(<Stack data-testid="stack">Content</Stack>);
-    expect(screen.getByTestId('stack')).toHaveClass('gap-3');
+    expect(screen.getByTestId('stack')).toHaveClass('wave:gap-3');
   });
 
   it.each([
-    ['none', 'gap-0'],
-    ['xs', 'gap-1'],
-    ['sm', 'gap-2'],
-    ['lg', 'gap-4'],
-    ['xl', 'gap-6'],
+    ['none', 'wave:gap-0'],
+    ['xs', 'wave:gap-1'],
+    ['sm', 'wave:gap-2'],
+    ['lg', 'wave:gap-4'],
+    ['xl', 'wave:gap-6'],
   ] as const)('applies %s gap', (gap, expected) => {
     render(
       <Stack gap={gap} data-testid="stack">
@@ -97,7 +97,7 @@ describe('Stack', () => {
     );
     const el = screen.getByTestId('stack');
     expect(el).toHaveClass(expected);
-    expect(el).not.toHaveClass('gap-3');
+    expect(el).not.toHaveClass('wave:gap-3');
   });
 
   it('applies align prop', () => {
@@ -106,7 +106,7 @@ describe('Stack', () => {
         Content
       </Stack>,
     );
-    expect(screen.getByTestId('stack')).toHaveClass('items-center');
+    expect(screen.getByTestId('stack')).toHaveClass('wave:items-center');
   });
 
   it('applies justify prop', () => {
@@ -115,7 +115,7 @@ describe('Stack', () => {
         Content
       </Stack>,
     );
-    expect(screen.getByTestId('stack')).toHaveClass('justify-between');
+    expect(screen.getByTestId('stack')).toHaveClass('wave:justify-between');
   });
 
   it('applies wrap class when wrap is true', () => {
@@ -124,12 +124,12 @@ describe('Stack', () => {
         Content
       </Stack>,
     );
-    expect(screen.getByTestId('stack')).toHaveClass('flex-wrap');
+    expect(screen.getByTestId('stack')).toHaveClass('wave:flex-wrap');
   });
 
   it('does not apply wrap class when wrap is false', () => {
     render(<Stack data-testid="stack">Content</Stack>);
-    expect(screen.getByTestId('stack')).not.toHaveClass('flex-wrap');
+    expect(screen.getByTestId('stack')).not.toHaveClass('wave:flex-wrap');
   });
 
   it('applies inline-flex when inline is true', () => {
@@ -139,8 +139,8 @@ describe('Stack', () => {
       </Stack>,
     );
     const el = screen.getByTestId('stack');
-    expect(el).toHaveClass('inline-flex');
-    expect(el).not.toHaveClass('flex');
+    expect(el).toHaveClass('wave:inline-flex');
+    expect(el).not.toHaveClass('wave:flex');
   });
 
   it('renders as custom element via as prop', () => {

@@ -322,7 +322,7 @@ describe('ColorPicker parts (D21)', () => {
         </ColorPicker>,
       );
       const swatches = screen.getByRole('radiogroup', { name: 'Brand colors' });
-      expect(swatches.querySelector('[role="radio"]')).toHaveClass('w-10', 'h-10');
+      expect(swatches.querySelector('[role="radio"]')).toHaveClass('wave:w-10', 'wave:h-10');
       rerender(
         <ColorPicker aria-label="Accent" presets={[]}>
           <ColorPicker.Swatches />
@@ -348,8 +348,8 @@ describe('ColorPicker parts (D21)', () => {
       const preview = container.querySelector<HTMLElement>('[data-color-preview]') as HTMLElement;
       expect(preview).toHaveClass(
         colorPickerPreviewClassNames.root,
-        'rounded-none',
-        'forced-colors:forced-color-adjust-none',
+        'wave:rounded-none',
+        'wave:forced-colors:forced-color-adjust-none',
       );
       expect(preview).toHaveAttribute('aria-hidden', 'true');
       expect(preview).toHaveStyle({ backgroundColor: 'rgba(15, 108, 189, 0.5)' });
@@ -384,9 +384,9 @@ describe('ColorPicker.HexField — slotProps', () => {
     };
     expect(tagsOf(inPicker(<ColorPicker.HexField />))).toBe(
       [
-        '<label class="wave-color-picker-hex-field flex min-w-0 flex-col gap-1">',
-        '<span class="wave-color-picker-hex-field__label text-caption-1 text-muted-foreground">',
-        '<input aria-label="Hex color value" autocomplete="off" class="wave-color-picker-hex-field__input w-24 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1 text-body-1 text-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary" maxlength="9" spellcheck="false" type="text" value="#0f6cbd">',
+        '<label class="wave-color-picker-hex-field wave:flex wave:min-w-0 wave:flex-col wave:gap-1">',
+        '<span class="wave-color-picker-hex-field__label wave:text-caption-1 wave:text-muted-foreground">',
+        '<input aria-label="Hex color value" autocomplete="off" class="wave-color-picker-hex-field__input wave:w-24 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:px-2 wave:py-1 wave:text-body-1 wave:text-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary" maxlength="9" spellcheck="false" type="text" value="#0f6cbd">',
       ].join('\n'),
     );
     expect(
@@ -411,9 +411,9 @@ describe('ColorPicker.HexField — slotProps', () => {
       ),
     ).toBe(
       [
-        '<label class="wave-color-picker-hex-field flex min-w-0 flex-col gap-1">',
-        '<span class="wave-color-picker-hex-field__label text-caption-1 text-muted-foreground">',
-        '<input aria-describedby="err own-hint" aria-details="details" aria-errormessage="err" aria-invalid="true" aria-labelledby="own-label" aria-required="true" autocapitalize="off" autocomplete="off" autocorrect="off" autofocus="" class="wave-color-picker-hex-field__input w-24 rounded border bg-background px-2 py-1 text-body-1 text-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary border-destructive" enterkeyhint="done" id="hex" inputmode="text" maxlength="9" spellcheck="true" tabindex="2" type="text" value="#0f6cbd">',
+        '<label class="wave-color-picker-hex-field wave:flex wave:min-w-0 wave:flex-col wave:gap-1">',
+        '<span class="wave-color-picker-hex-field__label wave:text-caption-1 wave:text-muted-foreground">',
+        '<input aria-describedby="err own-hint" aria-details="details" aria-errormessage="err" aria-invalid="true" aria-labelledby="own-label" aria-required="true" autocapitalize="off" autocomplete="off" autocorrect="off" autofocus="" class="wave-color-picker-hex-field__input wave:w-24 wave:rounded wave:border wave:bg-background wave:px-2 wave:py-1 wave:text-body-1 wave:text-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:border-destructive" enterkeyhint="done" id="hex" inputmode="text" maxlength="9" spellcheck="true" tabindex="2" type="text" value="#0f6cbd">',
       ].join('\n'),
     );
   });
@@ -424,10 +424,10 @@ describe('ColorPicker.HexField — slotProps', () => {
     fireEvent.change(hexInput(), { target: { value: 'zz' } });
     expect(openingTags(...parts(document))).toBe(
       [
-        '<label class="wave-color-picker-hex-field flex min-w-0 flex-col gap-1">',
-        '<span class="wave-color-picker-hex-field__label text-caption-1 text-muted-foreground">',
-        '<input aria-describedby="wave-color-picker-error-_id0_" aria-invalid="true" aria-label="Hex color value" autocomplete="off" class="wave-color-picker-hex-field__input w-24 rounded border bg-background px-2 py-1 text-body-1 text-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary border-destructive" maxlength="9" spellcheck="false" type="text" value="#zz">',
-        '<span class="wave-color-picker-hex-field__error-message text-caption-1 text-error" id="wave-color-picker-error-_id0_">',
+        '<label class="wave-color-picker-hex-field wave:flex wave:min-w-0 wave:flex-col wave:gap-1">',
+        '<span class="wave-color-picker-hex-field__label wave:text-caption-1 wave:text-muted-foreground">',
+        '<input aria-describedby="wave-color-picker-error-_id0_" aria-invalid="true" aria-label="Hex color value" autocomplete="off" class="wave-color-picker-hex-field__input wave:w-24 wave:rounded wave:border wave:bg-background wave:px-2 wave:py-1 wave:text-body-1 wave:text-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:border-destructive" maxlength="9" spellcheck="false" type="text" value="#zz">',
+        '<span class="wave-color-picker-hex-field__error-message wave:text-caption-1 wave:text-error" id="wave-color-picker-error-_id0_">',
       ].join('\n'),
     );
   });
@@ -495,7 +495,7 @@ describe('ColorPicker.HexField — slotProps', () => {
       [
         screen.getByText('Hex'),
         colorPickerHexFieldClassNames.label,
-        'text-caption-1',
+        'wave:text-caption-1',
         'my-label',
         'label',
         'rgb(255, 0, 0)',
@@ -503,7 +503,7 @@ describe('ColorPicker.HexField — slotProps', () => {
       [
         hexInput(),
         colorPickerHexFieldClassNames.input,
-        'w-24',
+        'wave:w-24',
         'my-input',
         'input',
         'rgb(0, 128, 0)',
@@ -511,7 +511,7 @@ describe('ColorPicker.HexField — slotProps', () => {
       [
         screen.getByText(ERROR_TEXT),
         colorPickerHexFieldClassNames.errorMessage,
-        'text-error',
+        'wave:text-error',
         'my-error',
         'error',
         'rgb(0, 0, 255)',
@@ -528,7 +528,7 @@ describe('ColorPicker.HexField — slotProps', () => {
   it('lets your class replace a conflicting class of the part', () => {
     render(inPicker(<ColorPicker.HexField slotProps={{ input: { className: 'w-32' } }} />));
     expect(hexInput()).toHaveClass('w-32');
-    expect(hexInput()).not.toHaveClass('w-24');
+    expect(hexInput()).not.toHaveClass('wave:w-24');
   });
 
   it('attaches your refs to the parts, beside ref', () => {
@@ -929,7 +929,7 @@ describe('ColorPicker.HexField — slotProps', () => {
     it('lets your class replace a conflicting class of the root', () => {
       render(inPicker(<ColorPicker.HexField slotProps={{ root: { className: 'gap-2' } }} />));
       expect(root()).toHaveClass('gap-2');
-      expect(root()).not.toHaveClass('gap-1');
+      expect(root()).not.toHaveClass('wave:gap-1');
     });
 
     it("keeps the props you give the field over the part's", () => {

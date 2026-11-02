@@ -41,7 +41,7 @@ import type {
   DataGridSelectionCellProps,
 } from './DataGrid';
 
-export const cellBase = 'px-4 py-3 border-b border-border';
+export const cellBase = 'wave:px-4 wave:py-3 wave:border-b wave:border-border';
 
 /** Whether `node` is an element of `DataGrid.SelectionCell` (lazy client references too). */
 export function isSelectionCellElement(
@@ -107,7 +107,7 @@ function DataGridSelectionHeaderCell({
         stableClassName,
         dataGridHeaderClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
-        'text-start',
+        'wave:text-start',
         focusRingInset,
         className,
       )}
@@ -129,7 +129,7 @@ function DataGridSelectionHeaderCell({
           part={selectAllPart}
         />
       ) : (
-        <span className="sr-only">{selectionHeaderLabel}</span>
+        <span className="wave:sr-only">{selectionHeaderLabel}</span>
       )}
     </th>
   );
@@ -328,12 +328,12 @@ export const DataGridHeader = ({
             ref={mergedRef}
             className={wcn(
               dataGridHeaderClassNames.root,
-              'bg-card',
+              'wave:bg-card',
               // While a column resize handle drags, the header cells ignore the pointer.
-              'in-data-[resizing]:pointer-events-none',
+              'wave:in-data-[resizing]:pointer-events-none',
               // A windowed grid scrolls in its wrapper: the header stays at its top, over the
               // rows (on the section: a header cell is positioned for its resize handle).
-              windowed && 'sticky top-0 z-1',
+              windowed && 'wave:sticky wave:top-0 wave:z-1',
               className,
             )}
             {...rest}
@@ -427,13 +427,13 @@ export const DataGridHeaderCell = ({
       className={wcn(
         dataGridHeaderCellClassNames.root,
         cellBase,
-        'text-start align-middle font-semibold text-caption-1 uppercase tracking-wider',
+        'wave:text-start wave:align-middle wave:font-semibold wave:text-caption-1 wave:uppercase wave:tracking-wider',
         focusRingInset,
-        sortColumnId !== undefined && 'p-0 hover:bg-subtle-hover',
+        sortColumnId !== undefined && 'wave:p-0 wave:hover:bg-subtle-hover',
         // Columns laid out from widths: what does not fit is clipped, not drawn over the next.
-        fixedLayout && 'overflow-hidden',
+        fixedLayout && 'wave:overflow-hidden',
         // The box the resize handle is drawn in, along the end edge.
-        resizeColumnId !== undefined && 'relative',
+        resizeColumnId !== undefined && 'wave:relative',
         className,
       )}
       {...rest}
@@ -454,7 +454,7 @@ export const DataGridHeaderCell = ({
           {children}
         </TableSortButton>
       ) : (
-        <span id={contentId} className="inline-flex items-center gap-1">
+        <span id={contentId} className="wave:inline-flex wave:items-center wave:gap-1">
           {children}
         </span>
       )}

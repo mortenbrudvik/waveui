@@ -26,20 +26,20 @@ export function avatarPixelSize(size: AvatarSize): number {
 
 /** Width, height and text size classes per pixel box. Literal strings only. */
 export const avatarBoxClasses: Readonly<Record<AvatarNumericSize, string>> = {
-  16: 'w-4 h-4 text-[10px]',
-  20: 'w-5 h-5 text-[10px]',
-  24: 'w-6 h-6 text-[10px]',
-  28: 'w-7 h-7 text-xs',
-  32: 'w-8 h-8 text-xs',
-  36: 'w-9 h-9 text-sm',
-  40: 'w-10 h-10 text-sm',
-  48: 'w-12 h-12 text-base',
-  56: 'w-14 h-14 text-lg',
-  64: 'w-16 h-16 text-xl',
-  72: 'w-18 h-18 text-2xl',
-  96: 'w-24 h-24 text-3xl',
-  120: 'w-30 h-30 text-4xl',
-  128: 'w-32 h-32 text-4xl',
+  16: 'wave:w-4 wave:h-4 wave:text-[10px]',
+  20: 'wave:w-5 wave:h-5 wave:text-[10px]',
+  24: 'wave:w-6 wave:h-6 wave:text-[10px]',
+  28: 'wave:w-7 wave:h-7 wave:text-xs',
+  32: 'wave:w-8 wave:h-8 wave:text-xs',
+  36: 'wave:w-9 wave:h-9 wave:text-sm',
+  40: 'wave:w-10 wave:h-10 wave:text-sm',
+  48: 'wave:w-12 wave:h-12 wave:text-base',
+  56: 'wave:w-14 wave:h-14 wave:text-lg',
+  64: 'wave:w-16 wave:h-16 wave:text-xl',
+  72: 'wave:w-18 wave:h-18 wave:text-2xl',
+  96: 'wave:w-24 wave:h-24 wave:text-3xl',
+  120: 'wave:w-30 wave:h-30 wave:text-4xl',
+  128: 'wave:w-32 wave:h-32 wave:text-4xl',
 };
 
 /** The box classes of an Avatar size. */
@@ -58,6 +58,6 @@ export function avatarBadgeSize(pixels: number): Size {
 
 /** The corner radius of an Avatar shape: a circle, or rounded-md from 40px and rounded-sm below. */
 export function avatarShapeClasses(shape: 'circular' | 'square', pixels: number): string {
-  if (shape === 'circular') return 'rounded-full';
-  return pixels >= 40 ? 'rounded-md' : 'rounded-sm';
+  if (shape === 'circular') return 'wave:rounded-full';
+  return pixels >= 40 ? 'wave:rounded-md' : 'wave:rounded-sm';
 }

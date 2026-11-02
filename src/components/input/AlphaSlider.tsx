@@ -222,7 +222,7 @@ export const AlphaSlider = ({
   const rootProps = mergeSlotProps(slotProps?.root, {
     className: wcn(
       alphaSliderClassNames.root,
-      'group/alpha-slider relative flex touch-none select-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
+      'wave:group/alpha-slider wave:relative wave:flex wave:touch-none wave:select-none wave:data-[disabled]:cursor-not-allowed wave:data-[disabled]:opacity-50',
       vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
       className,
     ),
@@ -252,14 +252,14 @@ export const AlphaSlider = ({
         {...mergeSlotProps(slotProps?.rail, {
           className: wcn(
             alphaSliderClassNames.rail,
-            'relative overflow-hidden rounded-full bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none',
+            'wave:relative wave:overflow-hidden wave:rounded-full wave:bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] wave:bg-size-[8px_8px] wave:forced-colors:forced-color-adjust-none',
             vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
-            resolvedShape === 'square' && 'rounded-none',
+            resolvedShape === 'square' && 'wave:rounded-none',
           ),
           locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
       >
-        <span className={wcn('absolute inset-0', RAIL_GRADIENT)} />
+        <span className={wcn('wave:absolute wave:inset-0', RAIL_GRADIENT)} />
       </div>
       <input
         type="range"
@@ -291,7 +291,7 @@ export const AlphaSlider = ({
               alphaSliderClassNames.thumb,
               COLOR_THUMB_CLASSES,
               vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
-              'group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]',
+              'wave:group-has-[:focus-visible]/alpha-slider:ring-2 wave:group-has-[:focus-visible]/alpha-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] wave:group-has-[:focus-visible]/alpha-slider:outline-2 wave:group-has-[:focus-visible]/alpha-slider:outline-offset-2 wave:group-has-[:focus-visible]/alpha-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]',
             ),
           })}
         />

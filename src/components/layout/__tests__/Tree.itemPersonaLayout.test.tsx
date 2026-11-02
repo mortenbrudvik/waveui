@@ -187,9 +187,9 @@ describe('Tree.ItemPersonaLayout — slotProps', () => {
 
   // Captured from ce1620c's dist (client and server agree).
   const BASE_PINS = [
-    '<span class="wave-tree-item-persona-layout__media inline-flex shrink-0">',
-    '<span class="wave-tree-item-persona-layout__main truncate" data-tree-persona-name="" id="tree-persona-name-_id0_">',
-    '<span class="wave-tree-item-persona-layout__description truncate text-caption-1 text-muted-foreground" id="tree-persona-description-_id1_">',
+    '<span class="wave-tree-item-persona-layout__media wave:inline-flex wave:shrink-0">',
+    '<span class="wave-tree-item-persona-layout__main wave:truncate" data-tree-persona-name="" id="tree-persona-name-_id0_">',
+    '<span class="wave-tree-item-persona-layout__description wave:truncate wave:text-caption-1 wave:text-muted-foreground" id="tree-persona-description-_id1_">',
   ].join('\n');
 
   function People({ slotProps, onClick }: { slotProps?: LayoutSlotProps; onClick?: () => void }) {
@@ -260,11 +260,11 @@ describe('Tree.ItemPersonaLayout — slotProps', () => {
     );
     const [media, main, description] = partsOf(document.body);
     expect(media).toHaveClass('inline-block');
-    expect(media).not.toHaveClass('inline-flex');
+    expect(media).not.toHaveClass('wave:inline-flex');
     expect(main).toHaveClass('text-clip');
-    expect(main).not.toHaveClass('truncate');
+    expect(main).not.toHaveClass('wave:truncate');
     expect(description).toHaveClass('text-caption-2');
-    expect(description).not.toHaveClass('text-caption-1');
+    expect(description).not.toHaveClass('wave:text-caption-1');
   });
 
   it('keeps the item’s name and description: the ids, names and hidden state of the parts are locked', () => {

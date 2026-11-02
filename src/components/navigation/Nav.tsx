@@ -417,7 +417,8 @@ type NavEntryProps = NavItemOwnProps &
 // Styles
 // ---------------------------------------------------------------------------
 
-const iconClasses = 'flex h-5 w-5 shrink-0 items-center justify-center';
+const iconClasses =
+  'wave:flex wave:h-5 wave:w-5 wave:shrink-0 wave:items-center wave:justify-center';
 
 /**
  * The `icon` slot of Nav.Item and Nav.Category, or `null` when it renders nothing. A falsy icon
@@ -436,27 +437,28 @@ function renderIcon(
 
 const itemClasses = {
   base: wcn(
-    'flex w-full items-center gap-2 px-4 py-2 text-body-1 text-start no-underline transition-colors motion-reduce:transition-none',
+    'wave:flex wave:w-full wave:items-center wave:gap-2 wave:px-4 wave:py-2 wave:text-body-1 wave:text-start wave:no-underline wave:transition-colors wave:motion-reduce:transition-none',
     focusRingInset,
     disabledStyles,
   ),
-  selected: 'bg-subtle-selected text-primary font-semibold border-s-2 border-s-primary',
-  idle: 'text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+  selected:
+    'wave:bg-subtle-selected wave:text-primary wave:font-semibold wave:border-s-2 wave:border-s-primary',
+  idle: 'wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
   // With actions, the selected background and indicator move to the row (D121).
-  selectedInRow: 'text-primary font-semibold',
-  rowSelected: 'bg-subtle-selected border-s-2 border-s-primary',
+  selectedInRow: 'wave:text-primary wave:font-semibold',
+  rowSelected: 'wave:bg-subtle-selected wave:border-s-2 wave:border-s-primary',
 };
 
 const subItemClasses = {
   base: wcn(
-    'flex w-full items-center ps-11 pe-4 py-1.5 text-body-1 text-start no-underline transition-colors motion-reduce:transition-none',
+    'wave:flex wave:w-full wave:items-center wave:ps-11 wave:pe-4 wave:py-1.5 wave:text-body-1 wave:text-start wave:no-underline wave:transition-colors wave:motion-reduce:transition-none',
     focusRingInset,
     disabledStyles,
   ),
-  selected: 'text-primary font-semibold',
-  idle: 'text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+  selected: 'wave:text-primary wave:font-semibold',
+  idle: 'wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
   // Sub-items have no selected background: a sub-item row gets only the hover.
-  selectedInRow: 'text-primary font-semibold',
+  selectedInRow: 'wave:text-primary wave:font-semibold',
   rowSelected: undefined,
 };
 
@@ -475,8 +477,8 @@ interface NavEntryClasses {
  * item cannot be disabled, so its hover needs no gate.
  */
 const rowClasses =
-  'group/nav-row flex items-center transition-colors motion-reduce:transition-none';
-const rowHoverClasses = 'hover:bg-subtle-hover';
+  'wave:group/nav-row wave:flex wave:items-center wave:transition-colors wave:motion-reduce:transition-none';
+const rowHoverClasses = 'wave:hover:bg-subtle-hover';
 
 /**
  * The actions element (D120). Each direct child is transparent until the row is hovered or has
@@ -488,17 +490,17 @@ const rowHoverClasses = 'hover:bg-subtle-hover';
  * `'none'` (it has no slot: it is not a presence motion).
  */
 const actionsClasses = wcn(
-  'flex shrink-0 items-center gap-1 pe-2',
-  '*:opacity-0 group-hover/nav-row:*:opacity-100 group-focus-within/nav-row:*:opacity-100',
-  'forced-colors:*:opacity-100 [@media(hover:none)]:*:opacity-100',
-  '*:has-[[aria-pressed=true]]:opacity-100 *:has-[[aria-expanded=true]]:opacity-100',
-  '[&>[aria-pressed=true]]:opacity-100 [&>[aria-expanded=true]]:opacity-100',
+  'wave:flex wave:shrink-0 wave:items-center wave:gap-1 wave:pe-2',
+  'wave:*:opacity-0 wave:group-hover/nav-row:*:opacity-100 wave:group-focus-within/nav-row:*:opacity-100',
+  'wave:forced-colors:*:opacity-100 wave:[@media(hover:none)]:*:opacity-100',
+  'wave:*:has-[[aria-pressed=true]]:opacity-100 wave:*:has-[[aria-expanded=true]]:opacity-100',
+  'wave:[&>[aria-pressed=true]]:opacity-100 wave:[&>[aria-expanded=true]]:opacity-100',
 );
 
 const categoryButtonClasses = wcn(
-  'flex w-full items-center gap-2 px-4 py-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
+  'wave:flex wave:w-full wave:items-center wave:gap-2 wave:px-4 wave:py-2 wave:text-body-1 wave:font-semibold wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none',
   // A closed category that contains the current page shows the selected look of an item.
-  'data-[contains-current]:bg-subtle-selected data-[contains-current]:text-primary data-[contains-current]:border-s-2 data-[contains-current]:border-s-primary',
+  'wave:data-[contains-current]:bg-subtle-selected wave:data-[contains-current]:text-primary wave:data-[contains-current]:border-s-2 wave:data-[contains-current]:border-s-primary',
   focusRingInset,
 );
 
@@ -587,7 +589,9 @@ function renderNavEntry(
 
   // The parts are merged only when given: a Nav renders many entries.
   const contentPart = slotProps?.content;
-  const contentClassName = withIcon ? wcn(stable.content, 'flex-1 text-start') : undefined;
+  const contentClassName = withIcon
+    ? wcn(stable.content, 'wave:flex-1 wave:text-start')
+    : undefined;
   const content = (
     <>
       {withIcon && renderIcon(icon, stable.icon)}
@@ -613,7 +617,7 @@ function renderNavEntry(
     stable.root,
     classes.base,
     isSelected ? (hasActions ? classes.selectedInRow : classes.selected) : classes.idle,
-    hasActions && 'min-w-0 flex-1',
+    hasActions && 'wave:min-w-0 wave:flex-1',
     className,
   );
 
@@ -832,9 +836,9 @@ const NavCategory = ({
       <ChevronDownIcon
         className={wcn(
           navCategoryClassNames.expandIcon,
-          'shrink-0',
+          'wave:shrink-0',
           expandIconMotionClassName,
-          isOpen && 'rotate-180',
+          isOpen && 'wave:rotate-180',
         )}
       />
     );
@@ -842,7 +846,11 @@ const NavCategory = ({
     expandIconElement = renderSlot(
       expandGlyph,
       'span',
-      wcn(navCategoryClassNames.expandIcon, 'inline-flex shrink-0', expandIconMotionClassName),
+      wcn(
+        navCategoryClassNames.expandIcon,
+        'wave:inline-flex wave:shrink-0',
+        expandIconMotionClassName,
+      ),
       { 'aria-hidden': true },
     );
   }
@@ -865,9 +873,9 @@ const NavCategory = ({
   const containsCurrentMarker = containsCurrent ? '' : undefined;
   const rovingValue = roving ? `wave-nav-category:${value}` : undefined;
   const buttonClassName = wcn(navCategoryClassNames.button, categoryButtonClasses);
-  const labelClassName = wcn(navCategoryClassNames.label, 'flex-1 text-start');
+  const labelClassName = wcn(navCategoryClassNames.label, 'wave:flex-1 wave:text-start');
   const listClassName = isListMounted
-    ? wcn(navCategoryClassNames.list, 'm-0 list-none p-0')
+    ? wcn(navCategoryClassNames.list, 'wave:m-0 wave:list-none wave:p-0')
     : undefined;
 
   return (

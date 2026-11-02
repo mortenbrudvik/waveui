@@ -17,7 +17,7 @@ import { useRestoreFocus } from '../hooks/useRestoreFocus';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { getElementType } from '../lib/children';
 import * as registry from '../lib/classNames';
-import { cn } from '../lib/cn';
+import { wcn } from '../lib/cn';
 import { composeEventHandlers } from '../lib/composeEventHandlers';
 import { warnOnce } from '../lib/dev';
 import { getOpenLayers, registerLayer } from '../lib/layers';
@@ -145,25 +145,25 @@ interface BoxProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/** Correct merge: defaults first, consumer last (`cn`). */
+/** Correct merge: defaults first, consumer last (`wcn`), the defaults prefixed as Wave's are. */
 const GoodBox = ({ className, ...rest }: BoxProps) => (
-  <div className={cn('flex p-4', className)} {...rest} />
+  <div className={wcn('wave:flex wave:p-4', className)} {...rest} />
 );
 GoodBox.displayName = 'GoodBox';
 
 /** Bug: a consumer className replaces every default class. */
 const ReplacingBox = ({ className, ...rest }: BoxProps) => (
-  <div className={className ?? 'flex p-4'} {...rest} />
+  <div className={className ?? 'wave:flex wave:p-4'} {...rest} />
 );
 
 /** Bug: the consumer class goes first, so tailwind-merge drops a conflicting user class. */
 const UserFirstBox = ({ className, ...rest }: BoxProps) => (
-  <div className={cn(className, 'flex p-4')} {...rest} />
+  <div className={wcn(className, 'wave:flex wave:p-4')} {...rest} />
 );
 
 /** Bug: claims Button's display name, but its className target carries no stable class. */
 const UnclassedButton = ({ className, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-  <button type="button" className={cn('px-3', className)} {...rest} />
+  <button type="button" className={wcn('wave:px-3', className)} {...rest} />
 );
 UnclassedButton.displayName = 'Button';
 
@@ -362,7 +362,13 @@ interface ChipProps extends React.HTMLAttributes<HTMLElement> {
 const Chip = ({ as: Component = 'span', className, ...rest }: ChipProps) => {
   const tone = React.useContext(ChipContext);
   if (tone === null) throw new Error('Chip must be used within ChipContext');
-  return <Component className={cn('inline-flex px-2', className)} data-tone={tone} {...rest} />;
+  return (
+    <Component
+      className={wcn('wave:inline-flex wave:px-2', className)}
+      data-tone={tone}
+      {...rest}
+    />
+  );
 };
 Chip.displayName = 'Chip';
 
@@ -845,7 +851,7 @@ describe('testSystemProps', () => {
         polymorphic: true,
         wrapper: ChipProvider,
         defaultProps: { children: 'Label' },
-        conflictingClass: { className: 'px-4', overrides: 'px-2' },
+        conflictingClass: { className: 'px-4', overrides: 'wave:px-2' },
         a11yVariants: [{ name: 'titled', props: { title: 'Chip title' } }],
       }),
     );
@@ -905,7 +911,13 @@ describe('testClassName', () => {
 
   it('conflictingClass: fails when tailwind-merge drops the consumer class', async () => {
     const tests = collect(() =>
-      testClassName(UserFirstBox, {}, { conflictingClass: { className: 'p-8', overrides: 'p-4' } }),
+      testClassName(
+        UserFirstBox,
+        {},
+        {
+          conflictingClass: { className: 'p-8', overrides: 'wave:p-4' },
+        },
+      ),
     );
     await expect(
       run(pick(tests, 'keeps its default classes when a className is added')),
@@ -917,14 +929,18 @@ describe('testClassName', () => {
 
   it('conflictingClass: passes when the consumer class wins and the default is gone', async () => {
     const tests = collect(() =>
-      testClassName(GoodBox, {}, { conflictingClass: { className: 'p-8', overrides: 'p-4' } }),
+      testClassName(GoodBox, {}, { conflictingClass: { className: 'p-8', overrides: 'wave:p-4' } }),
     );
     await runAll(tests);
   });
 
   it('conflictingClass: reports a misconfigured `overrides` that is not a default class', async () => {
     const tests = collect(() =>
-      testClassName(GoodBox, {}, { conflictingClass: { className: 'gap-8', overrides: 'gap-2' } }),
+      testClassName(
+        GoodBox,
+        {},
+        { conflictingClass: { className: 'gap-8', overrides: 'wave:gap-2' } },
+      ),
     );
     await expect(
       run(pick(tests, 'lets a conflicting consumer className win over the default')),
@@ -2678,7 +2694,7 @@ function typeContracts(): void {
     displayName: 'ToggleLike',
     a11yScope: 'container',
     control: { role: 'button' },
-    conflictingClass: { className: 'p-8', overrides: 'p-4' },
+    conflictingClass: { className: 'p-8', overrides: 'wave:p-4' },
   };
   testSystemProps(ToggleLike, config);
 

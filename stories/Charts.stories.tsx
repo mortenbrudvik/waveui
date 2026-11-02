@@ -162,9 +162,9 @@ function useForcedColors(): boolean {
 
 /** The data of the chart as a table: the fallback that screen readers and keyboards can read. */
 function SalesTable() {
-  const cell = 'border-b border-border px-3 py-2';
+  const cell = 'border-b border-wave-border px-3 py-2';
   return (
-    <table className="w-full border-collapse text-body-1">
+    <table className="w-full border-collapse text-wave-body-1">
       <caption className="pb-2 text-start font-semibold">
         Units sold per quarter, by region (thousands)
       </caption>
@@ -208,7 +208,7 @@ function ChartFigure({ children }: { children: React.ReactNode }) {
   const [showTable, setShowTable] = React.useState(false);
   return (
     <div className="flex max-w-2xl flex-col gap-4 p-6">
-      <h3 className="text-subtitle-1 font-semibold">{CHART_TITLE}</h3>
+      <h3 className="text-wave-subtitle-1 font-semibold">{CHART_TITLE}</h3>
       <div
         role="img"
         aria-label={CHART_LABEL}
@@ -217,7 +217,7 @@ function ChartFigure({ children }: { children: React.ReactNode }) {
       >
         {children}
       </div>
-      <p id={descriptionId} className="text-body-1 text-muted-foreground">
+      <p id={descriptionId} className="text-wave-body-1 text-wave-muted-foreground">
         {CHART_DESCRIPTION}
       </p>
       <Switch label="Show the data table" checked={showTable} onCheckedChange={setShowTable} />
@@ -276,7 +276,7 @@ function SvgPatterns({ id, colors }: { id: string; colors: ChartColors }) {
 function SvgLegend({ patternId, colors }: { patternId: string; colors: ChartColors }) {
   return (
     <ul
-      className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-caption-1"
+      className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-wave-caption-1"
       style={{ color: colors.text }}
     >
       {series.map((item, index) => (

@@ -65,7 +65,7 @@ export const Inverted: Story = {
       <Button appearance="primary" icon={<Spinner {...args} size="extra-small" />}>
         Saving
       </Button>
-      <div className="inline-flex items-center rounded bg-inverted px-3 py-2 text-inverted-foreground">
+      <div className="inline-flex items-center rounded bg-wave-inverted px-3 py-2 text-wave-inverted-foreground">
         <Spinner {...args} size="small" labelVisible />
       </div>
     </div>

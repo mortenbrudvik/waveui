@@ -471,7 +471,7 @@ const InteractionTagRoot = ({
         ref={mergedRef}
         className={wcn(
           interactionTagClassNames.root,
-          'group/interaction-tag inline-flex items-stretch',
+          'wave:group/interaction-tag wave:inline-flex wave:items-stretch',
           className,
         )}
       >
@@ -768,7 +768,7 @@ export const InteractionTagSecondary = ({
   const contentClassName = hasContent
     ? wcn(
         interactionTagSecondaryClassNames.dismissIcon,
-        'inline-flex items-center justify-center',
+        'wave:inline-flex wave:items-center wave:justify-center',
         // A text label keeps clear of the divider and the tag's end; a glyph needs no room.
         hasLabel && INTERACTION_TAG_SECONDARY_LABEL_CLASSES,
       )
@@ -807,7 +807,7 @@ export const InteractionTagSecondary = ({
       )}
     >
       {!namedByConsumer && (
-        <span id={dismissLabelId} className="sr-only">
+        <span id={dismissLabelId} className="wave:sr-only">
           {dismissLabel}
         </span>
       )}

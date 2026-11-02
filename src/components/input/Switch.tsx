@@ -20,8 +20,8 @@ import { HiddenInput } from '../internal/HiddenInput';
  * focus outline; only the thumb (the leaf indicator) opts out of forced colors. A disabled switch
  * draws a GrayText thumb and border on Canvas, without the Highlight fill.
  */
-const onTrack = 'forced-colors:border-[Highlight] forced-colors:bg-[Highlight]';
-const disabledOnTrack = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
+const onTrack = 'wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]';
+const disabledOnTrack = 'wave:forced-colors:border-[GrayText] wave:forced-colors:bg-[Canvas]';
 
 /** The handlers a part drops while the switch is unavailable: it does not activate then. */
 const BLOCK_CLICK = ['onClick'] as const;
@@ -41,17 +41,18 @@ const SWITCH_SIZE: Readonly<
 > = {
   small: {
     // The target layer is placed against the padding box inside the 1px border: 14 + 2 × 5 = 24px.
-    track: 'h-[16px] w-[32px] before:absolute before:inset-x-0 before:-inset-y-[5px]',
-    thumb: 'h-[10px] w-[10px]',
-    on: 'translate-x-[18px] wave-rtl:-translate-x-[18px]',
-    off: 'translate-x-[2px] wave-rtl:-translate-x-[2px]',
-    offset: 'mt-0.5',
+    track:
+      'wave:h-[16px] wave:w-[32px] wave:before:absolute wave:before:inset-x-0 wave:before:-inset-y-[5px]',
+    thumb: 'wave:h-[10px] wave:w-[10px]',
+    on: 'wave:translate-x-[18px] wave:wave-rtl:-translate-x-[18px]',
+    off: 'wave:translate-x-[2px] wave:wave-rtl:-translate-x-[2px]',
+    offset: 'wave:mt-0.5',
   },
   medium: {
-    track: 'h-[20px] w-[40px]',
-    thumb: 'h-[14px] w-[14px]',
-    on: 'translate-x-[22px] wave-rtl:-translate-x-[22px]',
-    off: 'translate-x-[2px] wave-rtl:-translate-x-[2px]',
+    track: 'wave:h-[20px] wave:w-[40px]',
+    thumb: 'wave:h-[14px] wave:w-[14px]',
+    on: 'wave:translate-x-[22px] wave:wave-rtl:-translate-x-[22px]',
+    off: 'wave:translate-x-[2px] wave:wave-rtl:-translate-x-[2px]',
     offset: '',
   },
 };
@@ -300,7 +301,7 @@ export const Switch = ({
   // The parts inside the switch do not activate while it is unavailable, as the switch does not.
   const partBlock = unavailable ? BLOCK_CLICK : undefined;
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: wcn(switchClassNames.label, 'text-body-1 text-foreground'),
+    className: wcn(switchClassNames.label, 'wave:text-body-1 wave:text-foreground'),
     // The text names the control through aria-labelledby: an aria-label would replace it.
     locked: { id: labelTextId, 'aria-label': undefined },
     blockHandlers: partBlock,
@@ -317,16 +318,16 @@ export const Switch = ({
       // 2px gap, and a transparent strip behind the track that grows the pointer target to
       // 24px tall. No padding is assumed here, unlike the native reset that any app button
       // style overrides (C-NATIVE): the thumb offsets rely on it staying at zero.
-      'relative inline-flex shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none',
+      'wave:relative wave:inline-flex wave:shrink-0 wave:items-center wave:rounded-full wave:border wave:p-0 wave:transition-colors wave:duration-200 wave:motion-reduce:transition-none',
       sizeMetrics.track,
       // The offset centres the track on the label line beside it; above the label, the
       // column gap alone separates them.
       hasLabel && labelPosition !== 'above' && sizeMetrics.offset,
       focusRing,
       checked
-        ? wcn('border-primary bg-primary', unavailable ? disabledOnTrack : onTrack)
+        ? wcn('wave:border-primary wave:bg-primary', unavailable ? disabledOnTrack : onTrack)
         : wcn(
-            'border-stroke-accessible bg-transparent',
+            'wave:border-stroke-accessible wave:bg-transparent',
             unavailable ? forcedColors.disabled : forcedColors.control,
           ),
     ),
@@ -371,16 +372,16 @@ export const Switch = ({
   const thumbProps = mergeSlotProps(slotProps?.thumb, {
     className: wcn(
       switchClassNames.thumb,
-      'block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
+      'wave:block wave:rounded-full wave:transition-transform wave:duration-200 wave:motion-reduce:transition-none wave:forced-colors:forced-color-adjust-none',
       sizeMetrics.thumb,
       checked
-        ? wcn(sizeMetrics.on, 'bg-primary-foreground')
-        : wcn(sizeMetrics.off, 'bg-stroke-accessible'),
+        ? wcn(sizeMetrics.on, 'wave:bg-primary-foreground')
+        : wcn(sizeMetrics.off, 'wave:bg-stroke-accessible'),
       unavailable
-        ? 'forced-colors:bg-[GrayText]'
+        ? 'wave:forced-colors:bg-[GrayText]'
         : checked
-          ? 'forced-colors:bg-[HighlightText]'
-          : 'forced-colors:bg-[ButtonText]',
+          ? 'wave:forced-colors:bg-[HighlightText]'
+          : 'wave:forced-colors:bg-[ButtonText]',
     ),
     locked: { 'aria-hidden': 'true', tabIndex: undefined },
     // The thumb sits in the track, which `disabledFocusable` leaves natively enabled.
@@ -392,13 +393,13 @@ export const Switch = ({
       // items-start: the track lines up with the top of the label's first line, not its
       // middle, when the label wraps or has a second line; medium's 20px track matches that
       // 20px line exactly, small's 16px track gets an offset below to stay centred on it.
-      'relative inline-flex items-start gap-2 select-none',
-      labelPosition === 'above' && 'flex-col gap-1',
+      'wave:relative wave:inline-flex wave:items-start wave:gap-2 wave:select-none',
+      labelPosition === 'above' && 'wave:flex-col wave:gap-1',
       // The dimmed look lifts while a focus ring shows inside the root (the control's, under
       // disabledFocusable, or a link's in the label): opacity would dim the ring below 3:1.
       unavailable
-        ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
-        : 'cursor-pointer',
+        ? 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100'
+        : 'wave:cursor-pointer',
       className,
     ),
     style,

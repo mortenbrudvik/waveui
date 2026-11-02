@@ -85,7 +85,7 @@ describe('Nav.SectionHeader', () => {
     displayName: 'NavSectionHeader',
     wrapper: NavWrapper,
     defaultProps: { children: 'Benefits' },
-    conflictingClass: { className: 'px-6', overrides: 'px-4' },
+    conflictingClass: { className: 'px-6', overrides: 'wave:px-4' },
   });
 
   it('is a level-3 heading in its own list item of the Nav list', () => {
@@ -184,7 +184,7 @@ describe('Nav.SectionHeader', () => {
     expect(heading).toHaveAttribute('data-section', 'benefits');
     expect(heading).toHaveStyle({ letterSpacing: '1px' });
     expect(heading).toHaveClass('text-primary');
-    expect(heading).not.toHaveClass('text-muted-foreground');
+    expect(heading).not.toHaveClass('wave:text-muted-foreground');
     const item = heading.parentElement as HTMLElement;
     expect(item.className).toBe(navSectionHeaderClassNames.listItem);
     expect(item).not.toHaveAttribute('id');
@@ -201,14 +201,14 @@ describe('Nav.SectionHeader', () => {
     const heading = screen.getByRole('heading', { name: 'Benefits' });
     expect(heading).toHaveClass(
       navSectionHeaderClassNames.root,
-      'm-0',
-      'px-4',
-      'pt-3',
-      'pb-1',
-      'text-caption-1',
-      'font-semibold',
-      'text-muted-foreground',
-      'text-start',
+      'wave:m-0',
+      'wave:px-4',
+      'wave:pt-3',
+      'wave:pb-1',
+      'wave:text-caption-1',
+      'wave:font-semibold',
+      'wave:text-muted-foreground',
+      'wave:text-start',
     );
     expect(heading.className).not.toMatch(/\btext-(left|right)\b|\bp[lr]-|\bm[lr]-/);
   });
@@ -236,7 +236,7 @@ describe('Nav.Divider', () => {
     expectedTag: 'li',
     displayName: 'NavDivider',
     wrapper: NavWrapper,
-    conflictingClass: { className: 'my-2', overrides: 'my-1' },
+    conflictingClass: { className: 'my-2', overrides: 'wave:my-1' },
   });
 
   it('is a list item hidden from assistive technology, no separator', () => {
@@ -268,11 +268,11 @@ describe('Nav.Divider', () => {
     const divider = navList().firstElementChild as HTMLElement;
     expect(divider).toHaveClass(
       navDividerClassNames.root,
-      'my-1',
-      'h-0',
-      'border-t',
-      'border-border',
-      'forced-colors:border-[CanvasText]',
+      'wave:my-1',
+      'wave:h-0',
+      'wave:border-t',
+      'wave:border-border',
+      'wave:forced-colors:border-[CanvasText]',
     );
     expect(divider).not.toHaveClass(dividerClassNames.root);
   });
@@ -345,7 +345,7 @@ describe('Nav.AppItem', () => {
       displayName: 'NavAppItem',
       wrapper: NavWrapper,
       defaultProps: { children: 'Contoso HR' },
-      conflictingClass: { className: 'px-6', overrides: 'px-4' },
+      conflictingClass: { className: 'px-6', overrides: 'wave:px-4' },
     });
   });
 
@@ -355,7 +355,7 @@ describe('Nav.AppItem', () => {
       displayName: 'NavAppItem',
       wrapper: NavWrapper,
       defaultProps: { href: '#home', children: 'Contoso HR' },
-      conflictingClass: { className: 'px-6', overrides: 'px-4' },
+      conflictingClass: { className: 'px-6', overrides: 'wave:px-4' },
     });
   });
 
@@ -384,7 +384,7 @@ describe('Nav.AppItem', () => {
     expect(button).toHaveAttribute('type', 'button');
     expect(button.parentElement?.className).toBe(navAppItemClassNames.listItem);
     const content = button.lastElementChild as HTMLElement;
-    expect(content).toHaveClass(navAppItemClassNames.content, 'flex-1', 'text-start');
+    expect(content).toHaveClass(navAppItemClassNames.content, 'wave:flex-1', 'wave:text-start');
     expect(content).toHaveTextContent('Contoso HR');
   });
 
@@ -449,15 +449,15 @@ describe('Nav.AppItem', () => {
     expect(icon).toHaveAttribute('aria-hidden', 'true');
     expect(icon).toHaveClass(
       navAppItemClassNames.icon,
-      'flex',
-      'min-h-5',
-      'min-w-5',
-      'shrink-0',
-      'items-center',
-      'justify-center',
+      'wave:flex',
+      'wave:min-h-5',
+      'wave:min-w-5',
+      'wave:shrink-0',
+      'wave:items-center',
+      'wave:justify-center',
     );
-    expect(icon).not.toHaveClass('h-5');
-    expect(icon).not.toHaveClass('w-5');
+    expect(icon).not.toHaveClass('wave:h-5');
+    expect(icon).not.toHaveClass('wave:w-5');
     const slot = screen.getByTestId('slot').parentElement as HTMLElement;
     expect(slot).toHaveClass(navAppItemClassNames.icon, 'text-primary');
     expect(slot).toHaveAttribute('aria-hidden', 'true');
@@ -490,24 +490,24 @@ describe('Nav.AppItem', () => {
       const item = screen.getByRole(role, { name: 'Contoso HR' });
       expect(item).toHaveClass(
         navAppItemClassNames.root,
-        'flex',
-        'w-full',
-        'items-center',
-        'gap-2',
-        'px-4',
-        'py-2',
-        'text-subtitle-2',
-        'text-start',
-        'text-foreground',
-        'no-underline',
-        'bg-transparent',
-        'transition-colors',
-        'motion-reduce:transition-none',
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:flex',
+        'wave:w-full',
+        'wave:items-center',
+        'wave:gap-2',
+        'wave:px-4',
+        'wave:py-2',
+        'wave:text-subtitle-2',
+        'wave:text-start',
+        'wave:text-foreground',
+        'wave:no-underline',
+        'wave:bg-transparent',
+        'wave:transition-colors',
+        'wave:motion-reduce:transition-none',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
         ...focusRingInset.split(' '),
         ...disabledStyles.split(' '),
       );
-      expect(item.className).not.toMatch(/(^|\s)hover:/);
+      expect(item.className).not.toMatch(/(^|\s)wave:hover:/);
       expect(item.className).not.toMatch(/\btext-(left|right)\b|\bp[lr]-|\bm[lr]-/);
     },
   );
@@ -649,7 +649,7 @@ describe('Nav.AppItemStatic', () => {
     displayName: 'NavAppItemStatic',
     wrapper: NavWrapper,
     defaultProps: { children: 'Contoso HR' },
-    conflictingClass: { className: 'px-6', overrides: 'px-4' },
+    conflictingClass: { className: 'px-6', overrides: 'wave:px-4' },
   });
 
   it('is plain text in a div in its own list item: no role, not a Tab stop, no hover', async () => {
@@ -667,22 +667,22 @@ describe('Nav.AppItemStatic', () => {
     expect(root).not.toHaveAttribute('tabindex');
     expect(root).toHaveClass(
       navAppItemStaticClassNames.root,
-      'flex',
-      'w-full',
-      'items-center',
-      'gap-2',
-      'px-4',
-      'py-2',
-      'text-subtitle-2',
-      'text-start',
-      'text-foreground',
-      'cursor-default',
+      'wave:flex',
+      'wave:w-full',
+      'wave:items-center',
+      'wave:gap-2',
+      'wave:px-4',
+      'wave:py-2',
+      'wave:text-subtitle-2',
+      'wave:text-start',
+      'wave:text-foreground',
+      'wave:cursor-default',
     );
     expect(root).not.toHaveClass(navAppItemClassNames.root);
     expect(root.className).not.toMatch(/hover:/);
     const icon = screen.getByTestId('logo').parentElement as HTMLElement;
     expect(icon).toHaveAttribute('aria-hidden', 'true');
-    expect(icon).toHaveClass(navAppItemStaticClassNames.icon, 'min-h-5', 'min-w-5');
+    expect(icon).toHaveClass(navAppItemStaticClassNames.icon, 'wave:min-h-5', 'wave:min-w-5');
     expect(root.lastElementChild).toHaveClass(navAppItemStaticClassNames.content);
     expect(root.lastElementChild).toHaveTextContent('Contoso HR');
     await user.tab();
@@ -961,11 +961,11 @@ describe('Nav.SectionHeader, Nav.AppItem and Nav.AppItemStatic — slotProps', (
   // Captured from 73e9b81's dist (client and server agree).
   const BASE_PINS = [
     '<li class="wave-nav-app-item__list-item">',
-    '<span class="wave-nav-app-item__content flex-1 text-start">',
+    '<span class="wave-nav-app-item__content wave:flex-1 wave:text-start">',
     '<li class="wave-nav-app-item__list-item">',
-    '<span class="wave-nav-app-item__content flex-1 text-start">',
+    '<span class="wave-nav-app-item__content wave:flex-1 wave:text-start">',
     '<li class="wave-nav-app-item-static__list-item">',
-    '<span class="wave-nav-app-item-static__content flex-1 text-start">',
+    '<span class="wave-nav-app-item-static__content wave:flex-1 wave:text-start">',
     '<li class="wave-nav-section-header__list-item">',
   ].join('\n');
 
@@ -1038,9 +1038,9 @@ describe('Nav.SectionHeader, Nav.AppItem and Nav.AppItemStatic — slotProps', (
     );
     const { linkContent, plainContent } = partsOf();
     expect(linkContent).toHaveClass('flex-none');
-    expect(linkContent).not.toHaveClass('flex-1');
+    expect(linkContent).not.toHaveClass('wave:flex-1');
     expect(plainContent).toHaveClass('text-end');
-    expect(plainContent).not.toHaveClass('text-start');
+    expect(plainContent).not.toHaveClass('wave:text-start');
   });
 
   it('attaches your refs to the parts', () => {
@@ -1238,7 +1238,7 @@ describe('Nav.SectionHeader, Nav.AppItem and Nav.AppItemStatic — slotProps', (
       { dir: 'rtl' },
     );
     const { linkContent, headerItem } = partsOf();
-    expect(linkContent).toHaveClass('my-content', 'text-start');
+    expect(linkContent).toHaveClass('my-content', 'wave:text-start');
     expect(headerItem).toHaveAttribute('dir', 'ltr');
   });
 

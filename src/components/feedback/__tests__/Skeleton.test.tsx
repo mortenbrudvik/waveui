@@ -15,7 +15,7 @@ describe('Skeleton', () => {
     expectedTag: 'div',
     displayName: 'Skeleton',
     defaultProps: { width: 120, height: 12 },
-    conflictingClass: { className: 'rounded-full', overrides: 'rounded' },
+    conflictingClass: { className: 'rounded-full', overrides: 'wave:rounded' },
   });
 
   testCompoundExposure(Skeleton, ['Group']);
@@ -48,7 +48,11 @@ describe('Skeleton', () => {
   it('uses the skeleton token, the pulse animation and no animation for reduced motion', () => {
     render(<Skeleton data-testid="skel" />);
     const el = screen.getByTestId('skel');
-    expect(el).toHaveClass('bg-skeleton', 'animate-wave-pulse', 'motion-reduce:animate-none');
+    expect(el).toHaveClass(
+      'wave:bg-skeleton',
+      'wave:animate-wave-pulse',
+      'wave:motion-reduce:animate-none',
+    );
     expect(el.className).not.toMatch(/\[#|animate-\[/);
   });
 
@@ -56,8 +60,8 @@ describe('Skeleton', () => {
     render(<Skeleton data-testid="skel" />);
     // Forced colors replace the author fill with Canvas, which would make the placeholder vanish.
     expect(screen.getByTestId('skel')).toHaveClass(
-      'forced-colors:bg-[GrayText]',
-      'forced-colors:forced-color-adjust-none',
+      'wave:forced-colors:bg-[GrayText]',
+      'wave:forced-colors:forced-color-adjust-none',
     );
   });
 
@@ -65,23 +69,23 @@ describe('Skeleton', () => {
     it('defaults to the rounded shape (exact token, feedback-navigation#21)', () => {
       render(<Skeleton data-testid="skel" />);
       const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded');
-      expect(el).not.toHaveClass('rounded-full');
-      expect(el).not.toHaveClass('rounded-none');
+      expect(el).toHaveClass('wave:rounded');
+      expect(el).not.toHaveClass('wave:rounded-full');
+      expect(el).not.toHaveClass('wave:rounded-none');
     });
 
     it('applies the circular shape', () => {
       render(<Skeleton shape="circular" data-testid="skel" />);
       const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded-full');
-      expect(el).not.toHaveClass('rounded');
+      expect(el).toHaveClass('wave:rounded-full');
+      expect(el).not.toHaveClass('wave:rounded');
     });
 
     it('applies the square shape', () => {
       render(<Skeleton shape="square" data-testid="skel" />);
       const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded-none');
-      expect(el).not.toHaveClass('rounded');
+      expect(el).toHaveClass('wave:rounded-none');
+      expect(el).not.toHaveClass('wave:rounded');
     });
   });
 
@@ -99,8 +103,8 @@ describe('Skeleton', () => {
         />,
       );
       const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded');
-      expect(el).not.toHaveClass('rounded-full');
+      expect(el).toHaveClass('wave:rounded');
+      expect(el).not.toHaveClass('wave:rounded-full');
       expect(el).toHaveAttribute('variant', 'circular');
       expect(warn).not.toHaveBeenCalled();
       expect(error).not.toHaveBeenCalled();
@@ -154,7 +158,7 @@ describe('Skeleton.Group (feedback-navigation#6)', () => {
     expect(group).toHaveAttribute('aria-busy', 'true');
     expect(group).not.toHaveAttribute('role');
     const label = screen.getByText('Loading');
-    expect(label).toHaveClass('sr-only');
+    expect(label).toHaveClass('wave:sr-only');
     expect(group).toContainElement(label);
     expect(screen.getByTestId('item')).toHaveAttribute('aria-hidden', 'true');
   });
@@ -165,7 +169,7 @@ describe('Skeleton.Group (feedback-navigation#6)', () => {
         <Skeleton />
       </Skeleton.Group>,
     );
-    expect(screen.getByText('Loading comments')).toHaveClass('sr-only');
+    expect(screen.getByText('Loading comments')).toHaveClass('wave:sr-only');
     expect(screen.queryByText('Loading')).toBeNull();
   });
 
@@ -194,7 +198,7 @@ describe('Skeleton.Group (feedback-navigation#6)', () => {
           <Skeleton />
         </Skeleton.Group>,
       );
-      expect(screen.getByText('Loading comments')).toHaveClass('sr-only');
+      expect(screen.getByText('Loading comments')).toHaveClass('wave:sr-only');
       rerender(
         <Skeleton.Group label="Loading comments" aria-busy={false} data-testid="group">
           <p>Two comments</p>
@@ -213,13 +217,13 @@ describe('Skeleton.Group (feedback-navigation#6)', () => {
       render(<Wrapper />);
       const group = screen.getByTestId('group');
       expect(group).toHaveAttribute('aria-busy', 'true');
-      expect(screen.getByText('Loading')).toHaveClass('sr-only');
+      expect(screen.getByText('Loading')).toHaveClass('wave:sr-only');
     });
 
     it('keeps the label for an explicit aria-busy={true}', () => {
       render(<Skeleton.Group aria-busy data-testid="group" />);
       expect(screen.getByTestId('group')).toHaveAttribute('aria-busy', 'true');
-      expect(screen.getByText('Loading')).toHaveClass('sr-only');
+      expect(screen.getByText('Loading')).toHaveClass('wave:sr-only');
     });
   });
 });

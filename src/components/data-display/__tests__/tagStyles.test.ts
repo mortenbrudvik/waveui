@@ -8,19 +8,28 @@ const SHAPES: readonly TagShape[] = ['circular', 'rounded'];
 
 /** Height, gap and type, then the insets of a text-only tag (D21; every inset holds the border). */
 const SIZE_CLASSES: Record<TagSize, readonly string[]> = {
-  medium: ['min-h-7', 'gap-1', 'text-body-1', 'ps-2.75', 'pe-2.75'],
-  small: ['min-h-6', 'gap-1', 'text-caption-1', 'ps-1.75', 'pe-1.75'],
-  'extra-small': ['min-h-5', 'gap-0.5', 'text-caption-1', 'ps-1.75', 'pe-1.75'],
+  medium: ['wave:min-h-7', 'wave:gap-1', 'wave:text-body-1', 'wave:ps-2.75', 'wave:pe-2.75'],
+  small: ['wave:min-h-6', 'wave:gap-1', 'wave:text-caption-1', 'wave:ps-1.75', 'wave:pe-1.75'],
+  'extra-small': [
+    'wave:min-h-5',
+    'wave:gap-0.5',
+    'wave:text-caption-1',
+    'wave:ps-1.75',
+    'wave:pe-1.75',
+  ],
 };
 
 /** The look of each appearance (D22): tokens only, a 1px border on every one. */
 const LOOK_CLASSES: Record<TagAppearance, readonly string[]> = {
-  filled: ['border-transparent', 'bg-muted', 'text-foreground'],
-  outline: ['border-stroke', 'bg-transparent', 'text-foreground'],
-  brand: ['border-transparent', 'bg-selected', 'text-selected-foreground'],
+  filled: ['wave:border-transparent', 'wave:bg-muted', 'wave:text-foreground'],
+  outline: ['wave:border-stroke', 'wave:bg-transparent', 'wave:text-foreground'],
+  brand: ['wave:border-transparent', 'wave:bg-selected', 'wave:text-selected-foreground'],
 };
 
-const SHAPE_CLASSES: Record<TagShape, string> = { circular: 'rounded-full', rounded: 'rounded' };
+const SHAPE_CLASSES: Record<TagShape, string> = {
+  circular: 'wave:rounded-full',
+  rounded: 'wave:rounded',
+};
 
 const RAW_COLOR =
   /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:white|black)\b|-(?:gray|grey|slate|zinc|neutral|blue|red)-\d/i;
@@ -33,9 +42,9 @@ describe('tagStyles', () => {
       const classes = tagRootClasses({ size, appearance, shape }).split(' ');
       expect([...classes].sort()).toEqual(
         [
-          'inline-flex',
-          'items-center',
-          'border',
+          'wave:inline-flex',
+          'wave:items-center',
+          'wave:border',
           ...SIZE_CLASSES[size],
           ...LOOK_CLASSES[appearance],
           SHAPE_CLASSES[shape],
@@ -50,7 +59,7 @@ describe('tagStyles', () => {
 
   it('keeps the size table in the order of the root, size, insets, look and shape', () => {
     expect(tagRootClasses({ size: 'medium', appearance: 'filled', shape: 'circular' })).toBe(
-      'inline-flex items-center border min-h-7 gap-1 text-body-1 ps-2.75 pe-2.75 border-transparent bg-muted text-foreground rounded-full',
+      'wave:inline-flex wave:items-center wave:border wave:min-h-7 wave:gap-1 wave:text-body-1 wave:ps-2.75 wave:pe-2.75 wave:border-transparent wave:bg-muted wave:text-foreground wave:rounded-full',
     );
   });
 

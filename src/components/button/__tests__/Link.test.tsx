@@ -155,8 +155,8 @@ describe('Link', () => {
     it('inline (default) is always underlined and thickens the underline on hover and focus', () => {
       render(<Link href="/docs">Documentation</Link>);
       const link = screen.getByRole('link', { name: 'Documentation' });
-      expect(link).toHaveClass('text-primary', 'underline');
-      expect(link).toHaveClass(`${HOVER_GATE}decoration-2`, 'focus-visible:decoration-2');
+      expect(link).toHaveClass('wave:text-primary', 'wave:underline');
+      expect(link).toHaveClass(`wave:${HOVER_GATE}decoration-2`, 'wave:focus-visible:decoration-2');
     });
 
     it('standalone is semibold and underlines on hover only', () => {
@@ -166,8 +166,12 @@ describe('Link', () => {
         </Link>,
       );
       const link = screen.getByRole('link', { name: 'Documentation' });
-      expect(link).toHaveClass('font-semibold', 'text-primary', `${HOVER_GATE}underline`);
-      expect(link).not.toHaveClass('underline');
+      expect(link).toHaveClass(
+        'wave:font-semibold',
+        'wave:text-primary',
+        `wave:${HOVER_GATE}underline`,
+      );
+      expect(link).not.toHaveClass('wave:underline');
     });
 
     it('subtle uses the foreground color and underlines on hover only', () => {
@@ -177,8 +181,8 @@ describe('Link', () => {
         </Link>,
       );
       const link = screen.getByRole('link', { name: 'Documentation' });
-      expect(link).toHaveClass('text-foreground', `${HOVER_GATE}underline`);
-      expect(link).not.toHaveClass('underline');
+      expect(link).toHaveClass('wave:text-foreground', `wave:${HOVER_GATE}underline`);
+      expect(link).not.toHaveClass('wave:underline');
     });
 
     it('gates hover styles, never uses enabled: and reduces motion', () => {
@@ -187,10 +191,10 @@ describe('Link', () => {
       expect(classes.filter((c) => c.includes('enabled:'))).toEqual([]);
       expect(
         classes.filter(
-          (c) => c.includes('hover:') && !c.startsWith('not-disabled:not-aria-disabled:'),
+          (c) => c.includes('hover:') && !c.startsWith('wave:not-disabled:not-aria-disabled:'),
         ),
       ).toEqual([]);
-      expect(classes).toContain('motion-reduce:transition-none');
+      expect(classes).toContain('wave:motion-reduce:transition-none');
     });
 
     // Untyped code that still passes it: an unknown attribute of the anchor, which React renders
@@ -208,8 +212,8 @@ describe('Link', () => {
         </Link>,
       );
       const link = screen.getByRole('link', { name: 'Documentation' });
-      expect(link).toHaveClass('text-primary', 'underline');
-      expect(link).not.toHaveClass('text-foreground');
+      expect(link).toHaveClass('wave:text-primary', 'wave:underline');
+      expect(link).not.toHaveClass('wave:text-foreground');
       expect(link).toHaveAttribute('variant', 'subtle');
       expect(warn).not.toHaveBeenCalled();
       expect(error).not.toHaveBeenCalled();
@@ -238,7 +242,7 @@ describe('Link', () => {
       expect(link).toHaveAttribute('role', 'link');
       expect(link).toHaveAttribute('aria-disabled', 'true');
       expect(link).toHaveAttribute('tabindex', '-1');
-      expect(link).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(link).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
     });
 
     it('prevents the default action of a click and does not call onClick', () => {
@@ -370,8 +374,8 @@ describe('Link', () => {
       );
       // CSS opacity dims the element's own outline too, which would put the ring below 3:1.
       expect(screen.getByRole('link', { name: 'Documentation' })).toHaveClass(
-        'opacity-50',
-        'aria-disabled:focus-visible:opacity-100',
+        'wave:opacity-50',
+        'wave:aria-disabled:focus-visible:opacity-100',
       );
     });
 
@@ -392,7 +396,7 @@ describe('Link', () => {
       expect(link).toHaveAttribute('aria-disabled', 'true');
       expect(link).toHaveAttribute('data-disabled', '');
       expect(link).toHaveAttribute('data-disabled-focusable', '');
-      expect(link).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(link).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
 
       await user.tab();
       expect(link).toHaveFocus();

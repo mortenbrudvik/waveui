@@ -27,7 +27,7 @@ describe('Avatar', () => {
     expectedTag: 'span',
     displayName: 'Avatar',
     defaultProps: { name: 'John Doe' },
-    conflictingClass: { className: 'bg-error', overrides: 'bg-primary' },
+    conflictingClass: { className: 'bg-error', overrides: 'wave:bg-primary' },
     a11yVariants: [
       { name: 'image', props: { src: PHOTO } },
       { name: 'icon without name', props: { name: undefined, icon: <svg /> } },
@@ -176,8 +176,8 @@ describe('Avatar', () => {
         expect(glyph).toHaveAttribute('aria-hidden', 'true');
         expect(glyph).toHaveAttribute('width', '60%');
         expect(glyph).toHaveAttribute('height', '60%');
-        expect(avatar).toHaveClass('bg-muted', 'text-muted-foreground');
-        expect(avatar).not.toHaveClass('bg-primary');
+        expect(avatar).toHaveClass('wave:bg-muted', 'wave:text-muted-foreground');
+        expect(avatar).not.toHaveClass('wave:bg-primary');
         // No name: the fallback glyph is decorative.
         expect(avatar).toHaveAttribute('aria-hidden', 'true');
         expect(screen.queryByRole('img')).toBeNull();
@@ -468,14 +468,14 @@ describe('Avatar', () => {
       const img = screen.getByRole('img', { name: 'Jane Doe' });
       expect(img.tagName).toBe('IMG');
       expect(img).toHaveAttribute('src', PHOTO);
-      expect(img).toHaveClass('object-cover');
+      expect(img).toHaveClass('wave:object-cover');
     });
 
     it('renders an element slot as the image itself (no nested children)', () => {
       render(<Avatar image={<img src={PHOTO} alt="Custom" className="custom-img" />} />);
       const img = screen.getByRole('img', { name: 'Custom' });
       expect(img).toHaveAttribute('src', PHOTO);
-      expect(img).toHaveClass('object-cover', 'custom-img');
+      expect(img).toHaveClass('wave:object-cover', 'custom-img');
       expect(img.childNodes).toHaveLength(0);
     });
 
@@ -483,7 +483,7 @@ describe('Avatar', () => {
       render(<Avatar image={{ src: PHOTO, alt: 'From object', className: 'custom-img' }} />);
       const img = screen.getByRole('img', { name: 'From object' });
       expect(img).toHaveAttribute('src', PHOTO);
-      expect(img).toHaveClass('object-cover', 'custom-img');
+      expect(img).toHaveClass('wave:object-cover', 'custom-img');
     });
 
     it('defaults the alt text of the object form to the name', () => {
@@ -551,12 +551,12 @@ describe('Avatar', () => {
         <Avatar src="https://example.com/missing.jpg" name="Jane Doe" data-testid="avatar" />,
       );
       const avatar = screen.getByTestId('avatar');
-      expect(avatar).not.toHaveClass('bg-primary');
+      expect(avatar).not.toHaveClass('wave:bg-primary');
       fireEvent.error(container.querySelector('img')!);
       expect(container.querySelector('img')).toBeNull();
       expect(screen.getByRole('img', { name: 'Jane Doe' })).toBe(avatar);
       expect(avatar).toHaveTextContent('JD');
-      expect(avatar).toHaveClass('bg-primary', 'text-primary-foreground');
+      expect(avatar).toHaveClass('wave:bg-primary', 'wave:text-primary-foreground');
     });
 
     // An image slot's own alt names the avatar (the avatar has no `name`).
@@ -755,7 +755,7 @@ describe('Avatar', () => {
           expect(host.querySelector('img')).toBeNull();
           const avatar = screen.getByRole('img', { name: 'Jane Doe' });
           expect(avatar).toHaveTextContent('JD');
-          expect(avatar).toHaveClass('bg-primary');
+          expect(avatar).toHaveClass('wave:bg-primary');
         } finally {
           cleanup();
         }
@@ -887,7 +887,7 @@ describe('Avatar', () => {
         render(<Avatar name="Jane Doe" icon={icon} data-testid="avatar" />);
         const avatar = screen.getByRole('img', { name: 'Jane Doe' });
         expect(avatar).toHaveTextContent('JD');
-        expect(avatar).toHaveClass('bg-primary');
+        expect(avatar).toHaveClass('wave:bg-primary');
       });
 
       it('falls back to the person glyph without a name', () => {
@@ -916,8 +916,8 @@ describe('Avatar', () => {
         render(<Avatar name="Jane Doe" icon={makeIcon()} />);
         const avatar = screen.getByRole('img', { name: 'Jane Doe' });
         expect(avatar).toHaveTextContent('JD');
-        expect(avatar).toHaveClass('bg-primary');
-        expect(avatar).not.toHaveClass('bg-muted');
+        expect(avatar).toHaveClass('wave:bg-primary');
+        expect(avatar).not.toHaveClass('wave:bg-muted');
       });
 
       it('falls back to the person glyph without a name', () => {
@@ -936,7 +936,7 @@ describe('Avatar', () => {
       render(<Avatar name="Jane Doe" icon={glyphs()} />);
       const avatar = screen.getByRole('img', { name: 'Jane Doe' });
       expect(screen.getByTestId('glyph').parentElement).toHaveAttribute('aria-hidden', 'true');
-      expect(avatar).toHaveClass('bg-muted');
+      expect(avatar).toHaveClass('wave:bg-muted');
       expect(avatar).not.toHaveTextContent('JD');
     });
   });
@@ -944,9 +944,9 @@ describe('Avatar', () => {
   // input-basic#8 / button-provider#3: token colors only.
   describe('colors', () => {
     it.each([
-      ['initials', { name: 'Jane Doe' }, ['bg-primary', 'text-primary-foreground']],
-      ['icon', { icon: <svg /> }, ['bg-muted', 'text-muted-foreground']],
-      ['fallback', {}, ['bg-muted', 'text-muted-foreground']],
+      ['initials', { name: 'Jane Doe' }, ['wave:bg-primary', 'wave:text-primary-foreground']],
+      ['icon', { icon: <svg /> }, ['wave:bg-muted', 'wave:text-muted-foreground']],
+      ['fallback', {}, ['wave:bg-muted', 'wave:text-muted-foreground']],
     ] as const)('%s mode uses token colors', (_mode, props, classes) => {
       render(<Avatar {...props} data-testid="avatar" />);
       const avatar = screen.getByTestId('avatar');
@@ -957,18 +957,18 @@ describe('Avatar', () => {
     it('paints no background behind a loaded image', () => {
       render(<Avatar src={PHOTO} name="Jane Doe" data-testid="avatar" />);
       // One class per assertion: a multi-class `.not.toHaveClass` passes when any one is missing.
-      expect(screen.getByTestId('avatar')).not.toHaveClass('bg-primary');
-      expect(screen.getByTestId('avatar')).not.toHaveClass('bg-muted');
+      expect(screen.getByTestId('avatar')).not.toHaveClass('wave:bg-primary');
+      expect(screen.getByTestId('avatar')).not.toHaveClass('wave:bg-muted');
     });
   });
 
   // data-display#16
   it.each([
-    ['extra-small', 'w-6'],
-    ['small', 'w-8'],
-    ['medium', 'w-10'],
-    ['large', 'w-12'],
-    ['extra-large', 'w-14'],
+    ['extra-small', 'wave:w-6'],
+    ['small', 'wave:w-8'],
+    ['medium', 'wave:w-10'],
+    ['large', 'wave:w-12'],
+    ['extra-large', 'wave:w-14'],
   ] as Array<[Size, string]>)('size %s renders %s', (size, width) => {
     render(<Avatar size={size} name="A" data-testid="avatar" />);
     expect(screen.getByTestId('avatar')).toHaveClass(width, width.replace('w-', 'h-'));
@@ -981,7 +981,7 @@ describe('Avatar', () => {
       { dir: 'rtl' },
     );
     const badge = screen.getByTestId('badge');
-    expect(badge).toHaveClass('end-0', 'bottom-0');
+    expect(badge).toHaveClass('wave:end-0', 'wave:bottom-0');
     expect(badge.className).not.toMatch(/\bright-0\b/);
   });
 
@@ -997,18 +997,18 @@ describe('Avatar', () => {
     );
 
     it.each([
-      [24, 'w-6', 'h-6'],
-      [20, 'w-5', 'h-5'],
-      [16, 'w-4', 'h-4'],
+      [24, 'wave:w-6', 'wave:h-6'],
+      [20, 'wave:w-5', 'wave:h-5'],
+      [16, 'wave:w-4', 'wave:h-4'],
     ] as const)(
       'an Avatar without size takes the box of AvatarSizeContext (%dpx)',
       (size, width, height) => {
         render(inBox(size, <Avatar name="Jane Doe" />));
         const avatar = screen.getByRole('img', { name: 'Jane Doe' });
-        expect(avatar).toHaveClass(width, height, 'text-[10px]');
-        expect(avatar).not.toHaveClass('w-10');
-        expect(avatar).not.toHaveClass('h-10');
-        expect(avatar).not.toHaveClass('text-sm');
+        expect(avatar).toHaveClass(width, height, 'wave:text-[10px]');
+        expect(avatar).not.toHaveClass('wave:w-10');
+        expect(avatar).not.toHaveClass('wave:h-10');
+        expect(avatar).not.toHaveClass('wave:text-sm');
         // The box is reported as the resolved size (0.13).
         expect(avatar).toHaveAttribute('data-size', String(size));
       },
@@ -1016,16 +1016,16 @@ describe('Avatar', () => {
 
     it('keeps the person glyph at 60% of the box', () => {
       const { container } = render(inBox(16, <Avatar data-testid="avatar" />));
-      expect(screen.getByTestId('avatar')).toHaveClass('w-4', 'h-4');
+      expect(screen.getByTestId('avatar')).toHaveClass('wave:w-4', 'wave:h-4');
       expect(container.querySelector('svg')).toHaveAttribute('width', '60%');
     });
 
     it('its own size wins over the context', () => {
       render(inBox(16, <Avatar name="Jane Doe" size="large" />));
       const avatar = screen.getByRole('img', { name: 'Jane Doe' });
-      expect(avatar).toHaveClass('w-12', 'h-12', 'text-base');
-      expect(avatar).not.toHaveClass('w-4');
-      expect(avatar).not.toHaveClass('h-4');
+      expect(avatar).toHaveClass('wave:w-12', 'wave:h-12', 'wave:text-base');
+      expect(avatar).not.toHaveClass('wave:w-4');
+      expect(avatar).not.toHaveClass('wave:h-4');
     });
 
     it('outside the context it keeps the medium classes', () => {
@@ -1037,8 +1037,16 @@ describe('Avatar', () => {
           </AvatarSizeContext.Provider>
         </>,
       );
-      expect(screen.getByRole('img', { name: 'Jane Doe' })).toHaveClass('w-10', 'h-10', 'text-sm');
-      expect(screen.getByRole('img', { name: 'John Doe' })).toHaveClass('w-10', 'h-10', 'text-sm');
+      expect(screen.getByRole('img', { name: 'Jane Doe' })).toHaveClass(
+        'wave:w-10',
+        'wave:h-10',
+        'wave:text-sm',
+      );
+      expect(screen.getByRole('img', { name: 'John Doe' })).toHaveClass(
+        'wave:w-10',
+        'wave:h-10',
+        'wave:text-sm',
+      );
     });
 
     it('with a badge the visual is sized, not the wrapper', () => {
@@ -1051,9 +1059,9 @@ describe('Avatar', () => {
       const root = screen.getByTestId('root');
       const visual = screen.getByRole('img', { name: 'Jane Doe' });
       expect(root).not.toBe(visual);
-      expect(visual).toHaveClass('w-5', 'h-5', 'text-[10px]');
-      expect(root).not.toHaveClass('w-5');
-      expect(root).not.toHaveClass('h-5');
+      expect(visual).toHaveClass('wave:w-5', 'wave:h-5', 'wave:text-[10px]');
+      expect(root).not.toHaveClass('wave:w-5');
+      expect(root).not.toHaveClass('wave:h-5');
     });
 
     it('is null by default and named for React DevTools', () => {
@@ -1084,31 +1092,31 @@ describe('Avatar', () => {
     it.each(NAMED)('the named size %s keeps its 0.12 box of %dpx', (size, px) => {
       render(<Avatar name="Jane Doe" size={size} />);
       expect(visual()).toHaveAttribute('data-size', size);
-      expect(visual().className).toContain(`w-${px / 4}`);
-      expect(visual().className).toContain(`h-${px / 4}`);
+      expect(visual().className).toContain(`wave:w-${px / 4}`);
+      expect(visual().className).toContain(`wave:h-${px / 4}`);
     });
 
     it.each(NUMERIC)('the numeric size %d renders its box', (px) => {
       render(<Avatar name="Jane Doe" size={px} />);
       expect(visual()).toHaveAttribute('data-size', String(px));
-      expect(visual().className).toContain(`w-${px / 4}`);
-      expect(visual().className).toContain(`h-${px / 4}`);
+      expect(visual().className).toContain(`wave:w-${px / 4}`);
+      expect(visual().className).toContain(`wave:h-${px / 4}`);
     });
 
     it('defaults to medium and renders the resolved data-size and data-shape', () => {
       render(<Avatar name="Jane Doe" />);
       expect(visual()).toHaveAttribute('data-size', 'medium');
       expect(visual()).toHaveAttribute('data-shape', 'circular');
-      expect(visual().className).toContain('rounded-full');
+      expect(visual().className).toContain('wave:rounded-full');
     });
 
     it('a square avatar is rounded-md from 40px and rounded-sm below', () => {
       const { rerender } = render(<Avatar name="Jane Doe" shape="square" size={40} />);
       expect(visual()).toHaveAttribute('data-shape', 'square');
-      expect(visual().className).toContain('rounded-md');
-      expect(visual().className).not.toContain('rounded-full');
+      expect(visual().className).toContain('wave:rounded-md');
+      expect(visual().className).not.toContain('wave:rounded-full');
       rerender(<Avatar name="Jane Doe" shape="square" size={24} />);
-      expect(visual().className).toContain('rounded-sm');
+      expect(visual().className).toContain('wave:rounded-sm');
     });
 
     it('with a badge the data attributes are on the root and the visual is sized', () => {
@@ -1160,7 +1168,7 @@ describe('Avatar', () => {
           <Avatar name="Jane Doe" />
         </AvatarSizeContext.Provider>,
       );
-      expect(visual().className).toContain('w-4');
+      expect(visual().className).toContain('wave:w-4');
       expect(visual()).toHaveAttribute('data-size', '16');
     });
 
@@ -1261,21 +1269,21 @@ describe('Avatar', () => {
     it('defaults to brand, with the 0.12 classes', () => {
       const { container } = render(<Avatar name="Jane Doe" />);
       expect(visual(container)).toHaveAttribute('data-color', 'brand');
-      expect(visual(container)).toHaveClass('bg-primary', 'text-primary-foreground');
+      expect(visual(container)).toHaveClass('wave:bg-primary', 'wave:text-primary-foreground');
     });
 
     it('neutral uses the muted pair', () => {
       const { container } = render(<Avatar name="Jane Doe" color="neutral" />);
       expect(visual(container)).toHaveAttribute('data-color', 'neutral');
-      expect(visual(container)).toHaveClass('bg-muted', 'text-muted-foreground');
+      expect(visual(container)).toHaveClass('wave:bg-muted', 'wave:text-muted-foreground');
     });
 
     it.each(NAMED)('the named color %s uses its palette pair', (color) => {
       const { container } = render(<Avatar name="Jane Doe" color={color} />);
       expect(visual(container)).toHaveAttribute('data-color', color);
       expect(visual(container)).toHaveClass(
-        `bg-palette-${color}`,
-        `text-palette-${color}-foreground`,
+        `wave:bg-palette-${color}`,
+        `wave:text-palette-${color}-foreground`,
       );
     });
 
@@ -1285,7 +1293,7 @@ describe('Avatar', () => {
       const colorA = visual(a.container).getAttribute('data-color');
       expect(NAMED).toContain(colorA);
       expect(visual(b.container)).toHaveAttribute('data-color', colorA!);
-      expect(visual(a.container)).toHaveClass(`bg-palette-${colorA}`);
+      expect(visual(a.container)).toHaveClass(`wave:bg-palette-${colorA}`);
     });
 
     it('colorful falls back to the name without an id', () => {
@@ -1332,12 +1340,12 @@ describe('Avatar', () => {
     it('an image avatar ignores the color classes but reports the color', () => {
       const { container } = render(<Avatar name="Jane Doe" src={PHOTO} color="red" />);
       expect(visual(container)).toHaveAttribute('data-color', 'red');
-      expect(visual(container).className).not.toContain('bg-palette-red');
+      expect(visual(container).className).not.toContain('wave:bg-palette-red');
     });
 
     it('an icon avatar keeps the muted pair', () => {
       const { container } = render(<Avatar name="Jane Doe" icon={<svg />} color="red" />);
-      expect(visual(container)).toHaveClass('bg-muted', 'text-muted-foreground');
+      expect(visual(container)).toHaveClass('wave:bg-muted', 'wave:text-muted-foreground');
     });
 
     it('types the colors', () => {
@@ -1359,10 +1367,10 @@ describe('Avatar', () => {
     });
 
     it.each([
-      ['ring', ['ring-2', 'ring-primary']],
-      ['ring-shadow', ['ring-2', 'ring-primary', 'shadow-8']],
-      ['shadow', ['shadow-8']],
-      ['glow', ['shadow-[0_0_0.5rem_0.125rem_var(--wave-primary)]']],
+      ['ring', ['wave:ring-2', 'wave:ring-primary']],
+      ['ring-shadow', ['wave:ring-2', 'wave:ring-primary', 'wave:shadow-8']],
+      ['shadow', ['wave:shadow-8']],
+      ['glow', ['wave:shadow-[0_0_0.5rem_0.125rem_var(--wave-primary)]']],
     ] as const)('an active avatar draws the %s appearance', (activeAppearance, classes) => {
       const { container } = render(
         <Avatar name="Jane Doe" active="active" activeAppearance={activeAppearance} />,
@@ -1383,20 +1391,23 @@ describe('Avatar', () => {
     it('an inactive avatar is dimmed, with a reduced-motion variant on its transition', () => {
       const { container } = render(<Avatar name="Jane Doe" active="inactive" />);
       expect(container.firstElementChild).toHaveAttribute('data-active', 'inactive');
-      expect(visual(container)).toHaveClass('opacity-60', 'motion-reduce:transition-none');
+      expect(visual(container)).toHaveClass(
+        'wave:opacity-60',
+        'wave:motion-reduce:transition-none',
+      );
     });
 
     it.each([
-      [16, 'size-2'],
-      [24, 'size-2'],
-      [28, 'size-2.5'],
-      [32, 'size-2.5'],
-      [36, 'size-3'],
-      [56, 'size-3'],
-      [64, 'size-4'],
-      [96, 'size-4'],
-      [120, 'size-5'],
-      [128, 'size-5'],
+      [16, 'wave:size-2'],
+      [24, 'wave:size-2'],
+      [28, 'wave:size-2.5'],
+      [32, 'wave:size-2.5'],
+      [36, 'wave:size-3'],
+      [56, 'wave:size-3'],
+      [64, 'wave:size-4'],
+      [96, 'wave:size-4'],
+      [120, 'wave:size-5'],
+      [128, 'wave:size-5'],
     ] as const)('a PresenceBadge in the badge slot of a %dpx avatar is %s', (size, boxClass) => {
       render(<Avatar name="Jane Doe" size={size} badge={<PresenceBadge status="busy" />} />);
       expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass(boxClass);
@@ -1404,19 +1415,19 @@ describe('Avatar', () => {
 
     it('named sizes map the same way', () => {
       render(<Avatar name="Jane Doe" size="large" badge={<PresenceBadge status="busy" />} />);
-      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-3');
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('wave:size-3');
     });
 
     it("the badge's own size wins", () => {
       render(
         <Avatar name="Jane Doe" size={128} badge={<PresenceBadge status="busy" size="small" />} />,
       );
-      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-2.5');
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('wave:size-2.5');
     });
 
     it('a PresenceBadge outside an avatar stays medium', () => {
       render(<PresenceBadge status="busy" />);
-      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-3');
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('wave:size-3');
     });
 
     it('the badge keeps its own role and name beside the avatar, with no violations', async () => {
@@ -1454,14 +1465,14 @@ describe('Avatar — slotProps', () => {
   );
 
   // Captured from 112d7f8's dist (client and server agree).
-  const SIZE = 'rounded-full w-10 h-10 text-sm';
-  const VISUAL = `wave-avatar__visual inline-flex items-center justify-center overflow-hidden shrink-0 font-bold ${SIZE}`;
+  const SIZE = 'wave:rounded-full wave:w-10 wave:h-10 wave:text-sm';
+  const VISUAL = `wave-avatar__visual wave:inline-flex wave:items-center wave:justify-center wave:overflow-hidden wave:shrink-0 wave:font-bold ${SIZE}`;
   const STATE =
     'data-active="unset" data-active-appearance="ring" data-color="brand" data-shape="circular" data-size="medium"';
   const BASE_PINS = [
-    `<span aria-label="Jane Doe" class="wave-avatar ${VISUAL} bg-primary text-primary-foreground" ${STATE} role="img">`,
-    `<span aria-label="Jane Doe" class="${VISUAL} bg-primary text-primary-foreground" role="img">`,
-    `<span aria-hidden="true" class="wave-avatar ${VISUAL} bg-muted text-muted-foreground" ${STATE}>`,
+    `<span aria-label="Jane Doe" class="wave-avatar ${VISUAL} wave:bg-primary wave:text-primary-foreground" ${STATE} role="img">`,
+    `<span aria-label="Jane Doe" class="${VISUAL} wave:bg-primary wave:text-primary-foreground" role="img">`,
+    `<span aria-hidden="true" class="wave-avatar ${VISUAL} wave:bg-muted wave:text-muted-foreground" ${STATE}>`,
   ].join('\n');
 
   it('renders the visual of 112d7f8 (attributes sorted), on the client and the server', () => {
@@ -1531,7 +1542,7 @@ describe('Avatar — slotProps', () => {
     expect(root.classList[1]).toBe(avatarClassNames.visual);
     expect(root).toHaveClass('my-avatar', 'my-visual', 'bg-error');
     // Your class replaces a conflicting one of the part.
-    expect(root).not.toHaveClass('bg-primary');
+    expect(root).not.toHaveClass('wave:bg-primary');
     expect(root).toHaveStyle({ opacity: '0.25', marginTop: '2px' });
     // The avatar's own props and its state win; you add what it does not set.
     expect(root).toHaveAttribute('id', 'own');

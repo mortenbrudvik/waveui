@@ -172,7 +172,14 @@ describe('a className with presence variants is a plain class list (the rule is 
     render(
       <FileMenu root={{ defaultOpen: true }} popover={{ className: presenceClasses.join(' ') }} />,
     );
-    expect(menu('File')).toHaveClass(...motionClasses(popupMotion), ...presenceClasses);
+    // The className's exit opacity replaces the recipe's own word of the same variant (1.0: the
+    // recipe's carries the prefix, so the two are no longer one string); the rest stays.
+    const replaced = 'wave:data-[presence=exiting]:opacity-0';
+    expect(menu('File')).toHaveClass(
+      ...motionClasses(popupMotion).filter((word) => word !== replaced),
+      ...presenceClasses,
+    );
+    expect(menu('File')).not.toHaveClass(replaced);
     expect(Array.from(menu('File').classList).slice(-2)).toEqual(presenceClasses);
   });
 
@@ -181,10 +188,10 @@ describe('a className with presence variants is a plain class list (the rule is 
     expect(menu('File')).toHaveClass(...storyClasses);
     // `transition-opacity` and `duration-wave-fast` replace the default's property list and
     // duration (the same variant); the rest of the default stays, its slide included.
-    expect(menu('File')).not.toHaveClass('transition-[opacity,translate]');
-    expect(menu('File')).not.toHaveClass('duration-wave-normal');
+    expect(menu('File')).not.toHaveClass('wave:transition-[opacity,translate]');
+    expect(menu('File')).not.toHaveClass('wave:duration-wave-normal');
     const kept = motionClasses(popupMotion).filter(
-      (word) => word.startsWith('data-[side=') || word.startsWith('ease-wave-'),
+      (word) => word.startsWith('wave:data-[side=') || word.startsWith('wave:ease-wave-'),
     );
     expect(kept.length).toBeGreaterThan(0);
     expect(menu('File')).toHaveClass(...kept);

@@ -375,7 +375,7 @@ function FruitOrder(props: TagGroupProps) {
           Reset
         </Button>
       </div>
-      <output className="text-caption-1 text-muted-foreground">
+      <output className="text-wave-caption-1 text-wave-muted-foreground">
         {submitted === null ? 'Nothing submitted yet' : `Submitted: ${submitted || 'nothing'}`}
       </output>
     </form>

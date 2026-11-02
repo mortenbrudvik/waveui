@@ -66,17 +66,17 @@ export type StrictImageProps = ImageProps;
 
 const fitMap: Record<ImageFit, string> = {
   // wave-allow-physical: the anchor is the image's own corner; image pixels never mirror in RTL.
-  none: 'object-none object-left-top',
-  center: 'object-none object-center',
-  contain: 'object-contain',
-  cover: 'object-cover',
+  none: 'wave:object-none wave:object-left-top',
+  center: 'wave:object-none wave:object-center',
+  contain: 'wave:object-contain',
+  cover: 'wave:object-cover',
   default: '',
 };
 
 const shapeMap: Record<ImageShape, string> = {
-  circular: 'rounded-full',
-  rounded: 'rounded',
-  square: 'rounded-none',
+  circular: 'wave:rounded-full',
+  rounded: 'wave:rounded',
+  square: 'wave:rounded-none',
 };
 
 /**
@@ -121,10 +121,10 @@ export const Image = ({
         shapeMap[shape],
         // Set here, not left to Preflight (C-NATIVE). The default fit fills the box, so an
         // automatic height keeps the aspect ratio; the other fits fit the image into the box.
-        block ? 'block w-full' : 'inline-block max-w-full',
-        fit === 'default' && 'h-auto',
-        shadow && 'shadow-4',
-        bordered && 'border border-border',
+        block ? 'wave:block wave:w-full' : 'wave:inline-block wave:max-w-full',
+        fit === 'default' && 'wave:h-auto',
+        shadow && 'wave:shadow-4',
+        bordered && 'wave:border wave:border-border',
         className,
       )}
       {...rest}

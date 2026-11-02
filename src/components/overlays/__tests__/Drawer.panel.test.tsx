@@ -13,7 +13,7 @@ import {
 } from '../Dialog.shared';
 import { Popover } from '../Popover';
 import { Toaster } from '../../feedback/Toaster';
-import { cn } from '../../../lib/cn';
+import { wcn } from '../../../lib/cn';
 import { drawerClassNames, navDrawerClassNames } from '../../../lib/classNames';
 import { getTopmostLayer } from '../../../lib/layers';
 
@@ -165,10 +165,17 @@ describe('DrawerPanel (the drawer panel shell)', () => {
       expect(panel).toHaveAttribute('data-presence', 'entered');
       expect(panel).not.toHaveAttribute('data-separator');
       expect(panel.classList[0]).toBe(drawerClassNames.root);
-      expect(panel).toHaveClass('fixed', 'flex', 'flex-col', 'shadow-64', 'end-0', 'border-s');
+      expect(panel).toHaveClass(
+        'wave:fixed',
+        'wave:flex',
+        'wave:flex-col',
+        'wave:shadow-64',
+        'wave:end-0',
+        'wave:border-s',
+      );
       // The consumer's className comes last and replaces the size's width.
       expect(panel).toHaveClass('w-96');
-      expect(panel).not.toHaveClass('w-80');
+      expect(panel).not.toHaveClass('wave:w-80');
     });
 
     it('renders the backdrop before the panel with backdropClassName first', () => {
@@ -194,7 +201,7 @@ describe('DrawerPanel (the drawer panel shell)', () => {
       expect(within(panel).queryByRole('heading')).not.toBeInTheDocument();
       expect(panel.querySelector('.' + drawerClassNames.header)).toBeNull();
       expect(panel.querySelector('.' + drawerClassNames.body)).toBeNull();
-      expect(panel).not.toHaveClass('p-4');
+      expect(panel).not.toHaveClass('wave:p-4');
       // No aria-labelledby of its own: the caller names the panel.
       expect(panel).not.toHaveAttribute('aria-labelledby');
     });
@@ -228,12 +235,17 @@ describe('DrawerPanel (the drawer panel shell)', () => {
     it('always renders data-size, the given size included, with the size class of the axis', () => {
       const { unmount } = render(<Shell defaultOpen size="medium" />);
       expect(panelElement()).toHaveAttribute('data-size', 'medium');
-      expect(panelElement()).toHaveClass('w-148');
+      expect(panelElement()).toHaveClass('wave:w-148');
       unmount();
       render(<Shell defaultOpen size="large" position="bottom" />);
       expect(panelElement()).toHaveAttribute('data-size', 'large');
       expect(panelElement()).toHaveAttribute('data-position', 'bottom');
-      expect(panelElement()).toHaveClass('h-235', 'bottom-0', 'inset-x-0', 'border-t');
+      expect(panelElement()).toHaveClass(
+        'wave:h-235',
+        'wave:bottom-0',
+        'wave:inset-x-0',
+        'wave:border-t',
+      );
     });
 
     it('renders nothing while closed, and nothing on the first render before hydration', () => {
@@ -270,15 +282,15 @@ describe('DrawerPanel (the drawer panel shell)', () => {
       expect(panel).toHaveAttribute('data-presence', 'entered');
       expect(panel.classList[0]).toBe(drawerClassNames.root);
       expect(panel).toHaveClass(
-        'relative',
-        'shrink-0',
-        'border-transparent',
-        'data-[separator]:border-border',
-        'forced-colors:border-[CanvasText]',
-        'border-e',
-        'w-80',
+        'wave:relative',
+        'wave:shrink-0',
+        'wave:border-transparent',
+        'wave:data-[separator]:border-border',
+        'wave:forced-colors:border-[CanvasText]',
+        'wave:border-e',
+        'wave:w-80',
       );
-      expect(panel).not.toHaveClass('fixed', 'shadow-64');
+      expect(panel).not.toHaveClass('wave:fixed', 'wave:shadow-64');
       expect(document.querySelector('.' + drawerClassNames.backdrop)).toBeNull();
       // The trigger renders before the panel.
       expect(button('Toggle').compareDocumentPosition(panel)).toBe(
@@ -296,7 +308,7 @@ describe('DrawerPanel (the drawer panel shell)', () => {
       expect(panel).toBe(panelElement());
       expect(panel.localName).toBe('aside');
       expect(panel).not.toHaveAttribute('data-separator');
-      expect(panel).toHaveClass('border-s');
+      expect(panel).toHaveClass('wave:border-s');
     });
 
     it('ignores separator on an overlay', () => {
@@ -632,7 +644,7 @@ describe('DrawerPanel (the drawer panel shell)', () => {
             defaultOpen
             id="variant"
             aria-label="Variant"
-            rootClassName={cn(drawerClassNames.root, navDrawerClassNames.root)}
+            rootClassName={wcn(drawerClassNames.root, navDrawerClassNames.root)}
           />
         </>,
       );
@@ -650,7 +662,7 @@ describe('DrawerPanel (the drawer panel shell)', () => {
       render(
         <Shell
           defaultOpen
-          backdropClassName={cn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
+          backdropClassName={wcn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
         />,
       );
       const backdrop = document.querySelector('.' + drawerClassNames.backdrop)!;

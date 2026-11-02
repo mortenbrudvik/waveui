@@ -29,8 +29,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  BRAND_TOKENS_BUDGET,
-  BUDGET_MARGIN_0_18,
+  BASELINES_0_18_1,
+  BUDGET_MARGIN_1_0,
   checkClassNameExports,
   checkDeclarations,
   checkDevEnvironment,
@@ -46,8 +46,6 @@ import {
   clientReferenceStub,
   createWorkDir,
   CUSTOMIZATION_MODULES,
-  BASELINES_0_17_1,
-  DATA_GRID_BUDGET,
   DATA_SCALE_MODULES,
   DEV_ONLY_LIBRARIES,
   directivePrologue,
@@ -83,9 +81,7 @@ import {
   probeIncludes,
   probeSizeBudget,
   probeTreeShaking,
-  RECORDED_IMPORTS,
-  RECORDED_IMPORTS_0_17,
-  RECORDED_IMPORTS_0_18,
+  RECORDED_IMPORTS_1_0,
   removeWorkDir,
   REQUIRED_DECLARATIONS,
   runScript,
@@ -94,13 +90,16 @@ import {
   undocumentedComponents,
   VALUE_AND_TYPE_DECLARATIONS,
   verifyDist,
-  VIRTUAL_BUDGET,
-  WAVE_TOKENS_BUDGET,
 } from '../verify-dist.mjs';
 // The source of `dist/lib/motion.mjs` (0.15): MOTION_RECIPE_MIN is the count of its literals.
 import * as motionSource from '../../src/lib/motion.ts';
 
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
+
+/** The record of `records` whose names, joined with ` + `, are `label`. */
+const recordOf = (records, label) => records.find(({ names }) => names.join(' + ') === label);
+/** The budget of the 1.0 record of `label` (RECORDED_IMPORTS_1_0, spec R7 of Phase 14). */
+const budgetOf = (label) => recordOf(RECORDED_IMPORTS_1_0, label).budget;
 // Removed with its parent once no other run uses the parent (no empty directory is left behind).
 const fixtureRun = createWorkDir(
   join(repoRoot, 'node_modules', '.cache', 'wave-verify-dist-test'),
@@ -3560,29 +3559,8 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     expect(INCLUSION_PROBES_0_16.map(({ keep }) => keep)).toEqual(['DataGrid', 'FlatTree', 'Tree']);
     expect(INCLUSION_PROBES_0_16[2].modules).toEqual(['lib/treeCascade.mjs']);
 
-    // Measured in 0.16.0 (3,532 and 1,695 bytes), plus 25 %; gzip at the ceiling of 2 KiB.
-    expect(VIRTUAL_BUDGET).toEqual({
-      names: ['useVirtualWindow'],
-      maxMinifiedBytes: 4415,
-      maxGzipBytes: 2048,
-      allowedExternals: ['react'],
-    });
-    // Measured in 0.16.0 (69,592 and 23,545 bytes), plus 25 % (86,990 and 29,431), until 0.18
-    // re-set it from the size measured at the end of Phase 13 (73,310 and 24,921) plus 512 and 192
-    // (spec R23; RECORDED_IMPORTS_0_18 holds it).
-    expect(DATA_GRID_BUDGET).toEqual({
-      names: ['DataGrid'],
-      maxMinifiedBytes: 73822,
-      maxGzipBytes: 25113,
-      allowedExternals: ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'],
-    });
-    // Printed against 0.15.0 for drift; the budgets live in the newest record.
-    expect(RECORDED_IMPORTS).toEqual([
-      { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
-      { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
-      { names: ['Button'], baseline: { version: '0.15.0', minified: 11195, gzip: 3855 } },
-      { names: ['MessageBar'], baseline: { version: '0.15.0', minified: 26831, gzip: 9312 } },
-    ]);
+    // The window's and the DataGrid-only budgets, and the drift records against 0.15.0, are
+    // folded into RECORDED_IMPORTS_1_0 since 1.0 (pinned with it, spec R7 of Phase 14).
   });
 
   it('the hook probes pass on a correct dist and report a component or the JSX runtime in the bundle', async () => {
@@ -3739,7 +3717,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     expect(measured.externals).toEqual(['react']);
     expect(measured.minified).toBeGreaterThan(0);
     expect(measured.gzip).toBeGreaterThan(0);
-    const budget = await probeSizeBudget(dist, VIRTUAL_BUDGET);
+    const budget = await probeSizeBudget(dist, budgetOf('useVirtualWindow'));
     expect(budget).toEqual({ ...measured, errors: [] });
   });
 
@@ -3765,11 +3743,13 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       body: `const TABLE = ${JSON.stringify(noise(8000))};\n${spec.body.replace('[{', '[TABLE, {')}`,
     }));
     const result = await verifyDist(fixture(big).dist, noPending);
-    expect(result.virtualBudget.minified).toBeGreaterThan(VIRTUAL_BUDGET.maxMinifiedBytes);
-    expect(result.virtualBudget.gzip).toBeGreaterThan(VIRTUAL_BUDGET.maxGzipBytes);
+    const windowRecord = recordOf(result.recorded, 'useVirtualWindow');
+    const { maxMinifiedBytes, maxGzipBytes } = budgetOf('useVirtualWindow');
+    expect(windowRecord.minified).toBeGreaterThan(maxMinifiedBytes);
+    expect(windowRecord.gzip).toBeGreaterThan(maxGzipBytes);
     expect(result.errors).toEqual([
-      `useVirtualWindow: ${result.virtualBudget.minified} bytes minified, over the budget of 4415`,
-      `useVirtualWindow: ${result.virtualBudget.gzip} bytes gzip, over the budget of 2048`,
+      `useVirtualWindow: ${windowRecord.minified} bytes minified, over the budget of ${maxMinifiedBytes}`,
+      `useVirtualWindow: ${windowRecord.gzip} bytes gzip, over the budget of ${maxGzipBytes}`,
     ]);
 
     const withClsx = changed('lib/virtual', (spec) => ({
@@ -3783,9 +3763,10 @@ describe('the 0.16 probes (INTEGRATION)', () => {
   }, 180_000);
 
   it('verifyDist gates the DataGrid-only import: passes on a correct dist, reports a grid over its budget and an import outside the dependencies', async () => {
-    const good = await probeSizeBudget(fixture().dist, DATA_GRID_BUDGET);
+    const dataGridBudget = budgetOf('DataGrid');
+    const good = await probeSizeBudget(fixture().dist, dataGridBudget);
     expect(good.errors).toEqual([]);
-    expect(good.minified).toBeLessThanOrEqual(DATA_GRID_BUDGET.maxMinifiedBytes);
+    expect(good.minified).toBeLessThanOrEqual(dataGridBudget.maxMinifiedBytes);
 
     // 120,000 characters of random base64, which gzip cannot shrink below 6 bits each (`noise`
     // repeats too soon at this length): over both budgets.
@@ -3795,13 +3776,13 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       body: `const TABLE = ${JSON.stringify(table)};\n${spec.body.replace("createElement('table', null", "createElement('table', { title: TABLE }")}`,
     }));
     const result = await verifyDist(fixture(big).dist, noPending);
-    const [dataGrid] = result.recorded;
-    expect(dataGrid.minified).toBeGreaterThan(DATA_GRID_BUDGET.maxMinifiedBytes);
-    expect(dataGrid.gzip).toBeGreaterThan(DATA_GRID_BUDGET.maxGzipBytes);
-    // Reported once, by the 0.18 record that holds the budget.
+    const dataGrid = recordOf(result.recorded, 'DataGrid');
+    expect(dataGrid.minified).toBeGreaterThan(dataGridBudget.maxMinifiedBytes);
+    expect(dataGrid.gzip).toBeGreaterThan(dataGridBudget.maxGzipBytes);
+    // Reported once, by the 1.0 record that holds the budget.
     expect(result.errors).toEqual([
-      `DataGrid: ${dataGrid.minified} bytes minified, over the budget of 73822`,
-      `DataGrid: ${dataGrid.gzip} bytes gzip, over the budget of 25113`,
+      `DataGrid: ${dataGrid.minified} bytes minified, over the budget of ${dataGridBudget.maxMinifiedBytes}`,
+      `DataGrid: ${dataGrid.gzip} bytes gzip, over the budget of ${dataGridBudget.maxGzipBytes}`,
     ]);
 
     const withLibrary = changed('components/table/DataGrid.window', (spec) => ({
@@ -3812,7 +3793,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
         'window: rows(options.virtualWindow)',
       ),
     }));
-    expect(await probeSizeBudget(fixture(withLibrary).dist, DATA_GRID_BUDGET)).toEqual({
+    expect(await probeSizeBudget(fixture(withLibrary).dist, dataGridBudget)).toEqual({
       minified: expect.any(Number),
       gzip: expect.any(Number),
       externals: ['react', 'virtual-rows'],
@@ -3822,10 +3803,10 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     });
   }, 90_000);
 
-  it('verifyDist measures the recorded imports, and main prints them with the window and DataGrid budgets', async () => {
+  it('verifyDist measures each recorded import once, and main prints each with its budget against 0.18.1', async () => {
     const { dist } = fixture();
     const measured = [];
-    const { errors, virtualBudget, recorded } = await verifyDist(dist, {
+    const { errors, recorded } = await verifyDist(dist, {
       ...noPending,
       measure: (root, names) => {
         measured.push(names.join(' + '));
@@ -3833,48 +3814,30 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       },
     });
     expect(errors).toEqual([]);
-    expect(virtualBudget).toEqual({ minified: expect.any(Number), gzip: expect.any(Number) });
-    // 0.17 appends its own records (RECORDED_IMPORTS_0_17, against 0.16.0), and 0.18 its own
-    // (RECORDED_IMPORTS_0_18, against 0.17.1).
     expect(recorded).toEqual(
-      [...RECORDED_IMPORTS, ...RECORDED_IMPORTS_0_17, ...RECORDED_IMPORTS_0_18].map((entry) => ({
+      RECORDED_IMPORTS_1_0.map((entry) => ({
         ...entry,
         minified: expect.any(Number),
         gzip: expect.any(Number),
       })),
     );
-    // An import recorded in several lists is measured once: one measurement per label.
-    const labels = recorded.map(({ names }) => names.join(' + '));
-    expect([...measured].sort()).toEqual([...new Set(labels)].sort());
-    for (const label of ['DataGrid', 'Tree', 'Button', 'MessageBar']) {
-      expect(labels.filter((each) => each === label).length, label).toBeGreaterThan(1);
-      expect(
-        measured.filter((each) => each === label),
-        label,
-      ).toEqual([label]);
-    }
+    // One list since 1.0: one measurement per record.
+    expect(measured).toEqual(RECORDED_IMPORTS_1_0.map(({ names }) => names.join(' + ')));
     const lines = [];
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     expect(await main(['--dist', dist, '--no-pending'], io)).toBe(0);
     const output = lines.join('\n');
-    expect(output).toMatch(
-      /verify-dist: window \(useVirtualWindow\): \d+ B minified \(budget 4415\), \d+ B gzip \(budget 2048\)/,
-    );
-    expect(output).toMatch(
-      /verify-dist: DataGrid-only import: \d+ B minified \(budget 73822\), \d+ B gzip \(budget 25113\) \(0\.17\.1: 70097 B, 23719 B; [+-]\d+\.\d{2} %, [+-]\d+\.\d{2} %\)/,
-    );
-    for (const [name, minified, gzip] of [
-      ['DataGrid', 48403, 16520],
-      ['Tree', 47248, 16201],
-      ['Button', 11195, 3855],
-      ['MessageBar', 26831, 9312],
-    ]) {
+    for (const { names, baseline, budget } of RECORDED_IMPORTS_1_0) {
       expect(output).toMatch(
         new RegExp(
-          `verify-dist: ${name}-only import: \\d+ B minified, \\d+ B gzip \\(0\\.15\\.0: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
+          `verify-dist: ${names.join(' \\+ ')}-only import: \\d+ B minified \\(budget ${budget.maxMinifiedBytes}\\), ` +
+            `\\d+ B gzip \\(budget ${budget.maxGzipBytes}\\) \\(0\\.18\\.1: ${baseline.minified} B, ` +
+            `${baseline.gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
         ),
       );
     }
+    // No comparison with an older release and no separate presence or window line any more.
+    expect(output).not.toMatch(/0\.15\.0|0\.16\.0|0\.17\.1|presence core \(|window \(/);
   }, 180_000);
 
   it('the real exports carry the 0.16 flat names', async () => {
@@ -4012,56 +3975,9 @@ describe('the 0.17 probes (INTEGRATION)', () => {
     ]);
     expect(DEV_ONLY_LIBRARIES).toEqual(['recharts', 'chart.js', 'kurkle']);
 
-    // Spec §10: 3 KiB gzip; minified, the size first measured for 0.17.0 (3,596 and 3,071 bytes)
-    // plus 25 %.
-    expect(BRAND_TOKENS_BUDGET).toEqual({
-      names: ['createBrandTokens'],
-      maxMinifiedBytes: 4495,
-      maxGzipBytes: 3072,
-      allowedExternals: [],
-    });
-    expect(WAVE_TOKENS_BUDGET).toEqual({
-      names: ['waveTokens'],
-      maxMinifiedBytes: 3839,
-      maxGzipBytes: 3072,
-      allowedExternals: [],
-    });
-    // The published 0.16.0 package, measured with this release's tools (the printed comparison).
-    // The five component imports are printed for drift only: 0.18 budgets them against 0.17.1
-    // (RECORDED_IMPORTS_0_18).
-    const records = [
-      [['Button'], { minified: 11195, gzip: 3855 }],
-      [['MessageBar'], { minified: 26831, gzip: 9312 }],
-      [['Tree'], { minified: 47248, gzip: 16196 }],
-      [['Dialog'], { minified: 70721, gzip: 23723 }],
-      [['WaveProvider', 'Dialog'], { minified: 71884, gzip: 24127 }],
-    ];
-    expect(RECORDED_IMPORTS_0_17).toEqual([
-      { names: ['createBrandTokens'], baseline: null, budget: BRAND_TOKENS_BUDGET },
-      { names: ['waveTokens'], baseline: null, budget: WAVE_TOKENS_BUDGET },
-      ...records.map(([names, baseline]) => ({
-        names,
-        baseline: { version: '0.16.0', ...baseline },
-      })),
-    ]);
-    // The 0.17 allowances (Dialog +0.4 KiB, WaveProvider with Dialog +0.7 KiB), rounded down: a
-    // budget never above the spec's figure.
-    expect(Math.floor(0.4 * 1024)).toBe(409);
-    expect(Math.floor(0.7 * 1024)).toBe(716);
-    // The 0.16.0 figures of Button, MessageBar and Tree are those of the 0.16.0 CHANGELOG.
-    const changelog = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
-    const section = changelog.slice(changelog.indexOf('## [0.16.0]'));
-    for (const [name, minified, gzip] of [
-      ['Tree', '47,248', '16,196'],
-      ['Button', '11,195', '3,855'],
-      ['MessageBar', '26,831', '9,312'],
-    ]) {
-      expect(section, name).toMatch(
-        new RegExp(
-          `An import of only \`${name}\` \\| [^|]+ \\| ${minified} \\(${gzip} gzip\\) \\|`,
-        ),
-      );
-    }
+    // The budgets of createBrandTokens and waveTokens (through 0.18 3 KiB gzip; minified, the
+    // size first measured for 0.17.0 plus 25 %) and the drift records against 0.16.0 are folded
+    // into RECORDED_IMPORTS_1_0 since 1.0 (pinned with it, spec R7 of Phase 14).
   });
 
   it('the hook probes pass on a correct dist built for production, whatever NODE_ENV this process has', async () => {
@@ -4383,7 +4299,7 @@ describe('the 0.17 probes (INTEGRATION)', () => {
     ]);
   }, 180_000);
 
-  it('verifyDist gates the 0.17 budgets: passes on a correct dist, reports an import over its budget', async () => {
+  it('verifyDist gates the createBrandTokens budget: passes on a correct dist, reports an import over its budget', async () => {
     const good = await verifyDist(fixture().dist, noPending);
     expect(good.errors).toEqual([]);
     // 120,000 characters of random base64 (see the DataGrid budget): over every budget.
@@ -4395,45 +4311,13 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       })),
     );
     const result = await verifyDist(dist, noPending);
-    // The 0.17 records follow those of RECORDED_IMPORTS (against 0.15.0, without these budgets).
-    const records = result.recorded.slice(RECORDED_IMPORTS.length);
-    const brand = records.find(({ names }) => names.join() === 'createBrandTokens');
-    const button = records.find(({ names }) => names.join() === 'Button');
-    expect(brand.baseline).toBeNull();
-    // The component imports of 0.17 have no budget there since 0.18 (RECORDED_IMPORTS_0_18).
-    expect(button.baseline.version).toBe('0.16.0');
-    expect(button.budget).toBeUndefined();
+    const brand = recordOf(result.recorded, 'createBrandTokens');
+    const { maxMinifiedBytes, maxGzipBytes } = budgetOf('createBrandTokens');
+    expect(brand.baseline).toEqual({ version: '0.18.1', minified: 3630, gzip: 1956 });
     expect(result.errors).toEqual([
-      `createBrandTokens: ${brand.minified} bytes minified, over the budget of 4495`,
-      `createBrandTokens: ${brand.gzip} bytes gzip, over the budget of 3072`,
+      `createBrandTokens: ${brand.minified} bytes minified, over the budget of ${maxMinifiedBytes}`,
+      `createBrandTokens: ${brand.gzip} bytes gzip, over the budget of ${maxGzipBytes}`,
     ]);
-  }, 180_000);
-
-  it('main prints the 0.17 imports against 0.16.0, and the new ones with their budgets', async () => {
-    const lines = [];
-    const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
-    expect(await main(['--dist', fixture().dist, '--no-pending'], io)).toBe(0);
-    const output = lines.join('\n');
-    expect(output).toMatch(
-      /verify-dist: createBrandTokens-only import: \d+ B minified \(budget 4495\), \d+ B gzip \(budget 3072\)\n/,
-    );
-    expect(output).toMatch(
-      /verify-dist: waveTokens-only import: \d+ B minified \(budget 3839\), \d+ B gzip \(budget 3072\)\n/,
-    );
-    // Without a budget since 0.18, which prints them with theirs against 0.17.1.
-    for (const [label, minified, gzip] of [
-      ['Button', 11195, 3855],
-      ['MessageBar', 26831, 9312],
-      ['Tree', 47248, 16196],
-      ['Dialog', 70721, 23723],
-      ['WaveProvider \\+ Dialog', 71884, 24127],
-    ]) {
-      expect(output).toMatch(
-        new RegExp(
-          `verify-dist: ${label}-only import: \\d+ B minified, \\d+ B gzip \\(0\\.16\\.0: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
-        ),
-      );
-    }
   }, 180_000);
 
   it('the real exports carry the 0.17 names', async () => {
@@ -4641,71 +4525,97 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       },
     ]);
 
-    // Spec R23: each budget is the size measured at the end of Phase 13 plus 512 bytes minified
-    // and 192 gzip; each import is printed against its size in the published 0.17.1 package.
-    expect(BUDGET_MARGIN_0_18).toEqual({ minified: 512, gzip: 192 });
-    expect(BASELINES_0_17_1).toEqual({
-      Button: { minified: 11222, gzip: 3866 },
-      MessageBar: { minified: 26858, gzip: 9324 },
-      Tree: { minified: 47327, gzip: 16232 },
-      Dialog: { minified: 70850, gzip: 23786 },
-      'WaveProvider + Dialog': { minified: 73403, gzip: 24778 },
-      DataGrid: { minified: 70097, gzip: 23719 },
+    // The 0.18 records (spec R23) are folded into RECORDED_IMPORTS_1_0 (spec R7 of Phase 14).
+  });
+
+  it('pins RECORDED_IMPORTS_1_0: every budget is the size measured at the flip plus the margin (spec R7 of Phase 14)', () => {
+    // Each budget is the size measured at the flip plus 512 bytes minified and 192 gzip; each
+    // import is printed against its size in the published 0.18.1 package.
+    expect(BUDGET_MARGIN_1_0).toEqual({ minified: 512, gzip: 192 });
+    expect(BASELINES_0_18_1).toEqual({
+      Button: { minified: 11079, gzip: 3865 },
+      MessageBar: { minified: 29221, gzip: 10201 },
+      Tree: { minified: 50383, gzip: 17271 },
+      Dialog: { minified: 72599, gzip: 24466 },
+      'WaveProvider + Dialog': { minified: 75147, gzip: 25458 },
+      DataGrid: { minified: 73306, gzip: 24926 },
+      'usePresence + Presence': { minified: 5453, gzip: 2341 },
+      useVirtualWindow: { minified: 3868, gzip: 1817 },
+      createBrandTokens: { minified: 3630, gzip: 1956 },
+      waveTokens: { minified: 3071, gzip: 969 },
     });
     const components = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
     const portal = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
     const records = [
-      [['Button'], [11222, 3866], [11079, 3865], [11591, 4057], components],
-      [['MessageBar'], [26858, 9324], [29185, 10188], [29697, 10380], components],
-      [['Tree'], [47327, 16232], [50387, 17260], [50899, 17452], components],
-      [['Dialog'], [70850, 23786], [72599, 24466], [73111, 24658], portal],
-      [['WaveProvider', 'Dialog'], [73403, 24778], [75147, 25458], [75659, 25650], portal],
-      [['DataGrid'], [70097, 23719], [73310, 24921], [73822, 25113], portal],
+      [['Button'], [12037, 4033], components],
+      [['MessageBar'], [30070, 10222], components],
+      [['Tree'], [51190, 17427], components],
+      [['Dialog'], [73934, 24667], portal],
+      [['WaveProvider', 'Dialog'], [76487, 25640], portal],
+      [['DataGrid'], [72123, 24325], portal],
+      [
+        ['usePresence', 'Presence'],
+        [5453, 2341],
+        ['react', 'react/jsx-runtime'],
+      ],
+      [['useVirtualWindow'], [3868, 1817], ['react']],
+      [['createBrandTokens'], [3630, 1956], []],
+      [['waveTokens'], [3071, 969], []],
     ];
-    expect(RECORDED_IMPORTS_0_18).toEqual(
-      records.map(([names, baseline, measured, budget, allowedExternals]) => ({
+    expect(RECORDED_IMPORTS_1_0).toEqual(
+      records.map(([names, measured, allowedExternals]) => ({
         names,
-        baseline: { version: '0.17.1', minified: baseline[0], gzip: baseline[1] },
+        baseline: { version: '0.18.1', ...BASELINES_0_18_1[names.join(' + ')] },
         measured: { minified: measured[0], gzip: measured[1] },
-        budget: { names, maxMinifiedBytes: budget[0], maxGzipBytes: budget[1], allowedExternals },
+        budget: {
+          names,
+          maxMinifiedBytes: measured[0] + 512,
+          maxGzipBytes: measured[1] + 192,
+          allowedExternals,
+        },
       })),
     );
-    expect(RECORDED_IMPORTS_0_18.at(-1).budget).toBe(DATA_GRID_BUDGET);
-    for (const { names, measured, budget } of RECORDED_IMPORTS_0_18) {
-      expect([budget.maxMinifiedBytes, budget.maxGzipBytes], names.join(' + ')).toEqual([
-        measured.minified + BUDGET_MARGIN_0_18.minified,
-        measured.gzip + BUDGET_MARGIN_0_18.gzip,
-      ]);
-    }
-    // The growth over 0.17.1 that the script's header and spec §11 state.
+    // The growth over 0.18.1 that the records' JSDoc states.
     expect(
-      RECORDED_IMPORTS_0_18.map(({ names, baseline, measured }) => [
+      RECORDED_IMPORTS_1_0.map(({ names, baseline, measured }) => [
         names.join(' + '),
         measured.minified - baseline.minified,
         measured.gzip - baseline.gzip,
       ]),
     ).toEqual([
-      ['Button', -143, -1],
-      ['MessageBar', 2327, 864],
-      ['Tree', 3060, 1028],
-      ['Dialog', 1749, 680],
-      ['WaveProvider + Dialog', 1744, 680],
-      ['DataGrid', 3213, 1202],
+      ['Button', 958, 168],
+      ['MessageBar', 849, 21],
+      ['Tree', 807, 156],
+      ['Dialog', 1335, 201],
+      ['WaveProvider + Dialog', 1340, 182],
+      ['DataGrid', -1183, -601],
+      ['usePresence + Presence', 0, 0],
+      ['useVirtualWindow', 0, 0],
+      ['createBrandTokens', 0, 0],
+      ['waveTokens', 0, 0],
     ]);
-    // The 0.17.1 sizes are those of the CHANGELOG's Size tables (0.17.1 changed only the
-    // provider, so the component imports keep their 0.17.0 sizes).
+    // The 0.18.1 sizes of the component imports are those of the 0.18.0 CHANGELOG's Size table
+    // (0.18.1 changed no size), and those of createBrandTokens and waveTokens of the 0.17.0 one.
     const log = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
-    const rows = log.slice(log.indexOf('## [0.17.1]'), log.indexOf('## [0.16.0]')).split('\n');
+    const section = (from, to) => log.slice(log.indexOf(from), log.indexOf(to)).split('\n');
+    const rows018 = section('## [0.18.0]', '## [0.17.1]');
     for (const [label, minified, gzip] of [
-      ['only `Button`', '11,222', '3,866'],
-      ['only `MessageBar`', '26,858', '9,324'],
-      ['only `Tree`', '47,327', '16,232'],
-      ['only `Dialog`', '70,850', '23,786'],
-      ['`WaveProvider` and `Dialog`', '73,403', '24,778'],
-      ['only `DataGrid`', '70,097', '23,719'],
+      ['only `Button`', '11,079', '3,865'],
+      ['only `MessageBar`', '29,221', '10,201'],
+      ['only `Tree`', '50,383', '17,271'],
+      ['only `Dialog`', '72,599', '24,466'],
+      ['`WaveProvider` and `Dialog`', '75,147', '25,458'],
+      ['only `DataGrid`', '73,306', '24,926'],
     ]) {
-      // The newest row of the import (0.17.1's table comes first), its last column.
-      const row = rows.find((line) => line.startsWith(`| An import of ${label} |`));
+      const row = rows018.find((line) => line.startsWith(`| An import of ${label} |`));
+      expect(row, label).toMatch(new RegExp(` \\| ${minified} \\(${gzip} gzip\\) \\|$`));
+    }
+    const rows017 = section('## [0.17.0]', '## [0.16.0]');
+    for (const [label, minified, gzip] of [
+      ['only `createBrandTokens` (new)', '3,630', '1,956'],
+      ['only `waveTokens` (new)', '3,071', '969'],
+    ]) {
+      const row = rows017.find((line) => line.startsWith(`| An import of ${label} |`));
       expect(row, label).toMatch(new RegExp(` \\| ${minified} \\(${gzip} gzip\\) \\|$`));
     }
   });
@@ -4975,7 +4885,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     ]);
   }, 180_000);
 
-  it('verifyDist gates the 0.18 budgets: passes on a correct dist, reports each import over its budget', async () => {
+  it('verifyDist gates the component budgets: passes on a correct dist, reports each import over its budget', async () => {
     const good = await verifyDist(fixture().dist, noPending);
     expect(good.errors).toEqual([]);
     // 120,000 characters of random base64 (see the DataGrid budget) in Button and in the part
@@ -4995,52 +4905,23 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       })),
     });
     const result = await verifyDist(dist, noPending);
-    // The 0.18 records follow those of RECORDED_IMPORTS (0.15.0) and RECORDED_IMPORTS_0_17 (0.16.0).
-    const records = result.recorded.slice(RECORDED_IMPORTS.length + RECORDED_IMPORTS_0_17.length);
     expect(
-      records.map(({ names, baseline }) => `${names.join(' + ')} ${baseline.version}`),
-    ).toEqual([
-      'Button 0.17.1',
-      'MessageBar 0.17.1',
-      'Tree 0.17.1',
-      'Dialog 0.17.1',
-      'WaveProvider + Dialog 0.17.1',
-      'DataGrid 0.17.1',
-    ]);
-    const over = (label, maxMinified, maxGzip) => {
-      const { minified, gzip } = records.find(({ names }) => names.join(' + ') === label);
+      result.recorded.map(({ names, baseline }) => `${names.join(' + ')} ${baseline.version}`),
+    ).toEqual(RECORDED_IMPORTS_1_0.map(({ names }) => `${names.join(' + ')} 0.18.1`));
+    const over = (label) => {
+      const { minified, gzip } = recordOf(result.recorded, label);
+      const { maxMinifiedBytes, maxGzipBytes } = budgetOf(label);
       return [
-        `${label}: ${minified} bytes minified, over the budget of ${maxMinified}`,
-        `${label}: ${gzip} bytes gzip, over the budget of ${maxGzip}`,
+        `${label}: ${minified} bytes minified, over the budget of ${maxMinifiedBytes}`,
+        `${label}: ${gzip} bytes gzip, over the budget of ${maxGzipBytes}`,
       ];
     };
     expect(result.errors).toEqual([
-      ...over('Button', 11591, 4057),
-      ...over('MessageBar', 29697, 10380),
-      ...over('Dialog', 73111, 24658),
-      ...over('WaveProvider + Dialog', 75659, 25650),
+      ...over('Button'),
+      ...over('MessageBar'),
+      ...over('Dialog'),
+      ...over('WaveProvider + Dialog'),
     ]);
-  }, 180_000);
-
-  it('main prints the 0.18 imports against 0.17.1, with their budgets', async () => {
-    const lines = [];
-    const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
-    expect(await main(['--dist', fixture().dist, '--no-pending'], io)).toBe(0);
-    const output = lines.join('\n');
-    for (const [label, minified, gzip, maxMinified, maxGzip] of [
-      ['Button', 11222, 3866, 11591, 4057],
-      ['MessageBar', 26858, 9324, 29697, 10380],
-      ['Tree', 47327, 16232, 50899, 17452],
-      ['Dialog', 70850, 23786, 73111, 24658],
-      ['WaveProvider \\+ Dialog', 73403, 24778, 75659, 25650],
-      ['DataGrid', 70097, 23719, 73822, 25113],
-    ]) {
-      expect(output).toMatch(
-        new RegExp(
-          `verify-dist: ${label}-only import: \\d+ B minified \\(budget ${maxMinified}\\), \\d+ B gzip \\(budget ${maxGzip}\\) \\(0\\.17\\.1: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
-        ),
-      );
-    }
   }, 180_000);
 
   it('the real exports carry the 0.18 names, mergeSlotProps last in the entry', async () => {
@@ -5375,12 +5256,16 @@ describe('verifyDist and main', () => {
     ]);
   }, 90_000);
 
-  it('prints the measured presence budget', async () => {
+  it('prints the measured presence core with its budget (a record of RECORDED_IMPORTS_1_0)', async () => {
     const lines = [];
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     expect(await main(['--dist', fixture().dist, '--no-pending'], io)).toBe(0);
+    const { maxMinifiedBytes, maxGzipBytes } = budgetOf('usePresence + Presence');
     expect(lines.join('\n')).toMatch(
-      /verify-dist: presence core \(usePresence \+ Presence\): \d+ B minified \(budget 6804\), \d+ B gzip \(budget 2927\)/,
+      new RegExp(
+        `verify-dist: usePresence \\+ Presence-only import: \\d+ B minified \\(budget ${maxMinifiedBytes}\\), ` +
+          `\\d+ B gzip \\(budget ${maxGzipBytes}\\) \\(0\\.18\\.1: 5453 B, 2341 B;`,
+      ),
     );
   }, 90_000);
 
@@ -5418,8 +5303,6 @@ describe('verifyDist and main', () => {
       errors: [],
       pending: ['CardHeader'],
       planned: [],
-      budget: { minified: expect.any(Number), gzip: expect.any(Number) },
-      virtualBudget: { minified: expect.any(Number), gzip: expect.any(Number) },
       recorded: expect.any(Array),
     });
     expect((await verifyDist(dist, { pendingFlatExports: ['Card'], final: true })).errors).toEqual([

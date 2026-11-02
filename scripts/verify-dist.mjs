@@ -53,9 +53,8 @@
  *     no InfoButton module, so a Field-only bundle never includes InfoButton's overlay code,
  *     nor its class string `'wave-info-button'`;
  *   - presence core: an import of only `Presence` contains `hooks/usePresence` (the probe finds
- *     the core where it is used), and the closure of `usePresence` + `Presence`, minified with
- *     bare imports external, stays within {@link PRESENCE_BUDGET} and imports nothing but
- *     `react` and `react/jsx-runtime`. The CLI prints the measured sizes;
+ *     the core where it is used); the closure of `usePresence` + `Presence` has its budget in
+ *     {@link RECORDED_IMPORTS_1_0};
  *   - opt-in modules (0.8): an import of only `Button` contains none of {@link OPT_IN_MODULES}
  *     (the color parts and helpers, the toaster handle), and an import of only `Toaster`
  *     contains `hooks/usePresence`;
@@ -80,10 +79,8 @@
  *     one of only `FlatTree` no DataGrid code, one of only `Button` or only `MessageBar` none of
  *     {@link DATA_SCALE_MODULES} and one of only `Tree` none but the moved cascade
  *     ({@link EXCLUSION_PROBES_0_16}, with the positive controls of {@link INCLUSION_PROBES_0_16});
- *     the closure of `useVirtualWindow`, minified, stays within {@link VIRTUAL_BUDGET} and imports
- *     nothing but `react`, and that of `DataGrid` within {@link DATA_GRID_BUDGET} (re-set in
- *     0.18). The CLI prints the measured sizes, and those of the imports of {@link
- *     RECORDED_IMPORTS} (DataGrid-only, Tree-only, Button-only, MessageBar-only) against 0.15.0;
+ *     the closures of `useVirtualWindow` and of `DataGrid` have their budgets in
+ *     {@link RECORDED_IMPORTS_1_0};
  *   - 0.17 (spec §10): an import of only `createBrandTokens` holds the brand generator and no
  *     names tuple, component or React module, and none of the development contrast check of a
  *     full ramp; one of only `waveTokens` the tuple and the token core, and no brand generator,
@@ -93,10 +90,9 @@
  *     fragment of their code: no token name, no brand warning key), one of only `Button` or only
  *     `MessageBar` none of {@link TOKEN_MODULES} and not the provider
  *     ({@link EXCLUSION_PROBES_0_17}, with the positive controls of {@link INCLUSION_PROBES_0_17});
- *     the imports of {@link RECORDED_IMPORTS_0_17} are printed with the 0.16.0 sizes, and
- *     createBrandTokens-only and waveTokens-only stay within their 3 KiB gzip budgets; no
- *     JavaScript, CSS or declaration file of dist names a chart library of the stories
- *     ({@link DEV_ONLY_LIBRARIES}, R14);
+ *     createBrandTokens-only and waveTokens-only have their budgets in {@link
+ *     RECORDED_IMPORTS_1_0}; no JavaScript, CSS or declaration file of dist names a chart library
+ *     of the stories ({@link DEV_ONLY_LIBRARIES}, R14);
  *   - 0.18 (Phase 13, spec §5, R23): an import of only `getNativeElementProps` or only
  *     `mergeSlotProps` holds its server-safe module (the latter with the helpers it merges with)
  *     and no component, hook or React module; an import of only one of the public context hooks
@@ -110,13 +106,10 @@
  *     INCLUSION_PROBES_0_18}); no module that only the tests read is in dist ({@link
  *     TEST_ONLY_MODULES}); `dist/lib/slotProps.mjs` and `dist/lib/nativeProps.mjs` work on the
  *     server, and `dist/index.mjs` exports `mergeSlotProps` and `getNativeElementProps` from them;
- *     the imports of {@link RECORDED_IMPORTS_0_18} stay within their budgets, each the size
- *     measured at the end of the phase plus {@link BUDGET_MARGIN_0_18}, which the CLI prints
- *     with the 0.17.1 sizes. Growth of the release over 0.17.1, in bytes minified and gzip:
- *     Button-only -143 and -1, MessageBar-only +2,363 and +877, Tree-only +3,056 and +1,039,
- *     Dialog-only +1,749 and +680, `WaveProvider` with `Dialog` +1,744 and +680, DataGrid-only
- *     +3,209 and +1,207 (the budgets' basis, measured at `e7833a7`: MessageBar-only +2,327 and
- *     +864, Tree-only +3,060 and +1,028, DataGrid-only +3,213 and +1,202).
+ *   - sizes (1.0, Phase 14 spec R7): the imports of {@link RECORDED_IMPORTS_1_0} stay within their
+ *     budgets, each the size measured at the flip plus {@link BUDGET_MARGIN_1_0}, and import no
+ *     package but their `allowedExternals`; the CLI prints each with its 0.18.1 size
+ *     ({@link BASELINES_0_18_1}). The growth over 0.18.1 is in the records' JSDoc.
  *
  * Every probe and size bundles as a consumer's production build: `process.env.NODE_ENV` is defined
  * as `"production"` whatever this process has (Vitest runs with `test`), so development-only code
@@ -177,21 +170,15 @@ const require = createRequire(import.meta.url);
 export const PENDING_FLAT_EXPORTS = [];
 
 /**
- * The presence core's probes: an import of only `Button` drops it, an import of only
- * `PRESENCE_INCLUDE_KEEP` holds it, and the closure of the two names fits the budget. The budget
- * is the first measured size plus 25 % (5,443 and 2,341 bytes in 0.7.0, against the 5 KiB and
- * 2 KiB of the phase 2 design, adjusted once as its open question 8 allows).
+ * The presence core's probes: an import of only `Button` drops it, and an import of only
+ * `PRESENCE_INCLUDE_KEEP` holds it. The closure of `usePresence` + `Presence` has its budget in
+ * {@link RECORDED_IMPORTS_1_0} (through 0.18 the first measured size plus 25 %: 5,443 and 2,341
+ * bytes in 0.7.0).
  */
 const PRESENCE_MODULE = 'hooks/usePresence.mjs';
 const PRESENCE_INCLUDE_KEEP = 'Menu';
 /** An import of only `Field` drops this module: Field imports a marker module, never InfoButton. */
 const INFO_BUTTON_MODULE = 'components/data-display/InfoButton.mjs';
-const PRESENCE_BUDGET = {
-  names: ['usePresence', 'Presence'],
-  maxMinifiedBytes: 6804,
-  maxGzipBytes: 2927,
-  allowedExternals: ['react', 'react/jsx-runtime'],
-};
 
 /**
  * Modules an import of only `Button` must not contain (spec D30, 0.8): the color parts, the public
@@ -583,52 +570,6 @@ export const INCLUSION_PROBES_0_16 = [
   { keep: 'Tree', modules: [TREE_CASCADE_MODULE] },
 ];
 
-/**
- * The window's budget (spec §11): the closure of an import of only `useVirtualWindow`, minified
- * with bare imports external (the window, its layout core and the development warning it shares
- * with every component), imports nothing but `react`. The budget is the size first measured for
- * 0.16.0 (3,532 bytes minified, 1,695 gzip) plus 25 %, the gzip size held at the spec's ceiling of
- * 2 KiB (25 % more would be 2,119).
- */
-export const VIRTUAL_BUDGET = {
-  names: ['useVirtualWindow'],
-  maxMinifiedBytes: 4415,
-  maxGzipBytes: 2048,
-  allowedExternals: ['react'],
-};
-
-/**
- * The DataGrid-only budget: the import grew in 0.16 by the selection core, the column sizing and
- * the window support, so its size was measured first, for 0.16.0 (69,592 bytes minified, 23,545
- * gzip), and the budget was that plus 25 % (86,990 and 29,431). Phase 13 re-set it, as the other
- * budgets of {@link RECORDED_IMPORTS_0_18} (spec R23): the size measured at the end of the phase
- * (73,310 and 24,921) plus {@link BUDGET_MARGIN_0_18}; raise it only deliberately. The closure
- * imports nothing but the package's own dependencies and peers (every component reaches `clsx` and
- * `tailwind-merge` through `wcn`; the grid uses `react-dom`), so a new dependency fails it.
- */
-export const DATA_GRID_BUDGET = {
-  names: ['DataGrid'],
-  maxMinifiedBytes: 73822,
-  maxGzipBytes: 25113,
-  allowedExternals: ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'],
-};
-
-/**
- * Imports whose size verify-dist measures and prints against their size in the published 0.15.0
- * package (minified and gzip bytes, bare imports external; spec §11, recorded in §16), for drift
- * only: in 0.16 a Tree-only import changed only by the moved cascade (R20), and Button-only and
- * MessageBar-only imports were as in 0.15.0. 0.17 budgeted all three against 0.16.0 ({@link
- * RECORDED_IMPORTS_0_17}), and 0.18 budgets them and the DataGrid-only import, which had its
- * budget here until then ({@link DATA_GRID_BUDGET}), against 0.17.1 ({@link
- * RECORDED_IMPORTS_0_18}).
- */
-export const RECORDED_IMPORTS = [
-  { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
-  { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
-  { names: ['Button'], baseline: { version: '0.15.0', minified: 11195, gzip: 3855 } },
-  { names: ['MessageBar'], baseline: { version: '0.15.0', minified: 26831, gzip: 9312 } },
-];
-
 /** The token core of 0.17 (`src/lib/tokens.ts`): the provider's conversion and merge. */
 const TOKEN_CORE_MODULE = 'lib/tokens.mjs';
 /** The names tuple with `waveTokens` and `chartPalette` (`src/lib/waveTokens.ts`). */
@@ -660,8 +601,7 @@ const BRAND_CHECK_MARKER = 'createBrandTokens:contrast';
 /**
  * The key prefix of the provider's `tokens` warnings: since 0.17.1 their effect reads
  * `process.env.NODE_ENV`, so a production bundle drops them and their text, which held the
- * `WaveProvider` + `Dialog` budget of {@link RECORDED_IMPORTS_0_17} (now in {@link
- * RECORDED_IMPORTS_0_18}).
+ * `WaveProvider` + `Dialog` budget of 0.17 (now in {@link RECORDED_IMPORTS_1_0}).
  */
 const PROVIDER_WARNING_MARKER = 'WaveProvider:tokens:';
 
@@ -723,7 +663,7 @@ export const EXCLUSION_PROBES_0_17 = [
  * `createBrandTokens` the brand marker, both in a production build, so the fragments the Dialog
  * probe looks for are found where they are; an import of only `WaveProvider` holds the token core;
  * one of only `Tree` the provider's module (`useDirection` reads its context, so a Tree-only
- * import carries the context's defaults; its budget is the one of {@link RECORDED_IMPORTS_0_18}).
+ * import carries the context's defaults; its budget is the one of {@link RECORDED_IMPORTS_1_0}).
  */
 export const INCLUSION_PROBES_0_17 = [
   { keep: 'waveTokens', modules: [WAVE_TOKENS_MODULE], substrings: [TOKEN_NAMES_MARKER] },
@@ -731,29 +671,6 @@ export const INCLUSION_PROBES_0_17 = [
   { keep: 'WaveProvider', modules: [PROVIDER_MODULE, TOKEN_CORE_MODULE] },
   { keep: 'Tree', modules: [PROVIDER_MODULE] },
 ];
-
-/**
- * The budget of an import of only `createBrandTokens` (spec §10): 3 KiB gzip; minified, the size
- * first measured for 0.17.0 (3,596 bytes, 1,932 gzip) plus 25 %, as {@link VIRTUAL_BUDGET} has it.
- * The closure imports nothing.
- */
-export const BRAND_TOKENS_BUDGET = {
-  names: ['createBrandTokens'],
-  maxMinifiedBytes: 4495,
-  maxGzipBytes: 3072,
-  allowedExternals: [],
-};
-
-/**
- * The budget of an import of only `waveTokens` (spec §10): 3 KiB gzip; minified, the size first
- * measured for 0.17.0 (3,071 bytes, 969 gzip) plus 25 %. The closure imports nothing.
- */
-export const WAVE_TOKENS_BUDGET = {
-  names: ['waveTokens'],
-  maxMinifiedBytes: 3839,
-  maxGzipBytes: 3072,
-  allowedExternals: [],
-};
 
 /** The part helper of 0.18 (`src/lib/slotProps.ts`, server-safe): `mergeSlotProps`. */
 const SLOT_PROPS_MODULE = 'lib/slotProps.mjs';
@@ -885,154 +802,93 @@ export const INCLUSION_PROBES_0_18 = [
  */
 export const TEST_ONLY_MODULES = ['lib/slotParts'];
 
+/**
+ * The sizes in the published 0.18.1 package of the imports of {@link RECORDED_IMPORTS_1_0},
+ * measured as {@link measureImport} measures: the base the 1.0 growth is printed against. The
+ * component imports are those of the 0.18.1 CHANGELOG's Size table. The presence core and the
+ * window, which no CHANGELOG table lists, are the sizes measured for 0.17 (the Phase 12 spec's
+ * notes of its Task 13), which no module of 0.18 changed (the 0.18.0 CHANGELOG: their closures
+ * hold none) and which Phase 14 measured again before the flip; `createBrandTokens` and
+ * `waveTokens` are those of the 0.17.0 CHANGELOG's Size table, unchanged in 0.18 alike.
+ */
+export const BASELINES_0_18_1 = {
+  Button: { minified: 11079, gzip: 3865 },
+  MessageBar: { minified: 29221, gzip: 10201 },
+  Tree: { minified: 50383, gzip: 17271 },
+  Dialog: { minified: 72599, gzip: 24466 },
+  'WaveProvider + Dialog': { minified: 75147, gzip: 25458 },
+  DataGrid: { minified: 73306, gzip: 24926 },
+  'usePresence + Presence': { minified: 5453, gzip: 2341 },
+  useVirtualWindow: { minified: 3868, gzip: 1817 },
+  createBrandTokens: { minified: 3630, gzip: 1956 },
+  waveTokens: { minified: 3071, gzip: 969 },
+};
+
+/**
+ * The margin of a 1.0 budget over the size measured at the flip, in bytes minified and gzip (spec
+ * R7, as 0.18's): about 1 % of the larger imports, so a later change that adds bytes to one of them
+ * re-sets its budget deliberately, and none can grow unnoticed.
+ */
+export const BUDGET_MARGIN_1_0 = { minified: 512, gzip: 192 };
+
 /** The externals of a component's closure: `wcn`'s two dependencies and React. */
 const COMPONENT_EXTERNALS = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
 /** The externals of a closure with a Portal, which also imports `react-dom`. */
 const PORTAL_EXTERNALS = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
 
-/**
- * The sizes of the imports of {@link RECORDED_IMPORTS_0_18} in the published 0.17.1 package, as
- * the CHANGELOG's Size tables give them (0.17.1 changed only the provider, so the others keep
- * their 0.17.0 sizes), measured as {@link measureImport} measures: the base the 0.18 growth is
- * printed against.
- */
-export const BASELINES_0_17_1 = {
-  Button: { minified: 11222, gzip: 3866 },
-  MessageBar: { minified: 26858, gzip: 9324 },
-  Tree: { minified: 47327, gzip: 16232 },
-  Dialog: { minified: 70850, gzip: 23786 },
-  'WaveProvider + Dialog': { minified: 73403, gzip: 24778 },
-  DataGrid: { minified: 70097, gzip: 23719 },
-};
+/** A record of {@link RECORDED_IMPORTS_1_0}: its 0.18.1 size, its size at the flip, its budget. */
+function record1_0(label, names, measured, allowedExternals) {
+  return {
+    names,
+    baseline: { version: '0.18.1', ...BASELINES_0_18_1[label] },
+    measured,
+    budget: {
+      names,
+      maxMinifiedBytes: measured.minified + BUDGET_MARGIN_1_0.minified,
+      maxGzipBytes: measured.gzip + BUDGET_MARGIN_1_0.gzip,
+      allowedExternals,
+    },
+  };
+}
 
 /**
- * The 0.17 records (spec §10, with the build's rulings, which correct it for Tree and add the
- * provider with a Dialog), measured as {@link measureImport} measures and printed against the size
- * in the published 0.16.0 package where the import had one (`baseline: null` for the new ones),
- * both measured with this release's build tools, as {@link RECORDED_IMPORTS} measures 0.15.0.
- * `createBrandTokens` and `waveTokens` keep their 3 KiB gzip budgets ({@link BRAND_TOKENS_BUDGET},
- * {@link WAVE_TOKENS_BUDGET}): no module of Phase 13 is in their closures. The five component
- * imports are printed for drift only since 0.18, which budgets them against 0.17.1 ({@link
- * RECORDED_IMPORTS_0_18}); in 0.17 each budget was the 0.16.0 size plus its allowance, in bytes
- * minified and gzip:
- *   - `Button` and `MessageBar`: +64 and +32, for `cn`, which recognises the two new font families
- *     (R13); otherwise byte for byte 0.16.0's;
- *   - `Tree`: +128 and +64, `cn`'s allowance and the provider's context, which Tree reads for its
- *     direction (`useDirection`) and which has three members more (R17);
- *   - `Dialog` without the provider component: +1 KiB and +0.4 KiB (1,024 and 409), the Portal's
- *     token style and the context;
- *   - `WaveProvider` with `Dialog`: +1.5 KiB and +0.7 KiB (1,536 and 716), the provider's token
- *     handling (`lib/tokens`) too.
- * A KiB fraction was rounded down, so no budget was above the spec's figure.
+ * The 1.0 records (Phase 14 spec R7): every budgeted import, in one list, folding the 0.18 records
+ * of the six component imports and the budgets the presence core, the window, `createBrandTokens`
+ * and `waveTokens` had since 0.7, 0.16 and 0.17 (their first measured size plus 25 %, or 3 KiB
+ * gzip), and the drift records of 0.15 and 0.17, which are gone. Each holds its size in the
+ * published 0.18.1 package (`baseline`, from {@link BASELINES_0_18_1}), the size measured at the
+ * flip (`measured`: {@link measureImport} on the build of the flip commit) and its `budget`, that
+ * size plus {@link BUDGET_MARGIN_1_0}, with the packages its closure may import. The CLI prints each
+ * import against 0.18.1. Growth over 0.18.1, in bytes minified and gzip:
+ *   - `Button`: +958 and +168; `MessageBar`: +849 and +21; `Tree`: +807 and +156; `Dialog`:
+ *     +1,335 and +201; `WaveProvider` with `Dialog`: +1,340 and +182. The utility prefix of 1.0
+ *     (`wave:`, about 5 bytes per class word before gzip) and `wcn`'s prefix-aware configuration
+ *     (about 220 bytes); the removals of Phase 14 pay for part of it (about 430 bytes of
+ *     MessageBar, about 200 of Tree and of Dialog);
+ *   - `DataGrid`: -1,183 and -601: the removed 0.x column and sort aliases and positional
+ *     callback forms outweigh the prefix;
+ *   - the presence core, the window, `createBrandTokens` and `waveTokens`: 0 and 0 (no class
+ *     string, no `wcn` in their closures).
  */
-export const RECORDED_IMPORTS_0_17 = [
-  { names: ['createBrandTokens'], baseline: null, budget: BRAND_TOKENS_BUDGET },
-  { names: ['waveTokens'], baseline: null, budget: WAVE_TOKENS_BUDGET },
-  { names: ['Button'], baseline: { version: '0.16.0', minified: 11195, gzip: 3855 } },
-  { names: ['MessageBar'], baseline: { version: '0.16.0', minified: 26831, gzip: 9312 } },
-  { names: ['Tree'], baseline: { version: '0.16.0', minified: 47248, gzip: 16196 } },
-  { names: ['Dialog'], baseline: { version: '0.16.0', minified: 70721, gzip: 23723 } },
-  {
-    names: ['WaveProvider', 'Dialog'],
-    baseline: { version: '0.16.0', minified: 71884, gzip: 24127 },
-  },
-];
-
-/**
- * The margin of a 0.18 budget over the size measured at the end of Phase 13, in bytes minified
- * and gzip (spec R23): about 1 % of the larger imports, so a later change that adds bytes to one of
- * them re-sets its budget deliberately, and none can grow unnoticed.
- */
-export const BUDGET_MARGIN_0_18 = { minified: 512, gzip: 192 };
-
-/**
- * The 0.18 records (spec §5, R23): every recorded import whose closure holds a module that Phase
- * 13 added or changed (`lib/slot`'s render-function children, which nearly every component holds;
- * `lib/slotProps` and the parts of the components that have them; the context modules of the
- * public hooks). Each holds its size in the published 0.17.1 package (`baseline`, from {@link
- * BASELINES_0_17_1}), the size measured at the end of the phase (`measured`: `measureImport` on
- * the build of the last rollout commit with the integration package's changes, which move no
- * byte of these imports) and its `budget`, that size plus {@link BUDGET_MARGIN_0_18}. The interim
- * allowance of the phase (the 0.17.1 size plus 4 KiB minified and 1.5 KiB gzip) ends here. The
- * CLI prints each import against 0.17.1. Growth over 0.17.1, in bytes minified and gzip, of the
- * release (of the `measured` basis at `e7833a7`, where the final lock fixes moved it):
- *   - `Button`: -143 and -1. Button has no part, so it holds no `lib/slotProps`; the
- *     render-function children of `lib/slot` were paid for by compacting that module;
- *   - `MessageBar`: +2,363 and +877 (+2,327 and +864), the `slotProps` helper, the body and
- *     dismiss button parts and the context of `useMessageBarContext`;
- *   - `Tree`: +3,056 and +1,039 (+3,060 and +1,028), the helper and the six parts of each item
- *     and its persona row;
- *   - `Dialog`: +1,749 and +680, the helper, the title actions and body parts, and the part that
- *     the shared close button takes for TeachingPopover;
- *   - `WaveProvider` with `Dialog`: +1,744 and +680, the same;
- *   - `DataGrid`: +3,209 and +1,207 (+3,213 and +1,202), the helper and the parts of the header
- *     cell, the resize handle and the selection controls ({@link DATA_GRID_BUDGET}, which was
- *     the 0.16.0 size plus 25 % until then).
- * The budgets of `createBrandTokens`, `waveTokens`, `useVirtualWindow` and the presence core stay
- * as they were: no module of Phase 13 is in their closures.
- */
-export const RECORDED_IMPORTS_0_18 = [
-  {
-    names: ['Button'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.Button },
-    measured: { minified: 11079, gzip: 3865 },
-    budget: {
-      names: ['Button'],
-      maxMinifiedBytes: 11591,
-      maxGzipBytes: 4057,
-      allowedExternals: COMPONENT_EXTERNALS,
-    },
-  },
-  {
-    names: ['MessageBar'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.MessageBar },
-    measured: { minified: 29185, gzip: 10188 },
-    budget: {
-      names: ['MessageBar'],
-      maxMinifiedBytes: 29697,
-      maxGzipBytes: 10380,
-      allowedExternals: COMPONENT_EXTERNALS,
-    },
-  },
-  {
-    names: ['Tree'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.Tree },
-    measured: { minified: 50387, gzip: 17260 },
-    budget: {
-      names: ['Tree'],
-      maxMinifiedBytes: 50899,
-      maxGzipBytes: 17452,
-      allowedExternals: COMPONENT_EXTERNALS,
-    },
-  },
-  {
-    names: ['Dialog'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.Dialog },
-    measured: { minified: 72599, gzip: 24466 },
-    budget: {
-      names: ['Dialog'],
-      maxMinifiedBytes: 73111,
-      maxGzipBytes: 24658,
-      allowedExternals: PORTAL_EXTERNALS,
-    },
-  },
-  {
-    names: ['WaveProvider', 'Dialog'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1['WaveProvider + Dialog'] },
-    measured: { minified: 75147, gzip: 25458 },
-    budget: {
-      names: ['WaveProvider', 'Dialog'],
-      maxMinifiedBytes: 75659,
-      maxGzipBytes: 25650,
-      allowedExternals: PORTAL_EXTERNALS,
-    },
-  },
-  {
-    names: ['DataGrid'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.DataGrid },
-    measured: { minified: 73310, gzip: 24921 },
-    budget: DATA_GRID_BUDGET,
-  },
+export const RECORDED_IMPORTS_1_0 = [
+  record1_0('Button', ['Button'], { minified: 12037, gzip: 4033 }, COMPONENT_EXTERNALS),
+  record1_0('MessageBar', ['MessageBar'], { minified: 30070, gzip: 10222 }, COMPONENT_EXTERNALS),
+  record1_0('Tree', ['Tree'], { minified: 51190, gzip: 17427 }, COMPONENT_EXTERNALS),
+  record1_0('Dialog', ['Dialog'], { minified: 73934, gzip: 24667 }, PORTAL_EXTERNALS),
+  record1_0(
+    'WaveProvider + Dialog',
+    ['WaveProvider', 'Dialog'],
+    { minified: 76487, gzip: 25640 },
+    PORTAL_EXTERNALS,
+  ),
+  record1_0('DataGrid', ['DataGrid'], { minified: 72123, gzip: 24325 }, PORTAL_EXTERNALS),
+  record1_0('usePresence + Presence', ['usePresence', 'Presence'], { minified: 5453, gzip: 2341 }, [
+    'react',
+    'react/jsx-runtime',
+  ]),
+  record1_0('useVirtualWindow', ['useVirtualWindow'], { minified: 3868, gzip: 1817 }, ['react']),
+  record1_0('createBrandTokens', ['createBrandTokens'], { minified: 3630, gzip: 1956 }, []),
+  record1_0('waveTokens', ['waveTokens'], { minified: 3071, gzip: 969 }, []),
 ];
 
 /**
@@ -3134,13 +2990,9 @@ function sizeBudgetErrors(
 /**
  * Runs every check on `dist` (its parent directory holds the package.json). Returns the errors,
  * the flat names still pending and the listed components that are no compound yet (see
- * {@link PENDING_FLAT_EXPORTS}), the measured sizes of the presence core (`budget`) and of the
- * window (`virtualBudget`; minified and gzip bytes, `null` when the probe failed), and the
- * measured sizes of {@link RECORDED_IMPORTS}, then of {@link RECORDED_IMPORTS_0_17} and then of
- * {@link RECORDED_IMPORTS_0_18} (`recorded`: each record with the `minified` and `gzip` sizes
- * measured, `baseline` `null` for an import new in 0.17; the errors of a record's `budget` join
- * the others; an import recorded in several lists is measured once); `final` closes the pending
- * bridge. `measure` measures each recorded import ({@link measureImport}; the tests pass a
+ * {@link PENDING_FLAT_EXPORTS}), and the measured sizes of {@link RECORDED_IMPORTS_1_0}
+ * (`recorded`: each record with the `minified` and `gzip` sizes measured; the errors of a
+ * record's `budget` join the others); `final` closes the pending bridge. `measure` measures each recorded import ({@link measureImport}; the tests pass a
  * wrapper that counts the measurements).
  */
 export async function verifyDist(
@@ -3153,7 +3005,6 @@ export async function verifyDist(
       errors: [`${dist} does not exist (run vite build first)`],
       pending: [],
       planned: [],
-      budget: null,
     };
   }
   const pkg = readJson(join(distRoot, '..', 'package.json'));
@@ -3358,49 +3209,17 @@ export async function verifyDist(
   } catch (error) {
     errors.push(`motion include probe failed: ${error.message}`);
   }
-  let budget = null;
-  try {
-    const {
-      minified,
-      gzip,
-      errors: budgetErrors,
-    } = await probeSizeBudget(distRoot, PRESENCE_BUDGET);
-    errors.push(...budgetErrors);
-    budget = { minified, gzip };
-  } catch (error) {
-    errors.push(`presence size budget probe failed: ${error.message}`);
-  }
-  let virtualBudget = null;
-  try {
-    const {
-      minified,
-      gzip,
-      errors: budgetErrors,
-    } = await probeSizeBudget(distRoot, VIRTUAL_BUDGET);
-    errors.push(...budgetErrors);
-    virtualBudget = { minified, gzip };
-  } catch (error) {
-    errors.push(`window size budget probe failed: ${error.message}`);
-  }
   const recorded = [];
   try {
-    // Button-only, Tree-only and MessageBar-only are recorded in all three lists: one build each.
-    const sizes = new Map();
-    for (const record of [
-      ...RECORDED_IMPORTS,
-      ...RECORDED_IMPORTS_0_17,
-      ...RECORDED_IMPORTS_0_18,
-    ]) {
-      const label = record.names.join(' + ');
-      if (!sizes.has(label)) sizes.set(label, await measure(distRoot, record.names));
-      const size = sizes.get(label);
-      if (record.budget) errors.push(...sizeBudgetErrors(size, record.budget));
+    for (const record of RECORDED_IMPORTS_1_0) {
+      const size = await measure(distRoot, record.names);
+      errors.push(...sizeBudgetErrors(size, record.budget));
       recorded.push({ ...record, minified: size.minified, gzip: size.gzip });
     }
   } catch (error) {
     errors.push(`recorded size measurement failed: ${error.message}`);
   }
-  return { errors, pending, planned, budget, virtualBudget, recorded };
+  return { errors, pending, planned, recorded };
 }
 
 /**
@@ -3430,36 +3249,18 @@ function parseArgs(argv) {
 /** CLI entry; returns the exit code. `io` receives the report (default: the console). */
 export async function main(argv = process.argv.slice(2), io = console) {
   const { dist, pendingFlatExports, final } = parseArgs(argv);
-  const { errors, pending, planned, budget, virtualBudget, recorded } = await verifyDist(dist, {
+  const { errors, pending, planned, recorded } = await verifyDist(dist, {
     pendingFlatExports,
     final,
   });
   const where = toPosix(relative(process.cwd(), dist) || dist);
-  if (budget) {
-    io.log(
-      `verify-dist: presence core (${PRESENCE_BUDGET.names.join(' + ')}): ` +
-        `${budget.minified} B minified (budget ${PRESENCE_BUDGET.maxMinifiedBytes}), ` +
-        `${budget.gzip} B gzip (budget ${PRESENCE_BUDGET.maxGzipBytes})`,
-    );
-  }
-  if (virtualBudget) {
-    io.log(
-      `verify-dist: window (${VIRTUAL_BUDGET.names.join(' + ')}): ` +
-        `${virtualBudget.minified} B minified (budget ${VIRTUAL_BUDGET.maxMinifiedBytes}), ` +
-        `${virtualBudget.gzip} B gzip (budget ${VIRTUAL_BUDGET.maxGzipBytes})`,
-    );
-  }
   for (const { names, minified, gzip, baseline, budget: importBudget } of recorded ?? []) {
-    const limit = (max) => (importBudget ? ` (budget ${max})` : '');
-    // An import new in 0.17 has no baseline to compare with.
-    const against = baseline
-      ? ` (${baseline.version}: ${baseline.minified} B, ${baseline.gzip} B; ` +
-        `${percentChange(minified, baseline.minified)}, ${percentChange(gzip, baseline.gzip)})`
-      : '';
     io.log(
       `verify-dist: ${names.join(' + ')}-only import: ` +
-        `${minified} B minified${limit(importBudget?.maxMinifiedBytes)}, ` +
-        `${gzip} B gzip${limit(importBudget?.maxGzipBytes)}${against}`,
+        `${minified} B minified (budget ${importBudget.maxMinifiedBytes}), ` +
+        `${gzip} B gzip (budget ${importBudget.maxGzipBytes}) ` +
+        `(${baseline.version}: ${baseline.minified} B, ${baseline.gzip} B; ` +
+        `${percentChange(minified, baseline.minified)}, ${percentChange(gzip, baseline.gzip)})`,
     );
   }
   if (errors.length > 0) {

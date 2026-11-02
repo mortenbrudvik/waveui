@@ -287,19 +287,19 @@ function startSpin(step: () => boolean): () => void {
 
 /** Per-size widths of the step buttons and the input's flex basis, and the glyph size. */
 const SPIN_SIZE: Readonly<Record<CoreSize, { button: string; input: string; glyph: number }>> = {
-  small: { button: 'w-6', input: 'w-10', glyph: 12 },
-  medium: { button: 'w-8', input: 'w-12', glyph: 12 },
-  large: { button: 'w-10', input: 'w-14', glyph: 16 },
+  small: { button: 'wave:w-6', input: 'wave:w-10', glyph: 12 },
+  medium: { button: 'wave:w-8', input: 'wave:w-12', glyph: 12 },
+  large: { button: 'wave:w-10', input: 'wave:w-14', glyph: 16 },
 };
 
 const stepButtonClass = wcn(
   // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill them. The
   // size and, in `outline`, the separator are added per render (SPIN_SIZE, D13).
-  'flex h-full shrink-0 items-center justify-center bg-transparent p-0 text-foreground',
-  'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
-  'disabled:pointer-events-none',
+  'wave:flex wave:h-full wave:shrink-0 wave:items-center wave:justify-center wave:bg-transparent wave:p-0 wave:text-foreground',
+  'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+  'wave:disabled:pointer-events-none',
   // A finger holding a button (D18): no double-tap zoom, text selection or iOS callout.
-  'touch-manipulation select-none [-webkit-touch-callout:none]',
+  'wave:touch-manipulation wave:select-none wave:[-webkit-touch-callout:none]',
 );
 
 /**
@@ -779,7 +779,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   const inputProps = mergeSlotProps(slotProps?.input, {
     className: wcn(
       spinButtonClassNames.input,
-      'h-full min-w-0 flex-auto border-none bg-transparent text-center text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]',
+      'wave:h-full wave:min-w-0 wave:flex-auto wave:border-none wave:bg-transparent wave:text-center wave:text-foreground wave:focus:outline-hidden wave:disabled:cursor-not-allowed wave:[appearance:textfield]',
       SPIN_SIZE[size].input,
       inputTextClasses[size],
     ),
@@ -833,13 +833,13 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   const rootProps = mergeSlotProps(slotProps?.root, {
     className: wcn(
       spinButtonClassNames.root,
-      'relative inline-flex items-center',
+      'wave:relative wave:inline-flex wave:items-center',
       inputHeightClasses[size],
       inputTextClasses[size],
       inputAppearanceClasses[appearance],
       inputFocusWithin,
       invalidLook && inputInvalidWithin,
-      disabled && 'cursor-not-allowed opacity-50',
+      disabled && 'wave:cursor-not-allowed wave:opacity-50',
       className,
     ),
     style,
@@ -869,10 +869,10 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
             spinButtonClassNames.decrementButton,
             stepButtonClass,
             SPIN_SIZE[size].button,
-            appearance === 'outline' && 'border-e border-input',
+            appearance === 'outline' && 'wave:border-e wave:border-input',
             appearance === 'filled-darker' &&
-              'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
-            !disabled && 'disabled:opacity-50',
+              'wave:not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+            !disabled && 'wave:disabled:opacity-50',
           ),
         )}
       >
@@ -907,10 +907,10 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
             spinButtonClassNames.incrementButton,
             stepButtonClass,
             SPIN_SIZE[size].button,
-            appearance === 'outline' && 'border-s border-input',
+            appearance === 'outline' && 'wave:border-s wave:border-input',
             appearance === 'filled-darker' &&
-              'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
-            !disabled && 'disabled:opacity-50',
+              'wave:not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+            !disabled && 'wave:disabled:opacity-50',
           ),
         )}
       >

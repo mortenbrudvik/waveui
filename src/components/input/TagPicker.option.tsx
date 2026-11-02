@@ -87,12 +87,17 @@ function TagPickerOptionImpl({
   const content =
     hasMedia || hasSecondary ? (
       // A layout wrapper (no class): the visual, then the text over its second line.
-      <span className="flex items-center gap-2">
+      <span className="wave:flex wave:items-center wave:gap-2">
         {hasMedia &&
-          renderSlot(media, 'span', wcn(tagPickerOptionClassNames.media, 'inline-flex shrink-0'), {
-            'aria-hidden': true,
-          })}
-        <span className="flex min-w-0 flex-col">
+          renderSlot(
+            media,
+            'span',
+            wcn(tagPickerOptionClassNames.media, 'wave:inline-flex wave:shrink-0'),
+            {
+              'aria-hidden': true,
+            },
+          )}
+        <span className="wave:flex wave:min-w-0 wave:flex-col">
           <span>{children ?? value}</span>
           {hasSecondary &&
             renderSlot(
@@ -100,7 +105,7 @@ function TagPickerOptionImpl({
               'span',
               wcn(
                 tagPickerOptionClassNames.secondaryContent,
-                'text-caption-1 text-muted-foreground',
+                'wave:text-caption-1 wave:text-muted-foreground',
               ),
             )}
         </span>

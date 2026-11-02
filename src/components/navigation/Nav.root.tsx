@@ -242,13 +242,13 @@ export const NavRoot = ({
         ref={ref}
         className={wcn(
           navClassNames.root,
-          'w-60 border-e border-border bg-background py-2',
+          'wave:w-60 wave:border-e wave:border-border wave:bg-background wave:py-2',
           className,
         )}
       >
         <ul
           {...mergeSlotProps(slotProps?.list, {
-            className: wcn(navClassNames.list, 'm-0 list-none p-0'),
+            className: wcn(navClassNames.list, 'wave:m-0 wave:list-none wave:p-0'),
             locked: NAV_SHOWN_PART_LOCKS,
           })}
           ref={listMergedRef}

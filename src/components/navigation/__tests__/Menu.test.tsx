@@ -98,7 +98,7 @@ describe('Menu', () => {
         </Menu.Item>,
       ],
     },
-    conflictingClass: { className: 'rounded-none', overrides: 'rounded-md' },
+    conflictingClass: { className: 'rounded-none', overrides: 'wave:rounded-md' },
   });
 
   testCompoundExposure(Menu, [
@@ -164,13 +164,13 @@ describe('Menu', () => {
   it('uses the default radius name rounded-md (C-RADIUS)', () => {
     renderStaticMenu();
     const menu = screen.getByTestId('menu');
-    expect(menu).toHaveClass('rounded-md');
-    expect(menu).not.toHaveClass('rounded-lg');
+    expect(menu).toHaveClass('wave:rounded-md');
+    expect(menu).not.toHaveClass('wave:rounded-lg');
   });
 
   it('the static menu element is the group/menu its items align their columns to', () => {
     renderStaticMenu({ className: 'consumer-class' });
-    expect(screen.getByTestId('menu')).toHaveClass('group/menu', 'consumer-class');
+    expect(screen.getByTestId('menu')).toHaveClass('wave:group/menu', 'consumer-class');
   });
 
   describe('roving focus (static menu)', () => {
@@ -400,7 +400,7 @@ describe('Menu', () => {
 
       it('shows the focus ring on the menu while it holds focus (C-FOCUS)', () => {
         render(<AllDisabledMenu />);
-        expect(screen.getByTestId('menu')).toHaveClass('focus-visible:outline-2');
+        expect(screen.getByTestId('menu')).toHaveClass('wave:focus-visible:outline-2');
       });
 
       it('gives the tab stop back to the items once one is enabled, moving focus there', async () => {
@@ -607,7 +607,7 @@ describe('Menu', () => {
       wrapper: StaticMenuWrapper,
       defaultProps: { children: 'Save', shortcut: 'Ctrl+S' },
       a11yVariants: [{ name: 'disabled', props: { disabled: true } }],
-      conflictingClass: { className: 'px-6', overrides: 'px-3' },
+      conflictingClass: { className: 'px-6', overrides: 'wave:px-3' },
     });
 
     it('renders the icon slot aria-hidden, so icon text is not part of the name', () => {
@@ -668,8 +668,8 @@ describe('Menu', () => {
         </Menu>,
       );
       const shortcut = screen.getByText('Ctrl+S');
-      expect(shortcut).toHaveClass('ms-4');
-      expect(shortcut).not.toHaveClass('ml-4');
+      expect(shortcut).toHaveClass('wave:ms-4');
+      expect(shortcut).not.toHaveClass('wave:ml-4');
     });
 
     it('keeps the logical shortcut margin in RTL', () => {
@@ -680,7 +680,7 @@ describe('Menu', () => {
         { dir: 'rtl' },
       );
       expect(screen.getByRole('menuitem').closest('[dir]')).toHaveAttribute('dir', 'rtl');
-      expect(screen.getByText('Ctrl+S')).toHaveClass('ms-4');
+      expect(screen.getByText('Ctrl+S')).toHaveClass('wave:ms-4');
     });
 
     it('has the shared focus ring and a focus background that matches hover (C-FOCUS)', () => {
@@ -690,10 +690,10 @@ describe('Menu', () => {
         </Menu>,
       );
       expect(screen.getByRole('menuitem')).toHaveClass(
-        'focus-visible:outline-2',
-        'focus-visible:outline-ring',
-        'not-disabled:not-aria-disabled:focus:bg-subtle-hover',
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:focus-visible:outline-2',
+        'wave:focus-visible:outline-ring',
+        'wave:not-disabled:not-aria-disabled:focus:bg-subtle-hover',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
       );
     });
 
@@ -710,8 +710,8 @@ describe('Menu', () => {
       // Mouse focus reaches the disabled item (roving tabindex -1), so the background is gated.
       expect(paste).toHaveFocus();
       expect(paste).toHaveAttribute('aria-disabled', 'true');
-      expect(paste).not.toHaveClass('focus:bg-subtle-hover');
-      expect(paste).toHaveClass('not-disabled:not-aria-disabled:focus:bg-subtle-hover');
+      expect(paste).not.toHaveClass('wave:focus:bg-subtle-hover');
+      expect(paste).toHaveClass('wave:not-disabled:not-aria-disabled:focus:bg-subtle-hover');
     });
 
     it('uses theme tokens only (no raw hover color)', () => {
@@ -1430,7 +1430,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     render(<PopupMenu popoverClassName="popover-class" />);
     await user.click(trigger());
     expect(screen.getByRole('menu', { name: 'Actions' })).toHaveClass(
-      'group/menu',
+      'wave:group/menu',
       'popover-class',
     );
   });
@@ -1452,7 +1452,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     const surface = screen.getByTestId('surface');
     expect(ref.current).toBe(surface);
     expect(surface).toHaveAttribute('role', 'menu');
-    expect(surface).toHaveClass('popover-class', 'rounded-md');
+    expect(surface).toHaveClass('popover-class', 'wave:rounded-md');
     expect(surface).toHaveAttribute('data-state', 'open');
   });
 
@@ -1780,8 +1780,8 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
 describe('Menu.Popover taller than the viewport', () => {
   const LONG_MENU_ITEMS = Array.from({ length: 40 }, (_, index) => `Command ${index + 1}`);
   /** The size limits, from the available space floating-ui writes as CSS variables. */
-  const SIZE_LIMIT_HEIGHT = 'max-h-(--wave-popup-available-height)';
-  const SIZE_LIMIT_WIDTH = 'max-w-(--wave-popup-available-width)';
+  const SIZE_LIMIT_HEIGHT = 'wave:max-h-(--wave-popup-available-height)';
+  const SIZE_LIMIT_WIDTH = 'wave:max-w-(--wave-popup-available-width)';
 
   function LongMenu() {
     return (
@@ -1804,8 +1804,8 @@ describe('Menu.Popover taller than the viewport', () => {
     await user.click(trigger());
     const menu = screen.getByRole('menu', { name: 'Actions' });
     expect(menu).toHaveClass(
-      'overflow-y-auto',
-      'overscroll-contain',
+      'wave:overflow-y-auto',
+      'wave:overscroll-contain',
       SIZE_LIMIT_HEIGHT,
       SIZE_LIMIT_WIDTH,
     );
@@ -1830,7 +1830,7 @@ describe('Menu.Popover taller than the viewport', () => {
     );
     await user.click(trigger());
     const menu = screen.getByRole('menu', { name: 'Actions' });
-    expect(menu).toHaveClass('max-h-64', 'max-w-xs', 'overflow-y-auto');
+    expect(menu).toHaveClass('max-h-64', 'max-w-xs', 'wave:overflow-y-auto');
     expect(menu).not.toHaveClass(SIZE_LIMIT_HEIGHT);
     expect(menu).not.toHaveClass(SIZE_LIMIT_WIDTH);
     expect(menu.style.maxHeight).toBe('');

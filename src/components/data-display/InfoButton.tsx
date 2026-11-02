@@ -110,9 +110,9 @@ type OpenReason = 'hover' | 'focus' | 'click';
  * taller.
  */
 const GLYPH: Readonly<Record<CoreSize, { size: number; margin: string }>> = {
-  small: { size: 12, margin: '-my-1' },
-  medium: { size: 16, margin: '-my-0.5' },
-  large: { size: 20, margin: '-my-px' },
+  small: { size: 12, margin: 'wave:-my-1' },
+  medium: { size: 16, margin: 'wave:-my-0.5' },
+  large: { size: 20, margin: 'wave:-my-px' },
 };
 
 /**
@@ -441,7 +441,7 @@ export const InfoButton = ({
       className: wcn(
         infoButtonClassNames.info,
         noteClassName,
-        'w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
+        'wave:w-max wave:max-w-[min(20rem,calc(100vw-1rem))] wave:rounded-md wave:border wave:border-border wave:bg-background wave:px-3 wave:py-2 wave:text-caption-1 wave:text-foreground wave:shadow-16',
         motionClassName,
       ),
       locked: {
@@ -510,9 +510,9 @@ export const InfoButton = ({
         aria-controls={open ? noteId : undefined}
         className={wcn(
           infoButtonClassNames.root,
-          'inline-flex size-6 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground',
+          'wave:inline-flex wave:size-6 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border-0 wave:bg-transparent wave:p-0 wave:text-muted-foreground',
           GLYPH[size].margin,
-          'not-disabled:not-aria-disabled:hover:text-foreground',
+          'wave:not-disabled:not-aria-disabled:hover:text-foreground',
           focusRing,
           className,
         )}

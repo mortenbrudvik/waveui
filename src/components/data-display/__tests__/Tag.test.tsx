@@ -58,7 +58,7 @@ describe('Tag', () => {
     displayName: 'Tag',
     polymorphic: true,
     defaultProps: { children: 'Label' },
-    conflictingClass: { className: 'bg-primary', overrides: 'bg-muted' },
+    conflictingClass: { className: 'bg-primary', overrides: 'wave:bg-muted' },
     a11yVariants: [
       { name: 'dismissible', props: { dismissible: true, children: 'Cherry' } },
       {
@@ -110,7 +110,7 @@ describe('Tag', () => {
 
   it('uses theme tokens for the chip (C-TOKENS)', () => {
     render(<Tag data-testid="tag">Label</Tag>);
-    expect(screen.getByTestId('tag')).toHaveClass('bg-muted', 'text-foreground');
+    expect(screen.getByTestId('tag')).toHaveClass('wave:bg-muted', 'wave:text-foreground');
   });
 
   it('does not show a dismiss button when not dismissible', () => {
@@ -605,10 +605,10 @@ describe('Tag', () => {
         expect(button).toHaveAttribute('data-disabled', '');
         expect(button).toHaveAttribute('data-disabled-focusable', '');
         expect(button).toHaveClass(
-          'aria-disabled:cursor-not-allowed',
-          'aria-disabled:opacity-50',
+          'wave:aria-disabled:cursor-not-allowed',
+          'wave:aria-disabled:opacity-50',
           // The dimmed look lifts while the focus ring shows (opacity would dim the ring too).
-          'aria-disabled:focus-visible:opacity-100',
+          'wave:aria-disabled:focus-visible:opacity-100',
         );
         await user.tab();
         expect(button).toHaveFocus();
@@ -1276,7 +1276,7 @@ describe('Tag', () => {
     );
     const tag = screen.getByTestId('tag');
     // 0.11 (D20): the 1px border is part of every inset, so 12px and 6px stay the outer metrics.
-    expect(tag).toHaveClass('ps-2.75', 'pe-1.25');
+    expect(tag).toHaveClass('wave:ps-2.75', 'wave:pe-1.25');
     expect(tag.className).not.toMatch(/\bp[lr]-/);
   });
 
@@ -1295,21 +1295,21 @@ describe('Tag', () => {
       );
       const box = [
         'wave-tag',
-        'inline-flex',
-        'items-center',
-        'gap-1',
-        'min-h-7',
-        'border',
-        'border-transparent',
-        'bg-muted',
-        'text-foreground',
-        'text-body-1',
-        'rounded-full',
-        'ps-2.75',
+        'wave:inline-flex',
+        'wave:items-center',
+        'wave:gap-1',
+        'wave:min-h-7',
+        'wave:border',
+        'wave:border-transparent',
+        'wave:bg-muted',
+        'wave:text-foreground',
+        'wave:text-body-1',
+        'wave:rounded-full',
+        'wave:ps-2.75',
       ];
       for (const [testId, endInset] of [
-        ['plain', 'pe-2.75'],
-        ['dismissible', 'pe-1.25'],
+        ['plain', 'wave:pe-2.75'],
+        ['dismissible', 'wave:pe-1.25'],
       ] as const) {
         const tag = screen.getByTestId(testId);
         expect(classesOf(tag)).toEqual([...box, endInset].sort());
@@ -1325,9 +1325,9 @@ describe('Tag', () => {
     });
 
     const LOOKS: Record<TagAppearance, readonly string[]> = {
-      filled: ['border-transparent', 'bg-muted', 'text-foreground'],
-      outline: ['border-stroke', 'bg-transparent', 'text-foreground'],
-      brand: ['border-transparent', 'bg-selected', 'text-selected-foreground'],
+      filled: ['wave:border-transparent', 'wave:bg-muted', 'wave:text-foreground'],
+      outline: ['wave:border-stroke', 'wave:bg-transparent', 'wave:text-foreground'],
+      brand: ['wave:border-transparent', 'wave:bg-selected', 'wave:text-selected-foreground'],
     };
     const RAW_COLOR = /#[0-9a-f]{3,8}\b|\brgba?\(|\b(?:white|black)\b|-(?:gray|grey|blue|red)-\d/i;
 
@@ -1339,7 +1339,7 @@ describe('Tag', () => {
       );
       const tag = screen.getByTestId('tag');
       expect(tag).toHaveAttribute('data-appearance', appearance);
-      expect(tag).toHaveClass(...LOOKS[appearance], 'border');
+      expect(tag).toHaveClass(...LOOKS[appearance], 'wave:border');
       for (const other of APPEARANCES.filter((name) => name !== appearance)) {
         const own = new Set(LOOKS[appearance]);
         for (const name of LOOKS[other]) if (!own.has(name)) expect(tag).not.toHaveClass(name);
@@ -1372,8 +1372,12 @@ describe('Tag', () => {
         const tag = screen.getByTestId(appearance);
         expect(tag).toHaveAttribute('data-selected', '');
         expect(tag).toHaveAttribute('data-appearance', appearance);
-        expect(tag).toHaveClass('bg-primary', 'text-primary-foreground', 'border-primary');
-        expect(tag).not.toHaveClass('bg-muted', 'bg-selected', 'bg-transparent');
+        expect(tag).toHaveClass(
+          'wave:bg-primary',
+          'wave:text-primary-foreground',
+          'wave:border-primary',
+        );
+        expect(tag).not.toHaveClass('wave:bg-muted', 'wave:bg-selected', 'wave:bg-transparent');
         // A Tag is not interactive: the selected state is a look, never announced (D26).
         expect(tag).not.toHaveAttribute('aria-selected');
         expect(tag).not.toHaveAttribute('aria-pressed');
@@ -1381,7 +1385,11 @@ describe('Tag', () => {
         const disabled = screen.getByTestId(`disabled-${appearance}`);
         expect(disabled).toHaveAttribute('data-selected', '');
         expect(disabled).toHaveAttribute('data-disabled', '');
-        expect(disabled).not.toHaveClass('bg-primary', 'text-primary-foreground', 'border-primary');
+        expect(disabled).not.toHaveClass(
+          'wave:bg-primary',
+          'wave:text-primary-foreground',
+          'wave:border-primary',
+        );
         expect(disabled).toHaveClass(...LOOKS[appearance]);
       }
     });
@@ -1399,13 +1407,15 @@ describe('Tag', () => {
       );
       const circular = screen.getByTestId('circular');
       expect(circular).toHaveAttribute('data-shape', 'circular');
-      expect(circular).toHaveClass('rounded-full');
+      expect(circular).toHaveClass('wave:rounded-full');
       const rounded = screen.getByTestId('rounded');
       expect(rounded).toHaveAttribute('data-shape', 'rounded');
-      expect(rounded).toHaveClass('rounded');
-      expect(rounded).not.toHaveClass('rounded-full');
+      expect(rounded).toHaveClass('wave:rounded');
+      expect(rounded).not.toHaveClass('wave:rounded-full');
       // The Dismiss button stays a circle in both shapes.
-      expect(screen.getByRole('button', { name: 'Dismiss Cherry' })).toHaveClass('rounded-full');
+      expect(screen.getByRole('button', { name: 'Dismiss Cherry' })).toHaveClass(
+        'wave:rounded-full',
+      );
     });
 
     it('uses the state tokens for the Dismiss hover of each look (D22)', () => {
@@ -1430,12 +1440,12 @@ describe('Tag', () => {
       };
       for (const [text, [hover, pressed]] of Object.entries(expected)) {
         const button = screen.getByRole('button', { name: `Dismiss ${text}` });
-        expect(button).toHaveClass(`${gate}hover:${hover}`, `${gate}active:${pressed}`);
+        expect(button).toHaveClass(`wave:${gate}hover:${hover}`, `wave:${gate}active:${pressed}`);
         // 0.10's dismiss hover (1.05:1 in light) is gone (D22, "Fixed").
-        expect(button).not.toHaveClass(`${gate}hover:bg-subtle-pressed`);
+        expect(button).not.toHaveClass(`wave:${gate}hover:bg-subtle-pressed`);
         // The glyph takes the tag's text colour (C-NATIVE: set explicitly).
-        expect(button).toHaveClass('text-inherit');
-        expect(button).not.toHaveClass('text-foreground');
+        expect(button).toHaveClass('wave:text-inherit');
+        expect(button).not.toHaveClass('wave:text-foreground');
       }
     });
 
@@ -1456,20 +1466,20 @@ describe('Tag', () => {
       );
       const plain = screen.getByRole('button', { name: 'Dismiss Plain' });
       expect(plain).toHaveClass(
-        'focus-visible:outline-2',
-        'focus-visible:outline-offset-2',
-        'focus-visible:outline-ring',
+        'wave:focus-visible:outline-2',
+        'wave:focus-visible:outline-offset-2',
+        'wave:focus-visible:outline-ring',
       );
       const selected = screen.getByRole('button', { name: 'Dismiss Selected' });
-      expect(selected).toHaveClass('focus-visible:outline-primary-foreground');
-      expect(selected).not.toHaveClass('focus-visible:outline-ring');
+      expect(selected).toHaveClass('wave:focus-visible:outline-primary-foreground');
+      expect(selected).not.toHaveClass('wave:focus-visible:outline-ring');
       // Disabled wins over selected: the default ring.
       const locked = screen.getByRole('button', { name: 'Dismiss Locked' });
-      expect(locked).toHaveClass('focus-visible:outline-ring');
-      expect(locked).not.toHaveClass('focus-visible:outline-primary-foreground');
+      expect(locked).toHaveClass('wave:focus-visible:outline-ring');
+      expect(locked).not.toHaveClass('wave:focus-visible:outline-primary-foreground');
       const small = screen.getByRole('button', { name: 'Dismiss Small' });
-      expect(small).toHaveClass('focus-visible:outline-offset-0');
-      expect(small).not.toHaveClass('focus-visible:outline-offset-2');
+      expect(small).toHaveClass('wave:focus-visible:outline-offset-0');
+      expect(small).not.toHaveClass('wave:focus-visible:outline-offset-2');
     });
 
     it('draws an edge, the selected outline, GrayText and a Highlight glyph in forced colours (D29)', () => {
@@ -1487,15 +1497,15 @@ describe('Tag', () => {
         </>,
       );
       // The transparent 1px border is the tag's edge in forced colours.
-      expect(screen.getByTestId('plain')).toHaveClass('border', 'border-transparent');
-      expect(screen.getByTestId('plain').className).not.toContain('forced-colors:outline');
+      expect(screen.getByTestId('plain')).toHaveClass('wave:border', 'wave:border-transparent');
+      expect(screen.getByTestId('plain').className).not.toContain('wave:forced-colors:outline');
       expect(screen.getByTestId('selected')).toHaveClass(
         ...forcedColors.selectedContainer.split(' '),
       );
       expect(screen.getByTestId('selected').className).not.toContain('forced-color-adjust');
       expect(screen.getByTestId('disabled')).toHaveClass(...forcedColors.disabled.split(' '));
       expect(screen.getByRole('button', { name: 'Dismiss Plain' })).toHaveClass(
-        'forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight]',
+        'wave:forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight]',
       );
     });
   });
@@ -1521,49 +1531,49 @@ describe('Tag', () => {
       }
     > = {
       medium: {
-        height: 'min-h-7',
-        text: 'text-body-1',
-        gap: 'gap-1',
-        textStart: 'ps-2.75',
-        iconStart: 'ps-1.75',
-        textEnd: 'pe-2.75',
-        dismissEnd: 'pe-1.25',
-        mediaEnd: 'me-1',
-        iconBox: 'size-5',
-        dismissBox: 'size-5',
-        hitLayer: 'before:-inset-0.5',
+        height: 'wave:min-h-7',
+        text: 'wave:text-body-1',
+        gap: 'wave:gap-1',
+        textStart: 'wave:ps-2.75',
+        iconStart: 'wave:ps-1.75',
+        textEnd: 'wave:pe-2.75',
+        dismissEnd: 'wave:pe-1.25',
+        mediaEnd: 'wave:me-1',
+        iconBox: 'wave:size-5',
+        dismissBox: 'wave:size-5',
+        hitLayer: 'wave:before:-inset-0.5',
         glyph: '12',
         avatar: avatarSizeClasses['extra-small'].split(' '),
       },
       small: {
-        height: 'min-h-6',
-        text: 'text-caption-1',
-        gap: 'gap-1',
-        textStart: 'ps-1.75',
-        iconStart: 'ps-1.25',
-        textEnd: 'pe-1.75',
-        dismissEnd: 'pe-0.75',
-        mediaEnd: 'me-0.5',
-        iconBox: 'size-4',
-        dismissBox: 'size-4',
-        hitLayer: 'before:-inset-1',
+        height: 'wave:min-h-6',
+        text: 'wave:text-caption-1',
+        gap: 'wave:gap-1',
+        textStart: 'wave:ps-1.75',
+        iconStart: 'wave:ps-1.25',
+        textEnd: 'wave:pe-1.75',
+        dismissEnd: 'wave:pe-0.75',
+        mediaEnd: 'wave:me-0.5',
+        iconBox: 'wave:size-4',
+        dismissBox: 'wave:size-4',
+        hitLayer: 'wave:before:-inset-1',
         glyph: '12',
-        avatar: ['w-5', 'h-5'],
+        avatar: ['wave:w-5', 'wave:h-5'],
       },
       'extra-small': {
-        height: 'min-h-5',
-        text: 'text-caption-1',
-        gap: 'gap-0.5',
-        textStart: 'ps-1.75',
-        iconStart: 'ps-1.25',
-        textEnd: 'pe-1.75',
-        dismissEnd: 'pe-px',
-        mediaEnd: 'me-0.5',
-        iconBox: 'size-3',
-        dismissBox: 'size-4',
-        hitLayer: 'before:-inset-1',
+        height: 'wave:min-h-5',
+        text: 'wave:text-caption-1',
+        gap: 'wave:gap-0.5',
+        textStart: 'wave:ps-1.75',
+        iconStart: 'wave:ps-1.25',
+        textEnd: 'wave:pe-1.75',
+        dismissEnd: 'wave:pe-px',
+        mediaEnd: 'wave:me-0.5',
+        iconBox: 'wave:size-3',
+        dismissBox: 'wave:size-4',
+        hitLayer: 'wave:before:-inset-1',
         glyph: '10',
-        avatar: ['w-4', 'h-4'],
+        avatar: ['wave:w-4', 'wave:h-4'],
       },
     };
 
@@ -1596,23 +1606,24 @@ describe('Tag', () => {
       expect(withIcon).toHaveClass(metrics.iconStart, metrics.dismissEnd);
       expect(withIcon).not.toHaveClass(metrics.textStart);
       const iconBox = withIcon.querySelector(`.${tagClassNames.icon}`);
-      expect(iconBox).toHaveClass(metrics.iconBox, '[&>svg]:size-full');
+      expect(iconBox).toHaveClass(metrics.iconBox, 'wave:[&>svg]:size-full');
 
       const dismiss = screen.getByRole('button', { name: 'Dismiss Icon' });
       expect(dismiss).toHaveClass(
         metrics.dismissBox,
-        'relative',
-        'before:absolute',
+        'wave:relative',
+        'wave:before:absolute',
         metrics.hitLayer,
       );
       const glyph = dismiss.querySelector('[data-wave-icon="dismiss"]');
       expect(glyph).toHaveAttribute('width', metrics.glyph);
       expect(glyph).toHaveAttribute('height', metrics.glyph);
-      if (size === 'extra-small') expect(dismiss).toHaveClass('focus-visible:outline-offset-0');
-      else expect(dismiss).toHaveClass('focus-visible:outline-offset-2');
+      if (size === 'extra-small')
+        expect(dismiss).toHaveClass('wave:focus-visible:outline-offset-0');
+      else expect(dismiss).toHaveClass('wave:focus-visible:outline-offset-2');
 
       const withMedia = screen.getByTestId('media');
-      expect(withMedia).toHaveClass('ps-px');
+      expect(withMedia).toHaveClass('wave:ps-px');
       expect(withMedia.querySelector(`.${tagClassNames.media}`)).toHaveClass(metrics.mediaEnd);
       expect(screen.getByRole('img', { name: 'Katri Athokas' })).toHaveClass(...metrics.avatar);
     });
@@ -1630,7 +1641,7 @@ describe('Tag', () => {
       for (const size of SIZES) {
         const button = screen.getByRole('button', { name: `Dismiss ${size}` });
         // A 20px button reaches 2px beyond each edge, a 16px one 4px: 24px either way.
-        expect(button).toHaveClass('relative', 'before:absolute', METRICS[size].hitLayer);
+        expect(button).toHaveClass('wave:relative', 'wave:before:absolute', METRICS[size].hitLayer);
       }
     });
   });
@@ -1717,23 +1728,23 @@ describe('Tag', () => {
       );
       const disabled = screen.getByTestId('disabled');
       expect(disabled).toHaveClass(
-        'opacity-50',
-        'focus-visible:opacity-100',
-        'has-focus-visible:opacity-100',
+        'wave:opacity-50',
+        'wave:focus-visible:opacity-100',
+        'wave:has-focus-visible:opacity-100',
       );
       const disabledButton = screen.getByRole('button', { name: 'Dismiss Cherry' });
-      expect(disabledButton).not.toHaveClass('disabled:opacity-50');
-      expect(disabledButton).not.toHaveClass('aria-disabled:opacity-50');
+      expect(disabledButton).not.toHaveClass('wave:disabled:opacity-50');
+      expect(disabledButton).not.toHaveClass('wave:aria-disabled:opacity-50');
       expect(disabledButton).toHaveClass(
-        'disabled:cursor-not-allowed',
-        'aria-disabled:cursor-not-allowed',
+        'wave:disabled:cursor-not-allowed',
+        'wave:aria-disabled:cursor-not-allowed',
       );
       // An enabled tag dims nothing itself; its button keeps the look of its own disabled states.
-      expect(screen.getByTestId('enabled')).not.toHaveClass('opacity-50');
+      expect(screen.getByTestId('enabled')).not.toHaveClass('wave:opacity-50');
       expect(screen.getByRole('button', { name: 'Dismiss Plum' })).toHaveClass(
-        'disabled:opacity-50',
-        'aria-disabled:opacity-50',
-        'aria-disabled:focus-visible:opacity-100',
+        'wave:disabled:opacity-50',
+        'wave:aria-disabled:opacity-50',
+        'wave:aria-disabled:focus-visible:opacity-100',
       );
     });
 
@@ -1827,7 +1838,7 @@ describe('Tag', () => {
       expect(link).not.toHaveAttribute('href');
       expect(link).toHaveAttribute('data-disabled', '');
       expect(screen.getByRole('link', { name: 'React' })).toBe(link);
-      expect(link).toHaveClass('opacity-50', 'focus-visible:opacity-100');
+      expect(link).toHaveClass('wave:opacity-50', 'wave:focus-visible:opacity-100');
       // A disabled `<a>` gets no `disabled` attribute.
       expect(link).not.toHaveAttribute('disabled');
 
@@ -1892,7 +1903,7 @@ describe('Tag', () => {
       expect(chip).toHaveAttribute('aria-disabled', 'true');
       expect(chip).toHaveAttribute('data-disabled', '');
       expect(chip).toHaveAttribute('data-disabled-focusable', '');
-      expect(chip).toHaveClass('opacity-50', 'focus-visible:opacity-100');
+      expect(chip).toHaveClass('wave:opacity-50', 'wave:focus-visible:opacity-100');
       await user.keyboard('{Enter}');
       await user.keyboard(' ');
       await user.click(chip);
@@ -2015,8 +2026,8 @@ describe('Tag', () => {
       );
       const boxes: Record<TagSize, readonly string[]> = {
         medium: avatarSizeClasses['extra-small'].split(' '),
-        small: ['w-5', 'h-5'],
-        'extra-small': ['w-4', 'h-4'],
+        small: ['wave:w-5', 'wave:h-5'],
+        'extra-small': ['wave:w-4', 'wave:h-4'],
       };
       for (const size of SIZES) {
         expect(screen.getByRole('img', { name: `Media ${size}` })).toHaveClass(...boxes[size]);
@@ -2067,9 +2078,9 @@ describe('Tag', () => {
         expect(tag.children).toHaveLength(1);
         expect(tag.firstElementChild).toHaveClass(tagClassNames.primaryText);
         // Nothing takes room: the text inset applies.
-        expect(tag).toHaveClass('ps-2.75');
-        expect(tag).not.toHaveClass('ps-px');
-        expect(tag).not.toHaveClass('ps-1.75');
+        expect(tag).toHaveClass('wave:ps-2.75');
+        expect(tag).not.toHaveClass('wave:ps-px');
+        expect(tag).not.toHaveClass('wave:ps-1.75');
       },
     );
 
@@ -2083,18 +2094,26 @@ describe('Tag', () => {
         </>,
       );
       const primary = screen.getByText('Katri');
-      expect(primary).toHaveClass(tagClassNames.primaryText, 'text-caption-1', 'leading-3.5');
+      expect(primary).toHaveClass(
+        tagClassNames.primaryText,
+        'wave:text-caption-1',
+        'wave:leading-3.5',
+      );
       const column = primary.parentElement as HTMLElement;
       expect(column).not.toBe(screen.getByTestId('two'));
-      expect(column.className).toBe('inline-flex min-w-0 flex-col text-start');
+      expect(column.className).toBe('wave:inline-flex wave:min-w-0 wave:flex-col wave:text-start');
       const secondary = screen.getByText('Designer');
-      expect(secondary).toHaveClass(tagClassNames.secondaryText, 'text-caption-2', 'leading-3');
+      expect(secondary).toHaveClass(
+        tagClassNames.secondaryText,
+        'wave:text-caption-2',
+        'wave:leading-3',
+      );
       expect(secondary.parentElement).toBe(column);
 
       const single = screen.getByText('Cherry');
       expect(single.parentElement).toBe(screen.getByTestId('one'));
-      expect(single).not.toHaveClass('text-caption-1');
-      expect(single).not.toHaveClass('leading-3.5');
+      expect(single).not.toHaveClass('wave:text-caption-1');
+      expect(single).not.toHaveClass('wave:leading-3.5');
     });
 
     it('names the dismiss button after the primary text only, with media, icon and secondary text', () => {
@@ -2141,7 +2160,7 @@ describe('Tag', () => {
         { dir: 'rtl' },
       );
       const tag = screen.getByTestId('tag');
-      expect(tag).toHaveClass('ps-px', 'pe-1.25');
+      expect(tag).toHaveClass('wave:ps-px', 'wave:pe-1.25');
       const physical =
         /(?:^|\s|:)-?(?:[pm][lr]|left|right|rounded-[lr]|border-[lr]|text-left|text-right)(?:-|\s|$)/;
       for (const element of [tag, ...Array.from(tag.querySelectorAll('*'))]) {
@@ -2667,7 +2686,7 @@ describe('Tag — slotProps', () => {
     ...all(root, tagClassNames.dismissButton),
   ];
   const DISMISS_CLASSES =
-    'wave-tag__dismiss-button relative inline-flex shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-inherit before:absolute disabled:cursor-not-allowed';
+    'wave-tag__dismiss-button wave:relative wave:inline-flex wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border-0 wave:bg-transparent wave:p-0 wave:text-inherit wave:before:absolute wave:disabled:cursor-not-allowed';
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -2703,15 +2722,15 @@ describe('Tag — slotProps', () => {
 
   // Captured from c2b9673's dist (client and server agree).
   const BASE_PINS = [
-    '<span class="wave-tag__primary-text inline-flex items-center gap-1 text-caption-1 leading-3.5" id="tag-content-_id0_">',
-    '<span class="wave-tag__primary-text inline-flex items-center gap-1" id="tag-content-_id1_">',
-    '<span class="wave-tag__primary-text inline-flex items-center gap-1" id="tag-content-_id2_">',
-    '<span class="wave-tag__primary-text inline-flex items-center gap-1 text-caption-1 leading-3.5" id="tag-content-_id3_">',
-    '<span class="wave-tag__secondary-text text-caption-2 leading-3">',
-    '<span class="wave-tag__secondary-text text-caption-2 leading-3">',
-    `<button aria-labelledby="tag-dismiss-_id4_ tag-content-_id0_" class="${DISMISS_CLASSES} forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] size-5 before:-inset-0.5 disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:active:bg-muted-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-wave-tag-dismiss="" type="button">`,
-    `<button aria-labelledby="tag-dismiss-_id5_ tag-content-_id1_" class="${DISMISS_CLASSES} aria-disabled:cursor-not-allowed forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] size-5 before:-inset-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-wave-tag-dismiss="" disabled="" type="button">`,
-    `<button aria-labelledby="tag-dismiss-text-_id6_ tag-content-_id2_" class="${DISMISS_CLASSES} forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] size-5 before:-inset-0.5 disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:active:bg-muted-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring my-merged" data-wave-tag-dismiss="" id="merged" tabindex="-1" title="Remove it" type="button">`,
+    '<span class="wave-tag__primary-text wave:inline-flex wave:items-center wave:gap-1 wave:text-caption-1 wave:leading-3.5" id="tag-content-_id0_">',
+    '<span class="wave-tag__primary-text wave:inline-flex wave:items-center wave:gap-1" id="tag-content-_id1_">',
+    '<span class="wave-tag__primary-text wave:inline-flex wave:items-center wave:gap-1" id="tag-content-_id2_">',
+    '<span class="wave-tag__primary-text wave:inline-flex wave:items-center wave:gap-1 wave:text-caption-1 wave:leading-3.5" id="tag-content-_id3_">',
+    '<span class="wave-tag__secondary-text wave:text-caption-2 wave:leading-3">',
+    '<span class="wave-tag__secondary-text wave:text-caption-2 wave:leading-3">',
+    `<button aria-labelledby="tag-dismiss-_id4_ tag-content-_id0_" class="${DISMISS_CLASSES} wave:forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] wave:size-5 wave:before:-inset-0.5 wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:not-disabled:not-aria-disabled:hover:bg-muted-hover wave:not-disabled:not-aria-disabled:active:bg-muted-pressed wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" data-wave-tag-dismiss="" type="button">`,
+    `<button aria-labelledby="tag-dismiss-_id5_ tag-content-_id1_" class="${DISMISS_CLASSES} wave:aria-disabled:cursor-not-allowed wave:forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] wave:size-5 wave:before:-inset-0.5 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" data-wave-tag-dismiss="" disabled="" type="button">`,
+    `<button aria-labelledby="tag-dismiss-text-_id6_ tag-content-_id2_" class="${DISMISS_CLASSES} wave:forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] wave:size-5 wave:before:-inset-0.5 wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:not-disabled:not-aria-disabled:hover:bg-muted-hover wave:not-disabled:not-aria-disabled:active:bg-muted-pressed wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring my-merged" data-wave-tag-dismiss="" id="merged" tabindex="-1" title="Remove it" type="button">`,
   ].join('\n');
 
   /** The development warning of a merged button, asserted once per test. */
@@ -2806,9 +2825,9 @@ describe('Tag — slotProps', () => {
       </Tag>,
     );
     for (const [cls, name, mine, conflict] of [
-      [tagClassNames.primaryText, 'primaryText', 'my-primary', 'gap-1'],
-      [tagClassNames.secondaryText, 'secondaryText', 'my-secondary', 'leading-3'],
-      [tagClassNames.dismissButton, 'dismissButton', 'my-dismiss', 'size-5'],
+      [tagClassNames.primaryText, 'primaryText', 'my-primary', 'wave:gap-1'],
+      [tagClassNames.secondaryText, 'secondaryText', 'my-secondary', 'wave:leading-3'],
+      [tagClassNames.dismissButton, 'dismissButton', 'my-dismiss', 'wave:size-5'],
     ] as const) {
       const [element] = all(document, cls);
       expect(element.classList[0]).toBe(cls);

@@ -15,7 +15,7 @@ type Story = StoryObj<typeof meta>;
 
 /** Demo item drawn with theme tokens. */
 const Box = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
-  <div className="rounded border border-border bg-muted px-4 py-3" style={style}>
+  <div className="rounded border border-wave-border bg-wave-muted px-4 py-3" style={style}>
     {children}
   </div>
 );
@@ -47,7 +47,7 @@ export const Column: Story = {
 export const AlignCenter: Story = {
   args: {
     align: 'center',
-    className: 'border border-dashed border-border',
+    className: 'border border-dashed border-wave-border',
     style: { height: 120 },
   },
   render: (args) => (
@@ -62,7 +62,7 @@ export const AlignCenter: Story = {
 export const SpaceBetween: Story = {
   args: {
     justify: 'between',
-    className: 'border border-dashed border-border p-2',
+    className: 'border border-dashed border-wave-border p-2',
   },
   render: (args) => (
     <Flex {...args}>
@@ -98,10 +98,10 @@ export const GrowShrink: Story = {
   },
   render: (args) => (
     <Flex {...args}>
-      <Flex grow className="rounded bg-selected p-3 text-selected-foreground">
+      <Flex grow className="rounded bg-wave-selected p-3 text-wave-selected-foreground">
         Grows to fill
       </Flex>
-      <Flex shrink={false} className="rounded border border-border bg-muted px-4 py-3">
+      <Flex shrink={false} className="rounded border border-wave-border bg-wave-muted px-4 py-3">
         Never shrinks
       </Flex>
     </Flex>

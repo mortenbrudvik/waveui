@@ -16,7 +16,7 @@ describe('Flex', () => {
     displayName: 'Flex',
     polymorphic: true,
     defaultProps: { children: <p>Flex item</p> },
-    conflictingClass: { className: 'flex-col', overrides: 'flex-row' },
+    conflictingClass: { className: 'flex-col', overrides: 'wave:flex-row' },
   });
 
   it('renders without crashing', () => {
@@ -32,9 +32,9 @@ describe('Flex', () => {
   it('renders as flex-row by default (exact tokens, feedback-navigation#21)', () => {
     render(<Flex data-testid="flex">Content</Flex>);
     const el = screen.getByTestId('flex');
-    expect(el).toHaveClass('flex', 'flex-row');
-    expect(el).not.toHaveClass('inline-flex');
-    expect(el).not.toHaveClass('flex-row-reverse');
+    expect(el).toHaveClass('wave:flex', 'wave:flex-row');
+    expect(el).not.toHaveClass('wave:inline-flex');
+    expect(el).not.toHaveClass('wave:flex-row-reverse');
   });
 
   it('applies row-reverse direction', () => {
@@ -44,8 +44,8 @@ describe('Flex', () => {
       </Flex>,
     );
     const el = screen.getByTestId('flex');
-    expect(el).toHaveClass('flex-row-reverse');
-    expect(el).not.toHaveClass('flex-row');
+    expect(el).toHaveClass('wave:flex-row-reverse');
+    expect(el).not.toHaveClass('wave:flex-row');
   });
 
   it('applies column direction', () => {
@@ -55,8 +55,8 @@ describe('Flex', () => {
       </Flex>,
     );
     const el = screen.getByTestId('flex');
-    expect(el).toHaveClass('flex-col');
-    expect(el).not.toHaveClass('flex-row');
+    expect(el).toHaveClass('wave:flex-col');
+    expect(el).not.toHaveClass('wave:flex-row');
   });
 
   it('applies column-reverse direction', () => {
@@ -66,8 +66,8 @@ describe('Flex', () => {
       </Flex>,
     );
     const el = screen.getByTestId('flex');
-    expect(el).toHaveClass('flex-col-reverse');
-    expect(el).not.toHaveClass('flex-col');
+    expect(el).toHaveClass('wave:flex-col-reverse');
+    expect(el).not.toHaveClass('wave:flex-col');
   });
 
   it('applies wrap class', () => {
@@ -77,8 +77,8 @@ describe('Flex', () => {
       </Flex>,
     );
     const el = screen.getByTestId('flex');
-    expect(el).toHaveClass('flex-wrap');
-    expect(el).not.toHaveClass('flex-wrap-reverse');
+    expect(el).toHaveClass('wave:flex-wrap');
+    expect(el).not.toHaveClass('wave:flex-wrap-reverse');
   });
 
   it('applies nowrap class', () => {
@@ -87,7 +87,7 @@ describe('Flex', () => {
         Content
       </Flex>,
     );
-    expect(screen.getByTestId('flex')).toHaveClass('flex-nowrap');
+    expect(screen.getByTestId('flex')).toHaveClass('wave:flex-nowrap');
   });
 
   it('applies wrap-reverse class', () => {
@@ -97,8 +97,8 @@ describe('Flex', () => {
       </Flex>,
     );
     const el = screen.getByTestId('flex');
-    expect(el).toHaveClass('flex-wrap-reverse');
-    expect(el).not.toHaveClass('flex-wrap');
+    expect(el).toHaveClass('wave:flex-wrap-reverse');
+    expect(el).not.toHaveClass('wave:flex-wrap');
   });
 
   it('applies align prop', () => {
@@ -107,7 +107,7 @@ describe('Flex', () => {
         Content
       </Flex>,
     );
-    expect(screen.getByTestId('flex')).toHaveClass('items-center');
+    expect(screen.getByTestId('flex')).toHaveClass('wave:items-center');
   });
 
   it('applies align baseline', () => {
@@ -116,7 +116,7 @@ describe('Flex', () => {
         Content
       </Flex>,
     );
-    expect(screen.getByTestId('flex')).toHaveClass('items-baseline');
+    expect(screen.getByTestId('flex')).toHaveClass('wave:items-baseline');
   });
 
   it('applies justify prop', () => {
@@ -125,7 +125,7 @@ describe('Flex', () => {
         Content
       </Flex>,
     );
-    expect(screen.getByTestId('flex')).toHaveClass('justify-between');
+    expect(screen.getByTestId('flex')).toHaveClass('wave:justify-between');
   });
 
   it('applies gap prop', () => {
@@ -134,7 +134,7 @@ describe('Flex', () => {
         Content
       </Flex>,
     );
-    expect(screen.getByTestId('flex')).toHaveClass('gap-4');
+    expect(screen.getByTestId('flex')).toHaveClass('wave:gap-4');
   });
 
   it('does not apply gap class when gap is not specified', () => {
@@ -149,8 +149,8 @@ describe('Flex', () => {
       </Flex>,
     );
     const el = screen.getByTestId('flex');
-    expect(el).toHaveClass('inline-flex');
-    expect(el).not.toHaveClass('flex');
+    expect(el).toHaveClass('wave:inline-flex');
+    expect(el).not.toHaveClass('wave:flex');
   });
 
   it('applies grow class when grow is true', () => {
@@ -159,7 +159,7 @@ describe('Flex', () => {
         Content
       </Flex>,
     );
-    expect(screen.getByTestId('flex')).toHaveClass('grow');
+    expect(screen.getByTestId('flex')).toHaveClass('wave:grow');
   });
 
   describe('shrink (layout#39)', () => {
@@ -170,8 +170,8 @@ describe('Flex', () => {
         </Flex>,
       );
       const el = screen.getByTestId('flex');
-      expect(el).toHaveClass('shrink');
-      expect(el).not.toHaveClass('shrink-0');
+      expect(el).toHaveClass('wave:shrink');
+      expect(el).not.toHaveClass('wave:shrink-0');
     });
 
     it('shrink={false} emits shrink-0', () => {
@@ -181,15 +181,15 @@ describe('Flex', () => {
         </Flex>,
       );
       const el = screen.getByTestId('flex');
-      expect(el).toHaveClass('shrink-0');
-      expect(el).not.toHaveClass('shrink');
+      expect(el).toHaveClass('wave:shrink-0');
+      expect(el).not.toHaveClass('wave:shrink');
     });
 
     it('emits neither class when shrink is not set', () => {
       render(<Flex data-testid="flex">Content</Flex>);
       const el = screen.getByTestId('flex');
-      expect(el).not.toHaveClass('shrink');
-      expect(el).not.toHaveClass('shrink-0');
+      expect(el).not.toHaveClass('wave:shrink');
+      expect(el).not.toHaveClass('wave:shrink-0');
     });
   });
 

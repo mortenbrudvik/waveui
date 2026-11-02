@@ -65,11 +65,11 @@ import type { RoutedHandlers } from './routedHandlers';
 /* ------------------------------------------------------------------ */
 
 const OPTION_CLASSES =
-  'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold';
+  'wave:flex wave:cursor-pointer wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground wave:hover:bg-subtle-hover wave:data-[active]:bg-subtle-hover wave:data-[active]:outline-2 wave:data-[active]:outline-ring wave:data-[active]:-outline-offset-2 wave:data-[selected]:bg-subtle-selected wave:data-[selected]:font-semibold';
 
 const CHECK_ICON_CLASSES = wcn(
   timePickerClassNames.checkIcon,
-  'flex h-4 w-4 shrink-0 items-center justify-center',
+  'wave:flex wave:h-4 wave:w-4 wave:shrink-0 wave:items-center wave:justify-center',
 );
 
 interface TimePickerOptionProps {
@@ -940,7 +940,7 @@ export const TimePicker = (props: TimePickerProps) => {
       {...mergeSlotProps(slotProps?.listbox, {
         className: wcn(
           timePickerClassNames.listbox,
-          'max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden',
+          'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden',
         ),
         locked: {
           inert: undefined,
@@ -989,7 +989,7 @@ export const TimePicker = (props: TimePickerProps) => {
   const surfaceProps = mergeSlotProps(slotProps?.surface, {
     className: wcn(
       timePickerClassNames.surface,
-      'flex flex-col overflow-hidden rounded border border-border bg-background shadow-8',
+      'wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8',
     ),
     locked: {
       ...placement,
@@ -1008,7 +1008,11 @@ export const TimePicker = (props: TimePickerProps) => {
   const surfaceStyle = lockPositionStyle(surfaceProps.style, positionStyle);
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: wcn(timePickerClassNames.root, 'relative inline-flex flex-col', className),
+    className: wcn(
+      timePickerClassNames.root,
+      'wave:relative wave:inline-flex wave:flex-col',
+      className,
+    ),
     style,
     locked: {
       'data-size': size,
@@ -1025,17 +1029,17 @@ export const TimePicker = (props: TimePickerProps) => {
   return (
     <ListboxContext.Provider value={lb.context}>
       <div {...rootProps} ref={rootRefs}>
-        <div ref={setReference} className="relative flex items-center">
+        <div ref={setReference} className="wave:relative wave:flex wave:items-center">
           <input
             {...mergeSlotProps(slotProps?.input, {
               className: wcn(
                 timePickerClassNames.input,
                 inputHeightClasses[size],
-                'w-full',
+                'wave:w-full',
                 inputPaddingClasses[size],
                 inputTextClasses[size],
                 inputAppearanceClasses[appearance],
-                'text-foreground placeholder:text-muted-foreground',
+                'wave:text-foreground wave:placeholder:text-muted-foreground',
                 inputFocus,
                 disabledStyles,
                 invalidLook && inputInvalid,
@@ -1140,7 +1144,10 @@ export const TimePicker = (props: TimePickerProps) => {
         {showOwnError && (
           <p
             {...mergeSlotProps(slotProps?.errorMessage, {
-              className: wcn(timePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error'),
+              className: wcn(
+                timePickerClassNames.errorMessage,
+                'wave:mt-1 wave:text-caption-1 wave:text-error',
+              ),
               locked: { id: errorId, role: 'alert' },
             })}
           >
@@ -1148,7 +1155,7 @@ export const TimePicker = (props: TimePickerProps) => {
           </p>
         )}
         {!open && allOptions.length > 0 && renderListbox(true)}
-        <span role="status" className="sr-only">
+        <span role="status" className="wave:sr-only">
           {statusMessage}
         </span>
         <HiddenInput
@@ -1170,7 +1177,7 @@ export const TimePicker = (props: TimePickerProps) => {
                   {...mergeSlotProps(slotProps?.emptyMessage, {
                     className: wcn(
                       timePickerClassNames.emptyMessage,
-                      'px-3 py-1.5 text-body-1 text-muted-foreground',
+                      'wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground',
                     ),
                     locked: { 'aria-hidden': 'true', tabIndex: undefined },
                   })}

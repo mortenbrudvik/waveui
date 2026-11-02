@@ -61,8 +61,9 @@ const config: StorybookConfig = {
   },
   /**
    * The library build compiles no CSS (scripts/build-css.mjs does), so Storybook adds the
-   * Tailwind plugin itself: it compiles `.storybook/preview.css`, the library stylesheet plus
-   * the stories as a source (scripts/verify-storybook.mjs checks the result). The autodocs
+   * Tailwind plugin itself: it compiles `.storybook/preview.css`, the library stylesheet with its
+   * `wave:` prefix, and `.storybook/stories.css`, the stories' own classes as an app's unprefixed
+   * build compiles them (scripts/verify-storybook.mjs checks the result). The autodocs
    * description of a component documented on its export comes from `withExportDocblocks`.
    */
   async viteFinal(viteConfig) {

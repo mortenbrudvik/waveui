@@ -247,7 +247,7 @@ function AsyncSearchCombobox({ onQueryChange, onValueChange, ...args }: Combobox
           </Option>
         )}
       </Combobox>
-      <span className="text-caption-1 text-muted-foreground">
+      <span className="text-wave-caption-1 text-wave-muted-foreground">
         {query === answered ? `${results.length} results` : 'Searching…'}
       </span>
     </div>

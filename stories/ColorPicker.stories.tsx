@@ -72,10 +72,10 @@ export const Controlled: Story = {
     const [color, setColor] = useState('#0f6cbd'); // wave-allow-color: fixture
     return (
       <div className="flex flex-col gap-2">
-        <p className="flex items-center gap-2 text-body-1 text-foreground">
+        <p className="flex items-center gap-2 text-wave-body-1 text-wave-foreground">
           <span
             aria-hidden="true"
-            className="inline-block h-4 w-4 rounded border border-border"
+            className="inline-block h-4 w-4 rounded border border-wave-border"
             style={{ backgroundColor: color }}
           />
           Color: {color}
@@ -160,7 +160,7 @@ export const RgbAndHslFields: Story = {
           }}
         />
         <fieldset className="flex gap-2">
-          <legend className="text-caption-1 text-muted-foreground">RGB</legend>
+          <legend className="text-wave-caption-1 text-wave-muted-foreground">RGB</legend>
           {['Red', 'Green', 'Blue'].map((label, index) => (
             <SpinButton
               key={label}
@@ -173,7 +173,7 @@ export const RgbAndHslFields: Story = {
           ))}
         </fieldset>
         <fieldset className="flex gap-2">
-          <legend className="text-caption-1 text-muted-foreground">HSL</legend>
+          <legend className="text-wave-caption-1 text-wave-muted-foreground">HSL</legend>
           <SpinButton
             aria-label="Hue"
             min={0}
@@ -220,7 +220,7 @@ export const InPopover: Story = {
             icon={
               <span
                 aria-hidden="true"
-                className="inline-block size-4 rounded border border-border"
+                className="inline-block size-4 rounded border border-wave-border"
                 style={{ backgroundColor: color }}
               />
             }

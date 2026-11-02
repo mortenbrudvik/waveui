@@ -149,13 +149,13 @@ function renderColumnSpace(column: 'checkmark' | 'icon'): React.ReactElement {
     <span
       aria-hidden="true"
       data-menu-column-space="checkmark"
-      className="hidden w-4 shrink-0 group-has-[[data-menu-checkmark]]/menu:inline-flex"
+      className="wave:hidden wave:w-4 wave:shrink-0 wave:group-has-[[data-menu-checkmark]]/menu:inline-flex"
     />
   ) : (
     <span
       aria-hidden="true"
       data-menu-column-space="icon"
-      className="hidden h-5 w-5 shrink-0 group-has-[[data-menu-icon]]/menu:inline-flex"
+      className="wave:hidden wave:h-5 wave:w-5 wave:shrink-0 wave:group-has-[[data-menu-icon]]/menu:inline-flex"
     />
   );
 }
@@ -187,14 +187,18 @@ export function MenuItemRow({
       ? renderSlot(
           icon,
           'span',
-          wcn(partClassNames?.icon, 'flex h-5 w-5 shrink-0 items-center justify-center'),
+          wcn(
+            partClassNames?.icon,
+            'wave:flex wave:h-5 wave:w-5 wave:shrink-0 wave:items-center wave:justify-center',
+          ),
           { 'aria-hidden': true, 'data-menu-icon': '' },
         )
       : null;
-  const contentClasses = wcn(partClassNames?.content, 'flex-1');
+  const contentClasses = wcn(partClassNames?.content, 'wave:flex-1');
   const labelMarker = markLabel && hasLabel && typeof label !== 'string' ? '' : undefined;
   const shortcutClasses =
-    shortcut && wcn(partClassNames?.shortcut, 'ms-4 text-caption-1 text-muted-foreground');
+    shortcut &&
+    wcn(partClassNames?.shortcut, 'wave:ms-4 wave:text-caption-1 wave:text-muted-foreground');
 
   return (
     <>
@@ -204,7 +208,7 @@ export function MenuItemRow({
           data-menu-checkmark=""
           className={wcn(
             partClassNames?.checkmark,
-            'inline-flex w-4 shrink-0 items-center justify-center',
+            'wave:inline-flex wave:w-4 wave:shrink-0 wave:items-center wave:justify-center',
           )}
         >
           {checkmark}
@@ -493,7 +497,7 @@ function renderSubmenuIndicator(
 ): React.ReactElement {
   const className = wcn(
     menuItemClassNames.submenuIndicator,
-    'ms-auto shrink-0 wave-rtl:-scale-x-100',
+    'wave:ms-auto wave:shrink-0 wave:wave-rtl:-scale-x-100',
   );
   return (
     <ChevronRightIcon
@@ -520,7 +524,11 @@ export const MenuDivider = ({ className, ref, ...rest }: MenuDividerProps) => {
       role="separator"
       {...rest}
       ref={ref}
-      className={wcn(menuDividerClassNames.root, 'my-1 border-t border-border', className)}
+      className={wcn(
+        menuDividerClassNames.root,
+        'wave:my-1 wave:border-t wave:border-border',
+        className,
+      )}
     />
   );
 };

@@ -139,7 +139,7 @@ export const DisabledFocusable: Story = {
   render: (args) => (
     <div className="flex flex-col items-start gap-1">
       <Checkbox {...args} />
-      <p id="share-reason" className="text-caption-1 text-muted-foreground">
+      <p id="share-reason" className="text-wave-caption-1 text-wave-muted-foreground">
         Only administrators can share with the organization.
       </p>
     </div>

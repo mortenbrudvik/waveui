@@ -456,7 +456,7 @@ function RichContentDemo({ status, title, children }: ToastProps) {
       >
         Send email
       </Button>
-      <p className="text-body-1 text-foreground">Undone {undone} times.</p>
+      <p className="text-wave-body-1 text-wave-foreground">Undone {undone} times.</p>
     </div>
   );
 }
@@ -482,7 +482,7 @@ function CustomContentDemo({ status, children }: ToastProps) {
     <Button
       onClick={() =>
         dispatchToast(
-          <div className="flex flex-col items-start gap-2 rounded border border-border bg-background p-3 text-body-1 text-foreground shadow-4">
+          <div className="flex flex-col items-start gap-2 rounded border border-wave-border bg-wave-background p-3 text-wave-body-1 text-wave-foreground shadow-wave-4">
             {children}
             <Toast.Close>
               <Button size="small">Stay signed in</Button>
@@ -565,7 +565,7 @@ export const KeyboardShortcut: Story = {
   render: (args) => (
     <Toaster shortcuts={{ focus: altShiftN }}>
       <div className="flex flex-col items-start gap-2">
-        <p className="text-body-1 text-foreground">
+        <p className="text-wave-body-1 text-wave-foreground">
           Show a toast, then press Alt+Shift+N to move focus to it.
         </p>
         <ToasterDemo {...args} />

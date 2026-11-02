@@ -115,7 +115,7 @@ export const Motion: Story = {
     <div className="flex flex-col gap-6">
       {motionCases(slowCollapse).map(({ label, motion }) => (
         <div key={label}>
-          <h2 className="mb-2 text-subtitle-2">{label}</h2>
+          <h2 className="mb-2 text-wave-subtitle-2">{label}</h2>
           {/* The story renders one accordion per case; every other arg is forwarded. */}
           <Accordion {...args}>
             <Accordion.Item value="item-1">

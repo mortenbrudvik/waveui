@@ -5,28 +5,28 @@ import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorph
 import type { Orientation } from '../../lib/types';
 
 const gapMap = {
-  none: 'gap-0',
-  xs: 'gap-1',
-  sm: 'gap-2',
-  md: 'gap-3',
-  lg: 'gap-4',
-  xl: 'gap-6',
+  none: 'wave:gap-0',
+  xs: 'wave:gap-1',
+  sm: 'wave:gap-2',
+  md: 'wave:gap-3',
+  lg: 'wave:gap-4',
+  xl: 'wave:gap-6',
 } as const;
 
 const alignMap = {
-  start: 'items-start',
-  center: 'items-center',
-  end: 'items-end',
-  stretch: 'items-stretch',
+  start: 'wave:items-start',
+  center: 'wave:items-center',
+  end: 'wave:items-end',
+  stretch: 'wave:items-stretch',
 } as const;
 
 const justifyMap = {
-  start: 'justify-start',
-  center: 'justify-center',
-  end: 'justify-end',
-  between: 'justify-between',
-  around: 'justify-around',
-  evenly: 'justify-evenly',
+  start: 'wave:justify-start',
+  center: 'wave:justify-center',
+  end: 'wave:justify-end',
+  between: 'wave:justify-between',
+  around: 'wave:justify-around',
+  evenly: 'wave:justify-evenly',
 } as const;
 
 /**
@@ -97,12 +97,12 @@ export const Stack: PolymorphicComponent<'div', StackOwnProps> = (props) => {
       ref={ref}
       className={wcn(
         stackClassNames.root,
-        inline ? 'inline-flex' : 'flex',
-        orientation === 'horizontal' ? 'flex-row' : 'flex-col',
+        inline ? 'wave:inline-flex' : 'wave:flex',
+        orientation === 'horizontal' ? 'wave:flex-row' : 'wave:flex-col',
         gapMap[gap],
         align && alignMap[align],
         justify && justifyMap[justify],
-        wrap && 'flex-wrap',
+        wrap && 'wave:flex-wrap',
         className,
       )}
       {...rest}

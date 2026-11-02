@@ -181,10 +181,10 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const tintClasses: Record<Status, string> = {
-  info: 'bg-info-tint',
-  success: 'bg-success-tint',
-  warning: 'bg-warning-tint',
-  error: 'bg-error-tint',
+  info: 'wave:bg-info-tint',
+  success: 'wave:bg-success-tint',
+  warning: 'wave:bg-warning-tint',
+  error: 'wave:bg-error-tint',
 };
 
 type UnknownProps = Record<string, unknown>;
@@ -228,7 +228,7 @@ const DISMISS_LOCKS = {
 /** The handlers a part does not receive while its button activates nothing (`blockHandlers`). */
 const BLOCK_CLICK = ['onClick'] as const;
 
-const dismissContentClassName = 'inline-flex items-center justify-center';
+const dismissContentClassName = 'wave:inline-flex wave:items-center wave:justify-center';
 
 /** Live-region roles: a title is read as the start of their content, never as their name. */
 const LIVE_REGION_ROLES: ReadonlySet<string> = new Set([
@@ -433,7 +433,7 @@ const MessageBarRoot = ({
 }: MessageBarProps) => {
   const iconClassName = wcn(
     messageBarClassNames.icon,
-    'mt-0.5 inline-flex shrink-0',
+    'wave:mt-0.5 wave:inline-flex wave:shrink-0',
     STATUS_ICON_COLOR[status],
   );
   const renderedIcon =
@@ -505,11 +505,11 @@ const MessageBarRoot = ({
         onClick: () => onDismiss?.(),
         className: wcn(
           messageBarClassNames.dismissButton,
-          'ms-auto inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
-          'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
-          'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+          'wave:ms-auto wave:inline-flex wave:shrink-0 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded wave:border-none wave:bg-transparent wave:p-1 wave:text-muted-foreground',
+          'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground',
+          'wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
           focusRing,
-          'disabled:cursor-not-allowed disabled:opacity-50',
+          'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
           mergedAriaDisabledClasses,
         ),
       },
@@ -612,8 +612,8 @@ const MessageBarRoot = ({
   );
   const bodyClassName = wcn(
     messageBarClassNames.body,
-    'min-w-0 flex-1 text-body-1',
-    unwrapped && 'whitespace-nowrap',
+    'wave:min-w-0 wave:flex-1 wave:text-body-1',
+    unwrapped && 'wave:whitespace-nowrap',
   );
   const text = (
     <div
@@ -654,7 +654,7 @@ const MessageBarRoot = ({
       aria-labelledby={labelledBy}
       className={wcn(
         messageBarClassNames.root,
-        'flex items-start gap-3 rounded border-s-4 px-4 py-3 text-foreground',
+        'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border-s-4 wave:px-4 wave:py-3 wave:text-foreground',
         tintClasses[status],
         STATUS_BORDER[status],
         className,
@@ -667,8 +667,8 @@ const MessageBarRoot = ({
             // A layout wrapper (not a part): the text column and the actions, in this DOM order.
             <div
               className={wcn(
-                'flex min-w-0 flex-1 gap-x-3 gap-y-2',
-                resolvedLayout === 'multiline' ? 'flex-col' : 'items-start',
+                'wave:flex wave:min-w-0 wave:flex-1 wave:gap-x-3 wave:gap-y-2',
+                resolvedLayout === 'multiline' ? 'wave:flex-col' : 'wave:items-start',
               )}
             >
               {text}

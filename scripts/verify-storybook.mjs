@@ -1,21 +1,23 @@
 #!/usr/bin/env node
 /**
  * Verifies the static Storybook build (`npm run build-storybook` runs it after `storybook
- * build`; spec §3.2, §3.3; repo-level#1): the preview's stylesheet was compiled by Tailwind from
- * `.storybook/preview.css`, i.e.
- *   - it contains the library utility `.bg-primary` (the stories are not rendered unstyled), and
- *   - it contains every utility the stories need that the library does not provide, proving
- *     `@source '../stories'` took effect. Those story-only utilities are found by compiling a
- *     reference — the library stylesheet `src/styles/styles.css` with `stories/` as an extra
- *     source, with the Tailwind CLI and independently of `.storybook/preview.css` — and keeping
- *     the Tailwind candidates of `stories/` that no library source (src/components, src/lib, the
- *     style entries) uses. `scripts/build-css.mjs` asserts the reverse for dist/styles.css: no
- *     story-only class ships to consumers.
+ * build`; spec §3.2, §3.3; repo-level#1; Phase 14 spec R6): the preview's stylesheet was compiled
+ * by Tailwind from its two sheets, i.e.
+ *   - it contains the library utility `.wave:bg-primary` (`.storybook/preview.css`, the library
+ *     stylesheet with Wave's prefix: the components are not rendered unstyled), and
+ *   - it contains every utility the stories use (`.storybook/stories.css`, the stories' own
+ *     classes as an app's unprefixed Tailwind build compiles them), proving `@source '../stories'`
+ *     took effect. Since 1.0 every utility of the stories is story-only: the library's classes all
+ *     carry its prefix, so it provides none of them. They are found by compiling a reference —
+ *     Tailwind's theme and utilities with Wave's namespaced keys (tokens.css as a reference) and
+ *     variants, `stories/` as the only source, with the Tailwind CLI and independently of
+ *     `.storybook/stories.css` — and keeping the Tailwind candidates of `stories/` it compiles.
+ *     `scripts/build-css.mjs` asserts the reverse for dist/styles.css: no story-only class ships
+ *     to consumers.
  *
- * When the stories use no utility the library lacks, there is nothing a missing `@source` could
- * leave unstyled and the second check has nothing to require: the build passes on `.bg-primary`
- * (and fails again as soon as a story adds a story-only utility that the build lacks). So no
- * story has to keep a story-only class alive for the build to pass.
+ * When the stories use no utility, there is nothing a missing `@source` could leave unstyled and
+ * the second check has nothing to require: the build passes on `.wave:bg-primary` (and fails
+ * again as soon as a story adds a utility that the build lacks).
  *
  * The stylesheet also keeps Wave's direction variant (src/styles/variants.css, C-LOGICAL) for
  * every `wave-rtl:` class of the library, as scripts/build-css.mjs asserts for dist, and selects
@@ -84,22 +86,34 @@ function cssPath(path) {
   return JSON.stringify(path.split(sep).join('/'));
 }
 
+/** The library utility whose presence shows the library sheet was compiled (Wave's prefix). */
+export const LIBRARY_PROBE = 'wave:bg-primary';
+
 /**
  * The story-only utilities a correct Storybook build contains for the project at
- * `projectRoot`: its `src/styles/styles.css` compiled by the Tailwind CLI with its `stories/` as
- * an extra source (what `.storybook/preview.css` is meant to compile, independent of that file),
- * reduced to the story candidates no library source uses (`storyOnlyClasses` of
- * scripts/build-css.mjs over `sources`). Empty when the stories need no utility the library
- * lacks.
+ * `projectRoot`: Tailwind's theme (inlined) and utilities with the project's
+ * `src/styles/tokens.css` as a reference (its namespaced keys) and `src/styles/variants.css`,
+ * compiled by the Tailwind CLI with its `stories/` as the only source (what
+ * `.storybook/stories.css` is meant to compile, independent of that file), reduced to the story
+ * candidates it compiles (`storyOnlyClasses` of scripts/build-css.mjs over `sources.stories`; the
+ * library, whose classes carry Wave's prefix, provides none of them). Empty when the stories use
+ * no utility.
  */
 export function expectedStoryOnly(projectRoot = root, sources = collectStorySources(projectRoot)) {
   const work = mkdtempSync(join(tmpdir(), 'wave-verify-storybook-'));
   try {
     const input = join(work, 'reference.css');
     const output = join(work, 'reference.out.css');
+    const tailwind = dirname(
+      createRequire(join(projectRoot, 'package.json')).resolve('tailwindcss/package.json'),
+    );
+    const style = (name) => join(projectRoot, 'src', 'styles', name);
     writeFileSync(
       input,
-      `@import ${cssPath(join(projectRoot, 'src', 'styles', 'styles.css'))};\n` +
+      `@import ${cssPath(join(tailwind, 'theme.css'))} theme(inline);\n` +
+        `@import ${cssPath(style('tokens.css'))} reference;\n` +
+        (existsSync(style('variants.css')) ? `@import ${cssPath(style('variants.css'))};\n` : '') +
+        `@import ${cssPath(join(tailwind, 'utilities.css'))} source(none);\n` +
         `@source ${cssPath(join(projectRoot, 'stories'))};\n`,
     );
     const result = spawnSync(
@@ -114,7 +128,11 @@ export function expectedStoryOnly(projectRoot = root, sources = collectStorySour
           `${result.stderr}${result.stdout}`,
       );
     }
-    return storyOnlyClasses(readFileSync(output, 'utf8'), sources);
+    return storyOnlyClasses(readFileSync(output, 'utf8'), {
+      stories: sources.stories,
+      library: [],
+      libraryClasses: [],
+    });
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -131,7 +149,7 @@ export function expectedDirectionClasses(projectRoot = root) {
 }
 
 /**
- * Checks one stylesheet: `.bg-primary` is present, and so is every story-only utility of
+ * Checks one stylesheet: {@link LIBRARY_PROBE} is present, and so is every story-only utility of
  * `expected` (see {@link expectedStoryOnly}); every class of `directionClasses` (see
  * {@link expectedDirectionClasses}) is compiled with Wave's direction variant, and none is
  * selected by `:lang()`: Vite's CSS minifier (Lightning CSS) rewrites a bare `:dir(rtl)` to a
@@ -141,10 +159,10 @@ export function expectedDirectionClasses(projectRoot = root) {
 export function checkStorybookCss(css, expected, directionClasses = []) {
   const errors = [];
   const classes = selectorClasses(css);
-  if (!classes.has('bg-primary')) {
+  if (!classes.has(LIBRARY_PROBE)) {
     errors.push(
-      'the Storybook CSS lacks .bg-primary: the preview is unstyled (.storybook/preview.css was ' +
-        'not compiled by Tailwind)',
+      `the Storybook CSS lacks .${LIBRARY_PROBE}: the components are unstyled ` +
+        '(.storybook/preview.css was not compiled by Tailwind)',
     );
     return { errors, storyOnly: [] };
   }
@@ -154,7 +172,7 @@ export function checkStorybookCss(css, expected, directionClasses = []) {
     errors.push(
       `the Storybook CSS lacks ${missing.length} of the ${expected.length} utilities used only ` +
         `in stories/ (${missing.slice(0, 10).join(' ')}${missing.length > 10 ? ' …' : ''}): ` +
-        "stories/ is not a Tailwind source of .storybook/preview.css (@source '../stories'), " +
+        "stories/ is not a Tailwind source of .storybook/stories.css (@source '../stories'), " +
         'or the build is older than the stories',
     );
   }
@@ -203,14 +221,14 @@ export function verifyStorybook(dir, expected, directionClasses = []) {
       storyOnly: [],
     };
   }
-  // No stylesheet passes: report the first styled one (it has .bg-primary), else the first.
+  // No stylesheet passes: report the first styled one (it has the probe), else the first.
   let candidate;
   let candidateStyled = false;
   for (const file of files) {
     const css = readFileSync(join(dir, file), 'utf8');
     const result = { ...checkStorybookCss(css, expected, directionClasses), file };
     if (result.errors.length === 0) return result;
-    const styled = selectorClasses(css).has('bg-primary');
+    const styled = selectorClasses(css).has(LIBRARY_PROBE);
     if (!candidate || (styled && !candidateStyled)) {
       candidate = result;
       candidateStyled = styled;
@@ -258,10 +276,10 @@ export function main(
   }
   const utilities =
     storyOnly.length > 0
-      ? `.bg-primary and all ${storyOnly.length} story-only utilities, e.g. ` +
+      ? `.${LIBRARY_PROBE} and all ${storyOnly.length} story-only utilities, e.g. ` +
         storyOnly.slice(0, 5).join(' ')
-      : '.bg-primary; the stories use no utility the library lacks, so there is no story-only ' +
-        'utility to check';
+      : `.${LIBRARY_PROBE}; the stories use no utility, so there is no story-only utility to ` +
+        'check';
   io.log(
     `verify-storybook: ${where}/${file} OK (${utilities}; all ${direction.length} wave-rtl ` +
       "classes of the library with Wave's direction variant)",

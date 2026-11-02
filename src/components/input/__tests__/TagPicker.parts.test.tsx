@@ -166,7 +166,7 @@ describe('TagPicker parts', () => {
       expectedTag: 'div',
       displayName: 'TagPickerControl',
       wrapper: ControlWrapper,
-      conflictingClass: { className: 'items-start', overrides: 'items-center' },
+      conflictingClass: { className: 'items-start', overrides: 'wave:items-center' },
     });
   });
 
@@ -551,12 +551,12 @@ describe('TagPicker parts', () => {
     it('a consumer Tag disabled in an enabled picker is dimmed; in a disabled picker only the control dims', () => {
       const { unmount } = render(<PeoplePicker lockedTag />);
       const locked = () => screen.getAllByRole('listitem')[0];
-      expect(locked()).toHaveClass('opacity-50');
+      expect(locked()).toHaveClass('wave:opacity-50');
       unmount();
       render(<PeoplePicker lockedTag disabled />);
-      expect(locked()).not.toHaveClass('opacity-50');
-      expect(screen.getAllByRole('listitem')[1]).not.toHaveClass('opacity-50');
-      expect(screen.getByRole('group')).toHaveClass('opacity-50');
+      expect(locked()).not.toHaveClass('wave:opacity-50');
+      expect(screen.getAllByRole('listitem')[1]).not.toHaveClass('wave:opacity-50');
+      expect(screen.getByRole('group')).toHaveClass('wave:opacity-50');
     });
   });
 
@@ -957,7 +957,7 @@ describe('TagPicker parts', () => {
       const list = screen.getByRole('listbox', { hidden: true });
       expect(ref.current).toBe(list);
       expect(list).toHaveClass('max-h-40');
-      expect(list).not.toHaveClass('max-h-60');
+      expect(list).not.toHaveClass('wave:max-h-60');
       expect(list.className.trim().split(/\s+/).at(-1)).toBe('max-h-40');
       expect(list).toHaveAttribute('data-kind', 'fruit');
       expect(list.style.minWidth).toBe('200px');
@@ -991,10 +991,10 @@ describe('TagPicker parts', () => {
 
   describe('sizes and appearances of the parts', () => {
     const cases = [
-      ['medium', 'extra-small', 'outline', 'filled', 'top-1.5', 'pe-8'],
-      ['large', 'small', 'underline', 'filled', 'top-1.5', 'pe-10'],
-      ['extra-large', 'medium', 'filled-darker', 'outline', 'top-2.25', 'pe-10'],
-      ['medium', 'extra-small', 'filled-lighter', 'filled', 'top-1.5', 'pe-8'],
+      ['medium', 'extra-small', 'outline', 'filled', 'wave:top-1.5', 'wave:pe-8'],
+      ['large', 'small', 'underline', 'filled', 'wave:top-1.5', 'wave:pe-10'],
+      ['extra-large', 'medium', 'filled-darker', 'outline', 'wave:top-2.25', 'wave:pe-10'],
+      ['medium', 'extra-small', 'filled-lighter', 'filled', 'wave:top-1.5', 'wave:pe-8'],
     ] as const;
 
     it.each(cases)(
@@ -1015,8 +1015,8 @@ describe('TagPicker parts', () => {
         expect(tag).toHaveAttribute('data-size', tagSize);
         expect(tag).toHaveAttribute('data-appearance', tagAppearance);
         const expand = screen.getByRole('button', { name: 'Show options' });
-        expect(expand).toHaveClass(top, 'end-1');
-        expect(expand).toHaveClass(size === 'medium' ? 'h-6' : 'size-8');
+        expect(expand).toHaveClass(top, 'wave:end-1');
+        expect(expand).toHaveClass(size === 'medium' ? 'wave:h-6' : 'wave:size-8');
         expect(expand.querySelector('svg')).toHaveAttribute(
           'width',
           size === 'medium' ? '12' : '16',
@@ -1062,11 +1062,11 @@ describe('TagPicker parts', () => {
     it('two end buttons: the clear button sits before the expand button', () => {
       render(<PartsForm size="large" defaultValue={['apple']} clearable />);
       expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass(
-        'end-9',
-        'top-1.5',
+        'wave:end-9',
+        'wave:top-1.5',
       );
-      expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('end-1');
-      expect(screen.getByRole('group')).toHaveClass('pe-18');
+      expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('wave:end-1');
+      expect(screen.getByRole('group')).toHaveClass('wave:pe-18');
     });
 
     it('only the root renders data-size and data-appearance among TagPicker’s own elements', () => {
@@ -1110,8 +1110,8 @@ describe('TagPicker parts', () => {
     expect(screen.getByRole('button', { name: 'Remove Apple' })).toHaveFocus();
     await user.keyboard('{ArrowLeft}{ArrowLeft}');
     expect(combobox()).toHaveFocus();
-    expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('end-1');
-    expect(screen.getByRole('group')).toHaveClass('pe-8');
+    expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('wave:end-1');
+    expect(screen.getByRole('group')).toHaveClass('wave:pe-8');
   });
 
   it('SSR: renders and hydrates the parts form with preselected registered options, and the Button trigger', async () => {

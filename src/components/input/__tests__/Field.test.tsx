@@ -60,7 +60,7 @@ const LABEL_HTML_FOR_WARNING =
  */
 function paddedFirstChild(column: Element): Element | null {
   const selector = [...column.classList]
-    .map((name) => /^\[&>(:first-child:has\(.+\))\]:py-1\.5$/.exec(name)?.[1])
+    .map((name) => /^wave:\[&>(:first-child:has\(.+\))\]:py-1\.5$/.exec(name)?.[1])
     .find((match) => match !== undefined);
   return selector === undefined ? null : column.querySelector(`:scope > ${selector}`);
 }
@@ -116,7 +116,7 @@ describe('Field', () => {
       },
       { name: 'horizontal', props: { orientation: 'horizontal', hint: 'Hint' } },
     ],
-    conflictingClass: { className: 'flex-row', overrides: 'flex-col' },
+    conflictingClass: { className: 'flex-row', overrides: 'wave:flex-col' },
   });
 
   it('declares ref in FieldProps (C-REF)', () => {
@@ -462,7 +462,7 @@ describe('Field', () => {
       const name = screen.getByRole('textbox', { name: 'Name' });
       for (const control of [email, name]) {
         expect(control).not.toHaveAttribute('aria-invalid');
-        expect(control).not.toHaveClass('border-destructive');
+        expect(control).not.toHaveClass('wave:border-destructive');
       }
       expect(email).toHaveAccessibleDescription('We never share it');
       expect(name).toHaveAccessibleDescription('Your full name');
@@ -589,10 +589,10 @@ describe('Field', () => {
           ))}
         </>,
       );
-      expect(messageElement('error message')).toHaveClass('text-error');
-      expect(messageElement('warning message')).toHaveClass('text-warning-tint-foreground');
-      expect(messageElement('success message')).toHaveClass('text-success-tint-foreground');
-      expect(messageElement('none message')).toHaveClass('text-muted-foreground');
+      expect(messageElement('error message')).toHaveClass('wave:text-error');
+      expect(messageElement('warning message')).toHaveClass('wave:text-warning-tint-foreground');
+      expect(messageElement('success message')).toHaveClass('wave:text-success-tint-foreground');
+      expect(messageElement('none message')).toHaveClass('wave:text-muted-foreground');
     });
 
     it.each(STATES)(
@@ -918,7 +918,7 @@ describe('Field', () => {
       );
       const root = screen.getByTestId('root');
       expect(root).toHaveAttribute('data-orientation', 'vertical');
-      expect(root).toHaveClass('flex-col');
+      expect(root).toHaveClass('wave:flex-col');
     });
 
     it('horizontal: the label in a start column, the control, message and hint in a column beside it', async () => {
@@ -936,15 +936,15 @@ describe('Field', () => {
       );
       const root = screen.getByTestId('root');
       expect(root).toHaveAttribute('data-orientation', 'horizontal');
-      expect(root).toHaveClass('flex-row', 'items-start');
+      expect(root).toHaveClass('wave:flex-row', 'wave:items-start');
       const label = screen.getByText('Name').closest('label');
       expect(root.firstElementChild).toBe(label);
-      expect(label).toHaveClass('basis-1/3', 'shrink-0', 'mb-0');
+      expect(label).toHaveClass('wave:basis-1/3', 'wave:shrink-0', 'wave:mb-0');
       const input = screen.getByRole('textbox', { name: 'Name' });
       const column = input.parentElement as HTMLElement;
       expect(column).not.toBe(root);
       expect(column.parentElement).toBe(root);
-      expect(column).toHaveClass('flex', 'flex-1', 'min-w-0', 'flex-col');
+      expect(column).toHaveClass('wave:flex', 'wave:flex-1', 'wave:min-w-0', 'wave:flex-col');
       expect(column).toContainElement(messageElement('Message'));
       expect(column).toContainElement(messageElement('Hint'));
       expect(input).toHaveAccessibleDescription('Message Hint');
@@ -1001,7 +1001,7 @@ describe('Field', () => {
         };
         // The label is centred on a 32px row (6px above its 20px line)...
         for (const name of ['Display name', 'Notifications', 'Newsletter', 'Theme', 'Alerts']) {
-          expect(screen.getByText(name).closest('label')).toHaveClass('pt-1.5');
+          expect(screen.getByText(name).closest('label')).toHaveClass('wave:pt-1.5');
         }
         // ...a 32px control fills that row as it is...
         const input = screen.getByRole('textbox', { name: 'Display name' });
@@ -1028,7 +1028,7 @@ describe('Field', () => {
       );
       const root = screen.getByTestId('root');
       expect(root.children).toHaveLength(1);
-      expect(root.firstElementChild).toHaveClass('flex-1');
+      expect(root.firstElementChild).toHaveClass('wave:flex-1');
       expect(root.firstElementChild).toContainElement(
         screen.getByRole('textbox', { name: 'Code' }),
       );
@@ -1056,9 +1056,9 @@ describe('Field', () => {
     });
 
     it.each([
-      ['small', 'text-caption-1'],
-      ['medium', 'text-body-1'],
-      ['large', 'text-body-2'],
+      ['small', 'wave:text-caption-1'],
+      ['medium', 'wave:text-body-1'],
+      ['large', 'wave:text-body-2'],
     ] as const)('a %s Field sizes its label with %s and renders data-size', (size, text) => {
       const { container } = render(
         <Field label="Name" size={size}>
@@ -1076,20 +1076,20 @@ describe('Field', () => {
         </Field>,
         { inputDefaults: { size: 'large' } },
       );
-      expect(screen.getByText('Name')).toHaveClass('text-body-2');
+      expect(screen.getByText('Name')).toHaveClass('wave:text-body-2');
       expect(container.querySelector('[data-orientation]')).toHaveAttribute('data-size', 'large');
     });
 
     it.each([
       [
         'small',
-        'pt-1',
-        '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-0.5',
+        'wave:pt-1',
+        'wave:[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-0.5',
       ],
       [
         'large',
-        'pt-2.25',
-        '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-2.5',
+        'wave:pt-2.25',
+        'wave:[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-2.5',
       ],
     ] as const)(
       'horizontal %s: the label and short rows line up',
@@ -1127,7 +1127,12 @@ describe('Field', () => {
         </Field>,
       );
       const label = screen.getByText('Plan').closest('label') as HTMLLabelElement;
-      expect(label).toHaveClass('text-body-2', 'font-semibold', 'basis-1/3', 'pt-2.25');
+      expect(label).toHaveClass(
+        'wave:text-body-2',
+        'wave:font-semibold',
+        'wave:basis-1/3',
+        'wave:pt-2.25',
+      );
       expect(label).toHaveAttribute('for', screen.getByRole('textbox').id);
       expect(label.id).not.toBe('');
     });
@@ -1145,7 +1150,7 @@ describe('Field', () => {
         </Field>,
       );
       expect(screen.getByText('Plan').closest('label')).toHaveAttribute('id', 'plan-label');
-      expect(screen.getByText('Plan').closest('label')).not.toHaveClass('font-semibold');
+      expect(screen.getByText('Plan').closest('label')).not.toHaveClass('wave:font-semibold');
       expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-labelledby', 'plan-label');
     });
 
@@ -1253,8 +1258,8 @@ describe('Field', () => {
       );
       expect(container.querySelectorAll('label')).toHaveLength(1);
       const label = screen.getByText('Plan').closest('label');
-      expect(label).toHaveClass('mb-1', 'text-body-1', 'font-semibold');
-      expect(label).not.toHaveClass('basis-1/3');
+      expect(label).toHaveClass('wave:mb-1', 'wave:text-body-1', 'wave:font-semibold');
+      expect(label).not.toHaveClass('wave:basis-1/3');
       // The element's own classes come last, so they win a conflicting class.
       rerender(
         <Field label={<Label className="mb-2 plan-label">Plan</Label>}>
@@ -1262,7 +1267,7 @@ describe('Field', () => {
         </Field>,
       );
       expect(screen.getByText('Plan').closest('label')).toHaveClass('mb-2', 'plan-label');
-      expect(screen.getByText('Plan').closest('label')).not.toHaveClass('mb-1');
+      expect(screen.getByText('Plan').closest('label')).not.toHaveClass('wave:mb-1');
     });
 
     it("keeps the element's own size", () => {
@@ -1273,8 +1278,8 @@ describe('Field', () => {
       );
       expect(container.querySelectorAll('label')).toHaveLength(1);
       const label = screen.getByText('Plan').closest('label');
-      expect(label).toHaveClass('text-caption-1');
-      expect(label).not.toHaveClass('text-body-2');
+      expect(label).toHaveClass('wave:text-caption-1');
+      expect(label).not.toHaveClass('wave:text-body-2');
     });
 
     it("gives the element the Field's required state, so only its own asterisk shows; its own required={false} wins", () => {
@@ -1305,7 +1310,7 @@ describe('Field', () => {
         </Field>,
       );
       const label = screen.getByText('Plan').closest('label') as HTMLLabelElement;
-      expect(label).toHaveClass('text-caption-1', 'font-semibold');
+      expect(label).toHaveClass('wave:text-caption-1', 'wave:font-semibold');
       expect(screen.getByRole('button', { name: 'Plan Information' })).toHaveAttribute(
         'data-size',
         'small',
@@ -1314,7 +1319,7 @@ describe('Field', () => {
       expect(group).toHaveAttribute('aria-labelledby', label.id);
       expect(group).toHaveAccessibleName('Plan');
       // The layout classes land on the InfoLabel's root, the element in the label's place.
-      expect(label.parentElement).toHaveClass('mb-1');
+      expect(label.parentElement).toHaveClass('wave:mb-1');
     });
 
     it('puts an InfoLabel element in the start column of a horizontal Field', async () => {
@@ -1331,8 +1336,8 @@ describe('Field', () => {
       );
       const infoLabel = screen.getByText('Password').closest('label')?.parentElement;
       expect(screen.getByTestId('root').firstElementChild).toBe(infoLabel);
-      expect(infoLabel).toHaveClass('mb-0', 'shrink-0', 'basis-1/3', 'pt-1.5');
-      expect(infoLabel).not.toHaveClass('mb-1');
+      expect(infoLabel).toHaveClass('wave:mb-0', 'wave:shrink-0', 'wave:basis-1/3', 'wave:pt-1.5');
+      expect(infoLabel).not.toHaveClass('wave:mb-1');
       const input = screen.getByRole('textbox', { name: 'Password' });
       expect(input).toHaveAccessibleDescription('Hint');
       expect(input).toBeRequired();
@@ -1426,7 +1431,9 @@ describe('Field', () => {
         expect(control, name).toHaveAttribute('aria-invalid', 'false');
         expect(control, name).toHaveAccessibleDescription('Checking');
       }
-      expect(screen.getByRole('textbox', { name: 'Code' })).not.toHaveClass('border-destructive');
+      expect(screen.getByRole('textbox', { name: 'Code' })).not.toHaveClass(
+        'wave:border-destructive',
+      );
       expect(screen.getByRole('textbox', { name: 'Spelling' })).toHaveAttribute(
         'aria-invalid',
         'spelling',
@@ -1610,17 +1617,19 @@ describe('Field', () => {
           </Field>
         </>,
       );
-      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveClass('border-destructive');
+      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveClass('wave:border-destructive');
       // With content slots the border is drawn by the wrapper.
       expect(screen.getByRole('textbox', { name: 'Price' }).parentElement).toHaveClass(
-        'border-destructive',
+        'wave:border-destructive',
       );
-      expect(screen.getByRole('combobox', { name: 'Country' })).toHaveClass('border-destructive');
-      expect(screen.getByRole('textbox', { name: 'Bio' })).toHaveClass('border-destructive');
-      expect(screen.getByRole('textbox', { name: 'City' })).toHaveClass('border-destructive');
+      expect(screen.getByRole('combobox', { name: 'Country' })).toHaveClass(
+        'wave:border-destructive',
+      );
+      expect(screen.getByRole('textbox', { name: 'Bio' })).toHaveClass('wave:border-destructive');
+      expect(screen.getByRole('textbox', { name: 'City' })).toHaveClass('wave:border-destructive');
       // SearchBox draws the field with its root, around the input.
       expect(screen.getByRole('searchbox', { name: 'Find' }).parentElement).toHaveClass(
-        'border-destructive',
+        'wave:border-destructive',
       );
     });
 
@@ -1635,8 +1644,12 @@ describe('Field', () => {
           </Field>
         </>,
       );
-      expect(screen.getByRole('textbox', { name: 'Name' })).not.toHaveClass('border-destructive');
-      expect(screen.getByRole('textbox', { name: 'Bio' })).not.toHaveClass('border-destructive');
+      expect(screen.getByRole('textbox', { name: 'Name' })).not.toHaveClass(
+        'wave:border-destructive',
+      );
+      expect(screen.getByRole('textbox', { name: 'Bio' })).not.toHaveClass(
+        'wave:border-destructive',
+      );
     });
   });
 
@@ -2325,14 +2338,14 @@ describe('Field — slotProps', () => {
       ),
     ).toBe(
       [
-        '<div class="wave-field flex flex-col" data-orientation="vertical" data-size="medium" data-validation-state="error">',
-        '<label class="wave-field__label mb-1 font-semibold text-foreground text-body-1" for="field-_R_0_" id="field-_R_0_-label">Name',
-        '<span aria-hidden="true" class="wave-field__required ms-0.5 text-error">*',
+        '<div class="wave-field wave:flex wave:flex-col" data-orientation="vertical" data-size="medium" data-validation-state="error">',
+        '<label class="wave-field__label wave:mb-1 wave:font-semibold wave:text-foreground wave:text-body-1" for="field-_R_0_" id="field-_R_0_-label">Name',
+        '<span aria-hidden="true" class="wave-field__required wave:ms-0.5 wave:text-error">*',
         '</span>',
         '</label>',
-        '<input aria-describedby="field-_R_0_-error field-_R_0_-hint" aria-invalid="true" aria-required="true" class="wave-input wave-input__input h-8 w-full px-3 text-body-1 rounded border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 border-destructive" data-appearance="outline" data-size="medium" id="field-_R_0_" required="">',
-        '<p class="wave-field__validation-message mt-1 flex items-start gap-1 text-caption-1 text-error" data-validation-state="error" id="field-_R_0_-error" role="alert">',
-        '<span aria-hidden="true" class="wave-field__validation-message-icon mt-0.5 inline-flex shrink-0">',
+        '<input aria-describedby="field-_R_0_-error field-_R_0_-hint" aria-invalid="true" aria-required="true" class="wave-input wave-input__input wave:h-8 wave:w-full wave:px-3 wave:text-body-1 wave:rounded wave:border wave:bg-background wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:border-destructive" data-appearance="outline" data-size="medium" id="field-_R_0_" required="">',
+        '<p class="wave-field__validation-message wave:mt-1 wave:flex wave:items-start wave:gap-1 wave:text-caption-1 wave:text-error" data-validation-state="error" id="field-_R_0_-error" role="alert">',
+        '<span aria-hidden="true" class="wave-field__validation-message-icon wave:mt-0.5 wave:inline-flex wave:shrink-0">',
         '<svg aria-hidden="true" data-wave-icon="error" fill="currentColor" focusable="false" height="12" viewBox="0 0 20 20" width="12" xmlns="http://www.w3.org/2000/svg">',
         '<path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm.5 5v4h-1V7h1Zm0 6v1h-1v-1h1Z" fill-rule="evenodd">',
         '</path>',
@@ -2341,7 +2354,7 @@ describe('Field — slotProps', () => {
         '<span>Wrong',
         '</span>',
         '</p>',
-        '<p class="wave-field__hint mt-1 text-caption-1 text-muted-foreground" id="field-_R_0_-hint">Hint',
+        '<p class="wave-field__hint wave:mt-1 wave:text-caption-1 wave:text-muted-foreground" id="field-_R_0_-hint">Hint',
         '</p>',
         '</div>',
       ].join(''),
@@ -2404,10 +2417,10 @@ describe('Field — slotProps', () => {
       </Field>,
     );
     for (const [ref, stable, own, mine, part] of [
-      [label, fieldClassNames.label, 'font-semibold', 'my-label', 'l'],
-      [required, fieldClassNames.required, 'text-error', 'my-mark', 'r'],
-      [message, fieldClassNames.validationMessage, 'text-caption-1', 'my-message', 'm'],
-      [hint, fieldClassNames.hint, 'text-muted-foreground', 'my-hint', 'h'],
+      [label, fieldClassNames.label, 'wave:font-semibold', 'my-label', 'l'],
+      [required, fieldClassNames.required, 'wave:text-error', 'my-mark', 'r'],
+      [message, fieldClassNames.validationMessage, 'wave:text-caption-1', 'my-message', 'm'],
+      [hint, fieldClassNames.hint, 'wave:text-muted-foreground', 'my-hint', 'h'],
     ] as const) {
       const element = ref.current as HTMLElement;
       expect(element).toHaveClass(stable, own, mine);
@@ -2535,7 +2548,7 @@ describe('Field — slotProps', () => {
       </Field>,
       { dir: 'rtl' },
     );
-    expect(screen.getByText('Name')).toHaveClass('basis-1/3', 'my-label');
+    expect(screen.getByText('Name')).toHaveClass('wave:basis-1/3', 'my-label');
   });
 
   it('has no accessibility violations with every part customised', async () => {

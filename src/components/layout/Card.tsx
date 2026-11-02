@@ -79,23 +79,23 @@ const cardAppearanceClasses: Readonly<
   Record<CardAppearance, { surface: string; interactive: string }>
 > = {
   filled: {
-    surface: 'border border-border bg-card shadow-4',
-    interactive: 'not-disabled:not-aria-disabled:hover:shadow-8',
+    surface: 'wave:border wave:border-border wave:bg-card wave:shadow-4',
+    interactive: 'wave:not-disabled:not-aria-disabled:hover:shadow-8',
   },
   'filled-alternative': {
-    surface: 'border border-transparent bg-muted',
+    surface: 'wave:border wave:border-transparent wave:bg-muted',
     interactive:
-      'not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:active:bg-muted-pressed',
+      'wave:not-disabled:not-aria-disabled:hover:bg-muted-hover wave:not-disabled:not-aria-disabled:active:bg-muted-pressed',
   },
   outline: {
-    surface: 'border border-border bg-transparent',
+    surface: 'wave:border wave:border-border wave:bg-transparent',
     interactive:
-      'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   },
   subtle: {
-    surface: 'border border-transparent bg-transparent',
+    surface: 'wave:border wave:border-transparent wave:bg-transparent',
     interactive:
-      'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   },
 };
 
@@ -109,15 +109,18 @@ const CHECKMARK_PART_LOCKS = {
 
 /** The props of a selected card's check glyph, its `slotProps.checkmark` merged in when given. */
 function checkmarkProps(part: SlotPart<'svg'> | undefined): Record<string, unknown> {
-  const className = wcn(cardClassNames.checkmark, 'absolute end-2 top-2 text-primary');
+  const className = wcn(
+    cardClassNames.checkmark,
+    'wave:absolute wave:end-2 wave:top-2 wave:text-primary',
+  );
   return part ? mergeSlotProps(part, { className, locked: CHECKMARK_PART_LOCKS }) : { className };
 }
 
 /** The padding the parts of a card read (`--wave-card-padding`), per size. */
 const cardSizeClasses: Readonly<Record<CoreSize, string>> = {
-  small: '[--wave-card-padding:0.75rem]',
-  medium: '[--wave-card-padding:1rem]',
-  large: '[--wave-card-padding:1.25rem]',
+  small: 'wave:[--wave-card-padding:0.75rem]',
+  medium: 'wave:[--wave-card-padding:1rem]',
+  large: 'wave:[--wave-card-padding:1.25rem]',
 };
 
 /**
@@ -406,18 +409,18 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
             data-orientation={orientation}
             className={wcn(
               cardClassNames.root,
-              'overflow-hidden rounded-md',
+              'wave:overflow-hidden wave:rounded-md',
               cardAppearanceClasses[appearance].surface,
               cardSizeClasses[size],
-              orientation === 'horizontal' && 'flex flex-row',
+              orientation === 'horizontal' && 'wave:flex wave:flex-row',
               // Positions the check glyph / checkbox; plain cards keep their 0.4 positioning.
-              (selectable || selected !== undefined || hasFloatingAction) && 'relative',
+              (selectable || selected !== undefined || hasFloatingAction) && 'wave:relative',
               selected &&
                 wcn(
-                  'border-primary bg-selected text-selected-foreground ring-1 ring-inset ring-primary',
+                  'wave:border-primary wave:bg-selected wave:text-selected-foreground wave:ring-1 wave:ring-inset wave:ring-primary',
                   forcedColors.selectedContainer,
                 ),
-              selectable && 'cursor-pointer',
+              selectable && 'wave:cursor-pointer',
               selectable && !selected && cardAppearanceClasses[appearance].interactive,
               cardMode && focusRing,
               className,
@@ -441,8 +444,8 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
                 }
                 className={wcn(
                   cardClassNames.checkbox,
-                  'absolute top-3 m-0 size-4 cursor-pointer accent-primary',
-                  hasFloatingAction ? 'start-3' : 'end-3',
+                  'wave:absolute wave:top-3 wave:m-0 wave:size-4 wave:cursor-pointer wave:accent-primary',
+                  hasFloatingAction ? 'wave:start-3' : 'wave:end-3',
                   focusRing,
                   checkboxProps?.className,
                 )}
@@ -453,7 +456,10 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
               renderSlot(
                 floatingAction,
                 'span',
-                wcn(cardClassNames.floatingAction, 'absolute end-3 top-3 inline-flex'),
+                wcn(
+                  cardClassNames.floatingAction,
+                  'wave:absolute wave:end-3 wave:top-3 wave:inline-flex',
+                ),
               )}
             {selected && !checkboxMode && (
               <CheckIcon size={12} {...checkmarkProps(slotProps?.checkmark)} />
@@ -584,7 +590,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
           id={titleId ?? undefined}
           {...textPartProps(
             slotProps?.title,
-            wcn(cardHeaderClassNames.title, 'text-subtitle-1'),
+            wcn(cardHeaderClassNames.title, 'wave:text-subtitle-1'),
             titleId,
           )}
         >
@@ -595,7 +601,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
         <div
           {...textPartProps(
             slotProps?.subtitle,
-            wcn(cardHeaderClassNames.subtitle, 'text-caption-1 text-muted-foreground'),
+            wcn(cardHeaderClassNames.subtitle, 'wave:text-caption-1 wave:text-muted-foreground'),
           )}
         >
           {materialiseSlotContent(subtitle)}
@@ -610,17 +616,17 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
       ref={ref}
       className={wcn(
         cardHeaderClassNames.root,
-        'p-[var(--wave-card-padding,1rem)]',
-        ((titleId && !corners.checkboxAtStart) || corners.floatingAction) && 'pe-10',
-        corners.checkboxAtStart && 'ps-10',
+        'wave:p-[var(--wave-card-padding,1rem)]',
+        ((titleId && !corners.checkboxAtStart) || corners.floatingAction) && 'wave:pe-10',
+        corners.checkboxAtStart && 'wave:ps-10',
         (hasImage || hasAction) &&
           wcn(
-            'grid items-center gap-x-3',
+            'wave:grid wave:items-center wave:gap-x-3',
             hasImage && hasAction
-              ? 'grid-cols-[auto_1fr_auto]'
+              ? 'wave:grid-cols-[auto_1fr_auto]'
               : hasImage
-                ? 'grid-cols-[auto_1fr]'
-                : 'grid-cols-[1fr_auto]',
+                ? 'wave:grid-cols-[auto_1fr]'
+                : 'wave:grid-cols-[1fr_auto]',
           ),
         className,
       )}
@@ -630,7 +636,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
         renderSlot(
           image,
           'span',
-          wcn(cardHeaderClassNames.image, 'inline-flex shrink-0 items-center'),
+          wcn(cardHeaderClassNames.image, 'wave:inline-flex wave:shrink-0 wave:items-center'),
         )}
       {hasImage || hasAction ? (
         <div {...textPartProps(slotProps?.text, cardHeaderClassNames.text)}>{text}</div>
@@ -641,7 +647,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
         renderSlot(
           action,
           'span',
-          wcn(cardHeaderClassNames.action, 'inline-flex shrink-0 items-center'),
+          wcn(cardHeaderClassNames.action, 'wave:inline-flex wave:shrink-0 wave:items-center'),
         )}
     </Component>
   );
@@ -672,7 +678,11 @@ export const CardBody: PolymorphicComponent<'div', CardBodyOwnProps> = (props) =
   return (
     <Component
       ref={ref}
-      className={wcn(cardBodyClassNames.root, 'p-[var(--wave-card-padding,1rem)] pt-0', className)}
+      className={wcn(
+        cardBodyClassNames.root,
+        'wave:p-[var(--wave-card-padding,1rem)] wave:pt-0',
+        className,
+      )}
       {...rest}
     />
   );
@@ -701,7 +711,7 @@ export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (prop
       ref={ref}
       className={wcn(
         cardFooterClassNames.root,
-        'flex justify-end gap-2 p-[var(--wave-card-padding,1rem)] pt-0',
+        'wave:flex wave:justify-end wave:gap-2 wave:p-[var(--wave-card-padding,1rem)] wave:pt-0',
         className,
       )}
       {...rest}

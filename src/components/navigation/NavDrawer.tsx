@@ -466,7 +466,10 @@ const NavDrawerRoot = ({
     >
       <nav
         {...mergeSlotProps(slotProps?.nav, {
-          className: wcn(navDrawerClassNames.nav, 'flex min-h-0 flex-1 flex-col'),
+          className: wcn(
+            navDrawerClassNames.nav,
+            'wave:flex wave:min-h-0 wave:flex-1 wave:flex-col',
+          ),
           locked: { ...NAV_SHOWN_PART_LOCKS, ...nameProps },
         })}
         ref={navMergedRef}
@@ -505,7 +508,7 @@ export const NavDrawerHeader = ({ className, children, ref, ...rest }: NavDrawer
       ref={ref}
       className={wcn(
         navDrawerHeaderClassNames.root,
-        'flex shrink-0 items-center gap-2 ps-2.5 pe-2 py-2',
+        'wave:flex wave:shrink-0 wave:items-center wave:gap-2 wave:ps-2.5 wave:pe-2 wave:py-2',
         scrollSeparatorClasses.header,
         className,
       )}
@@ -589,14 +592,14 @@ export const NavDrawerBody = ({
       })}
       className={wcn(
         navDrawerBodyClassNames.root,
-        'min-h-0 flex-1 overflow-y-auto py-2',
+        'wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:py-2',
         className,
       )}
     >
       <NavRovingContext.Provider value={arrow ? roving : null}>
         <ul
           {...mergeSlotProps(slotProps?.list, {
-            className: wcn(navDrawerBodyClassNames.list, 'm-0 list-none p-0'),
+            className: wcn(navDrawerBodyClassNames.list, 'wave:m-0 wave:list-none wave:p-0'),
             locked: NAV_SHOWN_PART_LOCKS,
           })}
           ref={listMergedRef}
@@ -632,14 +635,14 @@ export const NavDrawerFooter = ({
       ref={ref}
       className={wcn(
         navDrawerFooterClassNames.root,
-        'shrink-0 py-2',
+        'wave:shrink-0 wave:py-2',
         scrollSeparatorClasses.footer,
         className,
       )}
     >
       <ul
         {...mergeSlotProps(slotProps?.list, {
-          className: wcn(navDrawerFooterClassNames.list, 'm-0 list-none p-0'),
+          className: wcn(navDrawerFooterClassNames.list, 'wave:m-0 wave:list-none wave:p-0'),
           locked: NAV_SHOWN_PART_LOCKS,
         })}
         ref={listMergedRef}

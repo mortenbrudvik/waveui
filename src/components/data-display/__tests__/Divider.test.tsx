@@ -33,7 +33,7 @@ describe('Divider', () => {
     const divider = screen.getByTestId('divider');
     expect(divider.tagName.toLowerCase()).toBe('hr');
     expect(screen.getByRole('separator')).toBe(divider);
-    expect(divider).toHaveClass('border-t', 'border-border');
+    expect(divider).toHaveClass('wave:border-t', 'wave:border-border');
   });
 
   it('renders children text between lines', () => {
@@ -51,7 +51,7 @@ describe('Divider', () => {
     const el = screen.getByTestId('divider');
     expect(el).toHaveAttribute('role', 'separator');
     expect(el).toHaveAttribute('aria-orientation', 'vertical');
-    expect(el).toHaveClass('border-s', 'border-border');
+    expect(el).toHaveClass('wave:border-s', 'wave:border-border');
   });
 
   it('renders as custom element via as prop', () => {
@@ -85,7 +85,7 @@ describe('Divider', () => {
       expect(lines).toHaveLength(2);
       for (const line of lines) {
         expect(line.tagName.toLowerCase()).toBe('div');
-        expect(line).toHaveClass('border-t');
+        expect(line).toHaveClass('wave:border-t');
       }
     });
 
@@ -110,11 +110,11 @@ describe('Divider', () => {
       render(<Divider orientation="vertical">OR</Divider>);
       const separator = screen.getByRole('separator', { name: 'OR' });
       expect(separator).toHaveAttribute('aria-orientation', 'vertical');
-      expect(separator).toHaveClass('flex-col');
+      expect(separator).toHaveClass('wave:flex-col');
       expect(separator).toHaveTextContent('OR');
       const lines = separator.querySelectorAll('[aria-hidden="true"]');
       expect(lines).toHaveLength(2);
-      for (const line of lines) expect(line).toHaveClass('border-s');
+      for (const line of lines) expect(line).toHaveClass('wave:border-s');
       expect(screen.getAllByRole('separator')).toHaveLength(1);
     });
   });
@@ -165,7 +165,7 @@ describe('Divider', () => {
         </Divider>,
       );
       const divider = screen.getByTestId('divider');
-      expect(divider).toHaveClass('inline-block', 'h-6');
+      expect(divider).toHaveClass('wave:inline-block', 'wave:h-6');
       expect(divider).toBeEmptyDOMElement();
       expect(divider).not.toHaveAttribute('aria-labelledby');
     });
@@ -193,7 +193,7 @@ describe('Divider', () => {
   it('uses logical borders, so a vertical divider is RTL-safe (feedback-navigation#34)', () => {
     renderWithProviders(<Divider orientation="vertical" data-testid="divider" />, { dir: 'rtl' });
     const divider = screen.getByTestId('divider');
-    expect(divider).toHaveClass('border-s');
+    expect(divider).toHaveClass('wave:border-s');
     expect(divider.className).not.toMatch(/\bborder-[lr]\b/);
   });
 
@@ -259,12 +259,12 @@ describe('Divider — slotProps', () => {
 
   // Captured from ee05cf8's dist (client and server agree).
   const BASE_PINS = [
-    '<div aria-hidden="true" class="wave-divider__line h-0 min-w-2 flex-1 border-t border-border">',
-    '<div aria-hidden="true" class="wave-divider__line h-0 min-w-2 flex-1 border-t border-border">',
-    '<div aria-hidden="true" class="wave-divider__line w-0 min-h-2 flex-1 border-s border-border">',
-    '<div aria-hidden="true" class="wave-divider__line w-0 min-h-2 flex-1 border-s border-border">',
-    '<span class="wave-divider__label shrink-0 text-caption-1 text-muted-foreground" id="divider-label-_id0_">',
-    '<span class="wave-divider__label shrink-0 text-caption-1 text-muted-foreground" id="divider-label-_id1_">',
+    '<div aria-hidden="true" class="wave-divider__line wave:h-0 wave:min-w-2 wave:flex-1 wave:border-t wave:border-border">',
+    '<div aria-hidden="true" class="wave-divider__line wave:h-0 wave:min-w-2 wave:flex-1 wave:border-t wave:border-border">',
+    '<div aria-hidden="true" class="wave-divider__line wave:w-0 wave:min-h-2 wave:flex-1 wave:border-s wave:border-border">',
+    '<div aria-hidden="true" class="wave-divider__line wave:w-0 wave:min-h-2 wave:flex-1 wave:border-s wave:border-border">',
+    '<span class="wave-divider__label wave:shrink-0 wave:text-caption-1 wave:text-muted-foreground" id="divider-label-_id0_">',
+    '<span class="wave-divider__label wave:shrink-0 wave:text-caption-1 wave:text-muted-foreground" id="divider-label-_id1_">',
   ].join('\n');
 
   it('renders the parts of ee05cf8 (attributes sorted), on the client and the server', () => {
@@ -327,8 +327,8 @@ describe('Divider — slotProps', () => {
       </Divider>,
     );
     for (const [cls, name, conflict, count] of [
-      [dividerClassNames.line, 'line', 'min-w-2', 2],
-      [dividerClassNames.label, 'label', 'text-caption-1', 1],
+      [dividerClassNames.line, 'line', 'wave:min-w-2', 2],
+      [dividerClassNames.label, 'label', 'wave:text-caption-1', 1],
     ] as const) {
       const elements = all(document, cls);
       expect(elements).toHaveLength(count);
@@ -429,7 +429,7 @@ describe('Divider — slotProps', () => {
       { dir: 'rtl' },
     );
     for (const line of all(document, dividerClassNames.line)) {
-      expect(line).toHaveClass('my-line', 'border-s');
+      expect(line).toHaveClass('my-line', 'wave:border-s');
     }
   });
 

@@ -63,7 +63,9 @@ export const Controlled: Story = {
     const selected = defaultItems.find((item) => item.value === value);
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-body-1 text-foreground">Selected: {selected?.label ?? 'none'}</p>
+        <p className="text-wave-body-1 text-wave-foreground">
+          Selected: {selected?.label ?? 'none'}
+        </p>
         <SwatchPicker
           {...args}
           value={value}

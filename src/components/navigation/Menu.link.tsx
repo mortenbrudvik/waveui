@@ -142,7 +142,7 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
         menuItemClassNames.root,
         menuItemLinkClassNames.root,
         menuItemClasses,
-        'text-foreground no-underline',
+        'wave:text-foreground wave:no-underline',
         className,
       )}
     >

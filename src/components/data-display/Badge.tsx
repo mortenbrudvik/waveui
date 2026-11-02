@@ -33,11 +33,11 @@ function isName(value: unknown): value is string {
 }
 
 const sizeClasses: Record<Size, string> = {
-  'extra-small': 'text-[10px] leading-[14px] px-1',
-  small: 'text-[10px] leading-[14px] px-1',
-  medium: 'text-caption-1 px-2 py-0.5',
-  large: 'text-body-2 px-2.5 py-0.5',
-  'extra-large': 'text-body-2 px-2.5 py-0.5',
+  'extra-small': 'wave:text-[10px] wave:leading-[14px] wave:px-1',
+  small: 'wave:text-[10px] wave:leading-[14px] wave:px-1',
+  medium: 'wave:text-caption-1 wave:px-2 wave:py-0.5',
+  large: 'wave:text-body-2 wave:px-2.5 wave:py-0.5',
+  'extra-large': 'wave:text-body-2 wave:px-2.5 wave:py-0.5',
 };
 
 /**
@@ -70,7 +70,7 @@ export const Badge = ({
       ? c.filled
       : appearance === 'tint'
         ? c.tint
-        : wcn('bg-transparent border text-foreground', c.border);
+        : wcn('wave:bg-transparent wave:border wave:text-foreground', c.border);
 
   // A name on a role-less <span> is not announced by screen readers: name it as an image. An empty
   // or whitespace-only name adds no role (an unnamed role="img" fails axe).
@@ -84,7 +84,7 @@ export const Badge = ({
       data-appearance={appearance}
       className={wcn(
         badgeClassNames.root,
-        'rounded-full inline-flex items-center font-semibold',
+        'wave:rounded-full wave:inline-flex wave:items-center wave:font-semibold',
         sizeClasses[size],
         appearanceClasses,
         className,

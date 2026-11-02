@@ -638,7 +638,7 @@ export const CustomBackdrop: Story = {
           </Dialog.Trigger>
           <Dialog.Content
             title="Tinted backdrop"
-            backdrop={{ className: 'bg-primary/30 backdrop-blur-sm' }}
+            backdrop={{ className: 'bg-wave-primary/30 backdrop-blur-sm' }}
           >
             <p>The backdrop takes the brand colour and blurs the page behind it.</p>
           </Dialog.Content>

@@ -135,7 +135,7 @@ describe('Toolbar parts', () => {
         displayName: 'ToolbarButton',
         polymorphic: true,
         defaultProps: { children: 'Share' },
-        conflictingClass: { className: 'px-8', overrides: 'px-3' },
+        conflictingClass: { className: 'px-8', overrides: 'wave:px-3' },
         wrapper: ToolbarWrapper,
         a11yVariants: [
           { name: 'vertical with an icon', props: { vertical: true, icon: <GlyphIcon /> } },
@@ -148,7 +148,7 @@ describe('Toolbar parts', () => {
         expectedTag: 'button',
         displayName: 'ToolbarToggleButton',
         defaultProps: { name: 'format', value: 'bold', children: 'Bold' },
-        conflictingClass: { className: 'px-8', overrides: 'px-3' },
+        conflictingClass: { className: 'px-8', overrides: 'wave:px-3' },
         wrapper: ToolbarWrapper,
         a11yVariants: [
           {
@@ -169,7 +169,7 @@ describe('Toolbar parts', () => {
         expectedTag: 'button',
         displayName: 'ToolbarRadioButton',
         defaultProps: { name: 'align', value: 'left', children: 'Left' },
-        conflictingClass: { className: 'px-8', overrides: 'px-3' },
+        conflictingClass: { className: 'px-8', overrides: 'wave:px-3' },
         wrapper: RadioGroupWrapper,
       });
     });
@@ -191,7 +191,7 @@ describe('Toolbar parts', () => {
             </>
           ),
         },
-        conflictingClass: { className: 'gap-3', overrides: 'gap-1' },
+        conflictingClass: { className: 'gap-3', overrides: 'wave:gap-1' },
         wrapper: ToolbarWrapper,
       });
     });
@@ -201,7 +201,7 @@ describe('Toolbar parts', () => {
         expectedTag: 'div',
         displayName: 'ToolbarGroup',
         defaultProps: { children: <Toolbar.Button>Share</Toolbar.Button> },
-        conflictingClass: { className: 'gap-3', overrides: 'gap-1' },
+        conflictingClass: { className: 'gap-3', overrides: 'wave:gap-1' },
         wrapper: ToolbarWrapper,
         a11yVariants: [{ name: 'named', props: { 'aria-label': 'Actions' } }],
       });
@@ -211,7 +211,7 @@ describe('Toolbar parts', () => {
       testSystemProps(ToolbarDivider, {
         expectedTag: 'div',
         displayName: 'ToolbarDivider',
-        conflictingClass: { className: 'mx-3', overrides: 'mx-1' },
+        conflictingClass: { className: 'mx-3', overrides: 'wave:mx-1' },
         wrapper: ToolbarWrapper,
       });
     });
@@ -258,27 +258,33 @@ describe('Toolbar parts', () => {
       const share = button('Share');
       expect(share).toHaveAttribute('data-vertical', '');
       expect(share).toHaveClass(
-        'h-auto',
-        'min-w-0',
-        'flex-col',
-        'gap-0.5',
-        'px-2',
-        'py-1',
-        'text-caption-1',
+        'wave:h-auto',
+        'wave:min-w-0',
+        'wave:flex-col',
+        'wave:gap-0.5',
+        'wave:px-2',
+        'wave:py-1',
+        'wave:text-caption-1',
       );
-      expect(share).not.toHaveClass('h-8', 'min-w-24', 'px-3', 'text-body-1', 'gap-1.5');
+      expect(share).not.toHaveClass(
+        'wave:h-8',
+        'wave:min-w-24',
+        'wave:px-3',
+        'wave:text-body-1',
+        'wave:gap-1.5',
+      );
       const iconBox = screen.getByTestId('glyph').parentElement;
       expect(iconBox).toHaveAttribute('aria-hidden', 'true');
-      expect(iconBox).toHaveClass('size-6', 'justify-center', '[&>svg]:size-full');
+      expect(iconBox).toHaveClass('wave:size-6', 'wave:justify-center', 'wave:[&>svg]:size-full');
       expect(share.firstElementChild).toBe(iconBox);
     });
 
     it.each([
-      ['extra-small', 'size-5'],
-      ['small', 'size-5'],
-      ['medium', 'size-6'],
-      ['large', 'size-6'],
-      ['extra-large', 'size-6'],
+      ['extra-small', 'wave:size-5'],
+      ['small', 'wave:size-5'],
+      ['medium', 'wave:size-6'],
+      ['large', 'wave:size-6'],
+      ['extra-large', 'wave:size-6'],
     ] as const)('vertical at size="%s" has a %s icon box', (size, box) => {
       render(
         <Toolbar aria-label="Tools" size={size}>
@@ -289,7 +295,7 @@ describe('Toolbar parts', () => {
       );
       const iconBox = screen.getByTestId('glyph').parentElement;
       expect(iconBox).toHaveClass(box);
-      expect(iconBox).not.toHaveClass(box === 'size-5' ? 'size-6' : 'size-5');
+      expect(iconBox).not.toHaveClass(box === 'wave:size-5' ? 'wave:size-6' : 'wave:size-5');
     });
 
     it('vertical keeps the attributes and classes of an icon slot object', () => {
@@ -304,7 +310,12 @@ describe('Toolbar parts', () => {
         </Toolbar>,
       );
       const iconBox = screen.getByTestId('glyph').parentElement;
-      expect(iconBox).toHaveClass('size-6', 'text-primary', 'inline-flex', 'shrink-0');
+      expect(iconBox).toHaveClass(
+        'wave:size-6',
+        'text-primary',
+        'wave:inline-flex',
+        'wave:shrink-0',
+      );
       expect(iconBox).toHaveAttribute('data-part', 'icon');
       expect(iconBox).toHaveAttribute('aria-hidden', 'true');
     });
@@ -740,10 +751,10 @@ describe('Toolbar parts', () => {
       const group = screen.getByRole('radiogroup', { name: 'Alignment' });
       expect(group).toHaveAttribute('data-roving-transparent', '');
       expect(group).not.toHaveAttribute('data-roving-container');
-      expect(group).toHaveClass('flex', 'gap-1');
-      expect(group).not.toHaveClass('flex-col');
+      expect(group).toHaveClass('wave:flex', 'wave:gap-1');
+      expect(group).not.toHaveClass('wave:flex-col');
       rerender(<AlignmentToolbar orientation="vertical" />);
-      expect(group).toHaveClass('flex', 'flex-col', 'gap-1');
+      expect(group).toHaveClass('wave:flex', 'wave:flex-col', 'wave:gap-1');
     });
 
     it('its role cannot be replaced: its radios and cross-axis keys need the radiogroup', () => {
@@ -820,8 +831,8 @@ describe('Toolbar parts', () => {
       const group = screen.getByTestId('group');
       expect(group).toHaveAttribute('role', 'presentation');
       expect(group).toHaveAttribute('data-orientation', 'horizontal');
-      expect(group).toHaveClass('flex', 'gap-1');
-      expect(group).not.toHaveClass('flex-col');
+      expect(group).toHaveClass('wave:flex', 'wave:gap-1');
+      expect(group).not.toHaveClass('wave:flex-col');
       rerender(
         <Toolbar aria-label="Tools" orientation="vertical">
           <Toolbar.Group data-testid="group">
@@ -830,7 +841,7 @@ describe('Toolbar parts', () => {
         </Toolbar>,
       );
       expect(group).toHaveAttribute('data-orientation', 'vertical');
-      expect(group).toHaveClass('flex-col');
+      expect(group).toHaveClass('wave:flex-col');
     });
 
     it('is a named group with aria-label (axe clean)', async () => {
@@ -886,15 +897,15 @@ describe('Toolbar parts', () => {
       expect(divider.tagName).toBe('DIV');
       expect(divider).toHaveAttribute('aria-orientation', 'vertical');
       expect(divider).toHaveClass(
-        'mx-1',
-        'w-0',
-        'shrink-0',
-        'self-stretch',
-        'border-s',
-        'border-border',
-        'forced-colors:border-[CanvasText]',
+        'wave:mx-1',
+        'wave:w-0',
+        'wave:shrink-0',
+        'wave:self-stretch',
+        'wave:border-s',
+        'wave:border-border',
+        'wave:forced-colors:border-[CanvasText]',
       );
-      expect(divider).not.toHaveClass('border-t', 'h-0', 'my-1');
+      expect(divider).not.toHaveClass('wave:border-t', 'wave:h-0', 'wave:my-1');
     });
 
     it('is a horizontal separator across a vertical toolbar', () => {
@@ -908,15 +919,15 @@ describe('Toolbar parts', () => {
       const divider = screen.getByRole('separator');
       expect(divider).toHaveAttribute('aria-orientation', 'horizontal');
       expect(divider).toHaveClass(
-        'my-1',
-        'h-0',
-        'shrink-0',
-        'self-stretch',
-        'border-t',
-        'border-border',
-        'forced-colors:border-[CanvasText]',
+        'wave:my-1',
+        'wave:h-0',
+        'wave:shrink-0',
+        'wave:self-stretch',
+        'wave:border-t',
+        'wave:border-border',
+        'wave:forced-colors:border-[CanvasText]',
       );
-      expect(divider).not.toHaveClass('border-s', 'w-0', 'mx-1');
+      expect(divider).not.toHaveClass('wave:border-s', 'wave:w-0', 'wave:mx-1');
     });
   });
 

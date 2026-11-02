@@ -106,7 +106,7 @@ export const MenuSplitGroup = ({
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       className={wcn(
         menuSplitGroupClassNames.root,
-        'flex items-stretch [&>:first-child]:flex-1 [&>:last-child]:border-s [&>:last-child]:border-border',
+        'wave:flex wave:items-stretch wave:[&>:first-child]:flex-1 wave:[&>:last-child]:border-s wave:[&>:last-child]:border-border',
         className,
       )}
     >

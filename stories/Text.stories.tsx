@@ -111,7 +111,7 @@ export const FontsAndWeights: Story = {
 export const MutedCaption: Story = {
   args: {
     variant: 'caption-1',
-    className: 'text-muted-foreground',
+    className: 'text-wave-muted-foreground',
     children: 'Last saved 2 minutes ago',
   },
 };

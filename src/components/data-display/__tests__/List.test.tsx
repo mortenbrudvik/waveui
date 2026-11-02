@@ -321,7 +321,7 @@ describe('List', () => {
       await user.click(item);
       expect(item).toHaveAttribute('aria-selected', 'true');
       expect(item).toHaveAttribute('data-selected');
-      expect(item).toHaveClass('bg-subtle-selected');
+      expect(item).toHaveClass('wave:bg-subtle-selected');
     });
 
     it('sets aria-multiselectable for multi-select mode', () => {
@@ -1202,7 +1202,7 @@ describe('List', () => {
       await user.keyboard('{ArrowRight}');
       expect(row(/Alpha/)).toHaveFocus();
       const actionCell = row(/Alpha/).querySelector('[data-list-action]');
-      expect(actionCell).toHaveClass('ms-2');
+      expect(actionCell).toHaveClass('wave:ms-2');
     });
 
     describe('several arrow stops in one action', () => {
@@ -2226,10 +2226,10 @@ describe('List.Item — slotProps', () => {
 
   // Captured from ee05cf8's dist (client and server agree).
   const BASE_PINS = [
-    '<span class="wave-list-item__content min-w-0 flex-1">',
-    '<div class="wave-list-item__content min-w-0 flex-1" role="gridcell">',
-    '<span class="wave-list-item__action ms-2 shrink-0" data-list-action="">',
-    '<div class="wave-list-item__action ms-2 shrink-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" data-list-action="" role="gridcell" tabindex="-1">',
+    '<span class="wave-list-item__content wave:min-w-0 wave:flex-1">',
+    '<div class="wave-list-item__content wave:min-w-0 wave:flex-1" role="gridcell">',
+    '<span class="wave-list-item__action wave:ms-2 wave:shrink-0" data-list-action="">',
+    '<div class="wave-list-item__action wave:ms-2 wave:shrink-0 wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring" data-list-action="" role="gridcell" tabindex="-1">',
   ].join('\n');
 
   it('renders the parts of ee05cf8 (attributes sorted), on the client and the server', () => {
@@ -2311,8 +2311,8 @@ describe('List.Item — slotProps', () => {
       />,
     );
     for (const [cls, name, conflict] of [
-      [listItemClassNames.content, 'content', 'flex-1'],
-      [listItemClassNames.action, 'action', 'ms-2'],
+      [listItemClassNames.content, 'content', 'wave:flex-1'],
+      [listItemClassNames.action, 'action', 'wave:ms-2'],
     ] as const) {
       const elements = all(document, cls);
       expect(elements.map((el) => el.localName)).toEqual(['span', 'div']);

@@ -194,7 +194,7 @@ describe('stable class names (P3-00): button folder', () => {
     expect(iconBox('paste-icon')).toHaveClass(
       buttonClassNames.icon,
       toolbarButtonClassNames.icon,
-      'size-6',
+      'wave:size-6',
     );
 
     expect(screen.getByRole('button', { name: 'Bold' })).toHaveClass(

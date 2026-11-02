@@ -83,11 +83,11 @@ describe('Persona', () => {
 
   // data-display#29: presence size mapping; the size reaches the avatar.
   it.each([
-    ['extra-small', 'size-2.5', 'w-6'],
-    ['small', 'size-2.5', 'w-8'],
-    ['medium', 'size-3', 'w-10'],
-    ['large', 'size-3', 'w-12'],
-    ['extra-large', 'size-3', 'w-14'],
+    ['extra-small', 'wave:size-2.5', 'wave:w-6'],
+    ['small', 'wave:size-2.5', 'wave:w-8'],
+    ['medium', 'wave:size-3', 'wave:w-10'],
+    ['large', 'wave:size-3', 'wave:w-12'],
+    ['extra-large', 'wave:size-3', 'wave:w-14'],
   ] as Array<[Size, string, string]>)(
     'a %s persona uses the %s presence badge and a %s avatar',
     (size, sizeClass, avatarWidth) => {
@@ -122,7 +122,7 @@ describe('Persona', () => {
   it('positions the badge at the logical end corner (RTL-safe)', () => {
     renderWithProviders(<Persona name="John" status="available" />, { dir: 'rtl' });
     const badgeContainer = screen.getByRole('img', { name: 'Available' }).parentElement;
-    expect(badgeContainer).toHaveClass('end-0', 'bottom-0');
+    expect(badgeContainer).toHaveClass('wave:end-0', 'wave:bottom-0');
     expect(badgeContainer?.className).not.toMatch(/\bright-0\b/);
   });
 
@@ -188,16 +188,16 @@ describe('Persona', () => {
     });
 
     it.each([
-      ['after', 'flex-row', 'items-start'],
-      ['before', 'flex-row-reverse', 'items-start'],
-      ['below', 'flex-col', 'items-center'],
+      ['after', 'wave:flex-row', 'wave:items-start'],
+      ['before', 'wave:flex-row-reverse', 'wave:items-start'],
+      ['below', 'wave:flex-col', 'wave:items-center'],
     ] as const)('textPosition %s lays out with %s', (textPosition, layoutClass, alignClass) => {
       const { container } = render(
         <Persona name="Jane Doe" secondaryText="x" textPosition={textPosition} />,
       );
       expect(root(container)).toHaveAttribute('data-text-position', textPosition);
       if (textPosition === 'after')
-        expect(root(container).className).not.toContain('flex-row-reverse');
+        expect(root(container).className).not.toContain('wave:flex-row-reverse');
       else expect(root(container)).toHaveClass(layoutClass);
       expect(primary(container).parentElement).toHaveClass(alignClass);
     });
@@ -209,7 +209,7 @@ describe('Persona', () => {
       expect(root(container)).toHaveAttribute('data-text-alignment', 'center');
       rerender(<Persona name="Jane Doe" textPosition="below" textAlignment="start" />);
       expect(root(container)).toHaveAttribute('data-text-alignment', 'start');
-      expect(primary(container).parentElement).toHaveClass('items-start', 'text-start');
+      expect(primary(container).parentElement).toHaveClass('wave:items-start', 'wave:text-start');
     });
 
     it('presenceOnly shows the presence badge and no avatar, and keeps the text', () => {
@@ -239,12 +239,12 @@ describe('Persona', () => {
     });
 
     it.each([
-      ['extra-small', 'text-caption-1', 'text-caption-2'],
-      ['small', 'text-body-1', 'text-caption-1'],
-      ['medium', 'text-body-1', 'text-caption-1'],
-      ['large', 'text-subtitle-2', 'text-body-1'],
-      ['extra-large', 'text-subtitle-1', 'text-body-1'],
-      ['huge', 'text-title-3', 'text-body-2'],
+      ['extra-small', 'wave:text-caption-1', 'wave:text-caption-2'],
+      ['small', 'wave:text-body-1', 'wave:text-caption-1'],
+      ['medium', 'wave:text-body-1', 'wave:text-caption-1'],
+      ['large', 'wave:text-subtitle-2', 'wave:text-body-1'],
+      ['extra-large', 'wave:text-subtitle-1', 'wave:text-body-1'],
+      ['huge', 'wave:text-title-3', 'wave:text-body-2'],
     ] as const)('the text of a %s persona is %s and %s', (size, primaryClass, secondaryClass) => {
       const { container } = render(
         <Persona name="Jane Doe" secondaryText="Designer" size={size} />,
@@ -256,7 +256,7 @@ describe('Persona', () => {
 
     it('a huge persona gets a large presence badge', () => {
       render(<Persona name="Jane Doe" status="busy" size="huge" />);
-      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('size-4');
+      expect(screen.getByRole('img', { name: 'Busy' })).toHaveClass('wave:size-4');
     });
 
     it('announces the name once: the avatar is decorative and the status stays one image', () => {
@@ -272,8 +272,8 @@ describe('Persona', () => {
         <Persona name="Jane Doe" status="busy" textPosition="before" />,
         { dir: 'rtl' },
       );
-      expect(container.querySelector('.wave-persona')).toHaveClass('flex-row-reverse');
-      expect(container.querySelector('.wave-persona__badge')).toHaveClass('end-0');
+      expect(container.querySelector('.wave-persona')).toHaveClass('wave:flex-row-reverse');
+      expect(container.querySelector('.wave-persona__badge')).toHaveClass('wave:end-0');
     });
 
     it('types the new props', () => {

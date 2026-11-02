@@ -50,11 +50,11 @@ export function CommandPalette({
         ref={mergedRef}
         role="dialog"
         aria-label={label}
-        className="fixed top-24 left-1/2 w-96 -translate-x-1/2 rounded-lg border border-border bg-background p-4 text-foreground shadow-16"
+        className="fixed top-24 left-1/2 w-96 -translate-x-1/2 rounded-lg border border-wave-border bg-wave-background p-4 text-wave-foreground shadow-wave-16"
       >
         <input
           aria-label="Search commands"
-          className="w-full rounded-md border border-border bg-background px-2 py-1"
+          className="w-full rounded-md border border-wave-border bg-wave-background px-2 py-1"
         />
         <ul className="mt-2">
           <li>
@@ -133,7 +133,7 @@ export function CustomPopup({
             role="dialog"
             aria-label={label}
             {...floatingProps}
-            className="rounded-lg border border-border bg-background p-3 text-foreground shadow-8"
+            className="rounded-lg border border-wave-border bg-wave-background p-3 text-wave-foreground shadow-wave-8"
           >
             {children}
           </div>
@@ -152,7 +152,7 @@ export function AppStatusRegion() {
         {...modalAllowProps}
         role="region"
         aria-label="App status"
-        className="fixed end-4 bottom-4 rounded-lg border border-border bg-background p-3 text-foreground shadow-8"
+        className="fixed end-4 bottom-4 rounded-lg border border-wave-border bg-wave-background p-3 text-wave-foreground shadow-wave-8"
       >
         <span>Offline</span> <button type="button">Retry</button>
       </div>

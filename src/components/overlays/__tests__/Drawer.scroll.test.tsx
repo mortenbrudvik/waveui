@@ -187,21 +187,21 @@ describe('the scroll store’s contract (D108, frozen)', () => {
 describe('scrollSeparatorClasses (P6-05 D80, D81)', () => {
   it('holds the header separator: a line under it once the body is scrolled', () => {
     expect(scrollSeparatorClasses.header.split(' ')).toEqual([
-      'border-b',
-      'border-transparent',
-      'data-[scroll-state=middle]:border-border',
-      'data-[scroll-state=bottom]:border-border',
-      'forced-colors:border-[CanvasText]',
+      'wave:border-b',
+      'wave:border-transparent',
+      'wave:data-[scroll-state=middle]:border-border',
+      'wave:data-[scroll-state=bottom]:border-border',
+      'wave:forced-colors:border-[CanvasText]',
     ]);
   });
 
   it('holds the footer separator: a line above it while content continues below', () => {
     expect(scrollSeparatorClasses.footer.split(' ')).toEqual([
-      'border-t',
-      'border-transparent',
-      'data-[scroll-state=top]:border-border',
-      'data-[scroll-state=middle]:border-border',
-      'forced-colors:border-[CanvasText]',
+      'wave:border-t',
+      'wave:border-transparent',
+      'wave:data-[scroll-state=top]:border-border',
+      'wave:data-[scroll-state=middle]:border-border',
+      'wave:forced-colors:border-[CanvasText]',
     ]);
   });
 });
@@ -367,7 +367,7 @@ describe('Drawer scroll state (P6-05 D80, D81)', () => {
     expect(panel().firstElementChild).toHaveClass(drawerClassNames.header, ...header);
     expect(screen.getByTestId('footer')).toHaveClass(drawerFooterClassNames.root, ...footer);
     // The built-in header's 0.10 line becomes the scroll-reactive separator (D82).
-    expect(panel().firstElementChild).not.toHaveClass('border-border');
+    expect(panel().firstElementChild).not.toHaveClass('wave:border-border');
     unmount();
 
     renderDrawer({ composed: true });

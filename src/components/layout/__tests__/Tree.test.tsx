@@ -165,7 +165,7 @@ describe('Tree', () => {
       </Tree>,
     );
     const tree = screen.getByTestId('tree');
-    expect(tree).toHaveClass('my-class', 'text-body-1');
+    expect(tree).toHaveClass('my-class', 'wave:text-body-1');
     expect(tree).toHaveAttribute('aria-label', 'file tree');
   });
 
@@ -669,7 +669,7 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
     );
     expect(screen.getByTestId('icon').parentElement).toHaveAttribute('aria-hidden', 'true');
     const objectIcon = screen.getByText('OB');
-    expect(objectIcon).toHaveClass('custom-icon', 'shrink-0');
+    expect(objectIcon).toHaveClass('custom-icon', 'wave:shrink-0');
     expect(objectIcon).toHaveAttribute('aria-hidden', 'true');
     expect(item('Item')).toHaveAccessibleName('Item');
     expect(item('Object slot')).toHaveAccessibleName('Object slot');
@@ -1205,13 +1205,13 @@ describe('Tree - RTL (layout#32)', () => {
       { dir: 'rtl' },
     );
     const group = within(item('Documents')).getAllByRole('group')[0];
-    expect(group).toHaveClass('ps-4');
+    expect(group).toHaveClass('wave:ps-4');
     expect(group.className).not.toMatch(/\bpl-/);
     const collapsedChevron = item('Images').querySelector('svg');
     const expandedChevron = item('Documents').querySelector('svg');
-    expect(collapsedChevron).toHaveClass('wave-rtl:-scale-x-100');
-    expect(expandedChevron).toHaveClass('rotate-90');
-    expect(expandedChevron).not.toHaveClass('wave-rtl:-scale-x-100');
+    expect(collapsedChevron).toHaveClass('wave:wave-rtl:-scale-x-100');
+    expect(expandedChevron).toHaveClass('wave:rotate-90');
+    expect(expandedChevron).not.toHaveClass('wave:wave-rtl:-scale-x-100');
   });
 
   it('inside a left-to-right subtree of a right-to-left page: LTR keys, and the chevron flips only through wave-rtl: (C-LOGICAL)', async () => {
@@ -1225,8 +1225,8 @@ describe('Tree - RTL (layout#32)', () => {
     // Tailwind's rtl: variant also matches `[dir=rtl] *`, so it would mirror this chevron; the
     // wave-rtl: variant follows the element's own direction.
     const chevron = item('Images').querySelector('svg')!;
-    expect(chevron).toHaveClass('wave-rtl:-scale-x-100');
-    expect(chevron.getAttribute('class')).not.toMatch(/(^|\s)rtl:/);
+    expect(chevron).toHaveClass('wave:wave-rtl:-scale-x-100');
+    expect(chevron.getAttribute('class')).not.toMatch(/(^|\s)wave:rtl:/);
     act(() => item('Documents').focus());
     await user.keyboard('{ArrowRight}');
     expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
@@ -1272,15 +1272,15 @@ describe('Tree.Item — slotProps', () => {
 
   // Captured from ce1620c's dist (client and server agree).
   const BASE_PINS = [
-    '<div class="wave-tree-item__row flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-subtle-hover group/row" data-tree-row="">',
-    '<span aria-checked="true" aria-labelledby="tree-item-label-_id0_" class="wave-tree-item__indicator relative inline-flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none before:absolute before:-inset-1 border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" data-tree-checkbox="" role="checkbox" tabindex="-1">',
-    '<span class="wave-tree-item__label truncate min-w-0" data-tree-label="" id="tree-item-label-_id0_">',
-    '<span class="wave-tree-item__aside inline-flex items-center text-caption-1 text-muted-foreground not-forced-colors:group-hover/row:invisible [@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible [@media(hover:hover)]:not-forced-colors:group-has-[[aria-expanded=true]]/end:invisible [@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible" data-tree-aside="" id="tree-item-aside-_id1_">',
-    '<span aria-labelledby="tree-item-label-_id0_" aria-orientation="horizontal" class="wave-tree-item__actions inline-flex items-center gap-1 invisible group-hover/row:visible focus-within:visible forced-colors:visible [@media(hover:none)]:visible has-[[aria-expanded=true]]:visible data-[focus-in-popup]:visible" data-roving-container="" data-tree-actions="" role="toolbar">',
-    '<div class="wave-tree-item__group ps-4" role="group">',
+    '<div class="wave-tree-item__row wave:flex wave:cursor-pointer wave:items-center wave:gap-1.5 wave:rounded wave:px-2 wave:py-1 wave:hover:bg-subtle-hover wave:group/row" data-tree-row="">',
+    '<span aria-checked="true" aria-labelledby="tree-item-label-_id0_" class="wave-tree-item__indicator wave:relative wave:inline-flex wave:size-4 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-xs wave:border wave:transition-colors wave:motion-reduce:transition-none wave:before:absolute wave:before:-inset-1 wave:border-primary wave:bg-primary wave:text-primary-foreground wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]" data-tree-checkbox="" role="checkbox" tabindex="-1">',
+    '<span class="wave-tree-item__label wave:truncate wave:min-w-0" data-tree-label="" id="tree-item-label-_id0_">',
+    '<span class="wave-tree-item__aside wave:inline-flex wave:items-center wave:text-caption-1 wave:text-muted-foreground wave:not-forced-colors:group-hover/row:invisible wave:[@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible wave:[@media(hover:hover)]:not-forced-colors:group-has-[[aria-expanded=true]]/end:invisible wave:[@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible" data-tree-aside="" id="tree-item-aside-_id1_">',
+    '<span aria-labelledby="tree-item-label-_id0_" aria-orientation="horizontal" class="wave-tree-item__actions wave:inline-flex wave:items-center wave:gap-1 wave:invisible wave:group-hover/row:visible wave:focus-within:visible wave:forced-colors:visible wave:[@media(hover:none)]:visible wave:has-[[aria-expanded=true]]:visible wave:data-[focus-in-popup]:visible" data-roving-container="" data-tree-actions="" role="toolbar">',
+    '<div class="wave-tree-item__group wave:ps-4" role="group">',
   ].join('\n');
   const RADIO_PIN =
-    '<span aria-hidden="true" class="wave-tree-item__indicator inline-flex size-4 shrink-0 items-center justify-center rounded-full transition-colors motion-reduce:transition-none border-2 border-primary forced-colors:border-[Highlight]">';
+    '<span aria-hidden="true" class="wave-tree-item__indicator wave:inline-flex wave:size-4 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:transition-colors wave:motion-reduce:transition-none wave:border-2 wave:border-primary wave:forced-colors:border-[Highlight]">';
 
   /** Documents (expanded, with an aside and an action) › Report; checkboxes or radios. */
   function Pinned({
@@ -1418,17 +1418,17 @@ describe('Tree.Item — slotProps', () => {
     );
     const [row, box, text, end, toolbar, group] = partsOf(item('Documents'));
     expect(row).toHaveClass('px-4');
-    expect(row).not.toHaveClass('px-2');
+    expect(row).not.toHaveClass('wave:px-2');
     expect(box).toHaveClass('size-5');
-    expect(box).not.toHaveClass('size-4');
+    expect(box).not.toHaveClass('wave:size-4');
     expect(text).toHaveClass('min-w-8');
-    expect(text).not.toHaveClass('min-w-0');
+    expect(text).not.toHaveClass('wave:min-w-0');
     expect(end).toHaveClass('text-body-1');
-    expect(end).not.toHaveClass('text-caption-1');
+    expect(end).not.toHaveClass('wave:text-caption-1');
     expect(toolbar).toHaveClass('gap-2');
-    expect(toolbar).not.toHaveClass('gap-1');
+    expect(toolbar).not.toHaveClass('wave:gap-1');
     expect(group).toHaveClass('ps-8');
-    expect(group).not.toHaveClass('ps-4');
+    expect(group).not.toHaveClass('wave:ps-4');
   });
 
   it('attaches your refs to the parts', () => {

@@ -63,8 +63,8 @@ const VALUE_WARNING = (key: string) =>
 
 /** The markup of a provider without overrides (0.16's), which a skipped override leaves as it is. */
 const PLAIN_MARKUP =
-  '<div dir="ltr" data-wave-theme="light" class="wave-root wave-light bg-background ' +
-  'text-foreground font-wave text-body-1">Content</div>';
+  '<div dir="ltr" data-wave-theme="light" class="wave-root wave-light wave:bg-background ' +
+  'wave:text-foreground wave:font-wave wave:text-body-1">Content</div>';
 
 /** A value that would write a second declaration into a server-rendered style attribute. */
 const INJECTION = 'red;background:url(x)';

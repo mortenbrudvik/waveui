@@ -54,7 +54,7 @@ export const Default: Story = {
             id="hamburger-region"
             role="region"
             aria-label="Pages"
-            className="rounded-md border border-border p-3"
+            className="rounded-md border border-wave-border p-3"
           >
             Home, Reports and Settings.
           </div>
@@ -92,8 +92,8 @@ export const InNavDrawer: Story = {
     const [open, setOpen] = React.useState(true);
     const outerRef = React.useRef<HTMLButtonElement>(null);
     return (
-      <div className="flex h-80 flex-col overflow-hidden rounded-md border border-border">
-        <div className="border-b border-border p-2">
+      <div className="flex h-80 flex-col overflow-hidden rounded-md border border-wave-border">
+        <div className="border-b border-wave-border p-2">
           <Hamburger
             ref={outerRef}
             aria-expanded={open}
@@ -113,7 +113,7 @@ export const InNavDrawer: Story = {
           >
             <NavDrawer.Header>
               <Hamburger {...args} />
-              <span className="text-subtitle-2 font-semibold">Contoso HR</span>
+              <span className="text-wave-subtitle-2 font-semibold">Contoso HR</span>
             </NavDrawer.Header>
             <NavDrawer.Body>
               <Nav.Item value="home">Home</Nav.Item>

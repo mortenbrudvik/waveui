@@ -394,7 +394,7 @@ export function DataGridColumnResizeHandle({
         // The cell clips what overflows it, the outer ring included.
         focusRingInset,
         // The header ignores the pointer while the grid resizes; the dragged handle does not.
-        'data-[dragging]:pointer-events-auto',
+        'wave:data-[dragging]:pointer-events-auto',
       )}
       onResize={(next, { event }) => setColumnWidth(columnId, next, event)}
       onReset={({ event }) => resetColumnWidth(columnId, event)}

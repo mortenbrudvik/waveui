@@ -96,11 +96,11 @@ export interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const fillColorClasses: Record<ProgressBarColor, string> = {
-  brand: 'bg-primary',
-  success: 'bg-success',
+  brand: 'wave:bg-primary',
+  success: 'wave:bg-success',
   // The warning token (a light yellow) is 1.02:1 on the light track: the severe orange passes 3:1.
-  warning: 'bg-severe',
-  error: 'bg-error',
+  warning: 'wave:bg-severe',
+  error: 'wave:bg-error',
 };
 
 /** The fill color a Field's validation state gives the bar (`none` keeps the default). */
@@ -288,10 +288,10 @@ export const ProgressBar = ({
   // style.
   const fillClassName = wcn(
     progressBarClassNames.bar,
-    'h-full rounded-full',
+    'wave:h-full wave:rounded-full',
     fillColorClasses[resolvedColor],
     forcedColors.selectedLeaf,
-    isIndeterminate && wcn('w-full', indeterminateClasses),
+    isIndeterminate && wcn('wave:w-full', indeterminateClasses),
   );
   const fillPart = slotProps?.bar;
   const fill: Record<string, unknown> = fillPart
@@ -305,8 +305,8 @@ export const ProgressBar = ({
       ref={ref}
       className={wcn(
         progressBarClassNames.root,
-        'h-2 overflow-hidden rounded-full bg-track',
-        'forced-colors:border',
+        'wave:h-2 wave:overflow-hidden wave:rounded-full wave:bg-track',
+        'wave:forced-colors:border',
         forcedColors.border,
         className,
       )}
@@ -324,9 +324,9 @@ export const ProgressBar = ({
 
   if (!visibleLabel) return bar;
 
-  const labelClassName = wcn(progressBarClassNames.label, 'text-body-1 text-foreground');
+  const labelClassName = wcn(progressBarClassNames.label, 'wave:text-body-1 wave:text-foreground');
   return (
-    <div className="flex flex-col gap-1">
+    <div className="wave:flex wave:flex-col wave:gap-1">
       <span
         id={labelId}
         className={labelClassName}

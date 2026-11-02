@@ -124,7 +124,7 @@ export const PickerExpandButton = ({
           pickerButtonOffset(size, 1),
           focusRing,
           // Inside a field that dims as a whole, a second dimming would multiply the opacity.
-          dimDisabled ? disabledStyles : 'disabled:cursor-not-allowed',
+          dimDisabled ? disabledStyles : 'wave:disabled:cursor-not-allowed',
         ),
         locked: {
           type: 'button',
@@ -147,8 +147,8 @@ export const PickerExpandButton = ({
         'span',
         wcn(
           iconClassName,
-          'inline-flex transition-transform motion-reduce:transition-none',
-          expanded && 'rotate-180',
+          'wave:inline-flex wave:transition-transform wave:motion-reduce:transition-none',
+          expanded && 'wave:rotate-180',
         ),
         { 'aria-hidden': true },
       )}

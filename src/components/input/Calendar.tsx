@@ -506,15 +506,15 @@ export interface CalendarViewProps {
 // Every button sets its own padding and background (C-NATIVE): an app-wide `button` rule would
 // otherwise pad and fill them.
 const NAV_BUTTON_CLASSES =
-  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
+  'wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover';
 
 // The heading's button keeps the heading's text style, set on itself (C-NATIVE).
 const HEADING_BUTTON_CLASSES =
-  'flex h-8 items-center justify-center rounded bg-transparent p-0 px-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
+  'wave:flex wave:h-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:px-2 wave:text-body-1 wave:font-semibold wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover';
 
 // The footer's text buttons (C-NATIVE: their own padding and background).
 const FOOTER_BUTTON_CLASSES =
-  'flex h-8 items-center justify-center rounded bg-transparent p-0 px-3 text-body-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
+  'wave:flex wave:h-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:px-3 wave:text-body-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover';
 
 /** The days of `'work-week'` unless `workWeekDays` says otherwise (Monday to Friday). */
 const DEFAULT_WORK_WEEK_DAYS: readonly DayOfWeek[] = [1, 2, 3, 4, 5];
@@ -1000,7 +1000,10 @@ export const CalendarView = ({
     <>
       <div
         {...mergeSlotProps(parts?.header, {
-          className: wcn(partClassNames?.header, 'mb-2 flex items-center justify-between gap-2'),
+          className: wcn(
+            partClassNames?.header,
+            'wave:mb-2 wave:flex wave:items-center wave:justify-between wave:gap-2',
+          ),
           locked: { ...HIDDEN_PART_LOCKS, onKeyDown: handleEscape },
         })}
         ref={headerRefs}
@@ -1027,11 +1030,11 @@ export const CalendarView = ({
             blockHandlers: previousDisabled ? ['onClick'] : undefined,
           })}
         >
-          <ChevronLeftIcon className="wave-rtl:-scale-x-100" />
+          <ChevronLeftIcon className="wave:wave-rtl:-scale-x-100" />
         </button>
         <Heading
           {...mergeSlotProps(parts?.heading, {
-            className: wcn(partClassNames?.heading, 'text-body-1 font-semibold'),
+            className: wcn(partClassNames?.heading, 'wave:text-body-1 wave:font-semibold'),
             locked: { ...HIDDEN_PART_LOCKS, id: headingId, 'aria-live': 'polite' },
           })}
         >
@@ -1079,14 +1082,17 @@ export const CalendarView = ({
             blockHandlers: nextDisabled ? ['onClick'] : undefined,
           })}
         >
-          <ChevronRightIcon className="wave-rtl:-scale-x-100" />
+          <ChevronRightIcon className="wave:wave-rtl:-scale-x-100" />
         </button>
       </div>
       {grid}
       {(showGoToToday || onClose) && (
         <div
           {...mergeSlotProps(parts?.footer, {
-            className: wcn(partClassNames?.footer, 'mt-2 flex items-center justify-end gap-2'),
+            className: wcn(
+              partClassNames?.footer,
+              'wave:mt-2 wave:flex wave:items-center wave:justify-end wave:gap-2',
+            ),
             locked: { ...HIDDEN_PART_LOCKS, onKeyDown: handleEscape },
           })}
         >
@@ -1329,7 +1335,7 @@ export const Calendar = ({
       aria-describedby={joinIds(fieldDescribedBy, showRequiredHint && requiredHintId)}
       className={wcn(
         calendarClassNames.root,
-        'relative inline-flex flex-col text-foreground',
+        'wave:relative wave:inline-flex wave:flex-col wave:text-foreground',
         className,
       )}
       {...rest}

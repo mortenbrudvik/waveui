@@ -606,7 +606,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   const showClear = clearable && hasValue;
   // The expand glyph's inline-end offset per size (P4-01), shared by the chevron and a consumer
   // glyph.
-  const expandOffset = size === 'small' ? 'end-2' : 'end-3';
+  const expandOffset = size === 'small' ? 'wave:end-2' : 'wave:end-3';
 
   const listLabelledBy =
     fieldProps['aria-label'] === undefined
@@ -621,7 +621,11 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   };
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: wcn(dropdownClassNames.root, 'relative inline-flex flex-col', className),
+    className: wcn(
+      dropdownClassNames.root,
+      'wave:relative wave:inline-flex wave:flex-col',
+      className,
+    ),
     style,
     locked: {
       'data-size': size,
@@ -638,7 +642,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   return (
     <div {...rootProps} ref={rootMergedRef}>
       {multiselect && <PickerAnnouncer />}
-      <div className="relative flex items-center">
+      <div className="wave:relative wave:flex wave:items-center">
         <button
           // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
           type="button"
@@ -648,12 +652,12 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
               // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The
               // end padding keeps the text clear of the chevron (and of the clear button while it
               // shows).
-              'relative flex w-full items-center justify-between py-0 text-start',
+              'wave:relative wave:flex wave:w-full wave:items-center wave:justify-between wave:py-0 wave:text-start',
               inputHeightClasses[size],
               inputPaddingClasses[size],
               inputTextClasses[size],
               inputAppearanceClasses[appearance],
-              'text-foreground',
+              'wave:text-foreground',
               pickerEndPadding(Number(showClear) + Number(showExpand), size),
               inputFocus,
               disabledStyles,
@@ -695,8 +699,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             {...mergeSlotProps(slotProps?.value, {
               className: wcn(
                 dropdownClassNames.value,
-                'truncate',
-                !showValue && 'text-muted-foreground',
+                'wave:truncate',
+                !showValue && 'wave:text-muted-foreground',
               ),
               // Inside the natively disabled button, a click on the span still reaches its own
               // handlers: a disabled Dropdown calls none of yours there.
@@ -712,9 +716,9 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
                 'span',
                 wcn(
                   dropdownClassNames.expandIcon,
-                  'absolute inline-flex transition-transform motion-reduce:transition-none',
+                  'wave:absolute wave:inline-flex wave:transition-transform wave:motion-reduce:transition-none',
                   expandOffset,
-                  expanded && 'rotate-180',
+                  expanded && 'wave:rotate-180',
                 ),
                 { 'aria-hidden': true },
               )
@@ -723,9 +727,9 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
                 size={pickerGlyphSize(size, 'chevron')}
                 className={wcn(
                   dropdownClassNames.expandIcon,
-                  'absolute transition-transform motion-reduce:transition-none',
+                  'wave:absolute wave:transition-transform wave:motion-reduce:transition-none',
                   expandOffset,
-                  expanded && 'rotate-180',
+                  expanded && 'wave:rotate-180',
                 )}
               />
             ))}
@@ -772,7 +776,10 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         open={open}
         expanded={expanded}
         // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
-        listClassName={wcn(dropdownClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
+        listClassName={wcn(
+          dropdownClassNames.listbox,
+          activeWindow && 'wave:[overflow-anchor:none]',
+        )}
         surfaceClassName={dropdownClassNames.surface}
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}

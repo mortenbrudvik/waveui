@@ -50,7 +50,7 @@ export const FlipAndHideWhenDetached: Story = {
   name: 'Fallback placements and hide when detached',
   render: () => (
     <div
-      className="h-64 overflow-auto rounded-md border border-border p-4"
+      className="h-64 overflow-auto rounded-md border border-wave-border p-4"
       role="region"
       aria-label="Scrolling page"
       tabIndex={0}
@@ -162,7 +162,7 @@ export const FocusableGroupRows: Story = {
         <div
           role="group"
           aria-label={title}
-          className="flex items-center gap-2 rounded-md border border-border p-2"
+          className="flex items-center gap-2 rounded-md border border-wave-border p-2"
           {...groupProps}
         >
           <span className="grow">{title}</span>

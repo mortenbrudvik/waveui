@@ -39,34 +39,34 @@ const SCALE = '--wave-tab-indicator-scale';
 
 /** The selected transparent tab's line in a horizontal list (spec §9.2, verbatim). */
 const HORIZONTAL_INDICATOR = [
-  'relative',
-  'border-b-2',
-  'border-b-transparent',
-  'after:absolute',
-  'after:inset-x-0',
-  'after:-bottom-0.5',
-  'after:border-b-2',
-  'after:border-b-primary',
-  'after:origin-left',
-  'after:translate-x-[var(--wave-tab-indicator-offset,0px)]',
-  'after:scale-x-[var(--wave-tab-indicator-scale,1)]',
-  'forced-colors:after:border-[Highlight]',
+  'wave:relative',
+  'wave:border-b-2',
+  'wave:border-b-transparent',
+  'wave:after:absolute',
+  'wave:after:inset-x-0',
+  'wave:after:-bottom-0.5',
+  'wave:after:border-b-2',
+  'wave:after:border-b-primary',
+  'wave:after:origin-left',
+  'wave:after:translate-x-[var(--wave-tab-indicator-offset,0px)]',
+  'wave:after:scale-x-[var(--wave-tab-indicator-scale,1)]',
+  'wave:forced-colors:after:border-[Highlight]',
 ];
 
 /** The selected transparent tab's line in a vertical list (spec §9.2, verbatim). */
 const VERTICAL_INDICATOR = [
-  'relative',
-  'border-s-2',
-  'border-s-transparent',
-  'after:absolute',
-  'after:inset-y-0',
-  'after:-start-0.5',
-  'after:border-s-2',
-  'after:border-s-primary',
-  'after:origin-top',
-  'after:translate-y-[var(--wave-tab-indicator-offset,0px)]',
-  'after:scale-y-[var(--wave-tab-indicator-scale,1)]',
-  'forced-colors:after:border-[Highlight]',
+  'wave:relative',
+  'wave:border-s-2',
+  'wave:border-s-transparent',
+  'wave:after:absolute',
+  'wave:after:inset-y-0',
+  'wave:after:-start-0.5',
+  'wave:after:border-s-2',
+  'wave:after:border-s-primary',
+  'wave:after:origin-top',
+  'wave:after:translate-y-[var(--wave-tab-indicator-offset,0px)]',
+  'wave:after:scale-y-[var(--wave-tab-indicator-scale,1)]',
+  'wave:forced-colors:after:border-[Highlight]',
 ];
 
 const MOTION = motionClasses(tabIndicatorMotion);
@@ -163,7 +163,10 @@ describe('TabList - sliding indicator (spec §9.2, R12)', () => {
   it('draws the selected transparent tab’s line as an ::after over a transparent border', () => {
     render(tabList());
     expect(tab('Tab A')).toHaveClass(...HORIZONTAL_INDICATOR);
-    expect(tab('Tab A')).not.toHaveClass('border-b-primary', 'forced-colors:border-[Highlight]');
+    expect(tab('Tab A')).not.toHaveClass(
+      'wave:border-b-primary',
+      'wave:forced-colors:border-[Highlight]',
+    );
     // Unselected tabs draw no line.
     expect(carried(tab('Tab B'), HORIZONTAL_INDICATOR)).toEqual([]);
     expect(classes(tab('Tab B')).filter((word) => word.includes('after:'))).toEqual([]);
@@ -172,13 +175,13 @@ describe('TabList - sliding indicator (spec §9.2, R12)', () => {
   it('draws the vertical line on the start side, with the vertical FLIP properties', () => {
     renderWithProviders(tabList({ orientation: 'vertical' }), { dir: 'rtl' });
     expect(tab('Tab A')).toHaveClass(...VERTICAL_INDICATOR);
-    expect(tab('Tab A')).not.toHaveClass('border-s-primary');
+    expect(tab('Tab A')).not.toHaveClass('wave:border-s-primary');
     expect(carried(tab('Tab B'), VERTICAL_INDICATOR)).toEqual([]);
   });
 
   it('keeps the selected tab’s line visible in forced colors', () => {
     render(tabList({ defaultValue: 'b' }));
-    expect(tab('Tab B')).toHaveClass('forced-colors:after:border-[Highlight]');
+    expect(tab('Tab B')).toHaveClass('wave:forced-colors:after:border-[Highlight]');
   });
 
   it.each(['horizontal', 'vertical'] as const)(
@@ -189,14 +192,20 @@ describe('TabList - sliding indicator (spec §9.2, R12)', () => {
       // selection would fade in under the new tab while the line slides there. Forced colors turn
       // a transparent border into the text color, but keep a system color.
       for (const name of ['Tab A', 'Tab B']) {
-        expect(tab(name)).toHaveClass('border-transparent', 'forced-colors:border-[Canvas]');
+        expect(tab(name)).toHaveClass(
+          'wave:border-transparent',
+          'wave:forced-colors:border-[Canvas]',
+        );
       }
     },
   );
 
   it('no own border color for the other appearances', () => {
     render(tabList({ appearance: 'subtle' }));
-    expect(tab('Tab A')).not.toHaveClass('border-transparent', 'forced-colors:border-[Canvas]');
+    expect(tab('Tab A')).not.toHaveClass(
+      'wave:border-transparent',
+      'wave:forced-colors:border-[Canvas]',
+    );
   });
 
   it('selecting B writes the FLIP start on B without the transition; the frame clears it and adds the transition', async () => {

@@ -269,7 +269,7 @@ export const DrawerTitle = ({
       ref={titleRef}
       className={wcn(
         drawerTitleClassNames.root,
-        'text-subtitle-1 font-semibold text-foreground',
+        'wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
         className,
       )}
     >
@@ -371,7 +371,7 @@ export const DrawerHeader = ({ className, children, ref, ...rest }: DrawerHeader
       ref={ref}
       className={wcn(
         drawerHeaderClassNames.root,
-        'flex shrink-0 flex-col gap-2 p-4',
+        'wave:flex wave:shrink-0 wave:flex-col wave:gap-2 wave:p-4',
         scrollSeparatorClasses.header,
         className,
       )}
@@ -420,14 +420,18 @@ export const DrawerHeaderTitle = ({
     <div
       {...rest}
       ref={ref}
-      className={wcn(drawerHeaderTitleClassNames.root, 'flex items-start gap-2', className)}
+      className={wcn(
+        drawerHeaderTitleClassNames.root,
+        'wave:flex wave:items-start wave:gap-2',
+        className,
+      )}
     >
       <DrawerPartContext.Provider value="content">
         <Heading
           {...mergeSlotProps(slotProps?.heading, {
             className: wcn(
               drawerHeaderTitleClassNames.heading,
-              'min-w-0 flex-1 text-subtitle-1 font-semibold text-foreground',
+              'wave:min-w-0 wave:flex-1 wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
             ),
             locked: { id: headingId },
           })}
@@ -439,7 +443,10 @@ export const DrawerHeaderTitle = ({
           ? renderSlot(
               action,
               'span',
-              wcn(drawerHeaderTitleClassNames.action, 'flex min-h-7 shrink-0 items-center gap-1'),
+              wcn(
+                drawerHeaderTitleClassNames.action,
+                'wave:flex wave:min-h-7 wave:shrink-0 wave:items-center wave:gap-1',
+              ),
             )
           : null}
         {inHeader && (
@@ -447,7 +454,7 @@ export const DrawerHeaderTitle = ({
             requestOpen={requestOpen}
             label={closeLabel}
             closeButton={closeButton}
-            className="mt-0.5 shrink-0 text-muted-foreground"
+            className="wave:mt-0.5 wave:shrink-0 wave:text-muted-foreground"
           />
         )}
       </DrawerPartContext.Provider>
@@ -472,7 +479,11 @@ export const DrawerHeaderNavigation = ({
     <nav
       {...rest}
       ref={ref}
-      className={wcn(drawerHeaderNavigationClassNames.root, 'flex items-center gap-1', className)}
+      className={wcn(
+        drawerHeaderNavigationClassNames.root,
+        'wave:flex wave:items-center wave:gap-1',
+        className,
+      )}
     >
       <DrawerPartContext.Provider value="content">{children}</DrawerPartContext.Provider>
     </nav>
@@ -524,7 +535,7 @@ export const DrawerFooter = ({ className, children, ref, ...rest }: DrawerFooter
       ref={ref}
       className={wcn(
         drawerFooterClassNames.root,
-        'flex shrink-0 flex-wrap items-center gap-2 p-4',
+        'wave:flex wave:shrink-0 wave:flex-wrap wave:items-center wave:gap-2 wave:p-4',
         scrollSeparatorClasses.footer,
         className,
       )}

@@ -87,8 +87,13 @@ describe('TagPicker overflow="count"', () => {
     expect(chip()).toHaveAttribute('aria-hidden', 'true');
     const group = screen.getByRole('list', { name: 'Selected' });
     expect(group.nextElementSibling).toBe(chip());
-    expect(group).toHaveClass('flex-nowrap', 'overflow-hidden', 'whitespace-nowrap', 'min-w-0');
-    expect(control()).toHaveClass('flex-nowrap');
+    expect(group).toHaveClass(
+      'wave:flex-nowrap',
+      'wave:overflow-hidden',
+      'wave:whitespace-nowrap',
+      'wave:min-w-0',
+    );
+    expect(control()).toHaveClass('wave:flex-nowrap');
     // The summary still names every tag.
     expect(combobox()).toHaveAccessibleDescription('Selected: Apple, Banana, Cherry');
     layout(40, 60);

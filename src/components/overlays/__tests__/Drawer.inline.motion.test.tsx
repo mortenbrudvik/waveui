@@ -46,8 +46,8 @@ const axisOf = (position: DrawerPosition) => (position === 'bottom' ? 'height' :
 const WRAPPER_RECIPE = `${inlineDrawerMotion.width} ${drawerDurations.small}`;
 /** The wrapper's class that lifts the panel's size cap on each axis while it is not entered. */
 const PANEL_CAP_LIFT = {
-  width: 'not-data-[presence=entered]:*:max-w-none',
-  height: 'not-data-[presence=entered]:*:max-h-none',
+  width: 'wave:not-data-[presence=entered]:*:max-w-none',
+  height: 'wave:not-data-[presence=entered]:*:max-h-none',
 } as const;
 
 /** No word of `recipe` on `el`, apart from the words in `except` (the consumer's own classes). */

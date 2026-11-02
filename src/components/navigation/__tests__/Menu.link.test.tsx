@@ -51,12 +51,12 @@ describe('the link element', () => {
     expect(anchor).toHaveAttribute('href', '#settings');
     expect(anchor).toHaveAttribute('data-roving-text', 'Settings');
     expect(anchor).toHaveClass(
-      'text-foreground',
-      'no-underline',
-      'flex',
-      'px-3',
-      'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
-      'focus-visible:outline-2',
+      'wave:text-foreground',
+      'wave:no-underline',
+      'wave:flex',
+      'wave:px-3',
+      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+      'wave:focus-visible:outline-2',
     );
     const kinds = Array.from(anchor.children).map(
       (child) =>
@@ -404,7 +404,7 @@ describe('MenuItemLink system props', () => {
     polymorphic: true,
     defaultProps: { href: '#settings', children: 'Settings' },
     a11yVariants: [{ name: 'disabled', props: { disabled: true } }],
-    conflictingClass: { className: 'px-4', overrides: 'px-3' },
+    conflictingClass: { className: 'px-4', overrides: 'wave:px-3' },
     wrapper: function LinkHarness({ children }) {
       return <MenuListHarness>{children}</MenuListHarness>;
     },
@@ -452,8 +452,8 @@ describe('Menu.ItemLink — slotProps', () => {
   // Captured from 4a08890 (client and server agree): the merged props may put the class before the
   // locked attributes.
   const BASE_PINS = [
-    '<span class="wave-menu-item__content wave-menu-item-link__content flex-1">',
-    '<span class="wave-menu-item__shortcut wave-menu-item-link__shortcut ms-4 text-caption-1 text-muted-foreground" dir="auto">',
+    '<span class="wave-menu-item__content wave-menu-item-link__content wave:flex-1">',
+    '<span class="wave-menu-item__shortcut wave-menu-item-link__shortcut wave:ms-4 wave:text-caption-1 wave:text-muted-foreground" dir="auto">',
   ].join('\n');
 
   function PinnedLink({ slotProps }: { slotProps?: LinkSlotProps }) {
@@ -539,7 +539,7 @@ describe('Menu.ItemLink — slotProps', () => {
         menuItemClassNames.content,
         menuItemLinkClassNames.content,
         'my-content',
-        'flex-1',
+        'wave:flex-1',
         'content',
         '0.5',
         contentRef,
@@ -549,7 +549,7 @@ describe('Menu.ItemLink — slotProps', () => {
         menuItemClassNames.shortcut,
         menuItemLinkClassNames.shortcut,
         'my-shortcut',
-        'ms-4',
+        'wave:ms-4',
         'shortcut',
         '0.25',
         shortcutRef,
@@ -782,7 +782,7 @@ describe('Menu.ItemLink — slotProps', () => {
     const link = named('Preferences');
     expect(link.closest('[dir]')).toHaveAttribute('dir', 'rtl');
     expect(shortcut(link)).toHaveAttribute('dir', 'auto');
-    expect(shortcut(link)).toHaveClass('my-shortcut', 'ms-4');
+    expect(shortcut(link)).toHaveClass('my-shortcut', 'wave:ms-4');
   });
 
   it('has no accessibility violations with every part customised', async () => {

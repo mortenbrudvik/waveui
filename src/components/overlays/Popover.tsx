@@ -1047,7 +1047,10 @@ export const PopoverContent = ({
       {hasTitle && (
         <h2
           {...mergeSlotProps(slotProps?.title, {
-            className: wcn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold'),
+            className: wcn(
+              popoverContentClassNames.title,
+              'wave:mb-2 wave:text-subtitle-2 wave:font-semibold',
+            ),
             locked: { id: titleId },
           })}
         >
@@ -1087,7 +1090,7 @@ export const PopoverContent = ({
         }
         className={wcn(
           popoverContentClassNames.root,
-          'w-64 rounded-md border border-border bg-background p-4 text-body-1 font-normal text-foreground normal-case tracking-normal text-start shadow-4',
+          'wave:w-64 wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-4 wave:text-body-1 wave:font-normal wave:text-foreground wave:normal-case wave:tracking-normal wave:text-start wave:shadow-4',
           motionClassName,
           className,
         )}
@@ -1101,7 +1104,7 @@ export const PopoverContent = ({
         {fitViewport ? (
           // The beak sits half outside the border, so the scroller is inside it: the viewport
           // limit minus the content's padding (2 x 1rem) and border (2 x 1px).
-          <div className="overflow-y-auto max-h-[calc(var(--wave-popup-available-height)-2rem-2px)]">
+          <div className="wave:overflow-y-auto wave:max-h-[calc(var(--wave-popup-available-height)-2rem-2px)]">
             {titleAndChildren}
           </div>
         ) : (

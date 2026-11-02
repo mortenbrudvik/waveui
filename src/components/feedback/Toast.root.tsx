@@ -204,7 +204,7 @@ export const ToastRoot = ({
   // so a slot object that swaps the element keeps it.
   const iconClassName = wcn(
     toastClassNames.icon,
-    'mt-0.5 inline-flex shrink-0',
+    'wave:mt-0.5 wave:inline-flex wave:shrink-0',
     STATUS_ICON_COLOR[status],
   );
   const renderedIcon =
@@ -222,14 +222,14 @@ export const ToastRoot = ({
       ? { role: 'alert', 'aria-live': 'assertive' }
       : { role: 'status', 'aria-live': 'polite' };
   // Each part merges only when given, so a toast without `slotProps` allocates no lock object.
-  const contentClassName = wcn(toastClassNames.content, 'min-w-0 flex-1');
+  const contentClassName = wcn(toastClassNames.content, 'wave:min-w-0 wave:flex-1');
   let dismissButton: React.ReactNode = null;
   if (dismiss) {
     const dismissClassName = wcn(
       toastClassNames.dismissButton,
-      'inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
-      'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
-      'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+      'wave:inline-flex wave:shrink-0 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded wave:border-none wave:bg-transparent wave:p-1 wave:text-muted-foreground',
+      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground',
+      'wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
       focusRing,
     );
     const handleDismissClick = () => dismiss();
@@ -261,7 +261,7 @@ export const ToastRoot = ({
       {...rest}
       className={wcn(
         toastClassNames.root,
-        'flex items-start gap-3 rounded border border-s-4 border-border bg-background p-3 text-foreground shadow-4',
+        'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border wave:border-s-4 wave:border-border wave:bg-background wave:p-3 wave:text-foreground wave:shadow-4',
         STATUS_BORDER[status],
         className,
       )}

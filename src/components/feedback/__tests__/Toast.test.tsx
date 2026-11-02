@@ -87,7 +87,7 @@ describe('Toast', () => {
     expectedTag: 'div',
     displayName: 'Toast',
     defaultProps: { title: 'Saved' },
-    conflictingClass: { className: 'p-6', overrides: 'p-3' },
+    conflictingClass: { className: 'p-6', overrides: 'wave:p-3' },
     a11yVariants: [
       {
         name: 'dismissible error',
@@ -214,10 +214,10 @@ describe('Toast', () => {
 
   describe('status (feedback-navigation#4, #14)', () => {
     it.each([
-      ['info', 'Info:', 'border-s-info'],
-      ['success', 'Success:', 'border-s-success'],
-      ['warning', 'Warning:', 'border-s-warning'],
-      ['error', 'Error:', 'border-s-error'],
+      ['info', 'Info:', 'wave:border-s-info'],
+      ['success', 'Success:', 'wave:border-s-success'],
+      ['warning', 'Warning:', 'wave:border-s-warning'],
+      ['error', 'Error:', 'wave:border-s-error'],
     ] as const)(
       'status %s reads "%s" first, shows its glyph and a %s border',
       (status, label, border) => {
@@ -228,11 +228,11 @@ describe('Toast', () => {
         );
         const toast = screen.getByTestId('toast');
         expect(toast).toHaveTextContent(new RegExp(`^${label}\\s*Upload\\s*Details$`));
-        expect(within(toast).getByText(label)).toHaveClass('sr-only');
+        expect(within(toast).getByText(label)).toHaveClass('wave:sr-only');
         const glyph = toast.querySelector(`[data-wave-icon="${status}"]`);
         expect(glyph).not.toBeNull();
         expect(glyph?.closest('[aria-hidden="true"]')).not.toBeNull();
-        expect(toast).toHaveClass('border-s-4', border);
+        expect(toast).toHaveClass('wave:border-s-4', border);
       },
     );
 
@@ -247,7 +247,7 @@ describe('Toast', () => {
     renderWithProviders(<Toast title="Saved" data-testid="toast" />, { dir: 'rtl' });
     const toast = screen.getByTestId('toast');
     expect(toast.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-    expect(toast).toHaveClass('border-s-4', 'border-s-info');
+    expect(toast).toHaveClass('wave:border-s-4', 'wave:border-s-info');
   });
 });
 
@@ -255,7 +255,7 @@ describe('Toaster', () => {
   testSystemProps(Toaster, {
     expectedTag: 'div',
     displayName: 'Toaster',
-    conflictingClass: { className: 'w-96', overrides: 'w-80' },
+    conflictingClass: { className: 'w-96', overrides: 'wave:w-80' },
   });
 
   it('renders children (app content)', () => {
@@ -318,34 +318,34 @@ describe('Toaster', () => {
     expect(polite).toHaveAttribute('role', 'status');
     expect(polite).toBeEmptyDOMElement();
     expect(assertive).toBeEmptyDOMElement();
-    expect(polite).toHaveClass('sr-only');
-    expect(assertive).toHaveClass('sr-only');
+    expect(polite).toHaveClass('wave:sr-only');
+    expect(assertive).toHaveClass('wave:sr-only');
   });
 
   describe('positions (overlays#40)', () => {
     it.each([
-      [undefined, 'bottom-end', ['bottom-4', 'end-4']],
-      ['bottom-end', 'bottom-end', ['bottom-4', 'end-4']],
-      ['bottom-start', 'bottom-start', ['bottom-4', 'start-4']],
-      ['top-end', 'top-end', ['top-4', 'end-4']],
-      ['top-start', 'top-start', ['top-4', 'start-4']],
-      ['top-right', 'top-right', ['top-4', 'right-4']],
-      ['top-left', 'top-left', ['top-4', 'left-4']],
-      ['bottom-right', 'bottom-right', ['bottom-4', 'right-4']],
-      ['bottom-left', 'bottom-left', ['bottom-4', 'left-4']],
+      [undefined, 'bottom-end', ['wave:bottom-4', 'wave:end-4']],
+      ['bottom-end', 'bottom-end', ['wave:bottom-4', 'wave:end-4']],
+      ['bottom-start', 'bottom-start', ['wave:bottom-4', 'wave:start-4']],
+      ['top-end', 'top-end', ['wave:top-4', 'wave:end-4']],
+      ['top-start', 'top-start', ['wave:top-4', 'wave:start-4']],
+      ['top-right', 'top-right', ['wave:top-4', 'wave:right-4']],
+      ['top-left', 'top-left', ['wave:top-4', 'wave:left-4']],
+      ['bottom-right', 'bottom-right', ['wave:bottom-4', 'wave:right-4']],
+      ['bottom-left', 'bottom-left', ['wave:bottom-4', 'wave:left-4']],
     ] as const)('position %s maps to %s', (position, dataPosition, classes) => {
       render(<Toaster position={position} />);
       const viewport = getViewport();
       expect(viewport).toHaveAttribute('data-position', dataPosition);
-      expect(viewport).toHaveClass('fixed', ...classes);
+      expect(viewport).toHaveClass('wave:fixed', ...classes);
     });
 
     it('logical positions follow the direction (RTL)', () => {
       renderWithProviders(<Toaster />, { dir: 'rtl' });
       const viewport = getViewport();
       expect(viewport.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-      expect(viewport).toHaveClass('bottom-4', 'end-4');
-      expect(viewport).not.toHaveClass('right-4');
+      expect(viewport).toHaveClass('wave:bottom-4', 'wave:end-4');
+      expect(viewport).not.toHaveClass('wave:right-4');
     });
   });
 });
@@ -1669,7 +1669,11 @@ describe('Toaster: beside an open modal side panel (feedback-navigation#50, WCAG
   it('moves bottom-end toasts beside a panel at the end edge, and back when it closes', () => {
     const { setOpen } = setup({ open: false });
     expect(offset()).toBe('');
-    expect(getViewport()).toHaveClass('bottom-4', 'end-4', 'me-(--wave-toaster-offset)');
+    expect(getViewport()).toHaveClass(
+      'wave:bottom-4',
+      'wave:end-4',
+      'wave:me-(--wave-toaster-offset)',
+    );
 
     setOpen(true);
     // The panel is 320px wide: the toasts sit left of it, with the same 1rem gap as at the edge.
@@ -1846,20 +1850,20 @@ describe('Toaster: beside an open modal side panel (feedback-navigation#50, WCAG
     });
 
     it.each([
-      ['top-start', 'mt-(--wave-toaster-offset-block)'],
-      ['top-end', 'mt-(--wave-toaster-offset-block)'],
-      ['top-left', 'mt-(--wave-toaster-offset-block)'],
-      ['top-right', 'mt-(--wave-toaster-offset-block)'],
-      ['bottom-start', 'mb-(--wave-toaster-offset-block)'],
-      ['bottom-end', 'mb-(--wave-toaster-offset-block)'],
-      ['bottom-left', 'mb-(--wave-toaster-offset-block)'],
-      ['bottom-right', 'mb-(--wave-toaster-offset-block)'],
+      ['top-start', 'wave:mt-(--wave-toaster-offset-block)'],
+      ['top-end', 'wave:mt-(--wave-toaster-offset-block)'],
+      ['top-left', 'wave:mt-(--wave-toaster-offset-block)'],
+      ['top-right', 'wave:mt-(--wave-toaster-offset-block)'],
+      ['bottom-start', 'wave:mb-(--wave-toaster-offset-block)'],
+      ['bottom-end', 'wave:mb-(--wave-toaster-offset-block)'],
+      ['bottom-left', 'wave:mb-(--wave-toaster-offset-block)'],
+      ['bottom-right', 'wave:mb-(--wave-toaster-offset-block)'],
     ] as const)('%s toasts carry the block margin %s', (position, expected) => {
       setup({ position, open: false });
       expect(getViewport()).toHaveClass(expected);
-      const other = expected.startsWith('mt-')
-        ? 'mb-(--wave-toaster-offset-block)'
-        : 'mt-(--wave-toaster-offset-block)';
+      const other = expected.startsWith('wave:mt-')
+        ? 'wave:mb-(--wave-toaster-offset-block)'
+        : 'wave:mt-(--wave-toaster-offset-block)';
       expect(getViewport()).not.toHaveClass(other);
     });
 
@@ -2030,8 +2034,8 @@ describe('Toast — slotProps', () => {
       ),
     ).toBe(
       [
-        '<div class="wave-toast__content min-w-0 flex-1">',
-        '<button aria-label="Dismiss" class="wave-toast__dismiss-button inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-subtle-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
+        '<div class="wave-toast__content wave:min-w-0 wave:flex-1">',
+        '<button aria-label="Dismiss" class="wave-toast__dismiss-button wave:inline-flex wave:shrink-0 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded wave:border-none wave:bg-transparent wave:p-1 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" type="button">',
       ].join('\n'),
     );
   });
@@ -2067,13 +2071,13 @@ describe('Toast — slotProps', () => {
     );
     const column = content();
     expect(column.classList[0]).toBe(toastClassNames.content);
-    expect(column).toHaveClass('min-w-0', 'flex-1', 'my-content');
+    expect(column).toHaveClass('wave:min-w-0', 'wave:flex-1', 'my-content');
     expect(column.classList[column.classList.length - 1]).toBe('my-content');
     expect(column).toHaveAttribute('data-part', 'content');
     expect(column).toHaveStyle({ opacity: '0.5' });
     const button = dismissButton();
     expect(button.classList[0]).toBe(toastClassNames.dismissButton);
-    expect(button).toHaveClass('p-1', 'my-dismiss');
+    expect(button).toHaveClass('wave:p-1', 'my-dismiss');
     expect(button.classList[button.classList.length - 1]).toBe('my-dismiss');
     expect(button).toHaveAttribute('data-part', 'dismiss');
     expect(button).toHaveStyle({ margin: '2px' });
@@ -2091,9 +2095,9 @@ describe('Toast — slotProps', () => {
       />,
     );
     expect(content()).toHaveClass('flex-none');
-    expect(content()).not.toHaveClass('flex-1');
+    expect(content()).not.toHaveClass('wave:flex-1');
     expect(dismissButton()).toHaveClass('p-2');
-    expect(dismissButton()).not.toHaveClass('p-1');
+    expect(dismissButton()).not.toHaveClass('wave:p-1');
   });
 
   it('attaches your refs to the parts', () => {
@@ -2322,7 +2326,7 @@ describe('Toast — slotProps', () => {
       { dir: 'rtl' },
     );
     expect(screen.getByTestId('toast').closest('[dir]')).toHaveAttribute('dir', 'rtl');
-    expect(screen.getByTestId('toast')).toHaveClass('border-s-4', 'border-s-info');
+    expect(screen.getByTestId('toast')).toHaveClass('wave:border-s-4', 'wave:border-s-info');
     expect(content()).toHaveClass(toastClassNames.content, 'my-content');
     expect(dismissButton()).toHaveClass(toastClassNames.dismissButton, 'my-dismiss');
   });

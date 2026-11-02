@@ -16,7 +16,9 @@ type Story = StoryObj<typeof meta>;
 
 /** Demo cell drawn with theme tokens. */
 const Box = ({ children }: { children: React.ReactNode }) => (
-  <div className="rounded border border-border bg-muted px-4 py-3 text-center">{children}</div>
+  <div className="rounded border border-wave-border bg-wave-muted px-4 py-3 text-center">
+    {children}
+  </div>
 );
 
 export const Default: Story = {

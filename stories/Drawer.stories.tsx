@@ -630,7 +630,7 @@ export const Inline: Story = {
   },
   render: function InlineDrawer({ children, ...args }) {
     return (
-      <div className="flex h-96 rounded-md border border-border">
+      <div className="flex h-96 rounded-md border border-wave-border">
         <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
           <p>Orders received this week. The details pane stays open while you work.</p>
           <Field label="Search orders">
@@ -673,8 +673,8 @@ export const InlineStart: Story = {
     };
     const paneId = 'inline-start-folders';
     return (
-      <div className="flex h-96 flex-col rounded-md border border-border">
-        <div className="flex items-center gap-2 border-b border-border p-2">
+      <div className="flex h-96 flex-col rounded-md border border-wave-border">
+        <div className="flex items-center gap-2 border-b border-wave-border p-2">
           <Button
             ref={toggleRef}
             aria-expanded={open}
@@ -683,7 +683,7 @@ export const InlineStart: Story = {
           >
             Folders
           </Button>
-          <span className="text-body-1 font-semibold">Mail</span>
+          <span className="text-wave-body-1 font-semibold">Mail</span>
         </div>
         <div className="flex min-h-0 flex-1">
           {/* The story owns the controlled pair; every other arg is forwarded. */}
@@ -721,7 +721,7 @@ export const InlineBottom: Story = {
   },
   render: function InlineBottomDrawer({ children, ...args }) {
     return (
-      <div className="flex h-128 flex-col rounded-md border border-border">
+      <div className="flex h-128 flex-col rounded-md border border-wave-border">
         <div className="min-h-0 flex-1 p-4">
           <p>The editor area. The problems pane below keeps its height.</p>
         </div>
@@ -807,7 +807,7 @@ export const InlineMotion: Story = {
     return (
       <div className="flex flex-col gap-3">
         {motionCases(slowCollapse).map(({ label, motion }) => (
-          <div key={label} className="flex h-48 rounded-md border border-border">
+          <div key={label} className="flex h-48 rounded-md border border-wave-border">
             <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
               <p>Orders received this week.</p>
             </div>
@@ -871,7 +871,7 @@ export const ResponsiveType: Story = {
       args.onOpenChange?.(next, details);
     };
     return (
-      <div className="flex h-96 rounded-md border border-border">
+      <div className="flex h-96 rounded-md border border-wave-border">
         <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
           <p>Orders received this week.</p>
         </div>

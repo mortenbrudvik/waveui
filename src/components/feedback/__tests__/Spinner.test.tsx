@@ -180,16 +180,16 @@ describe('Spinner', () => {
     render(<Spinner label="Loading" />);
     await React.act(nextFrame);
     const label = screen.getByText('Loading');
-    expect(label).toHaveClass('sr-only');
-    expect(label).not.toHaveClass('text-body-1');
+    expect(label).toHaveClass('wave:sr-only');
+    expect(label).not.toHaveClass('wave:text-body-1');
   });
 
   it('renders label visibly when labelVisible is true', async () => {
     render(<Spinner label="Loading" labelVisible />);
     await React.act(nextFrame);
     const label = screen.getByText('Loading');
-    expect(label).not.toHaveClass('sr-only');
-    expect(label).toHaveClass('text-body-1', 'text-muted-foreground');
+    expect(label).not.toHaveClass('wave:sr-only');
+    expect(label).toHaveClass('wave:text-body-1', 'wave:text-muted-foreground');
   });
 
   it('renders one label element whether or not it is visible (single render path)', async () => {
@@ -210,10 +210,10 @@ describe('Spinner', () => {
     expect(ring).not.toBeNull();
     expect(ring).toHaveAttribute('aria-hidden', 'true');
     expect(ring).toHaveClass(
-      'border-track',
-      'border-t-primary',
-      'animate-wave-spin',
-      'motion-reduce:animate-wave-spin-slow',
+      'wave:border-track',
+      'wave:border-t-primary',
+      'wave:animate-wave-spin',
+      'wave:motion-reduce:animate-wave-spin-slow',
     );
     expect(ring?.className).not.toMatch(/\[#|animate-\[/);
   });
@@ -223,22 +223,22 @@ describe('Spinner', () => {
     const ring = screen.getByTestId('sp').querySelector('[data-wave-spinner-ring]');
     // Forced colors would paint all four borders alike: the track takes Canvas, the arc Highlight.
     expect(ring).toHaveClass(
-      'forced-colors:forced-color-adjust-none',
-      'forced-colors:border-[Canvas]',
-      'forced-colors:border-t-[Highlight]',
+      'wave:forced-colors:forced-color-adjust-none',
+      'wave:forced-colors:border-[Canvas]',
+      'wave:forced-colors:border-t-[Highlight]',
     );
   });
 
   it('applies size classes', () => {
     render(<Spinner size="large" data-testid="sp" />);
     const ring = screen.getByTestId('sp').querySelector('[data-wave-spinner-ring]');
-    expect(ring).toHaveClass('w-9', 'h-9');
+    expect(ring).toHaveClass('wave:w-9', 'wave:h-9');
   });
 
   it('defaults to medium size', () => {
     render(<Spinner data-testid="sp" />);
     const ring = screen.getByTestId('sp').querySelector('[data-wave-spinner-ring]');
-    expect(ring).toHaveClass('w-6', 'h-6');
+    expect(ring).toHaveClass('wave:w-6', 'wave:h-6');
   });
 
   describe('appearance', () => {
@@ -246,9 +246,9 @@ describe('Spinner', () => {
       render(<Spinner label="Loading" labelVisible data-testid="sp" />);
       const root = screen.getByTestId('sp');
       expect(root).toHaveAttribute('data-appearance', 'primary');
-      expect(ringOf(root)).toHaveClass('border-track', 'border-t-primary');
+      expect(ringOf(root)).toHaveClass('wave:border-track', 'wave:border-t-primary');
       await React.act(nextFrame);
-      expect(screen.getByText('Loading')).toHaveClass('text-muted-foreground');
+      expect(screen.getByText('Loading')).toHaveClass('wave:text-muted-foreground');
     });
 
     it('inverted draws the arc, a 30% track and the visible label in the current text color', async () => {
@@ -257,21 +257,21 @@ describe('Spinner', () => {
       expect(root).toHaveAttribute('data-appearance', 'inverted');
       const ring = ringOf(root);
       expect(ring).toHaveClass(
-        'border-current/30',
-        'border-t-current',
-        'animate-wave-spin',
-        'motion-reduce:animate-wave-spin-slow',
+        'wave:border-current/30',
+        'wave:border-t-current',
+        'wave:animate-wave-spin',
+        'wave:motion-reduce:animate-wave-spin-slow',
         // Forced colors keep the Highlight arc on a Canvas track.
-        'forced-colors:forced-color-adjust-none',
-        'forced-colors:border-[Canvas]',
-        'forced-colors:border-t-[Highlight]',
+        'wave:forced-colors:forced-color-adjust-none',
+        'wave:forced-colors:border-[Canvas]',
+        'wave:forced-colors:border-t-[Highlight]',
       );
-      expect(ring).not.toHaveClass('border-track');
-      expect(ring).not.toHaveClass('border-t-primary');
+      expect(ring).not.toHaveClass('wave:border-track');
+      expect(ring).not.toHaveClass('wave:border-t-primary');
       await React.act(nextFrame);
       const label = screen.getByText('Saving');
-      expect(label).toHaveClass('text-body-1', 'text-current');
-      expect(label).not.toHaveClass('text-muted-foreground');
+      expect(label).toHaveClass('wave:text-body-1', 'wave:text-current');
+      expect(label).not.toHaveClass('wave:text-muted-foreground');
     });
 
     it.each([
@@ -289,14 +289,14 @@ describe('Spinner', () => {
         );
         const root = screen.getByTestId('sp');
         expect(root).toHaveAttribute('data-appearance', 'primary');
-        expect(ringOf(root)).toHaveClass('border-track', 'border-t-primary');
+        expect(ringOf(root)).toHaveClass('wave:border-track', 'wave:border-t-primary');
       },
     );
 
     it('keeps an inverted label that is not visible screen-reader only', async () => {
       render(<Spinner appearance="inverted" label="Saving" />);
       await React.act(nextFrame);
-      expect(screen.getByText('Saving')).toHaveClass('sr-only');
+      expect(screen.getByText('Saving')).toHaveClass('wave:sr-only');
     });
 
     it('has no accessibility violations inside a primary button (inverted)', async () => {
@@ -313,7 +313,9 @@ describe('Spinner', () => {
       );
       await React.act(nextFrame);
       expect(screen.getByRole('button', { name: 'Saving' })).toBeInTheDocument();
-      expect(ringOf(screen.getByRole('status', { hidden: true }))).toHaveClass('border-t-current');
+      expect(ringOf(screen.getByRole('status', { hidden: true }))).toHaveClass(
+        'wave:border-t-current',
+      );
       await expectNoA11yViolations();
     });
 
@@ -466,9 +468,9 @@ describe('Spinner — slotProps', () => {
     ...all(root, spinnerClassNames.label),
   ];
   const RING =
-    'wave-spinner__spinner rounded-full border-2 animate-wave-spin motion-reduce:animate-wave-spin-slow';
+    'wave-spinner__spinner wave:rounded-full wave:border-2 wave:animate-wave-spin wave:motion-reduce:animate-wave-spin-slow';
   const FORCED =
-    'forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:border-t-[Highlight]';
+    'wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:border-t-[Highlight]';
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -493,11 +495,11 @@ describe('Spinner — slotProps', () => {
 
   // Captured from 54699b8's dist (client and server agree).
   const BASE_PINS = [
-    `<span aria-hidden="true" class="${RING} border-track border-t-primary ${FORCED} w-6 h-6" data-wave-spinner-ring="">`,
-    `<span aria-hidden="true" class="${RING} border-current/30 border-t-current ${FORCED} w-9 h-9" data-wave-spinner-ring="">`,
-    '<span class="wave-spinner__label sr-only" data-wave-spinner-label="">',
-    '<span class="wave-spinner__label text-body-1 text-current" data-wave-spinner-label="">',
-    '<span class="wave-spinner__label sr-only" data-wave-spinner-label="">',
+    `<span aria-hidden="true" class="${RING} wave:border-track wave:border-t-primary ${FORCED} wave:w-6 wave:h-6" data-wave-spinner-ring="">`,
+    `<span aria-hidden="true" class="${RING} wave:border-current/30 wave:border-t-current ${FORCED} wave:w-9 wave:h-9" data-wave-spinner-ring="">`,
+    '<span class="wave-spinner__label wave:sr-only" data-wave-spinner-label="">',
+    '<span class="wave-spinner__label wave:text-body-1 wave:text-current" data-wave-spinner-label="">',
+    '<span class="wave-spinner__label wave:sr-only" data-wave-spinner-label="">',
   ].join('\n');
 
   it('renders the parts of 54699b8 (attributes sorted), on the client and the server', () => {
@@ -557,8 +559,8 @@ describe('Spinner — slotProps', () => {
       />,
     );
     for (const [cls, name, mine, conflict] of [
-      [spinnerClassNames.spinner, 'spinner', 'my-ring', 'border-2'],
-      [spinnerClassNames.label, 'label', 'my-label', 'text-body-1'],
+      [spinnerClassNames.spinner, 'spinner', 'my-ring', 'wave:border-2'],
+      [spinnerClassNames.label, 'label', 'my-label', 'wave:text-body-1'],
     ] as const) {
       const [element] = all(document, cls);
       expect(element.classList[0]).toBe(cls);

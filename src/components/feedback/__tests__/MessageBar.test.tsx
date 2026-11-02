@@ -52,7 +52,7 @@ describe('MessageBar', () => {
     expectedTag: 'div',
     displayName: 'MessageBar',
     defaultProps: { children: 'Your changes were saved.' },
-    conflictingClass: { className: 'px-8', overrides: 'px-4' },
+    conflictingClass: { className: 'px-8', overrides: 'wave:px-4' },
     a11yVariants: [
       { name: 'dismissible error', props: { status: 'error', onDismiss: () => {} } },
       { name: 'warning', props: { status: 'warning' } },
@@ -77,8 +77,8 @@ describe('MessageBar', () => {
       const bar = screen.getByTestId('bar');
       expect(bar).toHaveAttribute('data-layout', 'multiline');
       expect(Array.from(bar.children, (child) => child.tagName)).toEqual(['SPAN', 'DIV', 'BUTTON']);
-      expect(bar.children[1]).toHaveClass('min-w-0', 'flex-1', 'text-body-1');
-      expect(bar.children[1]).not.toHaveClass('whitespace-nowrap');
+      expect(bar.children[1]).toHaveClass('wave:min-w-0', 'wave:flex-1', 'wave:text-body-1');
+      expect(bar.children[1]).not.toHaveClass('wave:whitespace-nowrap');
     });
 
     it('an explicit singleline bar without actions renders the same markup', () => {
@@ -155,7 +155,7 @@ describe('MessageBar', () => {
       const bar = screen.getByTestId('bar');
       expect(bar).toHaveTextContent(new RegExp(`^${label}\\s*Disk almost full$`));
       const text = within(bar).getByText(label);
-      expect(text).toHaveClass('sr-only');
+      expect(text).toHaveClass('wave:sr-only');
     });
 
     it('statusLabel overrides the status text (i18n)', () => {
@@ -197,7 +197,7 @@ describe('MessageBar', () => {
       const wrapper = screen.getByTestId('custom-icon').parentElement;
       expect(wrapper?.tagName).toBe('SPAN');
       expect(wrapper).toHaveAttribute('aria-hidden', 'true');
-      expect(wrapper).toHaveClass('shrink-0');
+      expect(wrapper).toHaveClass('wave:shrink-0');
       expect(screen.getByTestId('bar').querySelector('[data-wave-icon]')).toBeNull();
     });
 
@@ -210,7 +210,7 @@ describe('MessageBar', () => {
       const icon = screen.getByText('custom-icon');
       expect(icon).toHaveAttribute('aria-hidden', 'false');
       expect(icon).toHaveClass('mt-1');
-      expect(icon).not.toHaveClass('mt-0.5');
+      expect(icon).not.toHaveClass('wave:mt-0.5');
     });
 
     it('renders the icon element through a render function; one that renders nothing shows no icon (P13-01)', () => {
@@ -233,8 +233,8 @@ describe('MessageBar', () => {
       const icon = screen.getByTestId('icon');
       expect(icon.tagName).toBe('SPAN');
       expect(icon.classList[0]).toBe(messageBarClassNames.icon);
-      expect(icon).toHaveClass('inline-flex', 'shrink-0', 'mt-1');
-      expect(icon).not.toHaveClass('mt-0.5');
+      expect(icon).toHaveClass('wave:inline-flex', 'wave:shrink-0', 'mt-1');
+      expect(icon).not.toHaveClass('wave:mt-0.5');
       expect(icon).toHaveAttribute('aria-hidden', 'true');
       expect(screen.getByTestId('bar').querySelector('[data-wave-icon]')).toBeNull();
 
@@ -279,10 +279,20 @@ describe('MessageBar', () => {
 
   describe('status tokens (button-provider#3)', () => {
     it.each([
-      ['info', 'bg-info-tint', 'border-s-info', 'text-info-tint-foreground'],
-      ['success', 'bg-success-tint', 'border-s-success', 'text-success-tint-foreground'],
-      ['warning', 'bg-warning-tint', 'border-s-warning', 'text-warning-tint-foreground'],
-      ['error', 'bg-error-tint', 'border-s-error', 'text-error-tint-foreground'],
+      ['info', 'wave:bg-info-tint', 'wave:border-s-info', 'wave:text-info-tint-foreground'],
+      [
+        'success',
+        'wave:bg-success-tint',
+        'wave:border-s-success',
+        'wave:text-success-tint-foreground',
+      ],
+      [
+        'warning',
+        'wave:bg-warning-tint',
+        'wave:border-s-warning',
+        'wave:text-warning-tint-foreground',
+      ],
+      ['error', 'wave:bg-error-tint', 'wave:border-s-error', 'wave:text-error-tint-foreground'],
     ] as const)('status %s uses %s, %s and an icon in %s', (status, bg, border, iconColor) => {
       render(
         <MessageBar status={status} data-testid="bar">
@@ -290,7 +300,7 @@ describe('MessageBar', () => {
         </MessageBar>,
       );
       const bar = screen.getByTestId('bar');
-      expect(bar).toHaveClass(bg, border, 'border-s-4');
+      expect(bar).toHaveClass(bg, border, 'wave:border-s-4');
       const icon = bar.querySelector(`[data-wave-icon="${status}"]`);
       expect(icon?.parentElement).toHaveClass(iconColor);
     });
@@ -920,10 +930,10 @@ describe('MessageBar', () => {
         expect(button).toHaveAttribute('data-disabled', '');
         expect(button).toHaveAttribute('data-disabled-focusable', '');
         expect(button).toHaveClass(
-          'aria-disabled:cursor-not-allowed',
-          'aria-disabled:opacity-50',
+          'wave:aria-disabled:cursor-not-allowed',
+          'wave:aria-disabled:opacity-50',
           // The dimmed look lifts while the focus ring shows (opacity would dim the ring too).
-          'aria-disabled:focus-visible:opacity-100',
+          'wave:aria-disabled:focus-visible:opacity-100',
         );
         await user.tab();
         expect(button).toHaveFocus();
@@ -1411,7 +1421,7 @@ describe('MessageBar', () => {
       expect(screen.getAllByRole('button')).toHaveLength(1);
       const button = screen.getByRole('button', { name: 'Dismiss' });
       expect(button).toHaveAttribute('type', 'button');
-      expect(button).toHaveClass('p-1');
+      expect(button).toHaveClass('wave:p-1');
       expect(button).not.toHaveClass('p-2');
       // Its children are the content, in a span; its other props reach nothing.
       const content = screen.getByText('x');
@@ -1556,7 +1566,7 @@ describe('MessageBar', () => {
     it('renders its id on the visually hidden text, so a labelled bar or toast can name it', () => {
       render(<StatusText label="Warning:" id="status-text-id" />);
       const text = document.getElementById('status-text-id');
-      expect(text).toHaveClass('sr-only');
+      expect(text).toHaveClass('wave:sr-only');
       expect(text?.textContent).toBe('Warning: ');
     });
 
@@ -1595,8 +1605,8 @@ describe('MessageBar', () => {
       );
       const bar = screen.getByTestId('bar');
       expect(bar.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-      expect(bar).toHaveClass('border-s-4', 'border-s-info');
-      expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveClass('ms-auto');
+      expect(bar).toHaveClass('wave:border-s-4', 'wave:border-s-info');
+      expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveClass('wave:ms-auto');
     });
   });
 });
@@ -1615,8 +1625,8 @@ describe('MessageBar — slotProps', () => {
   const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   const Icon = () => <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" />;
   const DISMISS_CLASSES =
-    'wave-message-bar__dismiss-button ms-auto inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-subtle-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100';
-  const BODY_CLASSES = 'wave-message-bar__body min-w-0 flex-1 text-body-1';
+    'wave-message-bar__dismiss-button wave:ms-auto wave:inline-flex wave:shrink-0 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded wave:border-none wave:bg-transparent wave:p-1 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100';
+  const BODY_CLASSES = 'wave-message-bar__body wave:min-w-0 wave:flex-1 wave:text-body-1';
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -1668,7 +1678,7 @@ describe('MessageBar — slotProps', () => {
   // Captured from 54699b8's dist (client and server agree); in the last bar the slot object's
   // class no longer reaches the button (1.0: the button-object form is removed).
   const BASE_PINS = [
-    `<div class="${BODY_CLASSES} whitespace-nowrap">`,
+    `<div class="${BODY_CLASSES} wave:whitespace-nowrap">`,
     `<div class="${BODY_CLASSES}">`,
     `<div class="${BODY_CLASSES}">`,
     `<div class="${BODY_CLASSES}">`,
@@ -1763,8 +1773,8 @@ describe('MessageBar — slotProps', () => {
       </MessageBar>,
     );
     for (const [cls, name, mine, conflict] of [
-      [messageBarClassNames.body, 'body', 'my-body', 'flex-1'],
-      [messageBarClassNames.dismissButton, 'dismissButton', 'my-dismiss', 'p-1'],
+      [messageBarClassNames.body, 'body', 'my-body', 'wave:flex-1'],
+      [messageBarClassNames.dismissButton, 'dismissButton', 'my-dismiss', 'wave:p-1'],
     ] as const) {
       const [element] = all(document, cls);
       expect(element.classList[0]).toBe(cls);
@@ -2109,7 +2119,7 @@ describe('MessageBar — slotProps', () => {
       expect(objectRef.current).toBe(body);
       expect(bar).toHaveAttribute('data-layout', 'singleline');
       expect(body).toHaveAttribute('data-layout', 'mine');
-      expect(body).toHaveClass('whitespace-nowrap', 'my-body');
+      expect(body).toHaveClass('wave:whitespace-nowrap', 'my-body');
 
       // The text needs 150 px more than its column: the bar measures it and goes multiline.
       mockRect(bar, { width: 400 });
@@ -2121,7 +2131,7 @@ describe('MessageBar — slotProps', () => {
       });
       expect(bar).toHaveAttribute('data-layout', 'multiline');
       expect(body).toHaveAttribute('data-layout', 'mine');
-      expect(body).not.toHaveClass('whitespace-nowrap');
+      expect(body).not.toHaveClass('wave:whitespace-nowrap');
       expect(bodyOf(bar)).toBe(body);
 
       // Back to one row once the bar is as wide as the text needed, with the ref changed again.
@@ -2311,7 +2321,10 @@ describe('MessageBar — slotProps', () => {
     const bar = screen.getByRole('status');
     expect(bar.closest('[dir]')).toHaveAttribute('dir', 'rtl');
     expect(bodyOf(bar)).toHaveClass('my-body');
-    expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveClass('my-dismiss', 'ms-auto');
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveClass(
+      'my-dismiss',
+      'wave:ms-auto',
+    );
   });
 
   it('has no axe violations with parts', async () => {

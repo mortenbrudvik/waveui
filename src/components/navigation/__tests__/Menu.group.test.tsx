@@ -26,7 +26,7 @@ const UNLABELLED_WARNING =
   '[WaveUI] Menu.GroupHeader: this header is not a direct child of Menu.Group (or of a Fragment in it), so it does not label the group. Make it a direct child, or pass aria-label to Menu.Group.';
 
 const HEADER_CLASSES =
-  'flex items-center gap-2 px-3 pb-1 pt-2 text-caption-1 font-semibold text-muted-foreground';
+  'wave:flex wave:items-center wave:gap-2 wave:px-3 wave:pb-1 wave:pt-2 wave:text-caption-1 wave:font-semibold wave:text-muted-foreground';
 
 const EXTRA_HEADER_WARNING =
   '[WaveUI] Menu.GroupHeader: this Menu.Group already has a header (its first direct child header), so this one does not label the group. Give a group one header, or put this one in a Menu.Group of its own.';
@@ -487,7 +487,7 @@ describe('MenuGroupHeader system props', () => {
     expectedTag: 'div',
     displayName: 'MenuGroupHeader',
     defaultProps: { children: 'Sort by' },
-    conflictingClass: { className: 'px-4', overrides: 'px-3' },
+    conflictingClass: { className: 'px-4', overrides: 'wave:px-3' },
     wrapper: HeaderHarness,
   });
 });

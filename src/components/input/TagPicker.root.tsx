@@ -1062,7 +1062,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
 
   const rootPart = slotProps?.root;
   const rootProps = mergeSlotProps(rootPart, {
-    className: wcn(tagPickerClassNames.root, 'relative', className),
+    className: wcn(tagPickerClassNames.root, 'wave:relative', className),
     style,
     locked: {
       'data-size': size,
@@ -1096,7 +1096,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       )}
       {/* Mounted before its text: a live region added together with its text is not announced by
           every screen reader. The row in the popup is the visible copy. */}
-      <span role="status" className="sr-only">
+      <span role="status" className="wave:sr-only">
         {noMatches && noMatchesText}
       </span>
       <HiddenInput

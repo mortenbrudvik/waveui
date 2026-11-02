@@ -28,10 +28,11 @@ import {
 // An unavailable day stays focusable in the roving grid (`aria-disabled`); the day button adds
 // `disabledStyles`, whose dimmed look lifts while the focus ring shows (opacity would dim the ring).
 const DAY_CLASSES =
-  'relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through';
+  'wave:relative wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through';
 
 // The header cells: the weekdays, the week-number column's header and each week's number.
-const HEADER_CELL_CLASSES = 'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground';
+const HEADER_CELL_CLASSES =
+  'wave:h-8 wave:w-8 wave:text-center wave:text-caption-1 wave:font-normal wave:text-muted-foreground';
 
 /**
  * The focus handler of a roving cell: `focus` (the tab stop follows the focused cell) runs after
@@ -214,7 +215,7 @@ export const CalendarDayGrid = ({
   const weekNumberClassName = wcn(partClassNames?.weekNumber, HEADER_CELL_CLASSES);
   const markedDotClassName = wcn(
     partClassNames?.markedDot,
-    'pointer-events-none absolute inset-x-0 bottom-0.5 mx-auto h-1 w-1 rounded-full bg-current forced-colors:forced-color-adjust-none',
+    'wave:pointer-events-none wave:absolute wave:inset-x-0 wave:bottom-0.5 wave:mx-auto wave:h-1 wave:w-1 wave:rounded-full wave:bg-current wave:forced-colors:forced-color-adjust-none',
   );
 
   /** The row header of the week that starts on `first`: its number. */
@@ -243,7 +244,7 @@ export const CalendarDayGrid = ({
   return (
     <table
       {...mergeSlotProps(parts?.grid, {
-        className: wcn(partClassNames?.grid, 'border-collapse'),
+        className: wcn(partClassNames?.grid, 'wave:border-collapse'),
         locked: {
           ...HIDDEN_PART_LOCKS,
           id,
@@ -267,7 +268,7 @@ export const CalendarDayGrid = ({
               })}
             >
               <span aria-hidden="true">#</span>
-              <span className="sr-only">{labels?.week ?? 'Week'}</span>
+              <span className="wave:sr-only">{labels?.week ?? 'Week'}</span>
             </th>
           )}
           {weekdays.map((weekday) => {
@@ -285,7 +286,7 @@ export const CalendarDayGrid = ({
                   }))}
               >
                 <span aria-hidden="true">{weekday.short}</span>
-                <span className="sr-only">{weekday.long}</span>
+                <span className="wave:sr-only">{weekday.long}</span>
               </th>
             );
           })}
@@ -332,7 +333,7 @@ export const CalendarDayGrid = ({
                 isSelected && forcedColors.selectedLeaf,
               );
               return (
-                <td key={column} role="gridcell" aria-selected={isSelected} className="p-0">
+                <td key={column} role="gridcell" aria-selected={isSelected} className="wave:p-0">
                   {/* Focus rests on the button, and screen readers do not reliably announce the
                         gridcell's aria-selected from inside it: the selected day's button is also
                         pressed. */}
@@ -385,7 +386,7 @@ const defaultWeekNumber = (week: number) => `Week ${week}`;
 // background, the gated hover, the selected fill, and an unavailable cell struck through besides
 // the dimming of `disabledStyles`).
 const PICKER_CELL_CLASSES =
-  'flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through';
+  'wave:flex wave:h-12 wave:w-14 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through';
 
 /** The cells of a row of the month and year grids. */
 const PICKER_COLUMNS = 4;
@@ -517,7 +518,7 @@ export const CalendarPickerGrid = ({
   return (
     <table
       {...mergeSlotProps(parts?.grid, {
-        className: wcn(partClassNames?.grid, 'border-collapse'),
+        className: wcn(partClassNames?.grid, 'wave:border-collapse'),
         locked: {
           ...HIDDEN_PART_LOCKS,
           id,
@@ -556,7 +557,7 @@ export const CalendarPickerGrid = ({
                 cell.selected && forcedColors.selectedLeaf,
               );
               return (
-                <td key={column} role="gridcell" aria-selected={cell.selected} className="p-0">
+                <td key={column} role="gridcell" aria-selected={cell.selected} className="wave:p-0">
                   <button
                     type="button"
                     {...cellProps}

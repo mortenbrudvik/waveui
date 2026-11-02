@@ -39,37 +39,44 @@ describe('PickerExpandButton (module-only)', () => {
       const button = renderButton({ disabled: true });
       expect(button).toBeDisabled();
       expect(button).toHaveClass(
-        'disabled:cursor-not-allowed',
-        'disabled:opacity-50',
-        'aria-disabled:cursor-not-allowed',
-        'aria-disabled:opacity-50',
-        'aria-disabled:focus-visible:opacity-100',
+        'wave:disabled:cursor-not-allowed',
+        'wave:disabled:opacity-50',
+        'wave:aria-disabled:cursor-not-allowed',
+        'wave:aria-disabled:opacity-50',
+        'wave:aria-disabled:focus-visible:opacity-100',
       );
     });
 
     it('dimDisabled={true} is the default look', () => {
       const button = renderButton({ disabled: true, dimDisabled: true });
-      expect(button).toHaveClass('disabled:cursor-not-allowed', 'disabled:opacity-50');
+      expect(button).toHaveClass('wave:disabled:cursor-not-allowed', 'wave:disabled:opacity-50');
     });
 
     it('dimDisabled={false} keeps only the not-allowed cursor', () => {
       const button = renderButton({ disabled: true, dimDisabled: false });
       expect(button).toBeDisabled();
-      expect(button).toHaveClass('disabled:cursor-not-allowed');
+      expect(button).toHaveClass('wave:disabled:cursor-not-allowed');
       // One class per assertion: a multi-class `.not.toHaveClass` passes when any one is missing.
-      expect(button).not.toHaveClass('disabled:opacity-50');
-      expect(button).not.toHaveClass('aria-disabled:opacity-50');
-      expect(button).not.toHaveClass('aria-disabled:cursor-not-allowed');
-      expect(button).not.toHaveClass('aria-disabled:focus-visible:opacity-100');
+      expect(button).not.toHaveClass('wave:disabled:opacity-50');
+      expect(button).not.toHaveClass('wave:aria-disabled:opacity-50');
+      expect(button).not.toHaveClass('wave:aria-disabled:cursor-not-allowed');
+      expect(button).not.toHaveClass('wave:aria-disabled:focus-visible:opacity-100');
       // The rest of the button is unchanged.
-      expect(button).toHaveClass('absolute', 'h-6', 'w-6', 'end-1', 'bg-transparent', 'p-0');
+      expect(button).toHaveClass(
+        'wave:absolute',
+        'wave:h-6',
+        'wave:w-6',
+        'wave:end-1',
+        'wave:bg-transparent',
+        'wave:p-0',
+      );
     });
 
     it('passes a className first, so a positioning class of the host stays', () => {
       const button = renderButton({ className: 'top-1.5', dimDisabled: false });
       expect(button.className.split(' ')[0]).toBe('top-1.5');
       // The medium box (24px at the inline end) stays next to it.
-      expect(button).toHaveClass('top-1.5', 'absolute', 'h-6', 'w-6', 'end-1');
+      expect(button).toHaveClass('top-1.5', 'wave:absolute', 'wave:h-6', 'wave:w-6', 'wave:end-1');
     });
 
     it('types dimDisabled as an optional boolean', () => {

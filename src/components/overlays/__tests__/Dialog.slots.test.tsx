@@ -103,25 +103,25 @@ describe('Dialog.Content backdrop (P6-06 D93)', () => {
     const positioner = surface.parentElement;
     expect(positioner).toHaveClass(
       dialogContentClassNames.positioner,
-      'pointer-events-none',
-      'fixed',
-      'inset-0',
-      'flex',
-      'items-center',
-      'justify-center',
+      'wave:pointer-events-none',
+      'wave:fixed',
+      'wave:inset-0',
+      'wave:flex',
+      'wave:items-center',
+      'wave:justify-center',
     );
     const backdrop = positioner?.previousElementSibling;
     expect(backdrop).toHaveClass(
       dialogContentClassNames.backdrop,
-      'fixed',
-      'inset-0',
-      'bg-backdrop',
+      'wave:fixed',
+      'wave:inset-0',
+      'wave:bg-backdrop',
     );
     expect(backdrop).toHaveAttribute('aria-hidden', 'true');
     expect(backdrop).toHaveAttribute('data-appearance', 'dimmed');
     expect(backdrop?.childElementCount).toBe(0);
     // The surface takes presses again inside the positioner, which lets them through.
-    expect(surface).toHaveClass('pointer-events-auto');
+    expect(surface).toHaveClass('wave:pointer-events-auto');
   });
 
   it('gives a slot object’s class (merged last), style, data attribute and ref to the backdrop', () => {
@@ -141,7 +141,7 @@ describe('Dialog.Content backdrop (P6-06 D93)', () => {
     const backdrop = screen.getByTestId('backdrop');
     expect(dialogBackdrops()).toEqual([backdrop]);
     expect(backdrop).toHaveClass(dialogContentClassNames.backdrop, 'bg-transparent');
-    expect(backdrop).not.toHaveClass('bg-backdrop');
+    expect(backdrop).not.toHaveClass('wave:bg-backdrop');
     expect(backdrop).toHaveStyle({ opacity: '0.5' });
     expect(ref.current).toBe(backdrop);
     // The class changes the look only: the attribute keeps the resolved appearance.
@@ -178,7 +178,7 @@ describe('Dialog.Content backdrop (P6-06 D93)', () => {
     expect(dialogBackdrops()).toEqual([backdrop]);
     expect(backdrop.tagName).toBe('DIV');
     expect(backdrop.classList[0]).toBe(dialogContentClassNames.backdrop);
-    expect(backdrop).toHaveClass('fixed', 'inset-0', 'bg-backdrop', 'opacity-50');
+    expect(backdrop).toHaveClass('wave:fixed', 'wave:inset-0', 'wave:bg-backdrop', 'opacity-50');
     expect(backdrop).toHaveAttribute('aria-hidden', 'true');
     expect(backdrop).toHaveAttribute('data-appearance', 'dimmed');
     expect(backdrop).toHaveAttribute('data-presence');
@@ -204,8 +204,8 @@ describe('Dialog.Content backdrop (P6-06 D93)', () => {
     render(<Open contentProps={{ backdrop: { appearance: 'transparent' } }} />);
     const [backdrop] = dialogBackdrops();
     expect(backdrop).toHaveAttribute('data-appearance', 'transparent');
-    expect(backdrop).toHaveClass('bg-transparent');
-    expect(backdrop).not.toHaveClass('bg-backdrop');
+    expect(backdrop).toHaveClass('wave:bg-transparent');
+    expect(backdrop).not.toHaveClass('wave:bg-backdrop');
     expect(backdrop).not.toHaveAttribute('appearance');
   });
 
@@ -218,7 +218,7 @@ describe('Dialog.Content backdrop (P6-06 D93)', () => {
     const backdrops = dialogBackdrops();
     expect(backdrops).toHaveLength(1);
     expect(backdrops[0]).toHaveAttribute('data-appearance', 'dimmed');
-    expect(backdrops[0]).toHaveClass('bg-backdrop');
+    expect(backdrops[0]).toHaveClass('wave:bg-backdrop');
   });
 
   it('renders shorthand content inside the backdrop, and a press on it closes a modal dialog', async () => {
@@ -376,9 +376,9 @@ describe('dim once (P6-06 D94)', () => {
       await user.click(button('Delete row'));
       const [dialogBackdrop] = dialogBackdrops();
       expect(dialogBackdrop).toHaveAttribute('data-appearance', 'transparent');
-      expect(dialogBackdrop).toHaveClass('bg-transparent');
+      expect(dialogBackdrop).toHaveClass('wave:bg-transparent');
       expect(drawerBackdrop()).toHaveAttribute('data-appearance', 'dimmed');
-      expect(drawerBackdrop()).toHaveClass('bg-backdrop');
+      expect(drawerBackdrop()).toHaveClass('wave:bg-backdrop');
       // The page outside both is inert, the drawer is inert behind the dialog, toasts are not.
       expect(
         screen.getByRole('button', { name: 'Page button', hidden: true }).closest('[inert]'),
@@ -403,7 +403,7 @@ describe('dim once (P6-06 D94)', () => {
     await user.click(button('Close the orders'));
     expect(screen.queryByRole('dialog', { name: 'Orders', hidden: true })).not.toBeInTheDocument();
     expect(dialogBackdrops()[0]).toHaveAttribute('data-appearance', 'dimmed');
-    expect(dialogBackdrops()[0]).toHaveClass('bg-backdrop');
+    expect(dialogBackdrops()[0]).toHaveClass('wave:bg-backdrop');
   });
 
   it('backdrop={{ appearance: "dimmed" }} wins over the automatic transparent backdrop', async () => {
@@ -411,7 +411,7 @@ describe('dim once (P6-06 D94)', () => {
     render(<NestedConfirm dialogBackdrop={{ appearance: 'dimmed' }} />);
     await user.click(button('Delete row'));
     expect(dialogBackdrops()[0]).toHaveAttribute('data-appearance', 'dimmed');
-    expect(dialogBackdrops()[0]).toHaveClass('bg-backdrop');
+    expect(dialogBackdrops()[0]).toHaveClass('wave:bg-backdrop');
   });
 
   it('a Dialog over another Dialog: the upper is transparent, the lower dimmed', async () => {
@@ -729,9 +729,9 @@ describe('Dialog.Content closeButton (P6-06 D95)', () => {
       expect(within(close).getByTestId('merged-icon')).toBeInTheDocument();
       expect(close).toHaveAttribute('aria-disabled', 'true');
       expect(close).toHaveAttribute('data-disabled-focusable');
-      expect(close).not.toHaveClass('bg-primary');
-      expect(close).not.toHaveClass('h-10');
-      expect(close).toHaveClass('h-6', 'bg-transparent');
+      expect(close).not.toHaveClass('wave:bg-primary');
+      expect(close).not.toHaveClass('wave:h-10');
+      expect(close).toHaveClass('wave:h-6', 'wave:bg-transparent');
       // Focusable but unavailable: a click does not close the dialog.
       act(() => close.focus());
       expect(close).toHaveFocus();
@@ -810,12 +810,19 @@ describe('Dialog title actions (P6-06 D97)', () => {
       const expand = button('Expand');
       const close = button('Close');
       const area = titleActions();
-      expect(area).toHaveClass('absolute', 'end-4', 'top-4', 'flex', 'items-start', 'gap-1');
+      expect(area).toHaveClass(
+        'wave:absolute',
+        'wave:end-4',
+        'wave:top-4',
+        'wave:flex',
+        'wave:items-start',
+        'wave:gap-1',
+      );
       expect(expand.parentElement).toHaveClass(
         dialogContentClassNames.titleAction,
-        'inline-flex',
-        'items-center',
-        'gap-1',
+        'wave:inline-flex',
+        'wave:items-center',
+        'wave:gap-1',
       );
       expect(expand.parentElement?.parentElement).toBe(area);
       expect(close.parentElement).toBe(area);
@@ -854,11 +861,11 @@ describe('Dialog title actions (P6-06 D97)', () => {
     const actionElement = more.parentElement;
     expect(actionElement).toHaveClass(
       dialogTitleClassNames.action,
-      'inline-flex',
-      'items-center',
-      'gap-1',
+      'wave:inline-flex',
+      'wave:items-center',
+      'wave:gap-1',
     );
-    expect(actionElement?.parentElement).toHaveClass('contents');
+    expect(actionElement?.parentElement).toHaveClass('wave:contents');
     expect(actionElement?.parentElement?.parentElement).toBe(titleActions());
     const expand = button('Expand');
     const close = button('Close');
@@ -959,7 +966,7 @@ describe('Dialog title actions (P6-06 D97)', () => {
   it('gives both title forms the measured end padding class', () => {
     const { unmount } = render(<Open />);
     expect(screen.getByRole('heading', { name: 'Edit report' })).toHaveClass(
-      'pe-[var(--wave-dialog-title-end-padding,2rem)]',
+      'wave:pe-[var(--wave-dialog-title-end-padding,2rem)]',
     );
     unmount();
     render(
@@ -970,7 +977,7 @@ describe('Dialog title actions (P6-06 D97)', () => {
       </Dialog>,
     );
     expect(screen.getByRole('heading', { name: 'Report' })).toHaveClass(
-      'pe-[var(--wave-dialog-title-end-padding,2rem)]',
+      'wave:pe-[var(--wave-dialog-title-end-padding,2rem)]',
     );
   });
 

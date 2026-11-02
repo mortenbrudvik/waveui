@@ -965,7 +965,7 @@ export const DatePicker = (props: DatePickerProps) => {
   const surfaceProps = mergeSlotProps(slotProps?.surface, {
     className: wcn(
       datePickerClassNames.surface,
-      'rounded-md border border-border bg-background p-3 text-foreground shadow-16',
+      'wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-3 wave:text-foreground wave:shadow-16',
     ),
     locked: {
       ...HIDDEN_PART_LOCKS,
@@ -998,7 +998,11 @@ export const DatePicker = (props: DatePickerProps) => {
   }
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: wcn(datePickerClassNames.root, 'relative inline-flex flex-col', className),
+    className: wcn(
+      datePickerClassNames.root,
+      'wave:relative wave:inline-flex wave:flex-col',
+      className,
+    ),
     style,
     locked: {
       'data-size': size,
@@ -1014,17 +1018,17 @@ export const DatePicker = (props: DatePickerProps) => {
 
   return (
     <div {...rootProps}>
-      <div ref={setReference} className="relative flex items-center">
+      <div ref={setReference} className="wave:relative wave:flex wave:items-center">
         <input
           {...mergeSlotProps(slotProps?.input, {
             className: wcn(
               datePickerClassNames.input,
               inputHeightClasses[size],
-              'w-full',
+              'wave:w-full',
               inputPaddingClasses[size],
               inputTextClasses[size],
               inputAppearanceClasses[appearance],
-              'text-foreground placeholder:text-muted-foreground',
+              'wave:text-foreground wave:placeholder:text-muted-foreground',
               inputFocus,
               disabledStyles,
               invalidLook && inputInvalid,
@@ -1121,7 +1125,10 @@ export const DatePicker = (props: DatePickerProps) => {
       {showOwnError && (
         <p
           {...mergeSlotProps(slotProps?.errorMessage, {
-            className: wcn(datePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error'),
+            className: wcn(
+              datePickerClassNames.errorMessage,
+              'wave:mt-1 wave:text-caption-1 wave:text-error',
+            ),
             locked: { id: errorId, role: 'alert' },
           })}
         >

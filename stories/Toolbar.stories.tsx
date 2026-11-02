@@ -265,7 +265,7 @@ export const MixedControls: Story = {
         </ToggleButton>
         <input
           aria-label="Search"
-          className="h-6 rounded border border-input bg-background px-2 text-caption-1 text-foreground"
+          className="h-6 rounded border border-wave-input bg-wave-background px-2 text-wave-caption-1 text-wave-foreground"
         />
         <Link href="#toolbar-help">Help</Link>
       </>

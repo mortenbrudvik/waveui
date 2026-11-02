@@ -471,7 +471,11 @@ export const ColorPickerHexField = ({
   );
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: wcn(colorPickerHexFieldClassNames.root, 'flex min-w-0 flex-col gap-1', className),
+    className: wcn(
+      colorPickerHexFieldClassNames.root,
+      'wave:flex wave:min-w-0 wave:flex-col wave:gap-1',
+      className,
+    ),
     style,
     locked: {
       // The label labels the input it holds: a part's `for` would send the caption's clicks to
@@ -492,7 +496,7 @@ export const ColorPickerHexField = ({
         {...mergeSlotProps(slotProps?.label, {
           className: wcn(
             colorPickerHexFieldClassNames.label,
-            'text-caption-1 text-muted-foreground',
+            'wave:text-caption-1 wave:text-muted-foreground',
           ),
         })}
       >
@@ -502,7 +506,7 @@ export const ColorPickerHexField = ({
         {...mergeSlotProps(slotProps?.input, {
           className: wcn(
             colorPickerHexFieldClassNames.input,
-            'w-24 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1 text-body-1 text-foreground',
+            'wave:w-24 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:px-2 wave:py-1 wave:text-body-1 wave:text-foreground',
             inputFocus,
             invalidLook && inputInvalid,
           ),
@@ -553,7 +557,10 @@ export const ColorPickerHexField = ({
       {draftInvalid && (
         <span
           {...mergeSlotProps(slotProps?.errorMessage, {
-            className: wcn(colorPickerHexFieldClassNames.errorMessage, 'text-caption-1 text-error'),
+            className: wcn(
+              colorPickerHexFieldClassNames.errorMessage,
+              'wave:text-caption-1 wave:text-error',
+            ),
             locked: { id: errorId },
           })}
         >
@@ -627,8 +634,8 @@ export const ColorPickerPreview = ({ className, style, ref, ...rest }: ColorPick
       ref={ref}
       className={wcn(
         colorPickerPreviewClassNames.root,
-        'h-10 w-10 shrink-0 rounded border border-border forced-colors:forced-color-adjust-none',
-        picker.shape === 'square' && 'rounded-none',
+        'wave:h-10 wave:w-10 wave:shrink-0 wave:rounded wave:border wave:border-border wave:forced-colors:forced-color-adjust-none',
+        picker.shape === 'square' && 'wave:rounded-none',
         className,
       )}
       style={{ ...style, backgroundColor: shown }}

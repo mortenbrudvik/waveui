@@ -325,21 +325,21 @@ describe('Slider', () => {
       const track = '[&::-webkit-slider-runnable-track]';
       const tokens = ['var(--wave-primary)', 'var(--wave-stroke-accessible)'] as const;
       expect(slider).toHaveClass(
-        `${track}:${gradient('to_right', ...tokens)}`,
-        `wave-rtl:${track}:${gradient('to_left', ...tokens)}`,
-        '[&::-moz-range-progress]:h-1',
-        '[&::-moz-range-progress]:rounded-full',
-        '[&::-moz-range-progress]:bg-primary',
+        `wave:${track}:${gradient('to_right', ...tokens)}`,
+        `wave:wave-rtl:${track}:${gradient('to_left', ...tokens)}`,
+        'wave:[&::-moz-range-progress]:h-1',
+        'wave:[&::-moz-range-progress]:rounded-full',
+        'wave:[&::-moz-range-progress]:bg-primary',
         // Forced colors: the filled part in Highlight, the rest in CanvasText.
-        `forced-colors:${track}:${gradient('to_right', 'Highlight', 'CanvasText')}`,
-        `forced-colors:wave-rtl:${track}:${gradient('to_left', 'Highlight', 'CanvasText')}`,
-        'forced-colors:[&::-moz-range-progress]:bg-[Highlight]',
+        `wave:forced-colors:${track}:${gradient('to_right', 'Highlight', 'CanvasText')}`,
+        `wave:forced-colors:wave-rtl:${track}:${gradient('to_left', 'Highlight', 'CanvasText')}`,
+        'wave:forced-colors:[&::-moz-range-progress]:bg-[Highlight]',
         // A disabled rail stays GrayText (forcedColors.rangeInput), without the Highlight fill.
-        `forced-colors:disabled:${track}:bg-none`,
-        'forced-colors:disabled:[&::-moz-range-progress]:bg-[GrayText]',
+        `wave:forced-colors:disabled:${track}:bg-none`,
+        'wave:forced-colors:disabled:[&::-moz-range-progress]:bg-[GrayText]',
       );
       // The rail color stays underneath the gradient.
-      expect(slider).toHaveClass(`${track}:bg-stroke-accessible`);
+      expect(slider).toHaveClass(`wave:${track}:bg-stroke-accessible`);
       expect(slider.className).not.toMatch(/#[0-9a-f]{3,8}\b/i);
     });
 
@@ -358,11 +358,11 @@ describe('Slider', () => {
       render(<Slider aria-label="Volume" />);
       const slider = screen.getByRole('slider', { name: 'Volume' });
       expect(slider).toHaveClass(
-        '[&::-webkit-slider-runnable-track]:bg-stroke-accessible',
-        '[&::-moz-range-track]:bg-stroke-accessible',
-        '[&::-webkit-slider-thumb]:border-background',
-        '[&::-moz-range-thumb]:border-background',
-        'focus-visible:outline-ring',
+        'wave:[&::-webkit-slider-runnable-track]:bg-stroke-accessible',
+        'wave:[&::-moz-range-track]:bg-stroke-accessible',
+        'wave:[&::-webkit-slider-thumb]:border-background',
+        'wave:[&::-moz-range-thumb]:border-background',
+        'wave:focus-visible:outline-ring',
       );
       expect(slider.className).not.toMatch(/#[0-9a-f]{3,8}|border-white|bg-white/i);
     });
@@ -390,7 +390,7 @@ describe('Slider', () => {
       function units(part: string, utility: string): number {
         const escaped = `${part}:${utility}`.replace(/[[\]&:]/g, (c) => `\\${c}`);
         const match = className.match(
-          new RegExp(`(?:^|\\s)${escaped}-(\\d+(?:\\.\\d+)?)(?=\\s|$)`),
+          new RegExp(`(?:^|\\s)wave:${escaped}-(\\d+(?:\\.\\d+)?)(?=\\s|$)`),
         );
         if (!match) throw new Error(`no ${part}:${utility}-<n> class in "${className}"`);
         return Number(match[1]);
@@ -411,9 +411,9 @@ describe('size (Phase 4 D10, D14)', () => {
   it('medium is the 0.7 look', () => {
     render(<Slider aria-label="Volume" />);
     expect(slider()).toHaveClass(
-      '[&::-webkit-slider-thumb]:h-5',
-      '[&::-webkit-slider-runnable-track]:h-1',
-      '[&::-webkit-slider-thumb]:-mt-2',
+      'wave:[&::-webkit-slider-thumb]:h-5',
+      'wave:[&::-webkit-slider-runnable-track]:h-1',
+      'wave:[&::-webkit-slider-thumb]:-mt-2',
     );
     expect(slider()).toHaveAttribute('data-size', 'medium');
   });
@@ -421,14 +421,14 @@ describe('size (Phase 4 D10, D14)', () => {
   it('small: a 16px thumb on a 2px rail in a 24px-tall input', () => {
     render(<Slider aria-label="Volume" size="small" />);
     expect(slider()).toHaveClass(
-      'h-6',
-      '[&::-webkit-slider-thumb]:h-4',
-      '[&::-webkit-slider-thumb]:w-4',
-      '[&::-webkit-slider-thumb]:-mt-1.75',
-      '[&::-webkit-slider-runnable-track]:h-0.5',
-      '[&::-moz-range-thumb]:h-4',
-      '[&::-moz-range-track]:h-0.5',
-      '[&::-moz-range-progress]:h-0.5',
+      'wave:h-6',
+      'wave:[&::-webkit-slider-thumb]:h-4',
+      'wave:[&::-webkit-slider-thumb]:w-4',
+      'wave:[&::-webkit-slider-thumb]:-mt-1.75',
+      'wave:[&::-webkit-slider-runnable-track]:h-0.5',
+      'wave:[&::-moz-range-thumb]:h-4',
+      'wave:[&::-moz-range-track]:h-0.5',
+      'wave:[&::-moz-range-progress]:h-0.5',
     );
   });
 
@@ -465,7 +465,7 @@ describe('size (Phase 4 D10, D14)', () => {
     // @ts-expect-error Slider has no large size
     render(<Slider aria-label="Volume" size="large" />);
     expect(slider()).toHaveAttribute('data-size', 'medium');
-    expect(slider()).toHaveClass('[&::-webkit-slider-thumb]:h-5');
-    expect(slider()).not.toHaveClass('h-6');
+    expect(slider()).toHaveClass('wave:[&::-webkit-slider-thumb]:h-5');
+    expect(slider()).not.toHaveClass('wave:h-6');
   });
 });

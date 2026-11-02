@@ -162,7 +162,7 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
   const iconElement = renderSlot(
     slotRendersContent(icon) ? icon : undefined,
     'span',
-    wcn(buttonClassNames.icon, 'inline-flex shrink-0 items-center'),
+    wcn(buttonClassNames.icon, 'wave:inline-flex wave:shrink-0 wave:items-center'),
     { 'aria-hidden': true },
   );
   /** Derived from what renders, so an icon that renders nothing never counts. */
@@ -217,7 +217,7 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
       className={wcn(
         buttonClassNames.root,
         buttonClassName({ appearance, size, disabled: showDisabledLook, iconOnly }),
-        hasIcon && hasLabel && 'gap-1.5',
+        hasIcon && hasLabel && 'wave:gap-1.5',
         className,
       )}
       {...enforced}

@@ -8,12 +8,13 @@ import type { Shape } from '../../lib/types';
  * is painted `GrayText` instead (a leaf element, so opting out of forced colors reaches nothing
  * else).
  */
-const forcedColorsFill = 'forced-colors:bg-[GrayText] forced-colors:forced-color-adjust-none';
+const forcedColorsFill =
+  'wave:forced-colors:bg-[GrayText] wave:forced-colors:forced-color-adjust-none';
 
 const shapeClasses: Record<Shape, string> = {
-  rounded: 'rounded',
-  circular: 'rounded-full',
-  square: 'rounded-none',
+  rounded: 'wave:rounded',
+  circular: 'wave:rounded-full',
+  square: 'wave:rounded-none',
 };
 
 /** Properties for the Skeleton component. */
@@ -49,7 +50,7 @@ const SkeletonRoot = ({
       ref={ref}
       className={wcn(
         skeletonClassNames.root,
-        'bg-skeleton animate-wave-pulse motion-reduce:animate-none',
+        'wave:bg-skeleton wave:animate-wave-pulse wave:motion-reduce:animate-none',
         forcedColorsFill,
         shapeClasses[shape],
         className,
@@ -96,7 +97,7 @@ export const SkeletonGroup = ({
       ref={ref}
       className={wcn(skeletonGroupClassNames.root, className)}
     >
-      {loading && <span className="sr-only">{label}</span>}
+      {loading && <span className="wave:sr-only">{label}</span>}
       {children}
     </div>
   );

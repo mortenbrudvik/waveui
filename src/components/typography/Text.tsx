@@ -42,29 +42,29 @@ type TextImplProps = TextOwnProps & {
 };
 
 const variantClasses: Record<TypographyVariant, string> = {
-  'caption-2': 'text-caption-2',
-  'caption-1': 'text-caption-1',
-  'body-1': 'text-body-1',
-  'body-2': 'text-body-2',
-  'subtitle-2': 'text-subtitle-2',
-  'subtitle-1': 'text-subtitle-1',
-  'title-3': 'text-title-3',
-  'title-2': 'text-title-2',
-  'title-1': 'text-title-1',
-  'large-title': 'text-large-title',
-  display: 'text-display',
+  'caption-2': 'wave:text-caption-2',
+  'caption-1': 'wave:text-caption-1',
+  'body-1': 'wave:text-body-1',
+  'body-2': 'wave:text-body-2',
+  'subtitle-2': 'wave:text-subtitle-2',
+  'subtitle-1': 'wave:text-subtitle-1',
+  'title-3': 'wave:text-title-3',
+  'title-2': 'wave:text-title-2',
+  'title-1': 'wave:text-title-1',
+  'large-title': 'wave:text-large-title',
+  display: 'wave:text-display',
 };
 
 const weightClasses: Record<TextWeight, string> = {
-  regular: 'font-normal',
-  medium: 'font-medium',
-  semibold: 'font-semibold',
-  bold: 'font-bold',
+  regular: 'wave:font-normal',
+  medium: 'wave:font-medium',
+  semibold: 'wave:font-semibold',
+  bold: 'wave:font-bold',
 };
 
 const fontClasses: Record<Exclude<NonNullable<TextOwnProps['font']>, 'base'>, string> = {
-  monospace: 'font-wave-mono',
-  numeric: 'font-wave-numeric',
+  monospace: 'wave:font-wave-mono',
+  numeric: 'wave:font-wave-numeric',
 };
 
 /**

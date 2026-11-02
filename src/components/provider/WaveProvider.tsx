@@ -348,7 +348,7 @@ export const WaveProvider = ({
         className={wcn(
           waveProviderClassNames.root,
           themeClassName,
-          'bg-background text-foreground font-wave text-body-1',
+          'wave:bg-background wave:text-foreground wave:font-wave wave:text-body-1',
           className,
         )}
       >

@@ -83,11 +83,14 @@ describe('AlphaSlider', () => {
     const rail = railOf(input);
     expect(rail.className).toContain('var(--wave-stroke)');
     expect(rail.className).toContain('var(--wave-background)');
-    expect(rail).toHaveClass('forced-colors:forced-color-adjust-none', 'wave-rtl:-scale-x-100');
-    expect(rail.firstElementChild).toHaveClass('bg-(image:--wave-color-slider-gradient)');
+    expect(rail).toHaveClass(
+      'wave:forced-colors:forced-color-adjust-none',
+      'wave:wave-rtl:-scale-x-100',
+    );
+    expect(rail.firstElementChild).toHaveClass('wave:bg-(image:--wave-color-slider-gradient)');
     expect(rootOf(input).querySelector(`.${alphaSliderClassNames.thumb}`)).toHaveClass(
-      'group-has-[:focus-visible]/alpha-slider:outline-ring',
-      'forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas]',
+      'wave:group-has-[:focus-visible]/alpha-slider:outline-ring',
+      'wave:forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas]',
     );
   });
 
@@ -279,9 +282,9 @@ describe('AlphaSlider — slotProps', () => {
     template.innerHTML = renderToString(<AlphaSlider defaultValue={HALF_RED} />);
     expect(openingTags(...parts(template.content))).toBe(
       [
-        '<div aria-hidden="true" class="wave-alpha-slider__rail relative overflow-hidden rounded-full bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none mx-3 h-3 flex-1 wave-rtl:-scale-x-100">',
-        '<span class="absolute inset-0 bg-(image:--wave-color-slider-gradient)">',
-        '<span class="wave-alpha-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] start-(--wave-color-slider-position) top-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 -translate-y-1/2 group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
+        '<div aria-hidden="true" class="wave-alpha-slider__rail wave:relative wave:overflow-hidden wave:rounded-full wave:bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] wave:bg-size-[8px_8px] wave:forced-colors:forced-color-adjust-none wave:mx-3 wave:h-3 wave:flex-1 wave:wave-rtl:-scale-x-100">',
+        '<span class="wave:absolute wave:inset-0 wave:bg-(image:--wave-color-slider-gradient)">',
+        '<span class="wave-alpha-slider__thumb wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText] wave:start-(--wave-color-slider-position) wave:top-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:-translate-y-1/2 wave:group-has-[:focus-visible]/alpha-slider:ring-2 wave:group-has-[:focus-visible]/alpha-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] wave:group-has-[:focus-visible]/alpha-slider:outline-2 wave:group-has-[:focus-visible]/alpha-slider:outline-offset-2 wave:group-has-[:focus-visible]/alpha-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
       ].join('\n'),
     );
     render(
@@ -289,9 +292,9 @@ describe('AlphaSlider — slotProps', () => {
     );
     expect(openingTags(...parts(document))).toBe(
       [
-        '<div aria-hidden="true" class="wave-alpha-slider__rail relative overflow-hidden bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none my-3 w-3 flex-1 rounded-none">',
-        '<span class="absolute inset-0 bg-(image:--wave-color-slider-gradient)">',
-        '<span class="wave-alpha-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] bottom-(--wave-color-slider-position) start-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2 group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
+        '<div aria-hidden="true" class="wave-alpha-slider__rail wave:relative wave:overflow-hidden wave:bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] wave:bg-size-[8px_8px] wave:forced-colors:forced-color-adjust-none wave:my-3 wave:w-3 wave:flex-1 wave:rounded-none">',
+        '<span class="wave:absolute wave:inset-0 wave:bg-(image:--wave-color-slider-gradient)">',
+        '<span class="wave-alpha-slider__thumb wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText] wave:bottom-(--wave-color-slider-position) wave:start-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:translate-y-1/2 wave:group-has-[:focus-visible]/alpha-slider:ring-2 wave:group-has-[:focus-visible]/alpha-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] wave:group-has-[:focus-visible]/alpha-slider:outline-2 wave:group-has-[:focus-visible]/alpha-slider:outline-offset-2 wave:group-has-[:focus-visible]/alpha-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
       ].join('\n'),
     );
   });
@@ -341,8 +344,8 @@ describe('AlphaSlider — slotProps', () => {
     );
     const input = slider();
     for (const [element, stable, own, mine, part, opacity] of [
-      [railOf(input), alphaSliderClassNames.rail, 'overflow-hidden', 'my-rail', 'rail', '0.5'],
-      [thumbOf(input), alphaSliderClassNames.thumb, 'size-6', 'my-thumb', 'thumb', '0.25'],
+      [railOf(input), alphaSliderClassNames.rail, 'wave:overflow-hidden', 'my-rail', 'rail', '0.5'],
+      [thumbOf(input), alphaSliderClassNames.thumb, 'wave:size-6', 'my-thumb', 'thumb', '0.25'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -353,7 +356,7 @@ describe('AlphaSlider — slotProps', () => {
     // The gradient inside the rail is no part: it keeps its own classes only.
     expect(railOf(input).firstElementChild).toHaveAttribute(
       'class',
-      'absolute inset-0 bg-(image:--wave-color-slider-gradient)',
+      'wave:absolute wave:inset-0 wave:bg-(image:--wave-color-slider-gradient)',
     );
   });
 
@@ -363,7 +366,7 @@ describe('AlphaSlider — slotProps', () => {
     );
     const rail = railOf(slider());
     expect(rail).toHaveClass('rounded-md');
-    expect(rail).not.toHaveClass('rounded-full');
+    expect(rail).not.toHaveClass('wave:rounded-full');
   });
 
   it('attaches your refs to the parts, beside ref', () => {
@@ -437,8 +440,8 @@ describe('AlphaSlider — slotProps', () => {
       { dir: 'rtl' },
     );
     const input = slider();
-    expect(railOf(input)).toHaveClass('wave-rtl:-scale-x-100', 'my-rail');
-    expect(thumbOf(input)).toHaveClass('wave-rtl:translate-x-1/2', 'my-thumb');
+    expect(railOf(input)).toHaveClass('wave:wave-rtl:-scale-x-100', 'my-rail');
+    expect(thumbOf(input)).toHaveClass('wave:wave-rtl:translate-x-1/2', 'my-thumb');
   });
 
   it('has no accessibility violations with every part customised', async () => {
@@ -519,7 +522,7 @@ describe('AlphaSlider — slotProps', () => {
     it('lets your class replace a conflicting class of the root', () => {
       render(<AlphaSlider slotProps={{ root: { className: 'items-start' } }} />);
       expect(root()).toHaveClass('items-start');
-      expect(root()).not.toHaveClass('items-center');
+      expect(root()).not.toHaveClass('wave:items-center');
     });
 
     it("keeps the props you give the slider over the part's", () => {

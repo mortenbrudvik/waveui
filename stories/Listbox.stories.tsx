@@ -284,7 +284,7 @@ function FontPicker() {
           onKeyUp={listbox.onKeyUp}
           placeholder="Type a font name…"
           style={{ fontFamily: draft === null && value ? value : undefined }}
-          className="w-56 rounded border border-border bg-background px-3 py-1.5 text-body-1 text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="w-56 rounded border border-wave-border bg-wave-background px-3 py-1.5 text-wave-body-1 text-wave-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wave-ring"
         />
         <ListboxSurface
           listbox={listbox}
@@ -307,11 +307,11 @@ function FontPicker() {
       <input type="hidden" name="font" value={value} />
       <button
         type="submit"
-        className="rounded border border-border bg-background px-3 py-1.5 text-body-1 text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="rounded border border-wave-border bg-wave-background px-3 py-1.5 text-wave-body-1 text-wave-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wave-ring"
       >
         Submit
       </button>
-      <p className="text-caption-1 text-muted-foreground">
+      <p className="text-wave-caption-1 text-wave-muted-foreground">
         Submitted: {submitted === null ? 'nothing yet' : submitted || '(no font)'}
       </p>
     </form>
@@ -375,7 +375,10 @@ function CommandPaletteWidget() {
 
   return (
     <div>
-      <label htmlFor={inputId} className="mb-1 block text-body-1 font-semibold text-foreground">
+      <label
+        htmlFor={inputId}
+        className="mb-1 block text-wave-body-1 font-semibold text-wave-foreground"
+      >
         Command palette
       </label>
       <input
@@ -401,19 +404,19 @@ function CommandPaletteWidget() {
           }
         }}
         placeholder="Type a command…"
-        className="w-64 rounded border border-border bg-background px-3 py-1.5 text-body-1 text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="w-64 rounded border border-wave-border bg-wave-background px-3 py-1.5 text-wave-body-1 text-wave-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wave-ring"
       />
       <ul
         id={listId}
         role="listbox"
         aria-label="Commands"
-        className="m-0 mt-1 w-64 list-none rounded border border-border bg-background py-1"
+        className="m-0 mt-1 w-64 list-none rounded border border-wave-border bg-wave-background py-1"
       >
         {commands.length === 0 ? (
           <li
             aria-disabled={true}
             role="option"
-            className="px-3 py-1.5 text-body-1 text-muted-foreground"
+            className="px-3 py-1.5 text-wave-body-1 text-wave-muted-foreground"
           >
             No matching commands
           </li>
@@ -425,8 +428,8 @@ function CommandPaletteWidget() {
               role="option"
               className={
                 command.id === activeDescendant.activeValue
-                  ? 'bg-subtle-hover px-3 py-1.5 text-body-1 text-foreground'
-                  : 'px-3 py-1.5 text-body-1 text-foreground'
+                  ? 'bg-wave-subtle-hover px-3 py-1.5 text-wave-body-1 text-wave-foreground'
+                  : 'px-3 py-1.5 text-wave-body-1 text-wave-foreground'
               }
             >
               {command.label}
@@ -434,7 +437,7 @@ function CommandPaletteWidget() {
           ))
         )}
       </ul>
-      <p className="mt-2 text-caption-1 text-muted-foreground">
+      <p className="mt-2 text-wave-caption-1 text-wave-muted-foreground">
         Last command: {lastCommand ?? 'none'}
       </p>
     </div>

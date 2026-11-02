@@ -95,11 +95,11 @@ describe('resolveSlot', () => {
   });
 
   it('lets the slot className win over a conflicting baseClassName (table-core#27)', () => {
-    expect(resolveSlot({ className: 'px-2' }, 'span', 'px-4')!.props.className).toBe('px-2');
+    expect(resolveSlot({ className: 'px-2' }, 'span', 'wave:px-4')!.props.className).toBe('px-2');
     expect(
-      resolveSlot({ className: 'text-primary' }, 'span', 'text-body-1 text-foreground')!.props
-        .className,
-    ).toBe('text-body-1 text-primary');
+      resolveSlot({ className: 'text-primary' }, 'span', 'wave:text-body-1 wave:text-foreground')!
+        .props.className,
+    ).toBe('wave:text-body-1 text-primary');
   });
 
   it('passes through extra props from SlotObject (typed, no cast)', () => {
@@ -121,12 +121,12 @@ describe('resolveSlot', () => {
 
   describe('defaultProps (4th argument, button-provider#21)', () => {
     it('applies defaultProps to shorthand wrappers', () => {
-      const result = resolveSlot('★', 'span', 'shrink-0', { 'aria-hidden': true });
-      expect(result!.props).toEqual({ 'aria-hidden': true, className: 'shrink-0' });
+      const result = resolveSlot('★', 'span', 'wave:shrink-0', { 'aria-hidden': true });
+      expect(result!.props).toEqual({ 'aria-hidden': true, className: 'wave:shrink-0' });
     });
 
     it('lets the slot object override defaultProps', () => {
-      const result = resolveSlot({ 'aria-hidden': false, children: 'x' }, 'span', 'shrink-0', {
+      const result = resolveSlot({ 'aria-hidden': false, children: 'x' }, 'span', 'wave:shrink-0', {
         'aria-hidden': true,
         role: 'presentation',
       });
@@ -135,7 +135,9 @@ describe('resolveSlot', () => {
     });
 
     it('does not let defaultProps override the merged className', () => {
-      const result = resolveSlot({ className: 'px-2' }, 'span', 'px-4', { className: 'ignored' });
+      const result = resolveSlot({ className: 'px-2' }, 'span', 'wave:px-4', {
+        className: 'ignored',
+      });
       expect(result!.props.className).toBe('px-2');
     });
   });
@@ -221,7 +223,7 @@ describe('resolveSlot', () => {
 
     it('returns a ReactElement slot itself (className merged, defaultProps underneath)', () => {
       const el = React.createElement('img', { src: 'a.png', alt: 'A', className: 'rounded-sm' });
-      const result = resolveSlot(el, 'img', 'w-full h-full rounded-full', {
+      const result = resolveSlot(el, 'img', 'wave:w-full wave:h-full wave:rounded-full', {
         loading: 'lazy',
         alt: '',
       });
@@ -229,7 +231,7 @@ describe('resolveSlot', () => {
       expect(result!.props.src).toBe('a.png');
       expect(result!.props.alt).toBe('A');
       expect(result!.props.loading).toBe('lazy');
-      expect(result!.props.className).toBe('w-full h-full rounded-sm');
+      expect(result!.props.className).toBe('wave:w-full wave:h-full rounded-sm');
       expect(result!.children).toBeUndefined();
     });
 
@@ -370,16 +372,16 @@ describe('resolveSlot', () => {
       (_label, make) => {
         const warn = vi.spyOn(console, 'warn');
         expect(resolveSlot(make(), 'img')).toBeNull();
-        expect(resolveSlot(make(), 'input', 'w-full')).toBeNull();
+        expect(resolveSlot(make(), 'input', 'wave:w-full')).toBeNull();
         expect(warn).not.toHaveBeenCalled();
       },
     );
 
     it('keeps object slots with src/alt (typed, no cast)', () => {
-      const result = resolveSlot({ src: 'a.png', alt: 'A' }, 'img', 'object-cover');
+      const result = resolveSlot({ src: 'a.png', alt: 'A' }, 'img', 'wave:object-cover');
       expect(result).toEqual({
         Component: 'img',
-        props: { src: 'a.png', alt: 'A', className: 'object-cover' },
+        props: { src: 'a.png', alt: 'A', className: 'wave:object-cover' },
         children: undefined,
       });
     });
@@ -391,7 +393,7 @@ describe('resolveSlot', () => {
         null,
         React.createElement('img', { src: 'a.png', alt: 'A' }),
       );
-      expect(resolveSlot(fragment, 'img', 'w-full')).toBeNull();
+      expect(resolveSlot(fragment, 'img', 'wave:w-full')).toBeNull();
       expect(warn.mock.calls).toEqual([[IMG_FRAGMENT_NOT_RENDERED]]);
     });
   });
@@ -457,7 +459,9 @@ describe('renderSlot', () => {
   });
 
   it('lets the slot className win over a conflicting baseClassName (table-core#27)', () => {
-    const { container } = render(renderSlot({ children: 'x', className: 'px-2' }, 'span', 'px-4')!);
+    const { container } = render(
+      renderSlot({ children: 'x', className: 'px-2' }, 'span', 'wave:px-4')!,
+    );
     expect(container.querySelector('span')!.className).toBe('px-2');
   });
 
@@ -466,7 +470,7 @@ describe('renderSlot', () => {
       React.createElement(
         'button',
         { type: 'button' },
-        renderSlot('★', 'span', 'shrink-0', { 'aria-hidden': true }),
+        renderSlot('★', 'span', 'wave:shrink-0', { 'aria-hidden': true }),
         'Favourite',
       ),
     );
@@ -476,11 +480,13 @@ describe('renderSlot', () => {
 
   it('renders an element slot inside the default tag with defaultProps on the wrapper', () => {
     const icon = React.createElement('svg', { 'data-testid': 'icon' });
-    const { container } = render(renderSlot(icon, 'span', 'shrink-0', { 'aria-hidden': true })!);
+    const { container } = render(
+      renderSlot(icon, 'span', 'wave:shrink-0', { 'aria-hidden': true })!,
+    );
     const wrapper = container.firstElementChild!;
     expect(wrapper.tagName).toBe('SPAN');
     expect(wrapper).toHaveAttribute('aria-hidden', 'true');
-    expect(wrapper).toHaveClass('shrink-0');
+    expect(wrapper).toHaveClass('wave:shrink-0');
     expect(screen.getByTestId('icon').parentElement).toBe(wrapper);
   });
 
@@ -514,21 +520,21 @@ describe('renderSlot', () => {
         renderSlot(
           React.createElement('img', { src: 'a.png', alt: 'Ada', className: 'rounded-sm' }),
           'img',
-          'w-full rounded-full',
+          'wave:w-full wave:rounded-full',
         )!,
       );
       const img = screen.getByRole('img', { name: 'Ada' });
       expect(img).toHaveAttribute('src', 'a.png');
-      expect(img.className).toBe('w-full rounded-sm');
+      expect(img.className).toBe('wave:w-full rounded-sm');
       expect(container.querySelectorAll('img')).toHaveLength(1);
       expect(error).not.toHaveBeenCalled();
     });
 
     it('renders an object slot with src/alt', () => {
-      render(renderSlot<'img'>({ src: 'b.png', alt: 'Bo' }, 'img', 'object-cover')!);
+      render(renderSlot<'img'>({ src: 'b.png', alt: 'Bo' }, 'img', 'wave:object-cover')!);
       const img = screen.getByRole('img', { name: 'Bo' });
       expect(img).toHaveAttribute('src', 'b.png');
-      expect(img).toHaveClass('object-cover');
+      expect(img).toHaveClass('wave:object-cover');
     });
 
     it('renders a void object slot with a conditional `children: false` without warnings or React errors', () => {
@@ -584,7 +590,7 @@ describe('renderSlot', () => {
         React.createElement('img', { src: 'a.png', alt: 'A' }),
       );
       const { container } = render(
-        React.createElement('div', null, renderSlot(fragment, 'img', 'w-full')),
+        React.createElement('div', null, renderSlot(fragment, 'img', 'wave:w-full')),
       );
       expect(container.querySelector('img')).toBeNull();
       expect(error).not.toHaveBeenCalled();
@@ -903,9 +909,15 @@ describe('render-function children (P13-01, spec R8)', () => {
     const renderFn = vi.fn((Component: React.ElementType, props: object) =>
       React.createElement(Component, props),
     );
-    render(renderSlot<'img'>({ src: 'a.png', alt: 'Ada', children: renderFn }, 'img', 'w-full')!);
-    expect(renderFn).toHaveBeenCalledWith('img', { src: 'a.png', alt: 'Ada', className: 'w-full' });
-    expect(screen.getByRole('img', { name: 'Ada' })).toHaveClass('w-full');
+    render(
+      renderSlot<'img'>({ src: 'a.png', alt: 'Ada', children: renderFn }, 'img', 'wave:w-full')!,
+    );
+    expect(renderFn).toHaveBeenCalledWith('img', {
+      src: 'a.png',
+      alt: 'Ada',
+      className: 'wave:w-full',
+    });
+    expect(screen.getByRole('img', { name: 'Ada' })).toHaveClass('wave:w-full');
     expect(warn).not.toHaveBeenCalled();
   });
 

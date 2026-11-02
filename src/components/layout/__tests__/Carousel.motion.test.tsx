@@ -87,14 +87,14 @@ function expectNoWordOf(el: Element, recipe: string) {
 
 /** The slide is the one shown: visible, reachable and exposed. */
 function expectShown(slide: HTMLElement) {
-  expect(slide).not.toHaveClass('opacity-0');
+  expect(slide).not.toHaveClass('wave:opacity-0');
   expect(slide).not.toHaveAttribute('inert');
   expect(slide).not.toHaveAttribute('aria-hidden');
 }
 
 /** The slide is hidden: transparent under fade, `inert` and `aria-hidden` as in every motion. */
 function expectHidden(slide: HTMLElement) {
-  expect(slide).toHaveClass('opacity-0');
+  expect(slide).toHaveClass('wave:opacity-0');
   expect(slide).toHaveAttribute('inert');
   expect(slide).toHaveAttribute('aria-hidden', 'true');
 }
@@ -146,15 +146,15 @@ describe('data-motion (§9.1)', () => {
 describe('slide (§9.1)', () => {
   it('the track transitions its transform on the motion tokens, no longer on 0.14’s classes', () => {
     renderCarousel();
-    expect(track()).toHaveClass('flex', ...motionClasses(carouselSlideMotion));
-    expect(track()).not.toHaveClass('duration-300');
-    expect(track()).not.toHaveClass('ease-in-out');
+    expect(track()).toHaveClass('wave:flex', ...motionClasses(carouselSlideMotion));
+    expect(track()).not.toHaveClass('wave:duration-300');
+    expect(track()).not.toHaveClass('wave:ease-in-out');
     expect(track().style.transform).toBe('translateX(0%)');
     for (const slide of slideElements()) {
       expectNoWordOf(slide, carouselFadeMotion);
-      expect(slide).not.toHaveClass('opacity-0');
-      expect(slide).not.toHaveClass('col-start-1');
-      expect(slide).toHaveClass('w-full');
+      expect(slide).not.toHaveClass('wave:opacity-0');
+      expect(slide).not.toHaveClass('wave:col-start-1');
+      expect(slide).toHaveClass('wave:w-full');
     }
   });
 
@@ -185,7 +185,7 @@ describe('slide (§9.1)', () => {
     const user = userEvent.setup();
     renderCarousel(props, provider);
     expectNoWordOf(track(), carouselSlideMotion);
-    expect(track()).toHaveClass('flex');
+    expect(track()).toHaveClass('wave:flex');
     for (const slide of slideElements()) expectNoWordOf(slide, carouselFadeMotion);
     await user.click(nextButton());
     expect(track().style.transform).toBe('translateX(-100%)');
@@ -195,12 +195,16 @@ describe('slide (§9.1)', () => {
 describe('fade (§9.1)', () => {
   it('stacks the slides in the first cell of a one-column grid track, without a transform', () => {
     renderCarousel({ motion: 'fade' });
-    expect(track()).toHaveClass('grid', 'grid-cols-[minmax(0,1fr)]');
-    expect(track()).not.toHaveClass('flex');
+    expect(track()).toHaveClass('wave:grid', 'wave:grid-cols-[minmax(0,1fr)]');
+    expect(track()).not.toHaveClass('wave:flex');
     expect(track().style.transform).toBe('');
     expectNoWordOf(track(), carouselSlideMotion);
     for (const slide of slideElements()) {
-      expect(slide).toHaveClass('col-start-1', 'row-start-1', ...motionClasses(carouselFadeMotion));
+      expect(slide).toHaveClass(
+        'wave:col-start-1',
+        'wave:row-start-1',
+        ...motionClasses(carouselFadeMotion),
+      );
     }
   });
 
@@ -311,13 +315,13 @@ describe('fade with pages of several slides (§9.1)', () => {
     );
     const { rerender } = render(ui());
     expect(region()).toHaveAttribute('data-motion', 'slide');
-    expect(track()).toHaveClass('flex', ...motionClasses(carouselSlideMotion));
-    expect(track()).not.toHaveClass('grid');
+    expect(track()).toHaveClass('wave:flex', ...motionClasses(carouselSlideMotion));
+    expect(track()).not.toHaveClass('wave:grid');
     expect(track().style.transform).toMatch(/^translateX\(/);
     for (const slide of slideElements()) {
       expectNoWordOf(slide, carouselFadeMotion);
-      expect(slide).not.toHaveClass('col-start-1');
-      expect(slide).not.toHaveClass('opacity-0');
+      expect(slide).not.toHaveClass('wave:col-start-1');
+      expect(slide).not.toHaveClass('wave:opacity-0');
     }
     rerender(ui({ motionDuration: 450 }));
     // Settle the observers the roving focus group and the sizing set up.
@@ -479,7 +483,7 @@ describe('dragging (§9.1)', () => {
 
   it('fade: lets the page scroll vertically over a draggable track', () => {
     const { el } = renderDraggable({ motion: 'fade' });
-    expect(el).toHaveClass('touch-pan-y', 'grid');
+    expect(el).toHaveClass('wave:touch-pan-y', 'wave:grid');
   });
 });
 
@@ -491,7 +495,7 @@ describe('reduced motion (D8)', () => {
       const { unmount } = renderCarousel({ motionDuration: 450 });
       expect(region()).toHaveAttribute('data-motion', 'slide');
       expect(track()).toHaveClass(...motionClasses(carouselSlideMotion));
-      expect(track()).toHaveClass('motion-reduce:transition-none');
+      expect(track()).toHaveClass('wave:motion-reduce:transition-none');
       expect(track().style.transitionDuration).toBe('450ms');
       unmount();
 
@@ -500,7 +504,7 @@ describe('reduced motion (D8)', () => {
       for (const slide of slideElements()) {
         expect(slide).toHaveClass(
           ...motionClasses(carouselFadeMotion),
-          'motion-reduce:transition-none',
+          'wave:motion-reduce:transition-none',
         );
       }
     },

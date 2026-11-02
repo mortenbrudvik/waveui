@@ -97,7 +97,7 @@ export const Controlled: Story = {
           }}
           {...args}
         />
-        <p className="text-body-1">Current page: {page}</p>
+        <p className="text-wave-body-1">Current page: {page}</p>
       </div>
     );
   },

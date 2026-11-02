@@ -70,11 +70,11 @@ type LinkImplProps = LinkOwnProps &
 
 const appearanceClasses: Record<LinkAppearance, string> = {
   inline:
-    'text-primary underline not-disabled:not-aria-disabled:hover:decoration-2 focus-visible:decoration-2',
+    'wave:text-primary wave:underline wave:not-disabled:not-aria-disabled:hover:decoration-2 wave:focus-visible:decoration-2',
   standalone:
-    'font-semibold text-primary no-underline not-disabled:not-aria-disabled:hover:underline focus-visible:underline',
+    'wave:font-semibold wave:text-primary wave:no-underline wave:not-disabled:not-aria-disabled:hover:underline wave:focus-visible:underline',
   subtle:
-    'text-foreground no-underline not-disabled:not-aria-disabled:hover:underline focus-visible:underline',
+    'wave:text-foreground wave:no-underline wave:not-disabled:not-aria-disabled:hover:underline wave:focus-visible:underline',
 };
 
 /**
@@ -134,13 +134,13 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
       ref={ref}
       className={wcn(
         linkClassNames.root,
-        'cursor-pointer transition-colors motion-reduce:transition-none',
+        'wave:cursor-pointer wave:transition-colors wave:motion-reduce:transition-none',
         focusRing,
         appearanceClasses[appearance],
         // Full opacity while a focusable disabled link shows its focus ring, which `opacity`
         // would dim below 3:1 (as for buttons).
         (disabled || disabledFocusable) &&
-          'cursor-not-allowed opacity-50 aria-disabled:focus-visible:opacity-100',
+          'wave:cursor-not-allowed wave:opacity-50 wave:aria-disabled:focus-visible:opacity-100',
         className,
       )}
       {...enforced}

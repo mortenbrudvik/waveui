@@ -118,7 +118,7 @@ describe('the collapse wrapper (§5.3 markup)', () => {
     // The list keeps its 0.14 element; the toggle still points at it.
     expect(ul.tagName).toBe('UL');
     expect(ul.classList[0]).toBe(navCategoryClassNames.list);
-    expect(ul).toHaveClass('m-0', 'list-none', 'p-0');
+    expect(ul).toHaveClass('wave:m-0', 'wave:list-none', 'wave:p-0');
     expect(ul.getAttributeNames().sort()).toEqual(['class', 'id']);
     expect(toggle()).toHaveAttribute('aria-controls', ul.id);
     expect(within(ul).getByRole('button', { name: 'Introduction' })).toBeInTheDocument();
@@ -518,15 +518,19 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
       );
       const closed = expandIcon()!;
       expect(closed.tagName.toLowerCase()).toBe('svg');
-      expect(closed).toHaveClass('shrink-0');
-      expect(closed).not.toHaveClass('rotate-180');
+      expect(closed).toHaveClass('wave:shrink-0');
+      expect(closed).not.toHaveClass('wave:rotate-180');
       expect(toggle().lastElementChild).toBe(closed);
       unmount();
 
       render(<Docs defaultOpenCategories={['docs']} category={{ expandIcon: icon }} />);
       const open = expandIcon()!;
       expect(open.tagName.toLowerCase()).toBe('svg');
-      expect(open).toHaveClass(navCategoryClassNames.expandIcon, 'shrink-0', 'rotate-180');
+      expect(open).toHaveClass(
+        navCategoryClassNames.expandIcon,
+        'wave:shrink-0',
+        'wave:rotate-180',
+      );
       expect(open.classList[0]).toBe(navCategoryClassNames.expandIcon);
     },
   );
@@ -549,11 +553,15 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
     );
     const closed = expandIcon()!;
     expect(closed.tagName).toBe('SPAN');
-    expect(closed).toHaveClass(navCategoryClassNames.expandIcon, 'inline-flex', 'shrink-0');
+    expect(closed).toHaveClass(
+      navCategoryClassNames.expandIcon,
+      'wave:inline-flex',
+      'wave:shrink-0',
+    );
     expect(closed.classList[0]).toBe(navCategoryClassNames.expandIcon);
     expect(closed).toHaveAttribute('aria-hidden', 'true');
     expect(within(closed as HTMLElement).getByTestId('plus')).toBeInTheDocument();
-    expect(closed).not.toHaveClass('rotate-180');
+    expect(closed).not.toHaveClass('wave:rotate-180');
     expect(toggle()).toHaveAccessibleName('Docs');
     unmount();
 
@@ -565,7 +573,7 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
     );
     const open = expandIcon()!;
     expect(open.tagName).toBe('SPAN');
-    expect(open).not.toHaveClass('rotate-180');
+    expect(open).not.toHaveClass('wave:rotate-180');
     expect(screen.getByTestId('minus').getAttribute('class')).toBeNull();
     expect(toggle().lastElementChild).toBe(open);
   });
@@ -581,7 +589,7 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
     expect(icon.tagName).toBe('SPAN');
     expect(icon).toHaveClass(navCategoryClassNames.expandIcon, 'my-glyph');
     expect(icon).toHaveTextContent('−');
-    expect(icon).not.toHaveClass('rotate-180');
+    expect(icon).not.toHaveClass('wave:rotate-180');
     expect(icon).toHaveAttribute('aria-hidden', 'true');
   });
 
@@ -600,9 +608,13 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
     const icon = expandIcon()!;
     expect(icon.tagName).toBe('SPAN');
     expect(icon.classList[0]).toBe(navCategoryClassNames.expandIcon);
-    expect(icon).toHaveClass('inline-flex', 'shrink-0', ...motionClasses(expandIconMotion));
+    expect(icon).toHaveClass(
+      'wave:inline-flex',
+      'wave:shrink-0',
+      ...motionClasses(expandIconMotion),
+    );
     expect(icon).toHaveClass('my-glyph');
-    expect(icon).not.toHaveClass('rotate-180');
+    expect(icon).not.toHaveClass('wave:rotate-180');
     expect(icon).toHaveAttribute('aria-hidden', 'true');
     expect(icon).toHaveTextContent('+');
     expect(toggle().lastElementChild).toBe(icon);
@@ -665,9 +677,9 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
       const icon = expandIcon()!;
       expect(icon.tagName).toBe('SPAN');
       expect(icon.classList[0]).toBe(navCategoryClassNames.expandIcon);
-      expect(icon).toHaveClass('inline-flex', 'shrink-0');
+      expect(icon).toHaveClass('wave:inline-flex', 'wave:shrink-0');
       expect(icon).toHaveAttribute('aria-hidden', 'true');
-      expect(icon).not.toHaveClass('rotate-180');
+      expect(icon).not.toHaveClass('wave:rotate-180');
       expect(within(icon as HTMLElement).getByTestId('glyph').parentElement).toBe(icon);
       // The button's props are dropped: neither its class nor its name reaches the toggle.
       expect(document.querySelector('.own-button')).toBeNull();
@@ -719,7 +731,7 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
     );
     expect(toggle().querySelector('button')).toBeNull();
     expect(expandIcon()!.tagName.toLowerCase()).toBe('svg');
-    expect(expandIcon()).toHaveClass('rotate-180');
+    expect(expandIcon()).toHaveClass('wave:rotate-180');
     expect(toggle()).toHaveAccessibleName('Docs');
     expect(warn.mock.calls).toEqual([[buttonGlyphWarning('a button element')]]);
     warn.mockClear();
@@ -740,13 +752,13 @@ describe('the expandIcon slot (C-SLOTS, optional indicator)', () => {
 describe('the expandIconMotion slot (Fluent’s NavCategoryItem expandIconMotion)', () => {
   it('undefined times the chevron’s turn with the default motion', () => {
     render(<Docs defaultOpenCategories={['docs']} />);
-    expect(expandIcon()).toHaveClass(...motionClasses(expandIconMotion), 'rotate-180');
+    expect(expandIcon()).toHaveClass(...motionClasses(expandIconMotion), 'wave:rotate-180');
   });
 
   it('null keeps the turn and drops its transition (the turn snaps)', () => {
     render(<Docs defaultOpenCategories={['docs']} category={{ expandIconMotion: null }} />);
     expectNoWordOf(expandIcon(), expandIconMotion);
-    expect(expandIcon()).toHaveClass('rotate-180', 'shrink-0');
+    expect(expandIcon()).toHaveClass('wave:rotate-180', 'wave:shrink-0');
   });
 
   it.each([
@@ -754,7 +766,7 @@ describe('the expandIconMotion slot (Fluent’s NavCategoryItem expandIconMotion
     ['an object', { className: 'my-motion' }],
   ] as Array<[string, MotionSlot]>)('%s replaces the default motion', (_kind, slot) => {
     render(<Docs defaultOpenCategories={['docs']} category={{ expandIconMotion: slot }} />);
-    expect(expandIcon()).toHaveClass('my-motion', 'rotate-180');
+    expect(expandIcon()).toHaveClass('my-motion', 'wave:rotate-180');
     expectNoWordOf(expandIcon(), expandIconMotion);
     expect(toggle()).not.toHaveClass('my-motion');
   });
@@ -764,7 +776,7 @@ describe('the expandIconMotion slot (Fluent’s NavCategoryItem expandIconMotion
       motion: 'none',
     });
     expectNoWordOf(expandIcon(), expandIconMotion);
-    expect(expandIcon()).toHaveClass('rotate-180');
+    expect(expandIcon()).toHaveClass('wave:rotate-180');
     unmount();
 
     renderWithProviders(
@@ -830,9 +842,9 @@ describe('item actions reveal (§3, D6)', () => {
     for (const name of ['Reports', 'Introduction']) {
       expect(actionsOf(name)).toHaveClass(
         ...motionClasses(navActionsRevealMotion),
-        '*:opacity-0',
-        'group-hover/nav-row:*:opacity-100',
-        'group-focus-within/nav-row:*:opacity-100',
+        'wave:*:opacity-0',
+        'wave:group-hover/nav-row:*:opacity-100',
+        'wave:group-focus-within/nav-row:*:opacity-100',
       );
     }
     expect(actionsOf('Reports').classList[0]).toBe(navItemClassNames.actions);
@@ -847,8 +859,8 @@ describe('item actions reveal (§3, D6)', () => {
     for (const name of ['Reports', 'Introduction']) {
       expectNoWordOf(actionsOf(name), navActionsRevealMotion);
       expect(actionsOf(name)).toHaveClass(
-        '*:opacity-0',
-        'group-focus-within/nav-row:*:opacity-100',
+        'wave:*:opacity-0',
+        'wave:group-focus-within/nav-row:*:opacity-100',
       );
     }
   });
@@ -886,7 +898,7 @@ describe('server rendering (D9)', () => {
       expect(Array.from(collapse.children)).toEqual([ul]);
       expect(collapse.parentElement).toHaveClass(navCategoryClassNames.root);
       const chevron = container.querySelector('.' + navCategoryClassNames.expandIcon)!;
-      expect(chevron).toHaveClass(...motionClasses(expandIconMotion), 'rotate-180');
+      expect(chevron).toHaveClass(...motionClasses(expandIconMotion), 'wave:rotate-180');
 
       const onRecoverableError = vi.fn();
       let root: ReturnType<typeof hydrateRoot> | undefined;

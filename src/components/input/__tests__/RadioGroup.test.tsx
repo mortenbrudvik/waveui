@@ -237,7 +237,7 @@ describe('RadioGroup', () => {
       </RadioGroup>,
     );
     const group = screen.getByRole('radiogroup', { name: 'Options' });
-    expect(group).toHaveClass('flex-col');
+    expect(group).toHaveClass('wave:flex-col');
     expect(group).toHaveAttribute('aria-orientation', 'vertical');
   });
 
@@ -248,7 +248,7 @@ describe('RadioGroup', () => {
       </RadioGroup>,
     );
     const group = screen.getByRole('radiogroup', { name: 'Options' });
-    expect(group).toHaveClass('flex-row');
+    expect(group).toHaveClass('wave:flex-row');
     expect(group).toHaveAttribute('aria-orientation', 'horizontal');
   });
 
@@ -543,18 +543,21 @@ describe('RadioItem', () => {
       </RadioGroup>,
     );
     expect(radio('Alpha')).toHaveClass(
-      'border-stroke-accessible',
-      'forced-colors:border-[ButtonText]',
+      'wave:border-stroke-accessible',
+      'wave:forced-colors:border-[ButtonText]',
     );
-    expect(radio('Alpha')).not.toHaveClass('border-input');
-    expect(radio('Beta')).toHaveClass('border-primary', 'forced-colors:border-[Highlight]');
+    expect(radio('Alpha')).not.toHaveClass('wave:border-input');
+    expect(radio('Beta')).toHaveClass(
+      'wave:border-primary',
+      'wave:forced-colors:border-[Highlight]',
+    );
     const dot = radio('Beta').querySelector('span');
     expect(dot).toHaveClass(
-      'bg-primary',
-      'forced-colors:bg-[Highlight]',
-      'forced-colors:forced-color-adjust-none',
+      'wave:bg-primary',
+      'wave:forced-colors:bg-[Highlight]',
+      'wave:forced-colors:forced-color-adjust-none',
     );
-    expect(radio('Alpha')).toHaveClass('motion-reduce:transition-none');
+    expect(radio('Alpha')).toHaveClass('wave:motion-reduce:transition-none');
   });
 
   it('sets its own zero padding and transparent circle, so app button styles cannot shift or fill it (C-NATIVE)', () => {
@@ -564,7 +567,7 @@ describe('RadioItem', () => {
       </RadioGroup>,
     );
     for (const name of ['Alpha', 'Beta']) {
-      expect(radio(name)).toHaveClass('p-0', 'bg-transparent');
+      expect(radio(name)).toHaveClass('wave:p-0', 'wave:bg-transparent');
     }
   });
 
@@ -574,8 +577,8 @@ describe('RadioItem', () => {
         <RadioItem value="a" label="Alpha" labelClassName="italic" />
       </RadioGroup>,
     );
-    expect(screen.getByText('Alpha')).toHaveClass('text-body-1', 'italic');
-    expect(screen.getByText('Alpha')).not.toHaveClass('text-sm');
+    expect(screen.getByText('Alpha')).toHaveClass('wave:text-body-1', 'italic');
+    expect(screen.getByText('Alpha')).not.toHaveClass('wave:text-sm');
   });
 
   it('forced colors: the radio circle keeps system colors; only the dot opts out (leaf)', () => {
@@ -584,7 +587,7 @@ describe('RadioItem', () => {
         {twoItems}
       </RadioGroup>,
     );
-    expect(radio('Beta')).not.toHaveClass('forced-colors:forced-color-adjust-none');
+    expect(radio('Beta')).not.toHaveClass('wave:forced-colors:forced-color-adjust-none');
   });
 
   it('forced colors: a disabled selected radio draws a GrayText dot and circle, no Highlight', () => {
@@ -593,17 +596,17 @@ describe('RadioItem', () => {
         {twoItems}
       </RadioGroup>,
     );
-    expect(radio('Beta')).toHaveClass('forced-colors:border-[GrayText]');
-    expect(radio('Beta')).not.toHaveClass('forced-colors:border-[Highlight]');
+    expect(radio('Beta')).toHaveClass('wave:forced-colors:border-[GrayText]');
+    expect(radio('Beta')).not.toHaveClass('wave:forced-colors:border-[Highlight]');
     const dot = radio('Beta').querySelector('span');
     expect(dot).toHaveClass(
-      'forced-colors:bg-[GrayText]',
-      'forced-colors:forced-color-adjust-none',
+      'wave:forced-colors:bg-[GrayText]',
+      'wave:forced-colors:forced-color-adjust-none',
     );
-    expect(dot).not.toHaveClass('forced-colors:bg-[Highlight]');
+    expect(dot).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
     // An unselected disabled radio draws a GrayText circle (not ButtonText).
-    expect(radio('Alpha')).toHaveClass('forced-colors:border-[GrayText]');
-    expect(radio('Alpha')).not.toHaveClass('forced-colors:border-[ButtonText]');
+    expect(radio('Alpha')).toHaveClass('wave:forced-colors:border-[GrayText]');
+    expect(radio('Alpha')).not.toHaveClass('wave:forced-colors:border-[ButtonText]');
   });
 });
 
@@ -728,12 +731,12 @@ describe('RadioItem — rich label', () => {
     );
     const pro = radio('Pro For growing teams');
     const root = pro.closest('label');
-    expect(root).toHaveClass('items-start');
-    expect(root).not.toHaveClass('items-center');
+    expect(root).toHaveClass('wave:items-start');
+    expect(root).not.toHaveClass('wave:items-center');
     // The 18px circle sits 1px down, centred on the 20px first line of `text-body-1`.
-    expect(pro).toHaveClass('mt-px');
+    expect(pro).toHaveClass('wave:mt-px');
     // Without a label text there is no line to line up with.
-    expect(radio('Free')).not.toHaveClass('mt-px');
+    expect(radio('Free')).not.toHaveClass('wave:mt-px');
   });
 
   it('clicking the label text selects; clicking a link inside it does not', async () => {
@@ -837,8 +840,8 @@ describe('RadioItem — rich label', () => {
       // disabled radio itself never takes focus). tailwind-merge keeps both classes (different
       // variants); the variant wins while it matches.
       expect(radio('Pro (see pricing)').closest('label')).toHaveClass(
-        'opacity-50',
-        'has-focus-visible:opacity-100',
+        'wave:opacity-50',
+        'wave:has-focus-visible:opacity-100',
       );
       expect(radio('Small').closest('label')?.className).not.toMatch(/opacity/);
     },
@@ -1411,13 +1414,13 @@ describe('RadioGroup.Item — slotProps', () => {
       ),
     ).toBe(
       [
-        '<div aria-label="Choice" aria-orientation="vertical" class="wave-radio-group relative flex flex-col gap-2" data-roving-container="" role="radiogroup">',
-        '<label class="wave-radio-group-item inline-flex items-start gap-2 select-none cursor-pointer">',
-        '<button aria-checked="true" aria-labelledby="radio-item-label-_R_3H1_" class="wave-radio-group-item__indicator flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-transparent p-0 transition-colors motion-reduce:transition-none mt-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-2 border-primary forced-colors:border-[Highlight]" data-roving-value="a" id="radio-item-_R_3_" role="radio" style="color:red" tabindex="0" title="t" type="button">',
-        '<span aria-hidden="true" class="block h-2 w-2 rounded-full bg-primary forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none">',
+        '<div aria-label="Choice" aria-orientation="vertical" class="wave-radio-group wave:relative wave:flex wave:flex-col wave:gap-2" data-roving-container="" role="radiogroup">',
+        '<label class="wave-radio-group-item wave:inline-flex wave:items-start wave:gap-2 wave:select-none wave:cursor-pointer">',
+        '<button aria-checked="true" aria-labelledby="radio-item-label-_R_3H1_" class="wave-radio-group-item__indicator wave:flex wave:h-[18px] wave:w-[18px] wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:bg-transparent wave:p-0 wave:transition-colors wave:motion-reduce:transition-none wave:mt-px wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:border-2 wave:border-primary wave:forced-colors:border-[Highlight]" data-roving-value="a" id="radio-item-_R_3_" role="radio" style="color:red" tabindex="0" title="t" type="button">',
+        '<span aria-hidden="true" class="wave:block wave:h-2 wave:w-2 wave:rounded-full wave:bg-primary wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none">',
         '</span>',
         '</button>',
-        '<span class="wave-radio-group-item__label text-body-1 text-foreground lc" id="radio-item-label-_R_3H1_">One',
+        '<span class="wave-radio-group-item__label wave:text-body-1 wave:text-foreground lc" id="radio-item-label-_R_3H1_">One',
         '</span>',
         '</label>',
         '</div>',
@@ -1464,7 +1467,11 @@ describe('RadioGroup.Item — slotProps', () => {
     );
     const indicator = screen.getByRole('radio', { name: 'One' });
     const label = screen.getByText('One');
-    expect(indicator).toHaveClass(radioGroupItemClassNames.indicator, 'rounded-full', 'my-circle');
+    expect(indicator).toHaveClass(
+      radioGroupItemClassNames.indicator,
+      'wave:rounded-full',
+      'my-circle',
+    );
     expect(indicator.classList[0]).toBe(radioGroupItemClassNames.indicator);
     expect(indicator.classList[indicator.classList.length - 1]).toBe('my-circle');
     expect(indicator).toHaveStyle({ width: '20px' });
@@ -1801,7 +1808,7 @@ describe('RadioGroup.Item — slotProps', () => {
         </RadioGroup>,
       );
       expect(rootOf('One')).toHaveClass('items-center');
-      expect(rootOf('One')).not.toHaveClass('items-start');
+      expect(rootOf('One')).not.toHaveClass('wave:items-start');
     });
 
     it('keeps the radio reachable: a part sets no hidden, inert or aria-hidden on the root', () => {

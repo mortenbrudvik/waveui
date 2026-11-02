@@ -68,7 +68,7 @@ describe('PresenceBadge', () => {
     const icon = status === 'do-not-disturb' ? 'dnd' : status === 'out-of-office' ? 'oof' : status;
     expect(svg).toHaveAttribute('data-wave-icon', `presence-${icon}`);
     expect(svg).toHaveAttribute('aria-hidden', 'true');
-    expect(svg).toHaveClass('size-full');
+    expect(svg).toHaveClass('wave:size-full');
     expect(badge.querySelectorAll('svg')).toHaveLength(1);
   });
 
@@ -78,7 +78,7 @@ describe('PresenceBadge', () => {
   it('draws the busy dot with currentColor so it stays solid in forced-colors mode', () => {
     render(<PresenceBadge status="busy" />);
     const badge = screen.getByRole('img', { name: 'Busy' });
-    expect(badge).toHaveClass('text-presence-busy');
+    expect(badge).toHaveClass('wave:text-presence-busy');
     const svg = badge.querySelector('svg');
     expect(svg).toHaveAttribute('data-wave-icon', 'presence-busy');
     expect(svg).toHaveAttribute('fill', 'currentColor');
@@ -98,26 +98,26 @@ describe('PresenceBadge', () => {
 
   // data-display#15 / input-basic#8: presence tokens and a background-colored ring.
   it.each([
-    ['available', ['bg-presence-available', 'text-presence-glyph']],
-    ['busy', ['bg-presence-busy', 'text-presence-busy']],
-    ['away', ['bg-presence-away', 'text-presence-glyph']],
-    ['offline', ['bg-background', 'text-presence-offline']],
-    ['do-not-disturb', ['bg-presence-busy', 'text-presence-glyph']],
-    ['out-of-office', ['bg-presence-oof', 'text-presence-glyph']],
+    ['available', ['wave:bg-presence-available', 'wave:text-presence-glyph']],
+    ['busy', ['wave:bg-presence-busy', 'wave:text-presence-busy']],
+    ['away', ['wave:bg-presence-away', 'wave:text-presence-glyph']],
+    ['offline', ['wave:bg-background', 'wave:text-presence-offline']],
+    ['do-not-disturb', ['wave:bg-presence-busy', 'wave:text-presence-glyph']],
+    ['out-of-office', ['wave:bg-presence-oof', 'wave:text-presence-glyph']],
   ] as Array<[PresenceStatus, string[]]>)('status "%s" uses %j', (status, classes) => {
     render(<PresenceBadge status={status} />);
     const badge = screen.getByRole('img');
-    expect(badge).toHaveClass(...classes, 'ring-2', 'ring-background');
+    expect(badge).toHaveClass(...classes, 'wave:ring-2', 'wave:ring-background');
     expect(badge.className).not.toMatch(/white|#|grey|var\(/);
   });
 
   // data-display#16
   it.each([
-    ['extra-small', 'size-2'],
-    ['small', 'size-2.5'],
-    ['medium', 'size-3'],
-    ['large', 'size-4'],
-    ['extra-large', 'size-5'],
+    ['extra-small', 'wave:size-2'],
+    ['small', 'wave:size-2.5'],
+    ['medium', 'wave:size-3'],
+    ['large', 'wave:size-4'],
+    ['extra-large', 'wave:size-5'],
   ] as Array<[Size, string]>)('size %s renders %s', (size, sizeClass) => {
     render(<PresenceBadge status="available" size={size} />);
     expect(screen.getByRole('img')).toHaveClass(sizeClass);
@@ -139,8 +139,8 @@ describe('PresenceBadge', () => {
       { dir: 'rtl' },
     );
     const svg = screen.getByRole('img', { name: 'Out of office' }).querySelector('svg')!;
-    expect(svg).toHaveClass('wave-rtl:-scale-x-100');
-    expect(svg).not.toHaveClass('rtl:-scale-x-100');
+    expect(svg).toHaveClass('wave:wave-rtl:-scale-x-100');
+    expect(svg).not.toHaveClass('wave:rtl:-scale-x-100');
   });
 
   it('mirrors no other status glyph', () => {
@@ -211,8 +211,8 @@ describe('PresenceBadge — slotProps', () => {
   const GLYPH =
     'fill="none" focusable="false" height="100%" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 16 16" width="100%" xmlns="http://www.w3.org/2000/svg"';
   const BASE_PINS = [
-    `<svg aria-hidden="true" class="wave-presence-badge__icon size-full wave-rtl:-scale-x-100" data-wave-icon="presence-oof" ${GLYPH}>`,
-    `<svg aria-hidden="true" class="wave-presence-badge__icon size-full" data-wave-icon="presence-available" ${GLYPH}>`,
+    `<svg aria-hidden="true" class="wave-presence-badge__icon wave:size-full wave:wave-rtl:-scale-x-100" data-wave-icon="presence-oof" ${GLYPH}>`,
+    `<svg aria-hidden="true" class="wave-presence-badge__icon wave:size-full" data-wave-icon="presence-available" ${GLYPH}>`,
   ].join('\n');
   const Badges = ({ parts }: { parts?: BadgeSlotProps }) => (
     <>
@@ -252,7 +252,7 @@ describe('PresenceBadge — slotProps', () => {
     expect(icon.classList[0]).toBe(presenceBadgeClassNames.icon);
     expect(icon).toHaveClass('my-icon', 'size-2');
     // Your class replaces a conflicting one of the part.
-    expect(icon).not.toHaveClass('size-full');
+    expect(icon).not.toHaveClass('wave:size-full');
     expect(icon).toHaveAttribute('data-part', 'icon');
     expect(icon).toHaveStyle({ opacity: '0.5' });
     expect(ref.current).toBe(icon);
@@ -284,7 +284,7 @@ describe('PresenceBadge — slotProps', () => {
     );
     expect(icons()[0]).toHaveClass(
       presenceBadgeClassNames.icon,
-      'wave-rtl:-scale-x-100',
+      'wave:wave-rtl:-scale-x-100',
       'my-icon',
     );
   });

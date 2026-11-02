@@ -284,7 +284,7 @@ export const ColorSlider = ({
   const rootProps = mergeSlotProps(slotProps?.root, {
     className: wcn(
       colorSliderClassNames.root,
-      'group/color-slider relative flex touch-none select-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
+      'wave:group/color-slider wave:relative wave:flex wave:touch-none wave:select-none wave:data-[disabled]:cursor-not-allowed wave:data-[disabled]:opacity-50',
       vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
       className,
     ),
@@ -318,10 +318,10 @@ export const ColorSlider = ({
         {...mergeSlotProps(slotProps?.rail, {
           className: wcn(
             colorSliderClassNames.rail,
-            'rounded-full forced-colors:forced-color-adjust-none',
+            'wave:rounded-full wave:forced-colors:forced-color-adjust-none',
             RAIL_GRADIENT,
             vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
-            resolvedShape === 'square' && 'rounded-none',
+            resolvedShape === 'square' && 'wave:rounded-none',
           ),
           locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
@@ -356,7 +356,7 @@ export const ColorSlider = ({
               colorSliderClassNames.thumb,
               COLOR_THUMB_CLASSES,
               vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
-              'group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]',
+              'wave:group-has-[:focus-visible]/color-slider:ring-2 wave:group-has-[:focus-visible]/color-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] wave:group-has-[:focus-visible]/color-slider:outline-2 wave:group-has-[:focus-visible]/color-slider:outline-offset-2 wave:group-has-[:focus-visible]/color-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]',
             ),
           })}
         />

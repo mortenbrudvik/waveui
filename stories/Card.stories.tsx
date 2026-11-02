@@ -165,8 +165,8 @@ export const HorizontalWithPreview: Story = {
   args: { style: { width: 480 } },
   render: (args) => (
     <Card {...args} orientation="horizontal" appearance="outline">
-      <Card.Preview logo={<span className="text-caption-1">W</span>}>
-        <div className="flex h-32 w-40 items-center justify-center bg-muted text-foreground">
+      <Card.Preview logo={<span className="text-wave-caption-1">W</span>}>
+        <div className="flex h-32 w-40 items-center justify-center bg-wave-muted text-wave-foreground">
           Preview
         </div>
       </Card.Preview>

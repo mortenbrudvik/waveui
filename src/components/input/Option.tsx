@@ -149,16 +149,16 @@ OptionCheckContext.displayName = 'OptionCheckContext';
  * it over `flex` and over a consumer's display class.
  */
 const OPTION_CLASSES = wcn(
-  'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground',
-  'bg-(--option-bg) [--option-bg:transparent]',
-  'not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)]',
-  'data-[selected]:[--option-bg:var(--wave-subtle-selected)]',
-  'data-[active]:[--option-bg:var(--wave-subtle-hover)]',
-  'data-[active]:outline-2 data-[active]:-outline-offset-2 data-[active]:outline-ring',
-  'aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground',
+  'wave:flex wave:cursor-pointer wave:select-none wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground',
+  'wave:bg-(--option-bg) wave:[--option-bg:transparent]',
+  'wave:not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)]',
+  'wave:data-[selected]:[--option-bg:var(--wave-subtle-selected)]',
+  'wave:data-[active]:[--option-bg:var(--wave-subtle-hover)]',
+  'wave:data-[active]:outline-2 wave:data-[active]:-outline-offset-2 wave:data-[active]:outline-ring',
+  'wave:aria-disabled:cursor-not-allowed wave:aria-disabled:text-muted-foreground',
 );
 
-const OPTION_CONTENT_CLASSES = wcn(optionClassNames.content, 'min-w-0 flex-1');
+const OPTION_CONTENT_CLASSES = wcn(optionClassNames.content, 'wave:min-w-0 wave:flex-1');
 
 /** The handlers the parts of a disabled option drop: the option selects nothing then. */
 const BLOCK_CLICK = ['onClick'] as const;
@@ -225,9 +225,10 @@ function useOptionGroupMembership(value: string): void {
  * Forced colours of a disabled option's box, as Checkbox draws a disabled box: GrayText on Canvas
  * for the square and its glyph, without the Highlight background of `forcedColors.selectedLeaf`.
  */
-const DISABLED_BOX_FORCED_COLORS = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
+const DISABLED_BOX_FORCED_COLORS =
+  'wave:forced-colors:border-[GrayText] wave:forced-colors:bg-[Canvas]';
 const DISABLED_GLYPH_FORCED_COLORS =
-  'forced-colors:text-[GrayText] forced-colors:forced-color-adjust-none';
+  'wave:forced-colors:text-[GrayText] wave:forced-colors:forced-color-adjust-none';
 
 /** What the check column of an option draws (see {@link renderCheck}). */
 interface CheckState {
@@ -251,29 +252,29 @@ function renderCheck(
   indicator: SlotPart<'span'> | undefined,
 ): React.ReactNode {
   if (!multiselect) {
-    const classes = wcn(optionClassNames.checkIcon, 'shrink-0', !selected && 'invisible');
+    const classes = wcn(optionClassNames.checkIcon, 'wave:shrink-0', !selected && 'wave:invisible');
     return glyph === undefined ? (
       <CheckIcon className={classes} />
     ) : (
-      renderSlot(glyph, 'span', wcn('inline-flex', classes), { 'aria-hidden': true })
+      renderSlot(glyph, 'span', wcn('wave:inline-flex', classes), { 'aria-hidden': true })
     );
   }
   // One class set per state, so a disabled box never carries the brand classes it replaces.
   let boxClasses: string;
   if (disabled) {
-    boxClasses = wcn('border-current bg-transparent', DISABLED_BOX_FORCED_COLORS);
+    boxClasses = wcn('wave:border-current wave:bg-transparent', DISABLED_BOX_FORCED_COLORS);
   } else if (selected) {
     boxClasses = wcn(
-      'border-primary bg-primary text-primary-foreground',
+      'wave:border-primary wave:bg-primary wave:text-primary-foreground',
       forcedColors.selectedLeaf,
     );
   } else {
-    boxClasses = wcn('border-stroke-accessible bg-transparent', forcedColors.control);
+    boxClasses = wcn('wave:border-stroke-accessible wave:bg-transparent', forcedColors.control);
   }
   const glyphClasses = disabled ? DISABLED_GLYPH_FORCED_COLORS : undefined;
   const indicatorClasses = wcn(
     optionClassNames.indicator,
-    'flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border',
+    'wave:flex wave:h-4 wave:w-4 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-xs wave:border',
     boxClasses,
   );
   return (
@@ -296,7 +297,7 @@ function renderCheck(
           renderSlot(
             glyph,
             'span',
-            wcn(optionClassNames.checkIcon, 'inline-flex shrink-0', glyphClasses),
+            wcn(optionClassNames.checkIcon, 'wave:inline-flex wave:shrink-0', glyphClasses),
             {
               'aria-hidden': true,
             },
@@ -602,7 +603,7 @@ function OptionGroupImpl({
           {...mergeSlotProps(slotProps?.label, {
             className: wcn(
               optionGroupClassNames.label,
-              'px-3 py-1 text-caption-1 font-semibold text-muted-foreground',
+              'wave:px-3 wave:py-1 wave:text-caption-1 wave:font-semibold wave:text-muted-foreground',
             ),
             locked: { id: labelId, role: 'presentation' },
           })}
@@ -928,7 +929,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
           {...mergeSlotProps(parts?.list, {
             className: wcn(
               listboxSurfaceClassNames.list,
-              'min-h-0 max-h-60 overflow-auto',
+              'wave:min-h-0 wave:max-h-60 wave:overflow-auto',
               listClassName,
             ),
             style: listStyle,
@@ -963,7 +964,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
   const surfaceProps = mergeSlotProps(parts?.surface, {
     className: wcn(
       listboxSurfaceClassNames.root,
-      'flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4',
+      'wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4',
       surfaceClassName,
     ),
     locked: {

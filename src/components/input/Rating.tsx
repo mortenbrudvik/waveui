@@ -427,8 +427,8 @@ const RatingRoot = ({
       data-color={resolvedColor}
       className={wcn(
         ratingClassNames.root,
-        'relative inline-flex items-center gap-0.5',
-        disabled && 'pointer-events-none opacity-50',
+        'wave:relative wave:inline-flex wave:items-center wave:gap-0.5',
+        disabled && 'wave:pointer-events-none wave:opacity-50',
         className,
       )}
       {...rest}
@@ -459,11 +459,11 @@ RatingRoot.displayName = 'Rating';
 
 /** Text size of the value and the count, following the star size. */
 const textSizeMap: Record<Size, string> = {
-  'extra-small': 'text-caption-1',
-  small: 'text-caption-1',
-  medium: 'text-body-1',
-  large: 'text-body-2',
-  'extra-large': 'text-body-2',
+  'extra-small': 'wave:text-caption-1',
+  small: 'wave:text-caption-1',
+  medium: 'wave:text-body-1',
+  large: 'wave:text-body-2',
+  'extra-large': 'wave:text-body-2',
 };
 
 const defaultRatingLabel = (_value: number, max: number, formattedValue: string) =>
@@ -556,7 +556,11 @@ const RatingDisplayRoot = ({
       aria-label={name}
       data-compact={compact ? '' : undefined}
       data-color={resolvedColor}
-      className={wcn(ratingDisplayClassNames.root, 'inline-flex items-center gap-0.5', className)}
+      className={wcn(
+        ratingDisplayClassNames.root,
+        'wave:inline-flex wave:items-center wave:gap-0.5',
+        className,
+      )}
       {...rest}
     >
       {compact ? (
@@ -580,7 +584,7 @@ const RatingDisplayRoot = ({
           {...mergeSlotProps(slotProps?.value, {
             className: wcn(
               ratingDisplayClassNames.value,
-              'ms-1 font-semibold text-foreground',
+              'wave:ms-1 wave:font-semibold wave:text-foreground',
               textSize,
             ),
           })}
@@ -591,7 +595,11 @@ const RatingDisplayRoot = ({
       {formattedCount !== undefined && (
         <span
           {...mergeSlotProps(slotProps?.count, {
-            className: wcn(ratingDisplayClassNames.count, 'ms-1 text-muted-foreground', textSize),
+            className: wcn(
+              ratingDisplayClassNames.count,
+              'wave:ms-1 wave:text-muted-foreground',
+              textSize,
+            ),
           })}
         >
           ({formattedCount})

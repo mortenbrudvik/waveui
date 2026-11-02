@@ -89,13 +89,13 @@ export const CounterBadge = ({
   const appearanceClasses = dot
     ? appearance === 'filled'
       ? c.dot
-      : wcn('bg-transparent border', c.dotBorder)
+      : wcn('wave:bg-transparent wave:border', c.dotBorder)
     : appearance === 'filled'
       ? c.filled
       : wcn(
-          'bg-transparent border',
+          'wave:bg-transparent wave:border',
           c.border,
-          resolvedColor === 'brand' ? 'text-primary' : 'text-foreground',
+          resolvedColor === 'brand' ? 'wave:text-primary' : 'wave:text-foreground',
         );
 
   // A name on a role-less <span> is not announced by screen readers: name it as an image. An empty
@@ -112,11 +112,11 @@ export const CounterBadge = ({
       className={wcn(
         badgeClassNames.root,
         counterBadgeClassNames.root,
-        'inline-flex items-center justify-center rounded-full',
+        'wave:inline-flex wave:items-center wave:justify-center wave:rounded-full',
         dot
           ? // In forced colors the background would become Canvas and hide the dot.
-            'h-1.5 w-1.5 min-w-0 p-0 forced-colors:forced-color-adjust-none forced-colors:bg-[CanvasText]'
-          : 'h-5 min-w-5 px-1.5 text-caption-1 font-semibold',
+            'wave:h-1.5 wave:w-1.5 wave:min-w-0 wave:p-0 wave:forced-colors:forced-color-adjust-none wave:forced-colors:bg-[CanvasText]'
+          : 'wave:h-5 wave:min-w-5 wave:px-1.5 wave:text-caption-1 wave:font-semibold',
         appearanceClasses,
         className,
       )}

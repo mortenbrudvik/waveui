@@ -5,8 +5,9 @@
   shadow-wave-4, font-wave) and the motion utilities (duration-wave-normal,
   ease-wave-decelerate-mid) prove the Wave theme keys of ./tokens reach the app's build, and
   wave-rtl:rotate-180, a class no component uses, that the app's build has Wave's direction
-  variant. Wave's component classes (bg-primary, text-body-1) appear only in the package, so in a
-  ./tailwind build they prove the precompiled dist/components.css was imported, never scanned.
+  variant. Wave's component classes (wave:bg-primary, wave:text-body-1) carry its own prefix and
+  appear only in the package, so in a ./tailwind build they prove the precompiled
+  dist/components.css was imported, never scanned.
 -->
 <html lang="en">
   <body>

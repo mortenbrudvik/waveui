@@ -50,15 +50,16 @@ type ToolbarButtonImplProps = ToolbarButtonOwnProps & { className?: string };
 const BaseButton = Button as React.ElementType;
 
 /** The layout of a vertical button: the icon above a caption-size label, no minimum width. */
-const verticalButtonClasses = 'h-auto min-w-0 flex-col gap-0.5 px-2 py-1 text-caption-1';
+const verticalButtonClasses =
+  'wave:h-auto wave:min-w-0 wave:flex-col wave:gap-0.5 wave:px-2 wave:py-1 wave:text-caption-1';
 
 /** The icon box of a vertical button per size: 24 px, 20 px at the two small sizes. */
 const verticalIconBoxClasses: Record<Size, string> = {
-  'extra-small': 'size-5 justify-center [&>svg]:size-full',
-  small: 'size-5 justify-center [&>svg]:size-full',
-  medium: 'size-6 justify-center [&>svg]:size-full',
-  large: 'size-6 justify-center [&>svg]:size-full',
-  'extra-large': 'size-6 justify-center [&>svg]:size-full',
+  'extra-small': 'wave:size-5 wave:justify-center wave:[&>svg]:size-full',
+  small: 'wave:size-5 wave:justify-center wave:[&>svg]:size-full',
+  medium: 'wave:size-6 wave:justify-center wave:[&>svg]:size-full',
+  large: 'wave:size-6 wave:justify-center wave:[&>svg]:size-full',
+  'extra-large': 'wave:size-6 wave:justify-center wave:[&>svg]:size-full',
 };
 
 /**
@@ -304,8 +305,8 @@ export const ToolbarRadioGroup = ({
       onKeyDown={composeEventHandlers(onKeyDown, handleCrossAxisKeyDown)}
       className={wcn(
         toolbarRadioGroupClassNames.root,
-        'flex gap-1',
-        orientation === 'vertical' && 'flex-col',
+        'wave:flex wave:gap-1',
+        orientation === 'vertical' && 'wave:flex-col',
         className,
       )}
     />
@@ -346,8 +347,8 @@ export const ToolbarGroup = ({ role, className, ref, ...rest }: ToolbarGroupProp
       ref={ref}
       className={wcn(
         toolbarGroupClassNames.root,
-        'flex gap-1',
-        orientation === 'vertical' && 'flex-col',
+        'wave:flex wave:gap-1',
+        orientation === 'vertical' && 'wave:flex-col',
         className,
       )}
     />
@@ -382,8 +383,8 @@ export const ToolbarDivider = ({ className, ref, ...rest }: ToolbarDividerProps)
       className={wcn(
         toolbarDividerClassNames.root,
         vertical
-          ? 'my-1 h-0 shrink-0 self-stretch border-t border-border'
-          : 'mx-1 w-0 shrink-0 self-stretch border-s border-border',
+          ? 'wave:my-1 wave:h-0 wave:shrink-0 wave:self-stretch wave:border-t wave:border-border'
+          : 'wave:mx-1 wave:w-0 wave:shrink-0 wave:self-stretch wave:border-s wave:border-border',
         forcedColors.border,
         className,
       )}

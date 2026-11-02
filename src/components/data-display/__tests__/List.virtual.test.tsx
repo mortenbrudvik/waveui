@@ -281,7 +281,7 @@ describe('List virtualWindow', () => {
       render(<WindowedList renderItem={renderItem} />);
       const called = new Set(renderItem.mock.calls.map(([index]) => index));
       expect([...called].sort((a, b) => a - b)).toEqual(range(0, 17));
-      expect(listRoot().className).toContain('overflow-y-auto');
+      expect(listRoot().className).toContain('wave:overflow-y-auto');
     });
 
     it('re-renders its items at a row boundary, not on every scroll event', async () => {
@@ -309,20 +309,20 @@ describe('List virtualWindow', () => {
       expect(apple).not.toHaveAttribute('aria-posinset');
       expect(apple).not.toHaveAttribute('style');
       expect(screen.getByRole('listbox')).not.toHaveAttribute('aria-rowcount');
-      expect(screen.getByRole('listbox').className).not.toContain('overflow-y-auto');
+      expect(screen.getByRole('listbox').className).not.toContain('wave:overflow-y-auto');
       expect(document.querySelector('[data-virtual-spacer]')).toBeNull();
     });
 
     it('turns the browser’s scroll anchoring off on its scroller (the window lays the items out)', () => {
       const { unmount } = render(<WindowedList />);
-      expect(listRoot()).toHaveClass('[overflow-anchor:none]');
+      expect(listRoot()).toHaveClass('wave:[overflow-anchor:none]');
       unmount();
       render(
         <List aria-label="Fruits">
           <List.Item>Apple</List.Item>
         </List>,
       );
-      expect(listRoot()).not.toHaveClass('[overflow-anchor:none]');
+      expect(listRoot()).not.toHaveClass('wave:[overflow-anchor:none]');
     });
 
     it('right to left: the window sets only heights (no physical property)', async () => {

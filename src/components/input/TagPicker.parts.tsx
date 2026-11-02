@@ -59,9 +59,12 @@ import type { TagPickerSize } from './TagPicker.root';
 
 /** Per-size classes of the control and the trigger (medium is the 0.7 look). */
 const TAG_PICKER_SIZE: Readonly<Record<TagPickerSize, { control: string; trigger: string }>> = {
-  medium: { control: 'gap-1 px-2 py-1.5', trigger: 'py-0.5 text-body-1' },
-  large: { control: 'gap-1.5 px-2.5 py-2', trigger: 'py-1 text-body-1' },
-  'extra-large': { control: 'gap-1.5 px-3 py-2.5', trigger: 'py-1 text-body-2' },
+  medium: { control: 'wave:gap-1 wave:px-2 wave:py-1.5', trigger: 'wave:py-0.5 wave:text-body-1' },
+  large: { control: 'wave:gap-1.5 wave:px-2.5 wave:py-2', trigger: 'wave:py-1 wave:text-body-1' },
+  'extra-large': {
+    control: 'wave:gap-1.5 wave:px-3 wave:py-2.5',
+    trigger: 'wave:py-1 wave:text-body-2',
+  },
 };
 
 /**
@@ -69,9 +72,9 @@ const TAG_PICKER_SIZE: Readonly<Record<TagPickerSize, { control: string; trigger
  * padding plus half the row (the trigger line) minus half the box.
  */
 const END_BUTTON_TOP: Readonly<Record<TagPickerSize, string>> = {
-  medium: 'top-1.5',
-  large: 'top-1.5',
-  'extra-large': 'top-2.25',
+  medium: 'wave:top-1.5',
+  large: 'wave:top-1.5',
+  'extra-large': 'wave:top-2.25',
 };
 
 /**
@@ -170,7 +173,7 @@ function TagPickerClearButton({ ctx, position }: TagPickerClearButtonProps) {
       pickerButtonOffset(ctx.coreSize, position),
       focusRing,
       // The control dims as a whole (D66): the button keeps only the not-allowed cursor.
-      'disabled:cursor-not-allowed aria-disabled:cursor-not-allowed',
+      'wave:disabled:cursor-not-allowed wave:aria-disabled:cursor-not-allowed',
     ),
     locked: {
       type: 'button',
@@ -279,15 +282,16 @@ function TagPickerControlImpl({
         ref={mergedRef}
         className={wcn(
           tagPickerControlClassNames.root,
-          'relative flex flex-wrap items-center',
+          'wave:relative wave:flex wave:flex-wrap wave:items-center',
           TAG_PICKER_SIZE[ctx.size].control,
           inputAppearanceClasses[ctx.appearance],
           inputFocusWithin,
           ctx.invalidLook && inputInvalidWithin,
           pickerEndPadding(buttons, ctx.coreSize),
           // Dimmed once (D66); a focus ring inside (a held remove button) lifts it.
-          ctx.disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
-          ctx.collapsed && 'flex-nowrap',
+          ctx.disabled &&
+            'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100',
+          ctx.collapsed && 'wave:flex-nowrap',
           className,
         )}
         onMouseDown={composeEventHandlers(onMouseDown, handlePress)}
@@ -513,8 +517,9 @@ function TagPickerGroupImpl({
           ref={mergedRef}
           className={wcn(
             tagPickerGroupClassNames.root,
-            'flex flex-wrap items-center gap-1',
-            ctx.collapsed && 'min-w-0 flex-nowrap overflow-hidden whitespace-nowrap *:shrink-0',
+            'wave:flex wave:flex-wrap wave:items-center wave:gap-1',
+            ctx.collapsed &&
+              'wave:min-w-0 wave:flex-nowrap wave:overflow-hidden wave:whitespace-nowrap wave:*:shrink-0',
             className,
           )}
           onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
@@ -538,7 +543,7 @@ function TagPickerGroupImpl({
                 appearance: ctx.tagAppearance,
                 shape: 'rounded',
               }),
-              'shrink-0 cursor-default',
+              'wave:shrink-0 wave:cursor-default',
             ),
             locked: {
               'aria-hidden': 'true',
@@ -734,7 +739,7 @@ function TagPickerInputImpl({
       className={wcn(
         tagPickerInputClassNames.root,
         tagPickerClassNames.input,
-        'min-w-15 flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-hidden',
+        'wave:min-w-15 wave:flex-1 wave:bg-transparent wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden',
         TAG_PICKER_SIZE[ctx.size].trigger,
         className,
       )}
@@ -846,13 +851,13 @@ function TagPickerButtonImpl({
       className={wcn(
         tagPickerButtonClassNames.root,
         // Padding and background set here (C-NATIVE); the control's focus look shows its focus.
-        'min-w-15 flex-1 border-0 bg-transparent px-0 text-start text-foreground focus:outline-hidden disabled:cursor-not-allowed',
+        'wave:min-w-15 wave:flex-1 wave:border-0 wave:bg-transparent wave:px-0 wave:text-start wave:text-foreground wave:focus:outline-hidden wave:disabled:cursor-not-allowed',
         TAG_PICKER_SIZE[ctx.size].trigger,
         className,
       )}
     >
       {ctx.selected.length === 0 && (
-        <span className="text-muted-foreground">{placeholder ?? ctx.placeholder}</span>
+        <span className="wave:text-muted-foreground">{placeholder ?? ctx.placeholder}</span>
       )}
     </button>
   );
@@ -1020,7 +1025,7 @@ function TagPickerListImpl({
             {...mergeSlotProps(slotProps?.emptyMessage, {
               className: wcn(
                 tagPickerClassNames.emptyMessage,
-                'px-3 py-1.5 text-body-1 text-muted-foreground',
+                'wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground',
               ),
               locked: { 'aria-hidden': 'true', tabIndex: undefined },
             })}

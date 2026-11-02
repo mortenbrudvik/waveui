@@ -119,7 +119,7 @@ export const Controlled: Story = {
           <RadioItem value="green" label="Green" />
           <RadioItem value="blue" label="Blue" />
         </RadioGroup>
-        <p className="text-body-1 text-foreground">Selected: {value}</p>
+        <p className="text-wave-body-1 text-wave-foreground">Selected: {value}</p>
       </div>
     );
   },
@@ -157,7 +157,8 @@ export const LabelWithSubtext: Story = {
   render: (args) => {
     const option = (title: string, detail: string) => (
       <span className="flex flex-col">
-        <span>{title}</span> <span className="text-caption-1 text-muted-foreground">{detail}</span>
+        <span>{title}</span>{' '}
+        <span className="text-wave-caption-1 text-wave-muted-foreground">{detail}</span>
       </span>
     );
     return (
@@ -192,9 +193,9 @@ function PlanCard({ value, title, description, disabled: disabledProp }: PlanCar
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-description`}
       className={cn(
-        'flex w-72 items-start gap-3 rounded-md border-2 bg-background p-3',
+        'flex w-72 items-start gap-3 rounded-md border-2 bg-wave-background p-3',
         focusRing,
-        checked ? 'border-primary' : 'border-stroke-accessible',
+        checked ? 'border-wave-primary' : 'border-wave-stroke-accessible',
         disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
       )}
     >
@@ -202,18 +203,18 @@ function PlanCard({ value, title, description, disabled: disabledProp }: PlanCar
         aria-hidden="true"
         className={cn(
           'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border',
-          checked ? 'border-primary' : 'border-stroke-accessible',
+          checked ? 'border-wave-primary' : 'border-wave-stroke-accessible',
         )}
       >
         {checked && (
-          <span className="size-2 rounded-full bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none" />
+          <span className="size-2 rounded-full bg-wave-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none" />
         )}
       </span>
       <span className="flex flex-col gap-0.5">
-        <span id={`${id}-title`} className="text-body-1 font-semibold text-foreground">
+        <span id={`${id}-title`} className="text-wave-body-1 font-semibold text-wave-foreground">
           {title}
         </span>
-        <span id={`${id}-description`} className="text-caption-1 text-muted-foreground">
+        <span id={`${id}-description`} className="text-wave-caption-1 text-wave-muted-foreground">
           {description}
         </span>
       </span>
@@ -225,7 +226,7 @@ function PlanCard({ value, title, description, disabled: disabledProp }: PlanCar
 function PlanSummary() {
   const { value } = useRadioGroupContext();
   return (
-    <div className="text-body-1 text-foreground">
+    <div className="text-wave-body-1 text-wave-foreground">
       {value === undefined ? 'No plan chosen' : `Chosen plan: ${value}`}
     </div>
   );

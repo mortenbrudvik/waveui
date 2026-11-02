@@ -27,10 +27,10 @@ import { getCheckColors, type CheckColors } from './colorUtils';
  */
 
 const sizeMap: Record<SwatchPickerSize, string> = {
-  'extra-small': 'w-5 h-5',
-  small: 'w-6 h-6',
-  medium: 'w-8 h-8',
-  large: 'w-10 h-10',
+  'extra-small': 'wave:w-5 wave:h-5',
+  small: 'wave:w-6 wave:h-6',
+  medium: 'wave:w-8 wave:h-8',
+  large: 'wave:w-10 wave:h-10',
 };
 
 const glyphSizeMap: Record<SwatchPickerSize, number> = {
@@ -41,9 +41,9 @@ const glyphSizeMap: Record<SwatchPickerSize, number> = {
 };
 
 const shapeMap: Record<Shape, string> = {
-  circular: 'rounded-full',
-  square: 'rounded-none',
-  rounded: 'rounded',
+  circular: 'wave:rounded-full',
+  square: 'wave:rounded-none',
+  rounded: 'wave:rounded',
 };
 
 /**
@@ -54,17 +54,17 @@ const shapeMap: Record<Shape, string> = {
  */
 function SwatchCheck({ colors, size }: { colors: CheckColors | null; size: number }) {
   return (
-    <span aria-hidden="true" className="pointer-events-none grid">
+    <span aria-hidden="true" className="wave:pointer-events-none wave:grid">
       <CheckIcon
         size={size}
         strokeWidth={4}
-        className={wcn('col-start-1 row-start-1', !colors && 'text-background')}
+        className={wcn('wave:col-start-1 wave:row-start-1', !colors && 'wave:text-background')}
         style={colors ? { color: colors.halo } : undefined}
       />
       <CheckIcon
         size={size}
         strokeWidth={2}
-        className={wcn('col-start-1 row-start-1', !colors && 'text-foreground')}
+        className={wcn('wave:col-start-1 wave:row-start-1', !colors && 'wave:text-foreground')}
         style={colors ? { color: colors.glyph } : undefined}
       />
     </span>
@@ -82,7 +82,7 @@ function SwatchSlash({ colors }: { colors: CheckColors | null }) {
       aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
-      className="pointer-events-none absolute inset-0 h-full w-full"
+      className="wave:pointer-events-none wave:absolute wave:inset-0 wave:h-full wave:w-full"
     >
       <line
         x1="5"
@@ -92,7 +92,7 @@ function SwatchSlash({ colors }: { colors: CheckColors | null }) {
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth={4}
-        className={colors ? undefined : 'text-background'}
+        className={colors ? undefined : 'wave:text-background'}
         style={colors ? { color: colors.halo } : undefined}
       />
       <line
@@ -103,7 +103,7 @@ function SwatchSlash({ colors }: { colors: CheckColors | null }) {
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth={2}
-        className={colors ? undefined : 'text-foreground'}
+        className={colors ? undefined : 'wave:text-foreground'}
         style={colors ? { color: colors.glyph } : undefined}
       />
     </svg>
@@ -154,7 +154,9 @@ function useSwatchContext(kind: string, size?: SwatchPickerSize, shape?: Shape) 
  * `spacing="small"` so it does not cover the neighbour (D22), where it lies over that band.
  */
 function outlineOffset(spacing: 'small' | 'medium'): string {
-  return spacing === 'small' ? 'focus-visible:outline-offset-2' : 'focus-visible:outline-offset-4';
+  return spacing === 'small'
+    ? 'wave:focus-visible:outline-offset-2'
+    : 'wave:focus-visible:outline-offset-4';
 }
 
 /**
@@ -164,7 +166,7 @@ function outlineOffset(spacing: 'small' | 'medium'): string {
  */
 function SwatchGridCell({ selected, children }: { selected?: boolean; children: React.ReactNode }) {
   return (
-    <div role="gridcell" aria-selected={selected} className="flex shrink-0">
+    <div role="gridcell" aria-selected={selected} className="wave:flex wave:shrink-0">
       {children}
     </div>
   );
@@ -180,11 +182,11 @@ function swatchBaseClasses(
     sizeMap[size],
     shapeMap[shape],
     // The padding is set here (C-NATIVE).
-    'relative flex shrink-0 items-center justify-center border-2 p-0',
+    'wave:relative wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:border-2 wave:p-0',
     motionSafeTransition,
     focusRing,
     outlineOffset(spacing),
-    'disabled:cursor-not-allowed disabled:opacity-50',
+    'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
   );
 }
 
@@ -324,21 +326,21 @@ const SwatchRadio = ({
         swatchPickerClassNames.swatch,
         swatchBaseClasses(size, shape, spacing),
         // A `borderColor` arrives as a variable, so the forced-colors edge below still wins.
-        'border-[color:var(--wave-swatch-border,transparent)]',
+        'wave:border-[color:var(--wave-swatch-border,transparent)]',
         paintClassName,
         // User colors are the content: keep them (and the check glyph) in forced colors, with a
         // Highlight outline, which an opted-out element would otherwise draw in author colors.
         keepsColors &&
-          'forced-colors:forced-color-adjust-none forced-colors:focus-visible:outline-[Highlight]',
+          'wave:forced-colors:forced-color-adjust-none wave:forced-colors:focus-visible:outline-[Highlight]',
         forcedColors.border,
         // An image stays in forced colors, so its selection needs a sign of its own.
-        isSelected && !keepsColors && 'forced-colors:border-[Highlight]',
+        isSelected && !keepsColors && 'wave:forced-colors:border-[Highlight]',
         isSelected
           ? wcn(
-              'ring-2 ring-foreground ring-offset-2 ring-offset-background',
-              keepsColors && 'forced-colors:ring-[Highlight]',
+              'wave:ring-2 wave:ring-foreground wave:ring-offset-2 wave:ring-offset-background',
+              keepsColors && 'wave:forced-colors:ring-[Highlight]',
             )
-          : 'not-disabled:not-aria-disabled:hover:border-stroke-hover',
+          : 'wave:not-disabled:not-aria-disabled:hover:border-stroke-hover',
         className,
       )}
       style={{ ...style, ...paint }}
@@ -348,7 +350,7 @@ const SwatchRadio = ({
       ) : (
         glyph != null &&
         slotRendersContent(glyph) &&
-        renderSlot(glyph, 'span', wcn(iconClassName, 'pointer-events-none inline-flex'), {
+        renderSlot(glyph, 'span', wcn(iconClassName, 'wave:pointer-events-none wave:inline-flex'), {
           'aria-hidden': true,
           style: checkColors ? { color: checkColors.glyph } : undefined,
         })
@@ -450,7 +452,7 @@ export const ImageSwatch = ({ src, ...rest }: ImageSwatchProps) => {
       defaultName={rest.value}
       checkColors={null}
       keepsColors={false}
-      paintClassName="bg-cover bg-center bg-no-repeat"
+      paintClassName="wave:bg-cover wave:bg-center wave:bg-no-repeat"
       paint={{ backgroundImage: `url(${JSON.stringify(src)})` }}
     />
   );
@@ -542,9 +544,9 @@ export const EmptySwatch = ({
         emptySwatchClassNames.root,
         swatchPickerClassNames.swatch,
         swatchBaseClasses(size, shape, spacing),
-        'border-dashed border-stroke-accessible bg-transparent text-foreground',
+        'wave:border-dashed wave:border-stroke-accessible wave:bg-transparent wave:text-foreground',
         forcedColors.control,
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
         className,
       )}
     >
@@ -552,7 +554,7 @@ export const EmptySwatch = ({
         renderSlot(
           content,
           'span',
-          wcn(emptySwatchClassNames.icon, 'pointer-events-none inline-flex'),
+          wcn(emptySwatchClassNames.icon, 'wave:pointer-events-none wave:inline-flex'),
           {
             'aria-hidden': true,
           },

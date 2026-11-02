@@ -649,9 +649,9 @@ const FlatTreeRoot = ({
         tabIndex={windowed && tabStop !== null ? -1 : undefined}
         className={wcn(
           flatTreeClassNames.root,
-          'text-body-1',
+          'wave:text-body-1',
           // The window lays the rows out: the browser's scroll anchoring only fights it.
-          windowed && 'overflow-y-auto [overflow-anchor:none]',
+          windowed && 'wave:overflow-y-auto wave:[overflow-anchor:none]',
           className,
         )}
         {...rest}

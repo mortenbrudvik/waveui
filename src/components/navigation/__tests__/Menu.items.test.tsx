@@ -27,8 +27,10 @@ afterEach(() => {
 
 const item = (name: string) => screen.getByRole('menuitem', { name });
 
-const CHECKMARK_SPACE = 'hidden w-4 shrink-0 group-has-[[data-menu-checkmark]]/menu:inline-flex';
-const ICON_SPACE = 'hidden h-5 w-5 shrink-0 group-has-[[data-menu-icon]]/menu:inline-flex';
+const CHECKMARK_SPACE =
+  'wave:hidden wave:w-4 wave:shrink-0 wave:group-has-[[data-menu-checkmark]]/menu:inline-flex';
+const ICON_SPACE =
+  'wave:hidden wave:h-5 wave:w-5 wave:shrink-0 wave:group-has-[[data-menu-icon]]/menu:inline-flex';
 
 /** What each child element of a row is: its column marker, else its text. */
 function describeRow(row: Element): string[] {
@@ -72,7 +74,7 @@ describe('MenuItemRow and the column alignment', () => {
     expect(screen.getByRole('menuitem').closest('[dir]')).toHaveAttribute('dir', 'rtl');
     const shortcut = screen.getByText('Ctrl+,');
     expect(shortcut).toHaveAttribute('dir', 'auto');
-    expect(shortcut).toHaveClass('ms-4', 'text-caption-1', 'text-muted-foreground');
+    expect(shortcut).toHaveClass('wave:ms-4', 'wave:text-caption-1', 'wave:text-muted-foreground');
   });
 
   it('a plain item renders hidden checkmark and icon placeholders that show when the list has the column', () => {
@@ -95,7 +97,14 @@ describe('MenuItemRow and the column alignment', () => {
     expect(describeRow(row)).toEqual(['space:checkmark', 'icon', 'text:Cut']);
     const iconBox = row.querySelector('[data-menu-icon]');
     expect(iconBox).toHaveAttribute('aria-hidden', 'true');
-    expect(iconBox).toHaveClass('flex', 'h-5', 'w-5', 'shrink-0', 'items-center', 'justify-center');
+    expect(iconBox).toHaveClass(
+      'wave:flex',
+      'wave:h-5',
+      'wave:w-5',
+      'wave:shrink-0',
+      'wave:items-center',
+      'wave:justify-center',
+    );
     expect(row).toHaveAccessibleName('Cut');
   });
 
@@ -116,7 +125,13 @@ describe('MenuItemRow and the column alignment', () => {
     expect(describeRow(uncheckedRow)).toEqual(['checkmark', 'space:icon', 'text:Grid']);
     const column = checkedRow.querySelector('[data-menu-checkmark]');
     expect(column).toHaveAttribute('aria-hidden', 'true');
-    expect(column).toHaveClass('inline-flex', 'w-4', 'shrink-0', 'items-center', 'justify-center');
+    expect(column).toHaveClass(
+      'wave:inline-flex',
+      'wave:w-4',
+      'wave:shrink-0',
+      'wave:items-center',
+      'wave:justify-center',
+    );
     expect(column).toContainElement(screen.getByTestId('glyph'));
     expect(uncheckedRow.querySelector('[data-menu-checkmark]')).toBeEmptyDOMElement();
   });
@@ -193,7 +208,7 @@ describe('MenuItemRow and the column alignment', () => {
 
   it('the placeholders refer to the list, which is the group/menu', () => {
     const { list } = renderInMenuList(<MenuItem>Paste</MenuItem>);
-    expect(list).toHaveClass('group/menu');
+    expect(list).toHaveClass('wave:group/menu');
     expect(list).toContainElement(item('Paste'));
   });
 
@@ -201,14 +216,14 @@ describe('MenuItemRow and the column alignment', () => {
     renderInMenuList(<MenuItem>Open recent</MenuItem>);
     const row = item('Open recent');
     expect(row).toHaveClass(
-      'aria-expanded:bg-subtle-hover',
-      'forced-colors:aria-expanded:border-s-4',
-      'forced-colors:aria-expanded:border-[Highlight]',
-      'forced-colors:aria-expanded:ps-2',
+      'wave:aria-expanded:bg-subtle-hover',
+      'wave:forced-colors:aria-expanded:border-s-4',
+      'wave:forced-colors:aria-expanded:border-[Highlight]',
+      'wave:forced-colors:aria-expanded:ps-2',
       // The 0.6 classes stay: the inset, the hover background and the focus ring.
-      'px-3',
-      'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
-      'focus-visible:outline-2',
+      'wave:px-3',
+      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+      'wave:focus-visible:outline-2',
     );
     expect(row.className).not.toMatch(/border-l-|pl-2/);
   });
@@ -456,7 +471,7 @@ describe('the submenu-trigger path of Menu.Item', () => {
     expect(chevron).toHaveAttribute('data-wave-icon', 'chevron-right');
     expect(chevron).toHaveAttribute('aria-hidden', 'true');
     expect(chevron).toHaveAttribute('width', '16');
-    expect(chevron).toHaveClass('ms-auto', 'shrink-0', 'wave-rtl:-scale-x-100');
+    expect(chevron).toHaveClass('wave:ms-auto', 'wave:shrink-0', 'wave:wave-rtl:-scale-x-100');
     expect(describeRow(row).slice(0, 4)).toEqual([
       'space:checkmark',
       'space:icon',
@@ -500,7 +515,7 @@ describe('the submenu-trigger path of Menu.Item', () => {
     });
     const row = item('Open recent');
     expect(row.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-    expect(row.lastElementChild).toHaveClass('ms-auto', 'wave-rtl:-scale-x-100');
+    expect(row.lastElementChild).toHaveClass('wave:ms-auto', 'wave:wave-rtl:-scale-x-100');
   });
 
   it('outside a submenu trigger an item has no chevron and no data-has-submenu', () => {
@@ -747,10 +762,10 @@ describe('Menu.Item — slotProps', () => {
   // Captured from 4a08890 (client and server agree): the merged props may put the class before the
   // locked attributes.
   const BASE_PINS = [
-    '<span class="wave-menu-item__content flex-1">',
-    '<span class="wave-menu-item__shortcut ms-4 text-caption-1 text-muted-foreground" dir="auto">',
-    '<svg aria-hidden="true" class="wave-menu-item__submenu-indicator ms-auto shrink-0 wave-rtl:-scale-x-100" data-wave-icon="chevron-right" fill="currentColor" focusable="false" height="16" viewBox="0 0 12 12" width="16" xmlns="http://www.w3.org/2000/svg">',
-    '<span class="wave-menu-item__content flex-1" data-menu-label="">',
+    '<span class="wave-menu-item__content wave:flex-1">',
+    '<span class="wave-menu-item__shortcut wave:ms-4 wave:text-caption-1 wave:text-muted-foreground" dir="auto">',
+    '<svg aria-hidden="true" class="wave-menu-item__submenu-indicator wave:ms-auto wave:shrink-0 wave:wave-rtl:-scale-x-100" data-wave-icon="chevron-right" fill="currentColor" focusable="false" height="16" viewBox="0 0 12 12" width="16" xmlns="http://www.w3.org/2000/svg">',
+    '<span class="wave-menu-item__content wave:flex-1" data-menu-label="">',
   ].join('\n');
 
   function PinnedItems({ slotProps }: { slotProps?: ItemSlotProps }) {
@@ -820,12 +835,12 @@ describe('Menu.Item — slotProps', () => {
     );
     const row = named('Save');
     for (const [element, stable, own, mine, data, opacity] of [
-      [content(row), menuItemClassNames.content, 'flex-1', 'my-content', 'content', '0.5'],
-      [shortcut(row), menuItemClassNames.shortcut, 'ms-4', 'my-shortcut', 'shortcut', '0.25'],
+      [content(row), menuItemClassNames.content, 'wave:flex-1', 'my-content', 'content', '0.5'],
+      [shortcut(row), menuItemClassNames.shortcut, 'wave:ms-4', 'my-shortcut', 'shortcut', '0.25'],
       [
         chevron(row),
         menuItemClassNames.submenuIndicator,
-        'ms-auto',
+        'wave:ms-auto',
         'my-chevron',
         'chevron',
         '0.75',
@@ -855,11 +870,11 @@ describe('Menu.Item — slotProps', () => {
     );
     const row = named('Save');
     expect(content(row)).toHaveClass('flex-none');
-    expect(content(row)).not.toHaveClass('flex-1');
+    expect(content(row)).not.toHaveClass('wave:flex-1');
     expect(shortcut(row)).toHaveClass('ms-2');
-    expect(shortcut(row)).not.toHaveClass('ms-4');
+    expect(shortcut(row)).not.toHaveClass('wave:ms-4');
     expect(chevron(row)).toHaveClass('ms-1');
-    expect(chevron(row)).not.toHaveClass('ms-auto');
+    expect(chevron(row)).not.toHaveClass('wave:ms-auto');
   });
 
   it('attaches your refs to the parts', () => {
@@ -1283,7 +1298,7 @@ describe('Menu.Item — slotProps', () => {
     );
     const row = item('Open recent');
     expect(row.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-    expect(chevron(row)).toHaveClass('wave-rtl:-scale-x-100', 'my-chevron');
+    expect(chevron(row)).toHaveClass('wave:wave-rtl:-scale-x-100', 'my-chevron');
     expect(row.lastElementChild).toBe(chevron(row));
   });
 

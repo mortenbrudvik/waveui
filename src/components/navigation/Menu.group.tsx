@@ -152,7 +152,7 @@ export const MenuGroupHeader = (props: MenuGroupHeaderProps) => {
       id={(scanned ? group.headerId : id) || undefined}
       className={wcn(
         menuGroupHeaderClassNames.root,
-        'flex items-center gap-2 px-3 pb-1 pt-2 text-caption-1 font-semibold text-muted-foreground',
+        'wave:flex wave:items-center wave:gap-2 wave:px-3 wave:pb-1 wave:pt-2 wave:text-caption-1 wave:font-semibold wave:text-muted-foreground',
         className,
       )}
     >

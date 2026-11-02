@@ -16,7 +16,7 @@ describe('Label', () => {
       { name: 'required', props: { required: true } },
       { name: 'disabled', props: { disabled: true } },
     ],
-    conflictingClass: { className: 'text-body-2', overrides: 'text-body-1' },
+    conflictingClass: { className: 'text-body-2', overrides: 'wave:text-body-1' },
   });
 
   it('declares ref in LabelProps (C-REF)', () => {
@@ -47,7 +47,7 @@ describe('Label', () => {
       </>,
     );
     expect(screen.getByText('*')).toHaveAttribute('aria-hidden', 'true');
-    expect(screen.getByText('*')).toHaveClass('ms-1');
+    expect(screen.getByText('*')).toHaveClass('wave:ms-1');
     expect(screen.getByRole('textbox', { name: 'Email' })).toBeInTheDocument();
   });
 
@@ -62,8 +62,8 @@ describe('Label', () => {
         Name
       </Label>,
     );
-    expect(screen.getByTestId('label')).toHaveClass('text-muted-foreground');
-    expect(screen.getByTestId('label')).not.toHaveClass('text-foreground');
+    expect(screen.getByTestId('label')).toHaveClass('wave:text-muted-foreground');
+    expect(screen.getByTestId('label')).not.toHaveClass('wave:text-foreground');
   });
 
   it('passes htmlFor to the label element', () => {
@@ -77,9 +77,9 @@ describe('Label', () => {
 
   describe('sizes (input-basic#40)', () => {
     it.each([
-      ['small', 'text-caption-1'],
-      ['medium', 'text-body-1'],
-      ['large', 'text-body-2'],
+      ['small', 'wave:text-caption-1'],
+      ['medium', 'wave:text-body-1'],
+      ['large', 'wave:text-body-2'],
     ] as const)('size %s uses %s', (size, token) => {
       render(
         <Label size={size} data-testid="label">
@@ -88,7 +88,7 @@ describe('Label', () => {
       );
       const label = screen.getByTestId('label');
       expect(label).toHaveClass(token);
-      for (const other of ['text-caption-1', 'text-body-1', 'text-body-2'].filter(
+      for (const other of ['wave:text-caption-1', 'wave:text-body-1', 'wave:text-body-2'].filter(
         (t) => t !== token,
       )) {
         expect(label).not.toHaveClass(other);
@@ -97,7 +97,7 @@ describe('Label', () => {
 
     it('defaults to medium (text-body-1)', () => {
       render(<Label data-testid="label">Name</Label>);
-      expect(screen.getByTestId('label')).toHaveClass('text-body-1');
+      expect(screen.getByTestId('label')).toHaveClass('wave:text-body-1');
     });
   });
 
@@ -111,7 +111,7 @@ describe('Label', () => {
       render(<Label required={<span>(required)</span>}>Email</Label>);
       const indicator = screen.getByText('(required)').parentElement as HTMLElement;
       expect(indicator).toHaveAttribute('aria-hidden', 'true');
-      expect(indicator).toHaveClass('ms-1', 'text-error');
+      expect(indicator).toHaveClass('wave:ms-1', 'wave:text-error');
       expect(screen.queryByText('*')).toBeNull();
     });
 
@@ -123,9 +123,9 @@ describe('Label', () => {
 
   describe('weight (layout#16)', () => {
     it.each([
-      ['medium', 'font-medium'],
-      ['semibold', 'font-semibold'],
-      ['bold', 'font-bold'],
+      ['medium', 'wave:font-medium'],
+      ['semibold', 'wave:font-semibold'],
+      ['bold', 'wave:font-bold'],
     ] as const)('weight %s uses %s', (weight, cls) => {
       render(
         <Label weight={weight} data-testid="label">
@@ -138,9 +138,9 @@ describe('Label', () => {
     it('regular adds no bold weight class', () => {
       render(<Label data-testid="label">Name</Label>);
       const label = screen.getByTestId('label');
-      expect(label).not.toHaveClass('font-medium');
-      expect(label).not.toHaveClass('font-semibold');
-      expect(label).not.toHaveClass('font-bold');
+      expect(label).not.toHaveClass('wave:font-medium');
+      expect(label).not.toHaveClass('wave:font-semibold');
+      expect(label).not.toHaveClass('wave:font-bold');
     });
   });
 });
@@ -160,8 +160,8 @@ describe('Label — slotProps', () => {
       ),
     ).toBe(
       [
-        '<label class="wave-label text-foreground text-body-1" for="name">Name',
-        '<span aria-hidden="true" class="wave-label__required ms-1 text-error">*',
+        '<label class="wave-label wave:text-foreground wave:text-body-1" for="name">Name',
+        '<span aria-hidden="true" class="wave-label__required wave:ms-1 wave:text-error">*',
         '</span>',
         '</label>',
       ].join(''),
@@ -208,7 +208,7 @@ describe('Label — slotProps', () => {
     );
     const mark = screen.getByText('*');
     expect(ref.current).toBe(mark);
-    expect(mark).toHaveClass(labelClassNames.required, 'text-error', 'my-mark');
+    expect(mark).toHaveClass(labelClassNames.required, 'wave:text-error', 'my-mark');
     expect(mark.classList[0]).toBe(labelClassNames.required);
     expect(mark.classList[mark.classList.length - 1]).toBe('my-mark');
     expect(mark).toHaveStyle({ color: 'rgb(255, 0, 0)' });

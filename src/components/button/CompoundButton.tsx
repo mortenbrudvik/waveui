@@ -106,20 +106,20 @@ export type CompoundButtonProps<C extends React.ElementType = 'button'> = Polymo
  * height); horizontal padding and font size come from Button.
  */
 const paddingClasses: Record<Size, string> = {
-  'extra-small': 'py-0.5',
-  small: 'py-1',
-  medium: 'py-2',
-  large: 'py-3',
-  'extra-large': 'py-4',
+  'extra-small': 'wave:py-0.5',
+  small: 'wave:py-1',
+  medium: 'wave:py-2',
+  large: 'wave:py-3',
+  'extra-large': 'wave:py-4',
 };
 
 /** The icon box per size (its SVG fills it): 24px at extra-small, 32px at small, else 40px. */
 const iconBoxClasses: Record<Size, string> = {
-  'extra-small': 'size-6',
-  small: 'size-8',
-  medium: 'size-10',
-  large: 'size-10',
-  'extra-large': 'size-10',
+  'extra-small': 'wave:size-6',
+  small: 'wave:size-8',
+  medium: 'wave:size-10',
+  large: 'wave:size-10',
+  'extra-large': 'wave:size-10',
 };
 
 /**
@@ -202,7 +202,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
     wcn(
       buttonClassNames.icon,
       compoundButtonClassNames.icon,
-      'inline-flex shrink-0 items-center justify-center [&>svg]:size-full',
+      'wave:inline-flex wave:shrink-0 wave:items-center wave:justify-center wave:[&>svg]:size-full',
       iconBoxClasses[size],
     ),
     { 'aria-hidden': true },
@@ -215,7 +215,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
       {...mergeSlotProps(slotProps?.contentContainer, {
         className: wcn(
           compoundButtonClassNames.contentContainer,
-          'flex min-w-0 flex-col items-start',
+          'wave:flex wave:min-w-0 wave:flex-col wave:items-start',
         ),
         locked: { 'data-wave-compound-content': '' },
         blockHandlers,
@@ -223,7 +223,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
     >
       <span
         {...mergeSlotProps(slotProps?.primaryText, {
-          className: wcn(compoundButtonClassNames.primaryText, 'font-bold'),
+          className: wcn(compoundButtonClassNames.primaryText, 'wave:font-bold'),
           // The text names the button: a part neither renames nor hides it.
           locked: TEXT_PART_LOCKS,
           blockHandlers,
@@ -236,8 +236,10 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
           {...mergeSlotProps(slotProps?.secondaryText, {
             className: wcn(
               compoundButtonClassNames.secondaryText,
-              'text-caption-1 font-normal',
-              appearance === 'primary' ? 'text-primary-foreground' : 'text-muted-foreground',
+              'wave:text-caption-1 wave:font-normal',
+              appearance === 'primary'
+                ? 'wave:text-primary-foreground'
+                : 'wave:text-muted-foreground',
             ),
             locked: TEXT_PART_LOCKS,
             blockHandlers,
@@ -256,7 +258,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
       size={size}
       className={wcn(
         compoundButtonClassNames.root,
-        'h-auto items-center justify-start gap-3 text-start',
+        'wave:h-auto wave:items-center wave:justify-start wave:gap-3 wave:text-start',
         paddingClasses[size],
         className,
       )}

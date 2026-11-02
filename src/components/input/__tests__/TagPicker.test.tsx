@@ -87,7 +87,7 @@ describe('TagPicker', () => {
     ref: 'control',
     control: { role: 'combobox', tag: 'input' },
     defaultProps: { options, 'aria-label': 'Fruits' },
-    conflictingClass: { className: 'static', overrides: 'relative' },
+    conflictingClass: { className: 'static', overrides: 'wave:relative' },
     a11yVariants: [
       { name: 'open', props: { defaultOpen: true } },
       { name: 'with a selected tag', props: { defaultValue: ['apple'] } },
@@ -399,8 +399,8 @@ describe('TagPicker', () => {
     it('gives the remove buttons their own padding and background (C-NATIVE)', () => {
       renderPicker({ defaultValue: ['apple', 'banana'] });
       for (const remove of screen.getAllByRole('button', { name: /^Remove/ })) {
-        expect(remove).toHaveClass('p-0');
-        expect(remove).toHaveClass('bg-transparent');
+        expect(remove).toHaveClass('wave:p-0');
+        expect(remove).toHaveClass('wave:bg-transparent');
       }
     });
 
@@ -1137,9 +1137,9 @@ describe('TagPicker', () => {
   describe('field look', () => {
     it('uses the input focus recipe instead of a ring (input-basic#9)', () => {
       renderPicker();
-      expect(combobox()).toHaveClass('focus:outline-hidden');
+      expect(combobox()).toHaveClass('wave:focus:outline-hidden');
       const control = screen.getByRole('group');
-      expect(control).toHaveClass('focus-within:border-b-2');
+      expect(control).toHaveClass('wave:focus-within:border-b-2');
       expect(control.className).not.toMatch(/ring/);
     });
 
@@ -1147,13 +1147,13 @@ describe('TagPicker', () => {
       renderPicker();
       const control = screen.getByRole('group');
       expect(control).toHaveClass(
-        'border',
-        'border-input',
-        'border-b-stroke-accessible',
-        'focus-within:border-b-primary',
+        'wave:border',
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+        'wave:focus-within:border-b-primary',
       );
-      expect(control).not.toHaveClass('border-border');
-      expect(control).not.toHaveClass('border-destructive');
+      expect(control).not.toHaveClass('wave:border-border');
+      expect(control).not.toHaveClass('wave:border-destructive');
     });
 
     it.each([
@@ -1171,8 +1171,12 @@ describe('TagPicker', () => {
       const control = screen.getByRole('group');
       // Keeps the destructive border and shows the focus color on the focused bottom border
       // (Phase 4 D4).
-      expect(control).toHaveClass('border', 'border-destructive', 'focus-within:border-b-primary');
-      for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
+      expect(control).toHaveClass(
+        'wave:border',
+        'wave:border-destructive',
+        'wave:focus-within:border-b-primary',
+      );
+      for (const replaced of ['wave:border-input', 'wave:border-b-stroke-accessible']) {
         expect(control).not.toHaveClass(replaced);
       }
     });
@@ -1183,8 +1187,8 @@ describe('TagPicker', () => {
       });
       expect(screen.getByRole('combobox')).toHaveAttribute('aria-invalid', 'false');
       const control = screen.getByRole('group');
-      expect(control).toHaveClass('border-input', 'border-b-stroke-accessible');
-      expect(control).not.toHaveClass('border-destructive');
+      expect(control).toHaveClass('wave:border-input', 'wave:border-b-stroke-accessible');
+      expect(control).not.toHaveClass('wave:border-destructive');
     });
   });
 
@@ -1590,9 +1594,15 @@ describe('TagPicker', () => {
 
     it('keeps the 0.7 classes at medium', () => {
       render(<TagPicker aria-label="Fruit" options={OPTIONS} defaultValue={['a']} />);
-      expect(control()).toHaveClass('gap-1', 'px-2', 'py-1.5', 'border-input', 'pe-8');
+      expect(control()).toHaveClass(
+        'wave:gap-1',
+        'wave:px-2',
+        'wave:py-1.5',
+        'wave:border-input',
+        'wave:pe-8',
+      );
       expectTag('extra-small');
-      expect(input()).toHaveClass('py-0.5', 'text-body-1');
+      expect(input()).toHaveClass('wave:py-0.5', 'wave:text-body-1');
       const root = input().closest('[data-size]') as HTMLElement;
       expect(root).toHaveAttribute('data-size', 'medium');
       expect(root).toHaveAttribute('data-appearance', 'outline');
@@ -1609,7 +1619,12 @@ describe('TagPicker', () => {
             appearance={'glass' as unknown as 'outline'}
           />,
         );
-        expect(control()).toHaveClass('gap-1', 'px-2', 'py-1.5', 'border-input');
+        expect(control()).toHaveClass(
+          'wave:gap-1',
+          'wave:px-2',
+          'wave:py-1.5',
+          'wave:border-input',
+        );
         expectTag('extra-small');
         const root = input().closest('[data-size]') as HTMLElement;
         expect(root).toHaveAttribute('data-size', 'medium');
@@ -1619,8 +1634,18 @@ describe('TagPicker', () => {
     });
 
     it.each([
-      ['large', ['gap-1.5', 'px-2.5', 'py-2'], 'small', ['py-1', 'text-body-1']],
-      ['extra-large', ['gap-1.5', 'px-3', 'py-2.5'], 'medium', ['py-1', 'text-body-2']],
+      [
+        'large',
+        ['wave:gap-1.5', 'wave:px-2.5', 'wave:py-2'],
+        'small',
+        ['wave:py-1', 'wave:text-body-1'],
+      ],
+      [
+        'extra-large',
+        ['wave:gap-1.5', 'wave:px-3', 'wave:py-2.5'],
+        'medium',
+        ['wave:py-1', 'wave:text-body-2'],
+      ],
     ] as const)('%s', (size, controlClasses, tagSize, inputClasses) => {
       render(<TagPicker aria-label="Fruit" options={OPTIONS} defaultValue={['a']} size={size} />);
       expect(control()).toHaveClass(...controlClasses);
@@ -1642,7 +1667,7 @@ describe('TagPicker', () => {
 
     it('the control takes the appearance', () => {
       render(<TagPicker aria-label="Fruit" options={OPTIONS} appearance="underline" />);
-      expect(control()).toHaveClass('border-0', 'border-b', 'rounded-none');
+      expect(control()).toHaveClass('wave:border-0', 'wave:border-b', 'wave:rounded-none');
     });
 
     it('types: TagPicker has no small size', () => {
@@ -1659,10 +1684,10 @@ describe('TagPicker', () => {
     // filled-darker; the remove buttons' 0.7 box and glyph at every size.
 
     it.each([
-      ['outline', ['border-input', 'bg-background']],
-      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-      ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+      ['outline', ['wave:border-input', 'wave:bg-background']],
+      ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+      ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+      ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
     ] as const)(
       'appearance="%s" renders its classes and data-appearance',
       (appearance, classes) => {
@@ -1705,7 +1730,10 @@ describe('TagPicker', () => {
         render(
           <TagPicker aria-label="Fruit" options={OPTIONS} appearance={appearance} aria-invalid />,
         );
-        expect(control()).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+        expect(control()).toHaveClass(
+          'wave:border-destructive',
+          'wave:focus-within:border-b-primary',
+        );
       },
     );
 
@@ -1718,14 +1746,17 @@ describe('TagPicker', () => {
         const fieldControl = screen
           .getByRole('combobox', { name: FIELD_TEST_TEXT.label })
           .closest('[data-wave-tagpicker-control]') as HTMLElement;
-        expect(fieldControl).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+        expect(fieldControl).toHaveClass(
+          'wave:border-destructive',
+          'wave:focus-within:border-b-primary',
+        );
       },
     );
 
     it.each([
-      ['medium', ['size-4'], '10'],
-      ['large', ['size-4'], '12'],
-      ['extra-large', ['size-5'], '12'],
+      ['medium', ['wave:size-4'], '10'],
+      ['large', ['wave:size-4'], '12'],
+      ['extra-large', ['wave:size-5'], '12'],
     ] as const)(
       'gives the remove button Tag\'s Dismiss box and glyph at size="%s"',
       (size, box, glyph) => {
@@ -1734,12 +1765,12 @@ describe('TagPicker', () => {
         expect(remove).toHaveClass(
           tagClassNames.dismissButton,
           tagPickerClassNames.removeButton,
-          'p-0',
-          'bg-transparent',
+          'wave:p-0',
+          'wave:bg-transparent',
           ...box,
         );
-        expect(remove).not.toHaveClass('ms-0.5');
-        expect(remove).not.toHaveClass('rounded-sm');
+        expect(remove).not.toHaveClass('wave:ms-0.5');
+        expect(remove).not.toHaveClass('wave:rounded-sm');
         expect(remove.querySelector('svg')).toHaveAttribute('width', glyph);
       },
     );
@@ -1824,7 +1855,7 @@ describe('TagPicker', () => {
         expect(held).toHaveFocus();
         expect(held).toHaveAttribute('aria-disabled', 'true');
         expect(held).not.toBeDisabled();
-        expect(control()).toHaveClass('opacity-50', 'has-focus-visible:opacity-100');
+        expect(control()).toHaveClass('wave:opacity-50', 'wave:has-focus-visible:opacity-100');
         await user.keyboard('{Enter}{Delete}');
         expect(onValueChange).not.toHaveBeenCalled();
         await user.tab();
@@ -1865,15 +1896,15 @@ describe('TagPicker', () => {
 
     it('dims the disabled field once', () => {
       renderPicker({ disabled: true, clearable: true, defaultValue: ['apple'] });
-      expect(control()).toHaveClass('opacity-50');
-      expect(screen.getByRole('listitem')).not.toHaveClass('opacity-50');
+      expect(control()).toHaveClass('wave:opacity-50');
+      expect(screen.getByRole('listitem')).not.toHaveClass('wave:opacity-50');
       expect(screen.getByRole('button', { name: 'Show options' })).not.toHaveClass(
-        'disabled:opacity-50',
+        'wave:disabled:opacity-50',
       );
       const clear = screen.getByRole('button', { name: 'Clear selection' });
       expect(clear.className).not.toMatch(/opacity/);
       expect(combobox().className).not.toMatch(/opacity/);
-      expect(removeButton('Apple').className).not.toMatch(/(^|\s)disabled:opacity-50/);
+      expect(removeButton('Apple').className).not.toMatch(/(^|\s)wave:disabled:opacity-50/);
     });
 
     describe('the previous arrow and the field press (D57, D66)', () => {
@@ -2042,13 +2073,13 @@ describe('TagPicker', () => {
       it.each([null, undefined])('keeps the chevron for %s', (expandIcon) => {
         renderPicker({ expandIcon });
         expect(expand().querySelector('svg')).not.toBeNull();
-        expect(control()).toHaveClass('pe-8');
+        expect(control()).toHaveClass('wave:pe-8');
       });
 
       it.each([false, '', [], <></>])('hides the button and its padding for %s', (expandIcon) => {
         renderPicker({ expandIcon });
         expect(screen.queryByRole('button', { name: 'Show options' })).toBeNull();
-        expect(control().className).not.toMatch(/(^|\s)pe-/);
+        expect(control().className).not.toMatch(/(^|\s)wave:pe-/);
       });
 
       it('renders a custom glyph', () => {
@@ -2103,16 +2134,16 @@ describe('TagPicker', () => {
       });
 
       it.each([
-        ['medium', 'top-1.5', ['h-6', 'w-6'], '12', 'pe-8'],
-        ['large', 'top-1.5', ['size-8'], '16', 'pe-10'],
-        ['extra-large', 'top-2.25', ['size-8'], '16', 'pe-10'],
+        ['medium', 'wave:top-1.5', ['wave:h-6', 'wave:w-6'], '12', 'wave:pe-8'],
+        ['large', 'wave:top-1.5', ['wave:size-8'], '16', 'wave:pe-10'],
+        ['extra-large', 'wave:top-2.25', ['wave:size-8'], '16', 'wave:pe-10'],
       ] as const)(
         'places the end buttons on the first row at size=%s',
         (size, top, box, glyph, padding) => {
           renderPicker({ size });
-          expect(expand()).toHaveClass('absolute', 'end-1', top, ...box);
+          expect(expand()).toHaveClass('wave:absolute', 'wave:end-1', top, ...box);
           expect(expand().querySelector('svg')).toHaveAttribute('width', glyph);
-          expect(control()).toHaveClass('relative', padding);
+          expect(control()).toHaveClass('wave:relative', padding);
         },
       );
     });
@@ -2139,8 +2170,8 @@ describe('TagPicker', () => {
         await user.tab();
         expect(clear()).toHaveFocus();
         expect(clear()).toHaveAttribute('type', 'button');
-        expect(clear()).toHaveClass('end-7', 'top-1.5');
-        expect(control()).toHaveClass('pe-14');
+        expect(clear()).toHaveClass('wave:end-7', 'wave:top-1.5');
+        expect(control()).toHaveClass('wave:pe-14');
       });
 
       it('clears every tag once, the query, closes the list and focuses the input, announcing nothing', async () => {
@@ -2217,7 +2248,7 @@ describe('TagPicker', () => {
         expect(clear()).toHaveFocus();
         expect(clear()).toHaveAttribute('aria-disabled', 'true');
         expect(clear()).toHaveAttribute('data-disabled-focusable', '');
-        expect(control()).toHaveClass('has-focus-visible:opacity-100');
+        expect(control()).toHaveClass('wave:has-focus-visible:opacity-100');
         await user.keyboard('{Enter} ');
         fireEvent.click(clear(), { detail: 1 });
         expect(onValueChange).not.toHaveBeenCalled();
@@ -2253,23 +2284,27 @@ describe('TagPicker', () => {
     it('keeps the default look pinned (D68, Phase 4 rule 14)', () => {
       renderPicker({ defaultValue: ['apple'] });
       expect(control()).toHaveClass(
-        'relative',
-        'flex',
-        'flex-wrap',
-        'items-center',
-        'gap-1',
-        'px-2',
-        'py-1.5',
-        'pe-8',
-        'border-input',
+        'wave:relative',
+        'wave:flex',
+        'wave:flex-wrap',
+        'wave:items-center',
+        'wave:gap-1',
+        'wave:px-2',
+        'wave:py-1.5',
+        'wave:pe-8',
+        'wave:border-input',
       );
       expect(screen.getByRole('list', { name: 'Selected' })).toHaveClass(
-        'flex',
-        'flex-wrap',
-        'items-center',
-        'gap-1',
+        'wave:flex',
+        'wave:flex-wrap',
+        'wave:items-center',
+        'wave:gap-1',
       );
-      expect(screen.getByRole('listitem')).toHaveClass('rounded', 'min-h-5', 'bg-muted');
+      expect(screen.getByRole('listitem')).toHaveClass(
+        'wave:rounded',
+        'wave:min-h-5',
+        'wave:bg-muted',
+      );
     });
   });
 });
@@ -2308,12 +2343,12 @@ describe('TagPicker — slotProps', () => {
       openingTags(...[tag, removeButton, clearButton, expandButton, surface, option].flatMap(all)),
     ).toBe(
       [
-        '<span class="wave-tag inline-flex items-center border min-h-5 gap-0.5 text-caption-1 ps-1.75 pe-px border-transparent bg-muted text-foreground rounded wave-tag-picker__tag" data-appearance="filled" data-shape="rounded" data-size="extra-small" data-wave-tag-item="" role="listitem">',
-        '<button aria-label="Remove Apple" class="wave-tag__dismiss-button relative inline-flex shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-inherit before:absolute disabled:cursor-not-allowed forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] size-4 before:-inset-1 disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:active:bg-muted-pressed focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-0 wave-tag-picker__remove-button" data-wave-tag-dismiss="" type="button">',
-        '<button aria-label="Clear selection" class="wave-tag-picker__clear-button top-1.5 absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed aria-disabled:cursor-not-allowed" type="button">',
-        '<button aria-controls="tagpicker-listbox-_id0_" aria-expanded="true" aria-label="Show options" class="wave-tag-picker__expand-button top-1.5 absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
-        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-tag-picker__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
-        '<li aria-selected="false" class="wave-option flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground bg-(--option-bg) [--option-bg:transparent] not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)] data-[selected]:[--option-bg:var(--wave-subtle-selected)] data-[active]:[--option-bg:var(--wave-subtle-hover)] data-[active]:outline-2 data-[active]:-outline-offset-2 data-[active]:outline-ring aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground wave-tag-picker-option wave-tag-picker__option" data-value="banana" id="tagpicker-listbox-_id0_-opt-0" role="option">',
+        '<span class="wave-tag wave:inline-flex wave:items-center wave:border wave:min-h-5 wave:gap-0.5 wave:text-caption-1 wave:ps-1.75 wave:pe-px wave:border-transparent wave:bg-muted wave:text-foreground wave:rounded wave-tag-picker__tag" data-appearance="filled" data-shape="rounded" data-size="extra-small" data-wave-tag-item="" role="listitem">',
+        '<button aria-label="Remove Apple" class="wave-tag__dismiss-button wave:relative wave:inline-flex wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border-0 wave:bg-transparent wave:p-0 wave:text-inherit wave:before:absolute wave:disabled:cursor-not-allowed wave:forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight] wave:size-4 wave:before:-inset-1 wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:not-disabled:not-aria-disabled:hover:bg-muted-hover wave:not-disabled:not-aria-disabled:active:bg-muted-pressed wave:focus-visible:outline-2 wave:focus-visible:outline-ring wave:focus-visible:outline-offset-0 wave-tag-picker__remove-button" data-wave-tag-dismiss="" type="button">',
+        '<button aria-label="Clear selection" class="wave-tag-picker__clear-button wave:top-1.5 wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-7 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:aria-disabled:cursor-not-allowed" type="button">',
+        '<button aria-controls="tagpicker-listbox-_id0_" aria-expanded="true" aria-label="Show options" class="wave-tag-picker__expand-button wave:top-1.5 wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-1 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+        '<div class="wave-listbox-surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4 wave-tag-picker__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<li aria-selected="false" class="wave-option wave:flex wave:cursor-pointer wave:select-none wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground wave:bg-(--option-bg) wave:[--option-bg:transparent] wave:not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)] wave:data-[selected]:[--option-bg:var(--wave-subtle-selected)] wave:data-[active]:[--option-bg:var(--wave-subtle-hover)] wave:data-[active]:outline-2 wave:data-[active]:-outline-offset-2 wave:data-[active]:outline-ring wave:aria-disabled:cursor-not-allowed wave:aria-disabled:text-muted-foreground wave-tag-picker-option wave-tag-picker__option" data-value="banana" id="tagpicker-listbox-_id0_-opt-0" role="option">',
       ].join('\n'),
     );
     first.unmount();
@@ -2330,7 +2365,7 @@ describe('TagPicker — slotProps', () => {
     await act(async () => {});
     expect(openingTags(...all(option))).toBe(
       [
-        '<li aria-selected="false" class="wave-option flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground bg-(--option-bg) [--option-bg:transparent] not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)] data-[selected]:[--option-bg:var(--wave-subtle-selected)] data-[active]:[--option-bg:var(--wave-subtle-hover)] data-[active]:outline-2 data-[active]:-outline-offset-2 data-[active]:outline-ring aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground wave-tag-picker__option wave-tag-picker__create-option" data-active="" data-create="" data-value="tagpicker-create-_id0_" id="tagpicker-listbox-_id1_-opt-0" role="option">',
+        '<li aria-selected="false" class="wave-option wave:flex wave:cursor-pointer wave:select-none wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground wave:bg-(--option-bg) wave:[--option-bg:transparent] wave:not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)] wave:data-[selected]:[--option-bg:var(--wave-subtle-selected)] wave:data-[active]:[--option-bg:var(--wave-subtle-hover)] wave:data-[active]:outline-2 wave:data-[active]:-outline-offset-2 wave:data-[active]:outline-ring wave:aria-disabled:cursor-not-allowed wave:aria-disabled:text-muted-foreground wave-tag-picker__option wave-tag-picker__create-option" data-active="" data-create="" data-value="tagpicker-create-_id0_" id="tagpicker-listbox-_id1_-opt-0" role="option">',
       ].join('\n'),
     );
     second.unmount();
@@ -2346,8 +2381,8 @@ describe('TagPicker — slotProps', () => {
     await act(async () => {});
     expect(openingTags(...[surface, emptyMessage].flatMap(all))).toBe(
       [
-        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-tag-picker__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
-        '<div aria-hidden="true" class="wave-tag-picker__empty-message px-3 py-1.5 text-body-1 text-muted-foreground">',
+        '<div class="wave-listbox-surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4 wave-tag-picker__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<div aria-hidden="true" class="wave-tag-picker__empty-message wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground">',
       ].join('\n'),
     );
   });
@@ -3055,7 +3090,7 @@ describe('TagPicker — slotProps', () => {
         />,
       );
       expect(root()).toHaveClass('static');
-      expect(root()).not.toHaveClass('relative');
+      expect(root()).not.toHaveClass('wave:relative');
     });
 
     it("keeps the props you give TagPicker over the part's", () => {

@@ -21,9 +21,10 @@ import { HiddenInput } from '../internal/HiddenInput';
  * focus outline and border; only the glyph (the leaf indicator) opts out of forced colors. A
  * disabled box draws a GrayText glyph and border on Canvas, without the Highlight fill.
  */
-const checkedBox = 'forced-colors:border-[Highlight] forced-colors:bg-[Highlight]';
-const disabledCheckedBox = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
-const disabledGlyph = 'forced-colors:text-[GrayText] forced-colors:forced-color-adjust-none';
+const checkedBox = 'wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]';
+const disabledCheckedBox = 'wave:forced-colors:border-[GrayText] wave:forced-colors:bg-[Canvas]';
+const disabledGlyph =
+  'wave:forced-colors:text-[GrayText] wave:forced-colors:forced-color-adjust-none';
 
 /** The handlers a part drops while the checkbox is unavailable: it does not activate then. */
 const BLOCK_CLICK = ['onClick'] as const;
@@ -44,14 +45,14 @@ export type CheckboxShape = Extract<Shape, 'square' | 'circular'>;
 const CHECKBOX_SIZE: Readonly<
   Record<CheckboxSize, { box: string; glyph: number; offset: string }>
 > = {
-  medium: { box: 'h-[18px] w-[18px]', glyph: 12, offset: 'mt-px' },
-  large: { box: 'h-[22px] w-[22px]', glyph: 16, offset: '-mt-px' },
+  medium: { box: 'wave:h-[18px] wave:w-[18px]', glyph: 12, offset: 'wave:mt-px' },
+  large: { box: 'wave:h-[22px] wave:w-[22px]', glyph: 16, offset: 'wave:-mt-px' },
 };
 
 /** Per-shape corner classes. */
 const CHECKBOX_SHAPE: Readonly<Record<CheckboxShape, string>> = {
-  square: 'rounded-xs',
-  circular: 'rounded-full',
+  square: 'wave:rounded-xs',
+  circular: 'wave:rounded-full',
 };
 
 /** Properties for the Checkbox component. */
@@ -312,7 +313,7 @@ export const Checkbox = ({
   // The glyph is the forced-colors leaf; the box stays on system colors (see `checkedBox`).
   const glyphClassName = unavailable ? disabledGlyph : forcedColors.selectedLeaf;
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: wcn(checkboxClassNames.label, 'text-body-1 text-foreground'),
+    className: wcn(checkboxClassNames.label, 'wave:text-body-1 wave:text-foreground'),
     // The text names the control through aria-labelledby: an aria-label would replace it.
     locked: { id: labelTextId, 'aria-label': undefined },
     // The label does not activate while the checkbox is unavailable, as the checkbox does not.
@@ -325,7 +326,7 @@ export const Checkbox = ({
       // p-0 and the unchecked bg-transparent are set here, not left to the native reset, which
       // any app button style overrides (C-NATIVE).
       wcn(
-        'flex shrink-0 items-center justify-center border p-0 transition-colors motion-reduce:transition-none',
+        'wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:border wave:p-0 wave:transition-colors wave:motion-reduce:transition-none',
         sizeMetrics.box,
         shapeClass,
       ),
@@ -334,11 +335,11 @@ export const Checkbox = ({
       focusRing,
       on
         ? wcn(
-            'border-primary bg-primary text-primary-foreground',
+            'wave:border-primary wave:bg-primary wave:text-primary-foreground',
             unavailable ? disabledCheckedBox : checkedBox,
           )
         : wcn(
-            'border-stroke-accessible bg-transparent',
+            'wave:border-stroke-accessible wave:bg-transparent',
             unavailable ? forcedColors.disabled : forcedColors.control,
           ),
     ),
@@ -386,12 +387,12 @@ export const Checkbox = ({
       checkboxClassNames.root,
       // items-start: the box lines up with the first line of a label that wraps or has a second
       // line, not with its middle.
-      'relative inline-flex items-start gap-2 select-none',
+      'wave:relative wave:inline-flex wave:items-start wave:gap-2 wave:select-none',
       // The dimmed look lifts while a focus ring shows inside the root (the control's, under
       // disabledFocusable, or a link's in the label): opacity would dim the ring below 3:1.
       unavailable
-        ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
-        : 'cursor-pointer',
+        ? 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100'
+        : 'wave:cursor-pointer',
       className,
     ),
     style,

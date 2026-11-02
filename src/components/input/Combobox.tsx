@@ -1000,11 +1000,11 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     className: wcn(
       comboboxClassNames.input,
       inputHeightClasses[size],
-      'w-full',
+      'wave:w-full',
       inputPaddingClasses[size],
       inputTextClasses[size],
       inputAppearanceClasses[appearance],
-      'text-foreground placeholder:text-muted-foreground',
+      'wave:text-foreground wave:placeholder:text-muted-foreground',
       inputFocus,
       disabledStyles,
       invalidLook && inputInvalid,
@@ -1062,7 +1062,11 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   });
 
   const rootProps = mergeSlotProps(slotProps?.root, {
-    className: wcn(comboboxClassNames.root, 'relative inline-flex flex-col', className),
+    className: wcn(
+      comboboxClassNames.root,
+      'wave:relative wave:inline-flex wave:flex-col',
+      className,
+    ),
     style,
     locked: {
       'data-size': size,
@@ -1079,7 +1083,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   return (
     <div {...rootProps} ref={rootMergedRef}>
       {multiselect && <PickerAnnouncer />}
-      <div className="relative flex items-center">
+      <div className="wave:relative wave:flex wave:items-center">
         <input
           {...inputProps}
           ref={inputMergedRef}
@@ -1142,7 +1146,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       </div>
       {/* Mounted before its text: a live region added together with its text is not announced by
           every screen reader. The row in the popup is the visible copy. */}
-      <span role="status" className="sr-only">
+      <span role="status" className="wave:sr-only">
         {noMatches && noMatchesText}
       </span>
       <PickerListboxSurface
@@ -1153,7 +1157,10 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         open={open}
         expanded={expanded}
         // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
-        listClassName={wcn(comboboxClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
+        listClassName={wcn(
+          comboboxClassNames.listbox,
+          activeWindow && 'wave:[overflow-anchor:none]',
+        )}
         surfaceClassName={comboboxClassNames.surface}
         emptyContent={
           draft ? (
@@ -1161,7 +1168,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
               {...mergeSlotProps(slotProps?.emptyMessage, {
                 className: wcn(
                   comboboxClassNames.emptyMessage,
-                  'px-3 py-1.5 text-body-1 text-muted-foreground',
+                  'wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground',
                 ),
                 locked: { 'aria-hidden': 'true', tabIndex: undefined },
               })}

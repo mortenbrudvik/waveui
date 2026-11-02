@@ -332,7 +332,7 @@ function withoutName(props: UnknownProps): { props: UnknownProps; ignoredName: b
   return { props: result, ignoredName };
 }
 
-const iconClassName = 'inline-flex items-center justify-center';
+const iconClassName = 'wave:inline-flex wave:items-center wave:justify-center';
 
 function isPlainObject(value: unknown): value is UnknownProps {
   if (typeof value !== 'object' || value === null) return false;
@@ -721,7 +721,7 @@ function TagDismissButton({
       })}
     >
       {!named && (
-        <span id={dismissLabelId} className="sr-only">
+        <span id={dismissLabelId} className="wave:sr-only">
           {dismissLabel}
         </span>
       )}
@@ -731,7 +731,7 @@ function TagDismissButton({
         <span
           id={dismissTextId}
           ref={setLabelTarget}
-          className="inline-flex items-center justify-center gap-[inherit]"
+          className="wave:inline-flex wave:items-center wave:justify-center wave:gap-[inherit]"
         >
           {content}
         </span>
@@ -1032,7 +1032,11 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       TAG_DISMISS_BASE_CLASSES,
       tagDismissSizeClasses[size],
       // A disabled tag dims itself, so its button dims nothing more and has no hover.
-      !disabled && ['disabled:opacity-50', mergedAriaDisabledClasses, tagDismissStateClasses[look]],
+      !disabled && [
+        'wave:disabled:opacity-50',
+        mergedAriaDisabledClasses,
+        tagDismissStateClasses[look],
+      ],
       focusRing,
       tagDismissRingClasses[size],
       look === 'selected' && TAG_DISMISS_SELECTED_RING_CLASSES,
@@ -1068,7 +1072,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   // The text parts merge only when given, so a tag without them allocates nothing more.
   const primaryTextClassName = wcn(
     tagClassNames.primaryText,
-    'inline-flex items-center gap-1',
+    'wave:inline-flex wave:items-center wave:gap-1',
     hasSecondary && TAG_PRIMARY_TEXT_TWO_LINE_CLASSES,
   );
   const primaryText = (

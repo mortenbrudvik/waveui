@@ -319,9 +319,9 @@ describe('checkPlainCss (repo-level#1)', () => {
     ':root,.wave-light{--wave-primary:#0f6cbd}' +
     '.wave-root,.wave-portal{font-family:var(--wave-font-family)}' +
     reset +
-    '.bg-primary{background-color:var(--wave-primary)}' +
-    '.text-body-1{font-size:14px}' +
-    '.focus-visible\\:outline-ring{outline-color:var(--wave-ring)}.focus-visible\\:-outline-offset-2{outline-offset:-2px}' +
+    '.wave\\:bg-primary{background-color:var(--wave-primary)}' +
+    '.wave\\:text-body-1{font-size:14px}' +
+    '.wave\\:focus-visible\\:outline-ring{outline-color:var(--wave-ring)}.wave\\:focus-visible\\:-outline-offset-2{outline-offset:-2px}' +
     '@keyframes wave-spin{to{transform:rotate(360deg)}}';
 
   it('passes unlayered CSS with the classes, tokens, keyframes and scoped reset', () => {
@@ -334,13 +334,19 @@ describe('checkPlainCss (repo-level#1)', () => {
   });
 
   it.each([
-    ['.bg-primary', good.replace('.bg-primary{', '.bg-secondary{')],
-    ['.text-body-1', good.replace('.text-body-1{', '.text-body-2{')],
+    ['.wave:bg-primary', good.replace('.wave\\:bg-primary{', '.wave\\:bg-secondary{')],
+    ['.wave:text-body-1', good.replace('.wave\\:text-body-1{', '.wave\\:text-body-2{')],
     ['--wave-primary', good.replace('--wave-primary:', '--primary:')],
     ['@keyframes wave-spin', good.replace('@keyframes wave-spin', '@keyframes spin')],
     ['reset', good.replace(reset, '')],
   ])('reports missing %s', (what, css) => {
     expect(checkPlainCss(css).join('\n')).toContain(what === 'reset' ? 'native' : what);
+  });
+
+  it("reports a class without Wave's prefix (it could collide with an app's)", () => {
+    expect(checkPlainCss(`${good}.flex{display:flex}.bg-primary{color:red}`)).toEqual([
+      "holds classes without Wave's prefix wave: (they could collide with an app's): bg-primary flex",
+    ]);
   });
 
   it('reports raw Tailwind source (the 0.4 ./styles entry)', () => {
@@ -353,13 +359,13 @@ describe('checkPlainCss (repo-level#1)', () => {
 describe('checkTailwindCss (repo-level#1; Phase 14 spec R6)', () => {
   /** A rule of Wave's direction variant for `name`, unminified as the fixture compiles it. */
   const directional = (name, declaration) =>
-    String.raw`.${name.replace(':', '\\:')}{
+    String.raw`.${name.replaceAll(':', '\\:')}{
       @supports selector(:nth-child(n of :dir(rtl))){&:where(:nth-child(n of :dir(rtl))){${declaration}}}
       @supports not selector(:nth-child(n of :dir(rtl))){&:where([dir="rtl"], [dir="rtl"] *){${declaration}}}}`;
   const COMPONENT_RULES =
-    '.bg-primary{background-color:var(--wave-primary)}.text-body-1{font-size:14px}' +
-    '.focus-visible\\:outline-ring:focus-visible{outline-color:var(--wave-ring)}' +
-    '.focus-visible\\:-outline-offset-2:focus-visible{outline-offset:-2px}';
+    '.wave\\:bg-primary{background-color:var(--wave-primary)}.wave\\:text-body-1{font-size:14px}' +
+    '.wave\\:focus-visible\\:outline-ring:focus-visible{outline-color:var(--wave-ring)}' +
+    '.wave\\:focus-visible\\:-outline-offset-2:focus-visible{outline-offset:-2px}';
   const MOTION_RULES =
     '.duration-wave-normal{--tw-duration:var(--wave-duration-normal);transition-duration:var(--wave-duration-normal)}' +
     '.ease-wave-decelerate-mid{--tw-ease:var(--wave-curve-decelerate-mid);transition-timing-function:var(--wave-curve-decelerate-mid)}';
@@ -392,25 +398,27 @@ describe('checkTailwindCss (repo-level#1; Phase 14 spec R6)', () => {
   it("reports a component class generated into @layer utilities (Tailwind scanned the package's dist)", () => {
     const scanned = good.replace(
       '@layer utilities{',
-      '@layer utilities{.focus-visible\\:-outline-offset-2:focus-visible{outline-offset:-2px}',
+      '@layer utilities{.wave\\:focus-visible\\:-outline-offset-2:focus-visible{outline-offset:-2px}',
     );
     expect(check(scanned)).toEqual([
-      'the component class .focus-visible:-outline-offset-2 was generated into @layer utilities: ' +
+      'the component class .wave:focus-visible:-outline-offset-2 was generated into @layer utilities: ' +
         "Tailwind scanned the package's dist (./tailwind has no @source)",
     ]);
   });
 
   it('reports a component class that is missing or outside @layer components', () => {
-    expect(check(good.replace('.bg-primary{background-color:var(--wave-primary)}', ''))).toEqual([
-      'the component class .bg-primary is missing (does @mortenbrudvik/waveui/tailwind import dist/components.css?)',
+    expect(
+      check(good.replace('.wave\\:bg-primary{background-color:var(--wave-primary)}', '')),
+    ).toEqual([
+      'the component class .wave:bg-primary is missing (does @mortenbrudvik/waveui/tailwind import dist/components.css?)',
     ]);
     const unlayered = good.replace(`@layer components{${COMPONENT_RULES}}`, COMPONENT_RULES);
     expect(check(unlayered)).toEqual(
       [
-        'bg-primary',
-        'text-body-1',
-        'focus-visible:outline-ring',
-        'focus-visible:-outline-offset-2',
+        'wave:bg-primary',
+        'wave:text-body-1',
+        'wave:focus-visible:outline-ring',
+        'wave:focus-visible:-outline-offset-2',
       ].map(
         (name) =>
           `the component class .${name} must sit in @layer components, found in <unlayered>`,
@@ -481,9 +489,26 @@ describe('checkTailwindCss (repo-level#1; Phase 14 spec R6)', () => {
     ]);
   });
 
+  it("checks the app's own classes with its prefix (an app built with prefix(tw))", () => {
+    /** The app's rules of {@link good}, each class with the app's `tw:` prefix. */
+    const prefixedApp = APP_RULES.replaceAll(/\.(?=[a-z])/g, '.tw\\:');
+    const prefixed = good.replace(APP_RULES, prefixedApp);
+    expect(check(prefixed, { appPrefix: 'tw' })).toEqual([]);
+    // Unprefixed, the app's classes are no classes of a prefix(tw) build.
+    expect(check(good, { appPrefix: 'tw' })).toEqual([
+      'the namespaced token utilities .tw:bg-wave-primary, .tw:text-wave-body-1, ' +
+        '.tw:border-wave-border, .tw:shadow-wave-4, .tw:font-wave were not generated (the ' +
+        'namespaced theme keys of @mortenbrudvik/waveui/tokens are missing)',
+      "the motion utilities .tw:duration-wave-normal, .tw:ease-wave-decelerate-mid were not generated (the Wave theme's --transition-duration-wave-* and --ease-wave-* mappings are missing)",
+      "the app's class tw:wave-rtl:rotate-180 was not compiled with Wave's wave-rtl variant " +
+        '(does @mortenbrudvik/waveui/tailwind import variants.css?)',
+      "the consumer utility .tw:p-4 was not generated (the fixture's own sources were not scanned)",
+    ]);
+  });
+
   describe('the wave-rtl classes (C-LOGICAL)', () => {
-    const directionClasses = ['wave-rtl:-scale-x-100'];
-    const compiled = `@layer components{${directional('wave-rtl:-scale-x-100', 'scale:-1 1')}}`;
+    const directionClasses = ['wave:wave-rtl:-scale-x-100'];
+    const compiled = `@layer components{${directional('wave:wave-rtl:-scale-x-100', 'scale:-1 1')}}`;
 
     it("passes the dist's classes compiled with the variant in dist/components.css", () => {
       expect(check(good + compiled, { directionClasses })).toEqual([]);
@@ -491,7 +516,7 @@ describe('checkTailwindCss (repo-level#1; Phase 14 spec R6)', () => {
 
     it('reports a dist class that was not compiled with the variant', () => {
       expect(check(good, { directionClasses })).toEqual([
-        "the dist classes wave-rtl:-scale-x-100 were not compiled with Wave's wave-rtl variant " +
+        "the dist classes wave:wave-rtl:-scale-x-100 were not compiled with Wave's wave-rtl variant " +
           '(is dist/components.css compiled with src/styles/variants.css?)',
       ]);
     });
@@ -514,14 +539,20 @@ describe('checkTailwindCss (repo-level#1; Phase 14 spec R6)', () => {
       expect(checkTailwindCss(tokens, { setup: 'tokens' })).toEqual([]);
       // The dist's direction classes are not the setup's: the components come from ./styles.
       expect(
-        checkTailwindCss(tokens, { setup: 'tokens', directionClasses: ['wave-rtl:-scale-x-100'] }),
+        checkTailwindCss(tokens, {
+          setup: 'tokens',
+          directionClasses: ['wave:wave-rtl:-scale-x-100'],
+        }),
       ).toEqual([]);
     });
 
     it('reports component classes (the setup compiled the components or ./tokens holds unnamespaced keys)', () => {
-      const css = tokens.replace('@layer utilities{', '@layer utilities{.bg-primary{color:red}');
+      const css = tokens.replace(
+        '@layer utilities{',
+        '@layer utilities{.wave\\:bg-primary{color:red}',
+      );
       expect(checkTailwindCss(css, { setup: 'tokens' })).toEqual([
-        'the component classes .bg-primary are in the custom setup (its components come from ' +
+        'the component classes .wave:bg-primary are in the custom setup (its components come from ' +
           "./styles: ./tokens must hold no unnamespaced theme key, and the setup must not scan the package's dist)",
       ]);
     });
@@ -626,6 +657,22 @@ describe('the Tailwind fixture', () => {
     expect(css).toMatch(/@import '@mortenbrudvik\/waveui\/variants\.css';/);
     expect(css).not.toMatch(/@source/);
     expect(css).not.toMatch(/waveui\/tailwind/);
+  });
+
+  it('compiles the same entry in an app with its own prefix (prefix(tw))', () => {
+    const css = readFileSync(join(fixture, 'prefixed-input.css'), 'utf8');
+    expect(css).toMatch(
+      /@import 'tailwindcss' prefix\(tw\);\s*@import '@mortenbrudvik\/waveui\/tailwind';/,
+    );
+    expect(css).toContain(`--wave-primary: ${APP_TOKEN_OVERRIDE};`);
+    expect(css).not.toMatch(/@source/);
+    const html = readFileSync(join(fixture, 'src/prefixed-app.html'), 'utf8');
+    expect(html).toMatch(
+      /<p\s+class="tw:bg-wave-primary tw:text-wave-body-1 tw:border-wave-border tw:shadow-wave-4 tw:font-wave tw:wave-rtl:rotate-180"\s*>/,
+    );
+    expect(html).toMatch(
+      /<main class="tw:p-4 tw:duration-wave-normal tw:ease-wave-decelerate-mid">/,
+    );
   });
 
   it("uses Wave's namespaced token, motion and direction utilities in its own source", () => {

@@ -142,7 +142,7 @@ export interface SwatchPickerRowProps extends React.HTMLAttributes<HTMLDivElemen
 
 /** The gap class the root and the rows share. */
 function swatchGap(spacing: 'small' | 'medium'): string {
-  return spacing === 'small' ? 'gap-1' : 'gap-2';
+  return spacing === 'small' ? 'wave:gap-1' : 'wave:gap-2';
 }
 
 /** Tab mode: every swatch is a tab stop. */
@@ -193,7 +193,7 @@ export const SwatchPickerRow = ({ className, ref, ...rest }: SwatchPickerRowProp
           swatchPickerRowClassNames.root,
           // The grid's rows never wrap: Up and Down would not reach a wrapped swatch. Tab mode
           // has no arrow keys, so its rows wrap like the row layout's.
-          isGridRow ? 'flex' : 'flex basis-full flex-wrap',
+          isGridRow ? 'wave:flex' : 'wave:flex wave:basis-full wave:flex-wrap',
           swatchGap(spacing),
           className,
         )}
@@ -381,7 +381,7 @@ const SwatchPickerRoot = ({
       data-spacing={spacing}
       className={wcn(
         swatchPickerClassNames.root,
-        isGrid ? 'relative flex flex-col' : 'relative flex flex-wrap',
+        isGrid ? 'wave:relative wave:flex wave:flex-col' : 'wave:relative wave:flex wave:flex-wrap',
         swatchGap(spacing),
         className,
       )}

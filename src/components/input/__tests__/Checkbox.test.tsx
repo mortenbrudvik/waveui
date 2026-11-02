@@ -728,18 +728,22 @@ describe('Checkbox — styling tokens', () => {
     render(<Checkbox label="Accept" />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
     expect(cb).toHaveClass(
-      'border-stroke-accessible',
-      'rounded-xs',
-      'forced-colors:border-[ButtonText]',
+      'wave:border-stroke-accessible',
+      'wave:rounded-xs',
+      'wave:forced-colors:border-[ButtonText]',
     );
-    expect(cb).not.toHaveClass('rounded-sm');
-    expect(cb).not.toHaveClass('border-input');
+    expect(cb).not.toHaveClass('wave:rounded-sm');
+    expect(cb).not.toHaveClass('wave:border-input');
   });
 
   it('draws the checked box with primary and the glyph with primary-foreground (currentColor)', () => {
     render(<Checkbox label="Accept" defaultChecked />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
-    expect(cb).toHaveClass('bg-primary', 'border-primary', 'text-primary-foreground');
+    expect(cb).toHaveClass(
+      'wave:bg-primary',
+      'wave:border-primary',
+      'wave:text-primary-foreground',
+    );
     const glyph = cb.querySelector('svg');
     expect(glyph).toHaveAttribute('stroke', 'currentColor');
     expect(glyph).toHaveAttribute('aria-hidden', 'true');
@@ -749,32 +753,38 @@ describe('Checkbox — styling tokens', () => {
     render(<Checkbox label="Accept" defaultChecked />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
     // The focusable box is not opted out of forced colors, so its focus outline and border are forced.
-    expect(cb).toHaveClass('forced-colors:bg-[Highlight]', 'forced-colors:border-[Highlight]');
-    expect(cb).not.toHaveClass('forced-colors:forced-color-adjust-none');
+    expect(cb).toHaveClass(
+      'wave:forced-colors:bg-[Highlight]',
+      'wave:forced-colors:border-[Highlight]',
+    );
+    expect(cb).not.toHaveClass('wave:forced-colors:forced-color-adjust-none');
     expect(cb.querySelector('svg')).toHaveClass(
-      'forced-colors:forced-color-adjust-none',
-      'forced-colors:text-[HighlightText]',
+      'wave:forced-colors:forced-color-adjust-none',
+      'wave:forced-colors:text-[HighlightText]',
     );
   });
 
   it('forced colors: a disabled checked box draws a GrayText glyph and border on Canvas, no Highlight', () => {
     render(<Checkbox label="Accept" defaultChecked disabled />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
-    expect(cb).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
-    expect(cb).not.toHaveClass('forced-colors:bg-[Highlight]');
-    expect(cb).not.toHaveClass('forced-colors:border-[Highlight]');
+    expect(cb).toHaveClass(
+      'wave:forced-colors:border-[GrayText]',
+      'wave:forced-colors:bg-[Canvas]',
+    );
+    expect(cb).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
+    expect(cb).not.toHaveClass('wave:forced-colors:border-[Highlight]');
     const glyph = cb.querySelector('svg');
-    expect(glyph).toHaveClass('forced-colors:text-[GrayText]');
-    expect(glyph).not.toHaveClass('forced-colors:bg-[Highlight]');
-    expect(glyph).not.toHaveClass('forced-colors:text-[HighlightText]');
+    expect(glyph).toHaveClass('wave:forced-colors:text-[GrayText]');
+    expect(glyph).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
+    expect(glyph).not.toHaveClass('wave:forced-colors:text-[HighlightText]');
   });
 
   it('forced colors: a disabled indeterminate box has no Highlight fill either', () => {
     render(<Checkbox label="Accept" indeterminate disabled />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
-    expect(cb).toHaveClass('forced-colors:bg-[Canvas]');
-    expect(cb).not.toHaveClass('forced-colors:bg-[Highlight]');
-    expect(cb.querySelector('svg')).toHaveClass('forced-colors:text-[GrayText]');
+    expect(cb).toHaveClass('wave:forced-colors:bg-[Canvas]');
+    expect(cb).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
+    expect(cb.querySelector('svg')).toHaveClass('wave:forced-colors:text-[GrayText]');
   });
 
   it('draws the indeterminate glyph with currentColor', () => {
@@ -791,22 +801,25 @@ describe('Checkbox — styling tokens', () => {
         <Checkbox label="Mixed" indeterminate />
       </>,
     );
-    expect(screen.getByRole('checkbox', { name: 'Off' })).toHaveClass('p-0', 'bg-transparent');
+    expect(screen.getByRole('checkbox', { name: 'Off' })).toHaveClass(
+      'wave:p-0',
+      'wave:bg-transparent',
+    );
     for (const name of ['On', 'Mixed']) {
-      expect(screen.getByRole('checkbox', { name })).toHaveClass('p-0', 'bg-primary');
+      expect(screen.getByRole('checkbox', { name })).toHaveClass('wave:p-0', 'wave:bg-primary');
     }
   });
 
   it('draws the label text on the px type ramp like Field and Label (text-body-1)', () => {
     render(<Checkbox label="Accept" />);
-    expect(screen.getByText('Accept')).toHaveClass('text-body-1');
-    expect(screen.getByText('Accept')).not.toHaveClass('text-sm');
+    expect(screen.getByText('Accept')).toHaveClass('wave:text-body-1');
+    expect(screen.getByText('Accept')).not.toHaveClass('wave:text-sm');
   });
 
   it('turns off the color transition for reduced motion', () => {
     render(<Checkbox label="Accept" />);
     expect(screen.getByRole('checkbox', { name: 'Accept' })).toHaveClass(
-      'motion-reduce:transition-none',
+      'wave:motion-reduce:transition-none',
     );
   });
 });
@@ -890,18 +903,18 @@ describe('Checkbox — rich label and labelPosition', () => {
         />,
       );
       const root = screen.getByTestId('root');
-      expect(root).toHaveClass('items-start');
-      expect(root).not.toHaveClass('items-center');
+      expect(root).toHaveClass('wave:items-start');
+      expect(root).not.toHaveClass('wave:items-center');
       // The 18px box sits 1px down, centred on the 20px first line of `text-body-1`.
       expect(screen.getByRole('checkbox', { name: 'Newsletter Once a month' })).toHaveClass(
-        'mt-px',
+        'wave:mt-px',
       );
     },
   );
 
   it('a checkbox without a label text gets no first-line offset', () => {
     render(<Checkbox aria-label="Select row" />);
-    expect(screen.getByRole('checkbox', { name: 'Select row' })).not.toHaveClass('mt-px');
+    expect(screen.getByRole('checkbox', { name: 'Select row' })).not.toHaveClass('wave:mt-px');
   });
 
   it('renders label={0} as content', () => {
@@ -1021,10 +1034,13 @@ describe('Checkbox — disabledFocusable', () => {
 
   it('has the disabled look, forced colors included', () => {
     render(<Checkbox label="Accept" disabledFocusable defaultChecked data-testid="root" />);
-    expect(screen.getByTestId('root')).toHaveClass('cursor-not-allowed', 'opacity-50');
+    expect(screen.getByTestId('root')).toHaveClass('wave:cursor-not-allowed', 'wave:opacity-50');
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
-    expect(cb).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
-    expect(cb.querySelector('svg')).toHaveClass('forced-colors:text-[GrayText]');
+    expect(cb).toHaveClass(
+      'wave:forced-colors:border-[GrayText]',
+      'wave:forced-colors:bg-[Canvas]',
+    );
+    expect(cb.querySelector('svg')).toHaveClass('wave:forced-colors:text-[GrayText]');
   });
 
   it('keeps its focus ring at full strength: the dimmed look lifts while a focus ring shows inside it', () => {
@@ -1037,8 +1053,8 @@ describe('Checkbox — disabledFocusable', () => {
     // The root's opacity dims the checkbox's outline too, which would put the ring below 3:1.
     // tailwind-merge keeps both classes (different variants); the variant wins while it matches.
     expect(screen.getByTestId('focusable')).toHaveClass(
-      'opacity-50',
-      'has-focus-visible:opacity-100',
+      'wave:opacity-50',
+      'wave:has-focus-visible:opacity-100',
     );
     expect(screen.getByTestId('available').className).not.toMatch(/opacity/);
   });
@@ -1084,7 +1100,7 @@ describe('size and shape (Phase 4 D14)', () => {
 
   it('medium square is the 0.7 look, with its attributes', () => {
     render(<Checkbox label="Accept" defaultChecked />);
-    expect(box()).toHaveClass('h-[18px]', 'w-[18px]', 'rounded-xs', 'mt-px');
+    expect(box()).toHaveClass('wave:h-[18px]', 'wave:w-[18px]', 'wave:rounded-xs', 'wave:mt-px');
     expect(box().querySelector('svg')).toHaveAttribute('width', '12');
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-shape', 'square');
@@ -1092,14 +1108,14 @@ describe('size and shape (Phase 4 D14)', () => {
 
   it('large is a 22px box with a 16px glyph', () => {
     render(<Checkbox label="Accept" size="large" defaultChecked />);
-    expect(box()).toHaveClass('h-[22px]', 'w-[22px]', '-mt-px');
+    expect(box()).toHaveClass('wave:h-[22px]', 'wave:w-[22px]', 'wave:-mt-px');
     expect(box().querySelector('svg')).toHaveAttribute('width', '16');
     expect(root()).toHaveAttribute('data-size', 'large');
   });
 
   it('circular is round', () => {
     render(<Checkbox label="Accept" shape="circular" />);
-    expect(box()).toHaveClass('rounded-full');
+    expect(box()).toHaveClass('wave:rounded-full');
     expect(root()).toHaveAttribute('data-shape', 'circular');
   });
 
@@ -1118,7 +1134,7 @@ describe('size and shape (Phase 4 D14)', () => {
   it('renders and reports the defaults for a size or shape from untyped code', () => {
     // @ts-expect-error Checkbox has no small size
     render(<Checkbox label="Accept" size="small" shape="rounded" />);
-    expect(box()).toHaveClass('h-[18px]', 'w-[18px]', 'rounded-xs');
+    expect(box()).toHaveClass('wave:h-[18px]', 'wave:w-[18px]', 'wave:rounded-xs');
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-shape', 'square');
   });
@@ -1164,14 +1180,14 @@ describe('Checkbox — slotProps', () => {
     // Captured from 17abc07: the merged props may put the class before the locked attributes.
     expect(sortAttributes(renderToString(<Checkbox label="Accept" indeterminate />))).toBe(
       [
-        '<label class="wave-checkbox relative inline-flex items-start gap-2 select-none cursor-pointer" data-label-position="after" data-shape="square" data-size="medium">',
-        '<button aria-checked="mixed" aria-labelledby="checkbox-label-_R_0H1_" class="wave-checkbox__indicator flex shrink-0 items-center justify-center border p-0 transition-colors motion-reduce:transition-none h-[18px] w-[18px] rounded-xs mt-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" id="checkbox-_R_0_" role="checkbox" type="button">',
-        '<svg aria-hidden="true" class="forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-wave-icon="subtract" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+        '<label class="wave-checkbox wave:relative wave:inline-flex wave:items-start wave:gap-2 wave:select-none wave:cursor-pointer" data-label-position="after" data-shape="square" data-size="medium">',
+        '<button aria-checked="mixed" aria-labelledby="checkbox-label-_R_0H1_" class="wave-checkbox__indicator wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:border wave:p-0 wave:transition-colors wave:motion-reduce:transition-none wave:h-[18px] wave:w-[18px] wave:rounded-xs wave:mt-px wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:border-primary wave:bg-primary wave:text-primary-foreground wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]" id="checkbox-_R_0_" role="checkbox" type="button">',
+        '<svg aria-hidden="true" class="wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none" data-wave-icon="subtract" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
         '<path d="M2.5 6h7">',
         '</path>',
         '</svg>',
         '</button>',
-        '<span class="wave-checkbox__label text-body-1 text-foreground" id="checkbox-label-_R_0H1_">Accept',
+        '<span class="wave-checkbox__label wave:text-body-1 wave:text-foreground" id="checkbox-label-_R_0H1_">Accept',
         '</span>',
         '</label>',
       ].join(''),
@@ -1218,8 +1234,8 @@ describe('Checkbox — slotProps', () => {
     const indicator = screen.getByRole('checkbox', { name: 'Accept' });
     const label = screen.getByText('Accept');
     for (const [element, stable, own, mine, part] of [
-      [indicator, checkboxClassNames.indicator, 'border', 'my-box', 'indicator'],
-      [label, checkboxClassNames.label, 'text-body-1', 'my-label', 'label'],
+      [indicator, checkboxClassNames.indicator, 'wave:border', 'my-box', 'indicator'],
+      [label, checkboxClassNames.label, 'wave:text-body-1', 'my-label', 'label'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -1493,7 +1509,7 @@ describe('Checkbox — slotProps', () => {
     it('lets your class replace a conflicting class of the root', () => {
       render(<Checkbox label="Accept" slotProps={{ root: { className: 'items-center' } }} />);
       expect(root()).toHaveClass('items-center');
-      expect(root()).not.toHaveClass('items-start');
+      expect(root()).not.toHaveClass('wave:items-start');
     });
 
     it("keeps the props you give the Checkbox over the part's", () => {

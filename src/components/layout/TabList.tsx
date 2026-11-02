@@ -522,7 +522,7 @@ const TabListRoot = ({
 
   return (
     <TabListContext.Provider value={context}>
-      <div className={wcn(isVertical && 'flex')}>
+      <div className={wcn(isVertical && 'wave:flex')}>
         <div
           role="tablist"
           aria-orientation={orientation}
@@ -531,12 +531,12 @@ const TabListRoot = ({
           data-orientation={orientation}
           className={wcn(
             tabListClassNames.root,
-            isVertical ? 'flex w-40 flex-col' : 'flex',
+            isVertical ? 'wave:flex wave:w-40 wave:flex-col' : 'wave:flex',
             appearance === 'transparent'
               ? isVertical
-                ? 'border-e border-border'
-                : 'border-b border-border'
-              : 'gap-1',
+                ? 'wave:border-e wave:border-border'
+                : 'wave:border-b wave:border-border'
+              : 'wave:gap-1',
             className,
           )}
           {...rest}
@@ -562,23 +562,23 @@ TabListRoot.displayName = 'TabList';
 
 /** Padding of a tab with text, per size. Literal strings only. */
 const tabPadding: Readonly<Record<CoreSize, string>> = {
-  small: 'px-3 py-1.5',
-  medium: 'px-4 py-2',
-  large: 'px-5 py-3',
+  small: 'wave:px-3 wave:py-1.5',
+  medium: 'wave:px-4 wave:py-2',
+  large: 'wave:px-5 wave:py-3',
 };
 
 /** Padding of an icon-only tab (a square hit area), per size. */
 const tabIconOnlyPadding: Readonly<Record<CoreSize, string>> = {
-  small: 'p-1.5',
-  medium: 'p-2',
-  large: 'p-3',
+  small: 'wave:p-1.5',
+  medium: 'wave:p-2',
+  large: 'wave:p-3',
 };
 
 /** Type step of a tab, per size. */
 const tabText: Readonly<Record<CoreSize, string>> = {
-  small: 'text-caption-1',
-  medium: 'text-body-1',
-  large: 'text-body-2',
+  small: 'wave:text-caption-1',
+  medium: 'wave:text-body-1',
+  large: 'wave:text-body-2',
 };
 
 /**
@@ -590,9 +590,9 @@ const tabText: Readonly<Record<CoreSize, string>> = {
  */
 const tabIndicatorClasses: Readonly<Record<Orientation, string>> = {
   horizontal:
-    'relative border-b-2 border-b-transparent after:absolute after:inset-x-0 after:-bottom-0.5 after:border-b-2 after:border-b-primary after:origin-left after:translate-x-[var(--wave-tab-indicator-offset,0px)] after:scale-x-[var(--wave-tab-indicator-scale,1)] forced-colors:after:border-[Highlight]', // wave-allow-physical: the FLIP offset is measured in physical pixels
+    'wave:relative wave:border-b-2 wave:border-b-transparent wave:after:absolute wave:after:inset-x-0 wave:after:-bottom-0.5 wave:after:border-b-2 wave:after:border-b-primary wave:after:origin-left wave:after:translate-x-[var(--wave-tab-indicator-offset,0px)] wave:after:scale-x-[var(--wave-tab-indicator-scale,1)] wave:forced-colors:after:border-[Highlight]', // wave-allow-physical: the FLIP offset is measured in physical pixels
   vertical:
-    'relative border-s-2 border-s-transparent after:absolute after:inset-y-0 after:-start-0.5 after:border-s-2 after:border-s-primary after:origin-top after:translate-y-[var(--wave-tab-indicator-offset,0px)] after:scale-y-[var(--wave-tab-indicator-scale,1)] forced-colors:after:border-[Highlight]', // wave-allow-physical: the FLIP offset is measured in physical pixels
+    'wave:relative wave:border-s-2 wave:border-s-transparent wave:after:absolute wave:after:inset-y-0 wave:after:-start-0.5 wave:after:border-s-2 wave:after:border-s-primary wave:after:origin-top wave:after:translate-y-[var(--wave-tab-indicator-offset,0px)] wave:after:scale-y-[var(--wave-tab-indicator-scale,1)] wave:forced-colors:after:border-[Highlight]', // wave-allow-physical: the FLIP offset is measured in physical pixels
 };
 
 /**
@@ -608,31 +608,31 @@ function tabLookClasses(
   switch (appearance) {
     case 'subtle':
     case 'subtle-circular': {
-      const shape = appearance === 'subtle' ? 'rounded-md' : 'rounded-full';
+      const shape = appearance === 'subtle' ? 'wave:rounded-md' : 'wave:rounded-full';
       return selected
-        ? wcn(shape, 'bg-subtle-selected text-foreground', forcedColors.selectedContainer)
+        ? wcn(shape, 'wave:bg-subtle-selected wave:text-foreground', forcedColors.selectedContainer)
         : wcn(
             shape,
-            'text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+            'wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
           );
     }
     case 'filled-circular':
       return selected
         ? wcn(
-            'rounded-full bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+            'wave:rounded-full wave:bg-primary wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-hover wave:not-disabled:not-aria-disabled:active:bg-primary-pressed',
             forcedColors.selectedContainer,
           )
-        : 'rounded-full bg-muted text-muted-foreground not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-muted-pressed';
+        : 'wave:rounded-full wave:bg-muted wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-muted-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:not-disabled:not-aria-disabled:active:bg-muted-pressed';
     default:
       // Every tab's own border has one color whether selected or not (forced colors would turn a
       // transparent one into the text color, but keep a system color): the tab's color transition
       // covers its border, so a color that changed with the selection would fade a second line in
       // under the new tab while its line slides there.
       return wcn(
-        'border-transparent forced-colors:border-[Canvas]',
+        'wave:border-transparent wave:forced-colors:border-[Canvas]',
         selected
-          ? wcn('text-primary', tabIndicatorClasses[vertical ? 'vertical' : 'horizontal'])
-          : 'text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground',
+          ? wcn('wave:text-primary', tabIndicatorClasses[vertical ? 'vertical' : 'horizontal'])
+          : 'wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:text-foreground',
       );
   }
 }
@@ -719,11 +719,11 @@ const Tab = ({
       role="tab"
       className={wcn(
         tabListTabClassNames.root,
-        'font-semibold transition-colors motion-reduce:transition-none',
+        'wave:font-semibold wave:transition-colors wave:motion-reduce:transition-none',
         iconOnly ? tabIconOnlyPadding[ctx.size] : tabPadding[ctx.size],
         tabText[ctx.size],
-        hasIcon && 'inline-flex items-center justify-center gap-2',
-        isVertical && 'text-start',
+        hasIcon && 'wave:inline-flex wave:items-center wave:justify-center wave:gap-2',
+        isVertical && 'wave:text-start',
         tabLookClasses(ctx.appearance, selected, isVertical),
         disabledStyles,
         focusRingInset,
@@ -791,7 +791,7 @@ const TabPanel = ({ value, id: idProp, children, className, ref, ...rest }: TabP
     <div
       role="tabpanel"
       tabIndex={0}
-      className={wcn(tabListPanelClassNames.root, 'p-4', focusRing, className)}
+      className={wcn(tabListPanelClassNames.root, 'wave:p-4', focusRing, className)}
       {...rest}
       id={id}
       aria-labelledby={tabId}
@@ -822,7 +822,7 @@ export interface TabPanelsProps extends React.HTMLAttributes<HTMLDivElement> {
 const TabPanels = ({ className, children, ref, ...rest }: TabPanelsProps) => (
   <div
     ref={ref}
-    className={wcn(tabListPanelsClassNames.root, 'min-w-0 flex-1', className)}
+    className={wcn(tabListPanelsClassNames.root, 'wave:min-w-0 wave:flex-1', className)}
     {...rest}
   >
     {children}

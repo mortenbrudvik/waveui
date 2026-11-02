@@ -791,10 +791,10 @@ function warnDuplicateRowId(rowId: string): void {
 /** A body row: its hover and, per `selectionAppearance`, the fill of a selected row. */
 const BODY_ROW_CLASSES: Record<DataGridSelectionAppearance, string> = {
   brand:
-    'hover:bg-subtle-hover data-[selected]:bg-selected transition-colors motion-reduce:transition-none',
+    'wave:hover:bg-subtle-hover wave:data-[selected]:bg-selected wave:transition-colors wave:motion-reduce:transition-none',
   neutral:
-    'hover:bg-subtle-hover data-[selected]:bg-subtle-selected transition-colors motion-reduce:transition-none',
-  none: 'hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
+    'wave:hover:bg-subtle-hover wave:data-[selected]:bg-subtle-selected wave:transition-colors wave:motion-reduce:transition-none',
+  none: 'wave:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none',
 };
 
 // ---------------------------------------------------------------------------
@@ -1307,10 +1307,10 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                       aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
                       className={wcn(
                         dataGridClassNames.container,
-                        'overflow-x-auto rounded-md border border-border',
+                        'wave:overflow-x-auto wave:rounded-md wave:border wave:border-border',
                         // The window lays the rows out: the browser's scroll anchoring only
                         // fights it.
-                        windowed && '[overflow-anchor:none]',
+                        windowed && 'wave:[overflow-anchor:none]',
                         containerClassName,
                       )}
                     >
@@ -1325,9 +1325,9 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                         data-resizing={sizing.resizing ? '' : undefined}
                         className={wcn(
                           dataGridClassNames.root,
-                          'w-full border-separate border-spacing-0',
+                          'wave:w-full wave:border-separate wave:border-spacing-0',
                           // The group whose hover or focus draws the subtle select-all checkbox.
-                          subtleSelection && 'group/grid',
+                          subtleSelection && 'wave:group/grid',
                           className,
                         )}
                         // The widths are runtime data: the layout and the width are inline.
@@ -1729,7 +1729,7 @@ const DataGridRow = ({
           dataGridRowClassNames.root,
           // The group whose hover or focus draws a subtle selection control (its own name: a
           // Tree in a cell keys its actions on its rows' `group/row`).
-          'group/table-row',
+          'wave:group/table-row',
           !inHeader && BODY_ROW_CLASSES[selectionAppearance],
           selectable && isSelected && forcedColors.selectedContainer,
           className,
@@ -1795,7 +1795,7 @@ function DataGridBodySelectionCell({
         stableClassName,
         dataGridRowClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
-        windowedRow && 'py-0 align-middle',
+        windowedRow && 'wave:py-0 wave:align-middle',
         focusRingInset,
         row.selectionCellProps?.className,
         className,
@@ -1932,9 +1932,10 @@ const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) 
       className={wcn(
         dataGridCellClassNames.root,
         cellBase,
-        'relative text-body-1',
-        (fixedLayout || windowedRow) && 'overflow-hidden text-ellipsis whitespace-nowrap',
-        windowedRow && 'py-0 align-middle',
+        'wave:relative wave:text-body-1',
+        (fixedLayout || windowedRow) &&
+          'wave:overflow-hidden wave:text-ellipsis wave:whitespace-nowrap',
+        windowedRow && 'wave:py-0 wave:align-middle',
         focusRingInset,
         className,
       )}

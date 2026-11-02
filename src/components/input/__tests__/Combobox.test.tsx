@@ -138,7 +138,7 @@ describe('Combobox', () => {
     ref: 'control',
     control: { role: 'combobox', tag: 'input' },
     defaultProps: { 'aria-label': 'Fruit', children: FRUITS },
-    conflictingClass: { className: 'flex-row', overrides: 'flex-col' },
+    conflictingClass: { className: 'flex-row', overrides: 'wave:flex-col' },
     a11yVariants: [
       { name: 'open', props: { defaultOpen: true } },
       { name: 'with a value', props: { defaultValue: 'b' } },
@@ -1510,7 +1510,7 @@ describe('Combobox', () => {
       const wrapper = combobox().parentElement as HTMLElement;
       expect(wrapper.parentElement).toBe(root);
       expect(wrapper.tagName).toBe('DIV');
-      expect(wrapper).toHaveClass('relative', 'flex', 'items-center');
+      expect(wrapper).toHaveClass('wave:relative', 'wave:flex', 'wave:items-center');
       expect(
         within(wrapper)
           .getAllByRole('button')
@@ -1583,11 +1583,14 @@ describe('Combobox', () => {
       renderCombobox();
       const glyph = () => expandButton().firstElementChild;
       expect(glyph()).toHaveAttribute('aria-hidden', 'true');
-      expect(glyph()).toHaveClass('transition-transform', 'motion-reduce:transition-none');
-      expect(glyph()).not.toHaveClass('rotate-180');
+      expect(glyph()).toHaveClass(
+        'wave:transition-transform',
+        'wave:motion-reduce:transition-none',
+      );
+      expect(glyph()).not.toHaveClass('wave:rotate-180');
       expect(glyph()?.querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
       await user.click(expandButton());
-      expect(glyph()).toHaveClass('rotate-180');
+      expect(glyph()).toHaveClass('wave:rotate-180');
     });
 
     it.each([
@@ -1806,9 +1809,9 @@ describe('Combobox', () => {
     });
 
     it.each([
-      ['the chevron', {}, 'pe-8'],
-      ['the chevron and the clear button', { clearable: true }, 'pe-14'],
-      ['only the clear button', { clearable: true, expandIcon: false }, 'pe-8'],
+      ['the chevron', {}, 'wave:pe-8'],
+      ['the chevron and the clear button', { clearable: true }, 'wave:pe-14'],
+      ['only the clear button', { clearable: true, expandIcon: false }, 'wave:pe-8'],
     ])('pads the input for %s', (_label, props, padding) => {
       renderCombobox({ defaultValue: 'a', ...props });
       expect(combobox()).toHaveClass(padding);
@@ -1821,8 +1824,11 @@ describe('Combobox', () => {
         </Combobox>,
         { dir: 'rtl' },
       );
-      expect(clearButton()).toHaveClass('absolute', 'end-7', 'h-6', 'w-6');
-      expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('absolute', 'end-1');
+      expect(clearButton()).toHaveClass('wave:absolute', 'wave:end-7', 'wave:h-6', 'wave:w-6');
+      expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass(
+        'wave:absolute',
+        'wave:end-1',
+      );
       for (const element of [clearButton(), screen.getByRole('button', { name: 'Show options' })]) {
         expect(element.className).not.toMatch(/\b(left|right)-/);
       }
@@ -1833,17 +1839,19 @@ describe('Combobox', () => {
         </Combobox>,
         { dir: 'rtl' },
       );
-      expect(screen.getAllByRole('button', { name: 'Clear selection' })[1]).toHaveClass('end-1');
+      expect(screen.getAllByRole('button', { name: 'Clear selection' })[1]).toHaveClass(
+        'wave:end-1',
+      );
     });
 
     it('gives both buttons their own padding, background and focus ring (C-NATIVE, C-FOCUS)', () => {
       renderCombobox({ defaultValue: 'a', clearable: true });
       for (const element of [clearButton(), screen.getByRole('button', { name: 'Show options' })]) {
         expect(element).toHaveClass(
-          'p-0',
-          'bg-transparent',
-          'focus-visible:outline-2',
-          'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+          'wave:p-0',
+          'wave:bg-transparent',
+          'wave:focus-visible:outline-2',
+          'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
         );
       }
     });
@@ -1853,12 +1861,12 @@ describe('Combobox', () => {
     it('draws the field boundary with the accessible bottom stroke (WCAG 1.4.11)', () => {
       renderCombobox();
       expect(combobox()).toHaveClass(
-        'border',
-        'border-input',
-        'border-b-stroke-accessible',
-        'focus:border-b-primary',
+        'wave:border',
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+        'wave:focus:border-b-primary',
       );
-      expect(combobox()).not.toHaveClass('border-destructive');
+      expect(combobox()).not.toHaveClass('wave:border-destructive');
     });
 
     it.each([
@@ -1876,8 +1884,12 @@ describe('Combobox', () => {
       expect(control).toHaveAttribute('aria-invalid', 'true');
       // Keeps the destructive border and shows the focus color on the focused bottom border
       // (Phase 4 D4).
-      expect(control).toHaveClass('border', 'border-destructive', 'focus:border-b-primary');
-      for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
+      expect(control).toHaveClass(
+        'wave:border',
+        'wave:border-destructive',
+        'wave:focus:border-b-primary',
+      );
+      for (const replaced of ['wave:border-input', 'wave:border-b-stroke-accessible']) {
         expect(control).not.toHaveClass(replaced);
       }
     });
@@ -1888,8 +1900,8 @@ describe('Combobox', () => {
       });
       const control = screen.getByRole('combobox');
       expect(control).toHaveAttribute('aria-invalid', 'false');
-      expect(control).toHaveClass('border-input', 'border-b-stroke-accessible');
-      expect(control).not.toHaveClass('border-destructive');
+      expect(control).toHaveClass('wave:border-input', 'wave:border-b-stroke-accessible');
+      expect(control).not.toHaveClass('wave:border-destructive');
     });
   });
 
@@ -1908,8 +1920,8 @@ describe('Combobox', () => {
     // The built-in active state only sets `--option-bg`, read by the unconditional
     // `bg-(--option-bg)`; the consumer's variant out-specifies that reader.
     expect(option('Apple')).toHaveClass(
-      'bg-(--option-bg)',
-      'data-[active]:[--option-bg:var(--wave-subtle-hover)]',
+      'wave:bg-(--option-bg)',
+      'wave:data-[active]:[--option-bg:var(--wave-subtle-hover)]',
       'data-[active]:bg-selected',
     );
   });
@@ -2126,7 +2138,7 @@ describe('Combobox', () => {
         // The one-line input of a single-select Combobox, full width and one row high: it clips
         // the text instead of growing.
         expect(combobox().className).toBe(singleClasses);
-        expect(combobox()).toHaveClass('w-full', 'h-8');
+        expect(combobox()).toHaveClass('wave:w-full', 'wave:h-8');
       });
     });
 
@@ -3752,9 +3764,15 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
 
   it('keeps the 0.7 classes and renders the medium outline attributes', () => {
     renderCombobox();
-    expect(input()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input', 'pe-14');
-    expect(expand()).toHaveClass('h-6', 'w-6', 'end-1');
-    expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+    expect(input()).toHaveClass(
+      'wave:h-8',
+      'wave:px-3',
+      'wave:text-body-1',
+      'wave:border-input',
+      'wave:pe-14',
+    );
+    expect(expand()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-1');
+    expect(clear()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-7');
     expect(clear().querySelector('svg')).toHaveAttribute('width', '16');
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-appearance', 'outline');
@@ -3765,26 +3783,32 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
       size: 'huge' as unknown as ComboboxProps['size'],
       appearance: 'glass' as unknown as ComboboxProps['appearance'],
     });
-    expect(input()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input', 'pe-14');
-    expect(expand()).toHaveClass('h-6', 'w-6', 'end-1');
-    expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+    expect(input()).toHaveClass(
+      'wave:h-8',
+      'wave:px-3',
+      'wave:text-body-1',
+      'wave:border-input',
+      'wave:pe-14',
+    );
+    expect(expand()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-1');
+    expect(clear()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-7');
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-appearance', 'outline');
   });
 
   it('small: 24px field, 20px buttons with hit layers at end-1 and end-7, pe-13', () => {
     renderCombobox({ size: 'small' });
-    expect(input()).toHaveClass('h-6', 'px-2', 'text-caption-1', 'pe-13');
-    expect(expand()).toHaveClass('size-5', 'before:-inset-0.5', 'end-1');
-    expect(clear()).toHaveClass('size-5', 'before:-inset-0.5', 'end-7');
+    expect(input()).toHaveClass('wave:h-6', 'wave:px-2', 'wave:text-caption-1', 'wave:pe-13');
+    expect(expand()).toHaveClass('wave:size-5', 'wave:before:-inset-0.5', 'wave:end-1');
+    expect(clear()).toHaveClass('wave:size-5', 'wave:before:-inset-0.5', 'wave:end-7');
     expect(clear().querySelector('svg')).toHaveAttribute('width', '12');
   });
 
   it('large: 40px field, 32px buttons at end-1 and end-9, pe-18, larger glyphs', () => {
     renderCombobox({ size: 'large' });
-    expect(input()).toHaveClass('h-10', 'px-4', 'text-body-2', 'pe-18');
-    expect(expand()).toHaveClass('size-8', 'end-1');
-    expect(clear()).toHaveClass('size-8', 'end-9');
+    expect(input()).toHaveClass('wave:h-10', 'wave:px-4', 'wave:text-body-2', 'wave:pe-18');
+    expect(expand()).toHaveClass('wave:size-8', 'wave:end-1');
+    expect(clear()).toHaveClass('wave:size-8', 'wave:end-9');
     expect(expand().querySelector('svg')).toHaveAttribute('width', '16');
     expect(clear().querySelector('svg')).toHaveAttribute('width', '20');
   });
@@ -3792,10 +3816,10 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   it('an appearance styles the input; the listbox does not change', async () => {
     const user = userEvent.setup();
     renderCombobox({ appearance: 'underline', size: 'large' });
-    expect(input()).toHaveClass('border-0', 'border-b', 'rounded-none');
+    expect(input()).toHaveClass('wave:border-0', 'wave:border-b', 'wave:rounded-none');
     await user.click(expand());
     const option = screen.getByRole('option', { name: 'Apple' });
-    expect(option).toHaveClass('px-3', 'py-1.5', 'text-body-1');
+    expect(option).toHaveClass('wave:px-3', 'wave:py-1.5', 'wave:text-body-1');
   });
 
   it('takes the Field size and the provider appearance', () => {
@@ -3811,7 +3835,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     expect(el.closest('[data-size]')).toHaveAttribute('data-size', 'small');
     expect(el.closest('[data-appearance]')).toHaveAttribute('data-appearance', 'filled-darker');
     expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass(
-      'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
     );
   });
 
@@ -3822,8 +3846,8 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
       </Combobox>,
       { dir: 'rtl' },
     );
-    expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('end-1');
-    expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass('end-9');
+    expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('wave:end-1');
+    expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass('wave:end-9');
   });
 
   // Spec cases added beyond the brief (§2.1's Tests paragraph, binding via §2.2's "as §2.1 for
@@ -3832,9 +3856,9 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   // filled-darker; the expandIcon rule (Phase 1 D21) at every size.
 
   it.each([
-    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+    ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+    ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
   ] as const)('appearance="%s" renders its classes and data-appearance', (appearance, classes) => {
     renderCombobox({ appearance });
     expect(input()).toHaveClass(...classes);
@@ -3881,7 +3905,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     'an invalid %s field keeps the destructive border and the focus color on its bottom (own aria-invalid)',
     (appearance) => {
       renderCombobox({ appearance, 'aria-invalid': true });
-      expect(input()).toHaveClass('border-destructive', 'focus:border-b-primary');
+      expect(input()).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
     },
   );
 
@@ -3895,7 +3919,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
         { errorId: FIELD_TEST_IDS.errorId },
       );
       const byName = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
-      expect(byName).toHaveClass('border-destructive', 'focus:border-b-primary');
+      expect(byName).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
     },
   );
 
@@ -3946,10 +3970,16 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
         <Combobox.Option value="pear">Pear</Combobox.Option>
       </Combobox>,
     );
-    expect(input()).toHaveClass('h-10', 'px-4', 'text-body-2', 'pe-18', 'bg-input-filled-darker');
+    expect(input()).toHaveClass(
+      'wave:h-10',
+      'wave:px-4',
+      'wave:text-body-2',
+      'wave:pe-18',
+      'wave:bg-input-filled-darker',
+    );
     expect(input()).toHaveValue('Apple, Pear');
-    expect(expand()).toHaveClass('size-8', 'end-1');
-    expect(clear()).toHaveClass('size-8', 'end-9');
+    expect(expand()).toHaveClass('wave:size-8', 'wave:end-1');
+    expect(clear()).toHaveClass('wave:size-8', 'wave:end-9');
     expect(root()).toHaveAttribute('data-size', 'large');
     expect(root()).toHaveAttribute('data-appearance', 'filled-darker');
   });
@@ -3989,11 +4019,11 @@ describe('Combobox — slotProps', () => {
     const { input, clearButton, expandButton, listbox, surface } = comboboxClassNames;
     expect(openingTags(...parts(input, clearButton, expandButton, listbox, surface))).toBe(
       [
-        '<input aria-autocomplete="list" aria-controls="combobox-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Fruit" autocomplete="off" class="wave-combobox__input h-8 w-full px-3 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 pe-14" role="combobox" type="text" value="Apple">',
-        '<button aria-label="Clear selection" class="wave-combobox__clear-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
-        '<button aria-controls="combobox-listbox-_id0_" aria-expanded="true" aria-label="Show options" class="wave-combobox__expand-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
-        '<ul aria-label="Fruit" class="wave-listbox-surface__list min-h-0 max-h-60 overflow-auto wave-combobox__listbox" id="combobox-listbox-_id0_" role="listbox" tabindex="-1">',
-        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-combobox__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<input aria-autocomplete="list" aria-controls="combobox-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Fruit" autocomplete="off" class="wave-combobox__input wave:h-8 wave:w-full wave:px-3 wave:text-body-1 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:pe-14" role="combobox" type="text" value="Apple">',
+        '<button aria-label="Clear selection" class="wave-combobox__clear-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-7 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
+        '<button aria-controls="combobox-listbox-_id0_" aria-expanded="true" aria-label="Show options" class="wave-combobox__expand-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-1 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+        '<ul aria-label="Fruit" class="wave-listbox-surface__list wave:min-h-0 wave:max-h-60 wave:overflow-auto wave-combobox__listbox" id="combobox-listbox-_id0_" role="listbox" tabindex="-1">',
+        '<div class="wave-listbox-surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4 wave-combobox__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
       ].join('\n'),
     );
     unmount();
@@ -4006,9 +4036,9 @@ describe('Combobox — slotProps', () => {
     await act(async () => {});
     expect(openingTags(...parts(listbox, surface, comboboxClassNames.emptyMessage))).toBe(
       [
-        '<ul aria-label="Fruit" class="wave-listbox-surface__list min-h-0 max-h-60 overflow-auto wave-combobox__listbox" hidden="" id="combobox-listbox-_id0_" role="listbox" tabindex="-1">',
-        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-combobox__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
-        '<div aria-hidden="true" class="wave-combobox__empty-message px-3 py-1.5 text-body-1 text-muted-foreground">',
+        '<ul aria-label="Fruit" class="wave-listbox-surface__list wave:min-h-0 wave:max-h-60 wave:overflow-auto wave-combobox__listbox" hidden="" id="combobox-listbox-_id0_" role="listbox" tabindex="-1">',
+        '<div class="wave-listbox-surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4 wave-combobox__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<div aria-hidden="true" class="wave-combobox__empty-message wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground">',
       ].join('\n'),
     );
   });
@@ -4158,7 +4188,7 @@ describe('Combobox — slotProps', () => {
     await act(async () => {});
     const list = screen.getByRole('listbox', { name: 'Fruit' });
     expect(list).toHaveClass('max-h-96');
-    expect(list).not.toHaveClass('max-h-60');
+    expect(list).not.toHaveClass('wave:max-h-60');
   });
 
   it('attaches your refs to the parts, beside ref and the positioning', async () => {
@@ -4560,7 +4590,7 @@ describe('Combobox — slotProps', () => {
       runFrames();
       const list = screen.getByRole('listbox', { name: 'Item' });
       expect(listRef.current).toBe(list);
-      expect(list).toHaveClass('my-list', '[overflow-anchor:none]');
+      expect(list).toHaveClass('my-list', 'wave:[overflow-anchor:none]');
       const shown = within(list).getAllByRole('option').length;
       expect(shown).toBeGreaterThan(0);
       expect(shown).toBeLessThanOrEqual(30);
@@ -4679,7 +4709,7 @@ describe('Combobox — slotProps', () => {
         </Combobox>,
       );
       expect(root()).toHaveClass('flex-row');
-      expect(root()).not.toHaveClass('flex-col');
+      expect(root()).not.toHaveClass('wave:flex-col');
     });
 
     it("keeps the props you give the Combobox over the part's", () => {

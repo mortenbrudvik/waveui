@@ -1181,7 +1181,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
       </Card>,
     );
     const card = screen.getByTestId('card');
-    expect(card).toHaveClass('overflow-hidden');
+    expect(card).toHaveClass('wave:overflow-hidden');
     const trigger = button('Open');
     expect(trigger).toHaveAccessibleDescription('Opens the project');
     await showTooltip(trigger, card);
@@ -1308,7 +1308,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
       </Overflow>,
     );
     const row = screen.getByTestId('row');
-    expect(row).toHaveClass('overflow-hidden');
+    expect(row).toHaveClass('wave:overflow-hidden');
     const trigger = button('Bold');
     expect(trigger).toHaveAccessibleDescription('Bold (Ctrl+B)');
     await showTooltip(trigger, row);
@@ -3114,7 +3114,7 @@ describe('a Field validation state around a ProgressBar', () => {
       const bar = screen.getByRole('progressbar', { name: 'Upload' });
       expect(bar).toHaveAccessibleDescription('The file is large Up to 10 MB');
       expect(bar).toHaveAttribute('data-color', state);
-      expect(bar.querySelector(`.${fill}`)).not.toBeNull();
+      expect(bar.querySelector(`.wave\\:${fill}`)).not.toBeNull();
       expect(bar).not.toHaveAttribute('aria-invalid');
       expect(bar).not.toHaveAttribute('aria-required');
       expect(bar).toHaveAttribute('aria-valuenow', '40');
@@ -3249,9 +3249,9 @@ describe('a Dialog with a long form of Fields and a Dialog.Footer', () => {
     const form = screen.getByRole('form', { name: 'Profile' });
     const footer = screen.getByTestId('footer');
     const body = form.parentElement!;
-    expect(body).toHaveClass('overflow-y-auto', `scroll-pb-(${FOOTER_HEIGHT})`);
+    expect(body).toHaveClass('wave:overflow-y-auto', `wave:scroll-pb-(${FOOTER_HEIGHT})`);
     expect(form.lastElementChild).toBe(footer);
-    expect(footer).toHaveClass('sticky', '-bottom-1', 'bg-background');
+    expect(footer).toHaveClass('wave:sticky', 'wave:-bottom-1', 'wave:bg-background');
 
     mockRect(footer, { height: 64 });
     resizeObserver.trigger(footer);
@@ -4259,7 +4259,7 @@ describe('menus and commands across components', () => {
       expect(bold).toHaveAttribute('aria-pressed', 'true');
       expect(bold).toHaveAttribute('data-pressed', '');
       expect(bold).not.toHaveAttribute('aria-checked');
-      expect(bold).toHaveClass('bg-primary', 'text-primary-foreground');
+      expect(bold).toHaveClass('wave:bg-primary', 'wave:text-primary-foreground');
 
       await user.tab();
       await user.tab();
@@ -4272,7 +4272,7 @@ describe('menus and commands across components', () => {
       await user.keyboard(' ');
       expect(bold).toHaveAttribute('aria-pressed', 'false');
       expect(bold).not.toHaveAttribute('data-pressed');
-      expect(bold).not.toHaveClass('bg-primary');
+      expect(bold).not.toHaveClass('wave:bg-primary');
       await expectNoA11yViolations(document.body);
     });
   });
@@ -4655,8 +4655,8 @@ describe('Phase 4 (form controls)', () => {
 
   it('case 1: a Field size reaches every text control and picker (TagPicker: small gives medium), and sizes the label and its horizontal padding; an own size wins', () => {
     // The Field label's type ramp and its top padding beside the control, per size (D8).
-    const LABEL_RAMP = { small: 'text-caption-1', large: 'text-body-2' } as const;
-    const LABEL_TOP = { small: 'pt-1', large: 'pt-2.25' } as const;
+    const LABEL_RAMP = { small: 'wave:text-caption-1', large: 'wave:text-body-2' } as const;
+    const LABEL_TOP = { small: 'wave:pt-1', large: 'wave:pt-2.25' } as const;
     for (const { name, role, render: control } of SIZED_CONTROLS) {
       for (const size of ['small', 'large'] as const) {
         for (const orientation of ['vertical', 'horizontal'] as const) {
@@ -4683,10 +4683,10 @@ describe('Phase 4 (form controls)', () => {
           expect(within(container).getByRole(role, { name }), where).toBeInTheDocument();
           const label = within(field).getByText(name, { selector: 'label' });
           expect(label, where).toHaveClass(LABEL_RAMP[size]);
-          expect(label, where).not.toHaveClass('text-body-1');
+          expect(label, where).not.toHaveClass('wave:text-body-1');
           if (orientation === 'horizontal') {
             expect(label, where).toHaveClass(LABEL_TOP[size]);
-            expect(label, where).not.toHaveClass('pt-1.5');
+            expect(label, where).not.toHaveClass('wave:pt-1.5');
           } else {
             expect(label, where).not.toHaveClass(LABEL_TOP[size]);
           }
@@ -4857,8 +4857,8 @@ describe('Phase 4 (form controls)', () => {
     expect(group).toHaveAttribute('aria-labelledby', label.id);
     expect(container.querySelector('label label')).toBeNull();
     // Field's own label is semibold; the element's own weight wins (D32).
-    expect(label).not.toHaveClass('font-semibold');
-    expect(label).not.toHaveClass('font-bold');
+    expect(label).not.toHaveClass('wave:font-semibold');
+    expect(label).not.toHaveClass('wave:font-bold');
     await expectNoA11yViolations(document.body);
   });
 
@@ -5097,8 +5097,8 @@ describe('Phase 4 (form controls)', () => {
     expect(email).toHaveAttribute('aria-invalid', 'true');
     expect(email).toHaveAccessibleDescription('Enter an email address');
     expect(email).toHaveAttribute('aria-errormessage', alert.id);
-    expect(email).toHaveClass('border-destructive');
-    expect(email).not.toHaveClass('border-input-filled-stroke');
+    expect(email).toHaveClass('wave:border-destructive');
+    expect(email).not.toHaveClass('wave:border-input-filled-stroke');
 
     // A Combobox with a name resets with its form at large.
     const fruit = screen.getByRole('combobox', { name: 'Fruit' });
@@ -9596,14 +9596,14 @@ describe('TagGroup and InteractionTag across components (0.11 spec §4.6 #3)', (
         <Tag media={<Avatar name="Own size" size="large" />}>Own</Tag>
       </>,
     );
-    expect(screen.getByRole('img', { name: 'Medium tag' })).toHaveClass('w-6', 'h-6');
-    expect(screen.getByRole('img', { name: 'Small tag' })).toHaveClass('w-5', 'h-5');
-    expect(screen.getByRole('img', { name: 'Group tag' })).toHaveClass('w-4', 'h-4');
+    expect(screen.getByRole('img', { name: 'Medium tag' })).toHaveClass('wave:w-6', 'wave:h-6');
+    expect(screen.getByRole('img', { name: 'Small tag' })).toHaveClass('wave:w-5', 'wave:h-5');
+    expect(screen.getByRole('img', { name: 'Group tag' })).toHaveClass('wave:w-4', 'wave:h-4');
     // Inside the Primary button the Avatar is presentational: find it by its element.
     expect(
       button(/^Interaction/).querySelector('[role="img"][aria-label="Interaction tag"]'),
-    ).toHaveClass('w-5', 'h-5');
-    expect(screen.getByRole('img', { name: 'Own size' })).toHaveClass('w-12', 'h-12');
+    ).toHaveClass('wave:w-5', 'wave:h-5');
+    expect(screen.getByRole('img', { name: 'Own size' })).toHaveClass('wave:w-12', 'wave:h-12');
   });
 });
 
@@ -12169,7 +12169,7 @@ describe('Phase 12 theming across components (0.17)', () => {
     );
     expect(html).toMatch(
       new RegExp(
-        `<span class="${textClassNames.root}( [^"]*)? font-wave-mono( [^"]*)?">npm install</span>`,
+        `<span class="${textClassNames.root}( [^"]*)? wave:font-wave-mono( [^"]*)?">npm install</span>`,
       ),
     );
     expect(findDanglingIdRefsInHtml(html)).toEqual([]);

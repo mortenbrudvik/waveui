@@ -307,8 +307,8 @@ describe('Tree - selectionMode="multiple"', () => {
   it('draws the checkbox with Checkbox forced-colors recipe', () => {
     renderChecks({ defaultExpandedItems: ALL_EXPANDED, defaultCheckedItems: ['report'] });
     expect(checkbox('Report.docx')).toHaveClass(
-      'forced-colors:border-[Highlight]',
-      'forced-colors:bg-[Highlight]',
+      'wave:forced-colors:border-[Highlight]',
+      'wave:forced-colors:bg-[Highlight]',
     );
     expect(checkbox('Slides.pptx')).toHaveClass(...forcedColors.control.split(' '));
     expect(checkbox('Report.docx').querySelector('svg')).toHaveClass(

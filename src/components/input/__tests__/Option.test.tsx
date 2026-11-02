@@ -135,7 +135,7 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
     const lemon = screen.getByText('Lemon').closest('li');
     expect(lemon).toHaveAttribute('role', 'option');
     expect(lemon).toHaveClass('grid');
-    expect(lemon).not.toHaveClass('flex');
+    expect(lemon).not.toHaveClass('wave:flex');
     const apple = screen.getByText('Apple').closest('li');
     expect(apple).toHaveAttribute('role', 'option');
     expect(apple).toHaveAttribute('hidden');
@@ -189,11 +189,11 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
     );
     const selected = screen.getByRole('option', { name: 'Banana' });
     const other = screen.getByRole('option', { name: 'Apple' });
-    expect(selected.querySelector('svg')).not.toHaveClass('invisible');
-    expect(other.querySelector('svg')).toHaveClass('invisible');
-    expect(selected).toHaveClass('forced-colors:outline-[Highlight]');
-    expect(other).not.toHaveClass('forced-colors:outline-[Highlight]');
-    expect(selected).not.toHaveClass('forced-colors:forced-color-adjust-none');
+    expect(selected.querySelector('svg')).not.toHaveClass('wave:invisible');
+    expect(other.querySelector('svg')).toHaveClass('wave:invisible');
+    expect(selected).toHaveClass('wave:forced-colors:outline-[Highlight]');
+    expect(other).not.toHaveClass('wave:forced-colors:outline-[Highlight]');
+    expect(selected).not.toHaveClass('wave:forced-colors:forced-color-adjust-none');
   });
 
   it('Option and OptionGroup written in a Server Component (lazy types) render the same server HTML and behave the same', async () => {
@@ -558,7 +558,7 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
         within(option('Apple')).getByTestId('glyph').closest('[aria-hidden="true"]'),
       ).not.toBeNull();
       expect(option('Apple').querySelector('svg')).toBeNull();
-      expect(option('Banana').querySelector('svg')).toHaveClass('shrink-0');
+      expect(option('Banana').querySelector('svg')).toHaveClass('wave:shrink-0');
     });
 
     it('keeps the check column for a custom glyph: shown while selected, invisible otherwise', () => {
@@ -575,12 +575,12 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       );
       const shown = within(option('Apple')).getByText('✓');
       expect(shown).toHaveAttribute('aria-hidden', 'true');
-      expect(shown).toHaveClass('shrink-0');
-      expect(shown).not.toHaveClass('invisible');
+      expect(shown).toHaveClass('wave:shrink-0');
+      expect(shown).not.toHaveClass('wave:invisible');
       // A slot object keeps the column classes and adds its own.
       const kept = within(option('Banana')).getByText('✓');
       expect(kept).toHaveAttribute('aria-hidden', 'true');
-      expect(kept).toHaveClass('shrink-0', 'invisible', 'text-success');
+      expect(kept).toHaveClass('wave:shrink-0', 'wave:invisible', 'text-success');
       // The glyph is not part of the option's name.
       expect(option('Apple')).toHaveAccessibleName('Apple');
     });
@@ -599,9 +599,9 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
         { selected: ['a'] },
       );
       expect(option('Apple').querySelector('svg')).toHaveAttribute('data-wave-icon', 'check');
-      expect(option('Apple').querySelector('svg')).toHaveClass('shrink-0');
-      expect(option('Apple').querySelector('svg')).not.toHaveClass('invisible');
-      expect(option('Banana').querySelector('svg')).toHaveClass('shrink-0', 'invisible');
+      expect(option('Apple').querySelector('svg')).toHaveClass('wave:shrink-0');
+      expect(option('Apple').querySelector('svg')).not.toHaveClass('wave:invisible');
+      expect(option('Banana').querySelector('svg')).toHaveClass('wave:shrink-0', 'wave:invisible');
       expect(warn).not.toHaveBeenCalled();
     });
 
@@ -641,7 +641,7 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       );
       const glyph = within(option('Apple')).getByTestId('glyph');
       expect(glyph.tagName).toBe('SPAN');
-      expect(glyph).toHaveClass(optionClassNames.checkIcon, 'inline-flex', 'shrink-0');
+      expect(glyph).toHaveClass(optionClassNames.checkIcon, 'wave:inline-flex', 'wave:shrink-0');
       expect(glyph).toHaveAttribute('aria-hidden', 'true');
       expect(option('Apple').querySelector('svg')).toBeNull();
       expect(option('Apple')).toHaveAccessibleName('Apple');
@@ -678,7 +678,7 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       renderInListbox(<Option value="a">Apple</Option>, { selected: ['a'], multiselect: true });
       const box = option('Apple').querySelector('[data-wave-option-box]');
       expect(box).toHaveAttribute('aria-hidden', 'true');
-      expect(box).toHaveClass('bg-primary');
+      expect(box).toHaveClass('wave:bg-primary');
       expect(option('Apple').className).not.toMatch(/outline-\[Highlight\]/);
     });
 
@@ -692,27 +692,27 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       );
       const checked = option('Apple').querySelector('[data-wave-option-box]');
       expect(checked).toHaveClass(
-        'h-4',
-        'w-4',
-        'shrink-0',
-        'rounded-xs',
-        'border',
-        'border-primary',
-        'bg-primary',
-        'text-primary-foreground',
-        'forced-colors:bg-[Highlight]',
-        'forced-colors:text-[HighlightText]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:h-4',
+        'wave:w-4',
+        'wave:shrink-0',
+        'wave:rounded-xs',
+        'wave:border',
+        'wave:border-primary',
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+        'wave:forced-colors:bg-[Highlight]',
+        'wave:forced-colors:text-[HighlightText]',
+        'wave:forced-colors:forced-color-adjust-none',
       );
       expect(checked?.querySelector('svg')).toHaveAttribute('data-wave-icon', 'check');
       const unchecked = option('Banana').querySelector('[data-wave-option-box]');
       expect(unchecked).toHaveAttribute('aria-hidden', 'true');
       expect(unchecked).toHaveClass(
-        'border-stroke-accessible',
-        'bg-transparent',
-        'forced-colors:border-[ButtonText]',
+        'wave:border-stroke-accessible',
+        'wave:bg-transparent',
+        'wave:forced-colors:border-[ButtonText]',
       );
-      expect(unchecked).not.toHaveClass('bg-primary');
+      expect(unchecked).not.toHaveClass('wave:bg-primary');
       expect(unchecked?.childNodes).toHaveLength(0);
       // The box is the check column: no second glyph next to it.
       expect(option('Apple').querySelectorAll('svg')).toHaveLength(1);
@@ -755,8 +755,8 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       render(<FontPicker multiselect showCheck={false} defaultValues={['Georgia']} />);
       await user.click(fontButton());
       expect(fontButton()).toHaveAttribute('aria-expanded', 'true');
-      expect(option('Georgia')).toHaveClass('forced-colors:outline-[Highlight]');
-      expect(option('Arial')).not.toHaveClass('forced-colors:outline-[Highlight]');
+      expect(option('Georgia')).toHaveClass('wave:forced-colors:outline-[Highlight]');
+      expect(option('Arial')).not.toHaveClass('wave:forced-colors:outline-[Highlight]');
     });
 
     it("draws a disabled option's box in the row's muted colour, checked or not", () => {
@@ -777,38 +777,38 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       // The row's disabled look is its muted text colour, which the box follows.
       expect(option('Apple')).toHaveAttribute('aria-disabled', 'true');
       const disabledBox = [
-        'border-current',
-        'bg-transparent',
-        'forced-colors:border-[GrayText]',
-        'forced-colors:bg-[Canvas]',
+        'wave:border-current',
+        'wave:bg-transparent',
+        'wave:forced-colors:border-[GrayText]',
+        'wave:forced-colors:bg-[Canvas]',
       ];
       const checked = option('Apple').querySelector('[data-wave-option-box]');
       expect(checked).toHaveClass(...disabledBox);
       for (const cls of [
-        'border-primary',
-        'bg-primary',
-        'text-primary-foreground',
-        'forced-colors:bg-[Highlight]',
-        'forced-colors:text-[HighlightText]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:border-primary',
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+        'wave:forced-colors:bg-[Highlight]',
+        'wave:forced-colors:text-[HighlightText]',
+        'wave:forced-colors:forced-color-adjust-none',
       ]) {
         expect(checked).not.toHaveClass(cls);
       }
       expect(checked?.querySelector('svg')).toHaveClass(
-        'forced-colors:text-[GrayText]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:forced-colors:text-[GrayText]',
+        'wave:forced-colors:forced-color-adjust-none',
       );
       const unchecked = option('Banana').querySelector('[data-wave-option-box]');
       expect(unchecked).toHaveClass(...disabledBox);
-      expect(unchecked).not.toHaveClass('border-stroke-accessible');
-      expect(unchecked).not.toHaveClass('forced-colors:border-[ButtonText]');
+      expect(unchecked).not.toHaveClass('wave:border-stroke-accessible');
+      expect(unchecked).not.toHaveClass('wave:forced-colors:border-[ButtonText]');
       expect(unchecked?.childNodes).toHaveLength(0);
       // A custom glyph takes the same GrayText recipe.
       const custom = option('Cherry').querySelector('[data-wave-option-box]');
       expect(custom).toHaveClass(...disabledBox);
       expect(screen.getByTestId('glyph-c').parentElement).toHaveClass(
-        'forced-colors:text-[GrayText]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:forced-colors:text-[GrayText]',
+        'wave:forced-colors:forced-color-adjust-none',
       );
     });
   });
@@ -1125,11 +1125,11 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       // The closed, inline list carries it too (hidden, so it has no accessible name to query).
       const inline = screen.getByRole('listbox', { hidden: true });
       expect(inline).toHaveClass('max-h-80');
-      expect(inline).not.toHaveClass('max-h-60');
+      expect(inline).not.toHaveClass('wave:max-h-60');
       await user.click(fontButton());
       const list = screen.getByRole('listbox', { name: 'Fonts' });
-      expect(list).toHaveClass('max-h-80', 'min-h-0', 'overflow-auto');
-      expect(list).not.toHaveClass('max-h-60');
+      expect(list).toHaveClass('max-h-80', 'wave:min-h-0', 'wave:overflow-auto');
+      expect(list).not.toHaveClass('wave:max-h-60');
     });
 
     it('keeps the 0.7 list and surface classes without the class props', async () => {
@@ -1138,10 +1138,10 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       await user.click(fontButton());
       // The stable classes (P3-00) come first, then the 0.7 utilities unchanged.
       expect(screen.getByRole('listbox', { name: 'Fonts' }).className).toBe(
-        `${listboxSurfaceClassNames.list} min-h-0 max-h-60 overflow-auto`,
+        `${listboxSurfaceClassNames.list} wave:min-h-0 wave:max-h-60 wave:overflow-auto`,
       );
       expect(fontSurface()?.className).toBe(
-        `${listboxSurfaceClassNames.root} flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4`,
+        `${listboxSurfaceClassNames.root} wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4`,
       );
     });
 
@@ -1149,9 +1149,14 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       const user = userEvent.setup();
       render(<FontPicker surfaceClassName="shadow-8 rounded-lg" />);
       await user.click(fontButton());
-      expect(fontSurface()).toHaveClass('shadow-8', 'rounded-lg', 'border', 'bg-background');
-      expect(fontSurface()).not.toHaveClass('shadow-4');
-      expect(fontSurface()).not.toHaveClass('rounded');
+      expect(fontSurface()).toHaveClass(
+        'shadow-8',
+        'rounded-lg',
+        'wave:border',
+        'wave:bg-background',
+      );
+      expect(fontSurface()).not.toHaveClass('wave:shadow-4');
+      expect(fontSurface()).not.toHaveClass('wave:rounded');
     });
   });
 
@@ -1200,7 +1205,7 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       expect(list).toHaveAttribute('aria-label', 'Fonts');
       expect(list).not.toHaveAttribute('hidden');
       expect(list.className).toBe(
-        `${listboxSurfaceClassNames.list} min-h-0 max-h-60 overflow-auto`,
+        `${listboxSurfaceClassNames.list} wave:min-h-0 wave:max-h-60 wave:overflow-auto`,
       );
       await expectNoA11yViolations(document.body);
     });
@@ -1375,11 +1380,11 @@ describe('Option — slotProps', () => {
       ),
     ).toBe(
       [
-        '<span aria-hidden="true" class="wave-option__indicator flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border border-primary bg-primary text-primary-foreground forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-wave-option-box="">',
-        '<span aria-hidden="true" class="wave-option__indicator flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border border-stroke-accessible bg-transparent forced-colors:border-[ButtonText]" data-wave-option-box="">',
-        '<span class="wave-option__content min-w-0 flex-1">',
-        '<span class="wave-option__content min-w-0 flex-1">',
-        '<div class="wave-option-group__label px-3 py-1 text-caption-1 font-semibold text-muted-foreground" id="option-group-_id0_" role="presentation">',
+        '<span aria-hidden="true" class="wave-option__indicator wave:flex wave:h-4 wave:w-4 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-xs wave:border wave:border-primary wave:bg-primary wave:text-primary-foreground wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none" data-wave-option-box="">',
+        '<span aria-hidden="true" class="wave-option__indicator wave:flex wave:h-4 wave:w-4 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-xs wave:border wave:border-stroke-accessible wave:bg-transparent wave:forced-colors:border-[ButtonText]" data-wave-option-box="">',
+        '<span class="wave-option__content wave:min-w-0 wave:flex-1">',
+        '<span class="wave-option__content wave:min-w-0 wave:flex-1">',
+        '<div class="wave-option-group__label wave:px-3 wave:py-1 wave:text-caption-1 wave:font-semibold wave:text-muted-foreground" id="option-group-_id0_" role="presentation">',
         '<ul aria-labelledby="option-group-_id0_" class="wave-option-group__list" role="group">',
       ].join('\n'),
     );
@@ -1465,7 +1470,7 @@ describe('Option — slotProps', () => {
     );
     const content = part(optionClassNames.content);
     expect(content).toHaveClass('flex-none');
-    expect(content).not.toHaveClass('flex-1');
+    expect(content).not.toHaveClass('wave:flex-1');
   });
 
   it('keeps the indicator decorative and marked', () => {

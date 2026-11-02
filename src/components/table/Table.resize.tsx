@@ -280,10 +280,10 @@ const TableResizeHandle = ({
     Pick<TableResizeHandlePartProps, 'slotPart'>;
   const classes = wcn(
     tableResizeHandleClassNames.root,
-    'absolute inset-y-0 end-0 z-1 w-2 cursor-col-resize touch-none select-none border-e-2 border-transparent',
-    'hover:border-stroke-accessible focus-visible:border-primary data-[dragging]:border-primary',
+    'wave:absolute wave:inset-y-0 wave:end-0 wave:z-1 wave:w-2 wave:cursor-col-resize wave:touch-none wave:select-none wave:border-e-2 wave:border-transparent',
+    'wave:hover:border-stroke-accessible wave:focus-visible:border-primary wave:data-[dragging]:border-primary',
     // The line is a border, so forced colors paint it only where it shows.
-    'forced-colors:forced-color-adjust-none forced-colors:hover:border-[ButtonText] forced-colors:focus-visible:border-[Highlight] forced-colors:data-[dragging]:border-[Highlight]',
+    'wave:forced-colors:forced-color-adjust-none wave:forced-colors:hover:border-[ButtonText] wave:forced-colors:focus-visible:border-[Highlight] wave:forced-colors:data-[dragging]:border-[Highlight]',
     focusRing,
     className,
   );

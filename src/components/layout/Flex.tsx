@@ -7,45 +7,45 @@ import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorph
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 
 const directionMap = {
-  row: 'flex-row',
-  'row-reverse': 'flex-row-reverse',
-  column: 'flex-col',
-  'column-reverse': 'flex-col-reverse',
+  row: 'wave:flex-row',
+  'row-reverse': 'wave:flex-row-reverse',
+  column: 'wave:flex-col',
+  'column-reverse': 'wave:flex-col-reverse',
 } as const;
 
 const wrapMap = {
-  nowrap: 'flex-nowrap',
-  wrap: 'flex-wrap',
-  'wrap-reverse': 'flex-wrap-reverse',
+  nowrap: 'wave:flex-nowrap',
+  wrap: 'wave:flex-wrap',
+  'wrap-reverse': 'wave:flex-wrap-reverse',
 } as const;
 
 const alignMap = {
-  start: 'items-start',
-  center: 'items-center',
-  end: 'items-end',
-  stretch: 'items-stretch',
-  baseline: 'items-baseline',
+  start: 'wave:items-start',
+  center: 'wave:items-center',
+  end: 'wave:items-end',
+  stretch: 'wave:items-stretch',
+  baseline: 'wave:items-baseline',
 } as const;
 
 const justifyMap = {
-  start: 'justify-start',
-  center: 'justify-center',
-  end: 'justify-end',
-  between: 'justify-between',
-  around: 'justify-around',
-  evenly: 'justify-evenly',
+  start: 'wave:justify-start',
+  center: 'wave:justify-center',
+  end: 'wave:justify-end',
+  between: 'wave:justify-between',
+  around: 'wave:justify-around',
+  evenly: 'wave:justify-evenly',
 } as const;
 
 /** Warn-once key of the "reversed order with focusable content" diagnostic. */
 const REVERSE_WARNING = 'Flex:reverse-focus-order';
 
 const gapMap = {
-  none: 'gap-0',
-  xs: 'gap-1',
-  sm: 'gap-2',
-  md: 'gap-3',
-  lg: 'gap-4',
-  xl: 'gap-6',
+  none: 'wave:gap-0',
+  xs: 'wave:gap-1',
+  sm: 'wave:gap-2',
+  md: 'wave:gap-3',
+  lg: 'wave:gap-4',
+  xl: 'wave:gap-6',
 } as const;
 
 /**
@@ -151,15 +151,15 @@ export const Flex: PolymorphicComponent<'div', FlexOwnProps> = (props) => {
       ref={mergedRef}
       className={wcn(
         flexClassNames.root,
-        inline ? 'inline-flex' : 'flex',
+        inline ? 'wave:inline-flex' : 'wave:flex',
         directionMap[direction],
         wrap && wrapMap[wrap],
         align && alignMap[align],
         justify && justifyMap[justify],
         gap && gapMap[gap],
-        grow && 'grow',
-        shrink === true && 'shrink',
-        shrink === false && 'shrink-0',
+        grow && 'wave:grow',
+        shrink === true && 'wave:shrink',
+        shrink === false && 'wave:shrink-0',
         className,
       )}
       {...rest}

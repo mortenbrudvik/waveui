@@ -52,10 +52,10 @@ describe('WaveProvider', () => {
       expect(el).toHaveClass(
         'wave-root',
         'wave-dark',
-        'bg-background',
-        'text-foreground',
-        'font-wave',
-        'text-body-1',
+        'wave:bg-background',
+        'wave:text-foreground',
+        'wave:font-wave',
+        'wave:text-body-1',
       );
       // The 0.4 class `dark` is removed in 1.0 (deprecated since 0.5).
       expect(el).not.toHaveClass('dark');
@@ -75,7 +75,12 @@ describe('WaveProvider', () => {
     it('applies wave-light for the default light theme', () => {
       const { container } = render(<WaveProvider>Content</WaveProvider>);
       const el = root(container);
-      expect(el).toHaveClass('wave-root', 'wave-light', 'bg-background', 'text-foreground');
+      expect(el).toHaveClass(
+        'wave-root',
+        'wave-light',
+        'wave:bg-background',
+        'wave:text-foreground',
+      );
       expect(el).not.toHaveClass('dark');
       expect(el).not.toHaveClass('high-contrast');
       expect(el).toHaveAttribute('data-wave-theme', 'light');
@@ -89,8 +94,8 @@ describe('WaveProvider', () => {
       );
       const el = root(container);
       expect(el).toHaveClass('bg-transparent', 'text-lg', 'custom', 'wave-root', 'wave-dark');
-      expect(el).not.toHaveClass('bg-background');
-      expect(el).not.toHaveClass('text-body-1');
+      expect(el).not.toHaveClass('wave:bg-background');
+      expect(el).not.toHaveClass('wave:text-body-1');
     });
 
     it('renders wave-light for a light provider nested inside a dark one', () => {
@@ -102,7 +107,12 @@ describe('WaveProvider', () => {
         </WaveProvider>,
       );
       const inner = screen.getByTestId('inner');
-      expect(inner).toHaveClass('wave-root', 'wave-light', 'bg-background', 'text-foreground');
+      expect(inner).toHaveClass(
+        'wave-root',
+        'wave-light',
+        'wave:bg-background',
+        'wave:text-foreground',
+      );
       expect(inner).not.toHaveClass('dark');
       expect(inner).not.toHaveClass('wave-dark');
       expect(inner.parentElement).toBe(screen.getByTestId('outer'));

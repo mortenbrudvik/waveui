@@ -399,7 +399,7 @@ const ColorPickerRoot = ({
       {...groupProps}
       className={wcn(
         colorPickerClassNames.root,
-        'relative inline-flex flex-col gap-3 rounded border border-border bg-background p-3 shadow-4',
+        'wave:relative wave:inline-flex wave:flex-col wave:gap-3 wave:rounded wave:border wave:border-border wave:bg-background wave:p-3 wave:shadow-4',
         className,
       )}
       {...rest}
@@ -415,29 +415,29 @@ const ColorPickerRoot = ({
             <>
               <ColorArea />
               <ColorSlider />
-              <div className="flex items-start gap-2">
+              <div className="wave:flex wave:items-start wave:gap-2">
                 <ColorPickerPreview />
                 <ColorPickerHexField />
               </div>
               <ColorPickerSwatches />
               {showOpacity && (
-                <div className="flex items-center gap-2">
+                <div className="wave:flex wave:items-center wave:gap-2">
                   <span
                     {...mergeSlotProps(slotProps?.opacityLabel, {
                       className: wcn(
                         colorPickerClassNames.opacityLabel,
-                        'w-14 text-caption-1 text-muted-foreground',
+                        'wave:w-14 wave:text-caption-1 wave:text-muted-foreground',
                       ),
                     })}
                   >
                     {strings.opacity}
                   </span>
-                  <AlphaSlider className="min-w-0 flex-1" />
+                  <AlphaSlider className="wave:min-w-0 wave:flex-1" />
                   <span
                     {...mergeSlotProps(slotProps?.opacityValue, {
                       className: wcn(
                         colorPickerClassNames.opacityValue,
-                        'w-10 text-end text-caption-1 text-muted-foreground',
+                        'wave:w-10 wave:text-end wave:text-caption-1 wave:text-muted-foreground',
                       ),
                     })}
                   >

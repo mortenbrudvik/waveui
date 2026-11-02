@@ -399,7 +399,7 @@ describe('InfoLabel', () => {
       const label = screen.getByText('Password').closest('label') as HTMLLabelElement;
       expect(label).toHaveAttribute('for', 'pw');
       expect(label).toHaveAttribute('id', 'pw-label');
-      expect(label).toHaveClass('text-body-2', 'font-semibold');
+      expect(label).toHaveClass('wave:text-body-2', 'wave:font-semibold');
       expect(label).toHaveTextContent('Password*');
     });
 
@@ -483,7 +483,9 @@ describe('InfoLabel', () => {
           Password
         </InfoLabel>,
       );
-      expect(screen.getByText('Password').closest('label')).toHaveClass('text-muted-foreground');
+      expect(screen.getByText('Password').closest('label')).toHaveClass(
+        'wave:text-muted-foreground',
+      );
       await user.click(screen.getByRole('button', { name: 'Password Information' }));
       expect(screen.getByRole('note')).toBeInTheDocument();
     });
@@ -535,10 +537,10 @@ describe('InfoLabel — slotProps', () => {
     expect(normaliseIds(sortAttributes(document.body))).toBe(
       [
         '<div>',
-        '<span class="wave-info-label inline-flex items-center gap-0">',
-        '<label class="wave-label text-foreground text-body-1 wave-info-label__label" id="info-label-_id0_">Password',
+        '<span class="wave-info-label wave:inline-flex wave:items-center wave:gap-0">',
+        '<label class="wave-label wave:text-foreground wave:text-body-1 wave-info-label__label" id="info-label-_id0_">Password',
         '</label>',
-        '<button aria-controls="info-note-_id1_" aria-describedby="info-_id2_" aria-expanded="true" aria-label="Information" aria-labelledby="info-label-_id0_ info-label-button-_id3_" class="wave-info-button inline-flex size-6 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground -my-0.5 not-disabled:not-aria-disabled:hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring wave-info-label__info-button" data-size="medium" id="info-label-button-_id3_" type="button">',
+        '<button aria-controls="info-note-_id1_" aria-describedby="info-_id2_" aria-expanded="true" aria-label="Information" aria-labelledby="info-label-_id0_ info-label-button-_id3_" class="wave-info-button wave:inline-flex wave:size-6 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border-0 wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:-my-0.5 wave:not-disabled:not-aria-disabled:hover:text-foreground wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave-info-label__info-button" data-size="medium" id="info-label-button-_id3_" type="button">',
         '<svg aria-hidden="true" data-wave-icon="info" fill="currentColor" focusable="false" height="16" viewBox="0 0 20 20" width="16" xmlns="http://www.w3.org/2000/svg">',
         '<path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm.5 5v1h-1V7h1Zm0 3v4h-1v-4h1Z" fill-rule="evenodd">',
         '</path>',
@@ -549,8 +551,8 @@ describe('InfoLabel — slotProps', () => {
         '</span>',
         '</div>',
         '<div class="wave-portal" data-layer="overlay" data-wave-portal="" dir="ltr" style="position: relative; z-index: calc(var(--wave-z-overlay, 1000) + 0);">',
-        '<div aria-labelledby="info-label-_id0_ info-label-button-_id3_" class="wave-info-button__info wave-info-label__info w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16 transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-faster data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[side=top]:data-[presence=entering]:starting:translate-y-1 data-[side=top]:data-[presence=exiting]:translate-y-1 data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 data-[side=bottom]:data-[presence=exiting]:-translate-y-1 data-[side=left]:data-[presence=entering]:starting:translate-x-1 data-[side=left]:data-[presence=exiting]:translate-x-1 data-[side=right]:data-[presence=entering]:starting:-translate-x-1 data-[side=right]:data-[presence=exiting]:-translate-x-1" data-align="center" data-presence="entered" data-side="top" data-state="open" data-wave-infolabel-surface="" id="info-note-_id1_" role="note" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, -8px);">',
-        '<div aria-hidden="true" class="size-2 rotate-45 border-inherit bg-inherit border-b border-r wave-info-button__beak" data-wave-popover-arrow="" style="position: absolute; bottom: calc(var(--wave-popup-arrow-size, 8px) / -2); left: -1px;">',
+        '<div aria-labelledby="info-label-_id0_ info-label-button-_id3_" class="wave-info-button__info wave-info-label__info wave:w-max wave:max-w-[min(20rem,calc(100vw-1rem))] wave:rounded-md wave:border wave:border-border wave:bg-background wave:px-3 wave:py-2 wave:text-caption-1 wave:text-foreground wave:shadow-16 wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1" data-align="center" data-presence="entered" data-side="top" data-state="open" data-wave-infolabel-surface="" id="info-note-_id1_" role="note" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, -8px);">',
+        '<div aria-hidden="true" class="wave:size-2 wave:rotate-45 wave:border-inherit wave:bg-inherit wave:border-b wave:border-r wave-info-button__beak" data-wave-popover-arrow="" style="position: absolute; bottom: calc(var(--wave-popup-arrow-size, 8px) / -2); left: -1px;">',
         '</div>',
         '<div id="info-_id2_">Use at least 8 characters.',
         '</div>',
@@ -646,11 +648,11 @@ describe('InfoLabel — slotProps', () => {
     );
     await open();
     expect(label()).toHaveClass('text-body-2');
-    expect(label()).not.toHaveClass('text-body-1');
+    expect(label()).not.toHaveClass('wave:text-body-1');
     expect(button()).toHaveClass('size-8');
-    expect(button()).not.toHaveClass('size-6');
+    expect(button()).not.toHaveClass('wave:size-6');
     expect(note()).toHaveClass('px-4');
-    expect(note()).not.toHaveClass('px-3');
+    expect(note()).not.toHaveClass('wave:px-3');
   });
 
   it('locks the label’s id and htmlFor: the button keeps its name', () => {

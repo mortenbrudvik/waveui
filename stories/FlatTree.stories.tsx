@@ -146,7 +146,7 @@ function MountedItems({ tree, visible }: { tree: HTMLElement | null; visible: nu
   );
   const total = FIVE_THOUSAND.length.toLocaleString('en');
   return (
-    <p className="text-body-1 text-foreground">
+    <p className="text-wave-body-1 text-wave-foreground">
       {`Mounted items: ${mounted} of ${visible.toLocaleString('en')} visible (${total} in the tree)`}
     </p>
   );

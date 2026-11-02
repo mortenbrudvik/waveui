@@ -69,7 +69,7 @@ describe('Tree.Item - row content', () => {
     const [chevron, icon, label, after, end] = Array.from(rowOf('Documents').children);
     expect(chevron).toHaveClass(treeItemClassNames.expandIcon);
     expect(icon).toHaveClass(treeItemClassNames.icon);
-    expect(label).toHaveClass(treeItemClassNames.label, 'min-w-0');
+    expect(label).toHaveClass(treeItemClassNames.label, 'wave:min-w-0');
     expect(after).toHaveClass(treeItemClassNames.iconAfter);
     expect(after).toHaveAttribute('aria-hidden', 'true');
     expect(within(after as HTMLElement).getByTestId('after')).toBeInTheDocument();
@@ -120,7 +120,7 @@ describe('Tree.Item - row content', () => {
       parent(expandIcon);
       const chevron = rowOf('Documents').children[0];
       expect(chevron.tagName.toLowerCase()).toBe('svg');
-      expect(chevron).toHaveClass(treeItemClassNames.expandIcon, 'wave-rtl:-scale-x-100');
+      expect(chevron).toHaveClass(treeItemClassNames.expandIcon, 'wave:wave-rtl:-scale-x-100');
     });
 
     it('a custom glyph replaces it, decorative and not rotated', () => {
@@ -129,7 +129,7 @@ describe('Tree.Item - row content', () => {
       expect(glyph.tagName.toLowerCase()).toBe('span');
       expect(glyph).toHaveClass(treeItemClassNames.expandIcon);
       expect(glyph).toHaveAttribute('aria-hidden', 'true');
-      expect(glyph).not.toHaveClass('rotate-90');
+      expect(glyph).not.toHaveClass('wave:rotate-90');
       expect(within(glyph as HTMLElement).getByTestId('glyph')).toBeInTheDocument();
       expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
     });
@@ -193,19 +193,19 @@ describe('Tree.Item - row content', () => {
       );
       const shared = rowOf('Documents').querySelector(`.${treeItemClassNames.aside}`)!;
       expect(shared).toHaveClass(
-        'not-forced-colors:group-hover/row:invisible',
-        '[@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible',
-        '[@media(hover:hover)]:not-forced-colors:group-has-[[aria-expanded=true]]/end:invisible',
-        '[@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible',
+        'wave:not-forced-colors:group-hover/row:invisible',
+        'wave:[@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible',
+        'wave:[@media(hover:hover)]:not-forced-colors:group-has-[[aria-expanded=true]]/end:invisible',
+        'wave:[@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible',
       );
       expect(item('Documents')).toHaveClass(
-        '[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible',
+        'wave:[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible',
       );
       expect(rowOf('Documents').querySelector('[data-tree-end]')).toHaveClass(
-        'group/end',
-        '[&>*]:[grid-area:1/1]',
-        'forced-colors:flex',
-        '[@media(hover:none)]:flex',
+        'wave:group/end',
+        'wave:[&>*]:[grid-area:1/1]',
+        'wave:forced-colors:flex',
+        'wave:[@media(hover:none)]:flex',
       );
       const alone = rowOf('Readme.md').querySelector(`.${treeItemClassNames.aside}`)!;
       expect(alone.className).not.toMatch(/invisible/);
@@ -237,19 +237,19 @@ describe('Tree.Item - actions', () => {
     expect(actions).toHaveAttribute('data-tree-actions', '');
     expect(actions).toHaveClass(
       treeItemClassNames.actions,
-      'invisible',
-      'group-hover/row:visible',
-      'focus-within:visible',
-      'forced-colors:visible',
-      '[@media(hover:none)]:visible',
+      'wave:invisible',
+      'wave:group-hover/row:visible',
+      'wave:focus-within:visible',
+      'wave:forced-colors:visible',
+      'wave:[@media(hover:none)]:visible',
       // While a surface opened from an action is open, and while focus is in it: its focus return
       // must reach the action (E2-fix2 review).
-      'has-[[aria-expanded=true]]:visible',
-      'data-[focus-in-popup]:visible',
+      'wave:has-[[aria-expanded=true]]:visible',
+      'wave:data-[focus-in-popup]:visible',
     );
-    expect(rowOf('Documents')).toHaveClass('group/row');
+    expect(rowOf('Documents')).toHaveClass('wave:group/row');
     expect(item('Documents')).toHaveClass(
-      '[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible',
+      'wave:[&:focus-within:not(:has(>*>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible',
     );
     // Not `:focus` on the item alone: Chromium ends it while focus moves from the item into an
     // action, so the hidden action refused the focus (E2b R6).
@@ -274,7 +274,7 @@ describe('Tree.Item - actions', () => {
     // component's own class (the arbitrary variant, its underscores as spaces).
     const suffix = '>[data-tree-row]_[data-tree-actions]]:visible';
     const variant = Array.from(item('Documents').classList).find((name) => name.endsWith(suffix))!;
-    const ownFocus = variant.slice('[&'.length, -suffix.length).replaceAll('_', ' ');
+    const ownFocus = variant.slice('wave:[&'.length, -suffix.length).replaceAll('_', ' ');
     // The child group is a grandchild of the item: it sits in its collapse element (0.15).
     expect(ownFocus).toBe(':focus-within:not(:has(>*>[role=group] :focus))');
     const shown = () =>
@@ -409,7 +409,7 @@ describe('Tree.Item - actions', () => {
     expect(rowOf('Alpha').querySelector('[data-tree-end]')).toBeNull();
     expect(rowOf('Alpha').children).toHaveLength(rowOf('Beta').children.length);
     expect(item('Alpha').className).toBe(item('Beta').className);
-    expect(rowOf('Alpha')).not.toHaveClass('group/row');
+    expect(rowOf('Alpha')).not.toHaveClass('wave:group/row');
   });
 
   it('tree mode: Tab from the focused item enters its actions (one stop), the arrows move inside with wrapping, Shift+Tab returns, Tab leaves', async () => {

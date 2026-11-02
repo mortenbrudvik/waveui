@@ -458,15 +458,15 @@ DialogClose.displayName = 'DialogClose';
  * side, with no direction override that a consumer's padding class would leave behind.
  */
 const sizeClasses: Record<DialogSize, string> = {
-  small: 'max-w-[400px]',
-  medium: 'max-w-[600px]',
-  large: 'max-w-[940px]',
-  full: 'm-0 h-dvh max-h-none max-w-none rounded-none border-0 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))]', // wave-allow-physical: the safe-area insets are physical sides
+  small: 'wave:max-w-[400px]',
+  medium: 'wave:max-w-[600px]',
+  large: 'wave:max-w-[940px]',
+  full: 'wave:m-0 wave:h-dvh wave:max-h-none wave:max-w-none wave:rounded-none wave:border-0 wave:pt-[max(1.5rem,env(safe-area-inset-top))] wave:pb-[max(1.5rem,env(safe-area-inset-bottom))] wave:pl-[max(1.5rem,env(safe-area-inset-left))] wave:pr-[max(1.5rem,env(safe-area-inset-right))]', // wave-allow-physical: the safe-area insets are physical sides
 };
 
 /** The title-actions area of a `full` dialog moves by the safe-area insets, as the padding does. */
 const fullTitleActionsClasses =
-  'top-[max(1rem,env(safe-area-inset-top))] end-[max(1rem,env(safe-area-inset-right))] wave-rtl:end-[max(1rem,env(safe-area-inset-left))]';
+  'wave:top-[max(1rem,env(safe-area-inset-top))] wave:end-[max(1rem,env(safe-area-inset-right))] wave:wave-rtl:end-[max(1rem,env(safe-area-inset-left))]';
 
 /** The gap (px) between the titles' text and the title-actions area. */
 const TITLE_ACTIONS_GAP = 8;
@@ -694,7 +694,7 @@ export const DialogContent = ({
         // (non-modal) around it.
         className={wcn(
           dialogContentClassNames.positioner,
-          'pointer-events-none fixed inset-0 flex items-center justify-center',
+          'wave:pointer-events-none wave:fixed wave:inset-0 wave:flex wave:items-center wave:justify-center',
         )}
       >
         <div
@@ -717,7 +717,7 @@ export const DialogContent = ({
             // a margin in `className` replaces it and a full-screen dialog can reach the edges.
             // Its minimum width is zero, so content wider than the room inside the gap scrolls in
             // the body instead of pushing the surface over the gap.
-            'pointer-events-auto relative m-4 flex min-w-0 max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-border bg-background p-6 text-foreground shadow-64',
+            'wave:pointer-events-auto wave:relative wave:m-4 wave:flex wave:min-w-0 wave:max-h-[calc(100dvh-2rem)] wave:w-full wave:flex-col wave:rounded-lg wave:border wave:border-border wave:bg-background wave:p-6 wave:text-foreground wave:shadow-64',
             sizeClasses[size],
             surfaceMotion,
             className,
@@ -729,7 +729,7 @@ export const DialogContent = ({
                 id={propTitleId}
                 className={wcn(
                   dialogTitleClassNames.root,
-                  'pe-[var(--wave-dialog-title-end-padding,2rem)] text-subtitle-1 font-semibold',
+                  'wave:pe-[var(--wave-dialog-title-end-padding,2rem)] wave:text-subtitle-1 wave:font-semibold',
                 )}
               >
                 {title}
@@ -739,7 +739,7 @@ export const DialogContent = ({
               {...mergeSlotProps(slotProps?.titleActions, {
                 className: wcn(
                   dialogContentClassNames.titleActions,
-                  'absolute end-4 top-4 flex items-start gap-1',
+                  'wave:absolute wave:end-4 wave:top-4 wave:flex wave:items-start wave:gap-1',
                   size === 'full' && fullTitleActionsClasses,
                 ),
                 locked: HIDDEN_PART_LOCKS,
@@ -750,17 +750,20 @@ export const DialogContent = ({
                 ? renderSlot(
                     titleAction,
                     'span',
-                    wcn(dialogContentClassNames.titleAction, 'inline-flex items-center gap-1'),
+                    wcn(
+                      dialogContentClassNames.titleAction,
+                      'wave:inline-flex wave:items-center wave:gap-1',
+                    ),
                   )
                 : null}
               {/* Each Dialog.Title action portals here, in mount order. */}
-              <span ref={setTitleActionsOutlet} className="contents" />
+              <span ref={setTitleActionsOutlet} className="wave:contents" />
               <ModalCloseButton
                 componentName="Dialog.Content"
                 closeButton={closeButton}
                 closeLabel={closeLabel}
                 onClose={(event) => requestOpen(false, { reason: 'close-button', event })}
-                className={wcn(dialogContentClassNames.closeButton, 'text-muted-foreground')}
+                className={wcn(dialogContentClassNames.closeButton, 'wave:text-muted-foreground')}
               />
             </div>
             <div
@@ -768,7 +771,7 @@ export const DialogContent = ({
                 // The scroll padding keeps a focused field above the sticky footer (WCAG 2.4.11).
                 className: wcn(
                   dialogContentClassNames.body,
-                  '-mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1',
+                  'wave:-mx-1 wave:mt-1 wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:scroll-pb-(--wave-dialog-footer-height) wave:p-1 wave:text-body-1',
                 ),
                 style:
                   footerHeight === null
@@ -814,7 +817,7 @@ export const DialogTitle = ({
       ref={titleRef}
       className={wcn(
         dialogTitleClassNames.root,
-        'pe-[var(--wave-dialog-title-end-padding,2rem)] text-subtitle-1 font-semibold text-foreground',
+        'wave:pe-[var(--wave-dialog-title-end-padding,2rem)] wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
         className,
       )}
     >
@@ -825,7 +828,7 @@ export const DialogTitle = ({
   const actionElement = renderSlot(
     action,
     'span',
-    wcn(dialogTitleClassNames.action, 'inline-flex items-center gap-1'),
+    wcn(dialogTitleClassNames.action, 'wave:inline-flex wave:items-center wave:gap-1'),
   );
   return (
     <>
@@ -842,13 +845,13 @@ DialogTitle.displayName = 'DialogTitle';
  * focus-ring inset, and `pt-3` separates the actions from the content scrolling under them.
  */
 const stickyFooterClasses =
-  'sticky -bottom-1 z-10 -mx-1 -mb-1 mt-6 flex justify-end gap-2 bg-background px-1 pb-2 pt-3';
+  'wave:sticky wave:-bottom-1 wave:z-10 wave:-mx-1 wave:-mb-1 wave:mt-6 wave:flex wave:justify-end wave:gap-2 wave:bg-background wave:px-1 wave:pb-2 wave:pt-3';
 
 /**
  * `Dialog.Footer` where no body reserves its height as scroll padding (a Drawer's body): a plain
  * action row, which never covers a focused field.
  */
-const footerRowClasses = 'mt-6 flex justify-end gap-2';
+const footerRowClasses = 'wave:mt-6 wave:flex wave:justify-end wave:gap-2';
 
 /**
  * Action row at the end of the dialog body. It stays where you render it in the DOM and sticks to

@@ -85,7 +85,7 @@ describe('TeachingPopover', () => {
     expectedTag: 'div',
     displayName: 'TeachingPopover',
     defaultProps: { steps },
-    conflictingClass: { className: 'w-96', overrides: 'w-80' },
+    conflictingClass: { className: 'w-96', overrides: 'wave:w-80' },
     a11yVariants: [
       { name: 'middle step', props: { activeStep: 1 } },
       { name: 'last step', props: { activeStep: 2 } },
@@ -243,7 +243,7 @@ describe('TeachingPopover', () => {
       const hoverClasses = Array.from(back.classList).filter((cls) => cls.includes('hover:'));
       expect(hoverClasses.length).toBeGreaterThan(0);
       for (const cls of hoverClasses) {
-        expect(cls.startsWith('not-disabled:not-aria-disabled:hover:')).toBe(true);
+        expect(cls.startsWith('wave:not-disabled:not-aria-disabled:hover:')).toBe(true);
       }
     });
 
@@ -389,7 +389,7 @@ describe('TeachingPopover', () => {
     it('puts a visually hidden “step n of m” in the heading', () => {
       render(<TeachingPopover steps={steps} activeStep={1} />);
       const position = within(heading()).getByText(', step 2 of 3');
-      expect(position).toHaveClass('sr-only');
+      expect(position).toHaveClass('wave:sr-only');
     });
 
     it('announces the new step politely after Next', async () => {
@@ -403,15 +403,15 @@ describe('TeachingPopover', () => {
       render(<TeachingPopover steps={steps} activeStep={1} />);
       const [first, second, third] = dots();
       expect(second).toHaveClass(
-        'forced-colors:bg-[Highlight]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:forced-colors:bg-[Highlight]',
+        'wave:forced-colors:forced-color-adjust-none',
       );
       for (const dot of [first, third]) {
         expect(dot).toHaveClass(
-          'forced-colors:bg-[CanvasText]',
-          'forced-colors:forced-color-adjust-none',
+          'wave:forced-colors:bg-[CanvasText]',
+          'wave:forced-colors:forced-color-adjust-none',
         );
-        expect(dot).not.toHaveClass('forced-colors:bg-[Highlight]');
+        expect(dot).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
       }
     });
 
@@ -421,8 +421,8 @@ describe('TeachingPopover', () => {
       const [first, second] = dots();
       expect(second).toHaveAttribute('aria-current', 'step');
       expect(first).not.toHaveAttribute('aria-current');
-      expect(second).toHaveClass('w-4', 'bg-primary');
-      expect(first).toHaveClass('w-1.5', 'bg-stroke-accessible');
+      expect(second).toHaveClass('wave:w-4', 'wave:bg-primary');
+      expect(first).toHaveClass('wave:w-1.5', 'wave:bg-stroke-accessible');
       expect(first!.parentElement).toHaveAttribute('aria-hidden', 'true');
     });
   });
@@ -439,7 +439,7 @@ describe('TeachingPopover', () => {
       const user = userEvent.setup();
       render(<TeachingPopover steps={steps} labels={labels} closeLabel="Lukk" />);
       expect(heading()).toHaveTextContent('Welcome, steg 1 av 3');
-      expect(within(heading()).getByText(', steg 1 av 3')).toHaveClass('sr-only');
+      expect(within(heading()).getByText(', steg 1 av 3')).toHaveClass('wave:sr-only');
       expect(screen.getByRole('button', { name: 'Tilbake' })).toHaveAttribute(
         'aria-disabled',
         'true',
@@ -532,16 +532,16 @@ describe('TeachingPopover', () => {
     it('uses theme tokens and rounded-md', () => {
       render(<TeachingPopover steps={steps} />);
       const dialog = screen.getByRole('dialog');
-      expect(dialog).toHaveClass('rounded-md', 'bg-background', 'text-foreground');
-      expect(dialog).not.toHaveClass('rounded-lg');
+      expect(dialog).toHaveClass('wave:rounded-md', 'wave:bg-background', 'wave:text-foreground');
+      expect(dialog).not.toHaveClass('wave:rounded-lg');
       expect(dialog.outerHTML).not.toMatch(/#[0-9a-f]{6}/i);
     });
 
     it('places the close button at the logical end in RTL', () => {
       renderWithProviders(<TeachingPopover steps={steps} />, { dir: 'rtl' });
       const close = screen.getByRole('button', { name: 'Close' });
-      expect(close).toHaveClass('end-3');
-      expect(close).not.toHaveClass('right-3');
+      expect(close).toHaveClass('wave:end-3');
+      expect(close).not.toHaveClass('wave:right-3');
       expect(close.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
     });
   });
@@ -942,8 +942,8 @@ describe('TeachingPopover', () => {
       const arrow = dialog.querySelector('[data-wave-teaching-popover-arrow]');
       expect(arrow).toHaveAttribute('aria-hidden', 'true');
       // The beak inherits the surface colors, so a className override reaches it (button-provider#3).
-      expect(arrow).toHaveClass('bg-inherit', 'border-inherit');
-      expect(arrow).not.toHaveClass('bg-background');
+      expect(arrow).toHaveClass('wave:bg-inherit', 'wave:border-inherit');
+      expect(arrow).not.toHaveClass('wave:bg-background');
       await waitFor(() => expect(dialog).toHaveFocus());
     });
 
@@ -1668,11 +1668,13 @@ describe('TeachingPopover', () => {
       const { rerender } = render(<TeachingPopover steps={steps} />);
       expect(screen.getByRole('dialog')).toHaveAttribute('data-layout', 'horizontal');
       expect(screen.getByRole('button', { name: 'Next' }).parentElement).not.toHaveClass(
-        'flex-col',
+        'wave:flex-col',
       );
       rerender(<TeachingPopover steps={steps} footerLayout="vertical" />);
       expect(screen.getByRole('dialog')).toHaveAttribute('data-layout', 'vertical');
-      expect(screen.getByRole('button', { name: 'Next' }).parentElement).toHaveClass('flex-col');
+      expect(screen.getByRole('button', { name: 'Next' }).parentElement).toHaveClass(
+        'wave:flex-col',
+      );
     });
 
     it('has no axe violations with custom actions in both layouts', async () => {
@@ -1806,17 +1808,17 @@ describe('TeachingPopover steps form markup (D2)', () => {
     '<span aria-hidden="true" class="wave-button__icon"><svg data-wave-icon="dismiss"></svg></span>' +
     '</button></div>';
   const TITLE_OPEN =
-    '<h3 id="" class="wave-teaching-popover-title wave-teaching-popover__title mb-2 pe-8 text-subtitle-1 font-semibold text-foreground">';
+    '<h3 id="" class="wave-teaching-popover-title wave-teaching-popover__title wave:mb-2 wave:pe-8 wave:text-subtitle-1 wave:font-semibold wave:text-foreground">';
   const BODY_OPEN =
-    '<div class="wave-teaching-popover-body wave-teaching-popover__body mb-4 text-body-1 text-muted-foreground">';
+    '<div class="wave-teaching-popover-body wave-teaching-popover__body wave:mb-4 wave:text-body-1 wave:text-muted-foreground">';
   const FOOTER_OPEN =
-    '<div data-layout="horizontal" class="wave-teaching-popover-footer wave-teaching-popover__footer flex gap-2 items-center justify-between">' +
-    '<div aria-hidden="true" class="flex items-center gap-1.5">';
+    '<div data-layout="horizontal" class="wave-teaching-popover-footer wave-teaching-popover__footer wave:flex wave:gap-2 wave:items-center wave:justify-between">' +
+    '<div aria-hidden="true" class="wave:flex wave:items-center wave:gap-1.5">';
   const DOT =
-    'wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none';
-  const CURRENT_DOT = `<span data-wave-teaching-popover-dot="" aria-current="step" class="${DOT} w-4 bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none"></span>`;
-  const OTHER_DOT = `<span data-wave-teaching-popover-dot="" class="${DOT} w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none"></span>`;
-  const BUTTONS_OPEN = '</div><div class="flex gap-2 items-center">';
+    'wave-teaching-popover__dot wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none';
+  const CURRENT_DOT = `<span data-wave-teaching-popover-dot="" aria-current="step" class="${DOT} wave:w-4 wave:bg-primary wave:forced-colors:bg-[Highlight] wave:forced-colors:forced-color-adjust-none"></span>`;
+  const OTHER_DOT = `<span data-wave-teaching-popover-dot="" class="${DOT} wave:w-1.5 wave:bg-stroke-accessible wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none"></span>`;
+  const BUTTONS_OPEN = '</div><div class="wave:flex wave:gap-2 wave:items-center">';
   const FOOTER_CLOSE = '</div></div>';
   const SURFACE_ATTRIBUTES = [
     ['role', 'dialog'],
@@ -1827,7 +1829,7 @@ describe('TeachingPopover steps form markup (D2)', () => {
     ['data-state', 'open'],
     [
       'class',
-      `wave-teaching-popover relative w-80 rounded-md border border-border bg-background p-5 text-foreground shadow-8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${popupMotion}`,
+      `wave-teaching-popover wave:relative wave:w-80 wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-5 wave:text-foreground wave:shadow-8 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring ${popupMotion}`,
     ],
   ];
 
@@ -1837,7 +1839,7 @@ describe('TeachingPopover steps form markup (D2)', () => {
     expect(surfaceAttributes(dialog)).toEqual(SURFACE_ATTRIBUTES);
     expect(surfaceMarkup(dialog)).toBe(
       HEADER +
-        `${TITLE_OPEN}Welcome<span class="sr-only">, step 1 of 3</span></h3>` +
+        `${TITLE_OPEN}Welcome<span class="wave:sr-only">, step 1 of 3</span></h3>` +
         `${BODY_OPEN}This is step one.</div>` +
         FOOTER_OPEN +
         CURRENT_DOT +
@@ -1853,7 +1855,11 @@ describe('TeachingPopover steps form markup (D2)', () => {
       ['Back', 'outline'],
       ['Next', 'primary'],
     ]);
-    expect(screen.getByRole('button', { name: 'Close' })).toHaveClass('absolute', 'end-3', 'top-3');
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveClass(
+      'wave:absolute',
+      'wave:end-3',
+      'wave:top-3',
+    );
   });
 
   it('the last of two steps: Back and Done', () => {
@@ -1870,7 +1876,7 @@ describe('TeachingPopover steps form markup (D2)', () => {
     expect(surfaceAttributes(dialog)).toEqual(SURFACE_ATTRIBUTES);
     expect(surfaceMarkup(dialog)).toBe(
       HEADER +
-        `${TITLE_OPEN}Search<span class="sr-only">, step 2 of 2</span></h3>` +
+        `${TITLE_OPEN}Search<span class="wave:sr-only">, step 2 of 2</span></h3>` +
         `${BODY_OPEN}Type to filter.</div>` +
         FOOTER_OPEN +
         OTHER_DOT +
@@ -2303,7 +2309,7 @@ describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
       expectedTag: 'div',
       displayName: 'TeachingPopoverSurface',
       wrapper: InRoot,
-      conflictingClass: { className: 'w-96', overrides: 'w-80' },
+      conflictingClass: { className: 'w-96', overrides: 'wave:w-80' },
     });
 
     it('is the one role="dialog" surface and carries the stable classes of both', () => {
@@ -2396,7 +2402,7 @@ describe('TeachingPopover parts: Trigger and Surface (P9-08)', () => {
       expect(dialog).toBe(ref.current);
       expect(dialog).toBe(screen.getByTestId('surface'));
       expect(dialog).toHaveClass('w-96');
-      expect(dialog).not.toHaveClass('w-80');
+      expect(dialog).not.toHaveClass('wave:w-80');
       expect(dialog.closest('[data-wave-portal]')).not.toBeNull();
       expect(dialog).toHaveAttribute('id', 'tour');
       expect(trigger()).toHaveAttribute('aria-controls', 'tour');
@@ -2897,7 +2903,7 @@ describe('TeachingPopover parts: Header, Title, Body and Footer (P9-08)', () => 
       displayName: 'TeachingPopoverHeader',
       wrapper: InSurface,
       defaultProps: { children: 'Tip' },
-      conflictingClass: { className: 'mb-4', overrides: 'mb-2' },
+      conflictingClass: { className: 'mb-4', overrides: 'wave:mb-2' },
     });
 
     it('renders a decorative icon and its text in a row, with the Close button', () => {
@@ -3052,7 +3058,7 @@ describe('TeachingPopover parts: Header, Title, Body and Footer (P9-08)', () => 
       displayName: 'TeachingPopoverTitle',
       wrapper: InSurface,
       polymorphic: true,
-      conflictingClass: { className: 'mb-4', overrides: 'mb-2' },
+      conflictingClass: { className: 'mb-4', overrides: 'wave:mb-2' },
     });
 
     it('carries TeachingPopover’s title class and the hidden step position, also with children', async () => {
@@ -3068,7 +3074,7 @@ describe('TeachingPopover parts: Header, Title, Body and Footer (P9-08)', () => 
         teachingPopoverClassNames.title,
       );
       expect(heading()).toHaveTextContent('Search, steg 1 av 3');
-      expect(heading().querySelector('.sr-only')).toHaveTextContent(', steg 1 av 3');
+      expect(heading().querySelector('.wave\\:sr-only')).toHaveTextContent(', steg 1 av 3');
       expect(screen.getByRole('dialog', { name: 'Search, steg 1 av 3' })).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Next' }));
       expect(heading()).toHaveTextContent('Search, steg 2 av 3');
@@ -3128,7 +3134,7 @@ describe('TeachingPopover parts: Header, Title, Body and Footer (P9-08)', () => 
       expectedTag: 'div',
       displayName: 'TeachingPopoverBody',
       wrapper: InSurface,
-      conflictingClass: { className: 'mb-2', overrides: 'mb-4' },
+      conflictingClass: { className: 'mb-2', overrides: 'wave:mb-4' },
     });
 
     it('carries TeachingPopover’s body class and renders `media` before its content, as content', () => {
@@ -3171,7 +3177,7 @@ describe('TeachingPopover parts: Header, Title, Body and Footer (P9-08)', () => 
       expectedTag: 'div',
       displayName: 'TeachingPopoverFooter',
       wrapper: InSurface,
-      conflictingClass: { className: 'gap-4', overrides: 'gap-2' },
+      conflictingClass: { className: 'gap-4', overrides: 'wave:gap-2' },
     });
 
     it('carries TeachingPopover’s footer class and data-layout, with the step dots and buttons', async () => {
@@ -3515,7 +3521,7 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
       expectedTag: 'div',
       displayName: 'TeachingPopoverCarouselNav',
       wrapper: InSurface,
-      conflictingClass: { className: 'inline-flex', overrides: 'flex' },
+      conflictingClass: { className: 'inline-flex', overrides: 'wave:flex' },
     });
 
     it('renders a group of step buttons, each named for its step, the current one with aria-current', () => {
@@ -3539,23 +3545,23 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
         expect(indicator).toHaveClass(teachingPopoverCarouselNavClassNames.indicator);
         expect(indicator).toHaveAttribute('aria-hidden', 'true');
       }
-      expect(buttons[1].firstElementChild).toHaveClass('w-4', 'bg-primary');
-      expect(buttons[0].firstElementChild).toHaveClass('w-1.5', 'bg-stroke-accessible');
+      expect(buttons[1].firstElementChild).toHaveClass('wave:w-4', 'wave:bg-primary');
+      expect(buttons[0].firstElementChild).toHaveClass('wave:w-1.5', 'wave:bg-stroke-accessible');
     });
 
     it('keeps its indicators visible in forced colors, the current one in Highlight', () => {
       render(<CarouselTour activeStep={1} />);
       const [first, second, third] = stepButtons().map((button) => button.firstElementChild);
       expect(second).toHaveClass(
-        'forced-colors:bg-[Highlight]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:forced-colors:bg-[Highlight]',
+        'wave:forced-colors:forced-color-adjust-none',
       );
       for (const indicator of [first, third]) {
         expect(indicator).toHaveClass(
-          'forced-colors:bg-[ButtonText]',
-          'forced-colors:forced-color-adjust-none',
+          'wave:forced-colors:bg-[ButtonText]',
+          'wave:forced-colors:forced-color-adjust-none',
         );
-        expect(indicator).not.toHaveClass('forced-colors:bg-[Highlight]');
+        expect(indicator).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
       }
     });
 
@@ -3671,7 +3677,7 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
       expectedTag: 'div',
       displayName: 'TeachingPopoverCarouselPageCount',
       wrapper: InSurface,
-      conflictingClass: { className: 'text-foreground', overrides: 'text-muted-foreground' },
+      conflictingClass: { className: 'text-foreground', overrides: 'wave:text-muted-foreground' },
     });
 
     it('shows the visible “n of m” and follows the step', async () => {
@@ -3739,7 +3745,7 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
       expectedTag: 'div',
       displayName: 'TeachingPopoverCarouselFooter',
       wrapper: InSurface,
-      conflictingClass: { className: 'gap-4', overrides: 'gap-2' },
+      conflictingClass: { className: 'gap-4', overrides: 'wave:gap-2' },
     });
 
     it('carries the footer classes and data-carousel-layout: the indicator first by default, between the buttons when centered', () => {
@@ -3810,21 +3816,32 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
         render(<CarouselTour indicator={navAndCount} />);
         const footer = footerOf();
         expect(footer).toHaveAttribute('data-carousel-layout', 'offset');
-        expect(footer).toHaveClass('flex', 'flex-wrap', 'items-center', 'justify-between', 'gap-2');
+        expect(footer).toHaveClass(
+          'wave:flex',
+          'wave:flex-wrap',
+          'wave:items-center',
+          'wave:justify-between',
+          'wave:gap-2',
+        );
         expect(footer).not.toHaveAttribute('data-stacked');
         const [indicator, buttons] = slotsOf(footer);
         expect(indicator).toContainElement(nav());
-        expect(indicator).toHaveClass('flex', 'flex-wrap', 'items-center', 'gap-2');
-        expect(indicator).not.toHaveClass('min-w-0');
+        expect(indicator).toHaveClass(
+          'wave:flex',
+          'wave:flex-wrap',
+          'wave:items-center',
+          'wave:gap-2',
+        );
+        expect(indicator).not.toHaveClass('wave:min-w-0');
         expect(buttons).toContainElement(screen.getByRole('button', { name: 'Back' }));
         expect(buttons).toContainElement(screen.getByRole('button', { name: 'Next' }));
         expect(buttons).toHaveClass(
-          'ms-auto',
-          'flex',
-          'flex-wrap',
-          'items-center',
-          'justify-end',
-          'gap-2',
+          'wave:ms-auto',
+          'wave:flex',
+          'wave:flex-wrap',
+          'wave:items-center',
+          'wave:justify-end',
+          'wave:gap-2',
         );
       });
 
@@ -3832,25 +3849,40 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
         render(<CarouselTour indicator={null} />);
         const [indicator] = slotsOf(footerOf());
         expect(indicator).toHaveAttribute('aria-hidden', 'true');
-        expect(indicator.getAttribute('class')).toBe('flex items-center gap-1.5');
+        expect(indicator.getAttribute('class')).toBe('wave:flex wave:items-center wave:gap-1.5');
       });
 
       it('centered: three columns, the indicator in the middle one between the buttons', () => {
         render(<CarouselTour footer={{ layout: 'centered' }} />);
         const footer = footerOf();
-        expect(footer).toHaveClass('grid', 'grid-cols-[1fr_auto_1fr]', 'items-center', 'gap-2');
-        expect(footer).not.toHaveClass('flex');
+        expect(footer).toHaveClass(
+          'wave:grid',
+          'wave:grid-cols-[1fr_auto_1fr]',
+          'wave:items-center',
+          'wave:gap-2',
+        );
+        expect(footer).not.toHaveClass('wave:flex');
         expect(footer).not.toHaveAttribute('data-stacked');
         const [secondary, indicator, primary] = slotsOf(footer);
         expect(secondary).toContainElement(screen.getByRole('button', { name: 'Back' }));
-        expect(secondary).toHaveClass('flex', 'w-max', 'max-w-full', 'col-start-1');
-        expect(secondary).toHaveClass('justify-self-start');
+        expect(secondary).toHaveClass(
+          'wave:flex',
+          'wave:w-max',
+          'wave:max-w-full',
+          'wave:col-start-1',
+        );
+        expect(secondary).toHaveClass('wave:justify-self-start');
         expect(indicator).toContainElement(nav());
-        expect(indicator).toHaveClass('flex', 'justify-center', 'col-start-2');
-        expect(indicator.firstElementChild).toHaveClass('w-max', 'max-w-full');
+        expect(indicator).toHaveClass('wave:flex', 'wave:justify-center', 'wave:col-start-2');
+        expect(indicator.firstElementChild).toHaveClass('wave:w-max', 'wave:max-w-full');
         expect(primary).toContainElement(screen.getByRole('button', { name: 'Next' }));
-        expect(primary).toHaveClass('flex', 'w-max', 'max-w-full', 'col-start-3');
-        expect(primary).toHaveClass('justify-self-end');
+        expect(primary).toHaveClass(
+          'wave:flex',
+          'wave:w-max',
+          'wave:max-w-full',
+          'wave:col-start-3',
+        );
+        expect(primary).toHaveClass('wave:justify-self-end');
       });
 
       it('centered without a secondary button keeps the indicator in the middle column (L9)', () => {
@@ -3860,9 +3892,9 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
         const [indicator, primary] = slotsOf(footer);
         expect(slotsOf(footer)).toHaveLength(2);
         expect(indicator).toContainElement(nav());
-        expect(indicator).toHaveClass('col-start-2');
+        expect(indicator).toHaveClass('wave:col-start-2');
         expect(primary).toContainElement(screen.getByRole('button', { name: 'Done' }));
-        expect(primary).toHaveClass('col-start-3', 'justify-self-end');
+        expect(primary).toHaveClass('wave:col-start-3', 'wave:justify-self-end');
       });
 
       it('centered stacks the indicator above the buttons while the row does not fit, and goes back', async () => {
@@ -3877,25 +3909,35 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
         // 2 x 96 + 72 = 264 fits in 278: one row.
         await layOut(resize, { footer: 278, secondary: 96, indicator: 72, primary: 96 });
         expect(footer).not.toHaveAttribute('data-stacked');
-        expect(footer).toHaveClass('grid');
+        expect(footer).toHaveClass('wave:grid');
 
         // ... not in 250: the indicator gets a row of its own, first, above the buttons.
         await layOut(resize, { footer: 250, secondary: 96, indicator: 72, primary: 96 });
         expect(footer).toHaveAttribute('data-stacked', '');
-        expect(footer).toHaveClass('flex', 'flex-wrap', 'items-center', 'gap-2');
-        expect(footer).not.toHaveClass('grid');
-        expect(indicator).toHaveClass('order-first', 'basis-full', 'flex', 'justify-center');
-        expect(indicator).not.toHaveClass('col-start-2');
-        expect(secondary).not.toHaveClass('col-start-1');
-        expect(primary).toHaveClass('ms-auto');
-        expect(primary).not.toHaveClass('col-start-3');
+        expect(footer).toHaveClass(
+          'wave:flex',
+          'wave:flex-wrap',
+          'wave:items-center',
+          'wave:gap-2',
+        );
+        expect(footer).not.toHaveClass('wave:grid');
+        expect(indicator).toHaveClass(
+          'wave:order-first',
+          'wave:basis-full',
+          'wave:flex',
+          'wave:justify-center',
+        );
+        expect(indicator).not.toHaveClass('wave:col-start-2');
+        expect(secondary).not.toHaveClass('wave:col-start-1');
+        expect(primary).toHaveClass('wave:ms-auto');
+        expect(primary).not.toHaveClass('wave:col-start-3');
         // The same elements in the same DOM order: the button keeps focus.
         expect(slotsOf(footer)).toEqual([secondary, indicator, primary]);
         expect(back).toHaveFocus();
 
         await layOut(resize, { footer: 300, secondary: 96, indicator: 72, primary: 96 });
         expect(footer).not.toHaveAttribute('data-stacked');
-        expect(footer).toHaveClass('grid');
+        expect(footer).toHaveClass('wave:grid');
         expect(back).toHaveFocus();
       });
 
@@ -3953,7 +3995,7 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
       it('renders the one-row layout in the server HTML', () => {
         const html = renderToString(<CarouselTour footer={{ layout: 'centered' }} />);
         expect(html).toContain('data-carousel-layout="centered"');
-        expect(html).toContain('grid-cols-[1fr_auto_1fr]');
+        expect(html).toContain('wave:grid-cols-[1fr_auto_1fr]');
         expect(html).not.toContain('data-stacked');
       });
 
@@ -4367,13 +4409,13 @@ describe('TeachingPopover — slotProps', () => {
       await placed();
       expect(openingTags(beak(), close(), ...dots(), back(), next())).toBe(
         [
-          '<div aria-hidden="true" class="size-2 rotate-45 border-inherit bg-inherit border-t border-l wave-teaching-popover__beak" data-wave-teaching-popover-arrow="" style="position: absolute; top: calc(var(--wave-popup-arrow-size, 8px) / -2); left: 0px;">',
-          '<button aria-label="Close" class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-6 w-6 px-0 text-caption-1 border border-transparent bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__close-button absolute end-3 top-3" type="button">',
-          '<span aria-current="step" class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-4 bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
-          '<span class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
-          '<span class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
-          '<button aria-disabled="true" class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed cursor-not-allowed opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:text-[GrayText] forced-colors:border-[GrayText] wave-teaching-popover__back-button" data-disabled="" type="button">',
-          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed wave-teaching-popover__next-button" type="button">',
+          '<div aria-hidden="true" class="wave:size-2 wave:rotate-45 wave:border-inherit wave:bg-inherit wave:border-t wave:border-l wave-teaching-popover__beak" data-wave-teaching-popover-arrow="" style="position: absolute; top: calc(var(--wave-popup-arrow-size, 8px) / -2); left: 0px;">',
+          '<button aria-label="Close" class="wave-button wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:h-6 wave:w-6 wave:px-0 wave:text-caption-1 wave:border wave:border-transparent wave:bg-transparent wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__close-button wave:absolute wave:end-3 wave:top-3" type="button">',
+          '<span aria-current="step" class="wave-teaching-popover__dot wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none wave:w-4 wave:bg-primary wave:forced-colors:bg-[Highlight] wave:forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<span class="wave-teaching-popover__dot wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none wave:w-1.5 wave:bg-stroke-accessible wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<span class="wave-teaching-popover__dot wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none wave:w-1.5 wave:bg-stroke-accessible wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<button aria-disabled="true" class="wave-button wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:h-8 wave:min-w-24 wave:px-3 wave:text-body-1 wave:border wave:border-stroke wave:bg-background wave:text-foreground wave:not-disabled:not-aria-disabled:hover:border-stroke-hover wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave:cursor-not-allowed wave:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:forced-colors:text-[GrayText] wave:forced-colors:border-[GrayText] wave-teaching-popover__back-button" data-disabled="" type="button">',
+          '<button class="wave-button wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:h-8 wave:min-w-24 wave:px-3 wave:text-body-1 wave:border wave:border-transparent wave:bg-primary wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-hover wave:not-disabled:not-aria-disabled:active:bg-primary-pressed wave-teaching-popover__next-button" type="button">',
         ].join('\n'),
       );
     });
@@ -4404,15 +4446,15 @@ describe('TeachingPopover — slotProps', () => {
         ),
       ).toBe(
         [
-          '<button aria-label="Close" class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-6 w-6 px-0 text-caption-1 border border-transparent bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__close-button absolute end-3 top-3" type="button">',
-          '<button aria-label="Step 1 of 3" class="wave-teaching-popover-carousel-nav__button group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
-          '<button aria-current="step" aria-label="Step 2 of 3" class="wave-teaching-popover-carousel-nav__button group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
-          '<button aria-label="Step 3 of 3" class="wave-teaching-popover-carousel-nav__button group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
-          '<span aria-hidden="true" class="wave-teaching-popover-carousel-nav__indicator block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none">',
-          '<span aria-hidden="true" class="wave-teaching-popover-carousel-nav__indicator block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-4 bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none">',
-          '<span aria-hidden="true" class="wave-teaching-popover-carousel-nav__indicator block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none">',
-          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__back-button" type="button">',
-          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed wave-teaching-popover__next-button" type="button">',
+          '<button aria-label="Close" class="wave-button wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:h-6 wave:w-6 wave:px-0 wave:text-caption-1 wave:border wave:border-transparent wave:bg-transparent wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__close-button wave:absolute wave:end-3 wave:top-3" type="button">',
+          '<button aria-label="Step 1 of 3" class="wave-teaching-popover-carousel-nav__button wave:group wave:inline-flex wave:h-6 wave:min-w-6 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded-md wave:border-0 wave:bg-transparent wave:p-0 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" type="button">',
+          '<button aria-current="step" aria-label="Step 2 of 3" class="wave-teaching-popover-carousel-nav__button wave:group wave:inline-flex wave:h-6 wave:min-w-6 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded-md wave:border-0 wave:bg-transparent wave:p-0 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" type="button">',
+          '<button aria-label="Step 3 of 3" class="wave-teaching-popover-carousel-nav__button wave:group wave:inline-flex wave:h-6 wave:min-w-6 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded-md wave:border-0 wave:bg-transparent wave:p-0 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" type="button">',
+          '<span aria-hidden="true" class="wave-teaching-popover-carousel-nav__indicator wave:block wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none wave:w-1.5 wave:bg-stroke-accessible wave:group-hover:bg-foreground wave:forced-colors:bg-[ButtonText] wave:forced-colors:forced-color-adjust-none">',
+          '<span aria-hidden="true" class="wave-teaching-popover-carousel-nav__indicator wave:block wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none wave:w-4 wave:bg-primary wave:forced-colors:bg-[Highlight] wave:forced-colors:forced-color-adjust-none">',
+          '<span aria-hidden="true" class="wave-teaching-popover-carousel-nav__indicator wave:block wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none wave:w-1.5 wave:bg-stroke-accessible wave:group-hover:bg-foreground wave:forced-colors:bg-[ButtonText] wave:forced-colors:forced-color-adjust-none">',
+          '<button class="wave-button wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:h-8 wave:min-w-24 wave:px-3 wave:text-body-1 wave:border wave:border-stroke wave:bg-background wave:text-foreground wave:not-disabled:not-aria-disabled:hover:border-stroke-hover wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__back-button" type="button">',
+          '<button class="wave-button wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:h-8 wave:min-w-24 wave:px-3 wave:text-body-1 wave:border wave:border-transparent wave:bg-primary wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-hover wave:not-disabled:not-aria-disabled:active:bg-primary-pressed wave-teaching-popover__next-button" type="button">',
         ].join('\n'),
       );
     });
@@ -4430,11 +4472,11 @@ describe('TeachingPopover — slotProps', () => {
       await act(async () => {});
       expect(openingTags(...dots(), back(), next())).toBe(
         [
-          '<span aria-current="step" class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-4 bg-primary forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
-          '<span class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
-          '<span class="wave-teaching-popover__dot h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
-          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__back-button" type="button">',
-          '<button class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 min-w-24 px-3 text-body-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed wave-teaching-popover__next-button" type="button">',
+          '<span aria-current="step" class="wave-teaching-popover__dot wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none wave:w-4 wave:bg-primary wave:forced-colors:bg-[Highlight] wave:forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<span class="wave-teaching-popover__dot wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none wave:w-1.5 wave:bg-stroke-accessible wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<span class="wave-teaching-popover__dot wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none wave:w-1.5 wave:bg-stroke-accessible wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none" data-wave-teaching-popover-dot="">',
+          '<button class="wave-button wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:h-8 wave:min-w-24 wave:px-3 wave:text-body-1 wave:border wave:border-stroke wave:bg-background wave:text-foreground wave:not-disabled:not-aria-disabled:hover:border-stroke-hover wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-teaching-popover__back-button" type="button">',
+          '<button class="wave-button wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:h-8 wave:min-w-24 wave:px-3 wave:text-body-1 wave:border wave:border-transparent wave:bg-primary wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-hover wave:not-disabled:not-aria-disabled:active:bg-primary-pressed wave-teaching-popover__next-button" type="button">',
         ].join('\n'),
       );
     });
@@ -4574,17 +4616,17 @@ describe('TeachingPopover — slotProps', () => {
       );
       await placed();
       expect(beak()).toHaveClass('size-3');
-      expect(beak()).not.toHaveClass('size-2');
+      expect(beak()).not.toHaveClass('wave:size-2');
       expect(close()).toHaveClass('end-2');
-      expect(close()).not.toHaveClass('end-3');
+      expect(close()).not.toHaveClass('wave:end-3');
       for (const dot of dots()) {
         expect(dot).toHaveClass('h-2');
-        expect(dot).not.toHaveClass('h-1.5');
+        expect(dot).not.toHaveClass('wave:h-1.5');
       }
       expect(back()).toHaveClass('min-w-16');
-      expect(back()).not.toHaveClass('min-w-24');
+      expect(back()).not.toHaveClass('wave:min-w-24');
       expect(next()).toHaveClass('min-w-32');
-      expect(next()).not.toHaveClass('min-w-24');
+      expect(next()).not.toHaveClass('wave:min-w-24');
     });
 
     it('attaches your refs to the parts, each dot included', async () => {
@@ -4859,7 +4901,7 @@ describe('TeachingPopover — slotProps', () => {
         { dir: 'rtl' },
       );
       await waitFor(() => expect(screen.getByRole('dialog')).toHaveAttribute('data-side', 'right'));
-      expect(beak()).toHaveClass('border-b', 'border-l', 'my-beak');
+      expect(beak()).toHaveClass('wave:border-b', 'wave:border-l', 'my-beak');
     });
   });
 
@@ -5291,7 +5333,7 @@ describe('TeachingPopover — slotProps', () => {
       );
       const el = next();
       expect(el).toHaveAttribute('type', 'button');
-      expect(el).toHaveClass('bg-primary', 'text-primary-foreground');
+      expect(el).toHaveClass('wave:bg-primary', 'wave:text-primary-foreground');
       for (const name of [
         'disabled',
         'tabindex',
@@ -5373,11 +5415,11 @@ describe('TeachingPopover.CarouselNav — slotProps', () => {
     );
     for (const button of buttons()) {
       expect(button).toHaveClass('min-w-8');
-      expect(button).not.toHaveClass('min-w-6');
+      expect(button).not.toHaveClass('wave:min-w-6');
     }
     for (const indicator of indicators()) {
       expect(indicator).toHaveClass('h-2');
-      expect(indicator).not.toHaveClass('h-1.5');
+      expect(indicator).not.toHaveClass('wave:h-1.5');
     }
   });
 

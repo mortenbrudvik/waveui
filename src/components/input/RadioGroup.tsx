@@ -164,8 +164,8 @@ const RadioGroupRoot = ({
         aria-disabled={disabled || undefined}
         className={wcn(
           radioGroupClassNames.root,
-          'relative flex',
-          orientation === 'vertical' ? 'flex-col gap-2' : 'flex-row gap-4',
+          'wave:relative wave:flex',
+          orientation === 'vertical' ? 'wave:flex-col wave:gap-2' : 'wave:flex-row wave:gap-4',
           className,
         )}
         {...rest}
@@ -195,7 +195,7 @@ RadioGroupRoot.displayName = 'RadioGroup';
 
 /* ---- RadioItem ---- */
 /** Forced-colors look of the dot of a disabled selected radio: GrayText, no Highlight fill. */
-const disabledDot = 'forced-colors:bg-[GrayText] forced-colors:forced-color-adjust-none';
+const disabledDot = 'wave:forced-colors:bg-[GrayText] wave:forced-colors:forced-color-adjust-none';
 
 /** The handlers the label part drops while the radio is disabled: it does not select then. */
 const BLOCK_CLICK = ['onClick'] as const;
@@ -337,17 +337,17 @@ export function RadioItem({
       radioGroupItemClassNames.indicator,
       // p-0 and bg-transparent are set here, not left to the native reset, which any app button
       // style overrides (C-NATIVE).
-      'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border bg-transparent p-0 transition-colors motion-reduce:transition-none',
+      'wave:flex wave:h-[18px] wave:w-[18px] wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border wave:bg-transparent wave:p-0 wave:transition-colors wave:motion-reduce:transition-none',
       // Centred on the 20px first line of the label text.
-      hasLabel && 'mt-px',
+      hasLabel && 'wave:mt-px',
       focusRing,
-      selected ? 'border-2 border-primary' : 'border-stroke-accessible',
+      selected ? 'wave:border-2 wave:border-primary' : 'wave:border-stroke-accessible',
       // Forced colors: the focusable circle keeps system colors (its focus outline stays
       // forced); only the dot opts out. A disabled radio draws GrayText, never Highlight.
       isDisabled
         ? forcedColors.disabled
         : selected
-          ? 'forced-colors:border-[Highlight]'
+          ? 'wave:forced-colors:border-[Highlight]'
           : forcedColors.control,
     ),
     style,
@@ -375,7 +375,11 @@ export function RadioItem({
     },
   });
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: wcn(radioGroupItemClassNames.label, 'text-body-1 text-foreground', labelClassName),
+    className: wcn(
+      radioGroupItemClassNames.label,
+      'wave:text-body-1 wave:text-foreground',
+      labelClassName,
+    ),
     // The text names the control through aria-labelledby: an aria-label would replace it.
     locked: { id: labelTextId, 'aria-label': undefined },
     blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
@@ -385,10 +389,12 @@ export function RadioItem({
       radioGroupItemClassNames.root,
       // items-start: the radio lines up with the first line of a label that wraps or has a
       // second line, not with its middle.
-      'inline-flex items-start gap-2 select-none',
+      'wave:inline-flex wave:items-start wave:gap-2 wave:select-none',
       // The dimmed look lifts while a focus ring shows inside the root (a link's in the label; a
       // disabled radio never takes focus): opacity would dim the ring below 3:1.
-      isDisabled ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100' : 'cursor-pointer',
+      isDisabled
+        ? 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100'
+        : 'wave:cursor-pointer',
       className,
     ),
     // The root holds the radio: a part neither hides it nor takes it out of reach, nor sends the
@@ -411,7 +417,7 @@ export function RadioItem({
           <span
             aria-hidden="true"
             className={wcn(
-              'block h-2 w-2 rounded-full bg-primary',
+              'wave:block wave:h-2 wave:w-2 wave:rounded-full wave:bg-primary',
               isDisabled ? disabledDot : forcedColors.selectedLeaf,
             )}
           />

@@ -48,7 +48,7 @@ describe('Button', () => {
     displayName: 'Button',
     polymorphic: true,
     defaultProps: { children: 'Click me' },
-    conflictingClass: { className: 'px-8', overrides: 'px-3' },
+    conflictingClass: { className: 'px-8', overrides: 'wave:px-3' },
     a11yVariants: [
       { name: 'disabled', props: { disabled: true } },
       { name: 'primary', props: { appearance: 'primary' } },
@@ -135,36 +135,36 @@ describe('Button', () => {
     const distinguishing: Record<Appearance, { has: string[]; lacks: string[] }> = {
       primary: {
         has: [
-          'bg-primary',
-          'text-primary-foreground',
-          `${HOVER_GATE}bg-primary-hover`,
-          `${ACTIVE_GATE}bg-primary-pressed`,
+          'wave:bg-primary',
+          'wave:text-primary-foreground',
+          `wave:${HOVER_GATE}bg-primary-hover`,
+          `wave:${ACTIVE_GATE}bg-primary-pressed`,
         ],
-        lacks: ['text-white', 'bg-background', 'border-stroke'],
+        lacks: ['wave:text-white', 'wave:bg-background', 'wave:border-stroke'],
       },
       outline: {
         has: [
-          'border',
-          'border-stroke',
-          'bg-background',
-          'text-foreground',
-          `${HOVER_GATE}bg-subtle-hover`,
-          `${ACTIVE_GATE}bg-subtle-pressed`,
+          'wave:border',
+          'wave:border-stroke',
+          'wave:bg-background',
+          'wave:text-foreground',
+          `wave:${HOVER_GATE}bg-subtle-hover`,
+          `wave:${ACTIVE_GATE}bg-subtle-pressed`,
         ],
-        lacks: ['bg-primary', 'text-primary'],
+        lacks: ['wave:bg-primary', 'wave:text-primary'],
       },
       subtle: {
         has: [
-          'bg-transparent',
-          'text-foreground',
-          `${HOVER_GATE}bg-subtle-hover`,
-          `${ACTIVE_GATE}bg-subtle-pressed`,
+          'wave:bg-transparent',
+          'wave:text-foreground',
+          `wave:${HOVER_GATE}bg-subtle-hover`,
+          `wave:${ACTIVE_GATE}bg-subtle-pressed`,
         ],
-        lacks: ['border-stroke', 'text-primary', `${HOVER_GATE}underline`],
+        lacks: ['wave:border-stroke', 'wave:text-primary', `wave:${HOVER_GATE}underline`],
       },
       transparent: {
-        has: ['bg-transparent', 'text-primary', `${HOVER_GATE}underline`],
-        lacks: ['text-foreground', `${HOVER_GATE}bg-subtle-hover`, 'border-stroke'],
+        has: ['wave:bg-transparent', 'wave:text-primary', `wave:${HOVER_GATE}underline`],
+        lacks: ['wave:text-foreground', `wave:${HOVER_GATE}bg-subtle-hover`, 'wave:border-stroke'],
       },
     };
 
@@ -183,10 +183,10 @@ describe('Button', () => {
     it('renders with outline appearance by default', () => {
       render(<Button>Outline</Button>);
       expect(screen.getByRole('button', { name: 'Outline' })).toHaveClass(
-        'border',
-        'border-stroke',
-        'bg-background',
-        'text-foreground',
+        'wave:border',
+        'wave:border-stroke',
+        'wave:bg-background',
+        'wave:text-foreground',
       );
     });
 
@@ -197,8 +197,9 @@ describe('Button', () => {
         for (const cls of Array.from(screen.getByRole('button', { name: 'Label' }).classList)) {
           expect(cls).not.toMatch(/\[#[0-9a-f]{3,8}\]|rgba?\(|-(white|black)\b/i);
           expect(cls).not.toMatch(/(^|:|-)enabled:/);
-          if (/(^|:)hover:/.test(cls)) expect(cls.startsWith(HOVER_GATE), cls).toBe(true);
-          if (/(^|:)active:/.test(cls)) expect(cls.startsWith(ACTIVE_GATE), cls).toBe(true);
+          if (/(^|:)hover:/.test(cls)) expect(cls.startsWith(`wave:${HOVER_GATE}`), cls).toBe(true);
+          if (/(^|:)active:/.test(cls))
+            expect(cls.startsWith(`wave:${ACTIVE_GATE}`), cls).toBe(true);
         }
       },
     );
@@ -214,8 +215,8 @@ describe('Button', () => {
       );
       const button = screen.getByRole('button', { name: 'Delete' });
       expect(button).toHaveClass(`${HOVER_GATE}bg-error`, `${ACTIVE_GATE}bg-error-tint`);
-      expect(button).not.toHaveClass(`${HOVER_GATE}bg-primary-hover`);
-      expect(button).not.toHaveClass(`${ACTIVE_GATE}bg-primary-pressed`);
+      expect(button).not.toHaveClass(`wave:${HOVER_GATE}bg-primary-hover`);
+      expect(button).not.toHaveClass(`wave:${ACTIVE_GATE}bg-primary-pressed`);
     });
 
     it('an important hover override is kept next to the gated class and wins by !important (button-provider#3)', () => {
@@ -226,7 +227,7 @@ describe('Button', () => {
       );
       expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass(
         'hover:bg-error!',
-        `${HOVER_GATE}bg-primary-hover`,
+        `wave:${HOVER_GATE}bg-primary-hover`,
       );
     });
 
@@ -239,33 +240,42 @@ describe('Button', () => {
       // Both stay; `:not(:disabled):not([aria-disabled="true"]):hover` (0,4,0) beats `:hover` (0,2,0).
       expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass(
         'hover:bg-error',
-        `${HOVER_GATE}bg-primary-hover`,
+        `wave:${HOVER_GATE}bg-primary-hover`,
       );
     });
   });
 
   describe('size (button-provider#19)', () => {
     const heights: Record<Size, string> = {
-      'extra-small': 'h-5',
-      small: 'h-6',
-      medium: 'h-8',
-      large: 'h-10',
-      'extra-large': 'h-12',
+      'extra-small': 'wave:h-5',
+      small: 'wave:h-6',
+      medium: 'wave:h-8',
+      large: 'wave:h-10',
+      'extra-large': 'wave:h-12',
     };
 
     it.each(Object.keys(heights) as Size[])('renders the %s size', (size) => {
       render(<Button size={size}>Label</Button>);
-      expect(screen.getByRole('button', { name: 'Label' })).toHaveClass(heights[size], 'min-w-24');
+      expect(screen.getByRole('button', { name: 'Label' })).toHaveClass(
+        heights[size],
+        'wave:min-w-24',
+      );
     });
 
     it('renders small size', () => {
       render(<Button size="small">Small</Button>);
-      expect(screen.getByRole('button', { name: 'Small' })).toHaveClass('h-6', 'text-caption-1');
+      expect(screen.getByRole('button', { name: 'Small' })).toHaveClass(
+        'wave:h-6',
+        'wave:text-caption-1',
+      );
     });
 
     it('renders large size', () => {
       render(<Button size="large">Large</Button>);
-      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('h-10', 'text-body-2');
+      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass(
+        'wave:h-10',
+        'wave:text-body-2',
+      );
     });
 
     it('extra-large uses a larger font than large', () => {
@@ -277,26 +287,26 @@ describe('Button', () => {
       );
       const large = screen.getByRole('button', { name: 'Large' });
       const extraLarge = screen.getByRole('button', { name: 'Extra large' });
-      expect(large).toHaveClass('text-body-2');
+      expect(large).toHaveClass('wave:text-body-2');
       // 18px (px like the rest of the ramp), not 0.4's text-sm or a rem size (button-provider#19).
-      expect(extraLarge).toHaveClass('text-[18px]/[24px]');
-      expect(extraLarge).not.toHaveClass('text-body-2');
-      expect(extraLarge).not.toHaveClass('text-sm');
-      expect(extraLarge).not.toHaveClass('text-lg');
+      expect(extraLarge).toHaveClass('wave:text-[18px]/[24px]');
+      expect(extraLarge).not.toHaveClass('wave:text-body-2');
+      expect(extraLarge).not.toHaveClass('wave:text-sm');
+      expect(extraLarge).not.toHaveClass('wave:text-lg');
     });
 
     it('keeps its type-ramp font size when the consumer adds a text color class (table-core#1)', () => {
       render(<Button className="text-error">Delete</Button>);
       const button = screen.getByRole('button', { name: 'Delete' });
-      expect(button).toHaveClass('text-body-1', 'text-error');
-      expect(button).not.toHaveClass('text-foreground');
+      expect(button).toHaveClass('wave:text-body-1', 'text-error');
+      expect(button).not.toHaveClass('wave:text-foreground');
     });
 
     it('lets a consumer font-size class win over the size default', () => {
       render(<Button className="text-sm">Small text</Button>);
       const button = screen.getByRole('button', { name: 'Small text' });
       expect(button).toHaveClass('text-sm');
-      expect(button).not.toHaveClass('text-body-1');
+      expect(button).not.toHaveClass('wave:text-body-1');
     });
   });
 
@@ -323,8 +333,11 @@ describe('Button', () => {
       expect(link).not.toHaveAttribute('disabled');
       expect(link).not.toHaveAttribute('role');
       expect(link).not.toHaveAttribute('tabindex');
-      expect(link).toHaveClass(`${HOVER_GATE}bg-subtle-hover`, `${ACTIVE_GATE}bg-subtle-pressed`);
-      expect(link).toHaveClass('no-underline');
+      expect(link).toHaveClass(
+        `wave:${HOVER_GATE}bg-subtle-hover`,
+        `wave:${ACTIVE_GATE}bg-subtle-pressed`,
+      );
+      expect(link).toHaveClass('wave:no-underline');
     });
 
     it('as="a" disabled: aria-disabled, no href, not focusable and clicks are prevented', async () => {
@@ -343,7 +356,7 @@ describe('Button', () => {
       expect(link).toHaveAttribute('tabindex', '-1');
       expect(link).not.toHaveAttribute('disabled');
       expect(link).not.toHaveAttribute('href');
-      expect(link).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(link).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
 
       // fireEvent returns false when the default action was prevented.
       expect(fireEvent.click(link)).toBe(false);
@@ -750,7 +763,7 @@ describe('Button', () => {
       render(<Button icon={<span data-testid="icon">X</span>}>With Icon</Button>);
       const icon = screen.getByTestId('icon');
       expect(icon.parentElement).toHaveAttribute('aria-hidden', 'true');
-      expect(icon.parentElement).toHaveClass('inline-flex', 'shrink-0');
+      expect(icon.parentElement).toHaveClass('wave:inline-flex', 'wave:shrink-0');
     });
 
     it('renders icon as SlotObject', () => {
@@ -762,7 +775,7 @@ describe('Button', () => {
         </Button>,
       );
       const icon = screen.getByTestId('slot-icon');
-      expect(icon.parentElement).toHaveClass('custom-icon', 'shrink-0');
+      expect(icon.parentElement).toHaveClass('custom-icon', 'wave:shrink-0');
       expect(icon.parentElement).toHaveAttribute('aria-hidden', 'true');
     });
 
@@ -778,9 +791,9 @@ describe('Button', () => {
 
     it('adds a gap only when there is both an icon and a label', () => {
       const { rerender } = render(<Button icon={<PaperclipIcon />}>Attach</Button>);
-      expect(screen.getByRole('button', { name: 'Attach' })).toHaveClass('gap-1.5');
+      expect(screen.getByRole('button', { name: 'Attach' })).toHaveClass('wave:gap-1.5');
       rerender(<Button>Attach</Button>);
-      expect(screen.getByRole('button', { name: 'Attach' })).not.toHaveClass('gap-1.5');
+      expect(screen.getByRole('button', { name: 'Attach' })).not.toHaveClass('wave:gap-1.5');
     });
 
     it('renders the icon element through a slot object’s render function (P13-01)', () => {
@@ -798,10 +811,10 @@ describe('Button', () => {
       });
       expect(icon.tagName).toBe('SPAN');
       expect(icon.classList[0]).toBe(buttonClassNames.icon);
-      expect(icon).toHaveClass('inline-flex', 'shrink-0', 'items-center', 'mine');
+      expect(icon).toHaveClass('wave:inline-flex', 'wave:shrink-0', 'wave:items-center', 'mine');
       expect(icon).toHaveAttribute('aria-hidden', 'true');
       expect(button).toContainElement(icon);
-      expect(button).toHaveClass('gap-1.5');
+      expect(button).toHaveClass('wave:gap-1.5');
     });
 
     it('takes a reusable render function annotated with the bare SlotRenderFunction (P13-01)', () => {
@@ -821,14 +834,14 @@ describe('Button', () => {
       render(<Button icon={{ children: () => null }}>Attach</Button>);
       const button = screen.getByRole('button', { name: 'Attach' });
       expect(button.querySelector('[aria-hidden]')).toBeNull();
-      expect(button).not.toHaveClass('gap-1.5');
+      expect(button).not.toHaveClass('wave:gap-1.5');
     });
 
     it('an icon-only button is square and has no minimum width', () => {
       render(<Button icon={<PaperclipIcon />} aria-label="Attach" size="large" />);
       const button = screen.getByRole('button', { name: 'Attach' });
-      expect(button).toHaveClass('h-10', 'w-10');
-      expect(button).not.toHaveClass('min-w-24');
+      expect(button).toHaveClass('wave:h-10', 'wave:w-10');
+      expect(button).not.toHaveClass('wave:min-w-24');
     });
 
     describe('iconPosition', () => {
@@ -859,7 +872,7 @@ describe('Button', () => {
         expect(button.firstChild?.textContent).toBe('Open in new window');
         expect(button.lastChild).toBe(screen.getByTestId('paperclip').parentElement);
         expect(button.lastChild).toHaveAttribute('aria-hidden', 'true');
-        expect(button).toHaveClass('gap-1.5');
+        expect(button).toHaveClass('wave:gap-1.5');
       });
 
       it('has no effect on an icon-only button: one child, square sizing', () => {
@@ -868,8 +881,8 @@ describe('Button', () => {
         );
         const button = screen.getByRole('button', { name: 'Attach' });
         expect(button.childNodes).toHaveLength(1);
-        expect(button).toHaveClass('h-10', 'w-10');
-        expect(button).not.toHaveClass('min-w-24');
+        expect(button).toHaveClass('wave:h-10', 'wave:w-10');
+        expect(button).not.toHaveClass('wave:min-w-24');
       });
 
       it('keeps the DOM order in RTL (the writing direction mirrors it)', () => {
@@ -923,16 +936,16 @@ describe('Button', () => {
       const { container, rerender } = render(<Button icon="">Attach</Button>);
       const labelled = screen.getByRole('button', { name: 'Attach' });
       expect(container.querySelector('[aria-hidden]')).toBeNull();
-      expect(labelled).not.toHaveClass('gap-1.5');
+      expect(labelled).not.toHaveClass('wave:gap-1.5');
       expect(labelled.childNodes).toHaveLength(1);
 
       // Without children it is an empty, regular-width button: not square, no icon-only warning.
       rerender(<Button icon="" aria-label="Empty" />);
       const unlabelled = screen.getByRole('button', { name: 'Empty' });
-      expect(unlabelled).toHaveClass('min-w-24');
-      expect(unlabelled).not.toHaveClass('w-8');
+      expect(unlabelled).toHaveClass('wave:min-w-24');
+      expect(unlabelled).not.toHaveClass('wave:w-8');
       rerender(<Button icon="" />);
-      expect(screen.getByRole('button')).toHaveClass('min-w-24');
+      expect(screen.getByRole('button')).toHaveClass('wave:min-w-24');
       expect(container.querySelector('[aria-hidden]')).toBeNull();
       expect(warn).not.toHaveBeenCalled();
     });
@@ -943,7 +956,7 @@ describe('Button', () => {
     ])('treats %s icon as no icon', (_name, icon) => {
       const { container } = render(<Button icon={icon}>Attach</Button>);
       expect(container.querySelector('[aria-hidden]')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Attach' })).not.toHaveClass('gap-1.5');
+      expect(screen.getByRole('button', { name: 'Attach' })).not.toHaveClass('wave:gap-1.5');
     });
 
     it('does not count an empty Fragment as a label (button-provider#21)', () => {
@@ -954,9 +967,9 @@ describe('Button', () => {
         </Button>,
       );
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('h-10', 'w-10');
-      expect(button).not.toHaveClass('min-w-24');
-      expect(button).not.toHaveClass('gap-1.5');
+      expect(button).toHaveClass('wave:h-10', 'wave:w-10');
+      expect(button).not.toHaveClass('wave:min-w-24');
+      expect(button).not.toHaveClass('wave:gap-1.5');
       expect(warn.mock.calls).toEqual([[ICON_ONLY_WARNING]]);
     });
 
@@ -967,7 +980,7 @@ describe('Button', () => {
         </Button>,
       );
       const button = screen.getByRole('button', { name: 'Attach' });
-      expect(button).toHaveClass('gap-1.5', 'min-w-24');
+      expect(button).toHaveClass('wave:gap-1.5', 'wave:min-w-24');
     });
 
     // The icon and the label follow the library's one renders-nothing rule. A generator is read
@@ -1050,11 +1063,11 @@ describe('Button', () => {
         );
         const button = screen.getByRole('button');
         if (text === null) {
-          expect(button).toHaveClass('h-10', 'w-10');
+          expect(button).toHaveClass('wave:h-10', 'wave:w-10');
           expect(button).toHaveTextContent(/^$/);
           expect(warn.mock.calls).toEqual([[ICON_ONLY_WARNING]]);
         } else {
-          expect(button).toHaveClass('gap-1.5', 'min-w-24');
+          expect(button).toHaveClass('wave:gap-1.5', 'wave:min-w-24');
           expect(button).toHaveTextContent(new RegExp(`^${text}$`));
           expect(warn).not.toHaveBeenCalled();
         }
@@ -1095,7 +1108,7 @@ describe('Button', () => {
       );
       const button = screen.getByTestId('btn');
       expect(button).toBeDisabled();
-      expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(button).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
       expect(button).not.toHaveAttribute('aria-disabled');
       expect(button).not.toHaveAttribute('tabindex');
     });
@@ -1105,7 +1118,7 @@ describe('Button', () => {
       const button = screen.getByRole('button', { name: 'Not yet' });
       expect(button).not.toBeDisabled();
       expect(button).toHaveAttribute('aria-disabled', 'true');
-      expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(button).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
     });
 
     it('a consumer aria-disabled stays in the tab order and does not block its handlers (spec §7.3, C-DISABLED)', async () => {
@@ -1172,8 +1185,8 @@ describe('Button', () => {
       // CSS opacity dims the element's own outline too, which would put the ring below 3:1.
       for (const name of ['Save', 'Not yet']) {
         expect(screen.getByRole('button', { name })).toHaveClass(
-          'opacity-50',
-          'aria-disabled:focus-visible:opacity-100',
+          'wave:opacity-50',
+          'wave:aria-disabled:focus-visible:opacity-100',
         );
       }
     });
@@ -1193,7 +1206,7 @@ describe('Button', () => {
       expect(button).toHaveAttribute('aria-disabled', 'true');
       expect(button).toHaveAttribute('data-disabled', '');
       expect(button).toHaveAttribute('data-disabled-focusable', '');
-      expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(button).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
 
       screen.getByRole('button', { name: 'Before' }).focus();
       await user.tab();
@@ -1265,12 +1278,12 @@ describe('Button', () => {
       );
       const button = screen.getByRole('button', { name: 'Save' });
       expect(button).toHaveClass(
-        `${HOVER_GATE}bg-primary-hover`,
-        `${ACTIVE_GATE}bg-primary-pressed`,
+        `wave:${HOVER_GATE}bg-primary-hover`,
+        `wave:${ACTIVE_GATE}bg-primary-pressed`,
       );
       for (const cls of Array.from(button.classList)) {
-        if (/(^|:)hover:/.test(cls)) expect(cls.startsWith(HOVER_GATE), cls).toBe(true);
-        if (/(^|:)active:/.test(cls)) expect(cls.startsWith(ACTIVE_GATE), cls).toBe(true);
+        if (/(^|:)hover:/.test(cls)) expect(cls.startsWith(`wave:${HOVER_GATE}`), cls).toBe(true);
+        if (/(^|:)active:/.test(cls)) expect(cls.startsWith(`wave:${ACTIVE_GATE}`), cls).toBe(true);
       }
       expect(button).toHaveAttribute('aria-disabled', 'true');
     });
@@ -1382,7 +1395,7 @@ describe('Button', () => {
     renderWithProviders(<Button appearance="primary">Save</Button>, { theme: 'dark' });
     const button = screen.getByRole('button', { name: 'Save' });
     expect(button.closest('.wave-dark')).not.toBeNull();
-    expect(button).toHaveClass('bg-primary', 'text-primary-foreground');
+    expect(button).toHaveClass('wave:bg-primary', 'wave:text-primary-foreground');
   });
 
   describe('types (button-provider#8, #27)', () => {

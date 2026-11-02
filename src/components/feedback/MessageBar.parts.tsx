@@ -93,7 +93,7 @@ export const MessageBarTitle = ({
       {...rest}
       ref={ref}
       id={(placed ? part.titleId : id) || undefined}
-      className={wcn(messageBarTitleClassNames.root, 'font-semibold', className)}
+      className={wcn(messageBarTitleClassNames.root, 'wave:font-semibold', className)}
     >
       <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
         {materialiseSlotContent(children)}
@@ -135,7 +135,7 @@ export const MessageBarActions = ({
       ref={ref}
       className={wcn(
         messageBarActionsClassNames.root,
-        'flex shrink-0 flex-wrap items-center gap-2',
+        'wave:flex wave:shrink-0 wave:flex-wrap wave:items-center wave:gap-2',
         className,
       )}
     >

@@ -108,7 +108,7 @@ function mergedParts(
     React.HTMLAttributes<HTMLElement>['dangerouslySetInnerHTML'] | undefined;
   const content =
     markup != null ? (
-      <span className="inline-flex items-center" dangerouslySetInnerHTML={markup} />
+      <span className="wave:inline-flex wave:items-center" dangerouslySetInnerHTML={markup} />
     ) : (
       materialiseSlotContent(children)
     );
@@ -417,8 +417,8 @@ export function ModalBackdrop({
       )}
       className={wcn(
         className,
-        'fixed inset-0',
-        appearance === 'transparent' ? 'bg-transparent' : 'bg-backdrop',
+        'wave:fixed wave:inset-0',
+        appearance === 'transparent' ? 'wave:bg-transparent' : 'wave:bg-backdrop',
         motionClassName,
         slotClassName as string | undefined,
       )}

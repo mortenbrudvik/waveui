@@ -165,7 +165,14 @@ describe('Dialog.Content motion slots (D5, D6)', () => {
         />,
       );
       expectWarnings([]);
-      expect(surface()).toHaveClass(...motionClasses(dialogMotion), ...presenceClasses);
+      // The className's exit opacity replaces the recipe's own word of the same variant (1.0:
+      // the recipe's carries the prefix, so the two are no longer one string); the rest stays.
+      const replaced = 'wave:data-[presence=exiting]:opacity-0';
+      expect(surface()).toHaveClass(
+        ...motionClasses(dialogMotion).filter((word) => word !== replaced),
+        ...presenceClasses,
+      );
+      expect(surface()).not.toHaveClass(replaced);
       expect(Array.from(surface()!.classList).slice(-2)).toEqual(presenceClasses);
       expect(backdrop()).toHaveClass(...motionClasses(dialogBackdropMotion));
     });
@@ -179,7 +186,7 @@ describe('Dialog.Content motion slots (D5, D6)', () => {
         />,
       );
       expectWarnings([]);
-      const replaced = 'data-[presence=exiting]:opacity-0';
+      const replaced = 'wave:data-[presence=exiting]:opacity-0';
       expect(surface()).toHaveClass(
         ...motionClasses(dialogMotion).filter((word) => word !== replaced),
         'data-[presence=exiting]:opacity-50',

@@ -96,7 +96,7 @@ const AccordionHeadingOutsideContext = React.createContext(false);
  * so a wrapper between the heading and the button (a Tooltip's inline-block `<span>`) does not
  * shrink the full-width button and move its chevron away from the row end.
  */
-const HEADING_CLASS = 'm-0 grid';
+const HEADING_CLASS = 'wave:m-0 wave:grid';
 
 /**
  * What the heading part locks unset: a role and a level (it stays the heading `headingLevel`
@@ -313,7 +313,11 @@ const AccordionRoot = (props: AccordionProps) => {
           <AccordionHeadingOutsideContext.Provider value={false}>
             <div
               ref={ref}
-              className={wcn(accordionClassNames.root, 'divide-y divide-border', className)}
+              className={wcn(
+                accordionClassNames.root,
+                'wave:divide-y wave:divide-border',
+                className,
+              )}
               {...rest}
             >
               {children}
@@ -581,8 +585,8 @@ const AccordionTrigger = ({
   const iconPart = slotProps?.expandIcon;
   const iconClassName = wcn(
     accordionTriggerClassNames.expandIcon,
-    'shrink-0 transition-transform motion-reduce:transition-none',
-    item.isOpen && 'rotate-180',
+    'wave:shrink-0 wave:transition-transform wave:motion-reduce:transition-none',
+    item.isOpen && 'wave:rotate-180',
   );
 
   const button = (
@@ -590,8 +594,8 @@ const AccordionTrigger = ({
       type="button"
       className={wcn(
         accordionTriggerClassNames.root,
-        'flex w-full items-center justify-between gap-2 px-4 py-3 text-start text-body-1 font-semibold text-foreground',
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+        'wave:flex wave:w-full wave:items-center wave:justify-between wave:gap-2 wave:px-4 wave:py-3 wave:text-start wave:text-body-1 wave:font-semibold wave:text-foreground',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
         disabledStyles,
         focusRingInset,
         className,
@@ -728,7 +732,7 @@ const AccordionPanel = ({
           role="region"
           className={wcn(
             accordionPanelClassNames.root,
-            'px-4 pb-3 text-body-1 text-muted-foreground',
+            'wave:px-4 wave:pb-3 wave:text-body-1 wave:text-muted-foreground',
             className,
           )}
           {...rest}

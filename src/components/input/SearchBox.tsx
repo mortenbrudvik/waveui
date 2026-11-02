@@ -218,9 +218,27 @@ export interface SearchBoxProps
 const SEARCH_SIZE: Readonly<
   Record<CoreSize, { before: string; after: string; input: string; clear: string; glyph: number }>
 > = {
-  small: { before: 'ps-1.5', after: 'pe-1.5', input: 'px-1.5', clear: 'size-5', glyph: 12 },
-  medium: { before: 'ps-2', after: 'pe-2', input: 'px-2', clear: 'h-6 w-6', glyph: 16 },
-  large: { before: 'ps-3', after: 'pe-3', input: 'px-3', clear: 'size-8', glyph: 20 },
+  small: {
+    before: 'wave:ps-1.5',
+    after: 'wave:pe-1.5',
+    input: 'wave:px-1.5',
+    clear: 'wave:size-5',
+    glyph: 12,
+  },
+  medium: {
+    before: 'wave:ps-2',
+    after: 'wave:pe-2',
+    input: 'wave:px-2',
+    clear: 'wave:h-6 wave:w-6',
+    glyph: 16,
+  },
+  large: {
+    before: 'wave:ps-3',
+    after: 'wave:pe-3',
+    input: 'wave:px-3',
+    clear: 'wave:size-8',
+    glyph: 20,
+  },
 };
 
 type UnknownProps = Record<string, unknown>;
@@ -306,7 +324,7 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
     const iconNode = renderSlot(
       props.icon as Slot<'span'>,
       'span',
-      wcn(searchBoxClassNames.dismissIcon, 'inline-flex'),
+      wcn(searchBoxClassNames.dismissIcon, 'wave:inline-flex'),
       { 'aria-hidden': true },
     );
     const buttonContent =
@@ -593,14 +611,14 @@ export const SearchBox = ({
       className: wcn(
         searchBoxClassNames.dismissButton,
         // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill it.
-        'me-1 flex shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground',
+        'wave:me-1 wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground',
         SEARCH_SIZE[size].clear,
         // hitAreaLayer needs a positioned element: unlike the picker buttons, the small clear
         // button sits in the row without its own position, so it sets one here.
-        size === 'small' && wcn('relative', hitAreaLayer),
-        'not-disabled:not-aria-disabled:hover:text-foreground',
+        size === 'small' && wcn('wave:relative', hitAreaLayer),
+        'wave:not-disabled:not-aria-disabled:hover:text-foreground',
         focusRing,
-        'disabled:cursor-not-allowed',
+        'wave:disabled:cursor-not-allowed',
         mergedAriaDisabledClasses,
       ),
     },
@@ -664,17 +682,17 @@ export const SearchBox = ({
       searchBoxClassNames.root,
       // The root draws the field; the slots, the text and the clear button are laid out side by
       // side inside it, so a slot never covers the text.
-      'relative inline-flex w-full items-center',
+      'wave:relative wave:inline-flex wave:w-full wave:items-center',
       inputHeightClasses[size],
       inputTextClasses[size],
       inputAppearanceClasses[appearance],
-      'text-foreground',
+      'wave:text-foreground',
       inputFocusWithin,
       invalidLook && inputInvalidWithin,
       // The dimmed look lifts while a focus ring shows inside the root (a clear button kept
       // focusable by a merged `disabledFocusable` Button, focusable slot content; the disabled
       // input never takes focus): opacity would dim the ring below 3:1.
-      disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
+      disabled && 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100',
       className,
     ),
     style,
@@ -697,14 +715,14 @@ export const SearchBox = ({
       <span
         className={wcn(
           searchBoxClassNames.contentBefore,
-          'flex shrink-0 items-center',
+          'wave:flex wave:shrink-0 wave:items-center',
           SEARCH_SIZE[size].before,
         )}
       >
         {hasBefore ? (
-          renderSlot(contentBefore, 'span', 'shrink-0')
+          renderSlot(contentBefore, 'span', 'wave:shrink-0')
         ) : (
-          <SearchIcon size={SEARCH_SIZE[size].glyph} className="text-muted-foreground" />
+          <SearchIcon size={SEARCH_SIZE[size].glyph} className="wave:text-muted-foreground" />
         )}
       </span>
 
@@ -712,13 +730,13 @@ export const SearchBox = ({
         {...mergeSlotProps(slotProps?.input, {
           className: wcn(
             searchBoxClassNames.input,
-            'h-full min-w-0 flex-1 appearance-none border-none bg-transparent text-foreground',
+            'wave:h-full wave:min-w-0 wave:flex-1 wave:appearance-none wave:border-none wave:bg-transparent wave:text-foreground',
             SEARCH_SIZE[size].input,
             inputTextClasses[size],
-            'placeholder:text-muted-foreground',
-            'focus:outline-hidden',
-            'disabled:cursor-not-allowed',
-            '[&::-webkit-search-cancel-button]:hidden',
+            'wave:placeholder:text-muted-foreground',
+            'wave:focus:outline-hidden',
+            'wave:disabled:cursor-not-allowed',
+            'wave:[&::-webkit-search-cancel-button]:hidden',
           ),
           locked: {
             type: 'search',
@@ -764,11 +782,11 @@ export const SearchBox = ({
         <span
           className={wcn(
             searchBoxClassNames.contentAfter,
-            'flex shrink-0 items-center',
+            'wave:flex wave:shrink-0 wave:items-center',
             SEARCH_SIZE[size].after,
           )}
         >
-          {renderSlot(contentAfter, 'span', 'shrink-0')}
+          {renderSlot(contentAfter, 'span', 'wave:shrink-0')}
         </span>
       )}
 

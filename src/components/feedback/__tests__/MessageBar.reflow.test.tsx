@@ -34,11 +34,11 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
 
 /** Classes that cut text off; no layout may put them on the text column (D17, WCAG 1.4.10). */
 const CLIPPING_CLASSES = [
-  'truncate',
-  'text-ellipsis',
-  'text-clip',
-  'overflow-hidden',
-  'line-clamp-1',
+  'wave:truncate',
+  'wave:text-ellipsis',
+  'wave:text-clip',
+  'wave:overflow-hidden',
+  'wave:line-clamp-1',
 ];
 
 /** An `'auto'` bar (unless `layout` says otherwise) with a Retry action (unless `actions` is false). */
@@ -174,12 +174,12 @@ describe('MessageBar reflow (D17)', () => {
   it('keeps the text column unwrapped only while it measures one row, and never cuts it off', async () => {
     render(<ReflowBar />);
     const bar = screen.getByRole('status');
-    expect(textColumn(bar)).toHaveClass('whitespace-nowrap');
+    expect(textColumn(bar)).toHaveClass('wave:whitespace-nowrap');
     for (const cls of CLIPPING_CLASSES) expect(textColumn(bar)).not.toHaveClass(cls);
 
     setWidths(bar, { root: 400, text: 200, content: 350 });
     await resize(bar);
-    expect(textColumn(bar)).not.toHaveClass('whitespace-nowrap');
+    expect(textColumn(bar)).not.toHaveClass('wave:whitespace-nowrap');
     for (const cls of CLIPPING_CLASSES) expect(textColumn(bar)).not.toHaveClass(cls);
   });
 
@@ -312,7 +312,7 @@ describe('MessageBar reflow (D17)', () => {
     );
     const html = renderToString(ui);
     expect(html).toContain('data-layout="singleline"');
-    expect(html).toContain('whitespace-nowrap');
+    expect(html).toContain('wave:whitespace-nowrap');
 
     const container = document.createElement('div');
     container.innerHTML = html;

@@ -15,13 +15,13 @@ export type PopoverPhysicalSide = UsePopupPositionResult['side'];
 /** Borders of the rotated square beak that face the anchor, per final physical side. */
 const BEAK_BORDER: Record<PopoverPhysicalSide, string> = {
   // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  top: 'border-b border-r',
+  top: 'wave:border-b wave:border-r',
   // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  bottom: 'border-t border-l',
+  bottom: 'wave:border-t wave:border-l',
   // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  left: 'border-t border-r',
+  left: 'wave:border-t wave:border-r',
   // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  right: 'border-b border-l',
+  right: 'wave:border-b wave:border-l',
 };
 
 /** Properties for the internal PopoverBeak. */
@@ -43,7 +43,11 @@ export const PopoverBeak = ({ side, className, ref, ...rest }: PopoverBeakProps)
     ref={ref}
     aria-hidden="true"
     {...rest}
-    className={wcn('size-2 rotate-45 border-inherit bg-inherit', BEAK_BORDER[side], className)}
+    className={wcn(
+      'wave:size-2 wave:rotate-45 wave:border-inherit wave:bg-inherit',
+      BEAK_BORDER[side],
+      className,
+    )}
   />
 );
 PopoverBeak.displayName = 'PopoverBeak';

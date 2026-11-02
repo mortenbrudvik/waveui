@@ -93,7 +93,7 @@ describe('Table', () => {
     expectedTag: 'table',
     displayName: 'Table',
     defaultProps: { children: tableContent() },
-    conflictingClass: { className: 'border-collapse', overrides: 'border-separate' },
+    conflictingClass: { className: 'border-collapse', overrides: 'wave:border-separate' },
     a11yVariants: [{ name: 'striped', props: { striped: true } }],
   });
 
@@ -119,24 +119,24 @@ describe('Table', () => {
     for (const th of headers) {
       expect(th.tagName.toLowerCase()).toBe('th');
       expect(th).toHaveAttribute('scope', 'col');
-      expect(th).toHaveClass('text-start');
-      expect(th).not.toHaveClass('text-left');
+      expect(th).toHaveClass('wave:text-start');
+      expect(th).not.toHaveClass('wave:text-left');
     }
-    expect(headers[0].closest('thead')).toHaveClass('bg-card');
+    expect(headers[0].closest('thead')).toHaveClass('wave:bg-card');
   });
 
   it('renders body cells', () => {
     renderFullTable();
     expect(screen.getByRole('cell', { name: 'Alpha' }).tagName.toLowerCase()).toBe('td');
-    expect(screen.getByRole('cell', { name: 'Alpha' })).toHaveClass('border-border');
+    expect(screen.getByRole('cell', { name: 'Alpha' })).toHaveClass('wave:border-border');
   });
 
   it('highlights rows on hover with the theme token and no motion under reduced motion', () => {
     renderFullTable();
     expect(bodyRows()[0]).toHaveClass(
-      'hover:bg-subtle-hover',
-      'transition-colors',
-      'motion-reduce:transition-none',
+      'wave:hover:bg-subtle-hover',
+      'wave:transition-colors',
+      'wave:motion-reduce:transition-none',
     );
   });
 
@@ -172,7 +172,7 @@ describe('Table', () => {
       expect(table).toHaveAttribute('data-striped');
       // `:where()` keeps the stripe at specificity 0, so any row class (a consumer
       // `bg-selected`, the row's own hover class) wins over it (C-CLASS).
-      expect(table).toHaveClass('[:where(&>tbody>tr:nth-child(odd))]:bg-card');
+      expect(table).toHaveClass('wave:[:where(&>tbody>tr:nth-child(odd))]:bg-card');
       expect(table.className).not.toContain('[&>tbody');
       // Rows need no context: the stripe comes from the table.
       expect(bodyRows()[0].className).not.toMatch(/odd:|bg-card/);
@@ -193,12 +193,12 @@ describe('Table', () => {
       // rule, and no stripe class (an `odd:` variant outranks a plain class) lands on the row.
       const table = screen.getByTestId('tbl');
       const stripeClasses = table.className.split(/\s+/).filter((c) => c.includes('nth-child'));
-      expect(stripeClasses).toEqual(['[:where(&>tbody>tr:nth-child(odd))]:bg-card']);
+      expect(stripeClasses).toEqual(['wave:[:where(&>tbody>tr:nth-child(odd))]:bg-card']);
       // Every non-hover background class of the row: only the consumer's, not dropped by cn.
       const rowBackgrounds = screen
         .getByTestId('row')
         .className.split(/\s+/)
-        .filter((c) => /(^|:)bg-/.test(c) && !c.startsWith('hover:'));
+        .filter((c) => /(^|:)bg-/.test(c) && !c.startsWith('wave:hover:'));
       expect(rowBackgrounds).toEqual(['bg-selected']);
     });
 
@@ -227,9 +227,14 @@ describe('Table', () => {
     it('wraps the table in a horizontally scrollable container', () => {
       renderFullTable();
       const wrapper = screen.getByRole('table').parentElement!;
-      expect(wrapper).toHaveClass('overflow-x-auto', 'rounded-md', 'border', 'border-border');
-      expect(wrapper).not.toHaveClass('overflow-hidden');
-      expect(wrapper).not.toHaveClass('rounded-lg');
+      expect(wrapper).toHaveClass(
+        'wave:overflow-x-auto',
+        'wave:rounded-md',
+        'wave:border',
+        'wave:border-border',
+      );
+      expect(wrapper).not.toHaveClass('wave:overflow-hidden');
+      expect(wrapper).not.toHaveClass('wave:rounded-lg');
       expect(wrapper).not.toHaveAttribute('tabindex');
       expect(wrapper).not.toHaveAttribute('role');
     });
@@ -245,8 +250,8 @@ describe('Table', () => {
       });
       const wrapper = screen.getByRole('table').parentElement!;
       expect(ref.current).toBe(wrapper);
-      expect(wrapper).toHaveClass('max-w-md', 'rounded-none', 'overflow-x-auto');
-      expect(wrapper).not.toHaveClass('rounded-md');
+      expect(wrapper).toHaveClass('max-w-md', 'rounded-none', 'wave:overflow-x-auto');
+      expect(wrapper).not.toHaveClass('wave:rounded-md');
       expect(wrapper).toHaveStyle({ maxHeight: '120px' });
     });
 
@@ -731,7 +736,7 @@ describe('Table.HeaderCell sortable', () => {
       </Table.HeaderCell>,
       { dir: 'rtl' },
     );
-    expect(sortButton()).toHaveClass('text-start');
+    expect(sortButton()).toHaveClass('wave:text-start');
     expect(sortButton()).toHaveAccessibleName('Name');
     expect(sortButton().lastElementChild).toBe(glyph());
     expect(header()).toHaveAttribute('aria-sort', 'ascending');
@@ -768,11 +773,11 @@ function InCell({ children }: { children: React.ReactNode }) {
 
 /** The classes that keep a part transparent until its table row is hovered or holds focus. */
 const ROW_REVEAL = [
-  'opacity-0',
-  'group-hover/table-row:opacity-100',
-  'group-focus-within/table-row:opacity-100',
-  'forced-colors:opacity-100',
-  'pointer-coarse:opacity-100',
+  'wave:opacity-0',
+  'wave:group-hover/table-row:opacity-100',
+  'wave:group-focus-within/table-row:opacity-100',
+  'wave:forced-colors:opacity-100',
+  'wave:pointer-coarse:opacity-100',
 ];
 
 const NAME_WARNING =
@@ -785,7 +790,7 @@ describe('Table.SelectionCell', () => {
     displayName: 'TableSelectionCell',
     defaultProps: { 'aria-label': 'Select Alpha' },
     control: { role: 'checkbox' },
-    conflictingClass: { className: 'w-12', overrides: 'w-10' },
+    conflictingClass: { className: 'w-12', overrides: 'wave:w-10' },
     a11yVariants: [
       { name: 'checked', props: { defaultChecked: true } },
       { name: 'mixed', props: { checked: 'mixed' } },
@@ -813,11 +818,11 @@ describe('Table.SelectionCell', () => {
     );
     const cell = screen.getByTestId('cell');
     expect(cell.localName).toBe('td');
-    expect(cell).toHaveClass(tableSelectionCellClassNames.root, 'w-10', 'border-b');
+    expect(cell).toHaveClass(tableSelectionCellClassNames.root, 'wave:w-10', 'wave:border-b');
     expect(cell).toHaveAttribute('data-type', 'checkbox');
     expect(checkbox().localName).toBe('input');
     expect(checkbox()).toHaveAttribute('type', 'checkbox');
-    expect(checkbox()).toHaveClass(tableSelectionCellClassNames.control, 'accent-primary');
+    expect(checkbox()).toHaveClass(tableSelectionCellClassNames.control, 'wave:accent-primary');
     expect(checkbox().parentElement).toBe(cell);
     expect(checkbox()).not.toBeChecked();
   });
@@ -979,7 +984,7 @@ describe('Table.SelectionCell', () => {
       // The state stays checked: a subtle control draws its hidden classes only while unchecked.
       // (A browser restores the old checkedness of a cancelled click; jsdom toggles it back, after
       // React restored it, so the input's own checkedness is not asserted here.)
-      expect(checkbox()).not.toHaveClass('opacity-0');
+      expect(checkbox()).not.toHaveClass('wave:opacity-0');
     });
 
     it('keeps uncontrolled radios that share a name one group', async () => {
@@ -1015,17 +1020,17 @@ describe('Table.SelectionCell', () => {
       const alpha = screen.getByRole('radio', { name: 'Pick Alpha' });
       const beta = screen.getByRole('radio', { name: 'Pick Beta' });
       expect(alpha).toBeChecked();
-      expect(beta).toHaveClass('opacity-0');
+      expect(beta).toHaveClass('wave:opacity-0');
       await user.click(beta);
       expect(beta).toBeChecked();
       expect(alpha).not.toBeChecked();
-      expect(beta).not.toHaveClass('opacity-0');
+      expect(beta).not.toHaveClass('wave:opacity-0');
       expect(onBeta.mock.calls.map(([value]) => value)).toEqual([true]);
       expect(onAlpha.mock.calls.map(([value]) => value)).toEqual([false]);
       await user.click(alpha);
       expect(alpha).toBeChecked();
       expect(beta).not.toBeChecked();
-      expect(beta).toHaveClass('opacity-0');
+      expect(beta).toHaveClass('wave:opacity-0');
       expect(onBeta.mock.calls.map(([value]) => value)).toEqual([true, false]);
       expect(onAlpha.mock.calls.map(([value]) => value)).toEqual([false, true]);
     });
@@ -1153,7 +1158,7 @@ describe('Table.SelectionCell', () => {
       );
       expect(checkbox()).toBeDisabled();
       expect(checkbox()).toBeRequired();
-      expect(checkbox()).toHaveClass('disabled:cursor-not-allowed');
+      expect(checkbox()).toHaveClass('wave:disabled:cursor-not-allowed');
       await user.click(checkbox());
       expect(checkbox()).not.toBeChecked();
       expect(onCheckedChange).not.toHaveBeenCalled();
@@ -1225,9 +1230,9 @@ describe('Table.SelectionCell', () => {
           <Table.SelectionCell subtle defaultChecked aria-label="Select Beta" />
         </CellRow>,
       );
-      expect(screen.getByTestId('row')).toHaveClass('group/table-row');
-      expect(checkbox()).toHaveClass(...ROW_REVEAL, 'motion-reduce:transition-none');
-      expect(checkbox('Select Beta')).not.toHaveClass('opacity-0');
+      expect(screen.getByTestId('row')).toHaveClass('wave:group/table-row');
+      expect(checkbox()).toHaveClass(...ROW_REVEAL, 'wave:motion-reduce:transition-none');
+      expect(checkbox('Select Beta')).not.toHaveClass('wave:opacity-0');
       expect(checkbox()).not.toHaveAttribute('tabindex', '-1');
     });
 
@@ -1243,7 +1248,7 @@ describe('Table.SelectionCell', () => {
       );
       // No `Table.Row` group around it: its own focus must lift it, or Tab lands on a control
       // whose focus ring is drawn transparent.
-      expect(checkbox()).toHaveClass('opacity-0', 'focus-visible:opacity-100');
+      expect(checkbox()).toHaveClass('wave:opacity-0', 'wave:focus-visible:opacity-100');
     });
 
     it('draws no subtle classes by default', () => {
@@ -1252,7 +1257,7 @@ describe('Table.SelectionCell', () => {
           <Table.SelectionCell aria-label="Select Alpha" />
         </CellRow>,
       );
-      expect(checkbox()).not.toHaveClass('opacity-0');
+      expect(checkbox()).not.toHaveClass('wave:opacity-0');
     });
 
     it('hides an invisible control while its cell keeps its box', () => {
@@ -1261,8 +1266,8 @@ describe('Table.SelectionCell', () => {
           <Table.SelectionCell invisible aria-label="Select Alpha" data-testid="cell" />
         </CellRow>,
       );
-      expect(screen.getByTestId('cell')).toHaveClass('w-10');
-      expect(screen.getByRole('checkbox', { hidden: true })).toHaveClass('invisible');
+      expect(screen.getByTestId('cell')).toHaveClass('wave:w-10');
+      expect(screen.getByRole('checkbox', { hidden: true })).toHaveClass('wave:invisible');
     });
   });
 
@@ -1333,7 +1338,7 @@ describe('Table.CellLayout', () => {
     expectedTag: 'div',
     displayName: 'TableCellLayout',
     defaultProps: { children: 'Alpha' },
-    conflictingClass: { className: 'gap-4', overrides: 'gap-2' },
+    conflictingClass: { className: 'gap-4', overrides: 'wave:gap-2' },
     a11yVariants: [
       {
         name: 'media and description',
@@ -1365,15 +1370,20 @@ describe('Table.CellLayout', () => {
       </InCell>,
     );
     expect(layout().localName).toBe('div');
-    expect(layout()).toHaveClass(tableCellLayoutClassNames.root, 'flex', 'items-center', 'gap-2');
+    expect(layout()).toHaveClass(
+      tableCellLayoutClassNames.root,
+      'wave:flex',
+      'wave:items-center',
+      'wave:gap-2',
+    );
     expect(part('media')).toContainElement(screen.getByTestId('icon'));
     expect(part('media')!.localName).toBe('span');
     expect(part('media')).not.toHaveAttribute('aria-hidden');
-    expect(part('content')).toHaveClass('flex', 'flex-col');
+    expect(part('content')).toHaveClass('wave:flex', 'wave:flex-col');
     expect(part('main')).toHaveTextContent('Ann Lee');
     expect(part('main')!.parentElement).toBe(part('content'));
     expect(part('description')).toHaveTextContent('Designer');
-    expect(part('description')).toHaveClass('text-caption-1', 'text-muted-foreground');
+    expect(part('description')).toHaveClass('wave:text-caption-1', 'wave:text-muted-foreground');
     expect(part('description')!.parentElement).toBe(part('content'));
     expect(part('media')!.nextElementSibling).toBe(part('content'));
     expect(layout()).not.toHaveAttribute('data-appearance');
@@ -1446,7 +1456,7 @@ describe('Table.CellLayout', () => {
     const media = part('media')!;
     expect(media.localName).toBe('span');
     expect(media.classList[0]).toBe(tableCellLayoutClassNames.media);
-    expect(media).toHaveClass('flex', 'shrink-0', 'items-center', 'my-media');
+    expect(media).toHaveClass('wave:flex', 'wave:shrink-0', 'wave:items-center', 'my-media');
     expect(media).toHaveAttribute('data-own', '');
     expect(media).toContainElement(screen.getByTestId('icon'));
     expect(media.nextElementSibling).toBe(part('content'));
@@ -1486,10 +1496,10 @@ describe('Table.CellLayout', () => {
       </InCell>,
     );
     expect(layout()).toHaveAttribute('data-truncate', '');
-    expect(layout()).toHaveClass('overflow-x-hidden');
-    expect(part('content')).toHaveClass('min-w-0', 'overflow-x-hidden');
-    expect(part('main')).toHaveClass('truncate');
-    expect(part('description')).toHaveClass('truncate');
+    expect(layout()).toHaveClass('wave:overflow-x-hidden');
+    expect(part('content')).toHaveClass('wave:min-w-0', 'wave:overflow-x-hidden');
+    expect(part('main')).toHaveClass('wave:truncate');
+    expect(part('description')).toHaveClass('wave:truncate');
   });
 
   it('wraps text by default', () => {
@@ -1500,9 +1510,9 @@ describe('Table.CellLayout', () => {
         </Table.CellLayout>
       </InCell>,
     );
-    expect(layout()).not.toHaveClass('overflow-x-hidden');
-    expect(part('main')).not.toHaveClass('truncate');
-    expect(part('description')).not.toHaveClass('truncate');
+    expect(layout()).not.toHaveClass('wave:overflow-x-hidden');
+    expect(part('main')).not.toHaveClass('wave:truncate');
+    expect(part('description')).not.toHaveClass('wave:truncate');
   });
 
   it('draws the primary appearance: a semibold main text and a larger media icon', () => {
@@ -1514,9 +1524,9 @@ describe('Table.CellLayout', () => {
       </InCell>,
     );
     expect(layout()).toHaveAttribute('data-appearance', 'primary');
-    expect(part('main')).toHaveClass('font-semibold');
-    expect(part('media')).toHaveClass('[&>svg]:size-6');
-    expect(part('media')).not.toHaveClass('[&>svg]:size-5');
+    expect(part('main')).toHaveClass('wave:font-semibold');
+    expect(part('media')).toHaveClass('wave:[&>svg]:size-6');
+    expect(part('media')).not.toHaveClass('wave:[&>svg]:size-5');
   });
 
   it('sizes a media icon at 20px by default', () => {
@@ -1527,8 +1537,13 @@ describe('Table.CellLayout', () => {
         </Table.CellLayout>
       </InCell>,
     );
-    expect(part('media')).toHaveClass('flex', 'shrink-0', 'items-center', '[&>svg]:size-5');
-    expect(part('main')).not.toHaveClass('font-semibold');
+    expect(part('media')).toHaveClass(
+      'wave:flex',
+      'wave:shrink-0',
+      'wave:items-center',
+      'wave:[&>svg]:size-5',
+    );
+    expect(part('main')).not.toHaveClass('wave:font-semibold');
   });
 });
 
@@ -1537,7 +1552,7 @@ describe('Table.CellActions', () => {
     expectedTag: 'div',
     displayName: 'TableCellActions',
     defaultProps: { children: <button type="button">Edit</button> },
-    conflictingClass: { className: 'bg-card', overrides: 'bg-background' },
+    conflictingClass: { className: 'bg-card', overrides: 'wave:bg-background' },
     a11yVariants: [{ name: 'visible', props: { visible: true } }],
     wrapper: InCell,
   });
@@ -1567,15 +1582,15 @@ describe('Table.CellActions', () => {
     renderActions();
     expect(actions()).toHaveClass(
       tableCellActionsClassNames.root,
-      'absolute',
-      'end-0',
-      'inset-y-0',
-      'flex',
-      'items-center',
+      'wave:absolute',
+      'wave:end-0',
+      'wave:inset-y-0',
+      'wave:flex',
+      'wave:items-center',
     );
-    expect(screen.getByTestId('cell')).toHaveClass('relative');
-    expect(screen.getByTestId('row')).toHaveClass('group/table-row');
-    expect(screen.getByTestId('row')).not.toHaveClass('group/row');
+    expect(screen.getByTestId('cell')).toHaveClass('wave:relative');
+    expect(screen.getByTestId('row')).toHaveClass('wave:group/table-row');
+    expect(screen.getByTestId('row')).not.toHaveClass('wave:group/row');
   });
 
   it('covers the full height of its cell, not a centred band, so taller content never shows', () => {
@@ -1583,17 +1598,17 @@ describe('Table.CellActions', () => {
     const classes = actions().className.split(/\s+/);
     // Both vertical insets: the opaque background spans the cell from its top edge to its bottom
     // edge, also over wrapped text or a layout with a description.
-    expect(classes).toContain('inset-y-0');
+    expect(classes).toContain('wave:inset-y-0');
     expect(classes.filter((cls) => /^-?(top|bottom)-/.test(cls))).toEqual([]);
     // No centring by translation: the flex column centres the buttons instead.
     expect(classes.filter((cls) => /translate-y/.test(cls))).toEqual([]);
-    expect(actions()).toHaveClass('items-center');
+    expect(actions()).toHaveClass('wave:items-center');
   });
 
   it('places itself at the inline end in RTL with logical classes only', () => {
     renderActions({}, { dir: 'rtl' });
     expect(actions().closest('[dir]')).toHaveAttribute('dir', 'rtl');
-    expect(actions()).toHaveClass('end-0');
+    expect(actions()).toHaveClass('wave:end-0');
     const physical = actions()
       .className.split(/\s+/)
       .filter((cls) => /(^|:)-?(left|right|ml|mr|pl|pr)-/.test(cls));
@@ -1604,8 +1619,8 @@ describe('Table.CellActions', () => {
     renderActions();
     expect(actions()).toHaveClass(
       ...ROW_REVEAL,
-      'focus-within:opacity-100',
-      'motion-reduce:transition-none',
+      'wave:focus-within:opacity-100',
+      'wave:motion-reduce:transition-none',
     );
     expect(actions()).not.toHaveAttribute('data-visible');
     // Still reachable: Tab reaches its buttons, which reveals them.
@@ -1615,18 +1630,18 @@ describe('Table.CellActions', () => {
   it('stays shown with visible', () => {
     renderActions({ visible: true });
     expect(actions()).toHaveAttribute('data-visible', '');
-    expect(actions()).not.toHaveClass('opacity-0');
-    expect(actions()).not.toHaveClass('group-hover/table-row:opacity-100');
+    expect(actions()).not.toHaveClass('wave:opacity-0');
+    expect(actions()).not.toHaveClass('wave:group-hover/table-row:opacity-100');
   });
 
   it('draws an opaque background that follows the row: hover, the stripe and grid selection', () => {
     renderActions();
     expect(actions()).toHaveClass(
-      'bg-background',
-      'group-hover/table-row:bg-subtle-hover',
-      '[:where([data-striped]>tbody>tr:nth-child(odd)>*)>&]:bg-card',
-      '[[data-selection-appearance=brand]>tbody>[data-selected]>*>&]:bg-selected',
-      '[[data-selection-appearance=neutral]>tbody>[data-selected]>*>&]:bg-subtle-selected',
+      'wave:bg-background',
+      'wave:group-hover/table-row:bg-subtle-hover',
+      'wave:[:where([data-striped]>tbody>tr:nth-child(odd)>*)>&]:bg-card',
+      'wave:[[data-selection-appearance=brand]>tbody>[data-selected]>*>&]:bg-selected',
+      'wave:[[data-selection-appearance=neutral]>tbody>[data-selected]>*>&]:bg-subtle-selected',
     );
   });
 
@@ -1636,7 +1651,7 @@ describe('Table.CellActions', () => {
       .getByTestId('table')
       .className.split(/\s+/)
       .filter((cls) => cls.includes('nth-child'));
-    expect(stripe).toEqual(['[:where(&>tbody>tr:nth-child(odd))]:bg-card']);
+    expect(stripe).toEqual(['wave:[:where(&>tbody>tr:nth-child(odd))]:bg-card']);
     expect(screen.getByTestId('row').className).not.toMatch(/odd:|bg-card/);
   });
 
@@ -1660,8 +1675,8 @@ describe('Table.CellActions', () => {
         </DataGrid.Body>
       </DataGrid>,
     );
-    expect(screen.getByTestId('row')).toHaveClass('group/table-row');
-    expect(screen.getByTestId('cell')).toHaveClass('relative');
+    expect(screen.getByTestId('row')).toHaveClass('wave:group/table-row');
+    expect(screen.getByTestId('cell')).toHaveClass('wave:relative');
     expect(actions()).toHaveClass(...ROW_REVEAL);
   });
 
@@ -1674,14 +1689,14 @@ describe('Table.CellActions', () => {
 describe('Table cells (P9-05)', () => {
   it('positions every data cell, so actions can sit in it', () => {
     renderFullTable();
-    for (const cell of screen.getAllByRole('cell')) expect(cell).toHaveClass('relative');
+    for (const cell of screen.getAllByRole('cell')) expect(cell).toHaveClass('wave:relative');
   });
 
   it('makes every Table.Row the table row group, never Tree’s row group', () => {
     renderFullTable();
     for (const row of bodyRows()) {
-      expect(row).toHaveClass('group/table-row');
-      expect(row).not.toHaveClass('group/row');
+      expect(row).toHaveClass('wave:group/table-row');
+      expect(row).not.toHaveClass('wave:group/row');
     }
   });
 
@@ -1839,13 +1854,13 @@ describe('Table parts — slotProps', () => {
 
   // Captured from 6f6b500's dist (client and server agree).
   const FOCUS =
-    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
-  const CONTROL = `accent-primary cursor-pointer disabled:cursor-not-allowed ${FOCUS}`;
+    'wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring';
+  const CONTROL = `wave:accent-primary wave:cursor-pointer wave:disabled:cursor-not-allowed ${FOCUS}`;
   const BASE_PINS = [
-    `<button class="wave-table-header-cell__button inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider ${FOCUS}" type="button">`,
+    `<button class="wave-table-header-cell__button wave:inline-flex wave:w-full wave:cursor-pointer wave:select-none wave:items-center wave:gap-1 wave:border-0 wave:bg-transparent wave:px-4 wave:py-3 wave:text-start wave:text-inherit wave:[font:inherit] wave:uppercase wave:tracking-wider ${FOCUS}" type="button">`,
     `<input aria-label="Select all files" class="wave-table-selection-cell__control ${CONTROL}" type="checkbox">`,
     `<input aria-labelledby="file-budget" class="wave-table-selection-cell__control ${CONTROL}" name="files" type="checkbox" value="budget">`,
-    '<div class="wave-table-cell-layout__content flex flex-col">',
+    '<div class="wave-table-cell-layout__content wave:flex wave:flex-col">',
     '<span class="wave-table-cell-layout__main">',
   ].join('\n');
 
@@ -1956,9 +1971,9 @@ describe('Table parts — slotProps', () => {
       />,
     );
     for (const [cls, name, conflict, count] of [
-      [tableHeaderCellClassNames.button, 'button', 'px-4', 1],
-      [tableSelectionCellClassNames.control, 'control', 'cursor-pointer', 2],
-      [tableCellLayoutClassNames.content, 'content', 'flex-col', 1],
+      [tableHeaderCellClassNames.button, 'button', 'wave:px-4', 1],
+      [tableSelectionCellClassNames.control, 'control', 'wave:cursor-pointer', 2],
+      [tableCellLayoutClassNames.content, 'content', 'wave:flex-col', 1],
       [tableCellLayoutClassNames.main, 'main', undefined, 1],
     ] as const) {
       const elements = all(document, cls);
@@ -2411,7 +2426,7 @@ describe('Table parts — slotProps', () => {
       { dir: 'rtl' },
     );
     const button = screen.getByRole('button', { name: /Name/ });
-    expect(button).toHaveClass('my-button', 'text-start');
+    expect(button).toHaveClass('my-button', 'wave:text-start');
     await user.click(button);
     expect(onSortClick).toHaveBeenCalledTimes(1);
     expect(all(document, tableCellLayoutClassNames.content)[0]).toHaveClass('my-content');

@@ -100,7 +100,7 @@ describe('InteractionTag', () => {
         <InteractionTag.Secondary key="secondary" />,
       ],
     },
-    conflictingClass: { className: 'items-center', overrides: 'items-stretch' },
+    conflictingClass: { className: 'items-center', overrides: 'wave:items-stretch' },
     a11yVariants: [
       ...APPEARANCES.map((appearance) => ({ name: appearance, props: { appearance } })),
       { name: 'selected', props: { selected: true } },
@@ -137,7 +137,7 @@ describe('InteractionTag', () => {
       displayName: 'InteractionTagPrimary',
       defaultProps: { children: 'Cherry' },
       wrapper: InTag,
-      conflictingClass: { className: 'bg-error', overrides: 'bg-muted' },
+      conflictingClass: { className: 'bg-error', overrides: 'wave:bg-muted' },
       a11yVariants: [
         {
           name: 'media, icon and secondary text',
@@ -157,7 +157,7 @@ describe('InteractionTag', () => {
       expectedTag: 'button',
       displayName: 'InteractionTagSecondary',
       wrapper: InTagWithPrimary,
-      conflictingClass: { className: 'min-w-10', overrides: 'min-w-7' },
+      conflictingClass: { className: 'min-w-10', overrides: 'wave:min-w-7' },
       a11yVariants: [
         { name: 'a text label', props: { children: 'Remove' } },
         { name: 'an icon', props: { children: <Glyph /> } },
@@ -252,7 +252,7 @@ describe('InteractionTag', () => {
       const button = secondary();
       const [labelId, textId] = (button.getAttribute('aria-labelledby') ?? '').split(' ');
       expect(document.getElementById(labelId)).toHaveTextContent('Dismiss');
-      expect(document.getElementById(labelId)).toHaveClass('sr-only');
+      expect(document.getElementById(labelId)).toHaveClass('wave:sr-only');
       expect(document.getElementById(textId)).toBe(screen.getByText('Cherry'));
       expect(screen.getByText('Cherry')).toHaveClass(interactionTagPrimaryClassNames.primaryText);
     });
@@ -308,7 +308,7 @@ describe('InteractionTag', () => {
       render(<Cherry secondaryProps={{ 'aria-label': 'Remove the cherry filter' }} />);
       const button = secondary('Remove the cherry filter');
       expect(button).not.toHaveAttribute('aria-labelledby');
-      expect(button.querySelector('.sr-only')).toBeNull();
+      expect(button.querySelector('.wave\\:sr-only')).toBeNull();
     });
 
     it('a consumer aria-labelledby replaces ours', () => {
@@ -582,11 +582,11 @@ describe('InteractionTag', () => {
       const tag = screen.getByTestId('tag');
       expect(tag).toHaveAttribute('data-disabled', '');
       // Each button dims itself; the root is not dimmed.
-      expect(tag).not.toHaveClass('opacity-50');
+      expect(tag).not.toHaveClass('wave:opacity-50');
       for (const button of [primary(), secondary()]) {
         expect(button).toHaveClass(
-          'disabled:cursor-not-allowed',
-          'disabled:opacity-50',
+          'wave:disabled:cursor-not-allowed',
+          'wave:disabled:opacity-50',
           ...forcedColors.disabled.split(' '),
         );
       }
@@ -669,62 +669,67 @@ describe('InteractionTag', () => {
     expect(Array.from(tag.classList).sort()).toEqual(
       [
         interactionTagClassNames.root,
-        'group/interaction-tag',
-        'inline-flex',
-        'items-stretch',
+        'wave:group/interaction-tag',
+        'wave:inline-flex',
+        'wave:items-stretch',
       ].sort(),
     );
     expect(primary()).toHaveClass(
-      'min-h-7',
-      'text-body-1',
-      'ps-2.75',
-      'pe-2.75',
-      'bg-muted',
-      'rounded-full',
+      'wave:min-h-7',
+      'wave:text-body-1',
+      'wave:ps-2.75',
+      'wave:pe-2.75',
+      'wave:bg-muted',
+      'wave:rounded-full',
     );
-    expect(secondary()).toHaveClass('min-w-7', 'bg-muted', 'rounded-e-full', 'rounded-s-none');
+    expect(secondary()).toHaveClass(
+      'wave:min-w-7',
+      'wave:bg-muted',
+      'wave:rounded-e-full',
+      'wave:rounded-s-none',
+    );
   });
 
   describe('look (D46)', () => {
     const gate = 'not-disabled:not-aria-disabled:';
     const LOOKS: Record<TagAppearance | 'selected', readonly string[]> = {
       filled: [
-        'border-transparent',
-        'bg-muted',
-        'text-foreground',
-        `${gate}hover:bg-muted-hover`,
-        `${gate}active:bg-muted-pressed`,
+        'wave:border-transparent',
+        'wave:bg-muted',
+        'wave:text-foreground',
+        `wave:${gate}hover:bg-muted-hover`,
+        `wave:${gate}active:bg-muted-pressed`,
       ],
       outline: [
-        'border-stroke',
-        'bg-transparent',
-        'text-foreground',
-        `${gate}hover:border-stroke-hover`,
-        `${gate}hover:bg-subtle-hover`,
-        `${gate}active:bg-subtle-pressed`,
+        'wave:border-stroke',
+        'wave:bg-transparent',
+        'wave:text-foreground',
+        `wave:${gate}hover:border-stroke-hover`,
+        `wave:${gate}hover:bg-subtle-hover`,
+        `wave:${gate}active:bg-subtle-pressed`,
       ],
       brand: [
-        'border-transparent',
-        'bg-selected',
-        'text-selected-foreground',
-        `${gate}hover:bg-selected-hover`,
-        `${gate}active:bg-selected-pressed`,
+        'wave:border-transparent',
+        'wave:bg-selected',
+        'wave:text-selected-foreground',
+        `wave:${gate}hover:bg-selected-hover`,
+        `wave:${gate}active:bg-selected-pressed`,
       ],
       selected: [
-        'border-primary',
-        'bg-primary',
-        'text-primary-foreground',
-        `${gate}hover:bg-primary-hover`,
-        `${gate}active:bg-primary-pressed`,
+        'wave:border-primary',
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+        `wave:${gate}hover:bg-primary-hover`,
+        `wave:${gate}active:bg-primary-pressed`,
         ...forcedColors.selectedContainer.split(' '),
-        'forced-colors:border-[Highlight]',
+        'wave:forced-colors:border-[Highlight]',
       ],
     };
     const DIVIDER: Record<TagAppearance | 'selected', string> = {
-      filled: 'border-s-stroke',
-      outline: 'border-s-stroke',
-      brand: 'border-s-stroke',
-      selected: 'border-s-primary-foreground',
+      filled: 'wave:border-s-stroke',
+      outline: 'wave:border-s-stroke',
+      brand: 'wave:border-s-stroke',
+      selected: 'wave:border-s-primary-foreground',
     };
     const RAW_COLOR = /#[0-9a-f]{3,8}\b|\brgba?\(|\b(?:white|black)\b|-(?:gray|grey|blue|red)-\d/i;
 
@@ -743,7 +748,7 @@ describe('InteractionTag', () => {
           look === 'selected' ? 'filled' : look,
         );
         for (const button of [primary(), secondary()]) {
-          expect(button).toHaveClass(...LOOKS[look], 'border');
+          expect(button).toHaveClass(...LOOKS[look], 'wave:border');
           expect(button.outerHTML).not.toMatch(RAW_COLOR);
         }
         expect(secondary()).toHaveClass(DIVIDER[look]);
@@ -756,8 +761,8 @@ describe('InteractionTag', () => {
       expect(screen.getByTestId('tag')).toHaveAttribute('data-selected', '');
       expect(primary()).toHaveAttribute('aria-pressed', 'true');
       for (const button of [primary(), secondary()]) {
-        expect(button).not.toHaveClass('bg-primary', 'border-primary');
-        expect(button).toHaveClass('bg-muted', ...forcedColors.disabled.split(' '));
+        expect(button).not.toHaveClass('wave:bg-primary', 'wave:border-primary');
+        expect(button).toHaveClass('wave:bg-muted', ...forcedColors.disabled.split(' '));
       }
     });
 
@@ -774,31 +779,43 @@ describe('InteractionTag', () => {
       }
     > = {
       medium: {
-        primary: ['min-h-7', 'gap-1', 'text-body-1', 'ps-2.75', 'pe-2.75'],
-        iconStart: 'ps-1.75',
-        mediaStart: 'ps-px',
-        joinedEnd: 'group-has-[[data-wave-tag-dismiss]]/interaction-tag:pe-2',
-        secondary: ['min-w-7', 'text-body-1'],
+        primary: ['wave:min-h-7', 'wave:gap-1', 'wave:text-body-1', 'wave:ps-2.75', 'wave:pe-2.75'],
+        iconStart: 'wave:ps-1.75',
+        mediaStart: 'wave:ps-px',
+        joinedEnd: 'wave:group-has-[[data-wave-tag-dismiss]]/interaction-tag:pe-2',
+        secondary: ['wave:min-w-7', 'wave:text-body-1'],
         glyph: '12',
         avatar: avatarSizeClasses['extra-small'].split(' '),
       },
       small: {
-        primary: ['min-h-6', 'gap-1', 'text-caption-1', 'ps-1.75', 'pe-1.75'],
-        iconStart: 'ps-1.25',
-        mediaStart: 'ps-px',
-        joinedEnd: 'group-has-[[data-wave-tag-dismiss]]/interaction-tag:pe-1.5',
-        secondary: ['min-w-6', 'text-caption-1'],
+        primary: [
+          'wave:min-h-6',
+          'wave:gap-1',
+          'wave:text-caption-1',
+          'wave:ps-1.75',
+          'wave:pe-1.75',
+        ],
+        iconStart: 'wave:ps-1.25',
+        mediaStart: 'wave:ps-px',
+        joinedEnd: 'wave:group-has-[[data-wave-tag-dismiss]]/interaction-tag:pe-1.5',
+        secondary: ['wave:min-w-6', 'wave:text-caption-1'],
         glyph: '12',
-        avatar: ['w-5', 'h-5'],
+        avatar: ['wave:w-5', 'wave:h-5'],
       },
       'extra-small': {
-        primary: ['min-h-5', 'gap-0.5', 'text-caption-1', 'ps-1.75', 'pe-1.75'],
-        iconStart: 'ps-1.25',
-        mediaStart: 'ps-px',
-        joinedEnd: 'group-has-[[data-wave-tag-dismiss]]/interaction-tag:pe-1',
-        secondary: ['min-w-6', 'text-caption-1'],
+        primary: [
+          'wave:min-h-5',
+          'wave:gap-0.5',
+          'wave:text-caption-1',
+          'wave:ps-1.75',
+          'wave:pe-1.75',
+        ],
+        iconStart: 'wave:ps-1.25',
+        mediaStart: 'wave:ps-px',
+        joinedEnd: 'wave:group-has-[[data-wave-tag-dismiss]]/interaction-tag:pe-1',
+        secondary: ['wave:min-w-6', 'wave:text-caption-1'],
         glyph: '10',
-        avatar: ['w-4', 'h-4'],
+        avatar: ['wave:w-4', 'wave:h-4'],
       },
     };
 
@@ -827,7 +844,7 @@ describe('InteractionTag', () => {
       const withIcon = primary('Icon');
       expect(withIcon).toHaveClass(metrics.iconStart);
       expect(withIcon.querySelector(`.${interactionTagPrimaryClassNames.icon}`)).toHaveClass(
-        '[&>svg]:size-full',
+        'wave:[&>svg]:size-full',
       );
       const withMedia = primary('Katri');
       expect(withMedia).toHaveClass(metrics.mediaStart);
@@ -839,28 +856,34 @@ describe('InteractionTag', () => {
     it("squares the Primary's end next to a Secondary", () => {
       render(<Cherry shape="rounded" data-testid="tag" />);
       // jsdom has no `:has()`: the classes that read the root's named group are asserted.
-      expect(screen.getByTestId('tag')).toHaveClass('group/interaction-tag');
+      expect(screen.getByTestId('tag')).toHaveClass('wave:group/interaction-tag');
       expect(primary()).toHaveClass(
-        'rounded',
-        'group-has-[[data-wave-tag-dismiss]]/interaction-tag:rounded-e-none',
-        'group-has-[[data-wave-tag-dismiss]]/interaction-tag:border-e-0',
+        'wave:rounded',
+        'wave:group-has-[[data-wave-tag-dismiss]]/interaction-tag:rounded-e-none',
+        'wave:group-has-[[data-wave-tag-dismiss]]/interaction-tag:border-e-0',
       );
-      expect(secondary()).toHaveClass('rounded-s-none', 'rounded-e');
+      expect(secondary()).toHaveClass('wave:rounded-s-none', 'wave:rounded-e');
       expect(secondary()).toHaveAttribute('data-wave-tag-dismiss', '');
     });
 
     it.each(SHAPES)('draws the %s shape', (shape) => {
       render(<Cherry shape={shape} data-testid="tag" />);
       expect(screen.getByTestId('tag')).toHaveAttribute('data-shape', shape);
-      expect(primary()).toHaveClass(shape === 'circular' ? 'rounded-full' : 'rounded');
-      expect(secondary()).toHaveClass(shape === 'circular' ? 'rounded-e-full' : 'rounded-e');
+      expect(primary()).toHaveClass(shape === 'circular' ? 'wave:rounded-full' : 'wave:rounded');
+      expect(secondary()).toHaveClass(
+        shape === 'circular' ? 'wave:rounded-e-full' : 'wave:rounded-e',
+      );
     });
 
     it('keeps the focus ring above the neighbour', () => {
       render(<Cherry />);
       for (const button of [primary(), secondary()]) {
-        expect(button).toHaveClass(...focusRing.split(' '), 'relative', 'focus-visible:z-10');
-        expect(button).toHaveClass('transition-colors', 'motion-reduce:transition-none');
+        expect(button).toHaveClass(
+          ...focusRing.split(' '),
+          'wave:relative',
+          'wave:focus-visible:z-10',
+        );
+        expect(button).toHaveClass('wave:transition-colors', 'wave:motion-reduce:transition-none');
       }
     });
 
@@ -874,24 +897,24 @@ describe('InteractionTag', () => {
           </InteractionTag>
         </>,
       );
-      const hit = ['before:absolute', 'before:inset-x-0', 'before:-inset-y-0.5'];
+      const hit = ['wave:before:absolute', 'wave:before:inset-x-0', 'wave:before:-inset-y-0.5'];
       for (const button of [primary(), secondary()]) expect(button).toHaveClass(...hit);
       for (const button of [primary('Plum'), secondary('Dismiss Plum')]) {
-        expect(button).not.toHaveClass('before:-inset-y-0.5');
+        expect(button).not.toHaveClass('wave:before:-inset-y-0.5');
       }
     });
 
     it('turns the dismiss glyph Highlight on hover in forced colours', () => {
       render(<Cherry />);
       expect(secondary()).toHaveClass(
-        'forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight]',
+        'wave:forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight]',
       );
     });
 
     it('gives the buttons their own padding and background (C-NATIVE)', () => {
       render(<Cherry />);
-      expect(primary()).toHaveClass('py-0', 'bg-muted');
-      expect(secondary()).toHaveClass('p-0', 'bg-muted');
+      expect(primary()).toHaveClass('wave:py-0', 'wave:bg-muted');
+      expect(secondary()).toHaveClass('wave:p-0', 'wave:bg-muted');
     });
 
     // jsdom has no layout: the width is pinned by its classes. With no padding of its own, a
@@ -915,9 +938,9 @@ describe('InteractionTag', () => {
             </InteractionTag>
           </>,
         );
-        const inlinePadding = /(?:^|\s)(?:p[xse]|padding)-/;
+        const inlinePadding = /(?:^|\s)wave:(?:p[xse]|padding)-/;
         for (const button of [secondary(), secondary('Dismiss Plum'), secondary('Remove Fig')]) {
-          expect(button).toHaveClass('p-0', METRICS[size].secondary[0]);
+          expect(button).toHaveClass('wave:p-0', METRICS[size].secondary[0]);
           expect(button.className).not.toMatch(inlinePadding);
         }
         for (const name of ['Dismiss Cherry', 'Dismiss Plum']) {
@@ -929,7 +952,7 @@ describe('InteractionTag', () => {
         const label = secondary('Remove Fig').querySelector(
           `.${interactionTagSecondaryClassNames.dismissIcon}`,
         );
-        expect(label).toHaveClass('px-1.5');
+        expect(label).toHaveClass('wave:px-1.5');
       },
     );
   });
@@ -949,7 +972,7 @@ describe('InteractionTag', () => {
         </InteractionTag>
       </>,
     );
-    expect(primary('Katri').querySelector('[role="img"]')).toHaveClass('w-5', 'h-5');
+    expect(primary('Katri').querySelector('[role="img"]')).toHaveClass('wave:w-5', 'wave:h-5');
     expect(primary('Ada').querySelector('[role="img"]')).toHaveClass(
       ...avatarSizeClasses.large.split(' '),
     );
@@ -1118,8 +1141,11 @@ describe('InteractionTag', () => {
     for (const element of [tag, ...tag.querySelectorAll('*')]) {
       expect(element.getAttribute('class') ?? '').not.toMatch(physical);
     }
-    expect(primary('Katri Designer')).toHaveClass('ps-px', 'text-start');
-    expect(secondary('Dismiss Katri')).toHaveClass('rounded-s-none', 'border-s-primary-foreground');
+    expect(primary('Katri Designer')).toHaveClass('wave:ps-px', 'wave:text-start');
+    expect(secondary('Dismiss Katri')).toHaveClass(
+      'wave:rounded-s-none',
+      'wave:border-s-primary-foreground',
+    );
   });
 
   it('renders and hydrates with a text-label child and selected', async () => {
@@ -1258,12 +1284,12 @@ describe('InteractionTag — slotProps', () => {
 
   // Captured from c2b9673's dist (client and server agree).
   const BASE_PINS = [
-    '<span class="wave-interaction-tag-primary__primary-text text-caption-1 leading-3.5" id="interaction-tag-text-_id0_">',
+    '<span class="wave-interaction-tag-primary__primary-text wave:text-caption-1 wave:leading-3.5" id="interaction-tag-text-_id0_">',
     '<span class="wave-interaction-tag-primary__primary-text" id="interaction-tag-text-_id1_">',
-    '<span class="wave-interaction-tag-primary__secondary-text text-caption-2 leading-3">',
+    '<span class="wave-interaction-tag-primary__secondary-text wave:text-caption-2 wave:leading-3">',
     '<svg aria-hidden="true" class="wave-interaction-tag-secondary__dismiss-icon" data-wave-icon="dismiss" fill="currentColor" focusable="false" height="12" viewBox="0 0 20 20" width="12" xmlns="http://www.w3.org/2000/svg">',
-    '<span class="wave-interaction-tag-secondary__dismiss-icon inline-flex items-center justify-center px-1.5" id="interaction-tag-dismiss-content-_id2_">',
-    '<span class="wave-interaction-tag-secondary__dismiss-icon inline-flex items-center justify-center" id="interaction-tag-dismiss-content-_id3_">',
+    '<span class="wave-interaction-tag-secondary__dismiss-icon wave:inline-flex wave:items-center wave:justify-center wave:px-1.5" id="interaction-tag-dismiss-content-_id2_">',
+    '<span class="wave-interaction-tag-secondary__dismiss-icon wave:inline-flex wave:items-center wave:justify-center" id="interaction-tag-dismiss-content-_id3_">',
   ].join('\n');
 
   it('renders the parts of c2b9673 (attributes sorted), on the client and the server', () => {
@@ -1381,8 +1407,8 @@ describe('InteractionTag — slotProps', () => {
       expect(refs).toContain(element);
     }
     // Your class replaces a conflicting one of the part.
-    expect(secondaryText).not.toHaveClass('leading-3');
-    expect(span).not.toHaveClass('items-center');
+    expect(secondaryText).not.toHaveClass('wave:leading-3');
+    expect(span).not.toHaveClass('wave:items-center');
     expect(refs).toHaveLength(4);
   });
 

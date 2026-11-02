@@ -70,7 +70,7 @@ type DividerImplProps = DividerOwnProps &
     as?: React.ElementType;
   };
 
-const labelClassName = 'shrink-0 text-caption-1 text-muted-foreground';
+const labelClassName = 'wave:shrink-0 wave:text-caption-1 wave:text-muted-foreground';
 
 /**
  * A line that separates content, horizontally or vertically, optionally with a label in the middle.
@@ -112,8 +112,8 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
     const lineClassName = wcn(
       dividerClassNames.line,
       vertical
-        ? 'w-0 min-h-2 flex-1 border-s border-border'
-        : 'h-0 min-w-2 flex-1 border-t border-border',
+        ? 'wave:w-0 wave:min-h-2 wave:flex-1 wave:border-s wave:border-border'
+        : 'wave:h-0 wave:min-w-2 wave:flex-1 wave:border-t wave:border-border',
     );
     const lineProps =
       slotProps?.line &&
@@ -138,8 +138,8 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         className={wcn(
           dividerClassNames.root,
           vertical
-            ? 'inline-flex min-h-12 flex-col items-center gap-1 self-stretch'
-            : 'flex items-center gap-3',
+            ? 'wave:inline-flex wave:min-h-12 wave:flex-col wave:items-center wave:gap-1 wave:self-stretch'
+            : 'wave:flex wave:items-center wave:gap-3',
           className,
         )}
         {...rest}
@@ -164,7 +164,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         aria-labelledby={ariaLabelledBy}
         className={wcn(
           dividerClassNames.root,
-          'inline-block h-6 border-s border-border',
+          'wave:inline-block wave:h-6 wave:border-s wave:border-border',
           className,
         )}
         {...rest}
@@ -180,7 +180,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
       aria-labelledby={ariaLabelledBy}
       className={wcn(
         dividerClassNames.root,
-        'm-0 h-0 w-full border-0 border-t border-solid border-border',
+        'wave:m-0 wave:h-0 wave:w-full wave:border-0 wave:border-t wave:border-solid wave:border-border',
         className,
       )}
       {...rest}

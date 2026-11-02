@@ -3,6 +3,7 @@ import type { Preview } from '@storybook/react';
 import { WaveProvider } from '../src/components/provider/WaveProvider';
 import type { WaveDir, WaveTheme } from '../src/components/provider/WaveProvider';
 import './preview.css';
+import './stories.css';
 
 const themes: ReadonlyArray<{ value: WaveTheme; title: string }> = [
   { value: 'light', title: 'Light' },

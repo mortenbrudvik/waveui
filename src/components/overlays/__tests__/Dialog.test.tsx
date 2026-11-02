@@ -176,7 +176,7 @@ describe('Dialog', () => {
       displayName: 'DialogContent',
       wrapper: createOverlayTestWrapper(Dialog, { defaultOpen: true }),
       defaultProps: { title: 'Edit profile', children: <p>Body</p> },
-      conflictingClass: { className: 'max-w-[800px]', overrides: 'max-w-[600px]' },
+      conflictingClass: { className: 'max-w-[800px]', overrides: 'wave:max-w-[600px]' },
       a11yVariants: [
         {
           name: 'named by aria-label, no title',
@@ -195,7 +195,7 @@ describe('Dialog', () => {
         displayName: 'DialogContent',
         wrapper: createOverlayTestWrapper(Dialog, { defaultOpen: true, modalType: 'non-modal' }),
         defaultProps: { title: 'Edit profile', children: <p>Body</p> },
-        conflictingClass: { className: 'max-w-[800px]', overrides: 'max-w-[600px]' },
+        conflictingClass: { className: 'max-w-[800px]', overrides: 'wave:max-w-[600px]' },
       });
     });
   });
@@ -394,9 +394,14 @@ describe('Dialog', () => {
     it('uses token backdrop, surface, radius and shadow classes (button-provider#3, repo-level#7)', () => {
       render(<Basic dialogProps={{ defaultOpen: true }} />);
       const dialog = screen.getByRole('dialog');
-      expect(dialog).toHaveClass('bg-background', 'text-foreground', 'rounded-lg', 'shadow-64');
-      expect(dialog).not.toHaveClass('rounded-xl');
-      expect(backdrop()).toHaveClass('bg-backdrop');
+      expect(dialog).toHaveClass(
+        'wave:bg-background',
+        'wave:text-foreground',
+        'wave:rounded-lg',
+        'wave:shadow-64',
+      );
+      expect(dialog).not.toHaveClass('wave:rounded-xl');
+      expect(backdrop()).toHaveClass('wave:bg-backdrop');
       expect(dialog.className).not.toMatch(/#|rgba|black|white/);
       expect(backdrop().className).not.toMatch(/#|rgba|black|white/);
     });
@@ -409,14 +414,14 @@ describe('Dialog', () => {
       });
       const dialog = screen.getByRole('dialog');
       expect(dialog.closest('.wave-high-contrast')).not.toBeNull();
-      expect(dialog).toHaveClass('border', 'border-border');
+      expect(dialog).toHaveClass('wave:border', 'wave:border-border');
     });
 
     it('renders its body in the primary text colour, as Drawer and Popover do (issue #4)', () => {
       render(<Basic dialogProps={{ defaultOpen: true }} />);
       // The body inherits the surface's foreground, so rich content never reads as secondary text.
-      expect(screen.getByRole('dialog')).toHaveClass('text-foreground');
-      expect(screen.getByText('Body').parentElement).not.toHaveClass('text-muted-foreground');
+      expect(screen.getByRole('dialog')).toHaveClass('wave:text-foreground');
+      expect(screen.getByText('Body').parentElement).not.toHaveClass('wave:text-muted-foreground');
     });
   });
 
@@ -424,23 +429,27 @@ describe('Dialog', () => {
     it('is full width up to 600px, bounded by the viewport height, with a scrolling body', () => {
       render(<Basic dialogProps={{ defaultOpen: true }} />);
       const dialog = screen.getByRole('dialog');
-      expect(dialog).toHaveClass('w-full', 'max-w-[600px]', 'max-h-[calc(100dvh-2rem)]');
-      expect(dialog).not.toHaveClass('w-[600px]');
-      expect(screen.getByText('Body').parentElement).toHaveClass('overflow-y-auto');
+      expect(dialog).toHaveClass(
+        'wave:w-full',
+        'wave:max-w-[600px]',
+        'wave:max-h-[calc(100dvh-2rem)]',
+      );
+      expect(dialog).not.toHaveClass('wave:w-[600px]');
+      expect(screen.getByText('Body').parentElement).toHaveClass('wave:overflow-y-auto');
     });
 
     it('caps the small size at 400px', () => {
       render(<Basic dialogProps={{ defaultOpen: true }} contentProps={{ size: 'small' }} />);
       const dialog = screen.getByRole('dialog');
-      expect(dialog).toHaveClass('w-full', 'max-w-[400px]');
-      expect(dialog).not.toHaveClass('w-[400px]');
+      expect(dialog).toHaveClass('wave:w-full', 'wave:max-w-[400px]');
+      expect(dialog).not.toHaveClass('wave:w-[400px]');
     });
 
     it('keeps its 1rem gap to the viewport as its own margin, not as backdrop padding (issue #4)', () => {
       render(<Basic dialogProps={{ defaultOpen: true }} />);
-      expect(screen.getByRole('dialog')).toHaveClass('m-4');
-      expect(backdrop().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
-      expect(positioner().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
+      expect(screen.getByRole('dialog')).toHaveClass('wave:m-4');
+      expect(backdrop().className).not.toMatch(/(^|\s)wave:p[xytrblse]?-/);
+      expect(positioner().className).not.toMatch(/(^|\s)wave:p[xytrblse]?-/);
     });
 
     it('keeps the gap when its content is wider than the room inside it (issue #4)', () => {
@@ -448,7 +457,7 @@ describe('Dialog', () => {
       // it, a long URL or a wide table would push the surface over its margin to the viewport
       // edges (0.7's padded backdrop kept the gap; the body scrolls sideways instead).
       render(<Basic dialogProps={{ defaultOpen: true }} />);
-      expect(screen.getByRole('dialog')).toHaveClass('min-w-0');
+      expect(screen.getByRole('dialog')).toHaveClass('wave:min-w-0');
     });
 
     it('lets a className remove the gap and lift the caps, for a full-screen dialog (issue #4)', () => {
@@ -460,25 +469,25 @@ describe('Dialog', () => {
       );
       const dialog = screen.getByRole('dialog');
       expect(dialog).toHaveClass('m-0', 'h-dvh', 'max-h-none', 'max-w-none', 'rounded-none');
-      expect(dialog).not.toHaveClass('m-4');
-      expect(dialog).not.toHaveClass('max-w-[600px]');
-      expect(dialog).not.toHaveClass('max-h-[calc(100dvh-2rem)]');
-      expect(dialog).not.toHaveClass('rounded-lg');
+      expect(dialog).not.toHaveClass('wave:m-4');
+      expect(dialog).not.toHaveClass('wave:max-w-[600px]');
+      expect(dialog).not.toHaveClass('wave:max-h-[calc(100dvh-2rem)]');
+      expect(dialog).not.toHaveClass('wave:rounded-lg');
       // Nothing around the surface keeps a gap the className cannot reach.
-      expect(backdrop().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
-      expect(positioner().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
+      expect(backdrop().className).not.toMatch(/(^|\s)wave:p[xytrblse]?-/);
+      expect(positioner().className).not.toMatch(/(^|\s)wave:p[xytrblse]?-/);
     });
 
     // P6-06 D96 (issue #4): the sizes `large` (940px) and `full` (the viewport, safe areas).
     it.each([
-      ['small', 'max-w-[400px]'],
-      ['medium', 'max-w-[600px]'],
-      ['large', 'max-w-[940px]'],
+      ['small', 'wave:max-w-[400px]'],
+      ['medium', 'wave:max-w-[600px]'],
+      ['large', 'wave:max-w-[940px]'],
     ] as const)('renders data-size="%s" with its %s cap and the 1rem margin', (size, cap) => {
       render(<Basic dialogProps={{ defaultOpen: true }} contentProps={{ size }} />);
       const dialog = screen.getByRole('dialog');
       expect(dialog).toHaveAttribute('data-size', size);
-      expect(dialog).toHaveClass('w-full', cap, 'm-4', 'max-h-[calc(100dvh-2rem)]');
+      expect(dialog).toHaveClass('wave:w-full', cap, 'wave:m-4', 'wave:max-h-[calc(100dvh-2rem)]');
     });
 
     it('renders data-size="medium" by default', () => {
@@ -488,11 +497,11 @@ describe('Dialog', () => {
 
     /** The safe-area padding of a `full` dialog (24px where there is no inset). */
     const FULL_INSET_CLASSES = [
-      'pt-[max(1.5rem,env(safe-area-inset-top))]',
-      'pb-[max(1.5rem,env(safe-area-inset-bottom))]',
+      'wave:pt-[max(1.5rem,env(safe-area-inset-top))]',
+      'wave:pb-[max(1.5rem,env(safe-area-inset-bottom))]',
       // The insets are physical: the left one pads the left side in either direction.
-      'pl-[max(1.5rem,env(safe-area-inset-left))]',
-      'pr-[max(1.5rem,env(safe-area-inset-right))]',
+      'wave:pl-[max(1.5rem,env(safe-area-inset-left))]',
+      'wave:pr-[max(1.5rem,env(safe-area-inset-right))]',
     ];
 
     it('size="full" covers the viewport, pads the safe-area insets and moves the title actions by them', () => {
@@ -500,27 +509,32 @@ describe('Dialog', () => {
       const dialog = screen.getByRole('dialog');
       expect(dialog).toHaveAttribute('data-size', 'full');
       expect(dialog).toHaveClass(
-        'm-0',
-        'h-dvh',
-        'max-h-none',
-        'max-w-none',
-        'rounded-none',
-        'border-0',
+        'wave:m-0',
+        'wave:h-dvh',
+        'wave:max-h-none',
+        'wave:max-w-none',
+        'wave:rounded-none',
+        'wave:border-0',
         ...FULL_INSET_CLASSES,
       );
-      for (const replaced of ['m-4', 'max-h-[calc(100dvh-2rem)]', 'rounded-lg', 'border']) {
+      for (const replaced of [
+        'wave:m-4',
+        'wave:max-h-[calc(100dvh-2rem)]',
+        'wave:rounded-lg',
+        'wave:border',
+      ]) {
         expect(dialog).not.toHaveClass(replaced);
       }
       expect(dialog.className).not.toMatch(/max-w-\[/);
       const area = button('Close').parentElement;
       expect(area).toHaveClass(
         dialogContentClassNames.titleActions,
-        'top-[max(1rem,env(safe-area-inset-top))]',
-        'end-[max(1rem,env(safe-area-inset-right))]',
-        'wave-rtl:end-[max(1rem,env(safe-area-inset-left))]',
+        'wave:top-[max(1rem,env(safe-area-inset-top))]',
+        'wave:end-[max(1rem,env(safe-area-inset-right))]',
+        'wave:wave-rtl:end-[max(1rem,env(safe-area-inset-left))]',
       );
-      expect(area).not.toHaveClass('top-4');
-      expect(area).not.toHaveClass('end-4');
+      expect(area).not.toHaveClass('wave:top-4');
+      expect(area).not.toHaveClass('wave:end-4');
     });
 
     it('size="full": a consumer padding class replaces the inset padding, also under RTL', () => {
@@ -545,7 +559,7 @@ describe('Dialog', () => {
       );
       const dialog = screen.getByRole('dialog');
       expect(dialog).toHaveClass('max-w-[72rem]');
-      expect(dialog).not.toHaveClass('max-w-[940px]');
+      expect(dialog).not.toHaveClass('wave:max-w-[940px]');
     });
 
     it('size="full" with a long form and a footer keeps the body’s footer scroll padding', () => {
@@ -567,7 +581,7 @@ describe('Dialog', () => {
         );
         const footer = screen.getByTestId('footer');
         const body = footer.closest<HTMLElement>('.' + dialogContentClassNames.body);
-        expect(body).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
+        expect(body).toHaveClass('wave:min-h-0', 'wave:flex-1', 'wave:overflow-y-auto');
         mockRect(footer, { height: 64 });
         resizeObserver.trigger(footer);
         expect(body?.style.getPropertyValue('--wave-dialog-footer-height')).toBe('64px');
@@ -684,7 +698,7 @@ describe('Dialog', () => {
       );
       // Same end padding as the `title` prop heading: the title-actions area's width (P6-06 D97).
       expect(screen.getByRole('heading')).toHaveClass(
-        'pe-[var(--wave-dialog-title-end-padding,2rem)]',
+        'wave:pe-[var(--wave-dialog-title-end-padding,2rem)]',
       );
       rerender(
         <Dialog defaultOpen>
@@ -695,7 +709,7 @@ describe('Dialog', () => {
       );
       expect(screen.getByRole('heading')).toHaveClass('pe-12');
       expect(screen.getByRole('heading')).not.toHaveClass(
-        'pe-[var(--wave-dialog-title-end-padding,2rem)]',
+        'wave:pe-[var(--wave-dialog-title-end-padding,2rem)]',
       );
     });
 
@@ -1105,7 +1119,7 @@ describe('Dialog', () => {
 
     /** The scrolling body of the open dialog (the element that scrolls its content). */
     function scrollingBody() {
-      const body = screen.getByRole('dialog').querySelector<HTMLElement>('.overflow-y-auto');
+      const body = screen.getByRole('dialog').querySelector<HTMLElement>('.wave\\:overflow-y-auto');
       if (!body) throw new Error('the dialog has no scrolling body');
       return body;
     }
@@ -1143,23 +1157,23 @@ describe('Dialog', () => {
         </Basic>,
       );
       expect(screen.getByTestId('footer')).toHaveClass(
-        'sticky',
-        '-bottom-1',
-        'z-10',
-        '-mx-1',
-        '-mb-1',
-        'mt-6',
-        'bg-background',
-        'px-1',
-        'pb-2',
-        'pt-3',
-        'flex',
-        'justify-end',
-        'gap-2',
+        'wave:sticky',
+        'wave:-bottom-1',
+        'wave:z-10',
+        'wave:-mx-1',
+        'wave:-mb-1',
+        'wave:mt-6',
+        'wave:bg-background',
+        'wave:px-1',
+        'wave:pb-2',
+        'wave:pt-3',
+        'wave:flex',
+        'wave:justify-end',
+        'wave:gap-2',
       );
       // The body reserves the footer's height as scroll padding, so a focused field is never
       // hidden behind it.
-      expect(scrollingBody()).toHaveClass(`scroll-pb-(${FOOTER_HEIGHT})`);
+      expect(scrollingBody()).toHaveClass(`wave:scroll-pb-(${FOOTER_HEIGHT})`);
     });
 
     it('keeps its place in the DOM: last in the body, after the content', () => {
@@ -1223,7 +1237,7 @@ describe('Dialog', () => {
       expect(form.parentElement).toBe(scrollingBody());
       expect(footer.parentElement).toBe(form);
       expect(form.lastElementChild).toBe(footer);
-      expect(footer).toHaveClass('sticky', '-bottom-1');
+      expect(footer).toHaveClass('wave:sticky', 'wave:-bottom-1');
       mockRect(footer, { height: 64 });
       resizeObserver.trigger(footer);
       expect(scrollingBody().style.getPropertyValue(FOOTER_HEIGHT)).toBe('64px');
@@ -1234,7 +1248,7 @@ describe('Dialog', () => {
 
     it('works without ResizeObserver: no variable, no error', () => {
       render(<FormDialog />);
-      expect(screen.getByTestId('footer')).toHaveClass('sticky');
+      expect(screen.getByTestId('footer')).toHaveClass('wave:sticky');
       expect(scrollingBody().style.getPropertyValue(FOOTER_HEIGHT)).toBe('');
     });
 
@@ -2594,8 +2608,8 @@ describe('Dialog.Content — slotProps', () => {
     const { unmount } = render(<Open />);
     expect(openingTags(part('titleActions'), part('body'))).toBe(
       [
-        '<div class="wave-dialog-content__title-actions absolute end-4 top-4 flex items-start gap-1">',
-        '<div class="wave-dialog-content__body -mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1">',
+        '<div class="wave-dialog-content__title-actions wave:absolute wave:end-4 wave:top-4 wave:flex wave:items-start wave:gap-1">',
+        '<div class="wave-dialog-content__body wave:-mx-1 wave:mt-1 wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:scroll-pb-(--wave-dialog-footer-height) wave:p-1 wave:text-body-1">',
       ].join('\n'),
     );
     unmount();
@@ -2607,8 +2621,8 @@ describe('Dialog.Content — slotProps', () => {
     );
     expect(openingTags(part('titleActions'), part('body'))).toBe(
       [
-        '<div class="wave-dialog-content__title-actions absolute flex items-start gap-1 top-[max(1rem,env(safe-area-inset-top))] end-[max(1rem,env(safe-area-inset-right))] wave-rtl:end-[max(1rem,env(safe-area-inset-left))]">',
-        '<div class="wave-dialog-content__body -mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1">',
+        '<div class="wave-dialog-content__title-actions wave:absolute wave:flex wave:items-start wave:gap-1 wave:top-[max(1rem,env(safe-area-inset-top))] wave:end-[max(1rem,env(safe-area-inset-right))] wave:wave-rtl:end-[max(1rem,env(safe-area-inset-left))]">',
+        '<div class="wave-dialog-content__body wave:-mx-1 wave:mt-1 wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:scroll-pb-(--wave-dialog-footer-height) wave:p-1 wave:text-body-1">',
       ].join('\n'),
     );
   });
@@ -2654,12 +2668,12 @@ describe('Dialog.Content — slotProps', () => {
       [
         part('titleActions'),
         dialogContentClassNames.titleActions,
-        'end-4',
+        'wave:end-4',
         'my-actions',
         'a',
         '0.5',
       ],
-      [part('body'), dialogContentClassNames.body, 'overflow-y-auto', 'my-body', 'b', '0.25'],
+      [part('body'), dialogContentClassNames.body, 'wave:overflow-y-auto', 'my-body', 'b', '0.25'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -2678,9 +2692,9 @@ describe('Dialog.Content — slotProps', () => {
       />,
     );
     expect(part('titleActions')).toHaveClass('end-2');
-    expect(part('titleActions')).not.toHaveClass('end-4');
+    expect(part('titleActions')).not.toHaveClass('wave:end-4');
     expect(part('body')).toHaveClass('p-4');
-    expect(part('body')).not.toHaveClass('p-1');
+    expect(part('body')).not.toHaveClass('wave:p-1');
   });
 
   it('keeps both parts visible and reachable: hidden, inert and aria-hidden stay unset', () => {
@@ -2837,7 +2851,7 @@ describe('Dialog.Content — slotProps', () => {
     );
     expect(part('titleActions').closest('[data-wave-portal]')).toHaveAttribute('dir', 'rtl');
     expect(part('titleActions')).toHaveClass(
-      'wave-rtl:end-[max(1rem,env(safe-area-inset-left))]',
+      'wave:wave-rtl:end-[max(1rem,env(safe-area-inset-left))]',
       'my-actions',
     );
   });

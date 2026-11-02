@@ -73,29 +73,29 @@ const SLIDER_SIZE: Readonly<
   medium: {
     rail: [
       // The rail color gives the rail itself 3:1 non-text contrast.
-      '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-stroke-accessible',
-      '[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
-      'wave-rtl:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_left,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
-      '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-stroke-accessible',
-      '[&::-moz-range-progress]:h-1 [&::-moz-range-progress]:rounded-full [&::-moz-range-progress]:bg-primary',
+      'wave:[&::-webkit-slider-runnable-track]:h-1 wave:[&::-webkit-slider-runnable-track]:rounded-full wave:[&::-webkit-slider-runnable-track]:bg-stroke-accessible',
+      'wave:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
+      'wave:wave-rtl:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_left,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
+      'wave:[&::-moz-range-track]:h-1 wave:[&::-moz-range-track]:rounded-full wave:[&::-moz-range-track]:bg-stroke-accessible',
+      'wave:[&::-moz-range-progress]:h-1 wave:[&::-moz-range-progress]:rounded-full wave:[&::-moz-range-progress]:bg-primary',
     ],
     thumbWebkit:
-      '[&::-webkit-slider-thumb]:-mt-2 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow',
+      'wave:[&::-webkit-slider-thumb]:-mt-2 wave:[&::-webkit-slider-thumb]:h-5 wave:[&::-webkit-slider-thumb]:w-5 wave:[&::-webkit-slider-thumb]:appearance-none wave:[&::-webkit-slider-thumb]:rounded-full wave:[&::-webkit-slider-thumb]:border-2 wave:[&::-webkit-slider-thumb]:border-background wave:[&::-webkit-slider-thumb]:bg-primary wave:[&::-webkit-slider-thumb]:shadow',
     thumbMoz:
-      '[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-background [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:shadow',
+      'wave:[&::-moz-range-thumb]:h-5 wave:[&::-moz-range-thumb]:w-5 wave:[&::-moz-range-thumb]:rounded-full wave:[&::-moz-range-thumb]:border-2 wave:[&::-moz-range-thumb]:border-background wave:[&::-moz-range-thumb]:bg-primary wave:[&::-moz-range-thumb]:shadow',
   },
   small: {
     rail: [
-      '[&::-webkit-slider-runnable-track]:h-0.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-stroke-accessible',
-      '[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
-      'wave-rtl:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_left,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
-      '[&::-moz-range-track]:h-0.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-stroke-accessible',
-      '[&::-moz-range-progress]:h-0.5 [&::-moz-range-progress]:rounded-full [&::-moz-range-progress]:bg-primary',
+      'wave:[&::-webkit-slider-runnable-track]:h-0.5 wave:[&::-webkit-slider-runnable-track]:rounded-full wave:[&::-webkit-slider-runnable-track]:bg-stroke-accessible',
+      'wave:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
+      'wave:wave-rtl:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_left,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
+      'wave:[&::-moz-range-track]:h-0.5 wave:[&::-moz-range-track]:rounded-full wave:[&::-moz-range-track]:bg-stroke-accessible',
+      'wave:[&::-moz-range-progress]:h-0.5 wave:[&::-moz-range-progress]:rounded-full wave:[&::-moz-range-progress]:bg-primary',
     ],
     thumbWebkit:
-      '[&::-webkit-slider-thumb]:-mt-1.75 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow',
+      'wave:[&::-webkit-slider-thumb]:-mt-1.75 wave:[&::-webkit-slider-thumb]:h-4 wave:[&::-webkit-slider-thumb]:w-4 wave:[&::-webkit-slider-thumb]:appearance-none wave:[&::-webkit-slider-thumb]:rounded-full wave:[&::-webkit-slider-thumb]:border-2 wave:[&::-webkit-slider-thumb]:border-background wave:[&::-webkit-slider-thumb]:bg-primary wave:[&::-webkit-slider-thumb]:shadow',
     thumbMoz:
-      '[&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-background [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:shadow',
+      'wave:[&::-moz-range-thumb]:h-4 wave:[&::-moz-range-thumb]:w-4 wave:[&::-moz-range-thumb]:rounded-full wave:[&::-moz-range-thumb]:border-2 wave:[&::-moz-range-thumb]:border-background wave:[&::-moz-range-thumb]:bg-primary wave:[&::-moz-range-thumb]:shadow',
   },
 };
 
@@ -104,10 +104,10 @@ const SLIDER_SIZE: Readonly<
  * filled part in Highlight; a disabled rail stays GrayText, without the fill.
  */
 const forcedColorsFill = [
-  'forced-colors:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,Highlight_var(--wave-slider-progress),CanvasText_var(--wave-slider-progress))]',
-  'forced-colors:wave-rtl:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_left,Highlight_var(--wave-slider-progress),CanvasText_var(--wave-slider-progress))]',
-  'forced-colors:[&::-moz-range-progress]:bg-[Highlight]',
-  'forced-colors:disabled:[&::-webkit-slider-runnable-track]:bg-none forced-colors:disabled:[&::-moz-range-progress]:bg-[GrayText]',
+  'wave:forced-colors:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,Highlight_var(--wave-slider-progress),CanvasText_var(--wave-slider-progress))]',
+  'wave:forced-colors:wave-rtl:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_left,Highlight_var(--wave-slider-progress),CanvasText_var(--wave-slider-progress))]',
+  'wave:forced-colors:[&::-moz-range-progress]:bg-[Highlight]',
+  'wave:forced-colors:disabled:[&::-webkit-slider-runnable-track]:bg-none wave:forced-colors:disabled:[&::-moz-range-progress]:bg-[GrayText]',
 ];
 
 /**
@@ -212,13 +212,13 @@ export const Slider = ({
       type="range"
       className={wcn(
         sliderClassNames.root,
-        'w-full cursor-pointer appearance-none bg-transparent',
+        'wave:w-full wave:cursor-pointer wave:appearance-none wave:bg-transparent',
         // A 24px-tall input at the small size, the rail centred in it (D14).
-        size === 'small' && 'h-6',
+        size === 'small' && 'wave:h-6',
         sizeClasses.rail,
         sizeClasses.thumbWebkit,
         sizeClasses.thumbMoz,
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
         focusRing,
         // Forced colors replace the author backgrounds of the rail and thumb with Canvas: give
         // every part a system color instead.

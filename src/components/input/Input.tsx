@@ -87,7 +87,11 @@ export function useControlErrorMessage(
       role="alert"
       {...messageRest}
       id={messageId}
-      className={wcn(partClassName, 'mt-1 block text-caption-1 text-error', messageClassName)}
+      className={wcn(
+        partClassName,
+        'wave:mt-1 wave:block wave:text-caption-1 wave:text-error',
+        messageClassName,
+      )}
     >
       {error}
     </span>
@@ -118,9 +122,9 @@ const BLOCK_CLICK = ['onClick'] as const;
 
 /** Padding of the slot spans and the inner input of the slot wrapper, per size. */
 const SLOT_PADDING: Readonly<Record<CoreSize, { before: string; after: string; input: string }>> = {
-  small: { before: 'ps-1.5', after: 'pe-1.5', input: 'px-1.5' },
-  medium: { before: 'ps-2', after: 'pe-2', input: 'px-2' },
-  large: { before: 'ps-3', after: 'pe-3', input: 'px-3' },
+  small: { before: 'wave:ps-1.5', after: 'wave:pe-1.5', input: 'wave:px-1.5' },
+  medium: { before: 'wave:ps-2', after: 'wave:pe-2', input: 'wave:px-2' },
+  large: { before: 'wave:ps-3', after: 'wave:pe-3', input: 'wave:px-3' },
 };
 
 /** Properties for the Input component. */
@@ -328,16 +332,17 @@ export const Input = ({
     const rootProps = mergeSlotProps(slotProps?.root, {
       className: wcn(
         inputClassNames.root,
-        'inline-flex w-full items-center',
+        'wave:inline-flex wave:w-full wave:items-center',
         inputHeightClasses[size],
         inputTextClasses[size],
         inputAppearanceClasses[appearance],
-        'text-foreground',
+        'wave:text-foreground',
         inputFocusWithin,
         invalidLook && inputInvalidWithin,
         // The dimmed look lifts while a focus ring shows inside the wrapper (focusable slot
         // content; the disabled input never takes focus): opacity would dim the ring below 3:1.
-        props.disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
+        props.disabled &&
+          'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100',
         className,
       ),
       style,
@@ -352,19 +357,19 @@ export const Input = ({
           renderSlot(
             contentBefore,
             'span',
-            wcn(inputClassNames.contentBefore, 'shrink-0', SLOT_PADDING[size].before),
+            wcn(inputClassNames.contentBefore, 'wave:shrink-0', SLOT_PADDING[size].before),
           )}
         <input
           {...mergeSlotProps(slotProps?.input, {
             className: wcn(
               inputClassNames.input,
-              'h-full w-full min-w-0 bg-transparent',
+              'wave:h-full wave:w-full wave:min-w-0 wave:bg-transparent',
               SLOT_PADDING[size].input,
               inputTextClasses[size],
-              'text-foreground',
-              'placeholder:text-muted-foreground',
-              'focus:outline-hidden',
-              'disabled:cursor-not-allowed',
+              'wave:text-foreground',
+              'wave:placeholder:text-muted-foreground',
+              'wave:focus:outline-hidden',
+              'wave:disabled:cursor-not-allowed',
             ),
             // The wrapper takes the Input's `hidden`; the input inside never is.
             locked: { ...inputProps, ...inputWiring, hidden: undefined },
@@ -375,7 +380,7 @@ export const Input = ({
           renderSlot(
             contentAfter,
             'span',
-            wcn(inputClassNames.contentAfter, 'shrink-0', SLOT_PADDING[size].after),
+            wcn(inputClassNames.contentAfter, 'wave:shrink-0', SLOT_PADDING[size].after),
           )}
       </span>
     );
@@ -388,13 +393,13 @@ export const Input = ({
             inputClassNames.root,
             inputClassNames.input,
             inputHeightClasses[size],
-            'w-full',
+            'wave:w-full',
             inputPaddingClasses[size],
             inputTextClasses[size],
             inputAppearanceClasses[appearance],
-            'text-foreground placeholder:text-muted-foreground',
+            'wave:text-foreground wave:placeholder:text-muted-foreground',
             inputFocus,
-            'disabled:cursor-not-allowed disabled:opacity-50',
+            'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
             invalidLook && inputInvalid,
             className,
           ),

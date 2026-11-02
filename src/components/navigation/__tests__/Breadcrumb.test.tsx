@@ -327,7 +327,7 @@ describe('Breadcrumb', () => {
     );
     const separator = separatorsIn(screen.getAllByRole('listitem')[1])[0];
     expect(separator.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-    expect(separator).toHaveClass('wave-rtl:-scale-x-100');
+    expect(separator).toHaveClass('wave:wave-rtl:-scale-x-100');
   });
 
   it("mirrors by the separator's own direction, not by any RTL ancestor (C-LOGICAL)", () => {
@@ -344,8 +344,8 @@ describe('Breadcrumb', () => {
     );
     const separator = separatorsIn(screen.getAllByRole('listitem')[1])[0];
     expect(separator.closest('[dir]')).toHaveAttribute('dir', 'ltr');
-    expect(separator).toHaveClass('wave-rtl:-scale-x-100');
-    expect(separator.getAttribute('class')).not.toMatch(/(^|\s)rtl:/);
+    expect(separator).toHaveClass('wave:wave-rtl:-scale-x-100');
+    expect(separator.getAttribute('class')).not.toMatch(/(^|\s)wave:rtl:/);
   });
 
   it('marks current item with aria-current="page"', () => {
@@ -582,7 +582,7 @@ describe('Breadcrumb', () => {
       const link = screen.getByRole('link', { name: 'Docs' });
       expect(link).toHaveAttribute('href', '/docs');
       expect(link).toHaveAttribute('data-router-link');
-      expect(link).toHaveClass('item-class', 'link-class', 'text-primary');
+      expect(link).toHaveClass('item-class', 'link-class', 'wave:text-primary');
       expect(ref.current).toBe(link);
       expect(within(link).getByText('I')).toHaveAttribute('aria-hidden', 'true');
     });
@@ -709,17 +709,17 @@ describe('Breadcrumb', () => {
       );
       const here = screen.getByRole('link', { name: 'Here' });
       expect(here).toHaveClass(
-        'font-semibold',
-        'text-foreground',
-        'focus-visible:outline-2',
-        'focus-visible:outline-offset-2',
-        'focus-visible:outline-ring',
+        'wave:font-semibold',
+        'wave:text-foreground',
+        'wave:focus-visible:outline-2',
+        'wave:focus-visible:outline-offset-2',
+        'wave:focus-visible:outline-ring',
       );
       // Still the current page, not a link-styled crumb.
-      expect(here).not.toHaveClass('text-primary');
+      expect(here).not.toHaveClass('wave:text-primary');
       const there = screen.getByRole('link', { name: 'There' });
       expect(there).toHaveAttribute('aria-disabled', 'true');
-      expect(there).toHaveClass('aria-disabled:opacity-50', 'focus-visible:outline-ring');
+      expect(there).toHaveClass('wave:aria-disabled:opacity-50', 'wave:focus-visible:outline-ring');
     });
   });
 
@@ -759,7 +759,7 @@ describe('Breadcrumb', () => {
       );
       expect(screen.getByText('ico')).toHaveAttribute('aria-hidden', 'true');
       expect(screen.getByRole('link')).toHaveAccessibleName('Home');
-      expect(screen.getByText('ico')).toHaveClass('me-1');
+      expect(screen.getByText('ico')).toHaveClass('wave:me-1');
     });
 
     // An icon that renders nothing is no icon, as in Nav, Tree and Avatar: no empty span and no
@@ -809,9 +809,9 @@ describe('Breadcrumb', () => {
         screen.getByRole('button', { name: 'Back' }),
       ]) {
         expect(el).toHaveClass(
-          'focus-visible:outline-2',
-          'focus-visible:outline-offset-2',
-          'focus-visible:outline-ring',
+          'wave:focus-visible:outline-2',
+          'wave:focus-visible:outline-offset-2',
+          'wave:focus-visible:outline-ring',
         );
       }
     });
@@ -861,12 +861,12 @@ describe('Breadcrumb', () => {
       const back = screen.getByRole('button', { name: 'Back' });
       expect(back).toBeDisabled();
       expect(back).toHaveClass(
-        'disabled:cursor-not-allowed',
-        'disabled:opacity-50',
-        'aria-disabled:opacity-50',
-        'not-disabled:not-aria-disabled:hover:underline',
+        'wave:disabled:cursor-not-allowed',
+        'wave:disabled:opacity-50',
+        'wave:aria-disabled:opacity-50',
+        'wave:not-disabled:not-aria-disabled:hover:underline',
       );
-      expect(back).not.toHaveClass('hover:underline');
+      expect(back).not.toHaveClass('wave:hover:underline');
       await user.click(back);
       expect(onClick).not.toHaveBeenCalled();
     });
@@ -999,10 +999,10 @@ describe('Breadcrumb', () => {
       );
       const link = screen.getByRole('link', { name: 'Home' });
       expect(link).toHaveClass(
-        'not-disabled:not-aria-disabled:hover:underline',
-        'aria-disabled:opacity-50',
+        'wave:not-disabled:not-aria-disabled:hover:underline',
+        'wave:aria-disabled:opacity-50',
       );
-      expect(link).not.toHaveClass('hover:underline');
+      expect(link).not.toHaveClass('wave:hover:underline');
     });
 
     it('types unannotated handlers from href: button events without it, link events with it', async () => {
@@ -1788,9 +1788,9 @@ describe('Breadcrumb', () => {
 
     describe('size', () => {
       it.each([
-        ['small', 'text-caption-1', '12'],
-        ['medium', 'text-body-1', '12'],
-        ['large', 'text-body-2', '16'],
+        ['small', 'wave:text-caption-1', '12'],
+        ['medium', 'wave:text-body-1', '12'],
+        ['large', 'wave:text-body-2', '16'],
       ] as const)('%s sets data-size, the text step and the divider size', (size, text, icon) => {
         render(<Trail size={size} />);
         const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
@@ -1932,7 +1932,7 @@ describe('Breadcrumb', () => {
         expect(dividers[0]).toHaveAttribute('aria-hidden', 'true');
         expect(dividers[0]).toHaveClass(breadcrumbClassNames.divider);
         expect(dividers[0].tagName).toBe('SPAN');
-        expect(dividers[0].getAttribute('class')).not.toContain('wave-rtl:-scale-x-100');
+        expect(dividers[0].getAttribute('class')).not.toContain('wave:wave-rtl:-scale-x-100');
         expect(nav.querySelector('svg[data-wave-icon]')).toBeNull();
       });
 
@@ -1967,7 +1967,7 @@ describe('Breadcrumb', () => {
       it('mirrors the default chevron in RTL', () => {
         renderWithProviders(<Trail />, { dir: 'rtl' });
         expect(separatorsIn(screen.getByRole('navigation'))[0]).toHaveClass(
-          'wave-rtl:-scale-x-100',
+          'wave:wave-rtl:-scale-x-100',
         );
       });
 
@@ -2162,7 +2162,11 @@ describe('Breadcrumb', () => {
         const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
         expect(nav).toHaveAttribute('data-overflow', 'auto');
         const list = within(nav).getByRole('list');
-        expect(list).toHaveClass(overflowClassNames.root, breadcrumbClassNames.list, 'text-body-2');
+        expect(list).toHaveClass(
+          overflowClassNames.root,
+          breadcrumbClassNames.list,
+          'wave:text-body-2',
+        );
         expect(list).toHaveAttribute('data-button-position', 'before-hidden');
         const items = list.querySelectorAll('li');
         expect(items).toHaveLength(6);
@@ -2183,7 +2187,7 @@ describe('Breadcrumb', () => {
         renderWithProviders(<Trail overflow="auto" />, { dir: 'rtl' });
         expect(shownLabels()).toEqual(['Home', '…', 'Delta', 'Widget']);
         expect(separatorsIn(overflowListItem() as HTMLElement)[0]).toHaveClass(
-          'wave-rtl:-scale-x-100',
+          'wave:wave-rtl:-scale-x-100',
         );
       });
 
@@ -2457,11 +2461,12 @@ describe('Breadcrumb — slotProps', () => {
 
   // Captured from 414fe7d's dist (client and server agree).
   const LINK_CLASSES =
-    'inline-flex cursor-pointer items-center text-primary no-underline not-disabled:not-aria-disabled:hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100';
-  const BASE_BUTTON = `<button aria-expanded="false" aria-haspopup="menu" aria-label="More items" class="wave-breadcrumb__overflow-button ${LINK_CLASSES} rounded px-1" id="wave-menu-trigger-_id0_" type="button">`;
-  const BASE_ITEM = '<li class="wave-breadcrumb__list-item flex items-center gap-1">';
+    'wave:inline-flex wave:cursor-pointer wave:items-center wave:text-primary wave:no-underline wave:not-disabled:not-aria-disabled:hover:underline wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100';
+  const BASE_BUTTON = `<button aria-expanded="false" aria-haspopup="menu" aria-label="More items" class="wave-breadcrumb__overflow-button ${LINK_CLASSES} wave:rounded wave:px-1" id="wave-menu-trigger-_id0_" type="button">`;
+  const BASE_ITEM =
+    '<li class="wave-breadcrumb__list-item wave:flex wave:items-center wave:gap-1">';
   const BASE_COLLAPSE = [
-    '<ol class="wave-breadcrumb__list m-0 flex list-none items-center gap-1 p-0 text-body-1">',
+    '<ol class="wave-breadcrumb__list wave:m-0 wave:flex wave:list-none wave:items-center wave:gap-1 wave:p-0 wave:text-body-1">',
     BASE_ITEM,
     BASE_ITEM,
     BASE_ITEM,
@@ -2469,11 +2474,11 @@ describe('Breadcrumb — slotProps', () => {
     BASE_BUTTON,
   ].join('\n');
   const BASE_AUTO_LIST =
-    '<div class="wave-overflow flex overflow-hidden p-1 items-center wave-breadcrumb__list gap-1 text-body-1" data-button-position="before-hidden" data-orientation="horizontal" data-overflow-direction="start" role="list">';
+    '<div class="wave-overflow wave:flex wave:overflow-hidden wave:p-1 wave:items-center wave-breadcrumb__list wave:gap-1 wave:text-body-1" data-button-position="before-hidden" data-orientation="horizontal" data-overflow-direction="start" role="list">';
   const BASE_AUTO_ITEM =
-    '<li class="wave-overflow-item shrink-0 wave-breadcrumb__list-item flex items-center gap-1">';
+    '<li class="wave-overflow-item wave:shrink-0 wave-breadcrumb__list-item wave:flex wave:items-center wave:gap-1">';
   const BASE_AUTO_HIDDEN =
-    '<li aria-hidden="true" class="wave-overflow-item shrink-0 wave-breadcrumb__list-item flex items-center gap-1" data-overflow-hidden="" inert="" style="display: none;">';
+    '<li aria-hidden="true" class="wave-overflow-item wave:shrink-0 wave-breadcrumb__list-item wave:flex wave:items-center wave:gap-1" data-overflow-hidden="" inert="" style="display: none;">';
   const BASE_AUTO_CLIENT = [
     BASE_AUTO_LIST,
     BASE_AUTO_ITEM,
@@ -2586,11 +2591,11 @@ describe('Breadcrumb — slotProps', () => {
     );
     const { list, listItems, button } = partsOf();
     expect(list).toHaveClass('gap-2');
-    expect(list).not.toHaveClass('gap-1');
+    expect(list).not.toHaveClass('wave:gap-1');
     expect(listItems[0]).toHaveClass('gap-3');
-    expect(listItems[0]).not.toHaveClass('gap-1');
+    expect(listItems[0]).not.toHaveClass('wave:gap-1');
     expect(button).toHaveClass('px-2');
-    expect(button).not.toHaveClass('px-1');
+    expect(button).not.toHaveClass('wave:px-1');
   });
 
   it('attaches your refs to the parts, the Overflow’s list included', () => {
@@ -2940,8 +2945,8 @@ describe('Breadcrumb — slotProps', () => {
       { dir: 'rtl' },
     );
     const { listItems, button } = partsOf();
-    expect(listItems[1]).toHaveClass('my-item', 'flex');
-    expect(separatorsIn(listItems[1])[0]).toHaveClass('wave-rtl:-scale-x-100');
+    expect(listItems[1]).toHaveClass('my-item', 'wave:flex');
+    expect(separatorsIn(listItems[1])[0]).toHaveClass('wave:wave-rtl:-scale-x-100');
     expect(button).toHaveAttribute('dir', 'ltr');
   });
 
