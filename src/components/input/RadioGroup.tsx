@@ -5,7 +5,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -229,14 +229,28 @@ export interface RadioItemProps extends Omit<
   ref?: React.Ref<HTMLButtonElement>;
   /**
    * Props for the elements the item draws, by part, merged into each part's own (Fluent UI's
-   * `indicator` and `label` slot props): your classes after the part's (yours win a conflict),
-   * your styles over its styles, your handlers before its handlers (`preventDefault()` in yours
-   * skips the item's handling of the event, its own `on…` prop included), your ref beside its
-   * ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every attribute the
-   * item sets on a part is locked and keeps the item's value (set it through the item's own
-   * props); you add the attributes it does not set. A part takes no `children`.
+   * `root`, `indicator` and `label` slot props): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers before its handlers (`preventDefault()`
+   * in yours skips the item's handling of the event, its own `on…` prop included), your ref
+   * beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every
+   * attribute the item sets on a part is locked and keeps the item's value (set it through the
+   * item's own props); you add the attributes it does not set. A part takes no `children`.
    */
   slotProps?: {
+    /**
+     * The root `<label>` around the radio and the label text (stable class
+     * `wave-radio-group-item`), which the item's `className` reaches as well; its `ref` is the
+     * one way to the label, since the item's `ref` and other props reach the radio. Your
+     * classes come after the item's `className`. Locked: `hidden`, `inert` and `aria-hidden`,
+     * unset (the root holds the radio, which only the item's own props hide). Your `onClick`
+     * sees every click inside the root as it bubbles: a click on the radio after the radio is
+     * selected, and a click on the label text first, before the `<label>` passes it on to the
+     * radio, so the text's click reaches your `onClick` twice (the text's own, then the
+     * radio's), as on any `<label>`; `preventDefault()` on the text's click keeps the label from
+     * passing it on (no selection). It is not called while the radio is disabled (its own
+     * `disabled` or the group's), as the radio is not selected then.
+     */
+    root?: SlotPart<'label'>;
     /**
      * The `role="radio"` `<button>` that draws the circle: the element the item's own props
      * and `ref` reach, but for `className` (stable class `wave-radio-group-item__indicator`).
@@ -267,11 +281,11 @@ export interface RadioItemProps extends Omit<
  * One option of a {@link RadioGroup}: a `role="radio"` button inside a `<label>`.
  *
  * Native button props (`id`, `aria-*`, `data-*`, handlers, `style`) and `ref` go to the radio
- * button; `className` stays on the root `<label>` and `labelClassName` styles the label text. A
- * consumer `onClick` runs before the selection; `preventDefault()` in it cancels the selection.
- * Must be rendered inside a RadioGroup (also inside Fragments or wrapper elements). `label` takes
- * rich content (a second line of subtext, a link); `children` are not rendered (a development
- * warning says so).
+ * button; `className` stays on the root `<label>` (which `slotProps.root` and its `ref` reach)
+ * and `labelClassName` styles the label text. A consumer `onClick` runs before the selection;
+ * `preventDefault()` in it cancels the selection. Must be rendered inside a RadioGroup (also
+ * inside Fragments or wrapper elements). `label` takes rich content (a second line of subtext,
+ * a link); `children` are not rendered (a development warning says so).
  */
 export function RadioItem({
   value,
@@ -365,22 +379,25 @@ export function RadioItem({
     locked: { id: labelTextId, 'aria-label': undefined },
     blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
   });
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: cn(
+      radioGroupItemClassNames.root,
+      // items-start: the radio lines up with the first line of a label that wraps or has a
+      // second line, not with its middle.
+      'inline-flex items-start gap-2 select-none',
+      // The dimmed look lifts while a focus ring shows inside the root (a link's in the label; a
+      // disabled radio never takes focus): opacity would dim the ring below 3:1.
+      isDisabled ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100' : 'cursor-pointer',
+      className,
+    ),
+    // The root holds the radio: a part neither hides it nor takes it out of reach.
+    locked: HIDDEN_PART_LOCKS,
+    // The label passes a click to the radio, which is not selected while disabled.
+    blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
+  });
 
   return (
-    <label
-      className={cn(
-        radioGroupItemClassNames.root,
-        // items-start: the radio lines up with the first line of a label that wraps or has a
-        // second line, not with its middle.
-        'inline-flex items-start gap-2 select-none',
-        // The dimmed look lifts while a focus ring shows inside the root (a link's in the label; a
-        // disabled radio never takes focus): opacity would dim the ring below 3:1.
-        isDisabled
-          ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
-          : 'cursor-pointer',
-        className,
-      )}
-    >
+    <label {...rootProps}>
       <button
         // The literal marks C-BUTTON-TYPE; the merged props hold the type (the item's props may
         // replace it, a part cannot).

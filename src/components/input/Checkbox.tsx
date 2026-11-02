@@ -137,24 +137,41 @@ export interface CheckboxProps extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
   /** Keyup handler of the checkbox control. */
   onKeyUp?: React.KeyboardEventHandler<HTMLButtonElement>;
-  /** Ref to the focusable `role="checkbox"` button. */
-  controlRef?: React.Ref<HTMLButtonElement>;
-  /** Ref to the root `<label>` element. */
-  ref?: React.Ref<HTMLLabelElement>;
   /**
-   * Props for the elements the Checkbox draws inside its root, by part, merged into each part's
-   * own (Fluent UI's `indicator` and `label` slot props): your classes after the part's (yours
-   * win a conflict), your styles over its styles, your handlers before its handlers
-   * (`preventDefault()` in yours skips the Checkbox's handling of the event, its own `on…` prop
-   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
-   * `aria-describedby`. Every attribute the Checkbox sets on a part is locked and keeps the
-   * Checkbox's value (set it through the Checkbox's own props); you add the attributes it does
-   * not set. A part takes no `children`.
+   * Ref to the focusable `role="checkbox"` button (Fluent UI's `ref`, on its primary element).
+   * The root `<label>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLButtonElement>;
+  /**
+   * Props for the elements the Checkbox draws, by part, merged into each part's own (Fluent UI's
+   * `root`, `indicator` and `label` slot props): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers before its handlers (`preventDefault()`
+   * in yours skips the Checkbox's handling of the event, its own `on…` prop included), your ref
+   * beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every
+   * attribute the Checkbox sets on a part is locked and keeps the Checkbox's value (set it
+   * through the Checkbox's own props); you add the attributes it does not set. A part takes no
+   * `children`.
    */
   slotProps?: {
     /**
+     * The root `<label>` around the box and the label text (stable class `wave-checkbox`), which
+     * the Checkbox's `className`, `style`, `data-*` and other root props reach as well; its
+     * `ref` is the way to the label, since the Checkbox's `ref` reaches the box. Your classes
+     * come after the Checkbox's `className`, your style over its `style`. Locked: every prop you
+     * give the Checkbox itself that reaches the root, `data-label-position`, `data-size`,
+     * `data-shape`, and `hidden`, `inert` and `aria-hidden` (the Checkbox's own: the root holds
+     * the box). Your handlers run before the Checkbox's own root handlers (`preventDefault()`
+     * in yours skips them). Your `onClick` sees every click inside the root as it bubbles: a
+     * click on the box after the box has toggled, and a click on the label text first, before
+     * the `<label>` passes it on to the box, so the text's click reaches your `onClick` twice
+     * (the text's own, then the box's), as on any `<label>`; `preventDefault()` on the text's
+     * click keeps the label from passing it on (no toggle). It is not called while the checkbox
+     * is `disabled` or `disabledFocusable`, as the checkbox does not toggle then.
+     */
+    root?: SlotPart<'label'>;
+    /**
      * The `role="checkbox"` `<button>` that draws the box, the focusable control (stable class
-     * `wave-checkbox__indicator`; `controlRef` reaches it as well). Locked: `id`, `type`,
+     * `wave-checkbox__indicator`; the Checkbox's `ref` reaches it as well). Locked: `id`, `type`,
      * `role`, `aria-checked`, `disabled`, `tabIndex`, `autoFocus`, the attributes of
      * `disabledFocusable`, the naming and Field attributes routed to it (`aria-label`,
      * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `aria-disabled`),
@@ -180,11 +197,12 @@ export interface CheckboxProps extends Omit<
  * A checkbox for a boolean (or mixed) choice, drawn as a `role="checkbox"` button inside a
  * `<label>`.
  *
- * - The root `<label>` receives `ref`, `className`, `style` and `data-*`; the control receives
- *   `id`, `aria-label`/`-labelledby`/`-describedby`/`-invalid`/`-required`/`-errormessage`/
- *   `-details`/`-disabled`, `tabIndex`, `autoFocus` and the click, focus and key handlers
- *   (`controlRef` exposes it). A consumer `onClick` runs once per activation, before the toggle;
- *   `preventDefault()` in it cancels the toggle.
+ * - `ref` reaches the control; the root `<label>` receives `className`, `style` and `data-*`
+ *   (`slotProps.root.ref` reaches it); the control receives `id`,
+ *   `aria-label`/`-labelledby`/`-describedby`/`-invalid`/`-required`/`-errormessage`/
+ *   `-details`/`-disabled`, `tabIndex`, `autoFocus` and the click, focus and key handlers. A
+ *   consumer `onClick` runs once per activation, before the toggle; `preventDefault()` in it
+ *   cancels the toggle.
  * - Inside a `Field` it is named by the Field label (followed by its own `label` text) and described
  *   by the Field message and hint.
  * - With `name` (or `required`) it takes part in native forms like `<input type="checkbox">`, and
@@ -228,8 +246,8 @@ export const Checkbox = ({
   onBlur,
   onKeyDown,
   onKeyUp,
-  controlRef,
   className,
+  style,
   children,
   ref,
   slotProps,
@@ -278,7 +296,7 @@ export const Checkbox = ({
       : fieldProps['aria-labelledby'];
 
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const mergedControlRef = useMergedRefs(buttonRef, controlRef, slotProps?.indicator?.ref);
+  const mergedControlRef = useMergedRefs(buttonRef, ref, slotProps?.indicator?.ref);
   useFormReset(buttonRef, () => setChecked(defaultChecked), form);
 
   const on = checked || indeterminate;
@@ -362,27 +380,37 @@ export const Checkbox = ({
     // is not.
     blockHandlers: disabledFocusable ? BLOCK_CLICK : undefined,
   });
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: cn(
+      checkboxClassNames.root,
+      // items-start: the box lines up with the first line of a label that wraps or has a second
+      // line, not with its middle.
+      'relative inline-flex items-start gap-2 select-none',
+      // The dimmed look lifts while a focus ring shows inside the root (the control's, under
+      // disabledFocusable, or a link's in the label): opacity would dim the ring below 3:1.
+      unavailable
+        ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
+        : 'cursor-pointer',
+      className,
+    ),
+    style,
+    locked: {
+      'data-label-position': labelPosition,
+      'data-size': resolvedSize,
+      'data-shape': resolvedShape,
+      // The Checkbox's own root props, after the data attributes as in 0.18, and over the
+      // part's; the root holds the box, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+    // The label passes a click to the box, which does not toggle while unavailable.
+    blockHandlers: unavailable ? BLOCK_CLICK : undefined,
+  });
 
   return (
-    <label
-      ref={ref}
-      data-label-position={labelPosition}
-      data-size={resolvedSize}
-      data-shape={resolvedShape}
-      className={cn(
-        checkboxClassNames.root,
-        // items-start: the box lines up with the first line of a label that wraps or has a second
-        // line, not with its middle.
-        'relative inline-flex items-start gap-2 select-none',
-        // The dimmed look lifts while a focus ring shows inside the root (the control's, under
-        // disabledFocusable, or a link's in the label): opacity would dim the ring below 3:1.
-        unavailable
-          ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
-          : 'cursor-pointer',
-        className,
-      )}
-      {...rest}
-    >
+    <label {...rootProps}>
       {labelPosition === 'before' && labelText}
       <button
         // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).

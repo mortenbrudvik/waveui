@@ -1187,6 +1187,43 @@ describe('testForwardRef', () => {
     ).toThrow(/needs a `control`/);
   });
 
+  it("throws at registration on a control.tag without ref: 'control', which would be ignored", () => {
+    const tagOnly = /control\.tag is asserted only with ref: 'control'/;
+    for (const ref of [undefined, 'root'] as const) {
+      expect(() =>
+        collect(() =>
+          testForwardRef(
+            RoutedCheck,
+            'span',
+            {},
+            { ref, control: { role: 'checkbox', tag: 'button' } },
+          ),
+        ),
+      ).toThrow(tagOnly);
+      expect(() =>
+        collect(() =>
+          testSystemProps(RoutedCheck, {
+            expectedTag: 'span',
+            displayName: 'RoutedCheck',
+            a11y: false,
+            ref,
+            control: { role: 'checkbox', tag: 'button' },
+          }),
+        ),
+      ).toThrow(tagOnly);
+    }
+    // A control without a tag still serves testRestSpread, and the root's ref test registers.
+    const tests = collect(() =>
+      testSystemProps(RoutedCheck, {
+        expectedTag: 'span',
+        displayName: 'RoutedCheck',
+        a11y: false,
+        control: { role: 'checkbox' },
+      }),
+    );
+    expect(tests.map((t) => t.name)[0]).toBe('forwards ref to DOM element');
+  });
+
   it("ref: 'control': a DOM-rendering wrapper does not change what ref must reach", async () => {
     const options = {
       ref: 'control',

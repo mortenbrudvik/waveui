@@ -234,14 +234,18 @@ export const SLOT_PROPS_KEYS = {
  * rule (Phase 14, R5): a component is an owner when its `ref` reaches a focusable element inside
  * its root, so `ref` no longer names the wrapper and `slotProps.root.ref` is the way to reach it
  * (Input, whose `root` and `input` are one `<input>` without content slots, and the wrapper and
- * the input with them, is the first). A component whose `ref` is its root has no need of the part
- * and is no owner, so it declares no `root` (the owners' type test requires `root` exactly for
- * the owners listed here). Each rollout task that moves a `ref` adds its component, in the change
- * that gives it the part: the type test forces an owner to declare `root`, so none is listed
- * earlier.
+ * the input with them, is the first; Checkbox, Switch and `RadioGroup.Item`, whose roots are
+ * `<label>`s around a `role` button, follow). A component whose `ref` is its root has no need of
+ * the part and is no owner, so it declares no `root` (the owners' type test requires `root`
+ * exactly for the owners listed here). Each rollout task that moves a `ref` adds its component,
+ * in the change that gives it the part: the type test forces an owner to declare `root`, so none
+ * is listed earlier.
  */
 export const SLOT_PROPS_ROOT_OWNERS = [
   'inputClassNames',
+  'checkboxClassNames',
+  'switchClassNames',
+  'radioGroupItemClassNames',
 ] as const satisfies readonly ClassNameConstant[];
 
 /** The parts that a named slot prop already fills (R2); see the module's JSDoc for the rule. */

@@ -203,7 +203,9 @@ export interface ControlQuery {
   role: string;
   /**
    * Tag name of the control (`'input'`, `'button'`). Asserted only by `ref: 'control'` (see
-   * {@link TestSystemPropsConfig.ref}), on the element `ref` must reach.
+   * {@link TestSystemPropsConfig.ref}), on the element `ref` must reach; given without
+   * `ref: 'control'`, {@link testForwardRef} (and so {@link testSystemProps}) throws at
+   * registration instead of ignoring it.
    */
   tag?: string;
 }
@@ -527,6 +529,14 @@ export interface ForwardRefOptions extends RenderHelperOptions {
  *   that carries `data-testid` is still the root (its tag is `expectedTag`) and contains the
  *   control. A `ref` left on the root fails, unless the control is the root.
  *
+ * The control is found by its role alone, with no name filter: the role must be unique in the
+ * render (`props` and `wrapper` included), or `getByRole` throws on several matches. A component
+ * that renders a second element of the role (a nested control in a label, a listbox option)
+ * cannot use `'control'` here; test its `ref` by hand.
+ *
+ * Throws at registration when `ref` is `'control'` without `control`, or when `control.tag` is
+ * given without `ref: 'control'` (the tag would be ignored).
+ *
  * @param Component   The component under test.
  * @param expectedTag Tag name of the root element (e.g. `'button'`), also with `ref: 'control'`.
  * @param props       Props every render needs (e.g. `{ children: 'Save' }`).
@@ -538,6 +548,11 @@ export function testForwardRef<P extends object>(
   props: TestProps<NoInfer<P>> = {},
   options: ForwardRefOptions = {},
 ): void {
+  if (options.control?.tag !== undefined && options.ref !== 'control') {
+    throw new Error(
+      "testForwardRef: control.tag is asserted only with ref: 'control'; pass ref: 'control' or drop the tag",
+    );
+  }
   if (options.ref === 'control') {
     const { control } = options;
     if (!control) {
@@ -586,7 +601,8 @@ export interface RootPartRefOptions<P> extends RenderHelperOptions {
  * Renders the component with `data-testid` (the root, as {@link testRestSpread} requires) and
  * `slotProps={{ root: { ref } }}`, and asserts `ref.current` is the element that carries the
  * `data-testid`. A root part that drops the ref (`null`), or hands it to the control, fails.
- * Parts of `props.slotProps` are kept.
+ * Parts of `props.slotProps` are kept. A component whose rest props reach its control instead of
+ * its root (`RadioGroup.Item`) cannot use it: find its root another way in a test of its own.
  *
  * @example
  * testRootPartRef(Switch, { props: { label: 'Wi-Fi' } });
@@ -923,8 +939,9 @@ export interface TestSystemPropsConfig<P> {
    * `data-testid`, which is also `expectedTag`'s element; `'control'` the focusable element
    * inside that root, `ref.current` being the element `getByRole(control.role)` finds (with
    * `control.tag`, an element of that tag), while `expectedTag` still names the root. Needs
-   * `control`. For a component with `ref: 'control'`, add {@link testRootPartRef} for its
-   * `slotProps.root.ref`.
+   * `control`, whose role must be unique in the render (no name filter: see
+   * {@link testForwardRef}); a `control.tag` without `'control'` throws at registration. For a
+   * component with `ref: 'control'`, add {@link testRootPartRef} for its `slotProps.root.ref`.
    * @default 'root'
    */
   ref?: 'root' | 'control';

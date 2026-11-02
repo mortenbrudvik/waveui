@@ -1391,7 +1391,7 @@ describe('RadioGroup — types', () => {
 
 describe('RadioGroup.Item — slotProps', () => {
   type ItemSlotProps = NonNullable<RadioGroupItemProps['slotProps']>;
-  const EVERY_PART: ItemSlotProps = { indicator: {}, label: {} };
+  const EVERY_PART: ItemSlotProps = { root: {}, indicator: {}, label: {} };
 
   it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
     // Captured from 17abc07: the merged props may put the class before the locked attributes.
@@ -1432,6 +1432,8 @@ describe('RadioGroup.Item — slotProps', () => {
       { 'aria-label': 'One' },
       { label: 'One', 'aria-describedby': 'd', 'data-x': '1', style: { color: 'red' }, title: 't' },
       { label: 'One', id: 'own', role: 'radio', tabIndex: 3 },
+      // The item's own props: on the root only its className, the rest on the radio.
+      { label: 'One', className: 'c', hidden: true, inert: true, 'aria-hidden': true },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -1721,8 +1723,11 @@ describe('RadioGroup.Item — slotProps', () => {
   });
 
   it('types each part for its element, and takes no children', () => {
-    expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<'indicator' | 'label'>();
+    expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<'root' | 'indicator' | 'label'>();
     expectTypeOf<RadioItemProps['slotProps']>().toEqualTypeOf<RadioGroupItemProps['slotProps']>();
+    expectTypeOf<NonNullable<ItemSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLabelElement> | undefined
+    >();
     expectTypeOf<NonNullable<ItemSlotProps['indicator']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLButtonElement> | undefined
     >();
@@ -1731,5 +1736,169 @@ describe('RadioGroup.Item — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the item draws the dot
     void (<RadioGroup.Item value="a" slotProps={{ indicator: { children: '•' } }} />);
+    // @ts-expect-error -- a part takes no children: the item draws its content
+    void (<RadioGroup.Item value="a" slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  // The root <label> was reachable by no ref before 1.0 (its `ref` reaches the radio, as do its
+  // rest props); `slotProps.root` opens it. testRootPartRef cannot find it by `data-testid`, which
+  // reaches the radio, so these tests find it from the radio.
+  describe('the root part', () => {
+    const radioNamed = (name: string) => screen.getByRole('radio', { name, hidden: true });
+    const rootOf = (name: string) => radioNamed(name).closest('label') as HTMLElement;
+
+    it('gives slotProps.root.ref the root <label>, while ref reaches the radio', () => {
+      const root = React.createRef<HTMLLabelElement>();
+      const ref = React.createRef<HTMLButtonElement>();
+      render(
+        <RadioGroup aria-label="Choice">
+          <RadioGroup.Item ref={ref} value="a" label="One" slotProps={{ root: { ref: root } }} />
+        </RadioGroup>,
+      );
+      expect(root.current).toBe(rootOf('One'));
+      expect(root.current?.tagName).toBe('LABEL');
+      expect(ref.current).toBe(radioNamed('One'));
+    });
+
+    it("puts your className, style, data-* and attributes on the root <label>, after the item's className", () => {
+      render(
+        <RadioGroup aria-label="Choice">
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            className="mine"
+            style={{ width: 10 }}
+            slotProps={{
+              root: {
+                className: 'my-root',
+                style: { color: 'red' },
+                'data-part': 'root',
+                title: 'R',
+              },
+            }}
+          />
+        </RadioGroup>,
+      );
+      const root = rootOf('One');
+      expect(root.classList[0]).toBe(radioGroupItemClassNames.root);
+      expect(root.className).toMatch(/ mine my-root$/);
+      expect(root).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+      expect(root).toHaveAttribute('data-part', 'root');
+      expect(root).toHaveAttribute('title', 'R');
+      // The item's own style and attributes stay on the radio.
+      expect(radioNamed('One')).toHaveStyle({ width: '10px' });
+      expect(radioNamed('One')).not.toHaveAttribute('data-part');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(
+        <RadioGroup aria-label="Choice">
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            slotProps={{ root: { className: 'items-center' } }}
+          />
+        </RadioGroup>,
+      );
+      expect(rootOf('One')).toHaveClass('items-center');
+      expect(rootOf('One')).not.toHaveClass('items-start');
+    });
+
+    it('keeps the radio reachable: a part sets no hidden, inert or aria-hidden on the root', () => {
+      render(
+        <RadioGroup aria-label="Choice">
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            slotProps={{ root: { hidden: true, inert: true, 'aria-hidden': true } }}
+          />
+        </RadioGroup>,
+      );
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(rootOf('One')).not.toHaveAttribute(attribute);
+      }
+    });
+
+    // A click on the label text reaches the root, then the <label> passes it to the radio, whose
+    // own click bubbles to the root again: the browser's label behaviour. It selects once.
+    it('selects once per click on the text or the radio, your root onClick seeing each click as it bubbles (StrictMode)', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const targets: EventTarget[] = [];
+      render(
+        <React.StrictMode>
+          <RadioGroup aria-label="Choice" onValueChange={onValueChange}>
+            <RadioGroup.Item
+              value="a"
+              label="One"
+              slotProps={{ root: { onClick: (event) => targets.push(event.target) } }}
+            />
+            <RadioGroup.Item value="b" label="Two" />
+          </RadioGroup>
+        </React.StrictMode>,
+      );
+      const text = screen.getByText('One');
+      await user.click(text);
+      expect(targets).toEqual([text, radioNamed('One')]);
+      expect(onValueChange.mock.calls).toEqual([['a']]);
+      await user.click(radioNamed('Two'));
+      targets.length = 0;
+      await user.click(radioNamed('One'));
+      expect(targets).toEqual([radioNamed('One')]);
+      expect(onValueChange.mock.calls).toEqual([['a'], ['b'], ['a']]);
+    });
+
+    it('keeps the label text from selecting when your root onClick prevents the default; the radio handles its own click first', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <RadioGroup aria-label="Choice" onValueChange={onValueChange}>
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+          />
+        </RadioGroup>,
+      );
+      await user.click(screen.getByText('One'));
+      expect(radioNamed('One')).toHaveAttribute('aria-checked', 'false');
+      expect(onValueChange).not.toHaveBeenCalled();
+      await user.click(radioNamed('One'));
+      expect(onValueChange.mock.calls).toEqual([['a']]);
+    });
+
+    it.each([
+      ['disabled by the item', {}, { disabled: true }],
+      ['disabled by the group', { disabled: true }, {}],
+    ] as const)('neither calls your root onClick nor selects while %s', async (_, group, item) => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onValueChange = vi.fn();
+      render(
+        <RadioGroup aria-label="Choice" onValueChange={onValueChange} {...group}>
+          <RadioGroup.Item value="a" label="One" {...item} slotProps={{ root: { onClick } }} />
+        </RadioGroup>,
+      );
+      await user.click(screen.getByText('One'));
+      fireEvent.click(rootOf('One'));
+      fireEvent.click(radioNamed('One'));
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(radioNamed('One')).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <RadioGroup aria-label="Choice" defaultValue="a">
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            slotProps={{ root: { className: 'mine', title: 'R' } }}
+          />
+          <RadioGroup.Item value="b" label="Two" />
+        </RadioGroup>,
+      );
+      await expectNoA11yViolations();
+    });
   });
 });

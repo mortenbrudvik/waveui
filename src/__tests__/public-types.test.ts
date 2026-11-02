@@ -2441,6 +2441,7 @@ describe('0.18 customization surface from the package entry', () => {
       secondaryText?: SlotPart<'span'>;
     }>();
     expectTypeOf<NonNullable<SwitchProps['slotProps']>>().toEqualTypeOf<{
+      root?: SlotPart<'label'>;
       track?: SlotPart<'button'>;
       thumb?: SlotPart<'span'>;
       label?: SlotPart<'span'>;
