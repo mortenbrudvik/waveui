@@ -3,7 +3,12 @@ import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { inputClassNames } from '../../lib/classNames';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart, type SlotPartWithRef } from '../../lib/slotProps';
+import {
+  mergeSlotProps,
+  ROVING_PART_LOCKS,
+  type SlotPart,
+  type SlotPartWithRef,
+} from '../../lib/slotProps';
 import {
   inputAppearanceClasses,
   inputFocus,
@@ -198,7 +203,11 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
      * applies after it. Locked in both shapes: `hidden`, the Input's own. On the `<span>`, also
      * `data-size` and `data-appearance`, and `inert` and `aria-hidden` unset (the input inside
      * stays reachable), and your `onClick` is not called while the Input is `disabled`, as a
-     * disabled `<input>` calls none; on the `<input>`, the locked attributes of `input`.
+     * disabled `<input>` calls none; on the `<input>`, the locked attributes of `input`. In both
+     * shapes this part sets no `role`, `tabIndex` and the roving markers (`data-roving-container`,
+     * `data-roving-disabled`, `data-roving-value`, `aria-disabled`): in a toolbar or another roving
+     * container the root is never a control of its own and never hides the input from the arrow
+     * order.
      */
     root?: SlotPartWithRef<'span', HTMLElement>;
     /**
@@ -346,8 +355,10 @@ export const Input = ({
         className,
       ),
       style,
-      // The wrapper holds the input: a part neither hides it nor takes it out of reach.
-      locked: { hidden, inert: undefined, 'aria-hidden': undefined, ...look },
+      // The wrapper holds the input: a part neither hides it nor takes it out of reach, nor (in a
+      // toolbar or another roving container) makes it a composite that hides the input, an item
+      // or a second tab stop.
+      locked: { hidden, inert: undefined, 'aria-hidden': undefined, ...ROVING_PART_LOCKS, ...look },
       // A disabled Input activates nothing: no click handler of the wrapper either.
       blockHandlers: props.disabled ? BLOCK_CLICK : undefined,
     });
@@ -385,10 +396,15 @@ export const Input = ({
       </span>
     );
   } else {
-    // One element: the root part, then the input part, which wins a prop both set.
+    // One element: the root part, then the input part, which wins a prop both set. The root part
+    // sets no role, tab stop or roving marker here either, as on the wrapper with content slots.
+    const rootPart: NonNullable<InputProps['slotProps']>['root'] = slotProps?.root && {
+      ...slotProps.root,
+      ...ROVING_PART_LOCKS,
+    };
     control = (
       <input
-        {...mergeSlotProps([slotProps?.root, slotProps?.input], {
+        {...mergeSlotProps([rootPart, slotProps?.input], {
           className: wcn(
             inputClassNames.root,
             inputClassNames.input,

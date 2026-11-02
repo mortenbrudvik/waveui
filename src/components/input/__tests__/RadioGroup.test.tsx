@@ -1928,4 +1928,59 @@ describe('RadioGroup.Item — slotProps', () => {
       await expectNoA11yViolations();
     });
   });
+
+  // CLAUDE.md, Testing, "Roving markers" (ruling BO): the root and the label text sit in the
+  // group's roving container, which reads roles, tab indexes and markers on every element. Each
+  // part is tried with all of them at once; each lock is proven by the attribute it keeps off
+  // and by the arrow order with exactly one tab stop.
+  describe('the roving markers of the root and label parts', () => {
+    const ATTEMPT = {
+      role: 'radiogroup',
+      tabIndex: 0,
+      'data-roving-container': '',
+      'data-roving-disabled': '',
+      'data-roving-value': 'z',
+      'aria-disabled': true,
+    };
+    const ATTRIBUTES = [
+      'role',
+      'tabindex',
+      'data-roving-container',
+      'data-roving-disabled',
+      'data-roving-value',
+      'aria-disabled',
+    ];
+
+    it.each([
+      ['root', (name: string) => radio(name).closest('label') as HTMLElement],
+      ['label', (name: string) => screen.getByText(name)],
+    ] as const)(
+      'keeps the item in the arrow order with one tab stop when the %s part tries every marker',
+      async (part, elementOf) => {
+        const user = userEvent.setup();
+        render(
+          <RadioGroup aria-label="Choice" defaultValue="a">
+            <RadioGroup.Item value="a" label="One" />
+            <RadioGroup.Item value="b" label="Two" slotProps={{ [part]: ATTEMPT }} />
+            <RadioGroup.Item value="c" label="Three" />
+          </RadioGroup>,
+        );
+        const group = screen.getByRole('radiogroup', { name: 'Choice' });
+        for (const attribute of ATTRIBUTES) {
+          expect(elementOf('Two'), attribute).not.toHaveAttribute(attribute);
+        }
+        expect(group.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+        await user.tab();
+        expect(radio('One')).toHaveFocus();
+        const order: string[] = [];
+        for (let step = 0; step < 3; step++) {
+          await user.keyboard('{ArrowDown}');
+          order.push(document.activeElement?.getAttribute('data-roving-value') ?? '');
+          expect(document.activeElement).toHaveAttribute('aria-checked', 'true');
+          expect(group.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+        }
+        expect(order).toEqual(['b', 'c', 'a']);
+      },
+    );
+  });
 });

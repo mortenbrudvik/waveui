@@ -755,6 +755,8 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'NATIVE_NO_CAPTURE_EVENTS',
       'NATIVE_TAG_PROPS',
       'PENDING_SLOT_PARTS',
+      // 1.0 (ruling BO): the roving markers a part that holds a control locks unset.
+      'ROVING_PART_LOCKS',
       'RadioGroupContext',
       'SLOT_PART_EXCLUSIONS',
       'SLOT_PROPS_KEYS',
@@ -12695,5 +12697,144 @@ describe('1.0: ref reaches the control of a composite control (R5)', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
       expect(control).toHaveFocus();
     });
+  });
+});
+
+// Ruling BO: the root of a composite control holds the control, and a toolbar's roving hook takes
+// any element with a tabindex for a control and reads roles and markers on each. The root part of
+// every owner tries all of them at once, and stays no control of its own: the control is the next
+// stop after the toolbar's first button, with exactly one tab stop before and after.
+describe('1.0: a root part in a Toolbar sets no role, tab stop or roving marker (ruling BO)', () => {
+  const ATTEMPT = {
+    role: 'radiogroup',
+    tabIndex: 0,
+    'data-roving-container': '',
+    'data-roving-disabled': '',
+    'data-roving-value': 'z',
+    'aria-disabled': true,
+  };
+  const ATTRIBUTES = [
+    'role',
+    'tabindex',
+    'data-roving-container',
+    'data-roving-disabled',
+    'data-roving-value',
+    'aria-disabled',
+  ];
+  const root = { root: ATTEMPT };
+  const options = [
+    <Dropdown.Option key="a" value="apple">
+      Apple
+    </Dropdown.Option>,
+  ];
+  const red = { h: 0, s: 1, v: 1 };
+  const cases: [string, () => React.ReactNode, () => HTMLElement, (() => HTMLElement)?][] = [
+    ['Checkbox', () => <Checkbox label="X" slotProps={root} />, () => screen.getByRole('checkbox')],
+    ['Switch', () => <Switch label="X" slotProps={root} />, () => screen.getByRole('switch')],
+    [
+      'Input with content',
+      () => <Input aria-label="X" contentBefore="$" slotProps={root} />,
+      () => screen.getByRole('textbox', { name: 'X' }),
+    ],
+    [
+      'Input',
+      () => <Input aria-label="X" slotProps={root} />,
+      () => screen.getByRole('textbox', { name: 'X' }),
+    ],
+    [
+      'SearchBox',
+      () => <SearchBox aria-label="X" slotProps={root} />,
+      () => screen.getByRole('searchbox', { name: 'X' }),
+    ],
+    [
+      'SpinButton',
+      () => <SpinButton aria-label="X" slotProps={root} />,
+      () => screen.getByRole('spinbutton', { name: 'X' }),
+    ],
+    [
+      'Combobox',
+      () => (
+        <Combobox aria-label="X" slotProps={root}>
+          {options}
+        </Combobox>
+      ),
+      () => screen.getByRole('combobox', { name: 'X' }),
+    ],
+    [
+      'Dropdown',
+      () => (
+        <Dropdown aria-label="X" slotProps={root}>
+          {options}
+        </Dropdown>
+      ),
+      () => screen.getByRole('combobox', { name: 'X' }),
+    ],
+    [
+      'DatePicker',
+      () => <DatePicker aria-label="X" locale="en-US" slotProps={root} />,
+      () => screen.getByRole('textbox', { name: 'X' }),
+    ],
+    [
+      'TimePicker',
+      () => <TimePicker aria-label="X" slotProps={root} />,
+      () => screen.getByRole('combobox', { name: 'X' }),
+    ],
+    [
+      'TagPicker',
+      () => <TagPicker aria-label="X" options={[{ value: 'a', label: 'A' }]} slotProps={root} />,
+      () => screen.getByRole('combobox', { name: 'X' }),
+    ],
+    [
+      'ColorSlider',
+      () => <ColorSlider aria-label="X" defaultValue={red} slotProps={root} />,
+      () => screen.getByRole('slider', { name: 'X' }),
+    ],
+    [
+      'AlphaSlider',
+      () => <AlphaSlider aria-label="X" defaultValue={red} slotProps={root} />,
+      () => screen.getByRole('slider', { name: 'X' }),
+    ],
+    [
+      'ColorPicker.HexField',
+      () => (
+        <ColorPicker aria-label="Accent">
+          <ColorPicker.HexField slotProps={root} />
+        </ColorPicker>
+      ),
+      () => screen.getByRole('textbox'),
+      () => screen.getByRole('textbox').closest('label') as HTMLElement,
+    ],
+  ];
+
+  it.each(cases)('%s', async (_, ui, control, rootOf) => {
+    const user = userEvent.setup();
+    render(
+      <Toolbar aria-label="Tools">
+        <Button>Bold</Button>
+        {ui()}
+        <Button>Italic</Button>
+      </Toolbar>,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Tools' });
+    const marked = toolbar.querySelectorAll('[data-roving-value="z"], [data-roving-disabled]');
+    expect(marked).toHaveLength(0);
+    // The root: the element between the two buttons, but HexField's, inside the picker.
+    const rootElement =
+      rootOf?.() ?? screen.getByRole('button', { name: 'Bold' }).nextElementSibling;
+    expect(rootElement?.contains(control())).toBe(true);
+    for (const attribute of ATTRIBUTES) {
+      // An Input without content is its own root, which the toolbar stamps as its item (a tab
+      // index and a roving value of its own; the part's value is the one checked above).
+      if (rootElement === control() && ['tabindex', 'data-roving-value'].includes(attribute)) {
+        continue;
+      }
+      expect(rootElement, attribute).not.toHaveAttribute(attribute);
+    }
+    expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Bold' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(control()).toHaveFocus();
+    expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
   });
 });

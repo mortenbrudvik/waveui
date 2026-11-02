@@ -156,6 +156,26 @@ export const HIDDEN_PART_LOCKS = {
 } as const;
 
 /**
+ * What a part that holds a control of a roving container, a toolbar or a grid locks unset
+ * (module-only): the role and the tab stop, and the markers the roving hook reads on every
+ * candidate (`data-roving-container`, `data-roving-disabled`, `data-roving-value`,
+ * `aria-disabled`), so a part can make the element neither a nested composite that hides the
+ * control from the arrow order, nor an item or a second tab stop of its own: the label part of
+ * RadioGroup.Item, and the root part of every component whose `ref` reaches a control inside its
+ * root (Checkbox, Switch, `RadioGroup.Item`, Input, the pickers, the sliders), which a toolbar's
+ * `[tabindex]` selector would otherwise take for a control. Spread it into the part's `locked`
+ * object, before the component's own attributes.
+ */
+export const ROVING_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  'data-roving-disabled': undefined,
+  'data-roving-value': undefined,
+  'aria-disabled': undefined,
+} as const;
+
+/**
  * What a button part locks before the button's own attributes (module-only): a button `type`, and
  * unset the tab stop, the native and the focusable disabled state and the keys of
  * {@link HIDDEN_PART_LOCKS}, so a part can change neither whether the button works nor whether it

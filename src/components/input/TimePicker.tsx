@@ -7,7 +7,12 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
-import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  lockPositionStyle,
+  mergeSlotProps,
+  ROVING_PART_LOCKS,
+  type SlotPart,
+} from '../../lib/slotProps';
 import {
   disabledStyles,
   focusRing,
@@ -343,14 +348,17 @@ export interface TimePickerProps extends Omit<
      * The root `<div>` around the input and its buttons, the error message and the list while
      * closed (stable class `wave-time-picker`), which the TimePicker's `className`, `style`,
      * `data-*` and other root props reach as well; its `ref` is the way to the root, since the
-     * TimePicker's `ref` reaches the input. Your classes come after the TimePicker's
-     * `className`, your style over its `style`. Locked: every prop you give the TimePicker
-     * itself that reaches the root, `data-size`, `data-appearance`, and `hidden`, `inert` and
-     * `aria-hidden` (the TimePicker's own: the root holds the input). Your handlers run before
-     * the TimePicker's own root handlers (`preventDefault()` in yours skips them). The root
-     * passes no click to the input, so your `onClick` is called in every state, as the
-     * TimePicker's own `onClick` is. Your ref joins the TimePicker's own, which keeps a press
-     * inside the root from dismissing the open list.
+     * TimePicker's `ref` reaches the input. Your classes come after the TimePicker's `className`,
+     * your style over its `style`. Locked: every prop you give the TimePicker itself that reaches
+     * the root, `data-size`, `data-appearance`, and `hidden`, `inert` and `aria-hidden` (the
+     * TimePicker's own: the root holds the input). Also locked, unset: `role`, `tabIndex` and the
+     * roving markers (`data-roving-container`, `data-roving-disabled`, `data-roving-value`,
+     * `aria-disabled`), so in a toolbar or another roving container the root is never a control of
+     * its own and never hides the control from the arrow order. Your handlers run before the
+     * TimePicker's own root handlers (`preventDefault()` in yours skips them). The root passes no
+     * click to the input, so your `onClick` is called in every state, as the TimePicker's own
+     * `onClick` is. Your ref joins the TimePicker's own, which keeps a press inside the root from
+     * dismissing the open list.
      */
     root?: SlotPart<'div'>;
     /**
@@ -1017,6 +1025,9 @@ export const TimePicker = (props: TimePickerProps) => {
     locked: {
       'data-size': size,
       'data-appearance': appearance,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
       // The TimePicker's own root props, after the data attributes as in 0.18, and over the
       // part's; the root holds the input, so only they hide it or take it out of reach.
       ...rest,

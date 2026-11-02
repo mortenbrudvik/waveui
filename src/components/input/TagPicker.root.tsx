@@ -4,7 +4,7 @@ import { wcn } from '../../lib/cn';
 import { tagPickerClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import type { Slot } from '../../lib/slot';
-import { composeAfterPart, mergeSlotProps } from '../../lib/slotProps';
+import { composeAfterPart, mergeSlotProps, ROVING_PART_LOCKS } from '../../lib/slotProps';
 import type { SlotPart } from '../../lib/slotProps';
 import type {
   CoreSize,
@@ -323,11 +323,14 @@ export interface TagPickerProps extends Omit<
      * the root, since TagPicker's `ref` reaches the trigger. Your classes come after TagPicker's
      * `className`, your style over its `style`. Locked: every prop you give TagPicker itself that
      * reaches the root, `data-size`, `data-appearance`, `data-overflow`, `data-collapsed`, and
-     * `hidden`, `inert` and `aria-hidden` (TagPicker's own: the root holds the trigger). Your
-     * handlers run before TagPicker's own root handlers (`preventDefault()` in yours skips
-     * them); the tracking of focus inside the root, which the single-line layout reads, runs
-     * after your `onFocus` and `onBlur`, also when they prevent the default. The root passes no
-     * click to the trigger, so your `onClick` is called in every state, as TagPicker's own
+     * `hidden`, `inert` and `aria-hidden` (TagPicker's own: the root holds the trigger). Also
+     * locked, unset: `role`, `tabIndex` and the roving markers (`data-roving-container`,
+     * `data-roving-disabled`, `data-roving-value`, `aria-disabled`), so in a toolbar or another
+     * roving container the root is never a control of its own and never hides the control from the
+     * arrow order. Your handlers run before TagPicker's own root handlers (`preventDefault()` in
+     * yours skips them); the tracking of focus inside the root, which the single-line layout reads,
+     * runs after your `onFocus` and `onBlur`, also when they prevent the default. The root passes
+     * no click to the trigger, so your `onClick` is called in every state, as TagPicker's own
      * `onClick` is. Your ref joins TagPicker's own, which keeps a press inside the root from
      * dismissing the open list and which a form reset reads.
      */
@@ -1069,6 +1072,9 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       'data-appearance': appearance,
       'data-overflow': overflow,
       'data-collapsed': collapsed ? '' : undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
       // TagPicker's own root props, after the data attributes as in 0.18, and over the part's;
       // the root holds the trigger, so only they hide it or take it out of reach.
       ...rest,

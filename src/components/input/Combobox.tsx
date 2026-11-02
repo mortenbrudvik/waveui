@@ -6,7 +6,7 @@ import { warnOnce } from '../../lib/dev';
 import { isFocused } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import {
   disabledStyles,
   focusRing,
@@ -373,10 +373,13 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
      * Combobox's `className`, `style`, `data-*` and other root props reach as well; its `ref` is
      * the way to the root, since the Combobox's `ref` reaches the input. Your classes come after
      * the Combobox's `className`, your style over its `style`. Locked: every prop you give the
-     * Combobox itself that reaches the root, `data-size`, `data-appearance`, and `hidden`,
-     * `inert` and `aria-hidden` (the Combobox's own: the root holds the input). Your handlers run
-     * before the Combobox's own root handlers (`preventDefault()` in yours skips them). The root
-     * passes no click to the input, so your `onClick` is called in every state, as the
+     * Combobox itself that reaches the root, `data-size`, `data-appearance`, and `hidden`, `inert`
+     * and `aria-hidden` (the Combobox's own: the root holds the input). Also locked, unset: `role`,
+     * `tabIndex` and the roving markers (`data-roving-container`, `data-roving-disabled`,
+     * `data-roving-value`, `aria-disabled`), so in a toolbar or another roving container the root
+     * is never a control of its own and never hides the control from the arrow order. Your handlers
+     * run before the Combobox's own root handlers (`preventDefault()` in yours skips them). The
+     * root passes no click to the input, so your `onClick` is called in every state, as the
      * Combobox's own `onClick` is. Your ref joins the Combobox's own, which keeps a press inside
      * the root from dismissing the open list.
      */
@@ -1071,6 +1074,9 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     locked: {
       'data-size': size,
       'data-appearance': appearance,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
       // The Combobox's own root props, after the data attributes as in 0.18, and over the part's;
       // the root holds the input, so only they hide it or take it out of reach.
       ...rest,

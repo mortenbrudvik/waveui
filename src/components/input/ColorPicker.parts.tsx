@@ -12,7 +12,7 @@ import {
 import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext } from '../../lib/dev';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import { inputFocus, inputInvalid } from '../../lib/styles';
 import type { ColorPickerShape, HsvColor } from '../../lib/types';
 import { isInvalidLook } from './Input';
@@ -310,18 +310,20 @@ export interface ColorPickerHexFieldProps extends React.HTMLAttributes<HTMLEleme
     /**
      * The root `<label>` around the caption, the input and the error (stable class
      * `wave-color-picker-hex-field`), which the field's `className`, `style`, `data-*` and other
-     * root props reach as well; its `ref` is the way to the label, since the field's `ref`
-     * reaches the input. Your classes come after the field's `className`, your style over its
-     * `style`. Locked: every prop you give the field itself that reaches the root, `htmlFor`
-     * (unset: the label labels the input it holds, and a `for` would send its clicks to another
-     * element), and `hidden`, `inert` and `aria-hidden` (the field's own: the root holds the
-     * input). Your handlers run before the field's own root handlers (`preventDefault()` in
-     * yours skips them). Your `onClick` sees every click inside the root as it bubbles: a click
-     * on the input once, and a click on the caption or the error first, before the `<label>`
-     * passes it on to the input (focusing it), so that click reaches your `onClick` twice (its
-     * own, then the input's), as on any `<label>`; `preventDefault()` on it keeps the label from
-     * passing it on. The field has no disabled state, so your `onClick` is called in every
-     * state.
+     * root props reach as well; its `ref` is the way to the label, since the field's `ref` reaches
+     * the input. Your classes come after the field's `className`, your style over its `style`.
+     * Locked: every prop you give the field itself that reaches the root, `htmlFor` (unset: the
+     * label labels the input it holds, and a `for` would send its clicks to another element), and
+     * `hidden`, `inert` and `aria-hidden` (the field's own: the root holds the input). Also locked,
+     * unset: `role`, `tabIndex` and the roving markers (`data-roving-container`,
+     * `data-roving-disabled`, `data-roving-value`, `aria-disabled`), so in a toolbar or another
+     * roving container the root is never a control of its own and never hides the control from the
+     * arrow order. Your handlers run before the field's own root handlers (`preventDefault()` in
+     * yours skips them). Your `onClick` sees every click inside the root as it bubbles: a click on
+     * the input once, and a click on the caption or the error first, before the `<label>` passes it
+     * on to the input (focusing it), so that click reaches your `onClick` twice (its own, then the
+     * input's), as on any `<label>`; `preventDefault()` on it keeps the label from passing it on.
+     * The field has no disabled state, so your `onClick` is called in every state.
      */
     root?: SlotPart<'label'>;
     /**
@@ -481,6 +483,9 @@ export const ColorPickerHexField = ({
       // The label labels the input it holds: a part's `for` would send the caption's clicks to
       // another element (the field's own, from untyped code, still wins below).
       htmlFor: undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
       // The field's own root props, over the part's; the root holds the input, so only they hide
       // it or take it out of reach.
       ...rest,

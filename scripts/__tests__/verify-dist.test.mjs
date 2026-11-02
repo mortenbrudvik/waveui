@@ -5017,6 +5017,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       'NATIVE_NO_CAPTURE_EVENTS',
       'NATIVE_TAG_PROPS',
       'PENDING_SLOT_PARTS',
+      'ROVING_PART_LOCKS',
       'RadioGroupContext',
       'RadioGroupItemsContextValue',
       'RadioItemState',

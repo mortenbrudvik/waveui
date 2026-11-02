@@ -4,7 +4,7 @@ import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { AddIcon, SubtractIcon } from '../../lib/icons';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import {
   inputAppearanceClasses,
   inputFocusWithin,
@@ -156,12 +156,15 @@ export interface SpinButtonBaseProps
      * The root `<div>` that draws the field around the step buttons and the input (stable class
      * `wave-spin-button`), which the SpinButton's `className`, `style`, `data-*` and other root
      * props reach as well; its `ref` is the way to the root, since the SpinButton's `ref` reaches
-     * the input. Your classes come after the SpinButton's `className`, your style over its
-     * `style`. Locked: every prop you give the SpinButton itself that reaches the root,
-     * `data-size`, `data-appearance`, and `hidden`, `inert` and `aria-hidden` (the SpinButton's
-     * own: the root holds the input). Your handlers run before the SpinButton's own root
-     * handlers (`preventDefault()` in yours skips them). The root passes no click to the input,
-     * so your `onClick` is called in every state, as the SpinButton's own `onClick` is.
+     * the input. Your classes come after the SpinButton's `className`, your style over its `style`.
+     * Locked: every prop you give the SpinButton itself that reaches the root, `data-size`,
+     * `data-appearance`, and `hidden`, `inert` and `aria-hidden` (the SpinButton's own: the root
+     * holds the input). Also locked, unset: `role`, `tabIndex` and the roving markers
+     * (`data-roving-container`, `data-roving-disabled`, `data-roving-value`, `aria-disabled`), so
+     * in a toolbar or another roving container the root is never a control of its own and never
+     * hides the control from the arrow order. Your handlers run before the SpinButton's own root
+     * handlers (`preventDefault()` in yours skips them). The root passes no click to the input, so
+     * your `onClick` is called in every state, as the SpinButton's own `onClick` is.
      */
     root?: SlotPart<'div'>;
     /**
@@ -846,6 +849,9 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     locked: {
       'data-size': size,
       'data-appearance': appearance,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
       // The SpinButton's own root props, after the data attributes as in 0.18, and over the
       // part's; the root holds the input, so only they hide it or take it out of reach.
       ...rest,

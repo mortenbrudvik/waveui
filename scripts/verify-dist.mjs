@@ -1074,6 +1074,7 @@ export const MODULE_ONLY_NAMES = [
   'PickerListboxSurface',
   'PresenceGroupEntry',
   'ROUNDS_DARKER',
+  'ROVING_PART_LOCKS',
   'RadioGroupContext',
   'RadioGroupItemsContextValue',
   'RadioItemState',

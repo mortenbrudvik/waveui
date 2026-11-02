@@ -5,7 +5,12 @@ import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
-import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  HIDDEN_PART_LOCKS,
+  mergeSlotProps,
+  ROVING_PART_LOCKS,
+  type SlotPart,
+} from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -242,9 +247,12 @@ export interface RadioItemProps extends Omit<
      * `wave-radio-group-item`), which the item's `className` reaches as well; its `ref` is the
      * one way to the label, since the item's `ref` and other props reach the radio. Your
      * classes come after the item's `className`. Locked: `htmlFor`, unset (the label labels the
-     * radio it holds, and a `for` would send its clicks to another element), and `hidden`,
-     * `inert` and `aria-hidden`, unset (the root holds the radio, which only the item's own
-     * props hide). Your `onClick` sees every click inside the root as it bubbles: a click on the
+     * radio it holds, and a `for` would send its clicks to another element), `hidden`, `inert`
+     * and `aria-hidden`, unset (the root holds the radio, which only the item's own props hide),
+     * and `role`, `tabIndex` and the roving markers the group reads (`data-roving-container`,
+     * `data-roving-disabled`, `data-roving-value`, `aria-disabled`), unset (the root sits in the
+     * group's arrow order: it is no composite that hides the radio, no item and no second tab
+     * stop). Your `onClick` sees every click inside the root as it bubbles: a click on the
      * radio after the radio is selected, and a click on the label text first, before the
      * `<label>` passes it on to the radio, so the text's click reaches your `onClick` twice (the
      * text's own, then the radio's), as on any `<label>`; `preventDefault()` on the text's click
@@ -268,11 +276,14 @@ export interface RadioItemProps extends Omit<
     /**
      * The `<span>` around the `label` text, rendered only with a `label` (stable class
      * `wave-radio-group-item__label`). Its classes come in the order: the element's own, then
-     * `labelClassName`, then this part's `className`. Locked: `id`, which names the radio, and
-     * `aria-label` unset (it would replace the text in the name). `hidden`, `inert` and
-     * `aria-hidden` stay yours: the radio's `aria-labelledby` still reads hidden text. Your
-     * `onClick` is not called while the radio is disabled (its own `disabled` or the group's),
-     * as the radio is not selected then.
+     * `labelClassName`, then this part's `className`. Locked: `id`, which names the radio,
+     * `aria-label` unset (it would replace the text in the name), and `role`, `tabIndex` and the
+     * roving markers the group reads (`data-roving-container`, `data-roving-disabled`,
+     * `data-roving-value`, `aria-disabled`), unset (the text sits in the group's roving
+     * container: it is no item, composite or tab stop; a link inside it keeps its own). `hidden`,
+     * `inert` and `aria-hidden` stay yours: the radio's `aria-labelledby` still reads hidden text.
+     * Your `onClick` is not called while the radio is disabled (its own `disabled` or the
+     * group's), as the radio is not selected then.
      */
     label?: SlotPart<'span'>;
   };
@@ -380,8 +391,9 @@ export function RadioItem({
       'wave:text-body-1 wave:text-foreground',
       labelClassName,
     ),
-    // The text names the control through aria-labelledby: an aria-label would replace it.
-    locked: { id: labelTextId, 'aria-label': undefined },
+    // The text names the control through aria-labelledby: an aria-label would replace it. The
+    // text sits in the group's roving container: a part makes it no item, tab stop or composite.
+    locked: { id: labelTextId, 'aria-label': undefined, ...ROVING_PART_LOCKS },
     blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
   });
   const rootProps = mergeSlotProps(slotProps?.root, {
@@ -398,8 +410,9 @@ export function RadioItem({
       className,
     ),
     // The root holds the radio: a part neither hides it nor takes it out of reach, nor sends the
-    // label's clicks to another element through a `for`.
-    locked: { htmlFor: undefined, ...HIDDEN_PART_LOCKS },
+    // label's clicks to another element through a `for`, nor makes it a composite that hides the
+    // radio from the group's arrow order, an item or a second tab stop.
+    locked: { htmlFor: undefined, ...HIDDEN_PART_LOCKS, ...ROVING_PART_LOCKS },
     // The label passes a click to the radio, which is not selected while disabled.
     blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
   });

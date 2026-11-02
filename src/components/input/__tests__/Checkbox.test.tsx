@@ -4,6 +4,8 @@ import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Checkbox } from '../Checkbox';
+import { Button } from '../../button/Button';
+import { Toolbar } from '../../button/Toolbar';
 import type { CheckboxLabelPosition, CheckboxProps } from '../Checkbox';
 import { checkboxClassNames } from '../../../lib/classNames';
 import {
@@ -1486,6 +1488,53 @@ describe('Checkbox — slotProps', () => {
   describe('the root part', () => {
     const control = () => screen.getByRole('checkbox', { name: 'Accept', hidden: true });
     const root = () => control().closest('label') as HTMLElement;
+
+    // CLAUDE.md, Testing, "Roving markers" (ruling BO): a toolbar's roving hook takes any element
+    // with a tabindex for a control and reads roles and markers on each, so the root, which holds
+    // the box, tries every one at once; each lock is proven by the attribute it keeps off and by
+    // the arrow order with exactly one tab stop.
+    it('keeps the box one control of a toolbar, with one tab stop, when the root tries every role and roving marker', async () => {
+      const user = userEvent.setup();
+      const ROVING_ATTEMPT = {
+        role: 'radiogroup',
+        tabIndex: 0,
+        'data-roving-container': '',
+        'data-roving-disabled': '',
+        'data-roving-value': 'z',
+        'aria-disabled': true,
+      };
+      render(
+        <Toolbar aria-label="View">
+          <Button appearance="subtle">Bold</Button>
+          <Checkbox label="Grid" slotProps={{ root: ROVING_ATTEMPT }} />
+          <Button appearance="subtle">Italic</Button>
+        </Toolbar>,
+      );
+      const toolbar = screen.getByRole('toolbar', { name: 'View' });
+      const item = screen.getByRole('checkbox', { name: 'Grid' });
+      const bold = screen.getByRole('button', { name: 'Bold' });
+      const italic = screen.getByRole('button', { name: 'Italic' });
+      for (const attribute of [
+        'role',
+        'tabindex',
+        'data-roving-container',
+        'data-roving-disabled',
+        'data-roving-value',
+        'aria-disabled',
+      ]) {
+        expect(item.closest('label'), attribute).not.toHaveAttribute(attribute);
+      }
+      expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      await user.tab();
+      expect(bold).toHaveFocus();
+      const order: Element[] = [];
+      for (let step = 0; step < 3; step++) {
+        await user.keyboard('{ArrowRight}');
+        order.push(document.activeElement as Element);
+        expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      }
+      expect(order).toEqual([item, italic, bold]);
+    });
 
     it("puts your className, style, data-* and attributes on the root <label>, after the Checkbox's className and style", () => {
       render(

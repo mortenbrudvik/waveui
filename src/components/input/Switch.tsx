@@ -5,7 +5,7 @@ import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { LabelPosition, Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -150,8 +150,11 @@ export interface SwitchProps extends Omit<
      * after the Switch's `className`, your style over its `style`. Locked: every prop you give
      * the Switch itself that reaches the root, `data-label-position`, `data-size`, `htmlFor`
      * (unset: the label labels the switch it holds, and a `for` would send its clicks to another
-     * element), and `hidden`, `inert` and `aria-hidden` (the Switch's own: the root holds the
-     * switch). Your handlers run before the Switch's own root handlers (`preventDefault()` in
+     * element), `hidden`, `inert` and `aria-hidden` (the Switch's own: the root holds the
+     * switch), and `role`, `tabIndex` and the roving markers (`data-roving-container`,
+     * `data-roving-disabled`, `data-roving-value`, `aria-disabled`), unset (in a toolbar or
+     * another roving container the root is no composite that hides the switch, no item and no
+     * second tab stop). Your handlers run before the Switch's own root handlers (`preventDefault()` in
      * yours skips them). Your `onClick` sees every click inside the root as it bubbles: a click
      * on the switch after the switch has toggled, and a click on the label text first, before
      * the `<label>` passes it on to the switch, so the text's click reaches your `onClick` twice
@@ -409,6 +412,10 @@ export const Switch = ({
       // The label labels the switch it holds: a part's `for` would send the text's clicks to
       // another element (the Switch's own, from untyped code, still wins below).
       htmlFor: undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the switch, no item and no second tab stop (a
+      // toolbar takes any element with a `tabindex` for a control).
+      ...ROVING_PART_LOCKS,
       // The Switch's own root props, after the data attributes as in 0.18, and over the part's;
       // the root holds the switch, so only they hide it or take it out of reach.
       ...rest,

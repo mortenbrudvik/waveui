@@ -4,7 +4,7 @@ import { wcn } from '../../lib/cn';
 import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getDirection } from '../../lib/direction';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import type { ColorPickerShape, HsvColor, Orientation } from '../../lib/types';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -123,13 +123,16 @@ export interface ColorSliderProps extends Omit<
   slotProps?: {
     /**
      * The root `<div>` around the rail, the range input and the thumb (stable class
-     * `wave-color-slider`), which the slider's `className`, `style`, `data-*` and other root
-     * props reach as well; its `ref` is the way to the root, since the slider's `ref` reaches the
-     * range input. Your classes come after the slider's `className`, your style over its `style`;
-     * the custom properties that draw the value (the gradient, the thumb's position and color)
-     * stay the slider's. Locked: every prop you give the slider itself that reaches the root,
-     * `data-orientation`, `data-channel`, `data-disabled`, and `hidden`, `inert` and
-     * `aria-hidden` (the slider's own: the root holds the input). Your handlers run before the
+     * `wave-color-slider`), which the slider's `className`, `style`, `data-*` and other root props
+     * reach as well; its `ref` is the way to the root, since the slider's `ref` reaches the range
+     * input. Your classes come after the slider's `className`, your style over its `style`; the
+     * custom properties that draw the value (the gradient, the thumb's position and color) stay the
+     * slider's. Locked: every prop you give the slider itself that reaches the root,
+     * `data-orientation`, `data-channel`, `data-disabled`, and `hidden`, `inert` and `aria-hidden`
+     * (the slider's own: the root holds the input). Also locked, unset: `role`, `tabIndex` and the
+     * roving markers (`data-roving-container`, `data-roving-disabled`, `data-roving-value`,
+     * `aria-disabled`), so in a toolbar or another roving container the root is never a control of
+     * its own and never hides the control from the arrow order. Your handlers run before the
      * slider's own root handlers (`preventDefault()` in yours skips them), and your `onClick` is
      * called in every state, as the slider's own `onClick` is: only the range input inside is
      * natively disabled.
@@ -293,6 +296,9 @@ export const ColorSlider = ({
       'data-orientation': orientation,
       'data-channel': channel,
       'data-disabled': part.disabled ? '' : undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
       // The slider's own root props, after the data attributes as in 0.18, and over the part's;
       // the root holds the input, so only they hide it or take it out of reach.
       ...rest,

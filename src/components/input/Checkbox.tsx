@@ -6,7 +6,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { CheckIcon, SubtractIcon } from '../../lib/icons';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { LabelPosition, Shape, Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -161,14 +161,18 @@ export interface CheckboxProps extends Omit<
      * come after the Checkbox's `className`, your style over its `style`. Locked: every prop you
      * give the Checkbox itself that reaches the root, `data-label-position`, `data-size`,
      * `data-shape`, `htmlFor` (unset: the label labels the box it holds, and a `for` would send
-     * its clicks to another element), and `hidden`, `inert` and `aria-hidden` (the Checkbox's
-     * own: the root holds the box). Your handlers run before the Checkbox's own root handlers
-     * (`preventDefault()` in yours skips them). Your `onClick` sees every click inside the root
-     * as it bubbles: a click on the box after the box has toggled, and a click on the label text
-     * first, before the `<label>` passes it on to the box, so the text's click reaches your
-     * `onClick` twice (the text's own, then the box's), as on any `<label>`; `preventDefault()`
-     * on the text's click keeps the label from passing it on (no toggle). It is not called while
-     * the checkbox is `disabled` or `disabledFocusable`, as the checkbox does not toggle then.
+     * its clicks to another element), `hidden`, `inert` and `aria-hidden` (the Checkbox's own:
+     * the root holds the box), and `role`, `tabIndex` and the roving markers
+     * (`data-roving-container`, `data-roving-disabled`, `data-roving-value`, `aria-disabled`),
+     * unset (in a toolbar or another roving container the root is no composite that hides the
+     * box, no item and no second tab stop). Your handlers run before the Checkbox's own root
+     * handlers (`preventDefault()` in yours skips them). Your `onClick` sees every click inside
+     * the root as it bubbles: a click on the box after the box has toggled, and a click on the
+     * label text first, before the `<label>` passes it on to the box, so the text's click reaches
+     * your `onClick` twice (the text's own, then the box's), as on any `<label>`;
+     * `preventDefault()` on the text's click keeps the label from passing it on (no toggle). It is
+     * not called while the checkbox is `disabled` or `disabledFocusable`, as the checkbox does not
+     * toggle then.
      */
     root?: SlotPart<'label'>;
     /**
@@ -403,6 +407,10 @@ export const Checkbox = ({
       // The label labels the box it holds: a part's `for` would send the text's clicks to
       // another element (the Checkbox's own, from untyped code, still wins below).
       htmlFor: undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the box, no item and no second tab stop (a
+      // toolbar takes any element with a `tabindex` for a control).
+      ...ROVING_PART_LOCKS,
       // The Checkbox's own root props, after the data attributes as in 0.18, and over the
       // part's; the root holds the box, so only they hide it or take it out of reach.
       ...rest,
