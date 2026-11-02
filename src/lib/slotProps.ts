@@ -283,7 +283,7 @@ export function composeAfterPart<E extends { defaultPrevented: boolean }>(
  * const trackRef = useMergedRefs(localTrackRef);
  * <span
  *   {...mergeSlotProps(slotProps?.track, {
- *     className: cn(switchClassNames.track, trackClasses),
+ *     className: wcn(switchClassNames.track, trackClasses),
  *     ref: trackRef,
  *     locked: { 'aria-hidden': true },
  *   })}

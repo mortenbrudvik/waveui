@@ -16,6 +16,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   APP_DIRECTION_CLASS,
   APP_TOKEN_OVERRIDE,
+  checkCodemodRun,
   checkFloorSmoke,
   checkPackedFiles,
   checkPlainCss,
@@ -30,8 +31,10 @@ import {
   parseArgs,
   parsePackOutput,
   resolveFloorNode,
+  SHIPPED_SCRIPTS,
   viteBuildCss,
 } from '../pack-smoke.mjs';
+import { rewriteFile } from '../../codemod/migrate-1.0.mjs';
 import { createWorkDir, removeWorkDir } from '../verify-dist.mjs';
 
 const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
@@ -100,8 +103,14 @@ describe('package.json (spec §3.2)', () => {
     );
   });
 
-  it('publishes dist and the style sources without their tests', () => {
-    expect(pkg.files).toEqual(['dist', 'src/styles', '!src/styles/__tests__']);
+  it('publishes dist, the style sources and the migration codemod without their tests', () => {
+    expect(pkg.files).toEqual([
+      'dist',
+      'src/styles',
+      '!src/styles/__tests__',
+      'codemod',
+      '!codemod/__tests__',
+    ]);
   });
 
   it('marks only CSS as side-effectful, so bundlers drop unused modules (repo-level#3)', () => {
@@ -178,10 +187,31 @@ describe('checkPackedFiles', () => {
     'src/styles/base.css',
     'src/styles/variants.css',
     'src/styles/styles.css',
+    'codemod/migrate-1.0.mjs',
   ];
 
   it('passes a tarball with every export target and nothing else from the sources', () => {
     expect(checkPackedFiles(good, pkg)).toEqual([]);
+  });
+
+  it('ships the migration codemod, its only script outside dist, without its tests', () => {
+    expect(SHIPPED_SCRIPTS).toEqual(['codemod/migrate-1.0.mjs']);
+    expect(
+      checkPackedFiles(
+        good.filter((path) => path !== 'codemod/migrate-1.0.mjs'),
+        pkg,
+      ),
+    ).toEqual(['codemod/migrate-1.0.mjs is not in the tarball']);
+    expect(
+      checkPackedFiles(
+        [...good, 'codemod/__tests__/migrate-1.0.test.mjs', 'codemod/helper.mjs', 'tools/x.js'],
+        pkg,
+      ),
+    ).toEqual([
+      'tests are packed: codemod/__tests__/migrate-1.0.test.mjs',
+      'scripts are packed: codemod/helper.mjs (only codemod/migrate-1.0.mjs ships)',
+      'scripts are packed: tools/x.js (only codemod/migrate-1.0.mjs ships)',
+    ]);
   });
 
   it('reports an export target missing from the tarball', () => {
@@ -248,6 +278,36 @@ describe('checkPackedFiles', () => {
     expect(
       read.mock.calls.map(([path]) => path).filter((path) => !path.startsWith('src/styles/')),
     ).toEqual([]);
+  });
+});
+
+describe('checkCodemodRun (the migration codemod from the installed package)', () => {
+  const fixture = readFileSync(join(root, 'scripts/fixtures/plain/migrate.css'), 'utf8');
+  const report = 'migrate-1.0 (dry run): 2 replacement(s) in 1 of 1 file(s)\n';
+
+  it('the plain fixture holds a file with two rewrites', () => {
+    const stats = { replacements: 0, shared: 0 };
+    const migrated = rewriteFile('migrate.css', fixture, { includeShared: true, stats });
+    expect(stats).toEqual({ replacements: 2, shared: 0 });
+    expect(migrated).toContain('@apply bg-wave-primary text-wave-body-1;');
+  });
+
+  it('passes a dry run that reports the rewrites and changes nothing', () => {
+    const run = { status: 0, stdout: `migrate.css:3\n  - x\n  + y\n${report}`, stderr: '' };
+    expect(checkCodemodRun(run, { before: fixture, after: fixture })).toEqual([]);
+  });
+
+  it('reports a failed run, another report and a changed file', () => {
+    expect(
+      checkCodemodRun(
+        { status: 1, stdout: '', stderr: 'Error: Cannot find module' },
+        { before: fixture, after: `${fixture}x` },
+      ),
+    ).toEqual([
+      'exited with 1: Error: Cannot find module',
+      'unexpected report: (none)',
+      'the dry run changed migrate.css',
+    ]);
   });
 });
 

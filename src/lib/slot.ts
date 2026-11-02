@@ -371,7 +371,7 @@ function mergeClassName(baseClassName: string | undefined, className: unknown): 
  *
  * - `null`, `undefined`, `false` and `true` resolve to `null` (render nothing).
  * - A slot object resolves to `Component = as ?? defaultAs`,
- *   `props = { ...defaultProps, ...attributes, className: cn(baseClassName, className) }` and its
+ *   `props = { ...defaultProps, ...attributes, className: wcn(baseClassName, className) }` and its
  *   `children` (a generator materialised into an array once, as for shorthand content). When the
  *   element is void its `children` are always dropped, with a development warning only if they
  *   would have rendered (not for `null`, `undefined`, booleans or `''`, nor for a Fragment,

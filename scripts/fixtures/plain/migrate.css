@@ -1,0 +1,4 @@
+/* The 1.0 migration codemod's dry run over this file (pack-smoke): two rewrites. */
+.app {
+  @apply bg-primary text-body-1;
+}

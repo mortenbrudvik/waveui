@@ -1560,13 +1560,18 @@ async function loadEntryGuard(): Promise<EntryGuard> {
 
 /**
  * The report of a passing build-css run whose outputs are in `dir` (a regular expression source:
- * `'dist'`, or `String.raw\`\S+\`` for any directory): every output with its size, in order.
+ * `'dist'`, or `String.raw\`\S+\`` for any directory): every output with its size, in order. With
+ * `compileCheckSkipped` (a run on this repository while `UTILITY_PREFIX` is empty; a fixture
+ * project has no src/lib/cn.ts), the line that says the compile check was skipped comes first.
  */
-function passingReport(dir: string): RegExp {
+function passingReport(dir: string, { compileCheckSkipped = false } = {}): RegExp {
   const file = (name: string) => `${dir}\\/${name.replace('.', '\\.')} \\([\\d.]+ kB\\)`;
+  const skipped = compileCheckSkipped
+    ? 'build-css: compile check skipped \\(UTILITY_PREFIX in src\\/lib\\/cn\\.ts is empty\\)\\n'
+    : '';
   return new RegExp(
-    `^build-css: ${file('styles.css')}, ${file('components.css')}, ${file('utilities.css')} ` +
-      `and ${file('preflight.css')} OK$`,
+    `^${skipped}build-css: ${file('styles.css')}, ${file('components.css')}, ` +
+      `${file('utilities.css')} and ${file('preflight.css')} OK$`,
   );
 }
 
@@ -2530,7 +2535,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     try {
       const code = main(['--out-dir', out]);
       const output = printed.map((args) => args.join(' ')).join('\n');
-      expect(output).toMatch(passingReport(String.raw`\S+`));
+      expect(output).toMatch(passingReport(String.raw`\S+`, { compileCheckSkipped: true }));
       expect(code).toBe(0);
       const classes = selectorClasses(readFileSync(join(out, 'styles.css'), 'utf8'));
       expect(classes).toContain('bg-primary');

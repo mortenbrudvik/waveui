@@ -82,6 +82,21 @@
  *   - no token rule and no theme variable (no `:root` rule, no custom property other than
  *     Tailwind's `--tw-*`), and the `@keyframes wave-*` of the animations.
  *
+ * The utility prefix (Phase 14 spec R6): `UTILITY_PREFIX` of src/lib/cn.ts, read from the file's
+ * text (`readUtilityPrefix`; a declaration that cannot be read stops the build). While it is
+ * empty, the build says so in one line and checks nothing more. Once it is set:
+ *   - the compile check runs first, before any compile: scripts/prefix-codemod.mjs `--check` over
+ *     src/components and src/lib (the string literals of the TypeScript AST, in two tiers: no
+ *     unprefixed utility word in a literal the class-context tracing reaches; elsewhere only the
+ *     words scripts/prefix-allowlist.json names for that file). A finding fails the build;
+ *   - every class of styles.css that is no selector class of the style entries (`.wave-root`,
+ *     the theme classes) starts with `<prefix>:`, and the required utilities are looked up with
+ *     the prefix;
+ *   - every custom property styles.css declares is a token tokens.css declares, Tailwind's
+ *     `--tw-*`, or one an arbitrary-property utility of the library declares (`--option-bg`,
+ *     `--wave-card-padding`): no theme variable ships (the `--spacing:`-style needles above
+ *     cannot see a leak under the prefix, which would be named `--wave-spacing`).
+ *
  * Usage: node scripts/build-css.mjs [--out-dir <dir>] [--check-only]
  *   --out-dir     output directory (default: dist)
  *   --check-only  skip the build and only assert the files already in the output directory
@@ -147,6 +162,81 @@ const FORBIDDEN = ['--spacing:', '--font-sans:', '--color-red-500', '--radius-']
 
 /** The 0.4 theme classes, deprecated in 0.5 and removed in 1.0: no rule may select them. */
 const REMOVED_THEME_CLASSES = ['dark', 'high-contrast'];
+
+// -------------------------------------------------------------------------------------------
+// The utility prefix and the compile check (Phase 14 spec R6)
+// -------------------------------------------------------------------------------------------
+
+/** The module that declares the prefix, relative to the project root. */
+const CN_MODULE = 'src/lib/cn.ts';
+
+/** The directories the compile check reads, relative to the project root. */
+const COMPILE_CHECK_PATHS = ['src/components', 'src/lib'];
+
+/**
+ * The value of `UTILITY_PREFIX` in the text of src/lib/cn.ts (`export const UTILITY_PREFIX:
+ * string = 'wave';`), read without importing TypeScript. Throws when the declaration is missing,
+ * declared twice or not a plain string literal: the check must never be skipped by accident.
+ */
+export function readUtilityPrefix(cnSource) {
+  const declarations = cnSource.match(/^export const UTILITY_PREFIX\b/gm) ?? [];
+  const found = [
+    ...cnSource.matchAll(
+      /^export const UTILITY_PREFIX(?:\s*:\s*string)?\s*=\s*(['"])([^'"\\]*)\1\s*;/gm,
+    ),
+  ];
+  if (declarations.length !== 1 || found.length !== 1) {
+    throw new Error(
+      `readUtilityPrefix: ${CN_MODULE} must declare \`export const UTILITY_PREFIX: string = '…';\` ` +
+        `once, with a string literal (found ${declarations.length} declaration(s), ` +
+        `${found.length} readable)`,
+    );
+  }
+  const prefix = found[0][2];
+  if (prefix && !/^[a-z][a-z0-9]*$/.test(prefix)) {
+    throw new Error(
+      `readUtilityPrefix: "${prefix}" is no Tailwind prefix (lowercase letters and digits)`,
+    );
+  }
+  return prefix;
+}
+
+/**
+ * The utility prefix of the project at `projectRoot` (see readUtilityPrefix), or `undefined` for a
+ * project without src/lib/cn.ts (a fixture of the tests: nothing to check, nothing said).
+ */
+export function utilityPrefixOf(projectRoot) {
+  const path = join(projectRoot, CN_MODULE);
+  return existsSync(path) ? readUtilityPrefix(readFileSync(path, 'utf8')) : undefined;
+}
+
+/**
+ * The compile check of the project at `projectRoot` for `prefix`: runs scripts/prefix-codemod.mjs
+ * `--check` (this repository's, with `--root projectRoot`; the allowlist is the project's
+ * scripts/prefix-allowlist.json) over the existing directories of src/components and src/lib.
+ * Returns `{ ok, lines }`: the check's report, or why it could not run.
+ */
+export function compileCheck(projectRoot, prefix) {
+  const codemod = join(dirname(fileURLToPath(import.meta.url)), 'prefix-codemod.mjs');
+  const paths = COMPILE_CHECK_PATHS.filter((path) => existsSync(join(projectRoot, path)));
+  if (paths.length === 0)
+    return { ok: true, lines: ['compile check: no src/components or src/lib'] };
+  const result = spawnSync(
+    process.execPath,
+    [codemod, '--check', '--root', projectRoot, '--prefix', prefix, ...paths],
+    { encoding: 'utf8' },
+  );
+  if (result.error) throw result.error;
+  const lines = `${result.stdout}${result.stderr}`.split(/\r?\n/).filter(Boolean);
+  if (result.status === 0) return { ok: true, lines };
+  if (result.status === 1 && /^prefix-codemod --check: /.test(lines[0] ?? '')) {
+    return { ok: false, lines };
+  }
+  return {
+    ok: false,
+    lines: [`prefix-codemod --check could not run (exit ${result.status})`, ...lines.slice(0, 20)],
+  };
+}
 
 // -------------------------------------------------------------------------------------------
 // Minimal CSS parser (rules, at-rules, declarations; escape-, string- and comment-aware)
@@ -822,7 +912,7 @@ export function loweredDirectionClasses(css) {
   return [...lowered].sort();
 }
 
-export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
+export function assertStylesCss(css, { tokensCss, baseCss, storySources, prefix = '' }) {
   const errors = [];
   const nodes = parseCss(css);
   assertUnlayered(nodes, 'styles.css', errors);
@@ -861,13 +951,18 @@ export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
   }
   const classes = selectorClasses(css);
   for (const name of REQUIRED_UTILITIES) {
-    if (!classes.has(name)) errors.push(`styles.css: missing utility .${name}`);
+    const required = prefix ? `${prefix}:${name}` : name;
+    if (!classes.has(required)) errors.push(`styles.css: missing utility .${required}`);
   }
 
   // No foreign theme variables.
   for (const needle of FORBIDDEN) {
     if (css.includes(needle)) errors.push(`styles.css: contains "${needle}"`);
   }
+
+  // With the utility prefix (Phase 14 spec R6): every utility carries it, and no theme variable
+  // ships under any name.
+  if (prefix) errors.push(...assertPrefixedCss(css, { prefix, tokensCss, baseCss }));
 
   // No rule of a removed theme class.
   const removedThemes = REMOVED_THEME_CLASSES.filter((name) => classes.has(name));
@@ -943,6 +1038,49 @@ function declaredCustomProperties(nodes) {
     names.push(node.prelude.slice(0, node.prelude.indexOf(':')).trim());
   });
   return names;
+}
+
+/**
+ * The assertions of a prefixed styles.css (`css`, built with `prefix(<prefix>)`; see the header):
+ *   - every class is `<prefix>:`-prefixed, but the selector classes of tokens.css and base.css
+ *     (`.wave-root`, `.wave-portal`, the theme classes), which no utility declares;
+ *   - every declared custom property is a token tokens.css declares, Tailwind's `--tw-*`, or one
+ *     that an arbitrary-property utility declares in its own rule (`.wave:[--option-bg:…]`): a
+ *     theme variable (`--spacing`, `--color-primary`, a self-referencing `--wave-shadow-N` in
+ *     `:root`) is none of them.
+ */
+export function assertPrefixedCss(css, { prefix, tokensCss, baseCss }) {
+  const errors = [];
+  const own = new Set([...selectorClasses(tokensCss), ...selectorClasses(baseCss)]);
+  const unprefixed = [...selectorClasses(css)]
+    .filter((name) => !own.has(name) && !name.startsWith(`${prefix}:`))
+    .sort();
+  if (unprefixed.length > 0) {
+    errors.push(
+      `styles.css: holds classes without the utility prefix ${prefix}: (is the sheet built with ` +
+        `prefix(${prefix})?): ${unprefixed.slice(0, 20).join(' ')}`,
+    );
+  }
+  const tokens = tokenNamesOf(tokensCss);
+  const foreign = new Set();
+  walk(parseCss(css), (node, parents) => {
+    if (node.children !== null || !node.prelude.startsWith('--')) return;
+    if (parents.some((parent) => /^@property\b/.test(parent.prelude))) return;
+    const name = node.prelude.slice(0, node.prelude.indexOf(':')).trim();
+    if (tokens.has(name) || name.startsWith('--tw-')) return;
+    // A property an arbitrary-property utility sets (`[--option-bg:transparent]`), in its rule.
+    const rule = [...parents].reverse().find(isStyleRule);
+    const declaredByUtility =
+      rule && classesOf(rule.prelude).some((cls) => cls.includes(`[${name}:`));
+    if (!declaredByUtility) foreign.add(name);
+  });
+  if (foreign.size > 0) {
+    errors.push(
+      'styles.css: declares custom properties that are no token, no --tw-* property and no ' +
+        `arbitrary property of a utility (theme variables?): ${[...foreign].sort().slice(0, 20).join(', ')}`,
+    );
+  }
+  return errors;
 }
 
 /** The selectors (normalised) of the style rules of the stylesheets, which `:root` rules use. */
@@ -1172,6 +1310,20 @@ function parseArgs(argv, projectRoot) {
  */
 export function main(argv = process.argv.slice(2), { projectRoot = root } = {}) {
   const { outDir, checkOnly } = parseArgs(argv, projectRoot);
+
+  // The compile check, before any compile (Phase 14 spec R6): only with a utility prefix.
+  const prefix = utilityPrefixOf(projectRoot);
+  if (prefix === '') {
+    console.log(`build-css: compile check skipped (UTILITY_PREFIX in ${CN_MODULE} is empty)`);
+  } else if (prefix !== undefined) {
+    const check = compileCheck(projectRoot, prefix);
+    if (!check.ok) {
+      console.error(`build-css: the compile check failed (prefix ${prefix}):`);
+      for (const line of check.lines) console.error(`  ${line}`);
+      return 1;
+    }
+  }
+
   if (!checkOnly) {
     mkdirSync(outDir, { recursive: true });
     const cli = tailwindCli();
@@ -1208,6 +1360,7 @@ export function main(argv = process.argv.slice(2), { projectRoot = root } = {}) 
       tokensCss,
       baseCss,
       storySources: collectStorySources(projectRoot),
+      prefix: prefix ?? '',
     }),
     ...assertComponentsCss(read('components.css'), { stylesCss, tokensCss, baseCss }),
     ...assertUtilitiesCss(read('utilities.css'), { tokensCss, baseCss }),

@@ -5,8 +5,10 @@
  * `scripts/fixtures/`. Run it after `npm run build` (`prepublishOnly` does).
  *
  *   tarball   every `exports` target is packed (and every file the style sources `@import`,
- *             `dist/components.css` of `./tailwind` included); no tests, stories, component
- *             sources or scripts are.
+ *             `dist/components.css` of `./tailwind` included), and so is the 1.0 migration
+ *             codemod (`codemod/migrate-1.0.mjs`, run from node_modules); no tests, stories,
+ *             component sources or other scripts are (a script outside `dist` is one of
+ *             SHIPPED_SCRIPTS or an error).
  *   plain     an app without Tailwind (scripts/fixtures/plain):
  *               - `import()` (smoke.mjs) and `require()` (smoke.cjs: the package ships ES modules
  *                 only, and `require(esm)` loads the entry on Node.js 22.12 and later) load the
@@ -32,7 +34,9 @@
  *                 its default target (Chrome 111), which rewrites a bare `:dir(rtl)` to a
  *                 `:lang()` list that a page setting only `dir` never matches;
  *               - an app importing `./utilities.css` (`utilities-entry.js`) built with Vite's
- *                 defaults: the emitted CSS passes the `./utilities` checks.
+ *                 defaults: the emitted CSS passes the `./utilities` checks;
+ *               - the migration codemod runs from the installed package with Node.js alone: a
+ *                 dry run over `migrate.css` reports its two rewrites and changes nothing.
  *   tailwind  a Tailwind 4 app (scripts/fixtures/tailwind) compiling, with @tailwindcss/cli,
  *               - `input.css`: `@import 'tailwindcss'; @import '@mortenbrudvik/waveui/tailwind';`
  *                 and the app's own token override in `@layer base`. Nothing of the package is
@@ -122,6 +126,12 @@ const ALIASES = [
   ['./variants', './variants.css'],
 ];
 
+/**
+ * The scripts the package ships (outside `dist`): the 1.0 migration codemod, which apps run from
+ * node_modules (Phase 14 spec R6). Any other script in the tarball is an error.
+ */
+export const SHIPPED_SCRIPTS = ['codemod/migrate-1.0.mjs'];
+
 const FIXTURES = ['plain', 'tailwind'];
 const REQUIRED_NAMES = ['Button', 'WaveProvider', 'cn'];
 const NATIVE_RESET = ':where(.wave-root,.wave-portal) :where(button,input,select,textarea)';
@@ -189,7 +199,16 @@ export function checkPackedFiles(
     else if (path.startsWith('scripts/')) errors.push(`scripts are packed: ${path}`);
     else if (path.startsWith('src/') && !path.startsWith('src/styles/')) {
       errors.push(`library sources are packed: ${path} (only src/styles is published)`);
+    } else if (
+      /\.[cm]?[jt]s$/.test(path) &&
+      !path.startsWith('dist/') &&
+      !SHIPPED_SCRIPTS.includes(path)
+    ) {
+      errors.push(`scripts are packed: ${path} (only ${SHIPPED_SCRIPTS.join(', ')} ships)`);
     }
+  }
+  for (const script of SHIPPED_SCRIPTS) {
+    if (!packed.has(script)) errors.push(`${script} is not in the tarball`);
   }
 
   const queue = [...targets]
@@ -934,6 +953,44 @@ async function runPlain(dir, io) {
       check: checkUtilitiesCss,
     })),
   );
+
+  // The migration codemod, run from the installed package with Node.js alone.
+  const codemod = join(
+    dir,
+    'node_modules',
+    '@mortenbrudvik',
+    'waveui',
+    ...SHIPPED_SCRIPTS[0].split('/'),
+  );
+  const before = readFileSync(join(dir, CODEMOD_FIXTURE), 'utf8');
+  const migration = run(
+    process.execPath,
+    [codemod, '--dry-run', '--include-shared', CODEMOD_FIXTURE],
+    { cwd: dir },
+  );
+  errors.push(
+    ...checkCodemodRun(migration, {
+      before,
+      after: readFileSync(join(dir, CODEMOD_FIXTURE), 'utf8'),
+    }).map((error) => `codemod: ${error}`),
+  );
+  return errors;
+}
+
+/** The plain fixture's file the migration codemod dry-runs over (two rewrites). */
+const CODEMOD_FIXTURE = 'migrate.css';
+
+/**
+ * The dry run of the shipped migration codemod over the plain fixture's `migrate.css`: it exits 0,
+ * reports the file's two rewrites and leaves the file (`before`, `after`) as it was.
+ */
+export function checkCodemodRun({ status, stdout, stderr }, { before, after }) {
+  const errors = [];
+  if (status !== 0) errors.push(`exited with ${status}: ${`${stderr}${stdout}`.trim()}`);
+  if (!/^migrate-1\.0 \(dry run\): 2 replacement\(s\) in 1 of 1 file\(s\)$/m.test(stdout)) {
+    errors.push(`unexpected report: ${stdout.trim() || '(none)'}`);
+  }
+  if (before !== after) errors.push(`the dry run changed ${CODEMOD_FIXTURE}`);
   return errors;
 }
 

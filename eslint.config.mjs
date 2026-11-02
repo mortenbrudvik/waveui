@@ -126,8 +126,9 @@ export default defineConfig(
     // nearest package.json is the root one (`"type": "module"`); a nested package without it (such
     // as a pack fixture) makes its `.js` files CommonJS. So CommonJS files — e.g. a require()-based
     // smoke file in a fixture — use the `.cjs` extension: Node treats `.cjs` as CommonJS whatever
-    // package.json says, and the next block lints it as CommonJS.
-    files: ['scripts/**/*.{js,mjs}'],
+    // package.json says, and the next block lints it as CommonJS. The shipped migration codemod
+    // (codemod/) is a Node ES module too.
+    files: ['scripts/**/*.{js,mjs}', 'codemod/**/*.{js,mjs}'],
     languageOptions: {
       sourceType: 'module',
       globals: nodeGlobals,
