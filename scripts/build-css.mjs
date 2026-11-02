@@ -88,14 +88,17 @@
  *   - the compile check runs first, before any compile: scripts/prefix-codemod.mjs `--check` over
  *     src/components and src/lib (the string literals of the TypeScript AST, in two tiers: no
  *     unprefixed utility word in a literal the class-context tracing reaches; elsewhere only the
- *     words scripts/prefix-allowlist.json names for that file). A finding fails the build;
+ *     words scripts/prefix-allowlist.json names for that file). A finding fails the build, and
+ *     a pass prints one line with what it read;
  *   - every class of styles.css that is no selector class of the style entries (`.wave-root`,
  *     the theme classes) starts with `<prefix>:`, and the required utilities are looked up with
  *     the prefix;
  *   - every custom property styles.css declares is a token tokens.css declares, Tailwind's
  *     `--tw-*`, or one an arbitrary-property utility of the library declares (`--option-bg`,
- *     `--wave-card-padding`): no theme variable ships (the `--spacing:`-style needles above
- *     cannot see a leak under the prefix, which would be named `--wave-spacing`).
+ *     `--wave-card-padding`), and none refers to itself: no theme variable ships (the
+ *     `--spacing:`-style needles above cannot see a leak under the prefix, which would be named
+ *     `--wave-spacing`, and a theme key `--shadow-4` would become the self-reference
+ *     `--wave-shadow-4: var(--wave-shadow-4)`, a token's name).
  *
  * Usage: node scripts/build-css.mjs [--out-dir <dir>] [--check-only]
  *   --out-dir     output directory (default: dist)
@@ -236,6 +239,18 @@ export function compileCheck(projectRoot, prefix) {
     ok: false,
     lines: [`prefix-codemod --check could not run (exit ${result.status})`, ...lines.slice(0, 20)],
   };
+}
+
+/**
+ * The one-line summary of a passing compile check, from the report line of
+ * `prefix-codemod --check`: `prefix wave: 4355 class words in 234 files, 116 allowlisted pairs`.
+ */
+export function compileCheckSummary(lines, prefix) {
+  const report = lines[0] ?? '';
+  const words = /(\d+) prefixed class word\(s\)/.exec(report)?.[1] ?? '?';
+  const files = /of (\d+) file\(s\)/.exec(report)?.[1] ?? '?';
+  const pairs = /\((\d+) word-file pair\(s\)/.exec(report)?.[1] ?? '?';
+  return `prefix ${prefix}: ${words} class words in ${files} files, ${pairs} allowlisted pairs`;
 }
 
 // -------------------------------------------------------------------------------------------
@@ -1046,8 +1061,10 @@ function declaredCustomProperties(nodes) {
  *     (`.wave-root`, `.wave-portal`, the theme classes), which no utility declares;
  *   - every declared custom property is a token tokens.css declares, Tailwind's `--tw-*`, or one
  *     that an arbitrary-property utility declares in its own rule (`.wave:[--option-bg:…]`): a
- *     theme variable (`--spacing`, `--color-primary`, a self-referencing `--wave-shadow-N` in
- *     `:root`) is none of them.
+ *     theme variable (`--spacing`, `--color-primary`) is none of them;
+ *   - no declaration refers to itself (`--wave-shadow-4: var(--wave-shadow-4)`): what a theme
+ *     key `--shadow-4` becomes under the prefix `wave` when theme.css loses `reference`. Its name
+ *     is a token's, so the rule above lets it pass; the value never is a token's.
  */
 export function assertPrefixedCss(css, { prefix, tokensCss, baseCss }) {
   const errors = [];
@@ -1063,10 +1080,14 @@ export function assertPrefixedCss(css, { prefix, tokensCss, baseCss }) {
   }
   const tokens = tokenNamesOf(tokensCss);
   const foreign = new Set();
+  const selfReferences = new Set();
   walk(parseCss(css), (node, parents) => {
     if (node.children !== null || !node.prelude.startsWith('--')) return;
     if (parents.some((parent) => /^@property\b/.test(parent.prelude))) return;
-    const name = node.prelude.slice(0, node.prelude.indexOf(':')).trim();
+    const colon = node.prelude.indexOf(':');
+    const name = node.prelude.slice(0, colon).trim();
+    const value = node.prelude.slice(colon + 1).trim();
+    if (value.replace(/\s+/g, '') === `var(${name})`) selfReferences.add(name);
     if (tokens.has(name) || name.startsWith('--tw-')) return;
     // A property an arbitrary-property utility sets (`[--option-bg:transparent]`), in its rule.
     const rule = [...parents].reverse().find(isStyleRule);
@@ -1078,6 +1099,12 @@ export function assertPrefixedCss(css, { prefix, tokensCss, baseCss }) {
     errors.push(
       'styles.css: declares custom properties that are no token, no --tw-* property and no ' +
         `arbitrary property of a utility (theme variables?): ${[...foreign].sort().slice(0, 20).join(', ')}`,
+    );
+  }
+  if (selfReferences.size > 0) {
+    errors.push(
+      'styles.css: declares custom properties that refer to themselves (a theme key emitted ' +
+        `under the prefix: has theme.css lost \`reference\`?): ${[...selfReferences].sort().join(', ')}`,
     );
   }
   return errors;
@@ -1322,6 +1349,7 @@ export function main(argv = process.argv.slice(2), { projectRoot = root } = {}) 
       for (const line of check.lines) console.error(`  ${line}`);
       return 1;
     }
+    console.log(`build-css: compile check passed (${compileCheckSummary(check.lines, prefix)})`);
   }
 
   if (!checkOnly) {

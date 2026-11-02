@@ -14,9 +14,12 @@
  *
  *   --dry-run         prints every change as a diff-like report and writes nothing
  *   --include-shared  also rewrites the names a stock shadcn/ui theme defines too (`bg-primary`,
- *                     `text-foreground`, `border-border`, `ring-ring`, … SHARED_COLORS): in an
- *                     app with such a theme they are the app's own classes, so they are left alone
- *                     (and counted) unless the app used them for Wave's tokens
+ *                     `text-foreground`, `border-border`, `ring-ring`, … SHARED_COLORS), and the
+ *                     names the scanned files declare as their own theme keys (an `@theme` with
+ *                     `--color-success: …`, as DaisyUI or Bootstrap themes have `success`,
+ *                     `error`, `info`; see declaredNames): in such an app they are the app's own
+ *                     classes, so they are left alone (and counted) unless the app used them for
+ *                     Wave's tokens. Scan the app's theme CSS with the rest for this to work.
  *
  * Paths are files or directories (walked for the file types below); globs take `*`, `**`, `?`,
  * `{a,b}` and `[…]` (quote them on shells that expand globs themselves). `node_modules` (and
@@ -34,10 +37,11 @@
  * A utility is rewritten with its variants (`dark:`, `hover:`, `data-[…]:`), its opacity or line
  * height modifier (`/50`), its important mark (`!bg-primary`, `bg-primary!`) and as a negated or
  * arbitrary part of nothing else: `bg-primary-hover` is the token `primary-hover`, `text-wave-body-1`
- * is already migrated (a second run changes nothing), a word such as `'primary'` is no utility.
- * A theme variable use (`var(--color-primary)`, `theme(--text-body-1--line-height)`,
- * `bg-(--color-primary)`) is rewritten; a declaration (`--color-primary: …` in an app's own
- * `@theme`) is not.
+ * is already migrated (a second run changes nothing), a word such as `'primary'` is no utility,
+ * and neither is a file name (`'bg-success.png'`). A theme variable use (`var(--color-primary)`,
+ * `theme(--text-body-1--line-height)`, `bg-(--color-primary)`) is rewritten; a declaration
+ * (`--color-primary: …` in an app's own `@theme`, a style object's `'--color-primary': x`) and a
+ * registration (`@property --color-primary`) are not.
  *
  * The names come from THEME_TABLE: the namespaced keys of Wave's `tokens.css` (`--color-wave-*`,
  * `--text-wave-*`, `--shadow-wave-*`), generated with `--print-table <tokens.css>` and kept in step
@@ -358,29 +362,64 @@ const NAME = '[a-z0-9]+(?:-[a-z0-9]+)*';
  */
 const UTILITY = new RegExp(
   String.raw`(?<![\w\-./#@$%\\\[])(${COLOR_ROOTS.map((root) => root.replace('-', '\\-')).join('|')})-(${NAME})` +
-    String.raw`(?=(?:\/(?:[\w.%]+|\[[^\]\s]*\]|\([^)\s]*\)))?!?(?![\w\-\[(]))`,
-  'g',
-);
-
-/** A use of a theme variable (`--color-primary`, `--text-body-1--line-height`), not its declaration. */
-const VARIABLE = new RegExp(
-  String.raw`(?<![\w-])--(color|text|shadow)-(${NAME})((?:--[a-z]+(?:-[a-z]+)*)?)(?![\w-])(?!\s*['"]?\s*:)`,
+    String.raw`(?=(?:\/(?:[\w.%]+|\[[^\]\s]*\]|\([^)\s]*\)))?!?(?![\w\-\[(])(?!\.\w))`,
   'g',
 );
 
 /**
- * Rewrites the utilities and variable uses of one piece of text; `classes: false` rewrites the
- * variable uses only (a CSS rule outside `@apply`, a `style` attribute). Counts each rewrite and
- * each use of a shared name left alone in `stats`.
+ * A use of a theme variable (`--color-primary`, `--text-body-1--line-height`), never its
+ * declaration (`--color-primary: …`, `'--color-primary': …`) or registration (`@property`).
  */
-export function rewriteText(text, { includeShared = false, classes = true, stats } = {}) {
+const VARIABLE = new RegExp(
+  String.raw`(?<![\w-])(?<!@property\s+)--(color|text|shadow)-(${NAME})((?:--[a-z]+(?:-[a-z]+)*)?)(?![\w-])(?!\s*['"]?\s*:)`,
+  'g',
+);
+
+/** A declaration of a theme key (`--color-success: …`, `'--text-body-1': …`), by namespace. */
+const DECLARATION = new RegExp(
+  String.raw`(?<![\w-])--(color|text|shadow)-(${NAME})(?:--[a-z]+(?:-[a-z]+)*)?['"]?\s*:`,
+  'g',
+);
+
+/**
+ * The theme keys of Wave's names that `texts` (an app's files) declare themselves (an `@theme`
+ * with `--color-success: …`, DaisyUI's or Bootstrap's `success`, `error`, `info`): those names are
+ * the app's own, so their utilities are left alone like the shadcn/ui names (`--include-shared`
+ * rewrites them). By namespace: `{ color, text, shadow }`, each a sorted array.
+ */
+export function declaredNames(texts) {
+  const known = { color: THEME_TABLE.colors, text: THEME_TABLE.text, shadow: THEME_TABLE.shadow };
+  const found = { color: new Set(), text: new Set(), shadow: new Set() };
+  for (const text of texts) {
+    for (const [, namespace, name] of text.matchAll(DECLARATION)) {
+      if (known[namespace].includes(name)) found[namespace].add(name);
+    }
+  }
+  return Object.fromEntries(Object.entries(found).map(([key, set]) => [key, [...set].sort()]));
+}
+
+/**
+ * Rewrites the utilities and variable uses of one piece of text; `classes: false` rewrites the
+ * variable uses only (a CSS rule outside `@apply`, a `style` attribute), `variables: false` the
+ * utilities only (an object key: `{ '--color-x': … }` is a declaration). A name of
+ * SHARED_COLORS, or one `appNames` lists (see declaredNames), is rewritten only with
+ * `includeShared`. Counts each rewrite and each shared use left alone in `stats`.
+ */
+export function rewriteText(
+  text,
+  { includeShared = false, classes = true, variables = true, appNames, stats } = {},
+) {
   const colors = new Set(THEME_TABLE.colors);
   const steps = new Set(THEME_TABLE.text);
   const levels = new Set(THEME_TABLE.shadow);
-  const shared = new Set(SHARED_COLORS);
-  /** Whether a known name is rewritten: a shared color only with `includeShared` (counted). */
-  const rewrites = (name, isColor) => {
-    if (isColor && shared.has(name) && !includeShared) {
+  const shared = {
+    color: new Set([...SHARED_COLORS, ...(appNames?.color ?? [])]),
+    text: new Set(appNames?.text ?? []),
+    shadow: new Set(appNames?.shadow ?? []),
+  };
+  /** Whether a known name is rewritten: a shared one only with `includeShared` (counted). */
+  const rewrites = (name, namespace) => {
+    if (shared[namespace].has(name) && !includeShared) {
       if (stats) stats.shared += 1;
       return false;
     }
@@ -391,11 +430,19 @@ export function rewriteText(text, { includeShared = false, classes = true, stats
   if (classes) {
     out = out.replace(UTILITY, (match, root, name) => {
       // The type ramp and the shadow levels share no name with the colors.
-      const scale = (root === 'text' && steps.has(name)) || (root === 'shadow' && levels.has(name));
-      if (!scale && !colors.has(name)) return match;
-      return rewrites(name, !scale) ? `${root}-wave-${name}` : match;
+      const namespace =
+        root === 'text' && steps.has(name)
+          ? 'text'
+          : root === 'shadow' && levels.has(name)
+            ? 'shadow'
+            : colors.has(name)
+              ? 'color'
+              : null;
+      if (!namespace) return match;
+      return rewrites(name, namespace) ? `${root}-wave-${name}` : match;
     });
   }
+  if (!variables) return out;
   return out.replace(VARIABLE, (match, namespace, name, sub) => {
     const known =
       namespace === 'color'
@@ -404,7 +451,7 @@ export function rewriteText(text, { includeShared = false, classes = true, stats
           ? steps.has(name)
           : levels.has(name) && !sub;
     if (!known) return match;
-    return rewrites(name, namespace === 'color') ? `--${namespace}-wave-${name}${sub}` : match;
+    return rewrites(name, namespace) ? `--${namespace}-wave-${name}${sub}` : match;
   });
 }
 
@@ -539,9 +586,30 @@ export function scriptStringRanges(code) {
   return ranges;
 }
 
+/**
+ * Whether the string at `[start, end)` of `code` (its text, without the quotes) is an object key:
+ * after `{` or `,` and before `:`. A key holds classes (`{ 'bg-success': on }`) but never a
+ * variable use: `{ '--color-success': x }` declares it.
+ */
+function isObjectKey(code, start, end) {
+  const before = code.slice(0, start - 1).trimEnd();
+  return /[{,]$/.test(before) && /^\s*:/.test(code.slice(end + 1));
+}
+
 /** Rewrites a script: its string and template text only. */
 export function rewriteScript(code, options) {
-  return rewriteRanges(code, scriptStringRanges(code), (piece) => rewriteText(piece, options));
+  const ranges = scriptStringRanges(code);
+  let out = '';
+  let last = 0;
+  for (const [start, end] of ranges) {
+    const piece = code.slice(start, end);
+    const key = isObjectKey(code, start, end);
+    out +=
+      code.slice(last, start) +
+      rewriteText(piece, key ? { ...options, variables: false } : options);
+    last = end;
+  }
+  return out + code.slice(last);
 }
 
 /** Rewrites a stylesheet: `@apply` lists, and variable uses outside comments. */
@@ -818,16 +886,36 @@ export function main(argv = process.argv.slice(2), { cwd = process.cwd(), io = c
   const stats = { replacements: 0, shared: 0 };
   let changed = 0;
   let failed = 0;
+  const texts = new Map();
   for (const file of files) {
-    let text;
     try {
-      text = readFileSync(file, 'utf8');
+      texts.set(file, readFileSync(file, 'utf8'));
     } catch (error) {
       io.error(`migrate-1.0: cannot read ${file}: ${error.message}`);
       failed++;
-      continue;
     }
-    const next = rewriteFile(file, text, { includeShared: options.includeShared, stats });
+  }
+  // Wave's names that the app declares as its own theme keys are the app's.
+  const appNames = declaredNames(texts.values());
+  const declared = [
+    ...appNames.color.map((name) => `--color-${name}`),
+    ...appNames.text.map((name) => `--text-${name}`),
+    ...appNames.shadow.map((name) => `--shadow-${name}`),
+  ];
+  if (declared.length > 0) {
+    io.log(
+      `migrate-1.0: the files declare ${declared.join(', ')}: ` +
+        (options.includeShared
+          ? 'rewritten as Wave’s all the same (--include-shared)'
+          : 'the app’s own names, left as they are (--include-shared rewrites them too)'),
+    );
+  }
+  for (const [file, text] of texts) {
+    const next = rewriteFile(file, text, {
+      includeShared: options.includeShared,
+      appNames,
+      stats,
+    });
     if (next === undefined || next === text) continue;
     changed++;
     const name = relative(cwd, file).split(sep).join('/');
@@ -848,8 +936,8 @@ export function main(argv = process.argv.slice(2), { cwd = process.cwd(), io = c
     `migrate-1.0${options.dryRun ? ' (dry run)' : ''}: ${stats.replacements} replacement(s) in ` +
       `${changed} of ${files.length} file(s)` +
       (stats.shared > 0
-        ? `; ${stats.shared} use(s) of a name shared with shadcn/ui left as they are (pass ` +
-          '--include-shared if they named Wave’s tokens)'
+        ? `; ${stats.shared} use(s) of a name shared with shadcn/ui${declared.length > 0 ? ' or declared by the app' : ''} ` +
+          'left as they are (pass --include-shared if they named Wave’s tokens)'
         : ''),
   );
   return failed > 0 ? 1 : 0;

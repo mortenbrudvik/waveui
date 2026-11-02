@@ -18,6 +18,7 @@ import {
   parseArgs,
   selectorClasses,
 } from '../prefix-tests-codemod.mjs';
+import { main as prefixSrc } from '../prefix-codemod.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -251,4 +252,139 @@ describe('helpers', () => {
   ])('refuses %j', (argv, message) => {
     expect(() => parseArgs(argv)).toThrow(message);
   });
+});
+
+describe('the run order, kept negatives and subjects (fix round 1)', () => {
+  /** A project with a recipe module, so src can be prefixed by the src codemod. */
+  const ORDER_TEST = [
+    "import { durations } from '../../lib/styles';",
+    "const MAP = { a: 'flex', b: 'grid' } as const;",
+    'declare const el: HTMLElement;',
+    "it.each(['a', 'b'] as const)('map %s', (key) => {",
+    '  expect(el).toHaveClass(`${MAP[key]}`);',
+    '  expect(el).not.toHaveClass(`${durations.small}`);',
+    '});',
+    '',
+  ].join('\n');
+  const NEGATIVE_TEST = [
+    'declare const option: HTMLElement;',
+    "it('keeps a negative of a class passed in', () => {",
+    '  render(<Group className="flex" />);',
+    "  expect(option).not.toHaveClass('flex');",
+    "  expect(option).toHaveClass('grid');",
+    '});',
+    "it('reads an array of other values as no class list', () => {",
+    "  expect([option.id, 'grid']).toEqual(['x', 'grid']);",
+    '});',
+    "it('sets the classes itself', () => {",
+    "  option.className = 'start-0 p-2';",
+    "  expect(option).toHaveClass('start-0');",
+    '});',
+    '',
+  ].join('\n');
+  const SOURCES = {
+    'src/lib/cn.ts':
+      "export const cn = (...a: unknown[]) => a.join(' ');\nexport const wcn = cn;\n",
+    'src/lib/styles.ts': [
+      "export const durations = { small: 'duration-wave-slow', large: 'duration-wave-slower' };",
+      "export const focusRing = 'focus-visible:outline-2';",
+      '',
+    ].join('\n'),
+    'src/components/__tests__/Order.test.tsx': ORDER_TEST,
+    'src/components/__tests__/Negative.test.tsx': NEGATIVE_TEST,
+  };
+  const makeProject = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wave-prefix-order-'));
+    mkdirSync(join(dir, 'src/styles'), { recursive: true });
+    for (const name of ['theme.css', 'variants.css']) {
+      copyFileSync(join(ROOT, 'src/styles', name), join(dir, 'src/styles', name));
+    }
+    for (const [path, content] of Object.entries(SOURCES)) {
+      mkdirSync(dirname(join(dir, path)), { recursive: true });
+      writeFileSync(join(dir, path), content);
+    }
+    return dir;
+  };
+  const quiet = () => {
+    const lines = [];
+    return { lines, io: { log: (line) => lines.push(line), error: (line) => lines.push(line) } };
+  };
+  const projects = [];
+  afterAll(() => {
+    for (const dir of projects) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('refuses --write while src is unprefixed, and a dry run warns', async () => {
+    const dir = makeProject();
+    projects.push(dir);
+    const write = quiet();
+    expect(await main(['--root', dir, '--write', 'src'], { io: write.io })).toBe(2);
+    expect(write.lines).toEqual([
+      'prefix-tests-codemod: src is not prefixed yet (src/lib/styles.ts): the flip runs ' +
+        'scripts/prefix-codemod.mjs --write over src first, then this tool ' +
+        '(--allow-unprefixed-src writes anyway)',
+    ]);
+    expect(readFileSync(join(dir, 'src/components/__tests__/Order.test.tsx'), 'utf8')).toBe(
+      ORDER_TEST,
+    );
+    const dry = quiet();
+    expect(await main(['--root', dir, 'src'], { io: dry.io })).toBe(0);
+    expect(dry.lines[0]).toBe(
+      'prefix-tests-codemod: warning: src is not prefixed yet (src/lib/styles.ts): the flip runs ' +
+        'scripts/prefix-codemod.mjs --write over src first, then this tool',
+    );
+  }, 60_000);
+
+  it('gives the same tests in either order of the two codemods, never a double prefix', async () => {
+    const testsFirst = makeProject();
+    const srcFirst = makeProject();
+    projects.push(testsFirst, srcFirst);
+    const src = ['src/components', 'src/lib', 'src/hooks'].slice(0, 2);
+    // Tests first, then src.
+    expect(
+      await main(['--root', testsFirst, '--write', '--allow-unprefixed-src', 'src'], quiet()),
+    ).toBe(0);
+    expect(await prefixSrc(['--root', testsFirst, '--write', ...src], quiet())).toBe(0);
+    // src first, then the tests.
+    expect(await prefixSrc(['--root', srcFirst, '--write', ...src], quiet())).toBe(0);
+    expect(await main(['--root', srcFirst, '--write', 'src'], quiet())).toBe(0);
+    for (const name of ['Order', 'Negative']) {
+      const path = `src/components/__tests__/${name}.test.tsx`;
+      expect(readFileSync(join(testsFirst, path), 'utf8'), name).toBe(
+        readFileSync(join(srcFirst, path), 'utf8'),
+      );
+    }
+    // The map's values are prefixed where they are written; the substitutions get no prefix.
+    expect(readFileSync(join(srcFirst, 'src/components/__tests__/Order.test.tsx'), 'utf8')).toBe(
+      ORDER_TEST.replace("{ a: 'flex', b: 'grid' }", "{ a: 'wave:flex', b: 'wave:grid' }"),
+    );
+    expect(readFileSync(join(srcFirst, 'src/lib/styles.ts'), 'utf8')).toContain(
+      "small: 'wave:duration-wave-slow'",
+    );
+  }, 60_000);
+
+  it('reports a negative assertion a class passed in keeps, and reads subjects by their shape', async () => {
+    const dir = makeProject();
+    projects.push(dir);
+    expect(await prefixSrc(['--root', dir, '--write', 'src/components', 'src/lib'], quiet())).toBe(
+      0,
+    );
+    const report = join(dir, 'report.json');
+    expect(await main(['--root', dir, '--write', '--report', report, 'src'], quiet())).toBe(0);
+    expect(readFileSync(join(dir, 'src/components/__tests__/Negative.test.tsx'), 'utf8')).toBe(
+      NEGATIVE_TEST.replace("toHaveClass('grid')", "toHaveClass('wave:grid')"),
+    );
+    expect(JSON.parse(readFileSync(report, 'utf8')).unclassified).toEqual([
+      {
+        place: 'src/components/__tests__/Negative.test.tsx:4',
+        kind: 'kept-negative',
+        words: ['flex'],
+        sites: [
+          'src/components/__tests__/Negative.test.tsx:4 (passed in at ' +
+            'src/components/__tests__/Negative.test.tsx:3)',
+        ],
+        text: "'flex'",
+      },
+    ]);
+  }, 60_000);
 });

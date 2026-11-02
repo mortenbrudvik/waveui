@@ -13,6 +13,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   collectFiles,
   COLOR_ROOTS,
+  declaredNames,
   globToRegExp,
   main,
   parseThemeTable,
@@ -311,6 +312,83 @@ describe('markup', () => {
   it('reads no other file type', () => {
     expect(rewriteFile('x.md', 'bg-subtle', {})).toBeUndefined();
     expect(rewriteFile('x.json', '{"c":"bg-subtle"}', {})).toBeUndefined();
+  });
+});
+
+describe('declarations, file names and the app’s own theme keys', () => {
+  it("leaves a style object's custom property and an @property registration, never a class key", () => {
+    expect(
+      rewriteScript("const s = { '--color-subtle': x, 'bg-subtle': on, \"--shadow-4\": y };", {}),
+    ).toBe("const s = { '--color-subtle': x, 'bg-wave-subtle': on, \"--shadow-4\": y };");
+    // A use in a value is rewritten.
+    expect(rewriteScript("const v = { color: 'var(--color-subtle)' };", {})).toBe(
+      "const v = { color: 'var(--color-wave-subtle)' };",
+    );
+    expect(
+      rewriteStyle(
+        '@property --color-subtle { syntax: "<color>"; } .a { color: var(--color-subtle); }',
+        {},
+      ),
+    ).toBe(
+      '@property --color-subtle { syntax: "<color>"; } .a { color: var(--color-wave-subtle); }',
+    );
+  });
+
+  it('leaves a file name that starts like a utility', () => {
+    expect(rewrite("'bg-subtle.png' 'shadow-4.svg' 'text-body-1.md'")).toBe(
+      "'bg-subtle.png' 'shadow-4.svg' 'text-body-1.md'",
+    );
+    expect(rewrite('bg-subtle. bg-subtle/50')).toBe('bg-wave-subtle. bg-wave-subtle/50');
+  });
+
+  it("finds the names the app's files declare as their own theme keys", () => {
+    expect(
+      declaredNames([
+        '@theme { --color-success: oklch(0.6 0.2 140); --color-error: red; --text-body-1: 15px; }',
+        "const theme = { '--color-info': 'blue' };",
+        // Not Wave's names, or already namespaced: nothing to keep.
+        ':root { --color-brand: x; --color-wave-primary: y; --shadow-lg: z; }',
+        // A use is no declaration.
+        '.a { color: var(--color-severe); }',
+      ]),
+    ).toEqual({ color: ['error', 'info', 'success'], text: ['body-1'], shadow: [] });
+  });
+
+  it("treats those names as shared: left unless --include-shared, like shadcn/ui's", () => {
+    const appNames = { color: ['success'], text: ['body-1'], shadow: [] };
+    const stats = { replacements: 0, shared: 0 };
+    expect(
+      rewriteText('bg-success text-body-1 bg-severe var(--color-success) var(--text-body-1)', {
+        appNames,
+        stats,
+      }),
+    ).toBe('bg-success text-body-1 bg-wave-severe var(--color-success) var(--text-body-1)');
+    expect(stats).toEqual({ replacements: 1, shared: 4 });
+    expect(rewriteText('bg-success text-body-1', { appNames, includeShared: true })).toBe(
+      'bg-wave-success text-wave-body-1',
+    );
+  });
+
+  it('reads the declarations across the scanned files and says so', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wave-migrate-daisy-'));
+    try {
+      writeFileSync(join(dir, 'theme.css'), '@theme { --color-success: oklch(0.6 0.2 140); }\n');
+      writeFileSync(join(dir, 'App.tsx'), '<i className="bg-success bg-severe" />\n');
+      const lines = [];
+      const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
+      expect(main(['--dry-run', '.'], { cwd: dir, io })).toBe(0);
+      expect(lines).toEqual([
+        'migrate-1.0: the files declare --color-success: the app’s own names, left as they are ' +
+          '(--include-shared rewrites them too)',
+        'App.tsx:1\n  - <i className="bg-success bg-severe" />\n' +
+          '  + <i className="bg-success bg-wave-severe" />',
+        'migrate-1.0 (dry run): 1 replacement(s) in 1 of 2 file(s); 1 use(s) of a name shared ' +
+          'with shadcn/ui or declared by the app left as they are (pass --include-shared if they ' +
+          'named Wave’s tokens)',
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

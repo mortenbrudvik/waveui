@@ -44,18 +44,27 @@
  * are not migrated at all).
  *
  * Idempotent: a word that carries the prefix, a selector that does, a renamed import are left
- * alone. `--report` lists every literal it could not classify, with its place, for a manual
- * decision: a classy literal no context reached (`untraced`), one whose contexts disagree
- * (`ambiguous`), a merge argument between two other arguments (`merge`), a matcher value that is
- * a single word with an unknown subject (`subject`), a token with a substitution that does not
- * resolve (`glued`), an escape in a class literal (`escaped`), a regular expression that names a
- * utility (`regex`), a class name in an expected object (`expected-object`). A classy literal
- * holds a utility word with a dash, colon, bracket or slash, or two or more words all utilities.
+ * alone. A token that starts with a substitution holding a whole class (`${MAP[key]}`) never gets
+ * a prefix of its own: the literals behind it are prefixed where they are written. `--report`
+ * lists every literal it could not classify, with its place, for a manual decision: a classy
+ * literal no context reached (`untraced`), one whose contexts disagree (`ambiguous`), a merge
+ * argument between two other arguments (`merge`), a matcher value that is a single word with an
+ * unknown subject (`subject`), a token with a substitution that does not resolve (`glued`), an
+ * escape in a class literal (`escaped`), a regular expression that names a utility (`regex`), a
+ * class name in an expected object (`expected-object`), and every negative assertion that a word
+ * passed in as a consumer class keeps unprefixed (`kept-negative`, with the assertion and the
+ * pass-in site in `sites`): the decision is by word and scope, not by element, and a negative
+ * assertion about Wave's own class would pass for nothing after the flip. A classy literal holds
+ * a utility word with a dash, colon, bracket or slash, or two or more words all utilities.
+ *
+ * The run order of the flip: `scripts/prefix-codemod.mjs --write` over src first, then this tool,
+ * then the manual pass over the report. `--write` refuses to run while src/lib/styles.ts holds no
+ * prefixed class (`--allow-unprefixed-src` overrides it); a dry run or `--check` warns.
  *
  * Usage:
  *   node scripts/prefix-tests-codemod.mjs [--root <project>] [--prefix wave] [--theme <css>]...
- *        [--variants <css>] [--exclude <file>]... [--write | --check] [--report <file.json>]
- *        <files or dirs>...
+ *        [--variants <css>] [--exclude <file>]... [--write [--allow-unprefixed-src] | --check]
+ *        [--report <file.json>] <files or dirs>...
  *
  *   (no mode)   a dry run: counts what `--write` would change
  *   --write     rewrites the files (then `prettier --write`)
@@ -64,7 +73,7 @@
  * The functions are exported for scripts/__tests__/prefix-tests-codemod.test.mjs; importing the
  * module runs nothing. It starts through verify-dist's `runScript`.
  */
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import {
   applyEdits,
@@ -139,7 +148,28 @@ const ITERATION_CHAINS = new Set([
 /** A stable class of the registry (`wave-button`, `wave-tag__media`): kept in a class list. */
 const STABLE_CLASS = /^wave-[a-z0-9-]+(?:__[a-z0-9-]+)?$/;
 const CONSUMER_NAME = /^(?:className|[a-zA-Z]+ClassName)$/;
-const CLASS_LIKE_SUBJECT = /class|tokens\s*\(|\bw?cn\s*\(/i;
+/**
+ * A name that holds classes: `cls`, `classes`, `tokens`, a `*Classes`/`*ClassName`/`*ClassList`
+ * map or string (`buttonAppearanceClasses`, `menuSurfaceClasses`), never the stable-class registry
+ * (`*ClassNames`, whose values are no utilities either way).
+ */
+const CLASS_HOLDER =
+  /^(?:cls|classes|classList|className|tokens)$|(?:Classes|ClassName|ClassList)$/;
+/** A function that returns classes: `classesOf`, `tokens`, `buttonClassName`, `tagRootClasses`. */
+const CLASS_FUNCTION = /^(?:class\w*|tokens|\w+Class\w*)$/;
+/** Methods whose result holds the receiver's classes (`[...el.classList].sort()`). */
+const CLASS_WRAPPERS = new Set([
+  'sort',
+  'toSorted',
+  'split',
+  'join',
+  'trim',
+  'filter',
+  'slice',
+  'find',
+  'findLast',
+  'at',
+]);
 
 /** Whether `path` (forward slashes) is a test file or a test helper. */
 export function isTestFile(path) {
@@ -178,6 +208,7 @@ export function parseArgs(argv) {
     write: false,
     check: false,
     report: null,
+    allowUnprefixedSrc: false,
     paths: [],
   };
   for (let i = 0; i < argv.length; i++) {
@@ -190,6 +221,7 @@ export function parseArgs(argv) {
     else if (arg === '--write') options.write = true;
     else if (arg === '--check') options.check = true;
     else if (arg === '--report') options.report = resolve(argv[++i]);
+    else if (arg === '--allow-unprefixed-src') options.allowUnprefixedSrc = true;
     else if (arg.startsWith('--')) throw new Error(`unknown option ${arg}`);
     else options.paths.push(arg);
   }
@@ -600,9 +632,23 @@ export function planMigration(ts, { root, files, isUtility, prefix, excludes = D
     standaloneSpans: true,
     mapCallbacks: true,
   });
+  /** Whether a matcher call is negated (`expect(el).not.toHaveClass(…)`). */
+  const isNegated = (call) => {
+    if (!ts.isCallExpression(call)) return false;
+    for (let e = call.expression; e && ts.isPropertyAccessExpression(e); e = e.expression) {
+      if (e.name.text === 'not') return true;
+    }
+    return false;
+  };
   const start = (node, kind, at, depth = 0) => {
     if (!node) return;
-    const origin = { kind, scopes: scopesOf(at), file: at.getSourceFile().fileName };
+    const origin = {
+      kind,
+      scopes: scopesOf(at),
+      file: at.getSourceFile().fileName,
+      place: placeOf(at),
+      negative: isNegated(at),
+    };
     tracer.trace(node, depth, tracer.newContext(new Map(), origin));
   };
   const startArgument = (argument, kind, at) => {
@@ -638,13 +684,65 @@ export function planMigration(ts, { root, files, isUtility, prefix, excludes = D
     }
     return undefined;
   };
-  const classLikeSubject = (subject) => {
-    if (!subject) return false;
-    // The keys of a class map are names (`Object.keys(buttonAppearanceClasses)`), not classes.
-    if (/^Object\.(?:keys|entries)\(/.test(subject.getText())) return false;
-    if (CLASS_LIKE_SUBJECT.test(subject.getText())) return true;
-    const resolved = resolveConst(subject);
-    return Boolean(resolved && resolved !== subject && CLASS_LIKE_SUBJECT.test(resolved.getText()));
+  /**
+   * Whether an `expect()` subject reads classes, by its shape: `el.className`, `el.classList`,
+   * `getAttribute('class')`, a `cn`/`wcn` merge, a class helper's result (`classesOf(el)`), a
+   * class map or list (`buttonAppearanceClasses.primary`, `classes`), through `Array.from`, a
+   * spread and `sort`/`split`/`join`, or a constant holding one of those. An array of other values
+   * (`[wrap, grid, classes.root]`) and the keys of a class map (`Object.keys(…)`) are no classes.
+   */
+  const classLikeSubject = (subject, depth = 0) => {
+    const e = stripped(ts, subject);
+    if (!e || depth > 4) return false;
+    if (ts.isCallExpression(e)) {
+      const name = calleeName(ts, e.expression);
+      if (ts.isPropertyAccessExpression(e.expression)) {
+        const receiver = e.expression.expression;
+        if (ts.isIdentifier(receiver) && receiver.text === 'Object') return false;
+        if (ts.isIdentifier(receiver) && receiver.text === 'Array' && name === 'from') {
+          return classLikeSubject(e.arguments[0], depth + 1);
+        }
+        if (name === 'getAttribute') return literalText(e.arguments[0]) === 'class';
+        if (CLASS_WRAPPERS.has(name)) return classLikeSubject(receiver, depth + 1);
+        // `sizes.map((s) => classesOf(…).find(…))`: what the callback returns.
+        const callback = e.arguments[0];
+        if (
+          (name === 'map' || name === 'flatMap') &&
+          callback &&
+          (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))
+        ) {
+          const returns = returnExpressions(ts, callback);
+          return returns.length > 0 && returns.every((r) => classLikeSubject(r, depth + 1));
+        }
+      }
+      if (name === 'String') return classLikeSubject(e.arguments[0], depth + 1);
+      return Boolean(name && (MERGE_CALLS.has(name) || CLASS_FUNCTION.test(name)));
+    }
+    if (ts.isArrayLiteralExpression(e)) {
+      return (
+        e.elements.length === 1 &&
+        ts.isSpreadElement(e.elements[0]) &&
+        classLikeSubject(e.elements[0].expression, depth + 1)
+      );
+    }
+    if (ts.isPropertyAccessExpression(e)) {
+      if (['className', 'classList'].includes(e.name.text)) return true;
+      if (CLASS_HOLDER.test(e.name.text)) return true;
+      // A value of a class map: `buttonAppearanceClasses.primary`.
+      return (
+        (ts.isIdentifier(e.expression) || ts.isPropertyAccessExpression(e.expression)) &&
+        CLASS_HOLDER.test(
+          ts.isIdentifier(e.expression) ? e.expression.text : e.expression.name.text,
+        )
+      );
+    }
+    if (ts.isElementAccessExpression(e)) return classLikeSubject(e.expression, depth + 1);
+    if (ts.isIdentifier(e)) {
+      if (CLASS_HOLDER.test(e.text)) return true;
+      const resolved = resolveConst(e);
+      return Boolean(resolved && resolved !== e && classLikeSubject(resolved, depth + 1));
+    }
+    return false;
   };
   /** Whether `node` is inside the arguments of an expectation (a matcher, `objectContaining`). */
   const inExpectation = (node) => {
@@ -764,6 +862,14 @@ export function planMigration(ts, { root, files, isUtility, prefix, excludes = D
         } else if (name && CONSUMER_NAME.test(name)) {
           start(value, inExpectation(node) ? 'expected-object' : 'consumer', node);
         }
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isPropertyAccessExpression(node.left) &&
+        node.left.name.text === 'className'
+      ) {
+        // `el.className = '…'`: the test sets the element's classes itself.
+        start(node.right, 'consumer', node);
       } else if (ts.isRegularExpressionLiteral(node)) {
         regexes.push(node);
       }
@@ -885,11 +991,23 @@ export function planMigration(ts, { root, files, isUtility, prefix, excludes = D
     for (const origin of origins) {
       if (origin.kind !== 'consumer') continue;
       const scope = scopesFor(origin, node)[0];
-      if (!consumerWords.has(scope)) consumerWords.set(scope, new Set());
-      for (const word of words) if (word) consumerWords.get(scope).add(word);
+      if (!consumerWords.has(scope)) consumerWords.set(scope, new Map());
+      for (const word of words) {
+        if (word && !consumerWords.get(scope).has(word)) {
+          consumerWords.get(scope).set(word, origin.place);
+        }
+      }
     }
   }
-  const passedIn = (word, scopes) => scopes.some((scope) => consumerWords.get(scope)?.has(word));
+  /** Where `word` is passed in as a consumer class in one of `scopes`, or `undefined`. */
+  const passedInAt = (word, scopes) => {
+    for (const scope of scopes) {
+      const place = consumerWords.get(scope)?.get(word);
+      if (place) return place;
+    }
+    return undefined;
+  };
+  const passedIn = (word, scopes) => passedInAt(word, scopes) !== undefined;
 
   // ---- decisions ----
   const edits = new Map();
@@ -899,20 +1017,29 @@ export function planMigration(ts, { root, files, isUtility, prefix, excludes = D
     edits.get(file).push(edit);
   };
   const stats = { words: 0, selectors: 0, markup: 0 };
-  /** One entry per literal and kind: `{ place, kind, words, text }`. */
+  /** One entry per literal and kind: `{ place, kind, words, text }`, and `sites` when known. */
   const reports = new Map();
-  const report = (node, kind, word) => {
+  const report = (node, kind, word, sites = []) => {
     const key = `${node.getSourceFile().fileName}:${node.getStart()}:${kind}`;
     if (!reports.has(key)) {
       reports.set(key, {
         place: placeOf(node),
         kind,
         words: new Set(),
+        sites: new Set(),
         text: node.getText().replace(/\s+/g, ' ').slice(0, 120),
       });
     }
     if (word) reports.get(key).words.add(word);
+    for (const site of sites) reports.get(key).sites.add(site);
   };
+  /**
+   * The places a decision rests on, collected while `decide` runs for one token: for a negative
+   * assertion that a word passed in keeps unprefixed (`kept-negative`), the assertion and the
+   * pass-in site. Such an assertion stays a check of the consumer's class; when it was about
+   * Wave's own class it passes for nothing after the flip, so each one is reported.
+   */
+  let decisionSites = [];
 
   // ---- the values a substitution can take (a probe through its own tracer) ----
   let probed = null;
@@ -956,48 +1083,59 @@ export function planMigration(ts, { root, files, isUtility, prefix, excludes = D
   };
 
   /** Prefixes the class tokens of `node` that `decide(text)` returns 'prefix' for. */
+  /** Whether one of `values` is or holds a class, prefixed or not. */
+  const holdsClass = (values) =>
+    values.some((value) =>
+      value.split(/\s+/).some((word) => word && (word.startsWith(marker) || isClass(word))),
+    );
+
+  /** Prefixes the class tokens of `node` that `decide(text)` returns 'prefix' for. */
   const rewriteTokens = (node, tokens, decide, count, passed = () => false) => {
     for (const token of tokens) {
+      // A token that starts with a substitution holding a whole class (`${MAP[key]}`, a recipe of
+      // src): the literals behind the substitution are traced and prefixed themselves (src by the
+      // src codemod), in either order of the two runs, so the token never gets a prefix of its own.
+      const first = token.pieces[0];
+      if ('expression' in first) {
+        const values = probeValues(first.expression);
+        if (values && holdsClass(values)) continue;
+      }
       const text = tokenText(token);
+      decisionSites = [];
       if (text === null) {
         // Every value the substitutions can take (`text-${variant}` over the rows of an
         // `it.each`): prefixed at the token's start when each combination is a class.
         const combinations = tokenCombinations(token);
-        const decisions = combinations?.every(
-          (combo) => !combo.startsWith(marker) && isClass(combo),
-        )
-          ? new Set(combinations.map((combo) => decide(combo)))
+        const decision = combinations?.every((combo) => !combo.startsWith(marker) && isClass(combo))
+          ? combine(new Set(combinations.map((combo) => decide(combo))))
           : null;
-        if (decisions && decisions.size === 1 && decisions.has('prefix')) {
+        if (decision === 'prefix') {
           addEdit(node, { start: token.start, end: token.start, text: marker });
           stats[count] += 1;
-        } else if (decisions && decisions.size === 1 && decisions.has('keep')) {
+        } else if (decision === 'keep') {
           continue;
+        } else if (decision) {
+          report(node, decision, rawToken(token), decisionSites);
         } else if (fragmentLooksLikeClass(token) && !passed(rawToken(token))) {
           report(node, 'glued', token.pieces.map((p) => p.text ?? '${…}').join(''));
         }
         continue;
       }
       if (text.startsWith(marker) || !isClass(text)) continue;
-      // A token that starts with a substitution holding a whole class: the literal behind the
-      // substitution is traced and prefixed itself.
-      const first = token.pieces[0];
-      if ('expression' in first) {
-        const value = constString(first.expression);
-        if (value !== null && value.split(/\s+/).some((word) => word && isClass(word))) continue;
-      }
       const decision = decide(text);
       if (decision === 'prefix') {
         addEdit(node, { start: token.start, end: token.start, text: marker });
         stats[count] += 1;
-      } else if (decision !== 'keep') report(node, decision, text);
+      } else if (decision !== 'keep') report(node, decision, text, decisionSites);
     }
   };
 
   /** The decision of several contexts for one word: a disagreement is reported. */
   const combine = (decisions) => {
-    if (decisions.has('prefix') && decisions.has('keep')) return 'ambiguous';
+    const kept = decisions.has('keep') || decisions.has('kept-negative');
+    if (decisions.has('prefix') && kept) return 'ambiguous';
     if (decisions.has('prefix')) return 'prefix';
+    if (decisions.has('kept-negative')) return 'kept-negative';
     if (decisions.has('keep')) return 'keep';
     return [...decisions][0];
   };
@@ -1046,7 +1184,11 @@ export function planMigration(ts, { root, files, isUtility, prefix, excludes = D
               if (origin.kind === 'unsure-merge') return 'merge';
               if (origin.kind === 'expected-object') return 'expected-object';
               if (origin.kind === 'fallback' && !list) return classyWord(text) ? 'subject' : 'keep';
-              return passedIn(text, scopesFor(origin, node)) ? 'keep' : 'prefix';
+              const site = passedInAt(text, scopesFor(origin, node));
+              if (!site) return 'prefix';
+              if (!origin.negative) return 'keep';
+              decisionSites.push(`${origin.place} (passed in at ${site})`);
+              return 'kept-negative';
             }),
           ),
         ),
@@ -1123,9 +1265,10 @@ export function planMigration(ts, { root, files, isUtility, prefix, excludes = D
       .filter((word) => word.length > 1);
     if (words.some((word) => /-/.test(word) && classyWord(word))) report(node, 'regex');
   }
-  const unclassified = [...reports.values()].map(({ words, ...entry }) => ({
+  const unclassified = [...reports.values()].map(({ words, sites, ...entry }) => ({
     ...entry,
     words: [...words],
+    ...(sites.size > 0 ? { sites: [...sites] } : {}),
   }));
 
   // ---- edits per file ----
@@ -1147,6 +1290,16 @@ export function planMigration(ts, { root, files, isUtility, prefix, excludes = D
 // Main
 // -------------------------------------------------------------------------------------------
 
+/**
+ * Whether the class strings of src carry `prefix` yet, read from src/lib/styles.ts (the recipes);
+ * `undefined` for a project without it (the test fixtures).
+ */
+export function srcPrefixed(root, prefix) {
+  const path = join(root, 'src/lib/styles.ts');
+  if (!existsSync(path)) return undefined;
+  return new RegExp(`['"\`\\s]${prefix}:`).test(readFileSync(path, 'utf8'));
+}
+
 /** Runs the migration; returns the exit code. `io` takes `log` and `error`. */
 export async function main(argv = process.argv.slice(2), { io = console } = {}) {
   let options;
@@ -1155,6 +1308,16 @@ export async function main(argv = process.argv.slice(2), { io = console } = {}) 
   } catch (error) {
     io.error(`prefix-tests-codemod: ${error.message}`);
     return 2;
+  }
+  if (srcPrefixed(options.root, options.prefix) === false) {
+    const order =
+      'src is not prefixed yet (src/lib/styles.ts): the flip runs scripts/prefix-codemod.mjs ' +
+      '--write over src first, then this tool';
+    if (options.write && !options.allowUnprefixedSrc) {
+      io.error(`prefix-tests-codemod: ${order} (--allow-unprefixed-src writes anyway)`);
+      return 2;
+    }
+    io.error(`prefix-tests-codemod: warning: ${order}`);
   }
   const ts = loadTypeScript();
   const files = listTestFiles(options.root, options.paths);

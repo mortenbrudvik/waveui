@@ -50,7 +50,7 @@
  *                      `--write-allowlist` writes the tier-2 pairs found to that file instead of
  *                      checking them (read every place first: a pair is a decision)
  *   --report <json>    writes the details (per-file counts, glued and escaped words; for `--check`
- *                      the failures and the tier-2 word-file pairs)
+ *                      the failures, the tier-2 word-file pairs and their lines, `untracedPlaces`)
  *
  * `--root` defaults to the current directory. `--theme` files hold the `@theme` mapping the design
  * system is loaded with (default `<root>/src/styles/theme.css`, else `<root>/src/styles/tokens.css`),
@@ -933,14 +933,16 @@ export function unprefixedWords(ts, files, isUtility, prefix) {
  * The two-tier compile check of `files` (absolute) under `root`, for `prefix`. `allow` maps a file
  * (relative to `root`, forward slashes) to the words its untraced literals may hold. Returns the
  * tier-1 failures (`file:line word`), the tier-2 failures, the tier-2 pairs found (`untraced`:
- * file to sorted words, the allowlist's shape) and the allowlist pairs that no longer occur
- * (`stale`, reported, never a failure).
+ * file to sorted words, the allowlist's shape; `untracedPlaces`: the same with each word's
+ * lines), the allowlist pairs that no longer occur (`stale`, reported, never a failure), and how
+ * much the check read: the class literals the tracing reached and their prefixed words.
  */
 export function checkFiles(ts, { root, files, isUtility, prefix, allow = {} }) {
   const program = createProgram(ts, root, files);
   const traced = collectClassLiterals(ts, program, files, { outside: new Set(), errors: [] });
   const tracedRanges = new Map();
   const tracedFailures = [];
+  let classWords = 0;
   for (const [node, { file }] of traced) {
     const rel = posix(relative(root, file));
     if (!tracedRanges.has(rel)) tracedRanges.set(rel, []);
@@ -950,7 +952,8 @@ export function checkFiles(ts, { root, files, isUtility, prefix, allow = {} }) {
       ? [node.head.text, ...node.templateSpans.map((s) => s.literal.text)].join(' ')
       : node.text;
     for (const word of text.split(/\s+/)) {
-      if (word && !word.startsWith(`${prefix}:`) && (MARKER.test(word) || isUtility(word))) {
+      if (word.startsWith(`${prefix}:`)) classWords += 1;
+      else if (word && (MARKER.test(word) || isUtility(word))) {
         tracedFailures.push(`${rel}:${line} ${word}`);
       }
     }
@@ -985,7 +988,22 @@ export function checkFiles(ts, { root, files, isUtility, prefix, allow = {} }) {
       ? words.filter((word) => !(pairs[rel] ?? []).includes(word)).map((word) => `${rel} ${word}`)
       : [],
   );
-  return { tracedFailures, untracedFailures, untraced: pairs, stale };
+  // The lines of every tier-2 pair, for the report: file to word to lines.
+  const untracedPlaces = Object.fromEntries(
+    Object.keys(pairs).map((rel) => [
+      rel,
+      Object.fromEntries(pairs[rel].map((word) => [word, untraced[rel][word]])),
+    ]),
+  );
+  return {
+    tracedFailures,
+    untracedFailures,
+    untraced: pairs,
+    untracedPlaces,
+    stale,
+    classLiterals: traced.size,
+    classWords,
+  };
 }
 
 /**
@@ -1060,7 +1078,8 @@ export async function main(argv = process.argv.slice(2), { io = console } = {}) 
     io.log(
       `prefix-codemod --check: ${result.tracedFailures.length} unprefixed word(s) in class contexts; ` +
         `${result.untracedFailures.length} outside the allowlist elsewhere (${pairCount} word-file ` +
-        `pair(s), ${wordCount} word(s), in other literals) of ${files.length} file(s)`,
+        `pair(s), ${wordCount} word(s), in other literals) of ${files.length} file(s); ` +
+        `${result.classWords} prefixed class word(s) in ${result.classLiterals} class literal(s)`,
     );
     for (const failure of [...result.tracedFailures, ...result.untracedFailures].slice(0, 40)) {
       io.log(`  ${failure}`);

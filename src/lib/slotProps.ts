@@ -281,9 +281,11 @@ export function composeAfterPart<E extends { defaultPrevented: boolean }>(
  *
  * @example
  * const trackRef = useMergedRefs(localTrackRef);
+ * // trackClassName: the part's stable class and its own classes, merged as the components
+ * // merge them.
  * <span
  *   {...mergeSlotProps(slotProps?.track, {
- *     className: wcn(switchClassNames.track, trackClasses),
+ *     className: trackClassName,
  *     ref: trackRef,
  *     locked: { 'aria-hidden': true },
  *   })}

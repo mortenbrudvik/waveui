@@ -15,6 +15,7 @@ import {
   assertStylesCss,
   bareDirectionClasses,
   compileCheck,
+  compileCheckSummary,
   main,
   readUtilityPrefix,
   utilityPrefixOf,
@@ -205,7 +206,8 @@ describe('the compile check (Phase 14 spec R6)', () => {
 
   it('passes prefixed classes, and a word the allowlist names for its file elsewhere', () => {
     write('src/components/Box.tsx', BOX);
-    expect(compileCheck(project, 'wave')).toEqual({
+    const result = compileCheck(project, 'wave');
+    expect(result).toEqual({
       ok: true,
       lines: [
         expect.stringMatching(
@@ -213,6 +215,28 @@ describe('the compile check (Phase 14 spec R6)', () => {
         ),
       ],
     });
+    expect(compileCheckSummary(result.lines, 'wave')).toBe(
+      'prefix wave: 3 class words in 2 files, 1 allowlisted pairs',
+    );
+  }, 60_000);
+
+  it('says in one line that the compile check passed, before the build goes on', () => {
+    write('src/components/Box.tsx', BOX);
+    const printed = [];
+    const log = vi.spyOn(console, 'log').mockImplementation((...args) => printed.push(args));
+    const error = vi.spyOn(console, 'error').mockImplementation((...args) => printed.push(args));
+    try {
+      // No dist: after the check, the outputs are missing.
+      expect(main(['--check-only'], { projectRoot: project })).toBe(1);
+      const lines = printed.map((args) => args.join(' '));
+      expect(lines[0]).toBe(
+        'build-css: compile check passed (prefix wave: 3 class words in 2 files, 1 allowlisted pairs)',
+      );
+      expect(lines.slice(1).every((line) => /does not exist/.test(line))).toBe(true);
+    } finally {
+      log.mockRestore();
+      error.mockRestore();
+    }
   }, 60_000);
 
   it('fails an unprefixed relative in a wcn call although the style object allows relative', () => {
@@ -280,8 +304,10 @@ describe('the compile check (Phase 14 spec R6)', () => {
 });
 
 describe('the prefixed styles.css assertions (Phase 14 spec R6)', () => {
+  // A token whose name a prefixed theme key takes (`--shadow-4` under `wave`), as in tokens.css.
   const TOKENS =
-    ':root, .wave-light { --wave-primary: #0f6cbd; }\n.wave-dark { color-scheme: dark; }';
+    ':root, .wave-light { --wave-primary: #0f6cbd; --wave-shadow-4: 0 0 2px #0003; }\n' +
+    '.wave-dark { color-scheme: dark; }';
   const BASE = '.wave-root, .wave-portal { color: var(--wave-foreground); }';
   const PREFIXED = [
     '@layer properties{@supports ((-webkit-hyphens:none)){*,:before,:after{--tw-border-style:solid}}}',
@@ -318,8 +344,22 @@ describe('the prefixed styles.css assertions (Phase 14 spec R6)', () => {
     expect(check(PREFIXED + leaked)).toEqual([
       'styles.css: declares custom properties that are no token, no --tw-* property and no ' +
         'arbitrary property of a utility (theme variables?): --color-primary, --wave-gap, ' +
-        '--wave-shadow-4, --wave-spacing',
+        '--wave-spacing',
+      'styles.css: declares custom properties that refer to themselves (a theme key emitted ' +
+        'under the prefix: has theme.css lost `reference`?): --wave-shadow-4',
     ]);
+  });
+
+  it('fails the self-reference a theme key leaves under the prefix, though its name is a token', () => {
+    // theme.css without `reference`, built with prefix(wave): `--shadow-4` becomes the token's
+    // own name and refers to itself (spike check 5).
+    const leaked = ':root,:host{--wave-shadow-4:var(--wave-shadow-4)}';
+    expect(check(PREFIXED + leaked)).toEqual([
+      'styles.css: declares custom properties that refer to themselves (a theme key emitted ' +
+        'under the prefix: has theme.css lost `reference`?): --wave-shadow-4',
+    ]);
+    // The token's own declaration is no self-reference.
+    expect(check(`${PREFIXED}:root{--wave-shadow-4:0 0 2px #0003}`)).toEqual([]);
   });
 
   it('runs only with a prefix, and the required utilities are looked up with it', () => {

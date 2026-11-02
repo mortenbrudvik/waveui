@@ -148,12 +148,18 @@ describe('prefix-codemod --check (two tiers)', () => {
       'src/components/Box.tsx',
       read('src/components/Box.tsx').replace('flex${suffix}', 'wave:flex${suffix}'),
     );
-    const { code, lines } = await run(['--check', 'src/components', 'src/lib']);
+    const report = join(project, 'check-report.json');
+    const { code, lines } = await run(['--check', '--report', report, 'src/components', 'src/lib']);
     expect(lines).toEqual([
       'prefix-codemod --check: 0 unprefixed word(s) in class contexts; 0 outside the allowlist ' +
-        'elsewhere (4 word-file pair(s), 4 word(s), in other literals) of 3 file(s)',
+        'elsewhere (4 word-file pair(s), 4 word(s), in other literals) of 3 file(s); 15 prefixed ' +
+        'class word(s) in 8 class literal(s)',
     ]);
     expect(code).toBe(0);
+    // The report keeps the lines of every tier-2 pair.
+    expect(JSON.parse(readFileSync(report, 'utf8')).untracedPlaces).toEqual({
+      'src/components/Box.tsx': { fixed: [6], grid: [9], hidden: [5], relative: [5] },
+    });
   }, 60_000);
 
   it('tier 1: an unprefixed relative in a wcn call fails although the file allows relative', async () => {
