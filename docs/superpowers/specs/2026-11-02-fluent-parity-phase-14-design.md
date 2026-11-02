@@ -517,3 +517,8 @@ Unbudgeted: `cn` 877 / 431 (Task 19) to 863 / 421, `mergeSlotProps` 2,764 / 1,33
 - **`docs/FLUENT-UI-COMPARISON.md`.** §3.1 and §3.2 rewritten to the 1.0 facts (README as the source): the prefixed precompiled classes and the layered `./tailwind`, the gated hover per setup, a Tailwind class without Tailwind (removes, adds none) and `./utilities`, the namespaced theme keys in place of the collision bullet and its `prefix(tw)`/`layer(wave)` recipe, every utility of the token table namespaced; the header's "Since 0.11" bullet names 3.1, 3.2 and 4.3 as describing 1.0.
 - **`src/test-utils.ts`.** The `ConflictingClass.overrides` JSDoc example is `'wave:p-4'` (comment only).
 - **Edits of existing assertions:** none.
+
+### Task 24 fix round 2
+
+- `docs/FLUENT-UI-COMPARISON.md`: §8.1 step 2 says the Tailwind entry has no `@source` and sends a shadcn/ui or prefixed app to `./tailwind` (`tw:bg-wave-primary`), in place of the removed layered-stylesheet recipe; §4.6's styling line gives the per-setup rule of 3.1 (with `./tailwind` a class of yours wins by its layer, with `./styles` the gated and state classes win); §7's namespaced-utilities row reads "shipped in 1.0".
+- A sweep of the whole file for 0.x class names, `@source`, `layer(wave)`, "a 0.x release announces" and unprefixed utilities found nothing else outside the sections labelled 0.11 (the overview table and the 3.11 size measurements, left as history); edits of existing assertions: none.
