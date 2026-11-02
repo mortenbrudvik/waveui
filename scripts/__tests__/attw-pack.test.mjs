@@ -21,12 +21,12 @@ describe('attw-pack.mjs', () => {
       calls.push({ tarball, packed: existsSync(tarball), args });
       return 7;
     };
-    expect(main(['--profile', 'node16'], { attw })).toBe(7);
+    expect(main(['--profile', 'esm-only'], { attw })).toBe(7);
     expect(calls).toEqual([
       {
         tarball: expect.stringMatching(/mortenbrudvik-waveui-[\d.]+\.tgz$/),
         packed: true,
-        args: ['--profile', 'node16'],
+        args: ['--profile', 'esm-only'],
       },
     ]);
     // The temporary tarball is removed afterwards.

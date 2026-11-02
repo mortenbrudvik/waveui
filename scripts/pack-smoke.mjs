@@ -15,9 +15,10 @@
  *                 reset scoped to `.wave-root`/`.wave-portal`, no `@layer` other than Tailwind's
  *                 `properties` fallback, no raw Tailwind directives; `./preflight.css` is
  *                 Preflight;
- *               - TypeScript (node16) type-checks an ES module and a CommonJS file importing the
- *                 package: the ESM file gets `dist/index.d.ts`, the CommonJS file
- *                 `dist/index.d.cts` (no TS1479);
+ *               - TypeScript (`module` node20) type-checks an ES module and a CommonJS file
+ *                 importing the package: both get `dist/index.d.ts` (ES modules only; the
+ *                 CommonJS file `require()`s the ES entry, which `module` node16 refuses with
+ *                 TS1479);
  *               - an app importing `./styles` (`vite-entry.js`) built with Vite's defaults: the
  *                 emitted CSS passes the `./styles` checks, and every `wave-rtl:` class of the
  *                 dist keeps Wave's direction variant. Vite minifies CSS with Lightning CSS for
@@ -407,7 +408,7 @@ function escapeRegExp(text) {
 
 /**
  * The fixture's `tsc --listFiles` run (repo-level#5): no type errors, and the program loaded
- * this package's `dist/index.d.ts` (ESM file) and `dist/index.d.cts` (CommonJS file) — the
+ * this package's `dist/index.d.ts` (the declarations of every condition, spec R4) — the
  * installed `node_modules/<packageName>/dist/…`, not another dependency's `dist/index.d.*`.
  */
 export function checkTypeProgram({ status, output }, packageName = pkg.name) {
@@ -418,10 +419,7 @@ export function checkTypeProgram({ status, output }, packageName = pkg.name) {
   if (status !== 0 && typeErrors.length === 0) errors.push(`tsc exited with status ${status}`);
   const installed = `/node_modules/${escapeRegExp(packageName)}/dist/`;
   if (!new RegExp(`${installed}index\\.d\\.ts\\s*$`, 'm').test(text)) {
-    errors.push(`the ES module consumer did not load ${packageName}/dist/index.d.ts`);
-  }
-  if (!new RegExp(`${installed}index\\.d\\.cts\\s*$`, 'm').test(text)) {
-    errors.push(`the CommonJS consumer did not load ${packageName}/dist/index.d.cts`);
+    errors.push(`the consumers did not load ${packageName}/dist/index.d.ts`);
   }
   return errors;
 }
@@ -693,7 +691,7 @@ async function runTailwind(dir) {
 /** CLI entry; returns the exit code. `io` receives the report (default: the console). */
 export async function main(argv = process.argv.slice(2), io = console) {
   const { fixtures, keep } = parseArgs(argv);
-  for (const file of ['dist/index.mjs', 'dist/index.cjs', 'dist/styles.css']) {
+  for (const file of ['dist/index.mjs', 'dist/styles.css']) {
     if (!existsSync(join(root, file))) {
       io.error(`pack-smoke: ${file} does not exist (run npm run build first)`);
       return 1;

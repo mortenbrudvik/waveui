@@ -4,43 +4,45 @@
  * runs it last, after `vite build` and `scripts/build-css.mjs`.
  *
  * Checks:
- *   - directives: every component and hook module (`dist/components/**`, `dist/hooks/**`, both
- *     formats) starts with `"use client"`; no other file does — not `dist/lib/cn.*`, not
- *     `dist/index.*`, not any `index.*` barrel, not the bundler runtime (repo-level#2);
- *   - declarations: `dist/index.d.ts` and its `dist/index.d.cts` copy for the `require`
- *     condition (repo-level#5); each declares and exports the public names on
+ *   - ES modules only (1.0, spec R4): no `.cjs`, `.cjs.map` or `.d.cts` file in `dist`
+ *     ({@link checkNoCommonJs}), and `dist/index.mjs` loads through `require()` with the names it
+ *     has through `import()` ({@link checkRequireEsm}: a CommonJS consumer on Node.js 22.12 and
+ *     later loads the ES entry so, which a top-level `await` in its module graph would break);
+ *   - directives: every component and hook module (`dist/components/**`, `dist/hooks/**`)
+ *     starts with `"use client"`; no other file does — not `dist/lib/cn.mjs`, not
+ *     `dist/index.mjs`, not any `index.mjs` barrel, not the bundler runtime (repo-level#2);
+ *   - declarations: `dist/index.d.ts` (repo-level#5) declares and exports the public names on
  *     {@link REQUIRED_DECLARATIONS} (a class-name constant among them), so an empty roll-up
  *     (only `export { }`) fails the build; every component it exports carries a JSDoc (C-DOCS: a
  *     compound is documented on its `Object.assign` export, which is what the roll-up keeps);
- *   - development mode: `dist/lib/dev.mjs` and `dist/lib/dev.cjs` still read
- *     `process.env.NODE_ENV` at run time, so a consumer's bundler decides between development and
- *     production (a `define` in vite.config.ts would inline the library's own build mode);
+ *   - development mode: `dist/lib/dev.mjs` still reads `process.env.NODE_ENV` at run time, so a
+ *     consumer's bundler decides between development and production (a `define` in
+ *     vite.config.ts would inline the library's own build mode);
  *   - imports: every bare import is a dependency or peer dependency of package.json (or a
  *     subpath of one), relative imports resolve inside `dist/`, no Node.js builtin is imported
  *     and no dependency was bundled into `dist/` (repo-level#4);
  *   - react-server: the package loads in a React Server Component (repo-level#2). A copy of
  *     `dist/` in which every `"use client"` module is replaced by client references (what an RSC
  *     bundler does) is loaded under `node --conditions=react-server`: every other module — the
- *     `index.*` entries, `dist/lib/**`, the bundler runtime — must evaluate (no client-only
+ *     `index.mjs` entries, `dist/lib/**`, the bundler runtime — must evaluate (no client-only
  *     React API at module scope, no dotting into a client reference such as `Card.Header`);
- *     `dist/lib/cn.*` must work and `dist/index.*` must export the server-side `cn`;
- *     `dist/lib/color.*` and `dist/lib/toaster.*` must exist and work on the server (the color
- *     helpers convert; a handle's dispatch returns an id and adds no global), and `dist/index.*`
+ *     `dist/lib/cn.mjs` must work and `dist/index.mjs` must export the server-side `cn`;
+ *     `dist/lib/color.mjs` and `dist/lib/toaster.mjs` must exist and work on the server (the color
+ *     helpers convert; a handle's dispatch returns an id and adds no global), and `dist/index.mjs`
  *     must export `hsvToHex`, `hexToHsv` and `createToaster` from them, not from a client module;
- *     so must the token modules of 0.17 (`dist/lib/tokens.*`, `dist/lib/waveTokens.*`,
- *     `dist/lib/brand.*`: `getTokenStyle` writes the custom properties, `waveTokens` reads them,
- *     `createBrandTokens` gives the default ramp for the default seed), and `dist/index.*` must
+ *     so must the token modules of 0.17 (`dist/lib/tokens.mjs`, `dist/lib/waveTokens.mjs`,
+ *     `dist/lib/brand.mjs`: `getTokenStyle` writes the custom properties, `waveTokens` reads them,
+ *     `createBrandTokens` gives the default ramp for the default seed), and `dist/index.mjs` must
  *     export `getTokenStyle`, `createBrandTokens`, `waveTokens` and `chartPalette` from them;
- *   - class names (P3-00): every export of `dist/lib/classNames.*` (the stable class-name
- *     registry) is exported by `dist/index.*` with the same value, in both formats
- *     ({@link checkClassNameExports}); under the react-server condition `dist/index.*` exports
+ *   - class names (P3-00): every export of `dist/lib/classNames.mjs` (the stable class-name
+ *     registry) is exported by `dist/index.mjs` with the same value
+ *     ({@link checkClassNameExports}); under the react-server condition `dist/index.mjs` exports
  *     `buttonClassNames` as a plain object whose root is `wave-button`, and every export of
- *     `dist/lib/classNames.*` is an object of strings;
+ *     `dist/lib/classNames.mjs` is an object of strings;
  *   - flat names: every sub-component of a compound export (`Card.Header`) is also exported
  *     from `dist/index.mjs` under its flat name (`CardHeader`), bound to the same component
  *     (C-COMPOUND, repo-level#2) — except the components on {@link PENDING_FLAT_EXPORTS}, a
  *     bridge that closes before publishing (`--final`);
- *   - CommonJS parity: `dist/index.cjs` exports the same names as `dist/index.mjs`;
  *   - tree-shaking: a probe entry importing only `Button` from `dist/index.mjs`, bundled with
  *     Vite's own `build()` API, contains only Button's module and its static imports — no
  *     Dialog code (repo-level#3), and neither the presence core (`hooks/usePresence`) nor
@@ -106,8 +108,8 @@
  *     `Dialog` none but `lib/slotProps` (no DataGrid hook), and one of only `DataGrid` not its
  *     hooks ({@link EXCLUSION_PROBES_0_18}, with the positive controls of {@link
  *     INCLUSION_PROBES_0_18}); no module that only the tests read is in dist ({@link
- *     TEST_ONLY_MODULES}); `dist/lib/slotProps.*` and `dist/lib/nativeProps.*` work on the
- *     server, and `dist/index.*` exports `mergeSlotProps` and `getNativeElementProps` from them;
+ *     TEST_ONLY_MODULES}); `dist/lib/slotProps.mjs` and `dist/lib/nativeProps.mjs` work on the
+ *     server, and `dist/index.mjs` exports `mergeSlotProps` and `getNativeElementProps` from them;
  *     the imports of {@link RECORDED_IMPORTS_0_18} stay within their budgets, each the size
  *     measured at the end of the phase plus {@link BUDGET_MARGIN_0_18}, which the CLI prints
  *     with the 0.17.1 sizes. Growth of the release over 0.17.1, in bytes minified and gzip:
@@ -226,21 +228,13 @@ const TOASTER_INCLUDE_KEEP = 'Toaster';
  */
 const SERVER_SAFE_MODULES = [
   'lib/brand.mjs',
-  'lib/brand.cjs',
   'lib/color.mjs',
-  'lib/color.cjs',
   'lib/date.mjs',
-  'lib/date.cjs',
   'lib/nativeProps.mjs',
-  'lib/nativeProps.cjs',
   'lib/slotProps.mjs',
-  'lib/slotProps.cjs',
   'lib/toaster.mjs',
-  'lib/toaster.cjs',
   'lib/tokens.mjs',
-  'lib/tokens.cjs',
   'lib/waveTokens.mjs',
-  'lib/waveTokens.cjs',
 ];
 
 /**
@@ -1154,6 +1148,7 @@ export const MODULE_ONLY_NAMES = [
   'DataGridWindowRowContext',
   'DataGridWindowState',
   'Deprecation',
+  'DeprecationAbsence',
   'DeprecationKind',
   'DrawerCloseButton',
   'DrawerCloseButtonProps',
@@ -1419,13 +1414,20 @@ export const MODULE_ONLY_NAMES = [
 ];
 
 /**
- * Names that `dist/index.d.ts` and `dist/index.d.cts` must export both as a type and as a value
- * (0.11 spec §6.2): `TagPickerOption` is the interface of an `options` entry and the
- * `TagPicker.Option` component. A roll-up that keeps only one meaning breaks one of the two uses.
+ * Names that `dist/index.d.ts` must export both as a type and as a value (0.11 spec §6.2):
+ * `TagPickerOption` is the interface of an `options` entry and the `TagPicker.Option` component.
+ * A roll-up that keeps only one meaning breaks one of the two uses.
  */
 export const VALUE_AND_TYPE_DECLARATIONS = ['TagPickerOption'];
 
-const JS_FILE = /\.(mjs|cjs|js)$/;
+/**
+ * A JavaScript module of `dist`: the build emits ES modules named `.mjs` only (vite.config.ts);
+ * {@link checkNoCommonJs} reports any CommonJS file.
+ */
+const JS_FILE = /\.mjs$/;
+
+/** A CommonJS file: a module, its source map or its declarations (1.0 ships none, spec R4). */
+const COMMONJS_FILE = /\.(cjs|cjs\.map|d\.cts)$/;
 
 // -------------------------------------------------------------------------------------------
 // Helpers
@@ -1571,7 +1573,7 @@ export function expectsUseClient(path) {
   const segments = path.split('/');
   if (segments[0] !== 'components' && segments[0] !== 'hooks') return false;
   if (segments.includes('node_modules')) return false;
-  return !/^index\.(mjs|cjs|js)$/.test(segments[segments.length - 1]);
+  return !/^index\.mjs$/.test(segments[segments.length - 1]);
 }
 
 /**
@@ -1604,6 +1606,88 @@ function readJson(file) {
 // Checks
 // -------------------------------------------------------------------------------------------
 
+/**
+ * `dist` holds ES modules only (1.0, spec R4): no CommonJS module, source map or declaration
+ * (`.cjs`, `.cjs.map`, `.d.cts`), which a second output format or a declaration copy in
+ * vite.config.ts would bring back.
+ */
+export function checkNoCommonJs(dist) {
+  return listFiles(dist)
+    .filter((path) => COMMONJS_FILE.test(path))
+    .map(
+      (path) =>
+        `${path} is CommonJS output: the package ships ES modules only ` +
+        '(one ES output in vite.config.ts, no index.d.cts)',
+    );
+}
+
+/** The export names of a module namespace. */
+function exportNames(mod) {
+  return Object.keys(mod).filter((name) => name !== 'default' && name !== '__esModule');
+}
+
+/**
+ * The source of the script that loads `entry` through `require()` and prints, on its last line,
+ * `{ names }` (the keys of what `require()` returned) or `{ error }` (its code and message).
+ */
+function requireProbeSource(entry) {
+  return `let result;
+try {
+  result = { names: Object.keys(require(${JSON.stringify(entry)})) };
+} catch (error) {
+  const message = String((error && error.message) || error).split('\\n')[0];
+  result = { error: error && error.code ? error.code + ': ' + message : message };
+}
+process.stdout.write('\\n' + JSON.stringify(result) + '\\n');
+`;
+}
+
+/**
+ * `require(esm)` (spec R4): `dist/index.mjs` loads through `require()`, as a CommonJS consumer on
+ * Node.js 22.12 and later loads the ES entry, with the export names it has through `import()`.
+ * Node.js refuses to `require()` a module graph with a top-level `await`
+ * (`ERR_REQUIRE_ASYNC_MODULE`), so one such `await` anywhere under the entry would break every
+ * CommonJS consumer. The entry is required in a child process of the Node.js running this check
+ * (the CI runs the build on every supported line), so the module cache of the check plays no part.
+ */
+export async function checkRequireEsm(dist) {
+  const entry = resolve(dist, 'index.mjs');
+  if (!existsSync(entry)) return ['index.mjs is missing'];
+  const child = spawnSync(
+    process.execPath,
+    ['--input-type=commonjs', '-e', requireProbeSource(entry)],
+    { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
+  );
+  if (child.error) throw child.error;
+  let result;
+  try {
+    result = JSON.parse((child.stdout ?? '').trim().split('\n').pop() ?? '');
+  } catch {
+    const output = `${child.stderr}${child.stdout}`.trim().split('\n');
+    throw new Error(`the require() probe exited with ${child.status}: ${output[0] ?? ''}`);
+  }
+  if (result.error !== undefined) {
+    return [
+      'index.mjs does not load through require(), so CommonJS consumers (Node.js 22.12 and ' +
+        `later) cannot use the package: ${result.error}`,
+    ];
+  }
+  const imported = exportNames(await import(pathToFileURL(entry).href));
+  const required = result.names.filter((name) => name !== 'default' && name !== '__esModule');
+  const errors = [];
+  const onlyImported = imported.filter((name) => !required.includes(name));
+  const onlyRequired = required.filter((name) => !imported.includes(name));
+  if (onlyImported.length > 0) {
+    errors.push(`require() of index.mjs lacks ${onlyImported.join(', ')}, which import() exports`);
+  }
+  if (onlyRequired.length > 0) {
+    errors.push(
+      `require() of index.mjs has ${onlyRequired.join(', ')}, which import() does not export`,
+    );
+  }
+  return errors;
+}
+
 /** `"use client"` on every component/hook module and on nothing else (repo-level#2). */
 export function checkDirectives(dist) {
   const errors = [];
@@ -1630,8 +1714,8 @@ export function checkDirectives(dist) {
 const COMPONENT_NAME = /^[A-Z](?=[A-Za-z0-9]*[a-z])[A-Za-z0-9]*$/;
 
 /**
- * Public names that `dist/index.d.ts` and `dist/index.d.cts` must declare and export: a utility,
- * a component, a props type, a compound, a hook and a class-name constant. The build passes with
+ * Public names that `dist/index.d.ts` must declare and export: a utility, a component, a props
+ * type, a compound, a hook and a class-name constant. The build passes with
  * an empty roll-up: vite-plugin-dts 4 rolls up only `export { }` when TypeScript writes the
  * declarations somewhere else than it expects (TypeScript 6 without `rootDir` in tsconfig.json).
  * Without this list, only `npm run test:pack`, which type-checks the packed tarball, would notice.
@@ -1771,9 +1855,9 @@ export function missingValueAndTypeDeclarations(dts, names) {
 }
 
 /**
- * `index.d.ts` and its `index.d.cts` copy for the `require` condition (repo-level#5); each
- * declares and exports `requiredDeclarations` (default {@link REQUIRED_DECLARATIONS}), so an empty
- * or partial roll-up fails, and exports each of `valueAndTypeDeclarations` (default {@link
+ * `index.d.ts`, the rolled-up declarations (repo-level#5), declares and exports
+ * `requiredDeclarations` (default {@link REQUIRED_DECLARATIONS}), so an empty or partial roll-up
+ * fails, and exports each of `valueAndTypeDeclarations` (default {@link
  * VALUE_AND_TYPE_DECLARATIONS}) both as a type and as a value; every component the declarations
  * export has a JSDoc (C-DOCS).
  */
@@ -1785,39 +1869,27 @@ export function checkDeclarations(
   } = {},
 ) {
   const errors = [];
-  const dts = join(dist, 'index.d.ts');
-  const dcts = join(dist, 'index.d.cts');
-  const esm = existsSync(dts) ? readFileSync(dts, 'utf8') : undefined;
-  const cjs = existsSync(dcts) ? readFileSync(dcts, 'utf8') : undefined;
-  if (esm === undefined) errors.push('index.d.ts is missing');
-  else if (esm.trim() === '') errors.push('index.d.ts is empty');
-  if (cjs === undefined) {
-    errors.push('index.d.cts is missing (CommonJS consumers would get ESM-typed declarations)');
-  } else if (esm !== undefined && cjs !== esm) {
-    errors.push('index.d.cts differs from index.d.ts (it must be a copy of the rolled-up file)');
-  }
-  for (const [name, text] of [
-    ['index.d.ts', esm],
-    ['index.d.cts', cjs],
-  ]) {
-    // Reported above: a missing file, an empty index.d.ts, an index.d.cts that is not its copy.
-    if (text === undefined || text.trim() === '') continue;
-    const missing = missingDeclarations(text, requiredDeclarations);
+  const file = join(dist, 'index.d.ts');
+  const dts = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
+  if (dts === undefined) errors.push('index.d.ts is missing');
+  else if (dts.trim() === '') errors.push('index.d.ts is empty');
+  else {
+    const missing = missingDeclarations(dts, requiredDeclarations);
     if (missing.length > 0) {
       errors.push(
-        `${name} does not declare and export ${missing.join(', ')} (an empty or partial ` +
+        `index.d.ts does not declare and export ${missing.join(', ')} (an empty or partial ` +
           "roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
       );
-      continue;
-    }
-    for (const both of missingValueAndTypeDeclarations(text, valueAndTypeDeclarations)) {
-      errors.push(
-        `${name} does not export ${both} both as a type and as a value (the interface and the ` +
-          'component of one name: export the name once, without `type`, from the barrel)',
-      );
+    } else {
+      for (const both of missingValueAndTypeDeclarations(dts, valueAndTypeDeclarations)) {
+        errors.push(
+          `index.d.ts does not export ${both} both as a type and as a value (the interface and ` +
+            'the component of one name: export the name once, without `type`, from the barrel)',
+        );
+      }
     }
   }
-  for (const name of esm ? undocumentedComponents(esm) : []) {
+  for (const name of dts ? undocumentedComponents(dts) : []) {
     errors.push(
       `index.d.ts: the exported component ${name} has no JSDoc (document it on its export, C-DOCS)`,
     );
@@ -1826,23 +1898,21 @@ export function checkDeclarations(
 }
 
 /**
- * `dist/lib/dev.mjs` and `dist/lib/dev.cjs` keep the literal `process.env.NODE_ENV` expression:
- * the consumer's bundler replaces it, so development warnings follow the consumer's
- * build mode. A `define` in vite.config.ts would inline the library's own mode instead.
+ * `dist/lib/dev.mjs` keeps the literal `process.env.NODE_ENV` expression: the consumer's bundler
+ * replaces it, so development warnings follow the consumer's build mode. A `define` in
+ * vite.config.ts would inline the library's own mode instead.
  */
 export function checkDevEnvironment(dist) {
-  const errors = [];
-  for (const path of ['lib/dev.mjs', 'lib/dev.cjs']) {
-    const file = join(dist, path);
-    if (!existsSync(file)) errors.push(`${path} is missing`);
-    else if (!readFileSync(file, 'utf8').includes('process.env.NODE_ENV')) {
-      errors.push(
-        `${path} does not read process.env.NODE_ENV: the build inlined the mode (a \`define\` in ` +
-          "vite.config.ts?), so the consumer's bundler can no longer choose development or production",
-      );
-    }
+  const path = 'lib/dev.mjs';
+  const file = join(dist, path);
+  if (!existsSync(file)) return [`${path} is missing`];
+  if (!readFileSync(file, 'utf8').includes('process.env.NODE_ENV')) {
+    return [
+      `${path} does not read process.env.NODE_ENV: the build inlined the mode (a \`define\` in ` +
+        "vite.config.ts?), so the consumer's bundler can no longer choose development or production",
+    ];
   }
-  return errors;
+  return [];
 }
 
 /**
@@ -1895,7 +1965,7 @@ export function checkImports(dist, pkg) {
  */
 export function checkDevOnlyLibraries(dist, names = DEV_ONLY_LIBRARIES) {
   const errors = [];
-  for (const path of listFiles(dist).filter((file) => /\.([cm]?js|css|d\.[cm]?ts)$/.test(file))) {
+  for (const path of listFiles(dist).filter((file) => /\.(mjs|css|d\.ts)$/.test(file))) {
     const text = readFileSync(join(dist, path), 'utf8');
     for (const name of names) {
       if (text.includes(name)) {
@@ -1995,21 +2065,16 @@ export function removeWorkDir({ work, created }) {
   }
 }
 
-/** Whether a built file is CommonJS (`.cjs`, or `.js` in a package without `type: module`). */
-function isCommonJs(path, packageType) {
-  return path.endsWith('.cjs') || (path.endsWith('.js') && packageType !== 'module');
-}
-
 /**
- * The source of a module standing in for a `"use client"` module on the server, as an RSC
+ * The source of an ES module standing in for a `"use client"` module on the server, as an RSC
  * bundler substitutes it: every export (`names`) is a client reference — a function that throws
  * when called and whose other properties can be neither read ("Cannot access Card.Header on the
  * server") nor assigned, like React's own client references — so evaluating the server module
  * graph never runs client code. As in React, reading `then` throws too ("Cannot await or return
  * from a thenable"), so server code that awaits a client reference or passes it to
- * `Promise.resolve` fails here as it does in an RSC bundler. `format` is `esm` or `cjs`.
+ * `Promise.resolve` fails here as it does in an RSC bundler.
  */
-export function clientReferenceStub(path, names, format) {
+export function clientReferenceStub(path, names) {
   const helper = `const clientReference = (name) => {
   const target = function () {
     throw new Error('Attempted to call ' + name + '() from the server: it is exported by the "use client" module ' + ${JSON.stringify(path)});
@@ -2046,20 +2111,6 @@ export function clientReferenceStub(path, names, format) {
   });
 };
 `;
-  if (format === 'cjs') {
-    const assignments = names
-      .filter((name) => name !== '__esModule')
-      .map(
-        (name) => `exports[${JSON.stringify(name)}] = clientReference(${JSON.stringify(name)});`,
-      );
-    return [
-      "'use strict';",
-      helper,
-      "Object.defineProperty(exports, '__esModule', { value: true });",
-      ...assignments,
-      '',
-    ].join('\n');
-  }
   const declarations = names.map(
     (name, index) => `const reference${index} = clientReference(${JSON.stringify(name)});`,
   );
@@ -2073,27 +2124,23 @@ export function clientReferenceStub(path, names, format) {
 }
 
 /**
- * The script run under `node --conditions=react-server` that loads each of `files` (paths
+ * The ES module run under `node --conditions=react-server` that imports each of `files` (paths
  * relative to `dir`) and prints `{ [path]: { phase, message } }` for the failures: `load` when
- * the module does not evaluate, `check` when it loads but `lib/cn.*` does not work, `index.*`
- * does not export the server-side `cn` and a plain `buttonClassNames`, or `lib/classNames.*`
- * exports anything but objects of strings.
+ * the module does not evaluate, `check` when it loads but `lib/cn.mjs` does not work,
+ * `index.mjs` does not export the server-side `cn` and a plain `buttonClassNames`, or
+ * `lib/classNames.mjs` exports anything but objects of strings.
  */
-function serverProbeSource(dir, files, format) {
-  const load =
-    format === 'cjs'
-      ? `const load = async (path) => require(require('node:path').join(${JSON.stringify(dir)}, path));`
-      : `const base = ${JSON.stringify(pathToFileURL(`${dir}/`).href)};\n` +
-        'const load = (path) => import(new URL(path, base).href);';
-  return `${load}
+function serverProbeSource(dir, files) {
+  return `const base = ${JSON.stringify(pathToFileURL(`${dir}/`).href)};
+const load = (path) => import(new URL(path, base).href);
 const files = ${JSON.stringify(files)};
 const check = (path, m) => {
-  if (/^lib\\/cn\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/cn\\.mjs$/.test(path)) {
     if (typeof m.cn !== 'function') throw new Error('cn is not exported');
     const out = m.cn('a', false, 'b');
     if (out !== 'a b') throw new Error("cn('a', false, 'b') returned " + JSON.stringify(out));
   }
-  if (/^lib\\/classNames\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/classNames\\.mjs$/.test(path)) {
     const names = Object.keys(m).filter((name) => name !== 'default' && name !== '__esModule');
     if (names.length === 0) throw new Error('exports no class-name constant');
     for (const name of names) {
@@ -2107,7 +2154,7 @@ const check = (path, m) => {
       }
     }
   }
-  if (/^index\\.[cm]?js$/.test(path)) {
+  if (/^index\\.mjs$/.test(path)) {
     if (typeof m.cn !== 'function') throw new Error('cn is not exported');
     if (m.cn.$$typeof === Symbol.for('react.client.reference')) {
       throw new Error('cn is a client reference (re-exported from a "use client" module)');
@@ -2122,7 +2169,7 @@ const check = (path, m) => {
       throw new Error('buttonClassNames.root is ' + JSON.stringify(constants.root) + ", not 'wave-button'");
     }
   }
-  if (/^lib\\/color\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/color\\.mjs$/.test(path)) {
     if (typeof m.hsvToHex !== 'function' || typeof m.hexToHsv !== 'function') {
       throw new Error('hsvToHex and hexToHsv are not both exported');
     }
@@ -2135,7 +2182,7 @@ const check = (path, m) => {
       throw new Error("hexToHsv('#ff0000') returned " + JSON.stringify(hsv));
     }
   }
-  if (/^lib\\/toaster\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/toaster\\.mjs$/.test(path)) {
     if (typeof m.createToaster !== 'function') throw new Error('createToaster is not exported');
     const handle = m.createToaster();
     for (const key of ['dispatchToast', 'dismissToast', 'dismissAllToasts']) {
@@ -2158,7 +2205,7 @@ const check = (path, m) => {
       throw new Error('a dispatch on the server added a global (it must do nothing)');
     }
   }
-  if (/^lib\\/date\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/date\\.mjs$/.test(path)) {
     const day = new Date(2024, 0, 31);
     const next = typeof m.addDays === 'function' ? m.addDays(day, 1) : undefined;
     if (!(next instanceof Date) || next.getMonth() !== 1 || next.getDate() !== 1) {
@@ -2166,7 +2213,7 @@ const check = (path, m) => {
     }
     if (day.getDate() !== 31) throw new Error('addDays changed its argument');
   }
-  if (/^lib\\/tokens\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/tokens\\.mjs$/.test(path)) {
     const style =
       typeof m.getTokenStyle === 'function'
         ? m.getTokenStyle({ brand80: '#c43e00', zOverlay: 2000 })
@@ -2178,7 +2225,7 @@ const check = (path, m) => {
       throw new Error('getTokenStyle(null) returned ' + JSON.stringify(m.getTokenStyle(null)) + ', not undefined');
     }
   }
-  if (/^lib\\/waveTokens\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/waveTokens\\.mjs$/.test(path)) {
     const tokens = m.waveTokens;
     if (typeof tokens !== 'object' || tokens === null || !Array.isArray(m.chartPalette)) {
       throw new Error('waveTokens and chartPalette are not both exported');
@@ -2191,7 +2238,7 @@ const check = (path, m) => {
       );
     }
   }
-  if (/^lib\\/brand\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/brand\\.mjs$/.test(path)) {
     if (typeof m.createBrandTokens !== 'function') throw new Error('createBrandTokens is not exported');
     // The default seed gives the default ramp: its 16 stops, stop 80 the seed itself.
     const brand = m.createBrandTokens('#0f6cbd');
@@ -2204,7 +2251,7 @@ const check = (path, m) => {
       );
     }
   }
-  if (/^lib\\/slotProps\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/slotProps\\.mjs$/.test(path)) {
     if (typeof m.mergeSlotProps !== 'function') throw new Error('mergeSlotProps is not exported');
     // The part's attributes, the locked ones over them, and the component's class (without a
     // class of the part it calls no cn, so a broken lib/cn is reported alone).
@@ -2219,7 +2266,7 @@ const check = (path, m) => {
       );
     }
   }
-  if (/^lib\\/nativeProps\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/nativeProps\\.mjs$/.test(path)) {
     if (typeof m.getNativeElementProps !== 'function') {
       throw new Error('getNativeElementProps is not exported');
     }
@@ -2238,7 +2285,7 @@ const check = (path, m) => {
       );
     }
   }
-  if (/^index\\.[cm]?js$/.test(path)) {
+  if (/^index\\.mjs$/.test(path)) {
     for (const name of ['hsvToHex', 'hexToHsv', 'createToaster', 'addDays', 'getTokenStyle', 'createBrandTokens', 'mergeSlotProps', 'getNativeElementProps']) {
       if (typeof m[name] !== 'function') throw new Error(name + ' is not exported');
       if (m[name].$$typeof === Symbol.for('react.client.reference')) {
@@ -2309,26 +2356,21 @@ function relativeImports(dist, path) {
 /**
  * The package loads in a React Server Component (repo-level#2). An RSC bundler replaces every
  * `"use client"` module with client references and evaluates the rest on the server — the
- * `index.*` entries, `dist/lib/**` and the bundler runtime. This check does the same with a copy
- * of `dist` (export names of the client modules read by loading them normally, the copy placed
- * next to `dist` so dependencies resolve alike) and loads every other module, both formats, under
+ * `index.mjs` entries, `dist/lib/**` and the bundler runtime. This check does the same with a copy
+ * of `dist` (export names of the client modules read by importing them normally, the copy placed
+ * next to `dist` so dependencies resolve alike) and imports every other module under
  * `node --conditions=react-server`. Reported: a module that does not evaluate (a client-only
  * React API at module scope, dotting into a client reference) — only the root cause, not the
- * modules that fail because they import it; a `lib/cn.*` that does not work; an `index.*` whose
- * `cn` is missing or a client reference, or whose `buttonClassNames` is no plain object with the
- * root `wave-button`; a `lib/classNames.*` export that is not an object of strings.
+ * modules that fail because they import it; a `lib/cn.mjs` that does not work; an `index.mjs`
+ * whose `cn` is missing or a client reference, or whose `buttonClassNames` is no plain object with
+ * the root `wave-button`; a `lib/classNames.mjs` export that is not an object of strings.
  */
 export async function checkServerImport(dist) {
   const errors = [];
   const distRoot = resolve(dist);
-  for (const path of ['lib/cn.mjs', 'lib/cn.cjs']) {
+  for (const path of ['lib/cn.mjs', ...SERVER_SAFE_MODULES]) {
     if (!existsSync(join(distRoot, path))) errors.push(`${path} is missing`);
   }
-  for (const path of SERVER_SAFE_MODULES) {
-    if (!existsSync(join(distRoot, path))) errors.push(`${path} is missing`);
-  }
-  const manifest = join(distRoot, '..', 'package.json');
-  const packageType = existsSync(manifest) ? readJson(manifest).type : undefined;
   const files = listFiles(distRoot).filter(
     (path) => JS_FILE.test(path) && !path.split('/').includes('node_modules'),
   );
@@ -2344,13 +2386,9 @@ export async function checkServerImport(dist) {
   const stubs = new Map();
   const unloadable = new Set();
   for (const path of clientFiles) {
-    const file = join(distRoot, path);
-    const format = isCommonJs(path, packageType) ? 'cjs' : 'esm';
     try {
-      const names = Object.keys(
-        format === 'cjs' ? require(file) : await import(pathToFileURL(file).href),
-      );
-      stubs.set(path, clientReferenceStub(path, names, format));
+      const names = Object.keys(await import(pathToFileURL(join(distRoot, path)).href));
+      stubs.set(path, clientReferenceStub(path, names));
     } catch {
       unloadable.add(path);
     }
@@ -2366,21 +2404,16 @@ export async function checkServerImport(dist) {
   try {
     const copy = join(work, 'dist');
     cpSync(distRoot, copy, { recursive: true, filter: (source) => !source.endsWith('.map') });
-    writeFileSync(join(work, 'package.json'), JSON.stringify({ type: packageType ?? 'commonjs' }));
     for (const [path, source] of stubs) writeFileSync(join(copy, path), source);
 
     const serverFiles = files.filter((path) => !clientFiles.has(path));
-    for (const format of ['esm', 'cjs']) {
-      const selected = serverFiles.filter(
-        (path) => isCommonJs(path, packageType) === (format === 'cjs'),
-      );
-      if (selected.length === 0) continue;
-      const probe = join(work, format === 'cjs' ? 'probe.cjs' : 'probe.mjs');
-      writeFileSync(probe, serverProbeSource(toPosix(copy), selected, format));
+    if (serverFiles.length > 0) {
+      const probe = join(work, 'probe.mjs');
+      writeFileSync(probe, serverProbeSource(toPosix(copy), serverFiles));
       try {
         Object.assign(failures, runServerProbe(probe));
       } catch (error) {
-        errors.push(`react-server check (${format}) failed: ${error.message}`);
+        errors.push(`react-server check failed: ${error.message}`);
       }
     }
   } finally {
@@ -2490,8 +2523,8 @@ export function checkFlatExports(
 
 /**
  * The names of `names` (default {@link MODULE_ONLY_NAMES}) that the package exports although
- * they are module-only: a value of the module namespace `mod` (`dist/index.mjs`; `index.cjs`
- * exports the same names, {@link checkCjsParity}), or a value or a type that the rolled-up
+ * they are module-only: a value of the module namespace `mod` (`dist/index.mjs`; `require()`
+ * gives the same names, {@link checkRequireEsm}), or a value or a type that the rolled-up
  * declarations `dts` (`dist/index.d.ts`, when given) export.
  */
 export function checkModuleOnlyNames(mod, dts, names = MODULE_ONLY_NAMES) {
@@ -2512,52 +2545,30 @@ export function checkModuleOnlyNames(mod, dts, names = MODULE_ONLY_NAMES) {
   return errors;
 }
 
-/** The export names of a namespace or CommonJS exports object. */
-function exportNames(mod) {
-  return Object.keys(mod).filter((name) => name !== 'default' && name !== '__esModule');
-}
-
-/** `dist/index.cjs` exports exactly the names of `dist/index.mjs`. */
-export async function checkCjsParity(dist) {
-  const esm = exportNames(await import(pathToFileURL(resolve(dist, 'index.mjs')).href));
-  const cjs = exportNames(require(resolve(dist, 'index.cjs')));
-  const errors = [];
-  const onlyEsm = esm.filter((name) => !cjs.includes(name));
-  const onlyCjs = cjs.filter((name) => !esm.includes(name));
-  if (onlyEsm.length > 0) errors.push(`index.cjs lacks ${onlyEsm.sort().join(', ')}`);
-  if (onlyCjs.length > 0) errors.push(`index.mjs lacks ${onlyCjs.sort().join(', ')}`);
-  return errors;
-}
-
 /**
- * The stable class-name registry (`dist/lib/classNames.*`, spec P3-00) is public API: every
- * constant it exports is exported by the entry of the same format (`dist/index.mjs`,
- * `dist/index.cjs`) with the same value. {@link checkFlatExports} walks only capitalised
- * components, so without this check a constant missing from the entry would pass.
+ * The stable class-name registry (`dist/lib/classNames.mjs`, spec P3-00) is public API: every
+ * constant it exports is exported by the entry (`dist/index.mjs`) with the same value.
+ * {@link checkFlatExports} walks only capitalised components, so without this check a constant
+ * missing from the entry would pass.
  */
 export async function checkClassNameExports(dist) {
-  const errors = [];
   const distRoot = resolve(dist);
-  const load = (file) => (file.endsWith('.cjs') ? require(file) : import(pathToFileURL(file).href));
-  for (const [registryPath, entryPath] of [
-    ['lib/classNames.mjs', 'index.mjs'],
-    ['lib/classNames.cjs', 'index.cjs'],
-  ]) {
-    const registryFile = join(distRoot, registryPath);
-    if (!existsSync(registryFile)) {
-      errors.push(`${registryPath} is missing (the class-name registry, src/lib/classNames.ts)`);
-      continue;
-    }
-    const registry = await load(registryFile);
-    const entry = await load(join(distRoot, entryPath));
-    for (const name of exportNames(registry)) {
-      if (!Object.hasOwn(entry, name)) {
-        errors.push(
-          `${entryPath} does not export ${name} (a class-name constant of ${registryPath})`,
-        );
-      } else if (!isDeepStrictEqual(entry[name], registry[name])) {
-        errors.push(`${entryPath} exports ${name} with another value than ${registryPath}`);
-      }
+  const registryPath = 'lib/classNames.mjs';
+  const entryPath = 'index.mjs';
+  const registryFile = join(distRoot, registryPath);
+  if (!existsSync(registryFile)) {
+    return [`${registryPath} is missing (the class-name registry, src/lib/classNames.ts)`];
+  }
+  const registry = await import(pathToFileURL(registryFile).href);
+  const entry = await import(pathToFileURL(join(distRoot, entryPath)).href);
+  const errors = [];
+  for (const name of exportNames(registry)) {
+    if (!Object.hasOwn(entry, name)) {
+      errors.push(
+        `${entryPath} does not export ${name} (a class-name constant of ${registryPath})`,
+      );
+    } else if (!isDeepStrictEqual(entry[name], registry[name])) {
+      errors.push(`${entryPath} exports ${name} with another value than ${registryPath}`);
     }
   }
   return errors;
@@ -3148,6 +3159,7 @@ export async function verifyDist(
   }
   const pkg = readJson(join(distRoot, '..', 'package.json'));
   const errors = [
+    ...checkNoCommonJs(distRoot),
     ...checkDeclarations(distRoot),
     ...checkDevEnvironment(distRoot),
     ...checkDirectives(distRoot),
@@ -3168,13 +3180,13 @@ export async function verifyDist(
     errors.push(...flat.errors);
     pending = flat.pending;
     planned = flat.planned;
-    errors.push(...(await checkCjsParity(distRoot)));
+    errors.push(...(await checkRequireEsm(distRoot)));
     const dts = join(distRoot, 'index.d.ts');
     errors.push(
       ...checkModuleOnlyNames(mod, existsSync(dts) ? readFileSync(dts, 'utf8') : undefined),
     );
   } catch (error) {
-    errors.push(`index.mjs/index.cjs do not load in Node.js: ${error.message}`);
+    errors.push(`index.mjs does not load in Node.js: ${error.message}`);
   }
   try {
     errors.push(...(await checkClassNameExports(distRoot)));

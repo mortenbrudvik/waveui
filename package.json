@@ -39,19 +39,12 @@
   "sideEffects": [
     "*.css"
   ],
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.mjs"
     },
     "./styles": "./dist/styles.css",
     "./styles.css": "./dist/styles.css",
@@ -86,7 +79,7 @@
     "lint:fix": "eslint src/ stories/ .storybook/ scripts/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
-    "check:package": "publint && node scripts/attw-pack.mjs --profile node16 --exclude-entrypoints styles styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css legacy-tokens.css",
+    "check:package": "publint && node scripts/attw-pack.mjs --profile esm-only --exclude-entrypoints styles styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css legacy-tokens.css",
     "test:pack": "node scripts/pack-smoke.mjs",
     "prepublishOnly": "npm run typecheck && npm run build && node scripts/verify-dist.mjs --final && npm test && npm run check:package && npm run test:pack"
   },

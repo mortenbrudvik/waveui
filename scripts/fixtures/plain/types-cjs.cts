@@ -1,8 +1,8 @@
 /**
- * CommonJS TypeScript consumer (`module`/`moduleResolution` node16): this import compiles to
- * `require`, so the `require` condition resolves `dist/index.d.cts`. With ESM-typed
- * declarations for `require` it fails with TS1479 (repo-level#5). Type-checked by
- * scripts/pack-smoke.mjs.
+ * CommonJS TypeScript consumer (`module` node20, `moduleResolution` node16): this import compiles
+ * to `require`, which loads the package's ES entry (Node.js 22.12 and later), typed by
+ * `dist/index.d.ts`. Under `module` node16 it fails with TS1479 (repo-level#5, spec R4).
+ * Type-checked by scripts/pack-smoke.mjs.
  */
 import { cn, type ButtonProps } from '@mortenbrudvik/waveui';
 

@@ -1,16 +1,17 @@
 // @vitest-environment node
 /**
  * Library build configuration (`vite.config.ts`, spec §3.1): externals derived from the manifest
- * (repo-level#4), one output file per source module (repo-level#3), the `"use client"` banner for
- * component and hook modules only (repo-level#2), and the CommonJS declaration copy
- * (repo-level#5). `scripts/verify-dist.mjs` asserts the same properties on the built `dist/`.
+ * (repo-level#4), one ES module per source module and no CommonJS output (repo-level#3; 1.0, spec
+ * R4), and the `"use client"` banner for component and hook modules only (repo-level#2).
+ * `scripts/verify-dist.mjs` asserts the same properties on the built `dist/`.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
-import config, { copyIndexDtsToDcts, external, useClient } from '../../vite.config.ts';
+import { describe, expect, it } from 'vitest';
+import * as viteConfig from '../../vite.config.ts';
+
+const { default: config, external, useClient } = viteConfig;
 
 const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -116,22 +117,21 @@ describe('useClient banner (repo-level#2)', () => {
 describe('library build options (repo-level#2, repo-level#3)', () => {
   const { build } = config;
 
-  it('keeps only the entry in build.lib (formats come from the output array)', () => {
-    expect(build.lib).toEqual({ entry: expect.stringMatching(/src[\\/]index\.ts$/) });
+  it('builds the entry as an ES library only (Vite 8 would add UMD without formats)', () => {
+    expect(build.lib).toEqual({
+      entry: expect.stringMatching(/src[\\/]index\.ts$/),
+      formats: ['es'],
+    });
   });
 
-  it('emits one file per source module in both formats, named .mjs / .cjs', () => {
-    const outputs = build.rolldownOptions.output;
-    expect(Array.isArray(outputs)).toBe(true);
-    expect(outputs.map((output) => output.format)).toEqual(['es', 'cjs']);
-    for (const output of outputs) {
-      expect(output.preserveModules).toBe(true);
-      expect(output.preserveModulesRoot).toBe('src');
-      expect(output.banner).toBe(useClient);
-    }
-    expect(outputs[0].entryFileNames).toBe('[name].mjs');
-    expect(outputs[1].entryFileNames).toBe('[name].cjs');
-    expect(outputs[1].exports).toBe('named');
+  it('emits one ES module per source module, named .mjs, and no CommonJS (spec R4)', () => {
+    expect(build.rolldownOptions.output).toEqual({
+      format: 'es',
+      entryFileNames: '[name].mjs',
+      preserveModules: true,
+      preserveModulesRoot: 'src',
+      banner: useClient,
+    });
   });
 
   it('uses the manifest-derived external function', () => {
@@ -147,27 +147,9 @@ describe('library build options (repo-level#2, repo-level#3)', () => {
     expect(names.some((name) => /tailwind/i.test(name))).toBe(false);
     expect(names).toContain('vite:dts');
   });
-});
 
-describe('copyIndexDtsToDcts (repo-level#5)', () => {
-  let dir;
-  afterEach(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
-    dir = undefined;
-  });
-
-  it('copies the rolled-up index.d.ts to index.d.cts', () => {
-    dir = mkdtempSync(join(tmpdir(), 'wave-dts-'));
-    const dts =
-      "import { ClassValue } from 'clsx';\nexport declare function cn(...inputs: ClassValue[]): string;\n";
-    writeFileSync(join(dir, 'index.d.ts'), dts);
-    copyIndexDtsToDcts(dir);
-    expect(readFileSync(join(dir, 'index.d.cts'), 'utf8')).toBe(dts);
-  });
-
-  it('fails the build when the rolled-up declaration is missing', () => {
-    dir = mkdtempSync(join(tmpdir(), 'wave-dts-'));
-    expect(() => copyIndexDtsToDcts(dir)).toThrow(/index\.d\.ts/);
-    expect(existsSync(join(dir, 'index.d.cts'))).toBe(false);
+  it('rolls up index.d.ts and makes no CommonJS copy of it (repo-level#5, spec R4)', () => {
+    // 0.x copied the roll-up to index.d.cts after the declaration build.
+    expect(viteConfig).not.toHaveProperty('copyIndexDtsToDcts');
   });
 });

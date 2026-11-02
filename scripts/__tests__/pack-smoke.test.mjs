@@ -33,16 +33,14 @@ const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 describe('package.json (spec §3.2)', () => {
-  it('nests the declarations under the import and require conditions (repo-level#5)', () => {
-    expect(pkg.exports['.']).toEqual({
-      import: { types: './dist/index.d.ts', default: './dist/index.mjs' },
-      require: { types: './dist/index.d.cts', default: './dist/index.cjs' },
-    });
-    // `types` must come first inside each condition.
-    expect(Object.keys(pkg.exports['.'].import)[0]).toBe('types');
-    expect(Object.keys(pkg.exports['.'].require)[0]).toBe('types');
-    expect(pkg.main).toBe('./dist/index.cjs');
-    expect(pkg.module).toBe('./dist/index.mjs');
+  it('exports the ES module and its declarations to every condition (repo-level#5, spec R4)', () => {
+    // ES modules only: `require()` loads the same entry on Node.js 22.12 and later.
+    expect(pkg.exports['.']).toEqual({ types: './dist/index.d.ts', default: './dist/index.mjs' });
+    // `types` must come first.
+    expect(Object.keys(pkg.exports['.'])[0]).toBe('types');
+    expect(pkg.main).toBe('./dist/index.mjs');
+    expect(pkg).not.toHaveProperty('module');
+    // Kept for `moduleResolution: node10`, which ignores `exports`.
     expect(pkg.types).toBe('./dist/index.d.ts');
   });
 
@@ -100,9 +98,10 @@ describe('package.json (spec §3.2)', () => {
 
   it('checks the types of a tarball it packs itself', () => {
     // `attw --pack` would run a nested `npm pack`, which writes nothing under
-    // `npm publish --dry-run`; scripts/attw-pack.mjs packs without the dry run.
+    // `npm publish --dry-run`; scripts/attw-pack.mjs packs without the dry run. The `esm-only`
+    // profile: `node16` and `strict` fail an ES-only package by design (spec R4).
     expect(pkg.scripts['check:package']).toBe(
-      'publint && node scripts/attw-pack.mjs --profile node16 --exclude-entrypoints styles ' +
+      'publint && node scripts/attw-pack.mjs --profile esm-only --exclude-entrypoints styles ' +
         'styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css ' +
         'legacy-tokens.css',
     );
@@ -125,11 +124,9 @@ describe('package.json (spec §3.2)', () => {
       pkg.files
         .filter((entry) => !entry.startsWith('!'))
         .some((entry) => target.startsWith(`./${entry}/`));
-    for (const target of Object.values(pkg.exports).flatMap((value) =>
-      typeof value === 'string'
-        ? [value]
-        : Object.values(value).flatMap((condition) => Object.values(condition)),
-    )) {
+    const targets = (value) =>
+      typeof value === 'string' ? [value] : Object.values(value).flatMap(targets);
+    for (const target of targets(pkg.exports)) {
       expect(published(target), target).toBe(true);
     }
   });
@@ -141,9 +138,7 @@ describe('checkPackedFiles', () => {
     'README.md',
     'LICENSE',
     'dist/index.mjs',
-    'dist/index.cjs',
     'dist/index.d.ts',
-    'dist/index.d.cts',
     'dist/styles.css',
     'dist/preflight.css',
     'dist/lib/cn.mjs',
@@ -162,11 +157,11 @@ describe('checkPackedFiles', () => {
 
   it('reports an export target missing from the tarball', () => {
     const errors = checkPackedFiles(
-      good.filter((path) => path !== 'dist/index.d.cts' && path !== 'dist/styles.css'),
+      good.filter((path) => path !== 'dist/index.d.ts' && path !== 'dist/styles.css'),
       pkg,
     );
     expect(errors).toEqual([
-      expect.stringContaining('./dist/index.d.cts'),
+      expect.stringContaining('./dist/index.d.ts'),
       expect.stringContaining('./dist/styles.css'),
     ]);
   });
@@ -535,17 +530,16 @@ describe('checkPlainSmoke', () => {
 });
 
 describe('checkTypeProgram (repo-level#5)', () => {
-  it('passes when the ESM file got index.d.ts and the CommonJS file index.d.cts', () => {
+  it('passes when the program loaded index.d.ts', () => {
     expect(
       checkTypeProgram({
         status: 0,
-        output:
-          '/f/node_modules/@mortenbrudvik/waveui/dist/index.d.ts\n/f/node_modules/@mortenbrudvik/waveui/dist/index.d.cts\n',
+        output: '/f/node_modules/@mortenbrudvik/waveui/dist/index.d.ts\n',
       }),
     ).toEqual([]);
   });
 
-  it('reports type errors such as TS1479 (ESM-typed declarations for require)', () => {
+  it('reports type errors such as TS1479 (a CommonJS file that cannot require the ES entry)', () => {
     const errors = checkTypeProgram({
       status: 2,
       output:
@@ -554,13 +548,10 @@ describe('checkTypeProgram (repo-level#5)', () => {
     expect(errors.join('\n')).toMatch(/TS1479/);
   });
 
-  it('reports a program that never loaded the CommonJS declaration', () => {
-    expect(
-      checkTypeProgram({
-        status: 0,
-        output: '/f/node_modules/@mortenbrudvik/waveui/dist/index.d.ts\n',
-      }),
-    ).toEqual([expect.stringContaining('index.d.cts')]);
+  it('reports a program that never loaded the declarations', () => {
+    expect(checkTypeProgram({ status: 0, output: '/f/types-esm.mts\n' })).toEqual([
+      expect.stringContaining('index.d.ts'),
+    ]);
   });
 
   it("counts only this package's declarations, not another dependency's dist/index.d.*", () => {
@@ -569,23 +560,18 @@ describe('checkTypeProgram (repo-level#5)', () => {
         status: 0,
         output: [
           '/f/node_modules/other-lib/dist/index.d.ts',
-          '/f/node_modules/@mortenbrudvik/waveui-extra/dist/index.d.cts',
-          '/f/node_modules/@scope/lib/node_modules/@mortenbrudvik/waveuix/dist/index.d.cts',
+          '/f/node_modules/@mortenbrudvik/waveui-extra/dist/index.d.ts',
+          '/f/node_modules/@scope/lib/node_modules/@mortenbrudvik/waveuix/dist/index.d.ts',
         ].join('\n'),
       }),
-    ).toEqual([
-      expect.stringMatching(/ES module consumer did not load .*dist\/index\.d\.ts/),
-      expect.stringMatching(/CommonJS consumer did not load .*dist\/index\.d\.cts/),
-    ]);
+    ).toEqual([expect.stringMatching(/consumers did not load .*dist\/index\.d\.ts/)]);
   });
 
   it('reads Windows paths from tsc --listFiles', () => {
     expect(
       checkTypeProgram({
         status: 0,
-        output:
-          'C:\\w\\plain\\node_modules\\@mortenbrudvik\\waveui\\dist\\index.d.ts\r\n' +
-          'C:\\w\\plain\\node_modules\\@mortenbrudvik\\waveui\\dist\\index.d.cts\r\n',
+        output: 'C:\\w\\plain\\node_modules\\@mortenbrudvik\\waveui\\dist\\index.d.ts\r\n',
       }),
     ).toEqual([]);
   });
