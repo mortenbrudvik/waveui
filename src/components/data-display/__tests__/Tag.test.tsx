@@ -32,9 +32,12 @@ const SIZES: readonly TagSize[] = ['medium', 'small', 'extra-small'];
 
 /** The development warning of a `<button>`/`Button` element passed as `dismissIcon`. */
 const BUTTON_SLOT_WARNING = '[WaveUI] Tag: `dismissIcon` received a button.';
-/** The deprecation warning of the 0.4 button-object form of `dismissIcon`. */
-const BUTTON_OBJECT_WARNING =
-  '[WaveUI] Tag: `dismissIcon={{ onClick, type, disabled, … }} (button props on the slot object)` is deprecated';
+/**
+ * The development warning of a slot object whose `as` is a button: unwrapped, since the 0.4
+ * button-object form is removed in 1.0.
+ */
+const BUTTON_SLOT_OBJECT_WARNING =
+  '[WaveUI] Tag: `dismissIcon` received a slot object that renders a button; its children render inside the built-in dismiss button and its props were dropped';
 /** The warning for `aria-label`/`aria-labelledby` on the slot. */
 const NAME_IGNORED_WARNING =
   '[WaveUI] Tag: `aria-label`/`aria-labelledby` on `dismissIcon` are ignored.';
@@ -383,7 +386,7 @@ describe('Tag', () => {
       expect(onDismiss).toHaveBeenCalledTimes(1);
     });
 
-    it('merges the button-object form with a render function as before; the function renders the content (P13-01)', async () => {
+    it('unwraps an object whose `as` is a button, with a render function: the function renders the content, the object’s props are dropped (P13-01, 1.0)', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const calls: string[] = [];
@@ -408,8 +411,8 @@ describe('Tag', () => {
       expect(content).toHaveAttribute('aria-hidden', 'true');
       expect(content.querySelector('svg')).not.toBeNull();
       await user.click(content);
-      expect(calls).toEqual(['slot', 'onDismiss']);
-      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+      expect(calls).toEqual(['onDismiss']);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_OBJECT_WARNING)]]);
     });
 
     it('a render function that renders nothing leaves the default glyph, with the object’s other attributes (P13-01)', () => {
@@ -428,7 +431,7 @@ describe('Tag', () => {
       expect(content.querySelector('svg')).not.toBeNull();
     });
 
-    it('gives a render function of the button-object form with an icon the merged icon as its children (P13-01)', () => {
+    it('unwraps an `as: Button` object with a render function: the function receives the default glyph, the Button’s icon is dropped (P13-01, 1.0)', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const error = vi.spyOn(console, 'error');
       const renderContent = vi.fn((Component: React.ElementType, props: object) => (
@@ -452,9 +455,10 @@ describe('Tag', () => {
       const content = screen.getByTestId('content');
       expect(button.querySelector('button')).toBeNull();
       expect(content).toHaveAttribute('aria-hidden', 'true');
-      expect(content).toContainElement(screen.getByTestId('button-icon'));
+      expect(screen.queryByTestId('button-icon')).toBeNull();
+      expect(content.querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
       expect(error).not.toHaveBeenCalled();
-      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_OBJECT_WARNING)]]);
     });
 
     it('merges a <button> slot into the wired button instead of nesting it', async () => {
@@ -567,22 +571,6 @@ describe('Tag', () => {
         'Remove Cherry',
         BUTTON_SLOT_WARNING,
       ],
-      [
-        'a slot object whose `as` is a Wave Button (deprecated form)',
-        (onClick: () => void) =>
-          // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
-          ({
-            as: Button,
-            icon: <CustomIcon />,
-            iconPosition: 'after',
-            disabled: true,
-            disabledFocusable: true,
-            onClick,
-            children: 'Remove',
-          }) as Slot<'span'>,
-        'Dismiss Cherry',
-        BUTTON_OBJECT_WARNING,
-      ],
     ])(
       '%s: iconPosition and disabledFocusable take effect on the dismiss button and never reach the DOM',
       async (_, dismissIcon, name, warning) => {
@@ -666,10 +654,10 @@ describe('Tag', () => {
     > = [
       ['a slot object without children', { className: 'text-error' }, 'content', null],
       [
-        'the deprecated button-object form without children',
+        'an object whose `as` is a button, without children (unwrapped: its props are dropped)',
         { as: 'button', className: 'text-error', onClick: () => {} },
-        'button',
-        BUTTON_OBJECT_WARNING,
+        null,
+        BUTTON_SLOT_OBJECT_WARNING,
       ],
       [
         'a childless <button>',
@@ -733,7 +721,7 @@ describe('Tag', () => {
         expect(icon).not.toBeNull();
         expect(icon?.closest('[aria-hidden="true"]')).not.toBeNull();
         if (classTarget === 'button') {
-          // A merged button (or the button-object form) keeps its className on the dismiss button.
+          // A merged button keeps its className on the dismiss button.
           expect(button).toHaveClass('text-error');
         } else if (classTarget === 'content') {
           // The slot object's element wraps the default icon and carries its className.
@@ -783,7 +771,7 @@ describe('Tag', () => {
         expect(error).not.toHaveBeenCalled();
       });
 
-      it('renders dangerouslySetInnerHTML of the deprecated button-object form inside the button', () => {
+      it('drops the markup of an object whose `as` is a button (unwrapped, 1.0): the default icon', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const error = vi.spyOn(console, 'error');
         render(
@@ -795,10 +783,9 @@ describe('Tag', () => {
           </Tag>,
         );
         const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
-        const icon = within(button).getByTestId('html-icon');
-        expect(icon.parentElement).toHaveAttribute('aria-hidden', 'true');
-        expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
-        expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+        expect(screen.queryByTestId('html-icon')).toBeNull();
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
+        expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_OBJECT_WARNING)]]);
         expect(error).not.toHaveBeenCalled();
       });
 
@@ -887,7 +874,7 @@ describe('Tag', () => {
       });
     });
 
-    it('merges a slot object whose `as` is a Wave Button instead of nesting it (deprecated form)', () => {
+    it('unwraps a slot object whose `as` is a Wave Button instead of nesting it: its props are dropped (1.0)', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <Tag
@@ -908,12 +895,10 @@ describe('Tag', () => {
       const buttons = screen.getAllByRole('button');
       expect(buttons).toHaveLength(1);
       expect(buttons[0]).toHaveAccessibleName('Dismiss Cherry');
-      expect(buttons[0]).toHaveClass('text-error');
-      expect(buttons[0]).not.toHaveAttribute('appearance');
-      const icon = within(buttons[0]).getByTestId('custom-icon');
-      expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
-      expect(buttons[0].querySelector('[data-wave-icon="dismiss"]')).toBeNull();
-      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+      expect(buttons[0].outerHTML).not.toMatch(/text-error|appearance/);
+      expect(screen.queryByTestId('custom-icon')).toBeNull();
+      expect(buttons[0].querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_OBJECT_WARNING)]]);
     });
 
     it('shows the default icon for a slot object whose `as` is a childless Wave Button', () => {
@@ -925,9 +910,9 @@ describe('Tag', () => {
       );
       const buttons = screen.getAllByRole('button');
       expect(buttons).toHaveLength(1);
-      expect(buttons[0]).toHaveClass('text-error');
+      expect(buttons[0].outerHTML).not.toContain('text-error');
       expect(buttons[0].querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
-      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_OBJECT_WARNING)]]);
     });
 
     // A generator is read once to decide whether it renders anything; its items are what renders.
@@ -994,7 +979,7 @@ describe('Tag', () => {
       });
     });
 
-    it('merges the deprecated button-object form onto the wired button with a warning', async () => {
+    it('has no button-object form (removed in 1.0): `as: "button"` is unwrapped and its onClick dropped', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onDismiss = vi.fn();
@@ -1010,26 +995,29 @@ describe('Tag', () => {
       );
       const buttons = screen.getAllByRole('button');
       expect(buttons).toHaveLength(1);
-      await user.click(buttons[0]);
-      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(buttons[0]).toContainElement(screen.getByTestId('custom-icon'));
+      await user.click(screen.getByTestId('custom-icon'));
+      expect(onClick).not.toHaveBeenCalled();
       expect(onDismiss).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_OBJECT_WARNING)]]);
     });
 
-    it('puts the button attributes of the deprecated button-object form on the dismiss button', () => {
+    it('has no button-object form (removed in 1.0): a slot object’s id, class and handlers stay on the icon, its aria-* reach the button', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onClick = vi.fn();
+      const onDismiss = vi.fn();
       render(
         <>
           <p id="remove-hint">Removes the filter</p>
           <Tag
             dismissible
+            onDismiss={onDismiss}
             dismissIcon={{
-              as: 'button',
               id: 'remove-cherry',
               className: 'text-error',
               'aria-label': 'Remove',
               'aria-describedby': 'remove-hint',
-              onClick: () => {},
+              onClick,
               children: <CustomIcon />,
             }}
           >
@@ -1040,20 +1028,21 @@ describe('Tag', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveAccessibleName('Dismiss Cherry');
       expect(button).toHaveAccessibleDescription('Removes the filter');
-      expect(button).toHaveAttribute('id', 'remove-cherry');
-      expect(button).toHaveClass('text-error');
+      expect(button).not.toHaveAttribute('id', 'remove-cherry');
+      expect(button).not.toHaveClass('text-error');
       expect(button).not.toHaveAttribute('aria-label');
 
       const iconSpan = screen.getByTestId('custom-icon').parentElement as HTMLElement;
       expect(iconSpan).toHaveAttribute('aria-hidden', 'true');
       expect(iconSpan).not.toHaveAttribute('aria-label');
       expect(iconSpan).not.toHaveAttribute('aria-describedby');
-      expect(iconSpan).not.toHaveAttribute('id');
-      expect(iconSpan).not.toHaveClass('text-error');
-      expect(warn.mock.calls).toEqual([
-        [expect.stringContaining(BUTTON_OBJECT_WARNING)],
-        [expect.stringContaining(NAME_IGNORED_WARNING)],
-      ]);
+      expect(iconSpan).toHaveAttribute('id', 'remove-cherry');
+      expect(iconSpan).toHaveClass('text-error');
+      // A click on the icon reaches its handler, then the dismiss button's.
+      fireEvent.click(iconSpan);
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(NAME_IGNORED_WARNING)]]);
     });
 
     it('ignores aria-label on a <button> slot and says so (the name comes from dismissLabel)', () => {
@@ -1693,11 +1682,6 @@ describe('Tag', () => {
           <CustomIcon />
         </button>,
         BUTTON_SLOT_WARNING,
-      ],
-      [
-        'the deprecated { disabled: false } object',
-        { disabled: false, children: <CustomIcon /> } as Slot<'span'>,
-        BUTTON_OBJECT_WARNING,
       ],
     ])('disabled wins over %s', (_, dismissIcon, warning) => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -2564,10 +2548,11 @@ describe('Tag', () => {
       expect(elements).toHaveLength(2);
     });
 
-    it('accepts icon content and the deprecated button-object form for dismissIcon', () => {
-      expectTypeOf<{ onClick: (event: React.MouseEvent<HTMLButtonElement>) => void }>().toExtend<
-        NonNullable<TagOwnProps['dismissIcon']>
-      >();
+    it('accepts icon content for dismissIcon, and no button-object form (removed in 1.0)', () => {
+      expectTypeOf<TagOwnProps['dismissIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+      // @ts-expect-error -- the button-object form is removed in 1.0: no button attributes
+      const buttonObject: TagOwnProps['dismissIcon'] = { disabled: true };
+      expect(buttonObject).toBeDefined();
       expectTypeOf<React.ReactElement>().toExtend<NonNullable<TagOwnProps['dismissIcon']>>();
       expectTypeOf<TagProps>().toEqualTypeOf<TagProps<'span'>>();
       interface FilterTagProps extends TagProps {

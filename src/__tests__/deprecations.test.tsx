@@ -24,14 +24,13 @@
  *   JSDoc examples, strings and import lines never count; an aliased import or a reference that is
  *   not a call fails the test, so a call cannot hide behind another name. Each call announces one
  *   row: a row whose `warningKey` starts with `deprecated:` (the key `warnDeprecated` builds) and
- *   whose `file` is the call's module. A call that warns for several values (PresenceBadge's
- *   `dnd` and `oof`) is one row, keyed by the value its case renders. So,
+ *   whose `file` is the call's module. A call that warns for several values is one row, keyed by
+ *   the value its case renders. So,
  *   exactly, the calls in each module equal the `deprecated:` rows that name it, and the calls in
  *   `src` equal the rows with `warns: true`, `kind: 'removed'` and a `deprecated:` key: a new alias
  *   without a row fails here. The other warnings of the inventory (`warnOnce` with keys of their
- *   own: Badge and CounterBadge `important`, the presence className rule, the button-object
- *   dismiss slots of MessageBar and SearchBox, a numeric Slider `size`, a missing `Image.alt`) are
- *   outside the count; their cases prove them.
+ *   own: Badge and CounterBadge `important`, the presence className rule, a missing `Image.alt`)
+ *   are outside the count; their cases prove them.
  * - **Done rows (Phase 14, R2).** The tasks that remove an alias set `done: true` on its row, and
  *   the checks above turn round for it: the call-site count ignores it (so its module has no call
  *   left), it has no warning case, no `warnOnce` of its key is left in the sources and no other
@@ -63,18 +62,9 @@ import {
   Dialog,
   Drawer,
   Image,
-  InfoLabel,
-  Input,
   Menu,
-  MessageBar,
   Nav,
   NavDrawer,
-  PresenceBadge,
-  SearchBox,
-  Select,
-  Slider,
-  Tag,
-  Tooltip,
   useRovingTabIndex,
 } from '../index';
 import { hasWarned } from '../lib/dev';
@@ -519,35 +509,6 @@ const gridContent = (
 
 /** A minimal case per row that warns, by row id. */
 const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
-  'messagebar-dismiss-button-object': {
-    ui: <MessageBar dismiss={{ as: 'button', onClick: noop }}>Saved</MessageBar>,
-    message:
-      '[WaveUI] MessageBar: the button-object form of `dismiss` is deprecated and will be removed in 1.0; its button props were merged into the built-in dismiss button. Pass icon content instead, e.g. `dismiss={<CloseIcon />}`, and use `onDismiss`.',
-  },
-  'searchbox-dismiss-button-object': {
-    ui: (
-      <SearchBox
-        aria-label="Search"
-        defaultValue="query"
-        dismiss={{ as: 'button', type: 'button', onClick: noop }}
-      />
-    ),
-    message:
-      '[WaveUI] SearchBox: `dismiss` with button props (`as: "button"`, `onClick`, `type`, …) is deprecated and will be removed in 1.0; the props were merged into the built-in clear button. Pass icon content instead, e.g. `dismiss={<MyIcon />}`.',
-  },
-  'tag-dismissicon-button-object': {
-    ui: (
-      <Tag dismissible dismissIcon={{ onClick: noop }}>
-        Cherry
-      </Tag>
-    ),
-    message: deprecated(
-      'Tag',
-      'dismissIcon={{ onClick, type, disabled, … }} (button props on the slot object)',
-      'onDismiss and icon content in dismissIcon',
-      'Its props are merged onto the built-in dismiss button, which is named by `dismissLabel` and the tag content.',
-    ),
-  },
   'badge-important': {
     ui: <Badge color="important">New</Badge>,
     message: importantColor('Badge'),
@@ -555,51 +516,6 @@ const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
   'counterbadge-important': {
     ui: <CounterBadge count={3} color="important" />,
     message: importantColor('CounterBadge'),
-  },
-  'tooltip-delay': {
-    ui: (
-      <Tooltip content="Tip" delay={100}>
-        <button type="button">Button</button>
-      </Tooltip>
-    ),
-    message: deprecated('Tooltip', 'delay', 'openDelay'),
-  },
-  'input-numeric-size': {
-    ui: <Input aria-label="Name" size={20} />,
-    message: deprecated('Input', 'size={number}', 'htmlSize'),
-  },
-  'select-numeric-size': {
-    ui: (
-      <Select aria-label="Fruit" size={3}>
-        <option>Apple</option>
-      </Select>
-    ),
-    message: deprecated('Select', 'size={number}', 'htmlSize'),
-  },
-  'slider-numeric-size': {
-    ui: <Slider aria-label="Volume" size={3} />,
-    message:
-      '[WaveUI] Slider: a numeric `size` has no effect (a range input ignores the native attribute) and is removed in 1.0; remove it.',
-  },
-  'infolabel-label': {
-    ui: <InfoLabel label="Name" info="Your full name" />,
-    message: deprecated('InfoLabel', 'label', 'children'),
-  },
-  'presencebadge-dnd-oof': {
-    ui: <PresenceBadge status="dnd" />,
-    message: deprecated('PresenceBadge', "status 'dnd'", "status 'do-not-disturb'"),
-  },
-  'datagridcolumn-id': {
-    ui: (
-      <DataGrid aria-label="People" columns={[{ id: 'name', label: 'Name' }]}>
-        <DataGrid.Body>
-          <DataGrid.Row rowId="1">
-            <DataGrid.Cell>Alice</DataGrid.Cell>
-          </DataGrid.Row>
-        </DataGrid.Body>
-      </DataGrid>
-    ),
-    message: deprecated('DataGrid', 'columns[].id', 'columns[].columnId'),
   },
   'userovingtabindex-positional': {
     ui: <RovingPositional />,

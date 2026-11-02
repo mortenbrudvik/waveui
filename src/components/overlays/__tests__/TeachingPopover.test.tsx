@@ -200,12 +200,16 @@ describe('TeachingPopover', () => {
       },
     );
 
-    it('Done on the last step dismisses', async () => {
+    it('Done on the last step closes and calls onFinish, not onDismiss (1.0)', async () => {
       const user = userEvent.setup();
       const onDismiss = vi.fn();
-      render(<TeachingPopover steps={steps} activeStep={2} onDismiss={onDismiss} />);
+      const onFinish = vi.fn();
+      render(
+        <TeachingPopover steps={steps} activeStep={2} onDismiss={onDismiss} onFinish={onFinish} />,
+      );
       await user.click(screen.getByRole('button', { name: 'Done' }));
-      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(onFinish).toHaveBeenCalledTimes(1);
+      expect(onDismiss).not.toHaveBeenCalled();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
@@ -309,6 +313,7 @@ describe('TeachingPopover', () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
       const onDismiss = vi.fn();
+      const onFinish = vi.fn();
       render(
         <TeachingPopover
           steps={steps}
@@ -316,6 +321,7 @@ describe('TeachingPopover', () => {
           activeStep={2}
           onOpenChange={onOpenChange}
           onDismiss={onDismiss}
+          onFinish={onFinish}
         />,
       );
       await user.keyboard('{Escape}');
@@ -327,7 +333,9 @@ describe('TeachingPopover', () => {
       await user.click(screen.getByRole('button', { name: 'Done' }));
       expect(onOpenChange).toHaveBeenCalledTimes(3);
       expect(onOpenChange.mock.calls).toEqual([[false], [false], [false]]);
-      expect(onDismiss).toHaveBeenCalledTimes(3);
+      // Escape and Close dismiss; Done finishes (1.0: it no longer calls onDismiss).
+      expect(onDismiss).toHaveBeenCalledTimes(2);
+      expect(onFinish).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
   });
@@ -640,7 +648,11 @@ describe('TeachingPopover', () => {
     }
 
     it.each([
-      ['Escape', async (user: ReturnType<typeof userEvent.setup>) => user.keyboard('{Escape}')],
+      [
+        'Escape',
+        async (user: ReturnType<typeof userEvent.setup>) => user.keyboard('{Escape}'),
+        'onDismiss',
+      ],
       [
         'Done',
         async (user: ReturnType<typeof userEvent.setup>) => {
@@ -650,12 +662,15 @@ describe('TeachingPopover', () => {
           expect(screen.getByRole('button', { name: 'Done' })).toHaveFocus();
           await user.keyboard('{Enter}');
         },
+        // Done finishes the tour: it calls onFinish, not onDismiss (1.0).
+        'onFinish',
       ],
-    ])(
+    ] as const)(
       'returns focus to the target when a tour opened on page load is dismissed with %s',
-      async (_how, dismissWith) => {
+      async (_how, dismissWith, callback) => {
         const user = userEvent.setup();
         const onDismiss = vi.fn();
+        const onFinish = vi.fn();
         function PageLoadTour() {
           const targetRef = React.useRef<HTMLButtonElement>(null);
           return (
@@ -668,6 +683,7 @@ describe('TeachingPopover', () => {
                 defaultActiveStep={2}
                 target={targetRef}
                 onDismiss={onDismiss}
+                onFinish={onFinish}
               />
             </>
           );
@@ -677,7 +693,8 @@ describe('TeachingPopover', () => {
         const dialog = await screen.findByRole('dialog');
         await waitFor(() => expect(dialog).toHaveFocus());
         await dismissWith(user);
-        expect(onDismiss).toHaveBeenCalledTimes(1);
+        expect(onDismiss).toHaveBeenCalledTimes(callback === 'onDismiss' ? 1 : 0);
+        expect(onFinish).toHaveBeenCalledTimes(callback === 'onFinish' ? 1 : 0);
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'New feature' })).toHaveFocus();
       },
@@ -1589,7 +1606,7 @@ describe('TeachingPopover', () => {
       expect(heading()).toHaveTextContent(/^Welcome/);
     });
 
-    it('Done calls onFinish, then onDismiss (kept in 0.x); Close and Escape only onDismiss', async () => {
+    it('Done calls onFinish only, not onDismiss (1.0); Close and Escape only onDismiss', async () => {
       const user = userEvent.setup();
       const calls: string[] = [];
       render(
@@ -1603,7 +1620,7 @@ describe('TeachingPopover', () => {
         />,
       );
       await user.click(screen.getByRole('button', { name: 'Done' }));
-      expect(calls).toEqual(['open', 'finish', 'dismiss']);
+      expect(calls).toEqual(['open', 'finish']);
       calls.length = 0;
       await user.click(screen.getByRole('button', { name: 'Close' }));
       await user.keyboard('{Escape}');
@@ -3438,7 +3455,8 @@ describe('TeachingPopover parts: Carousel, CarouselNav, CarouselPageCount and Ca
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(onStepChange.mock.calls).toEqual([[1], [2]]);
     expect(onFinish).toHaveBeenCalledTimes(1);
-    expect(onDismiss).toHaveBeenCalledTimes(1);
+    // Finishing is no dismissal (1.0: Done no longer calls onDismiss).
+    expect(onDismiss).not.toHaveBeenCalled();
     expect(trigger()).toHaveFocus();
   });
 

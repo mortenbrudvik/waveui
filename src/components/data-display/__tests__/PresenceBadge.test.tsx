@@ -13,7 +13,8 @@ import {
   renderWithProviders,
   testSystemProps,
 } from '../../../test-utils';
-import type { DeprecatedPresenceStatus, PresenceStatus, Size } from '../../../lib/types';
+import type { PresenceStatus, Size } from '../../../lib/types';
+import type * as Wave from '../../../index';
 
 const STATUSES: PresenceStatus[] = [
   'available',
@@ -160,37 +161,25 @@ describe('PresenceBadge', () => {
   });
 
   describe('Fluent status names (0.13)', () => {
-    it.each([
-      ['do-not-disturb', 'dnd'],
-      ['out-of-office', 'oof'],
-    ] as const)(
-      '%s and the deprecated %s render the same glyph, class and name',
-      (status, alias) => {
+    // Removed in 1.0: like any status outside the union (untyped code), the 0.5 spellings have no
+    // look of their own, and rendering one throws (no badge is drawn for a status it cannot name).
+    it.each(['dnd', 'oof'] as const)(
+      'has no %s alias (removed in 1.0): rendering it throws, with no warning',
+      (alias) => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const { container: current } = render(<PresenceBadge status={status} />);
-        const { container: legacy } = render(<PresenceBadge status={alias} />);
-        const a = current.firstElementChild as HTMLElement;
-        const b = legacy.firstElementChild as HTMLElement;
-        expect(b.className).toBe(a.className);
-        expect(b).toHaveAttribute('data-glyph', a.getAttribute('data-glyph'));
-        expect(b).toHaveAttribute('aria-label', a.getAttribute('aria-label'));
-        expect(b).toHaveAttribute('data-status', status);
-        expect(a).toHaveAttribute('data-status', status);
-        warn.mockRestore();
+        const error = vi.spyOn(console, 'error');
+        try {
+          // @ts-expect-error -- `'dnd'` and `'oof'` are removed in 1.0: use `'do-not-disturb'`
+          // and `'out-of-office'`
+          expect(() => render(<PresenceBadge status={alias} />)).toThrow(TypeError);
+          expect(warn).not.toHaveBeenCalled();
+          expect(error).not.toHaveBeenCalled();
+        } finally {
+          warn.mockRestore();
+          error.mockRestore();
+        }
       },
     );
-
-    it.each([
-      ['dnd', 'do-not-disturb'],
-      ['oof', 'out-of-office'],
-    ] as const)('the %s alias warns once and names %s', (alias, status) => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const { rerender } = render(<PresenceBadge status={alias} />);
-      rerender(<PresenceBadge status={alias} />);
-      expect(warn.mock.calls).toEqual([[expect.stringContaining(`status '${alias}'`)]]);
-      expect(warn.mock.calls[0][0]).toContain(`'${status}'`);
-      warn.mockRestore();
-    });
 
     it('status is optional and defaults to available', () => {
       render(<PresenceBadge />);
@@ -200,12 +189,15 @@ describe('PresenceBadge', () => {
       );
     });
 
-    it('types the new names, the aliases and the optional status', () => {
+    it('types the Fluent names and the optional status; no aliases (removed in 1.0)', () => {
       expectTypeOf<PresenceBadgeProps['status']>().toEqualTypeOf<PresenceStatus | undefined>();
-      expectTypeOf<'do-not-disturb'>().toExtend<PresenceStatus>();
-      expectTypeOf<'out-of-office'>().toExtend<PresenceStatus>();
-      expectTypeOf<DeprecatedPresenceStatus>().toEqualTypeOf<'dnd' | 'oof'>();
-      expectTypeOf<DeprecatedPresenceStatus>().toExtend<PresenceStatus>();
+      expectTypeOf<PresenceStatus>().toEqualTypeOf<
+        'available' | 'busy' | 'away' | 'offline' | 'do-not-disturb' | 'out-of-office'
+      >();
+      expectTypeOf<'dnd'>().not.toExtend<PresenceStatus>();
+      expectTypeOf<'oof'>().not.toExtend<PresenceStatus>();
+      // @ts-expect-error -- `DeprecatedPresenceStatus` is removed in 1.0 (no member of the entry)
+      expectTypeOf<Wave.DeprecatedPresenceStatus>().toBeAny();
     });
   });
 });

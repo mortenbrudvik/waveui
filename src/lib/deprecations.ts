@@ -679,6 +679,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'MessageBar:dismiss-button-object',
     changelogAnchor: BUTTON_OBJECT_ANCHOR,
     file: 'src/components/feedback/MessageBar.tsx',
+    done: true,
   },
   {
     id: 'searchbox-dismiss-button-object',
@@ -691,6 +692,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'SearchBox:dismiss-button-object',
     changelogAnchor: BUTTON_OBJECT_ANCHOR,
     file: 'src/components/input/SearchBox.tsx',
+    done: true,
   },
   {
     id: 'tag-dismissicon-button-object',
@@ -704,6 +706,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
       'deprecated:Tag:dismissIcon={{ onClick, type, disabled, … }} (button props on the slot object)',
     changelogAnchor: BUTTON_OBJECT_ANCHOR,
     file: 'src/components/data-display/Tag.tsx',
+    done: true,
   },
 
   // Style entries and theme classes, which no code can detect.
@@ -780,6 +783,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Tooltip:delay',
     changelogAnchor: '**Tooltip `delay`**: use `openDelay`',
     file: TOOLTIP,
+    done: true,
   },
   {
     id: 'input-numeric-size',
@@ -792,6 +796,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Input:size={number}',
     changelogAnchor: NUMERIC_SIZE_ANCHOR,
     file: 'src/components/input/Input.tsx',
+    done: true,
   },
   {
     id: 'select-numeric-size',
@@ -804,6 +809,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:Select:size={number}',
     changelogAnchor: NUMERIC_SIZE_ANCHOR,
     file: 'src/components/input/Select.tsx',
+    done: true,
   },
   {
     id: 'slider-numeric-size',
@@ -816,6 +822,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'Slider:size-number',
     changelogAnchor: NUMERIC_SIZE_ANCHOR,
     file: 'src/components/input/Slider.tsx',
+    done: true,
   },
   {
     id: 'infolabel-label',
@@ -828,6 +835,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:InfoLabel:label',
     changelogAnchor: '**InfoLabel `label`**: use `children`',
     file: 'src/components/data-display/InfoLabel.tsx',
+    done: true,
   },
   {
     id: 'tagpicker-legacy-classes',
@@ -841,6 +849,8 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     changelogAnchor:
       '`wave-tag-picker__control` and `wave-tag-picker__group` stay on their elements',
     file: 'src/lib/classNames.ts',
+    done: true,
+    absent: { classNames: ['wave-tag-picker__control', 'wave-tag-picker__group'] },
   },
   {
     id: 'presencebadge-dnd-oof',
@@ -854,6 +864,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     changelogAnchor:
       "**`PresenceStatus` `'dnd'` and `'oof'`:** use `'do-not-disturb'` and `'out-of-office'`",
     file: 'src/components/data-display/PresenceBadge.tsx',
+    done: true,
   },
   {
     id: 'datagridcolumn-id',
@@ -866,6 +877,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DataGrid:columns[].id',
     changelogAnchor: '**`DataGridColumn.id`:** use `columnId`',
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'teachingpopover-done-ondismiss',
@@ -877,6 +889,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warns: false,
     changelogAnchor: 'Done stops calling `onDismiss` in 1.0 (use `onFinish`)',
     file: TEACHING_POPOVER_ROOT,
+    done: true,
   },
 
   // Call forms and a rule that 0.18 announces, each with a development warning.

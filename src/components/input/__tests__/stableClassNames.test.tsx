@@ -436,9 +436,11 @@ describe('stable class names: input folder', () => {
     const input = screen.getByRole('combobox', { name: 'Fruits' });
     expect(input).toHaveClass(tagPickerClassNames.input);
     const control = input.closest('[data-wave-tagpicker-control]') as HTMLElement;
-    expect(control).toHaveClass(tagPickerClassNames.control);
+    expect(control).toHaveClass(tagPickerControlClassNames.root);
     expect(control.parentElement).toHaveClass(tagPickerClassNames.root);
-    expect(screen.getByRole('list', { name: 'Selected' })).toHaveClass(tagPickerClassNames.group);
+    expect(screen.getByRole('list', { name: 'Selected' })).toHaveClass(
+      tagPickerGroupClassNames.root,
+    );
     expect(screen.getByRole('listitem')).toHaveClass(tagPickerClassNames.tag);
     expect(screen.getByRole('button', { name: 'Remove Apple' })).toHaveClass(
       tagPickerClassNames.removeButton,
@@ -461,7 +463,7 @@ describe('stable class names: input folder', () => {
     expect(empty.parentElement).toHaveClass(tagPickerClassNames.surface);
   });
 
-  it('TagPicker parts: the member roots next to the 0.8 part classes', () => {
+  it('TagPicker parts: the member roots next to the 0.8 part classes, but control and group', () => {
     render(
       <TagPicker
         aria-label="Fruits"
@@ -476,11 +478,16 @@ describe('stable class names: input folder', () => {
     const input = screen.getByRole('combobox', { name: 'Fruits' });
     expect(input).toHaveClass(tagPickerInputClassNames.root, tagPickerClassNames.input);
     const control = input.closest('[data-wave-tagpicker-control]') as HTMLElement;
-    expect(control).toHaveClass(tagPickerControlClassNames.root, tagPickerClassNames.control);
+    // The 0.8 `control` and `group` parts are removed in 1.0: the member roots replace them.
+    expect(stableClassesOf(control)).toEqual([tagPickerControlClassNames.root]);
+    expect(control).not.toHaveClass('wave-tag-picker__control');
     const group = screen.getByRole('list', { name: 'Selected' });
     expect(stableClassesOf(group)).toEqual(
-      [tagGroupClassNames.root, tagPickerGroupClassNames.root, tagPickerClassNames.group].sort(),
+      [tagGroupClassNames.root, tagPickerGroupClassNames.root].sort(),
     );
+    expect(group).not.toHaveClass('wave-tag-picker__group');
+    expect(Object.keys(tagPickerClassNames)).not.toContain('control');
+    expect(Object.keys(tagPickerClassNames)).not.toContain('group');
     expect(screen.getByRole('listitem')).toHaveClass(tagClassNames.root, tagPickerClassNames.tag);
     expect(screen.getByRole('button', { name: 'Remove Apple' })).toHaveClass(
       tagClassNames.dismissButton,

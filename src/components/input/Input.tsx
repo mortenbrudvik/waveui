@@ -2,7 +2,6 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { inputClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp } from '../../lib/dev';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart, type SlotPartWithRef } from '../../lib/slotProps';
 import {
@@ -19,7 +18,7 @@ import type { CoreSize, InputAppearance, Slot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { legacyNativeSize, useInputLook } from './inputLook';
+import { useInputLook } from './inputLook';
 
 /**
  * Props of the error message element that {@link Input}, `Select` and `Textarea` render after the
@@ -145,14 +144,11 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   errorMessageProps?: InputErrorMessageProps;
   /**
    * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
-   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`.
-   *
-   * A number is the native `size` attribute (the visible width in characters), as in 0.8: it
-   * still renders, warns once in development and is removed in 1.0. Use `htmlSize` for it.
-   * A string of digits only (`size="20"` from untyped code) counts as that number. Any other value
-   * outside the three sizes renders as if `size` were not set.
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`. A value
+   * outside the three sizes (a number from untyped code included) renders as if `size` were not
+   * set. The native `size` attribute, the visible width in characters, is `htmlSize`.
    */
-  size?: CoreSize | number;
+  size?: CoreSize;
   /** The native `size` attribute: the visible width of the field in characters. */
   htmlSize?: number;
   /**
@@ -279,18 +275,7 @@ export const Input = ({
     { nativeRequired: true },
   );
   const invalidLook = isInvalidLook(invalid, fieldProps['aria-invalid']);
-  const numericSize = legacyNativeSize(sizeProp);
-  const nativeSize = resolveDeprecatedProp(
-    'Input',
-    htmlSize,
-    numericSize,
-    'size={number}',
-    'htmlSize',
-  );
-  const { size, appearance } = useInputLook(
-    numericSize === undefined && typeof sizeProp !== 'number' ? sizeProp : undefined,
-    appearanceProp,
-  );
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const handleChange =
     onChange || onValueChange
@@ -319,7 +304,7 @@ export const Input = ({
     inert: props.inert,
     disabled: props.disabled,
     readOnly: props.readOnly,
-    size: nativeSize,
+    size: htmlSize,
   };
   const look = { 'data-size': size, 'data-appearance': appearance };
 

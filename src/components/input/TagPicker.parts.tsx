@@ -279,7 +279,6 @@ function TagPickerControlImpl({
         ref={mergedRef}
         className={cn(
           tagPickerControlClassNames.root,
-          tagPickerClassNames.control,
           'relative flex flex-wrap items-center',
           TAG_PICKER_SIZE[ctx.size].control,
           inputAppearanceClasses[ctx.appearance],
@@ -514,7 +513,6 @@ function TagPickerGroupImpl({
           ref={mergedRef}
           className={cn(
             tagPickerGroupClassNames.root,
-            tagPickerClassNames.group,
             'flex flex-wrap items-center gap-1',
             ctx.collapsed && 'min-w-0 flex-nowrap overflow-hidden whitespace-nowrap *:shrink-0',
             className,

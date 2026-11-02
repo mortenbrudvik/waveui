@@ -25,7 +25,7 @@ import {
   inputInvalidWithin,
   inputTextClasses,
 } from '../../lib/styles';
-import type { CoreSize, InputAppearance, Slot, SlotObject } from '../../lib/types';
+import type { CoreSize, InputAppearance, Slot } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { fieldLocks, useFieldControl } from '../../hooks/useFieldControl';
@@ -140,20 +140,24 @@ export interface SearchBoxProps
    * children become the content, with a development warning. A Wave `Button`'s own props are not
    * attributes: its `icon` becomes decorative content before its children (after them with
    * `iconPosition="after"`), `disabledFocusable` makes the clear button unavailable but focusable
-   * as on the Button (nothing is cleared), and `appearance` and `size` are ignored. The 0.4
-   * button-object form (`{ as: 'button', onClick, … }` or an object with button props) is
-   * **deprecated**: its button props are merged the same way. Pass icon content instead.
+   * as on the Button (nothing is cleared), and `appearance` and `size` are ignored.
+   *
+   * A slot object is the content element, not the button: its attributes, event handlers
+   * included, go to that element (only the naming attributes below reach the button), so handle
+   * the press in `onClear`. A slot object whose `as` is a `<button>` or a Wave `Button` cannot
+   * render inside the button: its children render as the content (the default icon when it has
+   * none) and its props are dropped, with a development warning.
    *
    * Name (WCAG 2.5.3 Label in Name): content is decorative (`aria-hidden`), so the button keeps
    * the name "Clear search". An `aria-label`, `aria-labelledby` or `title` on the merged button or
    * on a slot object names the button instead (`{ children: 'Reset', 'aria-label': 'Reset' }`).
-   * The children of a merged `<button>`/`Button` (or of `{ as: 'button' }`) are rendered as is:
+   * The children of a merged `<button>`/`Button` are rendered as is:
    * when they render a text label (at least two letters or digits outside `aria-hidden`/`hidden`
    * content, text from components such as translations included), that text names the button;
    * an icon or a lone character (`X`, `×`) keeps "Clear search". Text hidden only with CSS still
    * counts as the label, so give a button with a responsive label an explicit `aria-label`.
    */
-  dismiss?: Slot<'span'> | SlotObject<'button'>;
+  dismiss?: Slot<'span'>;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
   /** Ref to the `<input type="search">` (the focusable control). */
@@ -206,23 +210,6 @@ const SEARCH_SIZE: Readonly<
 
 type UnknownProps = Record<string, unknown>;
 
-/** Attributes that only make sense on the clear `<button>` itself (merged onto it). */
-const BUTTON_ONLY_KEYS: ReadonlySet<string> = new Set([
-  'type',
-  'disabled',
-  'form',
-  'formAction',
-  'formEncType',
-  'formMethod',
-  'formNoValidate',
-  'formTarget',
-  'name',
-  'value',
-  'popoverTarget',
-  'popoverTargetAction',
-]);
-const HANDLER_KEY = /^on[A-Z]/;
-
 /**
  * Attributes that name the clear button (C-SLOTS naming). On a merged button or a slot object they
  * go to the clear button (slot content is `aria-hidden`), and any of them replaces the default
@@ -236,17 +223,18 @@ const DEFAULT_CLEAR_LABEL = 'Clear search';
 interface DismissParts {
   /**
    * `default`: no slot (default icon); `content`: icon content; `element`: a `<button>`/`Button`
-   * element; `button-object`: the deprecated button-object form.
+   * element (merged); `unwrapped`: a slot object whose `as` is a button (its children are the
+   * content, its props dropped).
    */
-  kind: 'default' | 'content' | 'element' | 'button-object';
+  kind: 'default' | 'content' | 'element' | 'unwrapped';
   /** Props merged onto the built-in clear button. */
   buttonProps: UnknownProps;
   /** Content of the clear button (`null` = the default icon, except for `content`). */
   content: React.ReactNode;
   /**
-   * `true` when the content is rendered as is (a merged `<button>`/`Button` or `{ as: 'button' }`),
-   * so a text label in it names the button (C-SLOTS naming, WCAG 2.5.3); `false` when the content
-   * is decorative (`aria-hidden`).
+   * `true` when the content is rendered as is (a merged `<button>`/`Button`), so a text label in
+   * it names the button (C-SLOTS naming, WCAG 2.5.3); `false` when the content is decorative
+   * (`aria-hidden`).
    */
   contentMayName: boolean;
   /**
@@ -284,9 +272,10 @@ function isButtonType(type: unknown): boolean {
 }
 
 /**
- * Splits the props of a button-like element or object into button props and content. The content
- * is rendered as is, so a text label in it names the button (C-SLOTS naming). Content that renders
- * nothing is `null` (the default icon); a generator is read once and rendered as its items.
+ * Splits the props of a `<button>` or Wave `Button` element into button props and content. The
+ * content is rendered as is, so a text label in it names the button (C-SLOTS naming). Content
+ * that renders nothing is `null` (the default icon); a generator is read once and rendered as its
+ * items.
  */
 function splitButtonLike(type: unknown, props: UnknownProps, children: React.ReactNode) {
   const hasChildren = slotRendersContent(children);
@@ -315,7 +304,7 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
       disabledFocusable: Boolean(props.disabledFocusable),
     };
   }
-  const { as, children: _children, ...buttonProps } = props;
+  const { children: _children, ...buttonProps } = props;
   // `null` content falls back to the default icon.
   return {
     buttonProps,
@@ -346,40 +335,34 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss'], size: CoreSize): Dis
   }
   // Resolved once: a generator is materialised (and cached) by resolveSlot, so it can be checked
   // for emptiness and rendered without being consumed twice.
-  // A render function is merged with a button `as`, or dropped when it renders nothing.
+  // A render function is resolved with a button `as` (it renders the content), or dropped when it
+  // renders nothing.
   const resolved = resolveWiredSlot(resolveSlot(dismiss as Slot<'span'>, 'span'), isButtonType);
   if (!resolved) return DEFAULT_DISMISS;
-  const { Component, props, children } = resolved;
-  if (isButtonType(Component)) {
-    return { kind: 'button-object', ...splitButtonLike(Component, props, children) };
-  }
+  const { children } = resolved;
+  // A slot object whose `as` is a button cannot render inside the clear button: it is unwrapped,
+  // so its children are the content of a span and its props are dropped.
+  const unwrapped = isButtonType(resolved.Component);
+  const kind = unwrapped ? 'unwrapped' : 'content';
+  const Component: React.ElementType = unwrapped ? 'span' : resolved.Component;
   const buttonProps: UnknownProps = {};
   const contentProps: UnknownProps = {};
-  let hasButtonProps = false;
-  for (const [key, value] of Object.entries(props)) {
+  for (const [key, value] of Object.entries(unwrapped ? {} : resolved.props)) {
     // resolveSlot sets `className: undefined` when there are no classes.
     if (value === undefined) continue;
-    if (BUTTON_ONLY_KEYS.has(key) || HANDLER_KEY.test(key)) {
-      buttonProps[key] = value;
-      hasButtonProps = true;
-    } else if (NAMING_KEYS.has(key)) {
-      // The content is aria-hidden, so a naming attribute names the clear button instead (not the
-      // deprecated button-object form).
-      buttonProps[key] = value;
-    } else {
-      contentProps[key] = value;
-    }
+    // The content is aria-hidden, so a naming attribute names the clear button instead.
+    (NAMING_KEYS.has(key) ? buttonProps : contentProps)[key] = value;
   }
   // A void (`img`), component (`{ as: MyIcon }`) or markup (`dangerouslySetInnerHTML`) slot
   // renders content of its own.
   const hasChildren = slotRendersContent(children);
   const empty = slotWrapsDefaultContent(Component, { ...contentProps, children });
   if (empty && Object.keys(buttonProps).length === 0 && Object.keys(contentProps).length === 0) {
-    return DEFAULT_DISMISS;
+    return unwrapped ? { ...DEFAULT_DISMISS, kind } : DEFAULT_DISMISS;
   }
-  // A button object without content (`{ onClick }`, `{ type: 'button' }`) or a content object
-  // without children (`{ className }`) keeps the default icon inside the object's own element (its
-  // className/style/attributes still apply). Markup of its own takes no children at all.
+  // A content object without children (`{ className }`, `{ 'aria-label': 'Reset' }`) keeps the
+  // default icon inside the object's own element (its className/style/attributes still apply).
+  // Markup of its own takes no children at all.
   const contentChildren = empty ? (
     <DismissIcon size={SEARCH_SIZE[size].glyph} />
   ) : hasChildren ? (
@@ -396,7 +379,7 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss'], size: CoreSize): Dis
       ? React.createElement(Component, iconProps)
       : React.createElement(Component, iconProps, contentChildren);
   return {
-    kind: hasButtonProps ? 'button-object' : 'content',
+    kind,
     buttonProps,
     content,
     contentMayName: false,
@@ -508,10 +491,10 @@ export const SearchBox = ({
         'SearchBox:dismiss-button-element',
         'SearchBox: `dismiss` received a button element; its props were merged into the built-in clear button (buttons cannot be nested). Pass icon content instead, e.g. `dismiss={<MyIcon />}`.',
       );
-    } else if (dismissKind === 'button-object') {
+    } else if (dismissKind === 'unwrapped') {
       warnOnce(
-        'SearchBox:dismiss-button-object',
-        'SearchBox: `dismiss` with button props (`as: "button"`, `onClick`, `type`, …) is deprecated and will be removed in 1.0; the props were merged into the built-in clear button. Pass icon content instead, e.g. `dismiss={<MyIcon />}`.',
+        'SearchBox:dismiss-button-slot-object',
+        'SearchBox: `dismiss` received a slot object that renders a button; its children render inside the built-in clear button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `dismiss={<MyIcon />}`.',
       );
     }
   }, [dismissKind]);
@@ -619,11 +602,10 @@ export const SearchBox = ({
               className={searchBoxClassNames.dismissIcon}
             />
           ));
-  // The props a `dismiss` button (a `<button>` or `Button` element, or the deprecated button
-  // object) merged into the clear button are the defaults of its part: `slotProps.dismissButton`
-  // replaces them, its handlers run first and its classes come last. The type, the disabled
-  // state, the tab stop, the visibility, the name and the clear stay locked, at the values the
-  // two give together.
+  // The props a `dismiss` button (a `<button>` or `Button` element) merged into the clear button
+  // are the defaults of its part: `slotProps.dismissButton` replaces them, its handlers run first
+  // and its classes come last. The type, the disabled state, the tab stop, the visibility, the
+  // name and the clear stay locked, at the values the two give together.
   const {
     className: clearClassName,
     style: clearStyle,

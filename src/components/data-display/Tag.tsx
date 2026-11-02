@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { tagClassNames } from '../../lib/classNames';
-import { hasWarned, isDev, warnDeprecated, warnOnce } from '../../lib/dev';
+import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
 import { getElementType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -28,6 +28,7 @@ import {
   MERGED_DISABLED_FOCUSABLE_PROPS,
   mergedAriaDisabledClasses,
   placeButtonIcon,
+  unwrapButtonGlyph,
 } from '../button/Button.slots';
 import { AvatarSizeContext } from './Avatar.context';
 import {
@@ -162,14 +163,12 @@ export interface TagOwnProps {
    * its children (after them with `iconPosition="after"`), `disabledFocusable` makes the dismiss
    * button unavailable but focusable as on the Button (`onDismiss` is not called), and
    * `appearance` and `size` are ignored.
-   * A slot object with button props (`type`, `disabled`, event handlers, `as: 'button'` or
-   * `as: Button`) is the deprecated 0.4 button-object form: its props (`className`, `id`,
-   * `aria-*`, handlers, …) are merged onto the dismiss button, except its content (`children`,
-   * `dangerouslySetInnerHTML`, rendered inside the button) and the naming attributes (see below);
-   * for `as: Button`, the Button's own props apply as for a `Button` element — pass icon content
-   * and use `onDismiss` instead.
-   * The `aria-*` attributes of an icon slot object also go to the dismiss button, because the icon
-   * is `aria-hidden`.
+   * A slot object is the icon element, not the button: its attributes, `className`, `id`, `ref`
+   * and event handlers included, go to that element, so handle the dismissal in `onDismiss`. Its
+   * `aria-*` attributes go to the dismiss button, because the icon is `aria-hidden`, except the
+   * naming attributes (see below). A slot object whose `as` is a `<button>` or a Wave `Button`
+   * cannot render inside the button: its children render as the icon (the default icon when it
+   * has none) and its props are dropped, with a development warning.
    *
    * The dismiss button's name is `dismissLabel` plus the tag's text ("Dismiss Cherry"):
    * `aria-label` and `aria-labelledby` on the slot are ignored (development warning). Icon
@@ -192,7 +191,7 @@ export interface TagOwnProps {
    * `slotProps.dismissButton` reaches the same button; its attributes replace those of a merged
    * button (see there).
    */
-  dismissIcon?: Slot<'span'> | SlotObject<'button'>;
+  dismissIcon?: Slot<'span'>;
   /**
    * Visually hidden text that names the dismiss button together with the tag's text (its
    * children; not `media`, `icon` or `secondaryText`; `aria-labelledby`), e.g. "Dismiss Cherry".
@@ -272,23 +271,6 @@ type TagImplProps = TagOwnProps &
 
 type UnknownProps = Record<string, unknown>;
 
-/** Attributes that only make sense on the dismiss `<button>` itself. */
-const BUTTON_ONLY_KEYS: ReadonlySet<string> = new Set([
-  'type',
-  'disabled',
-  'autoFocus',
-  'form',
-  'formAction',
-  'formEncType',
-  'formMethod',
-  'formNoValidate',
-  'formTarget',
-  'name',
-  'value',
-]);
-
-const HANDLER_KEY = /^on[A-Z]/;
-
 /**
  * Naming attributes a slot cannot set: the Tag names its dismiss button itself
  * (`aria-labelledby` = `dismissLabel` + tag content, data-display#10), so these are dropped.
@@ -309,8 +291,11 @@ interface ResolvedDismissSlot {
   buttonProps: UnknownProps | null;
   /** What renders inside the dismiss button. */
   content: React.ReactNode;
-  /** Which development warning the slot needs. */
-  warning: 'button-element' | 'button-object' | null;
+  /**
+   * Which development warning the slot needs: a `<button>`/`Button` element merged, or a slot
+   * object whose `as` is a button unwrapped.
+   */
+  warning: 'button-element' | 'button-slot-object' | null;
   /** Whether the slot passed `aria-label`/`aria-labelledby`, which the Tag ignores. */
   ignoredName: boolean;
   /**
@@ -368,8 +353,8 @@ function defaultDismissContent(glyphSize: number, className?: string): React.Rea
 /**
  * Splits the dismissIcon slot into dismiss-button props and icon content (C-SLOTS). The icon
  * content is `aria-hidden`, so no attribute that means something to assistive technology stays on
- * it: button-form props go to the dismiss button, and so do the `aria-*` attributes of an icon slot
- * object; the naming attributes are dropped (see {@link NAME_KEYS}).
+ * it: a merged button's props go to the dismiss button, and so do the `aria-*` attributes of an
+ * icon slot object; the naming attributes are dropped (see {@link NAME_KEYS}).
  *
  * Content that renders nothing (`[]`, `<></>`, a childless merged button, a slot object without
  * `children`) shows the default icon, so the dismiss button is never an empty, invisible Tab stop.
@@ -450,84 +435,56 @@ function resolveDismissSlot(
   }
 
   if (isPlainObject(slot)) {
-    // 0.4 rendered the whole object as the dismiss element, so an object with button props
-    // describes the button: everything but its content goes to the dismiss button. `as: Button`
-    // is that form too (a button cannot contain a button); its icon becomes decorative content.
-    const asWaveButton = slot.as === Button;
-    const isButtonObject =
-      slot.as === 'button' ||
-      asWaveButton ||
-      Object.keys(slot).some((key) => BUTTON_ONLY_KEYS.has(key) || HANDLER_KEY.test(key));
+    // A slot object whose `as` is a button cannot render inside the dismiss button: it is
+    // unwrapped, so its children are the icon content and its props are dropped (a render
+    // function as its children renders that content).
+    if (slot.as === 'button' || slot.as === Button) {
+      const { glyph } = unwrapButtonGlyph(slot as Slot<'span'>);
+      return { ...resolveDismissSlot(glyph, glyphSize), warning: 'button-slot-object' };
+    }
     const buttonProps: UnknownProps = {};
     const contentProps: UnknownProps = {};
-    // Wave Button's own props are not attributes: `icon`, `iconPosition` and `disabledFocusable`
-    // are applied below, the others (`appearance`, `size`) are dropped.
-    const ownProps: UnknownProps = {};
     let ignoredName = false;
     for (const [key, value] of Object.entries(slot)) {
-      if (key === 'as') {
-        if (value !== 'button' && !asWaveButton) contentProps.as = value;
-      } else if (asWaveButton && BUTTON_OWN_PROP_KEYS.has(key)) {
-        ownProps[key] = value;
-      } else if (NAME_KEYS.has(key)) {
+      if (NAME_KEYS.has(key)) {
         if (value !== undefined) ignoredName = true;
-      } else if (key === 'children' || key === 'dangerouslySetInnerHTML') {
-        // Content, also in the button-object form: the dismiss button holds its own name text.
-        contentProps[key] = value;
-      } else if (isButtonObject || (key.startsWith('aria-') && key !== 'aria-hidden')) {
+      } else if (key.startsWith('aria-') && key !== 'aria-hidden') {
         buttonProps[key] = value;
       } else {
         contentProps[key] = value;
       }
     }
     // An object without content styles the default icon, e.g. `{ className: 'text-error' }` (as in
-    // MessageBar and SearchBox); a Wave Button's icon comes before the content (after it with
-    // `iconPosition="after"`).
-    // The dismiss icon part is the merged Button's icon element when there is one, else the
-    // element this slot object renders (a default glyph inside it stays without the part class).
-    // A render function is no content of its own: it stays, and receives what the element would
-    // hold (the default glyph, or a merged Button's icon) as its `children` prop (C-SLOTS).
+    // MessageBar and SearchBox). The dismiss icon part is the element this slot object renders (a
+    // default glyph inside it stays without the part class). A render function is no content of
+    // its own: it stays, and receives the default glyph as its `children` prop (C-SLOTS).
     const render = contentProps.children;
     const isRender = typeof render === 'function';
-    const receive = (content: React.ReactNode) =>
-      isRender
-        ? (Component: React.ElementType, props: object) =>
-            (render as SlotRenderFunction<object>)(Component, { ...props, children: content })
-        : content;
-    const hasButtonIcon = slotRendersContent(ownProps.icon);
-    if (hasButtonIcon) {
-      contentProps.children = receive(
-        placeButtonIcon(
-          renderSlot(
-            ownProps.icon as Slot<'span'>,
-            'span',
-            cn(tagClassNames.dismissIcon, iconClassName),
-          ),
-          isRender ? undefined : materialiseSlotContent(contentProps.children),
-          ownProps.iconPosition,
-        ),
-      );
-    } else if (
+    if (
       slotWrapsDefaultContent(
         contentProps.as ?? 'span',
         isRender ? { ...contentProps, children: undefined } : contentProps,
       )
     ) {
-      contentProps.children = receive(defaultDismissContent(glyphSize));
+      const glyph = defaultDismissContent(glyphSize);
+      contentProps.children = isRender
+        ? (Component: React.ElementType, props: object) =>
+            (render as SlotRenderFunction<object>)(Component, { ...props, children: glyph })
+        : glyph;
     }
     return {
-      buttonProps: isButtonObject || Object.keys(buttonProps).length > 0 ? buttonProps : null,
+      buttonProps: Object.keys(buttonProps).length > 0 ? buttonProps : null,
       content: renderSlot(
         contentProps as SlotObject<'span'>,
         'span',
-        cn(!hasButtonIcon && tagClassNames.dismissIcon, iconClassName),
+        cn(tagClassNames.dismissIcon, iconClassName),
         { 'aria-hidden': true },
       ),
-      warning: isButtonObject ? 'button-object' : null,
+      warning: null,
       ignoredName,
       contentMayName: false,
       literalTextLabel: false,
-      disabledFocusable: Boolean(ownProps.disabledFocusable),
+      disabledFocusable: false,
     };
   }
 
@@ -947,12 +904,10 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
         'Tag:dismissIcon-button',
         'Tag: `dismissIcon` received a button. Its props were merged into the built-in dismiss button (a button cannot contain another button), which is named by its text label (or `dismissLabel`) and the tag content. Pass icon content instead, e.g. `dismissIcon={<CloseIcon />}`, and handle the dismissal in `onDismiss`.',
       );
-    } else if (warning === 'button-object') {
-      warnDeprecated(
-        'Tag',
-        'dismissIcon={{ onClick, type, disabled, … }} (button props on the slot object)',
-        'onDismiss and icon content in dismissIcon',
-        'Its props are merged onto the built-in dismiss button, which is named by `dismissLabel` and the tag content.',
+    } else if (warning === 'button-slot-object') {
+      warnOnce(
+        'Tag:dismissIcon-button-slot-object',
+        'Tag: `dismissIcon` received a slot object that renders a button; its children render inside the built-in dismiss button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `dismissIcon={<CloseIcon />}`, and handle the dismissal in `onDismiss`.',
       );
     }
   }, [warning]);

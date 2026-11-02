@@ -70,11 +70,8 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    */
   onStepChange?: (step: number) => void;
   /**
-   * Called when the popover is dismissed with Close, Done, Escape or a `TeachingPopover.Trigger`
-   * that closes it.
-   *
-   * Done also calls it in 0.x, after `onFinish`, so that code written before `onFinish` keeps
-   * working; from 1.0 only Close, Escape and the Trigger will.
+   * Called when the popover is dismissed with Close, Escape or a `TeachingPopover.Trigger` that
+   * closes it. Done finishes the tour instead: it calls `onFinish`, not this.
    */
   onDismiss?: () => void;
   /**
@@ -448,11 +445,10 @@ export const TeachingPopoverRoot = ({
     setOpen(false);
     onDismiss?.();
   });
-  // Done: close, then `onFinish`. `onDismiss` still follows in 0.x (see its JSDoc).
+  // Done: close, then `onFinish` (never `onDismiss`).
   const finish = useEventCallback(() => {
     setOpen(false);
     onFinish?.();
-    onDismiss?.();
   });
   const goBack = useEventCallback(() => {
     if (!isFirst) setStep(index - 1);

@@ -379,16 +379,6 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
   },
   {
     component: 'tagPickerClassNames',
-    key: 'control',
-    reason: 'the root of TagPicker.Control, which takes its props directly in the parts form (R3)',
-  },
-  {
-    component: 'tagPickerClassNames',
-    key: 'group',
-    reason: 'the root of TagPicker.Group, which takes its props directly in the parts form (R3)',
-  },
-  {
-    component: 'tagPickerClassNames',
     key: 'input',
     reason: 'the root of TagPicker.Input, which takes its props directly in the parts form (R3)',
   },

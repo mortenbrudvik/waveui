@@ -496,21 +496,34 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   });
 });
 
-describe('htmlSize and the numeric size (Phase 4 D10)', () => {
+describe('htmlSize (Phase 4 D10), and no numeric size (removed in 1.0)', () => {
   const field = () => screen.getByRole('textbox', { name: 'Name' });
-  const NUMERIC_SIZE_WARNING =
-    '[WaveUI] Input: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.';
 
-  it('a numeric size renders the native attribute, keeps the medium design size and warns once', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { rerender } = render(<Input aria-label="Name" size={20} />);
-    rerender(<Input aria-label="Name" size={20} />);
-    expect(field()).toHaveAttribute('size', '20');
-    expect(field()).toHaveAttribute('data-size', 'medium');
-    expect(field()).toHaveClass('h-8');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(NUMERIC_SIZE_WARNING);
-  });
+  it.each([
+    ['a number', 20],
+    ['a digit-only string (0.7 HTML style)', '20'],
+  ])(
+    'has no numeric size (removed in 1.0): %s renders neither the native attribute nor a design size',
+    (_label, value) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { rerender } = render(
+        // @ts-expect-error -- a numeric `size` is removed in 1.0: use `htmlSize`
+        <Input aria-label="Name" size={value as number} />,
+      );
+      expect(field()).not.toHaveAttribute('size');
+      expect(field()).toHaveAttribute('data-size', 'medium');
+      expect(field()).toHaveClass('h-8', 'px-3', 'text-body-1');
+      // Next to htmlSize, which alone reaches the native attribute.
+      rerender(
+        // @ts-expect-error -- a numeric `size` is removed in 1.0: use `htmlSize`
+        <Input aria-label="Name" htmlSize={12} size={value as number} />,
+      );
+      expect(field()).toHaveAttribute('size', '12');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    },
+  );
 
   it('htmlSize alone renders the attribute without a warning', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -518,24 +531,6 @@ describe('htmlSize and the numeric size (Phase 4 D10)', () => {
     expect(field()).toHaveAttribute('size', '12');
     expect(field()).toHaveAttribute('data-size', 'small');
     expect(warn).not.toHaveBeenCalled();
-  });
-
-  it('with both, htmlSize wins and the numeric form still warns', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    render(<Input aria-label="Name" htmlSize={12} size={20} />);
-    expect(field()).toHaveAttribute('size', '12');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(NUMERIC_SIZE_WARNING);
-  });
-
-  it('a digit-only size string (0.7 HTML style from untyped code) is the numeric legacy form', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    render(<Input aria-label="Name" size={'20' as unknown as number} />);
-    expect(field()).toHaveAttribute('size', '20');
-    expect(field()).toHaveAttribute('data-size', 'medium');
-    expect(field()).toHaveClass('h-8', 'px-3', 'text-body-1');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(NUMERIC_SIZE_WARNING);
   });
 
   it('another untyped size string renders the medium outline defaults, without the attribute', () => {
@@ -554,8 +549,8 @@ describe('htmlSize and the numeric size (Phase 4 D10)', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('types: CoreSize or a number', () => {
-    expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+  it('types: CoreSize only', () => {
+    expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     // @ts-expect-error not a size
     render(<Input aria-label="Name" size="huge" />);
   });

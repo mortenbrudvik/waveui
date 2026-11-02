@@ -319,62 +319,37 @@ describe('Tooltip', () => {
       await waitFor(() => expect(surface()).not.toBeNull());
     });
 
-    it('the deprecated delay still sets the show delay and warns once', async () => {
+    it('has no delay alias of openDelay (removed in 1.0): the default 200 ms applies', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const user = setupTimers();
-      let enteredAt = 0;
-      const { rerender } = render(
-        <Tooltip content="Tooltip text" delay={300} onMouseEnter={() => (enteredAt = Date.now())}>
-          <button type="button">Target</button>
-        </Tooltip>,
-      );
-      await user.hover(screen.getByRole('button', { name: 'Target' }));
-      advanceTo(enteredAt + 299);
-      expect(surface()).toBeNull();
-      advance(1);
-      await waitFor(() => expect(surface()).not.toBeNull());
-      rerender(
-        <Tooltip content="Tooltip text" delay={300} onMouseEnter={() => (enteredAt = Date.now())}>
-          <button type="button">Target</button>
-        </Tooltip>,
-      );
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Tooltip: `delay` is deprecated and will be removed in 1.0. Use `openDelay` instead.',
-        ],
-      ]);
-    });
-
-    it('openDelay wins over the deprecated delay', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const user = setupTimers();
       let enteredAt = 0;
       render(
         <Tooltip
           content="Tooltip text"
-          openDelay={100}
+          // @ts-expect-error -- `delay` is removed in 1.0: use `openDelay`
           delay={500}
           onMouseEnter={() => (enteredAt = Date.now())}
         >
           <button type="button">Target</button>
         </Tooltip>,
       );
-      await user.hover(screen.getByRole('button', { name: 'Target' }));
-      advanceTo(enteredAt + 99);
+      const target = screen.getByRole('button', { name: 'Target' });
+      // An unknown prop of the wrapper `<span>`: rendered as a plain attribute, read by nothing.
+      expect(target.parentElement).toHaveAttribute('delay', '500');
+      await user.hover(target);
+      advanceTo(enteredAt + 199);
       expect(surface()).toBeNull();
       advance(1);
       await waitFor(() => expect(surface()).not.toBeNull());
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Tooltip: `delay` is deprecated and will be removed in 1.0. Use `openDelay` instead.',
-        ],
-      ]);
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
 
-    it('types the delays: openDelay and closeDelay in milliseconds, delay still accepted', () => {
+    it('types the delays: openDelay and closeDelay in milliseconds, no delay', () => {
       expectTypeOf<TooltipProps['openDelay']>().toEqualTypeOf<number | undefined>();
       expectTypeOf<TooltipProps['closeDelay']>().toEqualTypeOf<number | undefined>();
-      expectTypeOf<TooltipProps['delay']>().toEqualTypeOf<number | undefined>();
+      expectTypeOf<TooltipProps>().not.toHaveProperty('delay');
     });
   });
 

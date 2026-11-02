@@ -10,17 +10,15 @@ import {
   PresenceOofIcon,
 } from '../../lib/icons';
 import type { IconComponent } from '../../lib/icons';
-import { warnDeprecated } from '../../lib/dev';
 import { AvatarBadgeSizeContext } from './Avatar.context';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
-import type { DeprecatedPresenceStatus, PresenceStatus, Size } from '../../lib/types';
+import type { PresenceStatus, Size } from '../../lib/types';
 
 /** Properties for the PresenceBadge component. */
 export interface PresenceBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   /**
-   * Presence status to display. `'dnd'` and `'oof'` are deprecated aliases of `'do-not-disturb'`
-   * and `'out-of-office'`: they render the same and warn once in development (removed in 1.0).
+   * Presence status to display.
    * @default 'available'
    */
   status?: PresenceStatus;
@@ -67,7 +65,7 @@ type PresenceGlyph = 'check' | 'solid' | 'clock' | 'ring-x' | 'bar' | 'arrow';
  * instead of an empty ring.
  */
 const statusStyles: Record<
-  Exclude<PresenceStatus, DeprecatedPresenceStatus>,
+  PresenceStatus,
   { glyph: PresenceGlyph; Icon: IconComponent; className: string }
 > = {
   available: {
@@ -102,7 +100,7 @@ const statusStyles: Record<
   },
 };
 
-const statusLabels: Record<Exclude<PresenceStatus, DeprecatedPresenceStatus>, string> = {
+const statusLabels: Record<PresenceStatus, string> = {
   available: 'Available',
   busy: 'Busy',
   away: 'Away',
@@ -110,23 +108,6 @@ const statusLabels: Record<Exclude<PresenceStatus, DeprecatedPresenceStatus>, st
   'do-not-disturb': 'Do not disturb',
   'out-of-office': 'Out of office',
 };
-
-const DEPRECATED_STATUS_NAMES = {
-  dnd: 'do-not-disturb',
-  oof: 'out-of-office',
-} as const;
-
-/** Maps the deprecated spellings to their Fluent names; warns once for an alias. */
-function normalizePresenceStatus(
-  status: PresenceStatus,
-): Exclude<PresenceStatus, DeprecatedPresenceStatus> {
-  if (status === 'dnd' || status === 'oof') {
-    const current = DEPRECATED_STATUS_NAMES[status];
-    warnDeprecated('PresenceBadge', `status '${status}'`, `status '${current}'`);
-    return current;
-  }
-  return status;
-}
 
 const sizeClasses: Record<Size, string> = {
   'extra-small': 'size-2', // 8px
@@ -150,7 +131,7 @@ const sizeClasses: Record<Size, string> = {
  * <PresenceBadge status="do-not-disturb" />
  */
 export const PresenceBadge = ({
-  status: statusProp = 'available',
+  status = 'available',
   size: sizeProp,
   className,
   ref,
@@ -159,7 +140,6 @@ export const PresenceBadge = ({
 }: PresenceBadgeProps) => {
   const avatarBadgeSize = React.useContext(AvatarBadgeSizeContext);
   const size = sizeProp ?? avatarBadgeSize ?? 'medium';
-  const status = normalizePresenceStatus(statusProp);
   const { glyph, Icon, className: statusClassName } = statusStyles[status];
   const iconPart = slotProps?.icon;
   const iconClassName = cn(

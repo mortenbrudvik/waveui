@@ -1117,7 +1117,7 @@ describe('Slot types (table-core#18)', () => {
     expect([bad, bad2]).toHaveLength(2);
   });
 
-  it("accepts the dismiss-slot union `Slot<'span'> | SlotObject<'button'>` in renderSlot", () => {
+  it("accepts a slot union `Slot<'span'> | SlotObject<'button'>` in renderSlot", () => {
     // A declared `const x: Union = { … }` would be narrowed to `SlotObject<'button'>` by the
     // assignment; a value returned from a function keeps the full union, as a prop does.
     const getDismiss = (): Slot<'span'> | SlotObject<'button'> => ({
@@ -1174,7 +1174,7 @@ describe('Slot types (table-core#18)', () => {
         return React.createElement(Component, props);
       },
     };
-    // One function fits every member of a slot union (the dismiss slots).
+    // One function fits every member of a slot union (a slot of two element types).
     const getDismiss = (): Slot<'span'> | SlotObject<'button'> => ({
       children: (Component, props) => React.createElement(Component, props),
     });

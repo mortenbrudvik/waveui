@@ -38,7 +38,11 @@ import {
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
 import type { ListboxItem } from '../../../hooks/useListbox';
-import { tagClassNames, tagPickerClassNames } from '../../../lib/classNames';
+import {
+  tagClassNames,
+  tagPickerClassNames,
+  tagPickerControlClassNames,
+} from '../../../lib/classNames';
 import * as devModule from '../../../lib/dev';
 
 const options = [
@@ -240,7 +244,7 @@ describe('TagPicker parts', () => {
       simple.unmount();
       const parts = render(<PartsForm defaultValue={['apple']} />);
       expect(normalizeIds(parts.container.innerHTML)).toBe(normalizeIds(simpleHtml));
-      expect(screen.getByRole('group')).toHaveClass(tagPickerClassNames.control);
+      expect(screen.getByRole('group')).toHaveClass(tagPickerControlClassNames.root);
       expect(tags()).toEqual(['Apple']);
       expect(combobox()).toHaveAttribute(
         'aria-controls',

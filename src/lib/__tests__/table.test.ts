@@ -78,7 +78,7 @@ describe('createTableColumn', () => {
     expectTypeOf<CreateTableColumnOptions<Person>['label']>().toEqualTypeOf<
       React.ReactNode | undefined
     >();
-    // @ts-expect-error — `columnId` is required (there is no deprecated `id` here).
+    // @ts-expect-error — `columnId` is required (`id` is no option).
     createTableColumn<Person>({ id: 'name' });
   });
 });

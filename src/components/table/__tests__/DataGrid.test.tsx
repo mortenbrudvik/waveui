@@ -170,14 +170,8 @@ function cell(text: string, index?: number): HTMLElement {
   return el;
 }
 
-/** DataGrid's deprecation warning for the prop `name`, replaced by `replacement`. */
-const deprecated = (name: string, replacement: string) =>
-  `[WaveUI] DataGrid: \`${name}\` is deprecated and will be removed in 1.0. Use \`${replacement}\` instead.`;
-
-const DEPRECATED_COLUMN_ID = deprecated('columns[].id', 'columns[].columnId');
-
 const COLUMN_WITHOUT_ID =
-  '[WaveUI] DataGrid: a column in `columns` has no `columnId` (nor the deprecated `id`), so its header cannot sort. Give every column a unique `columnId`.';
+  '[WaveUI] DataGrid: a column in `columns` has no `columnId`, so its header cannot sort. Give every column a unique `columnId`.';
 
 const BODY_WITHOUT_ITEMS =
   "[WaveUI] DataGrid.Body: a render function child renders one row per item of the DataGrid's `items`, which is not set, so the body has no rows.";
@@ -441,7 +435,7 @@ describe('DataGrid parts written in a Server Component (lazy element types)', ()
         aria-label="People"
         selectionMode="multiple"
         defaultSelectedItems={['2']}
-        columns={[{ id: 'generated', label: 'Generated' }]}
+        columns={[{ columnId: 'generated', label: 'Generated' }]}
         {...props}
       >
         <Header>
@@ -913,59 +907,41 @@ describe('DataGrid header from columns', () => {
     ]);
   });
 
-  describe('the deprecated column `id` (0.13 columns)', () => {
-    it('names the column as `columnId` does, and warns once', async () => {
-      const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const onSortChange = vi.fn();
-      const legacy: DataGridColumn[] = [
-        { id: 'name', label: 'Name', sortable: true },
-        { id: 'role', label: 'Role' },
-      ];
-      render(
-        <DataGrid aria-label="People" columns={legacy} onSortChange={onSortChange}>
-          {rows()}
-        </DataGrid>,
-      );
-      expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
-        'Name',
-        'Role',
-      ]);
-      await user.click(sortButton('Name'));
-      await user.click(sortButton('Name'));
-      expect(onSortChange.mock.calls).toEqual([
-        ['name', 'ascending'],
-        ['name', 'descending'],
-      ]);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_COLUMN_ID], [POSITIONAL_SORT]]);
-    });
-
-    it('loses to `columnId` when a column has both, and still warns', async () => {
-      const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const onSortChange = vi.fn();
-      render(
-        <DataGrid
-          aria-label="People"
-          columns={[{ columnId: 'fullName', id: 'name', label: 'Name', sortable: true }]}
-          defaultSort={null}
-          onSortChange={onSortChange}
-        >
-          {rows()}
-        </DataGrid>,
-      );
-      await user.click(sortButton('Name'));
-      expect(onSortChange).toHaveBeenCalledWith(
-        { columnId: 'fullName', direction: 'ascending' },
-        DETAILS,
-      );
-      expect(warn.mock.calls).toEqual([[DEPRECATED_COLUMN_ID]]);
-    });
+  it('has no column `id` alias of `columnId` (removed in 1.0): the column has no id', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const legacy: DataGridColumn[] = [
+      // @ts-expect-error -- `id` is removed in 1.0: use `columnId`
+      { id: 'name', label: 'Name', sortable: true },
+      // @ts-expect-error -- `id` is removed in 1.0: use `columnId`
+      { id: 'role', label: 'Role' },
+    ];
+    render(
+      <DataGrid aria-label="People" columns={legacy}>
+        {rows()}
+      </DataGrid>,
+    );
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      'Name',
+      'Role',
+    ]);
+    // Without a `columnId` the sortable column cannot sort: no sort button, no `aria-sort`, and
+    // the warnings of a column without an id (the header cell's runs first).
+    expect(header('Name')).not.toHaveAttribute('aria-sort');
+    expect(within(header('Name')).queryByRole('button')).toBeNull();
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.HeaderCell: `sortable` needs a `columnId`; the header is rendered as not sortable.',
+      ],
+      [COLUMN_WITHOUT_ID],
+    ]);
+    expect(error).not.toHaveBeenCalled();
+    expectTypeOf<DataGridColumn>().not.toHaveProperty('id');
   });
 
-  it('warns once for a column with neither `columnId` nor `id`', () => {
+  it('warns once for a column without `columnId`', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    // A column without an id compiles (both names are optional while `id` is deprecated).
+    // A column without an id compiles (`columnId` is optional).
     const { rerender } = render(
       <DataGrid aria-label="People" columns={[{ label: 'Name', sortable: true }]}>
         {rows()}
@@ -6023,8 +5999,8 @@ describe('DataGrid types', () => {
 
   it('accepts readonly arrays (`as const`) for columns and the selection, and emits a mutable array', () => {
     const COLUMNS = [
-      { id: 'name', label: 'Name', sortable: true },
-      { id: 'role', label: 'Role' },
+      { columnId: 'name', label: 'Name', sortable: true },
+      { columnId: 'role', label: 'Role' },
     ] as const;
     const IDS = ['1', '2'] as const;
     const element = (
@@ -6115,16 +6091,19 @@ describe('DataGrid types', () => {
     expect(elements).toHaveLength(3);
   });
 
-  it('keeps 0.13 columns compiling: an untyped `DataGridColumn[]` with `id`, also extended', () => {
+  it('keeps untyped columns compiling: a `DataGridColumn[]`, also extended; no `id` (removed in 1.0)', () => {
     expectTypeOf<DataGridColumn>().toEqualTypeOf<DataGridColumn<unknown>>();
     const columns: DataGridColumn[] = [
-      { id: 'name', label: 'Name', sortable: true },
-      { id: 'role', label: 'Role' },
+      { columnId: 'name', label: 'Name', sortable: true },
+      { columnId: 'role', label: 'Role' },
     ];
     interface WidthColumn extends DataGridColumn {
       width: number;
     }
-    const sized: WidthColumn[] = [{ id: 'name', label: 'Name', width: 120 }];
+    const sized: WidthColumn[] = [{ columnId: 'name', label: 'Name', width: 120 }];
+    // @ts-expect-error -- `id` is removed in 1.0: use `columnId`
+    const legacy: WidthColumn[] = [{ id: 'name', label: 'Name', width: 120 }];
+    expect(legacy).toHaveLength(1);
     const elements = [
       <DataGrid key="untyped" aria-label="People" columns={columns}>
         {null}

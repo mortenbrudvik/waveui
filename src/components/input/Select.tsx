@@ -2,7 +2,6 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { selectClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp } from '../../lib/dev';
 import {
   inputAppearanceClasses,
   inputFocus,
@@ -13,7 +12,7 @@ import {
 import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
-import { legacyNativeSize, useInputLook } from './inputLook';
+import { useInputLook } from './inputLook';
 
 /** Properties for the Select component. */
 export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
@@ -35,14 +34,11 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
   errorMessageProps?: InputErrorMessageProps;
   /**
    * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
-   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`.
-   *
-   * A number is the native `size` attribute (the number of visible rows), as in 0.8: it still
-   * renders, warns once in development and is removed in 1.0. Use `htmlSize` for it.
-   * A string of digits only (`size="20"` from untyped code) counts as that number. Any other value
-   * outside the three sizes renders as if `size` were not set.
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`. A value
+   * outside the three sizes (a number from untyped code included) renders as if `size` were not
+   * set. The native `size` attribute, the number of visible rows, is `htmlSize`.
    */
-  size?: CoreSize | number;
+  size?: CoreSize;
   /** The native `size` attribute: the number of visible rows. */
   htmlSize?: number;
   /**
@@ -122,18 +118,7 @@ export const Select = ({
     { nativeRequired: true },
   );
   const invalidLook = isInvalidLook(invalid, fieldProps['aria-invalid']);
-  const numericSize = legacyNativeSize(sizeProp);
-  const nativeSize = resolveDeprecatedProp(
-    'Select',
-    htmlSize,
-    numericSize,
-    'size={number}',
-    'htmlSize',
-  );
-  const { size, appearance } = useInputLook(
-    numericSize === undefined && typeof sizeProp !== 'number' ? sizeProp : undefined,
-    appearanceProp,
-  );
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const control = (
     <select
@@ -161,7 +146,7 @@ export const Select = ({
       {...props}
       {...fieldProps}
       aria-errormessage={joinIds(ariaErrorMessage, messageId)}
-      size={nativeSize}
+      size={htmlSize}
     >
       {children}
     </select>

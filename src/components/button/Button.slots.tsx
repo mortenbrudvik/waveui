@@ -3,9 +3,11 @@
  * Internal (not exported from the package).
  *
  * - Dismiss and clear slots (MessageBar `dismiss`, SearchBox `dismiss`, Tag `dismissIcon`) merge
- *   it into their own wired `<button>`. {@link BUTTON_OWN_PROP_KEYS} lists the Button props that
- *   must not reach that element; {@link placeButtonIcon} and {@link MERGED_DISABLED_FOCUSABLE_PROPS}
- *   give it what the Button would have done with `icon`, `iconPosition` and `disabledFocusable`.
+ *   a button element into their own wired `<button>`. {@link BUTTON_OWN_PROP_KEYS} lists the
+ *   Button props that must not reach that element; {@link placeButtonIcon} and
+ *   {@link MERGED_DISABLED_FOCUSABLE_PROPS} give it what the Button would have done with `icon`,
+ *   `iconPosition` and `disabledFocusable`. A slot object whose `as` is a button is unwrapped
+ *   there (Tag through {@link unwrapButtonGlyph}).
  * - Glyph slots inside a wired button (SplitButton and MenuButton `menuIcon`, Combobox and
  *   TimePicker `expandIcon`) unwrap it: {@link unwrapButtonGlyph}.
  * - Variants that hand their `icon` to Button (ToggleButton, CompoundButton, MenuButton,

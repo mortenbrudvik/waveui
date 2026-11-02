@@ -14,24 +14,9 @@ export type BadgeColor =
 /** Semantic status used for alerts, messages, and status indicators. */
 export type Status = 'success' | 'warning' | 'error' | 'info';
 
-/**
- * The 0.5 spellings of two presence statuses. They still work and warn once in development; use
- * `'do-not-disturb'` and `'out-of-office'` instead. Removed in 1.0.
- */
-export type DeprecatedPresenceStatus = 'dnd' | 'oof';
-
-/**
- * User presence status for Avatar and Persona components. `'dnd'` and `'oof'` are deprecated
- * aliases of `'do-not-disturb'` and `'out-of-office'` ({@link DeprecatedPresenceStatus}).
- */
+/** User presence status for Avatar and Persona components (Fluent's names). */
 export type PresenceStatus =
-  | 'available'
-  | 'busy'
-  | 'away'
-  | 'offline'
-  | 'do-not-disturb'
-  | 'out-of-office'
-  | DeprecatedPresenceStatus;
+  'available' | 'busy' | 'away' | 'offline' | 'do-not-disturb' | 'out-of-office';
 
 /** Typography scale variant mapping to Fluent UI type ramp tokens. */
 export type TypographyVariant =

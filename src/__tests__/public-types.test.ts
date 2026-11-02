@@ -1022,11 +1022,12 @@ describe('0.7 menus, popovers and toolbars from the package entry', () => {
       }
     >();
 
-    expectTypeOf<Pick<TooltipProps, 'openDelay' | 'closeDelay' | 'delay'>>().toEqualTypeOf<{
+    expectTypeOf<Pick<TooltipProps, 'openDelay' | 'closeDelay'>>().toEqualTypeOf<{
       openDelay?: number;
       closeDelay?: number;
-      delay?: number;
     }>();
+    // The deprecated `delay` is removed in 1.0.
+    expectTypeOf<TooltipProps>().not.toHaveProperty('delay');
   });
 
   it('Toolbar and ToggleButton: size, the bound parts and isAccessible', () => {
@@ -1256,9 +1257,9 @@ describe('0.9 input defaults from the package entry (Phase 4 D7)', () => {
 // imported from the package entry (compile-time, tsconfig.dev.json).
 describe('Phase 4 public types', () => {
   it('sizes and appearances', () => {
-    expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     expectTypeOf<InputProps['htmlSize']>().toEqualTypeOf<number | undefined>();
-    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     expectTypeOf<TextareaProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     for (const appearance of [
       {} as InputProps['appearance'],
@@ -1278,7 +1279,7 @@ describe('Phase 4 public types', () => {
     expectTypeOf<CheckboxProps['size']>().toEqualTypeOf<CheckboxSize | undefined>();
     expectTypeOf<CheckboxProps['shape']>().toEqualTypeOf<CheckboxShape | undefined>();
     expectTypeOf<SwitchProps['size']>().toEqualTypeOf<SwitchSize | undefined>();
-    expectTypeOf<SliderProps['size']>().toEqualTypeOf<SliderSize | number | undefined>();
+    expectTypeOf<SliderProps['size']>().toEqualTypeOf<SliderSize | undefined>();
     expectTypeOf<FieldProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     expectTypeOf<FieldContextValue['size']>().toEqualTypeOf<CoreSize | undefined>();
   });
@@ -1298,9 +1299,8 @@ describe('Phase 4 public types', () => {
     expectTypeOf<InfoLabelProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<InfoButtonProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<LabelProps['required']>().toEqualTypeOf<boolean | ReactNode | undefined>();
-    expectTypeOf<InfoLabelProps['label']>().toEqualTypeOf<ReactNode>();
-    // Optional (the deprecated alias of `children`): a label-less pick accepts `{}`.
-    expectTypeOf<{}>().toExtend<Pick<InfoLabelProps, 'label'>>(); // eslint-disable-line @typescript-eslint/no-empty-object-type -- the empty object is the point
+    // The deprecated `label` alias of `children` is removed in 1.0.
+    expectTypeOf<InfoLabelProps>().not.toHaveProperty('label');
     expectTypeOf<InfoLabelProps['htmlFor']>().toEqualTypeOf<LabelProps['htmlFor']>();
     expectTypeOf<InfoLabelProps['required']>().toEqualTypeOf<LabelProps['required']>();
     expectTypeOf<InfoLabelProps['size']>().toEqualTypeOf<LabelProps['size']>();

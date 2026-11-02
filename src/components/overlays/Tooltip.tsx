@@ -2,7 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { tooltipClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { FOCUSABLE_SELECTOR, getFirstTabbable } from '../../lib/focus';
 import { tooltipMotion } from '../../lib/motion';
@@ -51,8 +51,6 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
    * @default 100
    */
   closeDelay?: number;
-  /** @deprecated Use `openDelay`. */
-  delay?: number;
   /**
    * Controlled open state (Fluent's `visible`). The tooltip still asks to open on hover and focus
    * (after `openDelay`) and to close on leave, blur and Escape through `onOpenChange`. The surface
@@ -344,7 +342,6 @@ export const Tooltip = ({
   appearance: appearanceProp,
   openDelay: openDelayProp,
   closeDelay = 100,
-  delay,
   open: openProp,
   defaultOpen,
   onOpenChange,
@@ -364,8 +361,7 @@ export const Tooltip = ({
   ...rest
 }: TooltipProps) => {
   const appearance = appearanceProp ?? 'inverted';
-  const openDelay =
-    resolveDeprecatedProp('Tooltip', openDelayProp, delay, 'delay', 'openDelay') ?? 200;
+  const openDelay = openDelayProp ?? 200;
   const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   // The surface lives in a portal, which renders only in the browser: until then (the server HTML,
   // hydration) the tooltip is closed; the hidden description is rendered either way.

@@ -448,20 +448,24 @@ describe('InfoLabel', () => {
       expect(screen.getByRole('button', { name: 'Password Info' })).toBeInTheDocument();
     });
 
-    it('the deprecated label prop still works and warns once; children win', () => {
+    it('has no label alias of children (removed in 1.0): the label stays empty', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const { rerender } = render(<InfoLabel label="Old" info="x" />);
-      expect(screen.getByText('Old')).toBeInTheDocument();
-      rerender(
-        <InfoLabel label="Old" info="x">
-          New
-        </InfoLabel>,
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { container } = render(
+        // @ts-expect-error -- `label` is removed in 1.0: pass the label content as `children`
+        <InfoLabel label="Old" info="x" />,
       );
-      expect(screen.getByText('New')).toBeInTheDocument();
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(
-        '[WaveUI] InfoLabel: `label` is deprecated and will be removed in 1.0. Use `children` instead.',
-      );
+      expect(screen.queryByText('Old')).not.toBeInTheDocument();
+      // An unknown prop of the root `<span>`: rendered as a plain attribute, read by nothing.
+      expect(container.firstElementChild).toHaveAttribute('label', 'Old');
+      expect(container.querySelector('label')).toBeEmptyDOMElement();
+      expect(screen.getByRole('button', { name: 'Information' })).toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it('types: no label prop (removed in 1.0)', () => {
+      expectTypeOf<InfoLabelProps>().not.toHaveProperty('label');
     });
 
     it('rich info: a link in the note is reachable by Tab', async () => {

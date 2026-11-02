@@ -597,19 +597,15 @@ export const dropdownClassNames = {
 } as const;
 
 /**
- * TagPicker: `root` on the outer element; `control` on the tag area and `group` on the list of
- * tags (both deprecated, kept until 1.0 next to TagPicker.Control's and TagPicker.Group's own
- * classes); `tag` on each tag; `removeButton` on each tag's remove button; `input` on the
- * `role="combobox"` input; `expandButton` on the expand button and `expandIcon` on its glyph;
- * `clearButton` on the clear button; `listbox` on the `role="listbox"` list; `option` on each
- * Option it renders (which also carries Option's classes); `createOption` on the create option of
- * `allowCreate`; `overflowCount` on the "+N" count of the single-line layout; `surface` on the
- * portaled popup; `emptyMessage` on the "No matches" row.
+ * TagPicker: `root` on the outer element; `tag` on each tag; `removeButton` on each tag's remove
+ * button; `input` on the `role="combobox"` input; `expandButton` on the expand button and
+ * `expandIcon` on its glyph; `clearButton` on the clear button; `listbox` on the `role="listbox"`
+ * list; `option` on each Option it renders (which also carries Option's classes); `createOption`
+ * on the create option of `allowCreate`; `overflowCount` on the "+N" count of the single-line
+ * layout; `surface` on the portaled popup; `emptyMessage` on the "No matches" row.
  */
 export const tagPickerClassNames = {
   root: 'wave-tag-picker',
-  control: 'wave-tag-picker__control',
-  group: 'wave-tag-picker__group',
   tag: 'wave-tag-picker__tag',
   removeButton: 'wave-tag-picker__remove-button',
   input: 'wave-tag-picker__input',
@@ -625,15 +621,11 @@ export const tagPickerClassNames = {
 } as const;
 
 /**
- * TagPicker.Control: `root` on the field that holds the tags, the trigger and the end buttons (it
- * also carries TagPicker's `control` part).
+ * TagPicker.Control: `root` on the field that holds the tags, the trigger and the end buttons.
  */
 export const tagPickerControlClassNames = { root: 'wave-tag-picker-control' } as const;
 
-/**
- * TagPicker.Group: `root` on the list of tags (also a TagGroup's root, and TagPicker's `group`
- * part).
- */
+/** TagPicker.Group: `root` on the list of tags (also a TagGroup's root). */
 export const tagPickerGroupClassNames = { root: 'wave-tag-picker-group' } as const;
 
 /**

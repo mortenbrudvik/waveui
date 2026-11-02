@@ -58,8 +58,8 @@ export function sortTableRows<T, R extends { item: T }>(
  * The sort plugin of `useTableFeatures`: sorts the rows by the `compare` of a column and fills
  * `state.sort`. The sort is controlled with `sort` or uncontrolled with `defaultSort`;
  * `toggleColumnSort` goes from ascending to descending as a sortable DataGrid header does. The
- * sorted column is the one whose `columnId` is the sort's `columnId` (the deprecated `id` of a
- * column is not read). Call it unconditionally and pass the plugin to `useTableFeatures`.
+ * sorted column is the one whose `columnId` is the sort's `columnId`. Call it unconditionally
+ * and pass the plugin to `useTableFeatures`.
  *
  * @example
  * const state = useTableFeatures({ items, columns }, [

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { infoLabelClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { MotionSlot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
@@ -16,11 +15,6 @@ export interface InfoLabelProps
     Pick<LabelProps, 'htmlFor' | 'required' | 'size' | 'weight' | 'disabled'> {
   /** The label content (Fluent's `children`). */
   children?: React.ReactNode;
-  /**
-   * The label content.
-   * @deprecated Use `children`.
-   */
-  label?: React.ReactNode;
   /** The information the info button's note shows: text, links or other rich content. */
   info: React.ReactNode;
   /**
@@ -92,8 +86,7 @@ export interface InfoLabelProps
  * rich content — in a note next to it, rendered once whether the note is open or closed (see
  * `InfoButton`, which owns that note and its opening, closing and Tab order).
  *
- * - `children` is the label content; `label` is a deprecated alias (a warning fires once, and
- *   `children` wins when both are given).
+ * - `children` is the label content.
  * - `htmlFor`, `required`, `size`, `weight` and `disabled` route to the `<label>`; `disabled` dims
  *   only the label text, and the info button stays usable.
  * - The button is named "‹label text› ‹infoButtonLabel›" through `aria-labelledby`, which points
@@ -109,7 +102,6 @@ export interface InfoLabelProps
  */
 export const InfoLabel = ({
   children,
-  label,
   info,
   infoButtonLabel = 'Information',
   openOnHover,
@@ -125,7 +117,6 @@ export const InfoLabel = ({
   slotProps,
   ...rest
 }: InfoLabelProps) => {
-  const content = resolveDeprecatedProp('InfoLabel', children, label, 'label', 'children');
   const generatedLabelId = useId('info-label');
   // An empty `id` counts as unset, so the button's name never points at an empty id.
   const labelId = id || generatedLabelId;
@@ -147,7 +138,7 @@ export const InfoLabel = ({
           locked: { id: labelId, htmlFor, required, size, weight, disabled },
         })}
       >
-        {content}
+        {children}
       </Label>
       <InfoNoteClassContext.Provider value={noteClass}>
         {/* The `infoButton` part is the InfoButton's own props; the `info` part reaches its note

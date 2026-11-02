@@ -9,7 +9,7 @@ import {
 } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, resolveDeprecatedProp, warnDeprecated, warnOnce } from '../../lib/dev';
+import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
 import type { ColumnSizingOption } from '../../lib/columnSizing';
 import { endsTextSelection, isForeignEvent } from '../../lib/events';
 import { clearIds, selectAllIds, summarizeSelection, toggleId } from '../../lib/selection';
@@ -115,15 +115,10 @@ export interface DataGridSelectedItemsChangeDetails {
 export interface DataGridColumn<T = unknown> {
   /**
    * Unique identifier of the column: the `columnId` of its header cell (and of the grid's sort) and
-   * the React key of its cells. Required in practice: a column without it (and without the
-   * deprecated `id`) cannot sort, with a development warning.
+   * the React key of its cells. Required in practice: a column without it cannot sort, with a
+   * development warning.
    */
   columnId?: string;
-  /**
-   * @deprecated Use `columnId`. Read only when `columnId` is not given, with a development
-   * warning.
-   */
-  id?: string;
   /** The header content (text or any React node), unless `renderHeaderCell` is given. */
   label: React.ReactNode;
   /**
@@ -794,17 +789,6 @@ function countHeaderRows(children: React.ReactNode): number {
   return flattenChildren(children).filter(({ node }) => React.isValidElement(node)).length;
 }
 
-/** A column's id: `columnId`, else the deprecated `id` (warned once). */
-function columnIdOf<T>(column: DataGridColumn<T>): string | undefined {
-  return resolveDeprecatedProp(
-    'DataGrid',
-    column.columnId,
-    column.id,
-    'columns[].id',
-    'columns[].columnId',
-  );
-}
-
 function warnDuplicateRowId(rowId: string): void {
   warnOnce(
     `DataGrid:duplicate-rowId:${rowId}`,
@@ -1137,7 +1121,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   const sortDirection = sort?.direction;
   const sortCompare = React.useMemo(() => {
     if (!hasItems || sortColumnId === undefined || !columns) return undefined;
-    return columns.find((column) => columnIdOf(column) === sortColumnId)?.compare;
+    return columns.find((column) => column.columnId === sortColumnId)?.compare;
   }, [hasItems, sortColumnId, columns]);
 
   const sortedRows = React.useMemo(() => {
@@ -1155,10 +1139,10 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
       );
   }, [itemRows, sortCompare, sortDirection]);
 
-  // Built only with `items`: the column ids are read (and the deprecated `id` warned) when used.
+  // Built only with `items`: the column ids are read when used.
   const renderColumnsRow = React.useMemo<DataGridRenderRow | null>(() => {
     if (!columns || !hasItems) return null;
-    const cellKeys = columns.map((column, index) => columnIdOf(column) ?? index);
+    const cellKeys = columns.map((column, index) => column.columnId ?? index);
     return (item) => (
       <DataGridRow>
         {columns.map((column, index) => (
@@ -1173,14 +1157,13 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     [sortedRows, renderColumnsRow, itemSelectionDisabled],
   );
 
-  const columnWithoutId =
-    columns?.some((column) => column.columnId === undefined && column.id === undefined) ?? false;
+  const columnWithoutId = columns?.some((column) => column.columnId === undefined) ?? false;
   React.useEffect(() => {
     if (columnWithoutId) {
       warnOnce(
         'DataGrid:column-without-columnId',
-        'DataGrid: a column in `columns` has no `columnId` (nor the deprecated `id`), so its ' +
-          'header cannot sort. Give every column a unique `columnId`.',
+        'DataGrid: a column in `columns` has no `columnId`, so its header cannot sort. Give every ' +
+          'column a unique `columnId`.',
       );
     }
   }, [columnWithoutId]);
@@ -1252,9 +1235,9 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   }, [sizingIgnored]);
   // A windowed grid is laid out from widths too: its columns never follow the rendered rows.
   const sizingEnabled = (sizingRequested && !sizingIgnored) || windowed;
-  // Read (and the deprecated `id` warned) only when the widths are used.
+  // Read only when the widths are used.
   const columnIds = React.useMemo(
-    () => (sizingEnabled && columns ? columns.map(columnIdOf) : NO_COLUMN_IDS),
+    () => (sizingEnabled && columns ? columns.map((column) => column.columnId) : NO_COLUMN_IDS),
     [sizingEnabled, columns],
   );
   const sizing = useDataGridColumnSizing({
@@ -1277,7 +1260,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
       <DataGridHeader key="wave-generated-header">
         <tr>
           {columns.map((column, index) => {
-            const columnId = columnIdOf(column);
+            const { columnId } = column;
             return (
               <DataGridHeaderCell
                 key={columnId ?? index}

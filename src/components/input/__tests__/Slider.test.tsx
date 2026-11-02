@@ -432,21 +432,19 @@ describe('size (Phase 4 D10, D14)', () => {
     );
   });
 
-  it('a numeric size renders nothing and is reported once', () => {
+  it('has no numeric size (removed in 1.0): a number renders nothing and the medium size', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const { rerender } = render(<Slider aria-label="Volume" size={3} />);
+      // @ts-expect-error -- a numeric `size` is removed in 1.0: it had no effect, remove it
+      render(<Slider aria-label="Volume" size={3} />);
       expect(slider()).not.toHaveAttribute('size');
       expect(slider()).toHaveAttribute('data-size', 'medium');
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(
-        '[WaveUI] Slider: a numeric `size` has no effect (a range input ignores the native attribute) and is removed in 1.0; remove it.',
-      );
-      // warnOnce: a re-render with the same numeric size does not warn again.
-      rerender(<Slider aria-label="Volume" size={3} />);
-      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
+      error.mockRestore();
     }
   });
 
@@ -458,7 +456,7 @@ describe('size (Phase 4 D10, D14)', () => {
   });
 
   it('types', () => {
-    expectTypeOf<SliderProps['size']>().toEqualTypeOf<SliderSize | number | undefined>();
+    expectTypeOf<SliderProps['size']>().toEqualTypeOf<SliderSize | undefined>();
     // @ts-expect-error Slider has no large size
     render(<Slider aria-label="Volume" size="large" />);
   });

@@ -2,7 +2,6 @@ import * as React from 'react';
 import { sliderClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnOnce } from '../../lib/dev';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Size } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -42,13 +41,9 @@ export interface SliderProps extends Omit<
    * rail in a 24px-tall input. Unlike the text controls and pickers, Slider does not read a
    * surrounding `Field`'s size or a `WaveProvider`'s input defaults: this prop is the only source
    * of its size.
-   *
-   * `SliderProps` inherited the native HTML `size` attribute, which a range input ignores anyway.
-   * A number is deprecated: it renders nothing (not even the native attribute), is reported once
-   * in development, and is a type error from 1.0.
    * @default 'medium'
    */
-  size?: SliderSize | number;
+  size?: SliderSize;
   /** Ref to the `<input type="range">` element. */
   ref?: React.Ref<HTMLInputElement>;
 }
@@ -153,19 +148,8 @@ export const Slider = ({
   required,
   ...props
 }: SliderProps) => {
-  // D10: the deprecated numeric form of `size` never reaches the input (it was part of `...props`
-  // in 0.7, which rendered it as the meaningless native `size` attribute); report it once.
-  const numericSize = typeof sizeProp === 'number';
-  React.useEffect(() => {
-    if (numericSize) {
-      warnOnce(
-        'Slider:size-number',
-        'Slider: a numeric `size` has no effect (a range input ignores the native attribute) and is removed in 1.0; remove it.',
-      );
-    }
-  }, [numericSize]);
-  // Any other value (an unknown string from untyped code) also resolves to medium, so the classes
-  // and `data-size` always agree.
+  // Any other value (an unknown string or a number from untyped code) resolves to medium, so the
+  // classes and `data-size` always agree; `size` never reaches the input.
   const size: SliderSize = sizeProp === 'small' ? 'small' : 'medium';
   const sizeClasses = SLIDER_SIZE[size];
 

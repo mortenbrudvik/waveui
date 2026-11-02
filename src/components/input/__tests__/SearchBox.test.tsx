@@ -7,7 +7,7 @@ import { SearchBox, type SearchBoxProps } from '../SearchBox';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { WaveProvider } from '../../provider/WaveProvider';
-import type { Slot, SlotObject } from '../../../lib/types';
+import type { Slot } from '../../../lib/types';
 import { inputInvalidWithin } from '../../../lib/styles';
 import { searchBoxClassNames } from '../../../lib/classNames';
 import {
@@ -24,7 +24,9 @@ import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../.
 
 /** The development warnings of the `dismiss` slot (C-SLOTS). */
 const ELEMENT_WARNING = /^\[WaveUI\] SearchBox: `dismiss` received a button element/;
-const OBJECT_WARNING = /^\[WaveUI\] SearchBox: `dismiss` with button props .* is deprecated/;
+/** A slot object whose `as` is a button, unwrapped (1.0: the button-object form is removed). */
+const SLOT_OBJECT_WARNING =
+  /^\[WaveUI\] SearchBox: `dismiss` received a slot object that renders a button; its children render inside the built-in clear button and its props were dropped/;
 
 /** Asserts that `warn` logged exactly one message per pattern (in any order) and nothing else. */
 function expectWarnings(warn: { mock: { calls: unknown[][] } }, patterns: RegExp[]) {
@@ -65,15 +67,16 @@ describe('SearchBox', () => {
       >();
     });
 
-    it("types dismiss as Slot<'span'> | SlotObject<'button'> (table-core#18)", () => {
-      expectTypeOf<SearchBoxProps['dismiss']>().toEqualTypeOf<
-        Slot<'span'> | SlotObject<'button'> | undefined
-      >();
+    it("types dismiss as Slot<'span'>: no button-object form (removed in 1.0)", () => {
+      expectTypeOf<SearchBoxProps['dismiss']>().toEqualTypeOf<Slot<'span'> | undefined>();
       // Compile-time checks (type-checked by tsconfig.dev.json).
       const iconContent = <SearchBox dismiss={<span>x</span>} />;
       const spanObject = <SearchBox dismiss={{ children: 'x', title: 'Clear' }} />;
       const deprecatedButtonObject = (
-        <SearchBox dismiss={{ as: 'button', type: 'button', onClick: () => {}, children: 'x' }} />
+        <SearchBox
+          // @ts-expect-error -- the button-object form is removed in 1.0: no button attributes
+          dismiss={{ as: 'button', disabled: true, onClick: () => {}, children: 'x' }}
+        />
       );
       // @ts-expect-error `href` is neither a span nor a button attribute
       const invalid = <SearchBox dismiss={{ href: '/x' }} />;
@@ -531,7 +534,7 @@ describe('SearchBox', () => {
         ['"button"', 'button'],
         ['a Wave Button', Button],
       ] as const)(
-        'merges an object whose `as` is %s into the wired button, never nesting one, with the warning',
+        'unwraps an object whose `as` is %s inside the wired button, never nesting one, with the warning',
         async (_name, as) => {
           const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
           const user = userEvent.setup();
@@ -555,7 +558,7 @@ describe('SearchBox', () => {
           expect(clear).toContainElement(screen.getByTestId('content'));
           await user.click(screen.getByTestId('content'));
           expect(onClear).toHaveBeenCalledOnce();
-          expectWarnings(warn, [OBJECT_WARNING]);
+          expectWarnings(warn, [SLOT_OBJECT_WARNING]);
         },
       );
     });
@@ -627,21 +630,6 @@ describe('SearchBox', () => {
           </Button>
         ),
         ELEMENT_WARNING,
-      ],
-      [
-        'a slot object whose `as` is a Wave Button (deprecated form)',
-        (onClick: () => void) =>
-          // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
-          ({
-            as: Button,
-            icon: <svg data-testid="button-icon" />,
-            iconPosition: 'after',
-            disabled: true,
-            disabledFocusable: true,
-            onClick,
-            children: 'Reset',
-          }) as Slot<'span'>,
-        OBJECT_WARNING,
       ],
     ])(
       '%s: iconPosition and disabledFocusable take effect on the clear button and never reach the DOM',
@@ -760,7 +748,7 @@ describe('SearchBox', () => {
       expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
-    it('keeps type="button" when a merged slot passes type null (C-BUTTON-TYPE, P12 change request)', async () => {
+    it('keeps type="button" when a merged slot (or a slot object) passes type null (C-BUTTON-TYPE, P12 change request)', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
@@ -781,7 +769,8 @@ describe('SearchBox', () => {
         await user.click(clear);
       }
       expect(onSubmit).not.toHaveBeenCalled();
-      expectWarnings(warn, [OBJECT_WARNING, ELEMENT_WARNING]);
+      // The slot object's `type` stays on its content (1.0: no button-object form).
+      expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
     it('lets a consumer slot handler cancel the clear with preventDefault', async () => {
@@ -799,7 +788,7 @@ describe('SearchBox', () => {
       expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
-    it('merges the deprecated button-object form onto the wired button with a warning', async () => {
+    it('has no button-object form (removed in 1.0): the onClick of a slot object stays on the content', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onClick = vi.fn();
@@ -814,14 +803,17 @@ describe('SearchBox', () => {
       );
       expect(screen.getAllByRole('button')).toHaveLength(1);
       const clear = screen.getByRole('button', { name: 'Clear search' });
-      expect(clear).toContainElement(screen.getByTestId('obj-content'));
-      await user.click(clear);
-      expect(onClick).toHaveBeenCalledOnce();
+      const content = screen.getByTestId('obj-content');
+      expect(clear).toContainElement(content);
+      // The button's own activation never reaches the content's handler.
+      clear.focus();
+      await user.keyboard('{Enter}');
+      expect(onClick).not.toHaveBeenCalled();
       expect(onClear).toHaveBeenCalledOnce();
-      expectWarnings(warn, [OBJECT_WARNING]);
+      expect(warn).not.toHaveBeenCalled();
     });
 
-    it('falls back to the default icon for a button object without children (table-core#18)', async () => {
+    it('falls back to the default icon for a slot object without children, handlers and button attributes included (table-core#18)', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onClick = vi.fn();
@@ -843,14 +835,20 @@ describe('SearchBox', () => {
         expect(icon).not.toBeNull();
         expect(icon).toHaveAttribute('aria-hidden', 'true');
       }
-      // The object's own content props still apply around the default icon.
+      // The object's own props, handlers and button attributes included, apply around the
+      // default icon (1.0: no button-object form).
       expect(clears[2].querySelector('[data-wave-icon="dismiss"]')?.parentElement).toHaveClass(
         'obj-content',
       );
-      await user.click(clears[0]);
-      expect(onClick).toHaveBeenCalledOnce();
+      expect(clears[1].querySelector('[data-wave-icon="dismiss"]')?.parentElement).toHaveAttribute(
+        'type',
+        'button',
+      );
+      clears[0].focus();
+      await user.keyboard('{Enter}');
+      expect(onClick).not.toHaveBeenCalled();
       expect(screen.getByRole('searchbox', { name: 'First' })).toHaveValue('');
-      expectWarnings(warn, [OBJECT_WARNING]);
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('keeps the default icon for empty shorthand (booleans, empty string, empty iterables and Fragments) (table-core#18)', () => {
@@ -1066,7 +1064,7 @@ describe('SearchBox', () => {
       expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
-    it("renders { as: 'button' } without nesting buttons", () => {
+    it("unwraps { as: 'button' } without nesting buttons: its props are dropped (no button-object form in 1.0)", () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <SearchBox
@@ -1076,8 +1074,12 @@ describe('SearchBox', () => {
         />,
       );
       expect(screen.getAllByRole('button')).toHaveLength(1);
-      expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('obj-button');
-      expectWarnings(warn, [OBJECT_WARNING]);
+      const clear = screen.getByRole('button', { name: 'Clear search' });
+      expect(clear.outerHTML).not.toContain('obj-button');
+      const content = screen.getByText('X');
+      expect(content.tagName).toBe('SPAN');
+      expect(content).toHaveAttribute('aria-hidden', 'true');
+      expectWarnings(warn, [SLOT_OBJECT_WARNING]);
     });
   });
 
@@ -1110,7 +1112,6 @@ describe('SearchBox', () => {
 
     it.each([
       ['a Wave Button with a text label', <Button key="b">Reset</Button>],
-      ['the deprecated { as: "button" } object', { as: 'button', children: 'Reset' } as const],
       [
         'a <button> whose child component renders the text (i18n)',
         <button key="t" type="button">
@@ -1122,7 +1123,21 @@ describe('SearchBox', () => {
       render(<SearchBox aria-label="Search" defaultValue="a" dismiss={dismiss} />);
       expect(screen.getAllByRole('button')).toHaveLength(1);
       expect(screen.getByRole('button')).toHaveAccessibleName('Reset');
-      expectWarnings(warn, [React.isValidElement(dismiss) ? ELEMENT_WARNING : OBJECT_WARNING]);
+      expectWarnings(warn, [ELEMENT_WARNING]);
+    });
+
+    it('an unwrapped { as: "button" } object is decorative content: the default name stays (1.0)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="a"
+          dismiss={{ as: 'button', children: 'Reset' }}
+        />,
+      );
+      expect(screen.getAllByRole('button')).toHaveLength(1);
+      expect(screen.getByRole('button')).toHaveAccessibleName('Clear search');
+      expectWarnings(warn, [SLOT_OBJECT_WARNING]);
     });
 
     it.each([

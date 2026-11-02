@@ -33,9 +33,12 @@ const statuses = ['info', 'success', 'warning', 'error'] as const;
 const BUTTON_ELEMENT_WARNING =
   '[WaveUI] MessageBar: `dismiss` received a button element; its props were merged into the built-in dismiss button (buttons cannot be nested). Pass icon content instead, e.g. `dismiss={<CloseIcon />}`, and use `onDismiss`.';
 
-/** The deprecation warning for the 0.4 button-object form of `dismiss`. */
-const BUTTON_OBJECT_WARNING =
-  '[WaveUI] MessageBar: the button-object form of `dismiss` is deprecated and will be removed in 1.0; its button props were merged into the built-in dismiss button. Pass icon content instead, e.g. `dismiss={<CloseIcon />}`, and use `onDismiss`.';
+/**
+ * The development warning for a slot object whose `as` is a button: unwrapped, since the 0.4
+ * button-object form is removed in 1.0.
+ */
+const BUTTON_SLOT_OBJECT_WARNING =
+  '[WaveUI] MessageBar: `dismiss` received a slot object that renders a button; its children render inside the built-in dismiss button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `dismiss={<CloseIcon />}`, and use `onDismiss`.';
 
 /** Records `console.warn` for one test (restored after each test); assert what it recorded. */
 const spyOnWarn = () => vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -354,7 +357,7 @@ describe('MessageBar', () => {
         ['"button"', 'button'],
         ['a Wave Button', Button],
       ] as const)(
-        'merges an object whose `as` is %s into the wired button, never nesting one, with the warning',
+        'unwraps an object whose `as` is %s inside the wired button, never nesting one, with the warning',
         async (_name, as) => {
           const warn = spyOnWarn();
           const user = userEvent.setup();
@@ -379,7 +382,7 @@ describe('MessageBar', () => {
           expect(screen.getByTestId('content').tagName).toBe('SPAN');
           await user.click(screen.getByTestId('content'));
           expect(onDismiss).toHaveBeenCalledTimes(1);
-          expect(warn.mock.calls).toEqual([[BUTTON_OBJECT_WARNING]]);
+          expect(warn.mock.calls).toEqual([[BUTTON_SLOT_OBJECT_WARNING]]);
         },
       );
     });
@@ -537,7 +540,7 @@ describe('MessageBar', () => {
         expect(error).not.toHaveBeenCalled();
       });
 
-      it('renders dangerouslySetInnerHTML of the deprecated button-object form inside the button', () => {
+      it('drops the markup of an object whose `as` is a button (no button-object form in 1.0)', () => {
         const warn = spyOnWarn();
         const error = vi.spyOn(console, 'error');
         render(
@@ -548,8 +551,11 @@ describe('MessageBar', () => {
             Msg
           </MessageBar>,
         );
-        expect(expectOwnContent('html-icon').parentElement).toHaveAttribute('aria-hidden', 'true');
-        expect(warn.mock.calls).toEqual([[BUTTON_OBJECT_WARNING]]);
+        // Unwrapped: its props, the markup included, are dropped, so the default icon shows.
+        const button = screen.getByRole('button', { name: 'Dismiss' });
+        expect(screen.queryByTestId('html-icon')).toBeNull();
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
+        expect(warn.mock.calls).toEqual([[BUTTON_SLOT_OBJECT_WARNING]]);
         expect(error).not.toHaveBeenCalled();
       });
 
@@ -629,11 +635,14 @@ describe('MessageBar', () => {
       });
     });
 
-    it('merges a slot object whose `as` is a Wave Button instead of nesting it (deprecated form)', () => {
+    it('unwraps a slot object whose `as` is a Wave Button: its props are dropped (no button-object form in 1.0)', async () => {
       const warn = spyOnWarn();
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      const onSlotClick = vi.fn();
       render(
         <MessageBar
-          onDismiss={() => {}}
+          onDismiss={onDismiss}
           dismiss={
             // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
             {
@@ -641,6 +650,7 @@ describe('MessageBar', () => {
               appearance: 'subtle',
               className: 'text-error',
               icon: <svg data-testid="button-icon" />,
+              onClick: onSlotClick,
             } as Slot<'span'>
           }
         >
@@ -650,12 +660,13 @@ describe('MessageBar', () => {
       const buttons = screen.getAllByRole('button');
       expect(buttons).toHaveLength(1);
       expect(buttons[0]).toHaveAccessibleName('Dismiss');
-      expect(buttons[0]).toHaveClass('text-error');
-      expect(buttons[0]).not.toHaveAttribute('appearance');
-      expect(
-        within(buttons[0]).getByTestId('button-icon').closest('[aria-hidden="true"]'),
-      ).not.toBeNull();
-      expect(warn.mock.calls).toEqual([[BUTTON_OBJECT_WARNING]]);
+      expect(buttons[0].outerHTML).not.toMatch(/text-error|appearance/);
+      expect(screen.queryByTestId('button-icon')).toBeNull();
+      expect(buttons[0].querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
+      await user.click(buttons[0]);
+      expect(onSlotClick).not.toHaveBeenCalled();
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([[BUTTON_SLOT_OBJECT_WARNING]]);
     });
 
     describe('a ref on the dismiss slot reaches the wired button (0.4 compatibility)', () => {
@@ -680,16 +691,6 @@ describe('MessageBar', () => {
           'Close',
           BUTTON_ELEMENT_WARNING,
         ],
-        [
-          'the deprecated button-object form',
-          (ref: React.Ref<HTMLButtonElement>): MessageBarProps['dismiss'] => ({
-            as: 'button',
-            ref,
-            children: 'x',
-          }),
-          'Dismiss',
-          BUTTON_OBJECT_WARNING,
-        ],
       ])('%s', (_, dismiss, name, warning) => {
         const warn = spyOnWarn();
         const ref = React.createRef<HTMLButtonElement>();
@@ -701,6 +702,31 @@ describe('MessageBar', () => {
         expect(screen.getAllByRole('button')).toHaveLength(1);
         expect(ref.current).toBe(screen.getByRole('button', { name }));
         expect(warn.mock.calls).toEqual([[warning]]);
+      });
+
+      it('a slot object is the content (1.0): its ref reaches the content, never the button', () => {
+        const warn = spyOnWarn();
+        const content = React.createRef<HTMLSpanElement>();
+        const unwrapped = React.createRef<HTMLButtonElement>();
+        render(
+          <>
+            <MessageBar onDismiss={() => {}} dismiss={{ ref: content, children: 'x' }}>
+              Content
+            </MessageBar>
+            <MessageBar
+              onDismiss={() => {}}
+              dismiss={{ as: 'button', ref: unwrapped, children: 'y' }}
+            >
+              Unwrapped
+            </MessageBar>
+          </>,
+        );
+        expect(content.current).toBe(screen.getByText('x'));
+        expect(content.current?.tagName).toBe('SPAN');
+        // An object whose `as` is a button is unwrapped: its props, the ref included, are dropped.
+        expect(unwrapped.current).toBeNull();
+        expect(screen.getAllByRole('button', { name: 'Dismiss' })).toHaveLength(2);
+        expect(warn.mock.calls).toEqual([[BUTTON_SLOT_OBJECT_WARNING]]);
       });
     });
 
@@ -860,22 +886,6 @@ describe('MessageBar', () => {
         ),
         'Close',
         BUTTON_ELEMENT_WARNING,
-      ],
-      [
-        'a slot object whose `as` is a Wave Button (deprecated form)',
-        (onClick: () => void) =>
-          // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
-          ({
-            as: Button,
-            icon: <svg data-testid="button-icon" />,
-            iconPosition: 'after',
-            disabled: true,
-            disabledFocusable: true,
-            onClick,
-            children: 'Close',
-          }) as Slot<'span'>,
-        'Dismiss',
-        BUTTON_OBJECT_WARNING,
       ],
     ])(
       '%s: iconPosition and disabledFocusable take effect on the wired button and never reach the DOM',
@@ -1377,7 +1387,7 @@ describe('MessageBar', () => {
       expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
     });
 
-    it('merges the deprecated button-object form and warns once', async () => {
+    it('has no button-object form (removed in 1.0): `as: "button"` is unwrapped, its props dropped, warned once', async () => {
       const warn = spyOnWarn();
       const user = userEvent.setup();
       const onDismiss = vi.fn();
@@ -1401,12 +1411,61 @@ describe('MessageBar', () => {
       expect(screen.getAllByRole('button')).toHaveLength(1);
       const button = screen.getByRole('button', { name: 'Dismiss' });
       expect(button).toHaveAttribute('type', 'button');
-      expect(button).toHaveClass('p-2');
-      expect(button).not.toHaveClass('p-1');
-      await user.click(button);
+      expect(button).toHaveClass('p-1');
+      expect(button).not.toHaveClass('p-2');
+      // Its children are the content, in a span; its other props reach nothing.
+      const content = screen.getByText('x');
+      expect(content.tagName).toBe('SPAN');
+      expect(content).toHaveAttribute('aria-hidden', 'true');
+      expect(content).not.toHaveClass('p-2');
+      await user.click(content);
+      expect(onSlotClick).not.toHaveBeenCalled();
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([[BUTTON_SLOT_OBJECT_WARNING]]);
+    });
+
+    it('has no button-object form (removed in 1.0): the handlers and button attributes of a slot object stay on the content', async () => {
+      const warn = spyOnWarn();
+      const error = vi.spyOn(console, 'error');
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      const onSlotClick = vi.fn();
+      render(
+        <MessageBar
+          onDismiss={onDismiss}
+          dismiss={
+            // From JavaScript: `type` and `disabled` are no attributes of the span slot object.
+            {
+              onClick: onSlotClick,
+              type: 'submit',
+              disabled: true,
+              className: 'p-2',
+              children: 'x',
+            } as Slot<'span'>
+          }
+        >
+          Msg
+        </MessageBar>,
+      );
+      const button = screen.getByRole('button', { name: 'Dismiss' });
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).not.toBeDisabled();
+      expect(button).not.toHaveClass('p-2');
+      const content = screen.getByText('x');
+      expect(content).toHaveAttribute('type', 'submit');
+      expect(content).toHaveAttribute('disabled');
+      expect(content).toHaveClass('p-2');
+      // A click on the content reaches its handler, then the button's; the keyboard reaches only
+      // the button.
+      await user.click(content);
       expect(onSlotClick).toHaveBeenCalledTimes(1);
       expect(onDismiss).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls).toEqual([[BUTTON_OBJECT_WARNING]]);
+      button.focus();
+      await user.keyboard('{Enter}');
+      expect(onSlotClick).toHaveBeenCalledTimes(1);
+      expect(onDismiss).toHaveBeenCalledTimes(2);
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
 
     it('an object slot without children styles the default icon', () => {
@@ -1433,20 +1492,17 @@ describe('MessageBar', () => {
       );
     });
 
-    it('accepts both dismiss slot typings', () => {
-      // `disabled` exists only on the `SlotObject<'button'>` arm: without that arm this object
-      // literal is an excess-property error. (Assignability alone cannot tell the arms apart, since
-      // a span slot object accepts extra keys structurally.)
+    it('types the dismiss slot as span content only (the button-object form is removed in 1.0)', () => {
+      expectTypeOf<MessageBarProps['dismiss']>().toEqualTypeOf<Slot<'span'> | undefined>();
+      // `disabled` is no attribute of a span slot object (`type` is not caught: `ReactNode`'s
+      // `ReactElement` has a `type`, so the excess-property check passes it over).
       const buttonObject: MessageBarProps['dismiss'] = {
         as: 'button',
-        type: 'button',
+        // @ts-expect-error -- the button-object form is removed in 1.0: no button attributes
         disabled: true,
         onClick: () => {},
       };
-      // Control: the span arm alone rejects the same button-only key.
-      // @ts-expect-error -- `disabled` is not an attribute of a span slot object
-      const spanOnly: Slot<'span'> = { disabled: true };
-      expect([buttonObject, spanOnly]).toHaveLength(2);
+      expect(buttonObject).toBeDefined();
 
       expectTypeOf<React.ReactElement>().toExtend<NonNullable<MessageBarProps['dismiss']>>();
       expectTypeOf<string>().toExtend<NonNullable<MessageBarProps['dismiss']>>();
@@ -1454,7 +1510,6 @@ describe('MessageBar', () => {
 
     it.each([
       ['a <button> element slot', <button key="el" type="submit" />, BUTTON_ELEMENT_WARNING],
-      ['the deprecated button-object form', { type: 'submit' as const }, BUTTON_OBJECT_WARNING],
     ])('an explicit type from %s overrides the type="button" default', (_, dismiss, warning) => {
       const warn = spyOnWarn();
       render(
@@ -1469,11 +1524,6 @@ describe('MessageBar', () => {
     it.each([
       // `null` reaches the component from JavaScript callers or casts; it means "the default".
       ['a <button> element slot', <button key="el" type={null as never} />, BUTTON_ELEMENT_WARNING],
-      [
-        'the deprecated button-object form',
-        { type: null } as unknown as MessageBarProps['dismiss'],
-        BUTTON_OBJECT_WARNING,
-      ],
     ])(
       'a null type from %s keeps type="button" and does not submit',
       async (_, dismiss, warning) => {
@@ -1574,7 +1624,8 @@ describe('MessageBar — slotProps', () => {
 
   /**
    * A measuring bar with a title and actions, one with a merged `<button>`, one with a merged
-   * `disabledFocusable` Button and one with the deprecated button object.
+   * `disabledFocusable` Button and one with a slot object that names the button (its other
+   * attributes stay on the content: the button-object form is removed in 1.0).
    */
   function Bars({ slotProps }: { slotProps?: BarSlotProps }) {
     return (
@@ -1605,7 +1656,7 @@ describe('MessageBar — slotProps', () => {
         </MessageBar>
         <MessageBar
           layout="singleline"
-          dismiss={{ as: 'button', type: 'reset', 'aria-label': 'Close', className: 'obj' }}
+          dismiss={{ 'aria-label': 'Close', className: 'obj' }}
           slotProps={slotProps}
         >
           Object.
@@ -1614,7 +1665,8 @@ describe('MessageBar — slotProps', () => {
     );
   }
 
-  // Captured from 54699b8's dist (client and server agree).
+  // Captured from 54699b8's dist (client and server agree); in the last bar the slot object's
+  // class no longer reaches the button (1.0: the button-object form is removed).
   const BASE_PINS = [
     `<div class="${BODY_CLASSES} whitespace-nowrap">`,
     `<div class="${BODY_CLASSES}">`,
@@ -1623,12 +1675,12 @@ describe('MessageBar — slotProps', () => {
     `<button aria-label="Dismiss" class="${DISMISS_CLASSES}" type="button">`,
     `<button class="${DISMISS_CLASSES} my-merged" id="merged" tabindex="-1" title="Close it" type="button">`,
     `<button aria-disabled="true" aria-label="Dismiss" class="${DISMISS_CLASSES}" data-disabled="" data-disabled-focusable="" type="button">`,
-    `<button aria-label="Close" class="${DISMISS_CLASSES} obj" type="reset">`,
+    `<button aria-label="Close" class="${DISMISS_CLASSES}" type="button">`,
   ].join('\n');
 
-  /** The development warnings of the merged button and the button object, once each. */
+  /** The development warning of the merged buttons, once. */
   function expectMergedWarnings(warn: { mock: { calls: unknown[][] } }) {
-    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING], [BUTTON_OBJECT_WARNING]]);
+    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
   }
 
   it('renders the parts of 54699b8 (attributes sorted), on the client and the server', () => {
@@ -1893,7 +1945,7 @@ describe('MessageBar — slotProps', () => {
     expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
   });
 
-  it('keeps the type and name a merged button or the button object gives over yours', () => {
+  it('keeps the type and name a merged button gives, and the name a slot object gives, over yours', () => {
     const warn = spyOnWarn();
     render(
       <>
@@ -1904,13 +1956,7 @@ describe('MessageBar — slotProps', () => {
           Form.
         </MessageBar>
         <MessageBar
-          dismiss={{
-            as: 'button',
-            type: 'reset',
-            name: 'object',
-            className: 'obj',
-            'aria-label': 'Close',
-          }}
+          dismiss={{ className: 'obj', 'aria-label': 'Close' }}
           slotProps={{
             dismissButton: {
               name: 'part',
@@ -1928,11 +1974,13 @@ describe('MessageBar — slotProps', () => {
     expect(merged).toHaveAttribute('type', 'reset');
     expect(merged).not.toHaveAttribute('aria-label');
     const object = screen.getByRole('button', { name: 'Close' });
-    expect(object).toHaveAttribute('type', 'reset');
-    // The button attributes of the object are defaults too: your name replaces its name.
+    expect(object).toHaveAttribute('type', 'button');
     expect(object).toHaveAttribute('name', 'part');
-    expect(object).toHaveClass('obj', 'part');
-    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING], [BUTTON_OBJECT_WARNING]]);
+    // The object's class is on the content (1.0: no button-object form); yours on the button.
+    expect(object).toHaveClass('part');
+    expect(object).not.toHaveClass('obj');
+    expect(object.querySelector('.obj')).not.toBeNull();
+    expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
   });
 
   it("keeps a merged disabledFocusable Button's state and does not call your onClick", () => {

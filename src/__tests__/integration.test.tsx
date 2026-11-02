@@ -1154,32 +1154,6 @@ describe('Tooltip > Dialog.Trigger > Button (overlays#5)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(button('Settings')).toHaveFocus();
   });
-
-  it('the deprecated delay prop still sets the open delay, and warns once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    render(
-      <Dialog>
-        <Tooltip content="Opens the settings" delay={0}>
-          <Dialog.Trigger>
-            <Button>Settings</Button>
-          </Dialog.Trigger>
-        </Tooltip>
-        <Dialog.Content title="Settings">
-          <p>Body</p>
-        </Dialog.Content>
-      </Dialog>,
-    );
-    await user.hover(button('Settings'));
-    expect(tooltipSurface()).toHaveTextContent('Opens the settings');
-    await user.click(button('Settings'));
-    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
-    expect(warn.mock.calls).toEqual([
-      [
-        '[WaveUI] Tooltip: `delay` is deprecated and will be removed in 1.0. Use `openDelay` instead.',
-      ],
-    ]);
-  });
 });
 
 // ---------------------------------------------------------------------------

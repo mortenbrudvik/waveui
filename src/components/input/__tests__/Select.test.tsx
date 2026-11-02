@@ -308,33 +308,25 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     },
   );
 
-  it('a numeric size is the native visible-rows attribute, deprecated', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    renderSelect({ size: 4 });
-    // A `size` greater than 1 gives the `<select>` the accessible role `listbox` (jsdom follows
-    // the HTML-AAM mapping here), so it is no longer reachable as a `combobox`: query by label.
-    const el = screen.getByLabelText('Country');
-    expect(el).toHaveAttribute('size', '4');
-    expect(el).toHaveAttribute('data-size', 'medium');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      '[WaveUI] Select: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.',
-    );
-  });
-
-  it('a digit-only size string (0.7 HTML style from untyped code) is the numeric legacy form', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    renderSelect({ size: '5' as unknown as number });
-    // Same role change as above: the native `size` is 5 here.
-    const el = screen.getByLabelText('Country');
-    expect(el).toHaveAttribute('size', '5');
-    expect(el).toHaveAttribute('data-size', 'medium');
-    expect(el).toHaveClass('h-8', 'text-body-1');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      '[WaveUI] Select: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.',
-    );
-  });
+  it.each([
+    ['a number', 4],
+    ['a digit-only string (0.7 HTML style)', '5'],
+  ])(
+    'has no numeric size (removed in 1.0): %s renders neither the native attribute nor a design size',
+    (_label, value) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // @ts-expect-error -- a numeric `size` is removed in 1.0: use `htmlSize`
+      renderSelect({ size: value as number });
+      // Without the native `size` the `<select>` keeps the accessible role `combobox`.
+      const el = select();
+      expect(el).not.toHaveAttribute('size');
+      expect(el).toHaveAttribute('data-size', 'medium');
+      expect(el).toHaveClass('h-8', 'text-body-1');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    },
+  );
 
   it('another untyped size string renders the medium outline defaults, without the attribute', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -353,26 +345,25 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   it('htmlSize alone does not warn', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderSelect({ htmlSize: 3 });
-    // Same role change as above: the native `size` is 3 here too.
+    // A `size` greater than 1 gives the `<select>` the accessible role `listbox` (jsdom follows
+    // the HTML-AAM mapping here), so it is no longer reachable as a `combobox`: query by label.
     const el = screen.getByLabelText('Country');
     expect(el).toHaveAttribute('size', '3');
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('with both, htmlSize wins and the numeric form still warns', () => {
+  it('htmlSize next to a numeric size from untyped code: htmlSize alone reaches the attribute', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // @ts-expect-error -- a numeric `size` is removed in 1.0: use `htmlSize`
     renderSelect({ htmlSize: 3, size: 4 });
-    // Same role change as above: the native `size` is 3 here too.
+    // A native `size` greater than 1 makes the `<select>` a `listbox`: query by label.
     const el = screen.getByLabelText('Country');
     expect(el).toHaveAttribute('size', '3');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      '[WaveUI] Select: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.',
-    );
+    expect(warn).not.toHaveBeenCalled();
   });
 
-  it('types: CoreSize or a number', () => {
-    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+  it('types: CoreSize only', () => {
+    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     render(
       // @ts-expect-error not a size
       <Select aria-label="Country" size="huge">
