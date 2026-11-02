@@ -43,7 +43,6 @@ export type {
   DataGridUncontrolledSortProps,
   DataGridItemsProps,
   DataGridItemsSortProps,
-  DataGridLegacySortProps,
   DataGridSortChangeDetails,
   DataGridSelectedItemsChangeDetails,
   DataGridHeaderProps,

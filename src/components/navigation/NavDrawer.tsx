@@ -183,11 +183,9 @@ export interface NavDrawerProps
    * the default classes with yours (see `MotionSlot`), also under a `WaveProvider` with
    * `motion="none"`, which otherwise turns the default off. They go on the overlay panel, or on
    * the element around an inline drawer's panel (`wave-nav-drawer__collapse`), whose phases the
-   * drawer waits for. A `className` that holds `data-[presence=…]` classes while `motion` is unset
-   * keeps 0.14's behaviour: no default motion, your classes animate the panel, and the drawer
-   * waits for the panel's motion (inline too, not the element around it); development builds log
-   * a warning once, and the rule is removed in 1.0, so pass `motion` instead. Fluent's
-   * `OverlayDrawer` and `InlineDrawer` `surfaceMotion`.
+   * drawer waits for. `className` is a plain class list on the panel: `data-[presence=…]` classes
+   * there apply next to the default motion, and the drawer still waits for the motion above, so
+   * pass a motion of your own here. Fluent's `OverlayDrawer` and `InlineDrawer` `surfaceMotion`.
    * @default the slide (overlay) or the collapse (inline) above
    */
   motion?: MotionSlot | null;

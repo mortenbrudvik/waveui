@@ -14,10 +14,11 @@ import {
 } from '../../../test-utils';
 
 /*
- * P10-MENU (spec §6.1, D7, D9, D19): Menu.Popover's default motion (`popupMotion`, keyed on the
+ * P10-MENU (spec §6.1, D7, D9): Menu.Popover's default motion (`popupMotion`, keyed on the
  * resolved `data-side`), its `motion` slot, the presence pair of a root menu and of a submenu
- * chain, `appear`, and 0.14's motion in `className`. jsdom loads no CSS, so the phases wait only
- * where `mockAnimations` gives a surface a running animation.
+ * chain, `appear`, and 0.14's motion in `className`, a plain class list since 1.0 (0.15's D19 rule
+ * is removed). jsdom loads no CSS, so the phases wait only where `mockAnimations` gives a surface
+ * a running animation.
  */
 
 let warn: ReturnType<typeof vi.spyOn>;
@@ -35,10 +36,6 @@ afterEach(() => {
   }
 });
 
-/** The development warning of a `className` with presence variants (P13-03). */
-const LEGACY_WARNING =
-  '[WaveUI] Menu.Popover: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.';
-
 const item = (name: string) => screen.getByRole('menuitem', { name });
 const fileButton = () => screen.getByRole('button', { name: 'File' });
 /** A menu surface by its name, exiting ones included (an exiting surface is `inert`, not hidden). */
@@ -47,7 +44,7 @@ const queryMenu = (name: string) => screen.queryByRole('menu', { name });
 /** The presence element of every menu: its `role="menu"` surface. */
 const isMenu = (el: Element) => el.getAttribute('role') === 'menu';
 
-/** The words of 0.14's `ExitMotion` story (stories/Menu.stories.tsx), motion in `className`. */
+/** The words of the `ExitMotion` story (stories/Menu.stories.tsx), which 0.14 put in `className`. */
 const STORY_EXIT_MOTION =
   'transition-opacity duration-wave-fast data-[presence=exiting]:opacity-0 motion-reduce:transition-none';
 
@@ -165,27 +162,43 @@ describe('Menu.Popover data-side picks the slide (§2.4)', () => {
   );
 });
 
-describe('a className with presence variants keeps 0.14’s own motion (D19)', () => {
-  const legacy = motionClasses(STORY_EXIT_MOTION);
+// 0.14's motion in `className` turned the default off through 0.x; in 1.0 it is a plain class
+// list, composed after the motion classes (the file's afterEach asserts that nothing warns).
+describe('a className with presence variants is a plain class list (the rule is removed in 1.0)', () => {
+  const presenceClasses = ['p-8', 'data-[presence=exiting]:opacity-0'];
+  const storyClasses = motionClasses(STORY_EXIT_MOTION);
 
-  it('the ExitMotion story’s classes: no default motion, every consumer class kept', () => {
-    render(<FileMenu root={{ defaultOpen: true }} popover={{ className: STORY_EXIT_MOTION }} />);
-    expect(warn.mock.calls).toEqual([[LEGACY_WARNING]]);
-    // The warning is asserted: the file's afterEach expects none further.
-    warn.mockClear();
-    expect(menu('File')).toHaveClass(...legacy);
-    expectNoWordOf(menu('File'), popupMotion, legacy);
+  it('keeps the default motion and composes the className after it', () => {
+    render(
+      <FileMenu root={{ defaultOpen: true }} popover={{ className: presenceClasses.join(' ') }} />,
+    );
+    expect(menu('File')).toHaveClass(...motionClasses(popupMotion), ...presenceClasses);
+    expect(Array.from(menu('File').classList).slice(-2)).toEqual(presenceClasses);
   });
 
-  it('an explicit motion applies next to that className', () => {
+  it('the 0.14 ExitMotion story’s classes merge as any className: the default’s words they conflict with go, its slide stays', () => {
+    render(<FileMenu root={{ defaultOpen: true }} popover={{ className: STORY_EXIT_MOTION }} />);
+    expect(menu('File')).toHaveClass(...storyClasses);
+    // `transition-opacity` and `duration-wave-fast` replace the default's property list and
+    // duration (the same variant); the rest of the default stays, its slide included.
+    expect(menu('File')).not.toHaveClass('transition-[opacity,translate]');
+    expect(menu('File')).not.toHaveClass('duration-wave-normal');
+    const kept = motionClasses(popupMotion).filter(
+      (word) => word.startsWith('data-[side=') || word.startsWith('ease-wave-'),
+    );
+    expect(kept.length).toBeGreaterThan(0);
+    expect(menu('File')).toHaveClass(...kept);
+  });
+
+  it('an explicit motion still replaces the default; the className stays', () => {
     render(
       <FileMenu
         root={{ defaultOpen: true }}
         popover={{ className: STORY_EXIT_MOTION, motion: 'my-motion' }}
       />,
     );
-    expect(menu('File')).toHaveClass('my-motion', ...legacy);
-    expectNoWordOf(menu('File'), popupMotion, legacy);
+    expect(menu('File')).toHaveClass('my-motion', ...storyClasses);
+    expectNoWordOf(menu('File'), popupMotion, storyClasses);
   });
 });
 

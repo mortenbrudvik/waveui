@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import * as React from 'react';
+import * as useMotionModule from '../useMotion';
 import { useMotionClasses, useMotionPreference } from '../useMotion';
 import { WaveProvider, type WaveProviderProps } from '../../components/provider/WaveProvider';
 
@@ -65,11 +66,24 @@ describe('useMotionClasses', () => {
     ).toBe('mine');
   });
 
-  it('null is no motion and a legacy className turns the default off', () => {
+  it('null is no motion', () => {
     expect(renderHook(() => useMotionClasses(null, 'r')).result.current).toBe('');
-    expect(
-      renderHook(() => useMotionClasses(undefined, 'r', 'data-[presence=exiting]:opacity-0')).result
-        .current,
-    ).toBe('');
+  });
+
+  it('takes no className (the presence-className rule is removed in 1.0): the recipe stays', () => {
+    const { result } = renderHook(() =>
+      // @ts-expect-error -- the third argument (the part's `className`) is removed in 1.0
+      useMotionClasses(undefined, 'r', 'data-[presence=exiting]:opacity-0'),
+    );
+    expect(result.current).toBe('r');
+  });
+});
+
+describe('the module', () => {
+  it('exports the two hooks only: no presence-className warning (removed in 1.0)', () => {
+    expect(Object.keys(useMotionModule).sort()).toEqual([
+      'useMotionClasses',
+      'useMotionPreference',
+    ]);
   });
 });

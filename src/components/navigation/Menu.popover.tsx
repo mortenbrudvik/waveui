@@ -21,7 +21,7 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { createHoverIntentGroup, type HoverIntentGroup } from '../../hooks/useHoverIntent';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
@@ -78,10 +78,9 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * appears and disappears at once. `null` turns the motion off (the surface still renders its
    * `data-presence` phases, which then end at once); a class string or `{ className }` replaces
    * the default classes with yours (see `MotionSlot`), also under a `WaveProvider` with
-   * `motion="none"`, which otherwise turns the default off. A `className` that holds
-   * `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default motion,
-   * your classes animate the surface; development builds log a warning once, and the rule is
-   * removed in 1.0, so pass `motion` instead. Fluent's `Menu` `surfaceMotion`.
+   * `motion="none"`, which otherwise turns the default off. `className` is a plain class list
+   * composed after the motion: `data-[presence=…]` classes there apply next to the default motion,
+   * so pass a motion of your own here. Fluent's `Menu` `surfaceMotion`.
    * @default the fade and slide above
    */
   motion?: MotionSlot | null;
@@ -180,8 +179,7 @@ export function useMenuListPointer(menu: MenuContextValue): {
  * slides out of its parent menu; a menu open by default animates in when it mounts in the
  * browser. Under reduced motion it appears and disappears at once. `motion` turns the motion off
  * (`null`) or replaces its classes, and a `WaveProvider` with `motion="none"` turns the default
- * off; a `className` with `data-[presence=…]` classes and no `motion` keeps 0.14's behaviour (your
- * classes, no default motion). The surface mounts through the presence core (`usePresence`): it
+ * off. The surface mounts through the presence core (`usePresence`): it
  * carries `data-presence="entering" | "entered" | "exiting"` and, while it closes,
  * `data-state="closed"` and `inert`, so it stays on screen, where it was, until its exit motion
  * ends. Focus, the dismiss layer and positioning follow the open state, not the exit: focus
@@ -251,9 +249,7 @@ export const MenuPopover = ({
   // (D9: a menu open by default animates in on a client render as after hydration); everything
   // else below keys on `open`, so focus returns and the layer goes on close, not after the exit.
   const { isMounted, ref: presenceRef, presenceProps } = usePresence(open, { appear: true });
-  // The motion classes (a `className` with presence variants keeps 0.14's own motion, D19).
-  const motionClassName = useMotionClasses(motion, popupMotion, className);
-  useLegacyMotionWarning('Menu.Popover', motion, className);
+  const motionClassName = useMotionClasses(motion, popupMotion);
 
   const {
     setReference,

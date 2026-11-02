@@ -29,8 +29,8 @@
  *   exactly, the calls in each module equal the `deprecated:` rows that name it, and the calls in
  *   `src` equal the rows with `warns: true`, `kind: 'removed'` and a `deprecated:` key: a new alias
  *   without a row fails here. The other warnings of the inventory (`warnOnce` with keys of their
- *   own: Badge and CounterBadge `important`, the presence className rule, a missing `Image.alt`)
- *   are outside the count; their cases prove them.
+ *   own: Badge and CounterBadge `important`, a missing `Image.alt`) are outside the count; their
+ *   cases prove them.
  * - **Done rows (Phase 14, R2).** The tasks that remove an alias set `done: true` on its row, and
  *   the checks above turn round for it: the call-site count ignores it (so its module has no call
  *   left), it has no warning case, no `warnOnce` of its key is left in the sources and no other
@@ -55,18 +55,7 @@ import changelog from '../../CHANGELOG.md?raw';
 import upgradingGuide from '../../docs/UPGRADING-TO-1.0.md?raw';
 import * as entry from '../index';
 import * as registry from '../lib/classNames';
-import {
-  Badge,
-  CounterBadge,
-  DataGrid,
-  Dialog,
-  Drawer,
-  Image,
-  Menu,
-  Nav,
-  NavDrawer,
-  useRovingTabIndex,
-} from '../index';
+import { Badge, CounterBadge, Image } from '../index';
 import { hasWarned } from '../lib/dev';
 import * as deprecations from '../lib/deprecations';
 import { DEPRECATIONS, type Deprecation, type DeprecationKind } from '../lib/deprecations';
@@ -458,21 +447,8 @@ const guideCells = (row: Deprecation): string[] => [
 // The warning cases
 // ---------------------------------------------------------------------------
 
-/** The message of `warnDeprecated` (`src/lib/dev.ts`). */
-const deprecated = (component: string, oldName: string, newName: string, extra?: string) =>
-  `[WaveUI] ${component}: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.` +
-  (extra ? ` ${extra}` : '');
-
-const legacyMotion = (part: string) =>
-  `[WaveUI] ${part}: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.`;
-
 const importantColor = (name: string) =>
   `[WaveUI] ${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.`;
-
-/** A presence variant in a `className` (0.14's motion compatibility rule). */
-const LEGACY_MOTION_CLASS = 'p-4 data-[presence=exiting]:opacity-0';
-
-const noop = () => {};
 
 interface WarningCase {
   /** The smallest rendering that uses the row's item. */
@@ -483,30 +459,6 @@ interface WarningCase {
   readonly also?: readonly string[];
 }
 
-function RovingPositional() {
-  const ref = React.useRef<HTMLDivElement>(null);
-  const { handleKeyDown } = useRovingTabIndex(ref, { items: ['a'], activeValue: 'a' });
-  return <div ref={ref} role="group" aria-label="Group" onKeyDown={handleKeyDown} />;
-}
-
-const navItems = <Nav.Item value="a">A</Nav.Item>;
-const gridContent = (
-  <>
-    <DataGrid.Header>
-      <DataGrid.Row>
-        <DataGrid.HeaderCell columnId="name" sortable>
-          Name
-        </DataGrid.HeaderCell>
-      </DataGrid.Row>
-    </DataGrid.Header>
-    <DataGrid.Body>
-      <DataGrid.Row rowId="1">
-        <DataGrid.Cell>Alice</DataGrid.Cell>
-      </DataGrid.Row>
-    </DataGrid.Body>
-  </>
-);
-
 /** A minimal case per row that warns, by row id. */
 const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
   'badge-important': {
@@ -516,73 +468,6 @@ const WARNING_CASES: Readonly<Record<string, WarningCase>> = {
   'counterbadge-important': {
     ui: <CounterBadge count={3} color="important" />,
     message: importantColor('CounterBadge'),
-  },
-  'userovingtabindex-positional': {
-    ui: <RovingPositional />,
-    message: deprecated(
-      'useRovingTabIndex',
-      'useRovingTabIndex(containerRef, options)',
-      'useRovingTabIndex(options)',
-      'Attach the returned `containerProps` to the container.',
-    ),
-  },
-  'datagrid-positional-onsortchange': {
-    ui: (
-      <DataGrid aria-label="People" onSortChange={noop}>
-        {gridContent}
-      </DataGrid>
-    ),
-    message: deprecated(
-      'DataGrid',
-      'onSortChange(columnId, direction)',
-      'onSortChange(sort, details?)',
-      'Pass `items`, `sort` or `defaultSort` to receive the sort object.',
-    ),
-  },
-  'menu-popover-legacy-motion': {
-    ui: (
-      <Menu>
-        <Menu.Trigger>
-          <button type="button">File</button>
-        </Menu.Trigger>
-        <Menu.Popover className={LEGACY_MOTION_CLASS}>
-          <Menu.Item>New</Menu.Item>
-        </Menu.Popover>
-      </Menu>
-    ),
-    message: legacyMotion('Menu.Popover'),
-  },
-  'dialog-content-legacy-motion': {
-    ui: (
-      <Dialog>
-        <Dialog.Trigger>
-          <button type="button">Open</button>
-        </Dialog.Trigger>
-        <Dialog.Content className={LEGACY_MOTION_CLASS}>
-          <Dialog.Title>Title</Dialog.Title>
-        </Dialog.Content>
-      </Dialog>
-    ),
-    message: legacyMotion('Dialog.Content'),
-  },
-  'drawer-legacy-motion': {
-    ui: (
-      <Drawer className={LEGACY_MOTION_CLASS}>
-        <Drawer.Trigger>
-          <button type="button">Open</button>
-        </Drawer.Trigger>
-        <Drawer.Title>Title</Drawer.Title>
-      </Drawer>
-    ),
-    message: legacyMotion('Drawer'),
-  },
-  'navdrawer-legacy-motion': {
-    ui: (
-      <NavDrawer aria-label="Main" open={false} onOpenChange={noop} className={LEGACY_MOTION_CLASS}>
-        <NavDrawer.Body>{navItems}</NavDrawer.Body>
-      </NavDrawer>
-    ),
-    message: legacyMotion('NavDrawer'),
   },
   'image-alt-required': {
     ui: <Image src="photo.png" />,

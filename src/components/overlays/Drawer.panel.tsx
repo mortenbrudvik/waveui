@@ -8,7 +8,6 @@ import {
   drawerMotion,
   inlineDrawerMotion,
   inlineDrawerStructure,
-  usesLegacyMotion,
 } from '../../lib/motion';
 import type { Slot, SlotObject } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
@@ -16,7 +15,7 @@ import type { BackdropAppearance, ModalType, MotionSlot } from '../../lib/types'
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { Portal } from '../portal/Portal';
@@ -218,9 +217,9 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
    * default of an inline panel is the collapse of the element around it (the space it takes opens
    * and closes on its axis, with a fade), on that element, and it is the element a value goes on.
    * Both take the duration of the panel's size. An inline panel at `full` has no motion: its
-   * element carries the collapse structure only, also with a value. A `className` with presence
-   * variants keeps 0.14's own motion while it is `undefined`: no default, and the presence core
-   * waits for the panel element (inline too, rather than for the element around it).
+   * element carries the collapse structure only, also with a value. The panel's `className` is a
+   * plain class list (on an overlay panel it comes after the motion classes): it never turns the
+   * motion off or changes the element the presence core waits for.
    */
   motion?: MotionSlot | null;
   /**
@@ -253,8 +252,8 @@ const OVERLAY_PANEL_CLASSES =
  * enters also when it mounts open, and its panel and backdrop carry their motion classes
  * (`motion`, `backdropMotion`); the presence core waits for the panel's. An inline panel renders
  * as the only child of a collapse element (`collapseClassName`, D13), which carries the presence
- * attributes too and the inline motion classes, and which the presence core waits for (the panel
- * itself under 0.14's `className` rule); it never enters on mount.
+ * attributes too and the inline motion classes, and which the presence core waits for; it never
+ * enters on mount.
  *
  * It renders its `children` raw and provides no context: no header, title registry, Close button
  * or padding. The component that renders it holds the open state (`useModalOpenState`, then
@@ -304,18 +303,14 @@ export const DrawerPanel = ({
   } = usePresence(open, { appear: overlay, unmountOnExit: unmountOnClose });
   // The motion classes over the size's duration: an overlay panel slides from its edge and its
   // backdrop fades with it; an inline panel's collapse element opens and closes its space on the
-  // panel's axis (D13). A `className` with presence variants keeps 0.14's own motion (D19): no
-  // default, and inline the presence core waits for the panel rather than its collapse element.
+  // panel's axis (D13).
   const panelMotion = useMotionClasses(
     motion,
     inline
       ? `${inlineDrawerMotion[getDrawerSizeAxis(position)]} ${drawerDurations[size]}`
       : `${drawerMotion[position]} ${drawerDurations[size]}`,
-    className,
   );
   const backdropMotionClassName = useMotionClasses(backdropMotion, drawerBackdropMotion[size]);
-  const legacyMotion = usesLegacyMotion(motion, className);
-  useLegacyMotionWarning(componentName, motion, className);
 
   // The panel element of each type, held in state through its own callback ref. A change of `type`
   // remounts the panel (D105): the overlay's hooks see only the portaled element and the inline
@@ -344,11 +339,7 @@ export const DrawerPanel = ({
     };
   }, []);
   const overlayRef = useMergedRefs<HTMLElement>(ref, attachOverlayPanel, presenceRef);
-  const inlineRef = useMergedRefs<HTMLElement>(
-    ref,
-    attachInlinePanel,
-    legacyMotion ? presenceRef : null,
-  );
+  const inlineRef = useMergedRefs<HTMLElement>(ref, attachInlinePanel);
 
   // An inline panel takes no focus on open and returns it on close only from inside (D101). Called
   // before useModalLayer: on a switch from inline to overlay it restores before the overlay's trap
@@ -429,7 +420,7 @@ export const DrawerPanel = ({
     // closed.
     return (
       <div
-        ref={legacyMotion ? undefined : presenceRef}
+        ref={presenceRef}
         {...presenceProps}
         className={cn(
           collapseClassName,

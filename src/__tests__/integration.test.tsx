@@ -602,7 +602,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       expect.arrayContaining([
         'dialogMotion',
         'resolveMotion',
-        'usesLegacyMotion',
         'useMotionClasses',
         'useMotionPreference',
         'useCollapsePresence',
@@ -785,7 +784,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'hasRenderFunction',
       'preventMouseDown',
       'resolveWiredSlot',
-      'useLegacyMotionWarning',
       'warnImportantColor',
       'withoutRenderFunction',
     ];

@@ -586,8 +586,8 @@ export const SplitGroup: Story = {
  * A `motion` of your own replaces the default one: this menu appears at once and fades out over
  * 150ms. While it closes, its surface carries `data-presence="exiting"` (and `inert`), the phase
  * these classes key on, and it unmounts when the fade ends; focus is back on the trigger at once.
- * The fade is off under reduced motion. (0.14 put such classes in `className`, which still works:
- * a `className` with `data-[presence=…]` classes and no `motion` gets no default motion.)
+ * The fade is off under reduced motion. (In `className` the same classes would apply next to the
+ * default motion: only `motion` replaces it.)
  */
 export const ExitMotion: Story = {
   args: {

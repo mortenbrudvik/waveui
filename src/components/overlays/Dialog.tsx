@@ -23,7 +23,7 @@ import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { Portal } from '../portal/Portal';
 import {
@@ -168,10 +168,9 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
    * curve; under reduced motion it appears and disappears at once. `null` turns the motion off
    * (the surface still renders its `data-presence` phases, which then end at once); a class string
    * or `{ className }` replaces the default classes with yours (see `MotionSlot`), also under a
-   * `WaveProvider` with `motion="none"`, which otherwise turns the default off. A `className` that
-   * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
-   * motion, your classes animate the surface; development builds log a warning once, and the rule
-   * is removed in 1.0, so pass `motion` instead. Fluent's `Dialog` `surfaceMotion`.
+   * `WaveProvider` with `motion="none"`, which otherwise turns the default off. `className` is a
+   * plain class list composed after the motion: `data-[presence=…]` classes there apply next to
+   * the default motion, so pass a motion of your own here. Fluent's `Dialog` `surfaceMotion`.
    * @default the scale and fade above
    */
   motion?: MotionSlot | null;
@@ -569,10 +568,8 @@ export const DialogContent = ({
     presenceProps,
   } = usePresence(open, { appear: true, unmountOnExit: unmountOnClose });
   const exiting = presenceProps['data-presence'] === 'exiting';
-  // The motion classes of the surface (a `className` with presence variants keeps 0.14's own
-  // motion, D19) and of the backdrop.
-  const surfaceMotion = useMotionClasses(motion, dialogMotion, className);
-  useLegacyMotionWarning('Dialog.Content', motion, className);
+  // The motion classes of the surface and of the backdrop.
+  const surfaceMotion = useMotionClasses(motion, dialogMotion);
   const backdropMotionClassName = useMotionClasses(backdropMotion, dialogBackdropMotion);
   const keptMounted = !unmountOnClose;
   const generatedId = useId('wave-dialog');

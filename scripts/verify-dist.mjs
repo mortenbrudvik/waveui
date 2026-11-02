@@ -1079,7 +1079,7 @@ export const INCLUSION_PROBES_0_11 = [
  * D6) also the parts the tables share (`Table.shared`, the sort arrows), the Overflow store,
  * TeachingPopover's root, context and surface, and the event predicates of the selectable
  * containers; since 0.15 (spec §16 Q1) every export of the motion internals: the recipe
- * constants, `resolveMotion` and `usesLegacyMotion` of `lib/motion`, and the hooks `useMotion`,
+ * constants and `resolveMotion` of `lib/motion`, and the hooks `useMotion`,
  * `useCollapsePresence`, `useFocusBeforeClose` and `usePresenceGroup` with their types; since
  * 0.16 (spec §11) every export of the data-scale modules that the entry does not export: the pure
  * cores (`lib/selection`, `lib/virtual`, `lib/columnSizing`, `lib/treeCascade`, `lib/flatTree`),
@@ -1387,7 +1387,6 @@ export const MODULE_ONLY_NAMES = [
   'useFocusWithin',
   'useHeldFocus',
   'useItemsAndChildrenWarning',
-  'useLegacyMotionWarning',
   'useModalOpener',
   'useMotionClasses',
   'useMotionPreference',
@@ -1407,7 +1406,6 @@ export const MODULE_ONLY_NAMES = [
   'useTagPickerControlContext',
   'useTeachingPopoverContext',
   'useToolbarNavigation',
-  'usesLegacyMotion',
   'visibleFlatItems',
   'warnImportantColor',
   'withoutRenderFunction',
@@ -2690,8 +2688,8 @@ async function minifiedCode(distRoot, keep) {
  * error for the same reason. `dropSubstrings` are fragments that no code of the bundle may contain
  * outside comments (`[presence=`: no string of a Button-only bundle may hold a presence variant),
  * checked on a second, minified bundle of the same entry, which drops comments and keeps string
- * contents. Since the motion resolver's own literal holds `[presence=`, a bundle that reaches
- * `lib/motion` always contains it: the positive control of the recipes is
+ * contents. Every recipe of `lib/motion` keyed on a phase holds `[presence=`, so the fragment
+ * alone cannot tell which recipes a bundle keeps: the positive control of the recipes is
  * {@link probeIncludes}'s `strings` (the recipe literals), never the fragment alone. `drop: null`
  * drops no component by name, only `dropModules` and the strings (the 0.17 token probes: a Dialog
  * holds the provider's module for its context, but none of the token modules it does not use).
@@ -2959,9 +2957,9 @@ export async function motionRecipeValues(dist, names) {
  * whole with their quotes, that the bundle must contain; `substrings` are fragments its code
  * (minified, so comments are dropped and string contents kept) must contain: the same matchers as
  * the tree-shaking probe's `dropStrings` and `dropSubstrings`, so a positive control proves they
- * see what they look for (spec D23). The recipes' control lists their literals in `strings`: the
- * motion resolver's own literal holds `[presence=`, so that fragment alone is found in any bundle
- * that reaches `lib/motion`, recipes or not.
+ * see what they look for (spec D23). The recipes' control lists their literals in `strings`: every
+ * recipe keyed on a phase holds `[presence=`, so that fragment alone does not say which recipes a
+ * bundle keeps.
  */
 export async function probeIncludes(dist, { keep, modules, strings = [], substrings = [] }) {
   const distRoot = realpathSync(resolve(dist));
@@ -3350,7 +3348,7 @@ export async function verifyDist(
   }
   try {
     // D23 (0.15): the positive controls of the Button-only motion probe. Each component's own
-    // recipe literals prove its matchers (the resolver's literal alone holds the presence variant).
+    // recipe literals prove its matchers (any recipe keyed on a phase holds the presence variant).
     for (const { recipes, ...probe } of MOTION_INCLUDE_PROBES) {
       const values = await motionRecipeValues(distRoot, recipes);
       errors.push(...values.errors);

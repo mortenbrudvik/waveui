@@ -9,7 +9,7 @@ import {
 } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
+import { isDev, warnOnce } from '../../lib/dev';
 import type { ColumnSizingOption } from '../../lib/columnSizing';
 import { endsTextSelection, isForeignEvent } from '../../lib/events';
 import { clearIds, selectAllIds, summarizeSelection, toggleId } from '../../lib/selection';
@@ -225,7 +225,7 @@ export interface DataGridSelectionCellProps
 
 /**
  * The `items` prop of a DataGrid that renders its rows from data, part of every sort form of
- * `DataGridProps` but the 0.4 one. `T` is the type of the items.
+ * `DataGridProps` that takes `onSortChange`. `T` is the type of the items.
  */
 export interface DataGridItemsProps<T = unknown> {
   /**
@@ -233,9 +233,9 @@ export interface DataGridItemsProps<T = unknown> {
    * (see `DataGridColumn.compare`). With `columns` and no `DataGrid.Body` child (or one without
    * children), the grid renders the rows and cells from the columns; a `DataGrid.Body` whose child
    * is a render function renders the row of each item. Each row's `rowId` comes from `getRowId`.
-   * The grid reads the array and never changes it. With `items`, `onSortChange` receives a
-   * `DataGridSort` object and `details`, never the 0.4 arguments. `items` may not be `undefined`
-   * unless `sort` or `defaultSort` is given; pass `items={data ?? []}` while loading.
+   * The grid reads the array and never changes it. `onSortChange` receives a `DataGridSort`
+   * object and `details`. `items` may not be `undefined` unless `sort` or `defaultSort` is given;
+   * pass `items={data ?? []}` while loading.
    */
   items?: readonly T[];
 }
@@ -485,8 +485,7 @@ export interface DataGridUncontrolledSortProps {
 
 /**
  * The sort props of a grid with `items`: the 0.5 sort API, whether or not `sort` or `defaultSort`
- * is given (unsorted at first without them). The 0.4 positional `onSortChange` does not apply to
- * such a grid.
+ * is given (unsorted at first without them).
  */
 export interface DataGridItemsSortProps<T = unknown> extends DataGridItemsProps<T> {
   /** The grid's data (see `DataGridItemsProps.items`). */
@@ -504,39 +503,32 @@ export interface DataGridItemsSortProps<T = unknown> extends DataGridItemsProps<
 }
 
 /**
- * The 0.4 sort API: `onSortChange(columnId, direction)`. It applies whenever none of `items`,
- * `sort` and `defaultSort` is given; the grid then keeps the sort itself, unsorted at first.
- */
-export interface DataGridLegacySortProps {
-  /** A grid with `items` uses the 0.5 sort API (`DataGridItemsSortProps`). */
-  items?: undefined;
-  sort?: undefined;
-  defaultSort?: undefined;
-  /**
-   * Called when a sortable header is activated (or `setSort` of `useDataGridSort` is called),
-   * with the 0.4 arguments (deprecated: removed in 1.0, with a development warning). Pass
-   * `items`, `sort` or `defaultSort` to receive a `DataGridSort` object (and `details`) instead:
-   * `defaultSort={null}` turns the object form on for an initially unsorted grid. A `sort` that is
-   * still `undefined` (e.g. while data loads) does not: pass `sort={sort ?? null}`.
-   *
-   * @example
-   * <DataGrid defaultSort={null} onSortChange={(sort) => setSort(sort)}>…</DataGrid>
-   */
-  onSortChange?: (columnId: string, direction: SortDirection) => void;
-}
-
-/**
  * Properties for the DataGrid component, whose `items` are of type `T`. The sort props form a
- * union: `sort`/`defaultSort` with `onSortChange(sort, details)` (0.5, also the form of every grid
- * with `items`), or the 0.4 form `onSortChange(columnId, direction)`, for a grid without `items`,
- * `sort` and `defaultSort`.
+ * union: `sort` or `defaultSort` with `onSortChange(sort, details)`, `items` with or without them
+ * (the same callback), or none of the three. A grid without `items`, `sort` and `defaultSort`
+ * keeps its sort itself, unsorted at first, and takes no `onSortChange` (the 0.4 positional
+ * `onSortChange(columnId, direction)` is removed in 1.0): give it `defaultSort={null}` to receive
+ * `onSortChange(sort, details)`, or `sort={sort ?? null}` while a controlled sort still loads.
+ *
+ * @example
+ * <DataGrid defaultSort={null} onSortChange={(sort) => setSort(sort)}>…</DataGrid>
  */
 export type DataGridProps<T = unknown> = DataGridBaseProps<T> &
   (
     | (DataGridItemsProps<T> & DataGridControlledSortProps)
     | (DataGridItemsProps<T> & DataGridUncontrolledSortProps)
     | DataGridItemsSortProps<T>
-    | DataGridLegacySortProps
+    | {
+        /** A grid with `items` takes the sort props of `DataGridItemsSortProps`. */
+        items?: undefined;
+        sort?: undefined;
+        defaultSort?: undefined;
+        /**
+         * None without `items`, `sort` or `defaultSort` (the 0.4 positional form is removed in
+         * 1.0): pass `defaultSort={null}` to receive `onSortChange(sort, details)`.
+         */
+        onSortChange?: never;
+      }
   );
 
 /** Properties for the DataGridHeader sub-component. */
@@ -855,51 +847,17 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     ...rest
   } = props;
 
-  // --- sort -----------------------------------------------------------------
   const hasItems = items !== undefined;
-  /** The 0.5 sort props. */
-  const usesSortApi = sortProp !== undefined || defaultSort !== undefined;
-  /** The 0.4 rule (the positional callback) applies without `items`, `sort` and `defaultSort`. */
-  const legacySort = !usesSortApi && !hasItems;
-  /** `onSortChange(sort, details)`; sticky, so the form never changes under the consumer. */
-  const [objectMode, setObjectMode] = React.useState(!legacySort);
-  if (!legacySort && !objectMode) setObjectMode(true);
-  const objectCallbacks = objectMode || !legacySort;
 
-  // C-DEV: the positional callback of the 0.4 sort API is removed in 1.0.
-  const positionalSortCallback = !objectCallbacks && onSortChange !== undefined;
-  React.useEffect(() => {
-    if (!positionalSortCallback) return;
-    // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
-    // production bundle then drops the warning and its text. Without a bundler and without
-    // `process` (an unbundled import in a browser), the read throws and it is skipped.
-    try {
-      if (process.env.NODE_ENV !== 'production') {
-        warnDeprecated(
-          'DataGrid',
-          'onSortChange(columnId, direction)',
-          'onSortChange(sort, details?)',
-          'Pass `items`, `sort` or `defaultSort` to receive the sort object.',
-        );
-      }
-    } catch {
-      // No `process`: see above.
-    }
-  }, [positionalSortCallback]);
-
+  // --- sort -----------------------------------------------------------------
   // The details of the sort being requested, set around the setter: useControllable calls its
   // onChange synchronously inside it, and only on change (the useCheckedValues pattern).
   const sortDetailsRef = React.useRef<DataGridSortChangeDetails | undefined>(undefined);
 
+  // Every grid reports `onSortChange(sort, details)`. The types offer the callback only next to
+  // `items`, `sort` or `defaultSort`; untyped code that passes one without them gets the same form.
   const emitSortChange = (next: DataGridSort | null) => {
-    if (!next || !onSortChange) return;
-    if (objectCallbacks) {
-      const objectForm = onSortChange as NonNullable<DataGridItemsSortProps['onSortChange']>;
-      objectForm(next, sortDetailsRef.current);
-    } else {
-      const legacy = onSortChange as (columnId: string, direction: SortDirection) => void;
-      legacy(next.columnId, next.direction);
-    }
+    if (next) onSortChange?.(next, sortDetailsRef.current);
   };
 
   // Unsorted at first without `defaultSort` (a grid with `items` too).

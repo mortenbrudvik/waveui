@@ -22,8 +22,8 @@ export interface UseDataGridSortResult {
   sort: DataGridSort | null;
   /**
    * Sorts the grid by the column and direction of `sort`, as activating a sortable header does:
-   * `onSortChange(sort, details?)` is called once with a new object of those two values (the
-   * deprecated positional form with the column and the direction), `details.event` is `event`,
+   * `onSortChange(sort, details?)` is called once with a new object of those two values,
+   * `details.event` is `event`,
    * else an untrusted `sort` event with no target, and an uncontrolled grid sorts. A controlled
    * grid changes when its parent passes the new `sort`. Any column can be named, sortable or not,
    * as a controlled `sort` can; the sort the grid already has changes nothing and calls nothing.

@@ -1,14 +1,5 @@
 import * as React from 'react';
-import {
-  describe,
-  it,
-  expect,
-  expectTypeOf,
-  vi,
-  afterEach,
-  beforeEach,
-  onTestFinished,
-} from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { composeStories } from '@storybook/react';
@@ -33,7 +24,6 @@ import type {
   DataGridHeaderCellProps,
   DataGridHeaderProps,
   DataGridLabels,
-  DataGridLegacySortProps,
   DataGridProps,
   DataGridRowProps,
   DataGridRowSelectionCellProps,
@@ -76,6 +66,7 @@ import {
   testSystemProps,
   expectThrows,
 } from '../../../test-utils';
+import type * as Wave from '../../../index';
 
 interface Person {
   id: string;
@@ -187,21 +178,6 @@ const unknownProp = (name: string) => [
   name,
   name.toLowerCase(),
 ];
-
-/** The warning of the 0.4 positional `onSortChange(columnId, direction)` (P13-03). */
-const POSITIONAL_SORT =
-  '[WaveUI] DataGrid: `onSortChange(columnId, direction)` is deprecated and will be removed in 1.0. Use `onSortChange(sort, details?)` instead. Pass `items`, `sort` or `defaultSort` to receive the sort object.';
-
-/**
- * For a test that uses the 0.4 positional `onSortChange` only as its means: spies on `console.warn`
- * and, when the test is over, asserts that the positional warning was the only message.
- */
-function expectOnlyPositionalSortWarning() {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  onTestFinished(() => {
-    expect(warn.mock.calls).toEqual([[POSITIONAL_SORT]]);
-  });
-}
 
 /** The `details` argument of `onSortChange` (object form) and `onSelectedItemsChange`. */
 const DETAILS = { event: expect.any(Event) };
@@ -498,7 +474,7 @@ describe('DataGrid sorting', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const onSortChange = vi.fn();
     render(
-      <DataGrid aria-label="People" onSortChange={onSortChange}>
+      <DataGrid aria-label="People" defaultSort={null} onSortChange={onSortChange}>
         <DataGrid.Header>
           <tr>
             <DataGrid.HeaderCell sortable>Name</DataGrid.HeaderCell>
@@ -520,7 +496,6 @@ describe('DataGrid sorting', () => {
       [
         '[WaveUI] DataGrid.HeaderCell: `sortable` needs a `columnId`; the header is rendered as not sortable.',
       ],
-      [POSITIONAL_SORT],
     ]);
   });
 
@@ -530,13 +505,25 @@ describe('DataGrid sorting', () => {
     expect(header('Role')).toHaveAttribute('aria-sort', 'none');
   });
 
-  it('calls onSortChange with the 0.4 arguments (columnId, direction) without sort/defaultSort', async () => {
-    expectOnlyPositionalSortWarning();
+  // The 0.4 positional `onSortChange(columnId, direction)` of a grid without `items`, `sort` and
+  // `defaultSort` is removed in 1.0: the types offer no `onSortChange` there (see `DataGrid
+  // types`), and untyped code that still passes one gets the sort object, with no warning.
+  it('has no positional onSortChange (removed in 1.0): untyped code gets the sort object and details', async () => {
     const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const onSortChange = vi.fn();
     renderGrid({ onSortChange });
+    expect(header('Name')).toHaveAttribute('aria-sort', 'none');
     await user.click(sortButton('Name'));
-    expect(onSortChange).toHaveBeenCalledWith('name', 'ascending');
+    await user.click(sortButton('Name'));
+    expect(onSortChange.mock.calls).toEqual([
+      [{ columnId: 'name', direction: 'ascending' }, DETAILS],
+      [{ columnId: 'name', direction: 'descending' }, DETAILS],
+    ]);
+    expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('calls onSortChange with a DataGridSort object when sort or defaultSort is given', async () => {
@@ -552,10 +539,9 @@ describe('DataGrid sorting', () => {
   });
 
   it('toggles the direction on repeated clicks and updates aria-sort', async () => {
-    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
-    renderGrid({ onSortChange });
+    renderGrid({ defaultSort: null, onSortChange });
 
     await user.click(sortButton('Name'));
     expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
@@ -564,9 +550,9 @@ describe('DataGrid sorting', () => {
     await user.click(sortButton('Name'));
     expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
     expect(onSortChange.mock.calls).toEqual([
-      ['name', 'ascending'],
-      ['name', 'descending'],
-      ['name', 'ascending'],
+      [{ columnId: 'name', direction: 'ascending' }, DETAILS],
+      [{ columnId: 'name', direction: 'descending' }, DETAILS],
+      [{ columnId: 'name', direction: 'ascending' }, DETAILS],
     ]);
   });
 
@@ -587,16 +573,21 @@ describe('DataGrid sorting', () => {
   });
 
   it('sorts with Enter and Space on the sort button', async () => {
-    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
-    renderGrid({ onSortChange });
+    renderGrid({ defaultSort: null, onSortChange });
 
     sortButton('Name').focus();
     await user.keyboard('{Enter}');
-    expect(onSortChange).toHaveBeenLastCalledWith('name', 'ascending');
+    expect(onSortChange).toHaveBeenLastCalledWith(
+      { columnId: 'name', direction: 'ascending' },
+      DETAILS,
+    );
     await user.keyboard(' ');
-    expect(onSortChange).toHaveBeenLastCalledWith('name', 'descending');
+    expect(onSortChange).toHaveBeenLastCalledWith(
+      { columnId: 'name', direction: 'descending' },
+      DETAILS,
+    );
     expect(onSortChange).toHaveBeenCalledTimes(2);
   });
 
@@ -671,22 +662,6 @@ describe('DataGrid sorting', () => {
     );
     expect(header('Role')).toHaveAttribute('aria-sort', 'ascending');
     expect(warn.mock.calls).toEqual([[switchWarning('uncontrolled', 'controlled')]]);
-  });
-
-  it('calls the positional onSortChange once per click in StrictMode', async () => {
-    expectOnlyPositionalSortWarning();
-    const user = userEvent.setup();
-    const onSortChange = vi.fn();
-    render(
-      <React.StrictMode>
-        <DataGrid aria-label="People" onSortChange={onSortChange}>
-          {gridContent()}
-        </DataGrid>
-      </React.StrictMode>,
-    );
-    await user.click(sortButton('Name'));
-    expect(onSortChange.mock.calls).toEqual([['name', 'ascending']]);
-    expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
   });
 
   // Untyped code that still passes a 0.4 sort prop: it lands on the `<table>` as an unknown prop,
@@ -829,11 +804,15 @@ describe('DataGrid header from columns', () => {
   }
 
   it('renders the header from `columns` when no DataGrid.Header child is given', async () => {
-    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
     render(
-      <DataGrid aria-label="People" columns={columns} onSortChange={onSortChange}>
+      <DataGrid
+        aria-label="People"
+        columns={columns}
+        defaultSort={null}
+        onSortChange={onSortChange}
+      >
         {rows()}
       </DataGrid>,
     );
@@ -844,7 +823,10 @@ describe('DataGrid header from columns', () => {
     expect(header('Name')).toHaveAttribute('aria-sort', 'none');
     expect(within(header('Role')).queryByRole('button')).toBeNull();
     await user.click(sortButton('Name'));
-    expect(onSortChange).toHaveBeenCalledWith('name', 'ascending');
+    expect(onSortChange).toHaveBeenCalledWith(
+      { columnId: 'name', direction: 'ascending' },
+      DETAILS,
+    );
   });
 
   it('includes the selection header cell', () => {
@@ -1852,7 +1834,7 @@ describe('DataGrid built-in sorting (items and compare)', () => {
     ]);
   });
 
-  it('keeps the DataGridSort callback when `items` becomes undefined, and the 0.4 one without it', async () => {
+  it('keeps the DataGridSort callback when `items` becomes undefined (the only form in 1.0)', async () => {
     const user = userEvent.setup();
     const onSortChange = vi.fn();
     const { rerender } = render(
@@ -1863,7 +1845,9 @@ describe('DataGrid built-in sorting (items and compare)', () => {
         onSortChange={onSortChange}
       />,
     );
-    // The callback form never changes under the consumer (a list that reloads).
+    // The callback form never changes under the consumer (a list that reloads). Typed code gives
+    // such a grid `items={data ?? []}` or a sort; untyped code still gets the same form.
+    // @ts-expect-error -- no `onSortChange` without `items`, `sort` or `defaultSort`
     rerender(<DataGrid aria-label="Members" columns={COLUMNS} onSortChange={onSortChange} />);
     await user.click(sortButton('Name'));
     expect(onSortChange.mock.calls).toEqual([
@@ -2092,15 +2076,6 @@ describe('DataGrid callback details', () => {
       [{ columnId: 'name', direction: 'ascending' }, DETAILS],
     ]);
     expect(onSelectedItemsChange.mock.calls).toEqual([[['2'], DETAILS]]);
-  });
-
-  it('keeps the 0.4 positional arguments of onSortChange: (columnId, direction)', async () => {
-    expectOnlyPositionalSortWarning();
-    const user = userEvent.setup();
-    const onSortChange = vi.fn();
-    renderGrid({ selectionMode: 'multiple', onSortChange });
-    await user.click(sortButton('Name'));
-    expect(onSortChange.mock.calls).toEqual([['name', 'ascending']]);
   });
 });
 
@@ -4490,7 +4465,7 @@ describe('DataGrid handler composition', () => {
   const onHeaderSort = vi.fn();
   function SortableHeader(props: Omit<DataGridHeaderCellProps, 'children'>) {
     return (
-      <DataGrid aria-label="People" onSortChange={onHeaderSort}>
+      <DataGrid aria-label="People" defaultSort={null} onSortChange={onHeaderSort}>
         <DataGrid.Header>
           <tr>
             <DataGrid.HeaderCell columnId="name" sortable {...props}>
@@ -4504,8 +4479,6 @@ describe('DataGrid handler composition', () => {
   SortableHeader.displayName = 'SortableHeader';
 
   describe('sortable header onClick', () => {
-    beforeEach(expectOnlyPositionalSortWarning);
-
     testComposedHandler(SortableHeader, {
       handler: 'onClick',
       act: async ({ user }) => {
@@ -4514,7 +4487,10 @@ describe('DataGrid handler composition', () => {
       },
       assertInternal: () => {
         expect(onHeaderSort).toHaveBeenCalledTimes(1);
-        expect(onHeaderSort).toHaveBeenCalledWith('name', 'ascending');
+        expect(onHeaderSort).toHaveBeenCalledWith(
+          { columnId: 'name', direction: 'ascending' },
+          DETAILS,
+        );
         expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
       },
       assertInternalSuppressed: () => {
@@ -4567,12 +4543,11 @@ describe('DataGrid handler composition', () => {
   });
 
   it('calls a consumer onClick on a sortable header next to sorting', async () => {
-    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onClick = vi.fn();
     const onSortChange = vi.fn();
     render(
-      <DataGrid aria-label="People" onSortChange={onSortChange}>
+      <DataGrid aria-label="People" defaultSort={null} onSortChange={onSortChange}>
         <DataGrid.Header>
           <tr>
             <DataGrid.HeaderCell columnId="name" sortable onClick={onClick}>
@@ -4584,7 +4559,10 @@ describe('DataGrid handler composition', () => {
     );
     await user.click(sortButton('Name'));
     expect(onClick).toHaveBeenCalledTimes(1);
-    expect(onSortChange).toHaveBeenCalledWith('name', 'ascending');
+    expect(onSortChange).toHaveBeenCalledWith(
+      { columnId: 'name', direction: 'ascending' },
+      DETAILS,
+    );
   });
 });
 
@@ -5790,9 +5768,10 @@ describe('DataGrid selection types (P9-04)', () => {
 });
 
 describe('DataGrid types', () => {
-  it('discriminates the sort API from the 0.4 positional callback', () => {
+  it('discriminates the sort API, with no positional callback (removed in 1.0)', () => {
     const setSort = (sort: DataGridSort | null) => void sort;
     const setColumn = (column: string) => void column;
+    const positional = (columnId: string, direction: SortDirection) => void [columnId, direction];
     const elements = [
       <DataGrid
         key="new"
@@ -5807,29 +5786,34 @@ describe('DataGrid types', () => {
       <DataGrid key="setter" defaultSort={null} onSortChange={setSort}>
         {null}
       </DataGrid>,
-      <DataGrid
-        key="legacy"
-        onSortChange={(columnId, direction) => {
-          expectTypeOf(columnId).toEqualTypeOf<string>();
-          expectTypeOf(direction).toEqualTypeOf<SortDirection>();
-          setColumn(columnId);
-        }}
-      >
+      // @ts-expect-error — the 0.4 positional `onSortChange(columnId, direction)` is removed in 1.0.
+      <DataGrid key="positional" onSortChange={positional}>
         {null}
       </DataGrid>,
-      <DataGrid key="legacy-one-arg" onSortChange={(columnId) => setColumn(columnId)}>
+      // @ts-expect-error — a one-argument callback of the column is removed with it.
+      <DataGrid key="positional-one-arg" onSortChange={setColumn}>
+        {null}
+      </DataGrid>,
+      // @ts-expect-error — the positional callback fits no grid with `sort` either.
+      <DataGrid key="positional-with-sort" sort={null} onSortChange={positional}>
         {null}
       </DataGrid>,
       // @ts-expect-error — `sortColumn` is removed in 1.0, next to the sort API too.
       <DataGrid key="mixed" sort={null} sortColumn="name">
         {null}
       </DataGrid>,
-      // @ts-expect-error — the DataGridSort callback needs `sort` or `defaultSort`.
+      // @ts-expect-error — no `onSortChange` without `items`, `sort` or `defaultSort`.
       <DataGrid key="object-without-sort" onSortChange={(sort: DataGridSort) => setSort(sort)}>
         {null}
       </DataGrid>,
     ];
-    expect(elements).toHaveLength(6);
+    expect(elements).toHaveLength(7);
+    // Every member of the union takes the object form, or no callback at all.
+    expectTypeOf<NonNullable<DataGridProps['onSortChange']>>().toEqualTypeOf<
+      (sort: DataGridSort, details?: DataGridSortChangeDetails) => void
+    >();
+    // @ts-expect-error -- `DataGridLegacySortProps` (the positional form's props) is removed in 1.0
+    expectTypeOf<Wave.DataGridLegacySortProps>().toBeAny();
   });
 
   it('gives a grid with `items` the DataGridSort callback with details, never the 0.4 callback', () => {
@@ -5873,7 +5857,7 @@ describe('DataGrid types', () => {
       >
         {null}
       </DataGrid>,
-      // The 0.4 positional callback keeps its two arguments without `items`.
+      // @ts-expect-error — the 0.4 positional callback is removed in 1.0, without `items` too.
       <DataGrid key="legacy" aria-label="People" onSortChange={positional}>
         {null}
       </DataGrid>,
@@ -5895,10 +5879,6 @@ describe('DataGrid types', () => {
     expectTypeOf<DataGridBaseProps>().not.toHaveProperty('selectedKeys');
     expectTypeOf<DataGridBaseProps>().not.toHaveProperty('defaultSelectedKeys');
     expectTypeOf<DataGridBaseProps>().not.toHaveProperty('onSelectionChange');
-    expectTypeOf<DataGridLegacySortProps>().not.toHaveProperty('sortColumn');
-    expectTypeOf<DataGridLegacySortProps>().not.toHaveProperty('sortDirection');
-    expectTypeOf<DataGridLegacySortProps>().not.toHaveProperty('defaultSortColumn');
-    expectTypeOf<DataGridLegacySortProps>().not.toHaveProperty('defaultSortDirection');
     const elements = [
       // @ts-expect-error — `selectedKeys` is removed in 1.0: use `selectedItems` (an array).
       <DataGrid key="selectedKeys" selectionMode="multiple" selectedKeys={['1']}>
@@ -5948,18 +5928,22 @@ describe('DataGrid types', () => {
       <DataGrid className={className} {...props} />
     );
     const setSort = (sort: DataGridSort | null) => void sort;
+    const positional = (columnId: string, direction: SortDirection) => void [columnId, direction];
     const elements = [
       <Spread key="spread" aria-label="People" items={PEOPLE} getRowId={(person) => person.id} />,
       <SpreadWithClass
-        key="legacy"
+        key="uncontrolled"
         aria-label="People"
-        onSortChange={(columnId, direction) => {
-          expectTypeOf(columnId).toEqualTypeOf<string>();
-          expectTypeOf(direction).toEqualTypeOf<SortDirection>();
+        defaultSort={null}
+        onSortChange={(sort, details) => {
+          expectTypeOf(sort).toEqualTypeOf<DataGridSort>();
+          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails | undefined>();
         }}
       >
         {null}
       </SpreadWithClass>,
+      // @ts-expect-error — the 0.4 positional callback is removed in 1.0, through a wrapper too.
+      <SpreadWithClass key="positional" aria-label="People" onSortChange={positional} />,
       <Destructured
         key="destructured"
         aria-label="People"
@@ -5968,7 +5952,7 @@ describe('DataGrid types', () => {
         onSortChange={(sort) => setSort(sort)}
       />,
     ];
-    expect(elements).toHaveLength(3);
+    expect(elements).toHaveLength(4);
 
     const onSortChange = vi.fn();
     render(

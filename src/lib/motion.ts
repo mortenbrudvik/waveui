@@ -150,8 +150,8 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   keyframes, mirrored by the right-to-left counterpart on the same value. Under reduced motion
  *   it becomes a full-width fill that pulses in place instead, in either direction.
  *
- * The resolver below picks the classes of a part: its motion slot, the provider's preference and
- * the className rule of the parts that keep 0.14's own motion.
+ * The resolver below picks the classes of a part from its motion slot and the provider's
+ * preference.
  */
 
 /** The Dialog surface's default motion: scale and fade, 250 ms in and 200 ms out. */
@@ -333,48 +333,27 @@ export const tabIndicatorMotion =
 export const progressIndeterminateMotion =
   'w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse';
 
-/** The text of a class list that marks a presence variant written for 0.14's own motion. */
-const PRESENCE_VARIANT = '[presence=';
-
 function slotClassName(slot: MotionSlot): string {
   return typeof slot === 'string' ? slot : slot.className;
 }
 
 /**
- * Whether a part keeps 0.14's own motion: no slot, and a `className` that holds a presence
- * variant, which the consumer wrote to animate the surface themselves. That `className` then
- * turns the default motion off, as it did before the default existed.
- *
- * @param slot - The part's `motion` prop.
- * @param legacyClassName - The part's `className`; omit it for a part without that rule.
- */
-export function usesLegacyMotion(
-  slot: MotionSlot | null | undefined,
-  legacyClassName?: string,
-): boolean {
-  return slot === undefined && (legacyClassName?.includes(PRESENCE_VARIANT) ?? false);
-}
-
-/**
  * The motion classes of an animated part: `null` none; a string or `{ className }` the
- * consumer's classes; `undefined` none under the provider's `'none'`, else `recipe`.
- * `legacyClassName` (the parts that keep 0.14's behaviour): a value containing a presence variant
- * gives no default motion.
+ * consumer's classes; `undefined` none under the provider's `'none'`, else `recipe`. The part's
+ * `className` does not enter into it: the part composes it after these classes, as a plain class
+ * list.
  *
  * @param slot - The part's `motion` prop: `undefined` the default, `null` none, a value replaces it.
  * @param recipe - The part's default motion classes.
  * @param preference - The `motion` of the nearest `WaveProvider`.
- * @param legacyClassName - The part's `className`, for the parts that keep 0.14's behaviour.
  */
 export function resolveMotion(
   slot: MotionSlot | null | undefined,
   recipe: string,
   preference: MotionPreference,
-  legacyClassName?: string,
 ): string {
   if (slot === null) return '';
   if (slot !== undefined) return slotClassName(slot);
   if (preference === 'none') return '';
-  if (usesLegacyMotion(slot, legacyClassName)) return '';
   return recipe;
 }

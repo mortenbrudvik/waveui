@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, it, expect, vi, expectTypeOf } from 'vitest';
-import type { MockInstance } from 'vitest';
+import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createPortal } from 'react-dom';
@@ -16,8 +15,8 @@ import { useMergedRefs } from '../useMergedRefs';
 type Orientation = UseRovingTabIndexOptions['orientation'];
 
 /**
- * Legacy harness (0.4 call shape: container ref + explicit `items`). Options are forwarded only
- * when a test sets them, so the hook's own defaults are exercised.
+ * Explicit-items harness (`items`, the container props spread). Options are forwarded only when a
+ * test sets them, so the hook's own defaults are exercised.
  */
 function TestGroup({
   activeValue,
@@ -32,14 +31,13 @@ function TestGroup({
   loop?: boolean;
   onFocusMove?: (value: string) => void;
 }) {
-  const containerRef = React.useRef<HTMLDivElement>(null);
   const options: UseRovingTabIndexOptions = { activeValue, items, onFocusMove };
   if (orientation !== undefined) options.orientation = orientation;
   if (loop !== undefined) options.loop = loop;
-  const { handleKeyDown, getTabIndex } = useRovingTabIndex(containerRef, options);
+  const { containerProps, getTabIndex } = useRovingTabIndex(options);
 
   return (
-    <div ref={containerRef} role="group" onKeyDown={handleKeyDown}>
+    <div role="group" {...containerProps}>
       {items.map((item) => (
         <button key={item} type="button" data-roving-value={item} tabIndex={getTabIndex(item)}>
           {item}
@@ -147,23 +145,8 @@ function focus(el: HTMLElement) {
   act(() => el.focus());
 }
 
-/** The warning of the 0.4 call shape `useRovingTabIndex(containerRef, options)` (P13-03). */
-const POSITIONAL_WARNING =
-  '[WaveUI] useRovingTabIndex: `useRovingTabIndex(containerRef, options)` is deprecated and will be removed in 1.0. Use `useRovingTabIndex(options)` instead. Attach the returned `containerProps` to the container.';
-
 describe('useRovingTabIndex', () => {
-  // Many cases here run the 0.4 call shape (the legacy harnesses): nothing but its warning may be
-  // logged, and a case with other messages asserts them on its own spy.
-  let positionalWarn: MockInstance<typeof console.warn>;
-  beforeEach(() => {
-    positionalWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  });
-  afterEach(() => {
-    expect(positionalWarn.mock.calls.every((call) => call[0] === POSITIONAL_WARNING)).toBe(true);
-    positionalWarn.mockRestore();
-  });
-
-  describe('legacy call shape (container ref + items)', () => {
+  describe('explicit items (the container props spread)', () => {
     it('sets tabIndex 0 on active item and -1 on others', () => {
       render(<TestGroup activeValue="b" items={['a', 'b', 'c']} />);
       expect(button('a')).toHaveAttribute('tabindex', '-1');
@@ -597,14 +580,13 @@ describe('useRovingTabIndex', () => {
 
     it('filters disabled items of an explicit items list too', async () => {
       const user = userEvent.setup();
-      function Legacy() {
-        const ref = React.useRef<HTMLDivElement>(null);
-        const { handleKeyDown, getTabIndex } = useRovingTabIndex(ref, {
+      function ItemsList() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({
           activeValue: 'a',
           items: ['a', 'b', 'c'],
         });
         return (
-          <div ref={ref} onKeyDown={handleKeyDown}>
+          <div {...containerProps}>
             {['a', 'b', 'c'].map((v) => (
               <button
                 key={v}
@@ -619,7 +601,7 @@ describe('useRovingTabIndex', () => {
           </div>
         );
       }
-      render(<Legacy />);
+      render(<ItemsList />);
       focus(button('a'));
       await user.keyboard('{ArrowRight}');
       expect(button('c')).toHaveFocus();
@@ -942,17 +924,16 @@ describe('useRovingTabIndex', () => {
       expect(screen.getByRole('radio', { name: 'x' })).toHaveFocus();
     });
 
-    it('0.4 call shape: a container ref on a wrapper around a role=radiogroup keeps its items', async () => {
+    it('explicit items: the container props on a wrapper around a role=radiogroup keep its items', async () => {
       const user = userEvent.setup();
       const values = ['a', 'b', 'c'];
-      function LegacyWrapper() {
-        const containerRef = React.useRef<HTMLDivElement>(null);
-        const { handleKeyDown, getTabIndex } = useRovingTabIndex(containerRef, {
+      function ItemsWrapper() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({
           activeValue: 'a',
           items: values,
         });
         return (
-          <div ref={containerRef} onKeyDown={handleKeyDown}>
+          <div {...containerProps}>
             <div role="radiogroup" aria-label="choices">
               {values.map((value) => (
                 <button
@@ -970,7 +951,7 @@ describe('useRovingTabIndex', () => {
           </div>
         );
       }
-      render(<LegacyWrapper />);
+      render(<ItemsWrapper />);
       const radio = (name: string) => screen.getByRole('radio', { name });
       expect(radio('a')).toHaveAttribute('tabindex', '0');
       expect(radio('b')).toHaveAttribute('tabindex', '-1');
@@ -1036,14 +1017,13 @@ describe('useRovingTabIndex', () => {
         );
       }
       function Outer() {
-        const containerRef = React.useRef<HTMLDivElement>(null);
-        const { handleKeyDown, getTabIndex } = useRovingTabIndex(containerRef, {
+        const { containerProps, getTabIndex } = useRovingTabIndex({
           activeValue: 'a',
           items: ['a', 'b'],
           orientation: 'vertical',
         });
         return (
-          <div ref={containerRef} onKeyDown={handleKeyDown}>
+          <div {...containerProps}>
             <button type="button" data-roving-value="a" tabIndex={getTabIndex('a')}>
               a
             </button>
@@ -1958,7 +1938,7 @@ describe('useRovingTabIndex', () => {
   });
 
   describe('explicit items: only rendered, visible items hold the tab stop', () => {
-    function LegacyItems({
+    function ItemsGroup({
       activeValue,
       hidden = [],
       rendered = ['a', 'b', 'c'],
@@ -1967,13 +1947,12 @@ describe('useRovingTabIndex', () => {
       hidden?: string[];
       rendered?: string[];
     }) {
-      const ref = React.useRef<HTMLDivElement>(null);
-      const { handleKeyDown, getTabIndex } = useRovingTabIndex(ref, {
+      const { containerProps, getTabIndex } = useRovingTabIndex({
         activeValue,
         items: ['a', 'b', 'c'],
       });
       return (
-        <div ref={ref} role="group" aria-label="group" onKeyDown={handleKeyDown}>
+        <div role="group" aria-label="group" {...containerProps}>
           {rendered.map((v) => (
             <button
               key={v}
@@ -1990,18 +1969,18 @@ describe('useRovingTabIndex', () => {
     }
 
     it('a hidden first item does not take the tab stop', () => {
-      render(<LegacyItems activeValue={null} hidden={['a']} />);
+      render(<ItemsGroup activeValue={null} hidden={['a']} />);
       expect(button('b')).toHaveAttribute('tabindex', '0');
       expect(button('c')).toHaveAttribute('tabindex', '-1');
     });
 
     it('a hidden active item does not take the tab stop', () => {
-      render(<LegacyItems activeValue="b" hidden={['b']} />);
+      render(<ItemsGroup activeValue="b" hidden={['b']} />);
       expect(button('a')).toHaveAttribute('tabindex', '0');
       expect(button('c')).toHaveAttribute('tabindex', '-1');
     });
 
-    it('an item that is not rendered does not take the tab stop (options object)', () => {
+    it('an item that is not rendered does not take the tab stop', () => {
       function Items() {
         const { containerProps, getTabIndex } = useRovingTabIndex({ items: ['a', 'b', 'c'] });
         return (
@@ -2709,21 +2688,15 @@ describe('useRovingTabIndex', () => {
     });
 
     it('hands the first container back when the container moves to another element', () => {
-      // The 0.4 call shape reads the container from a ref object in its layout effect, so the
-      // store goes from one element straight to the other, with no detach in between.
+      // The container props move from one element to the other in one commit: React detaches
+      // the ref from the first and attaches it to the second.
       function Moving({ on }: { on: 'first' | 'second' }) {
-        const containerRef = React.useRef<HTMLDivElement>(null);
-        const { handleKeyDown } = useRovingTabIndex(containerRef, {
+        const { containerProps } = useRovingTabIndex({
           itemSelector: TOOLBAR_SELECTOR,
           manageTabIndex: true,
         });
         const group = (name: 'first' | 'second', labels: [string, string]) => (
-          <div
-            role="group"
-            aria-label={name}
-            ref={on === name ? containerRef : undefined}
-            onKeyDown={on === name ? handleKeyDown : undefined}
-          >
+          <div role="group" aria-label={name} {...(on === name ? containerProps : {})}>
             <button type="button">{labels[0]}</button>
             <button type="button">{labels[1]}</button>
           </div>

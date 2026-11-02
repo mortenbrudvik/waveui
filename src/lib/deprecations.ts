@@ -904,6 +904,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:useRovingTabIndex:useRovingTabIndex(containerRef, options)',
     changelogAnchor: 'the 0.4 call shape of `useRovingTabIndex` is removed',
     file: 'src/hooks/useRovingTabIndex.ts',
+    done: true,
   },
   {
     id: 'datagrid-positional-onsortchange',
@@ -916,6 +917,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'deprecated:DataGrid:onSortChange(columnId, direction)',
     changelogAnchor: 'the 0.4 callback form of a grid without `items`, `sort` or `defaultSort`',
     file: DATA_GRID,
+    done: true,
   },
   {
     id: 'menu-popover-legacy-motion',
@@ -928,6 +930,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'Menu.Popover:legacy-motion',
     changelogAnchor: PRESENCE_CLASS_NAME_ANCHOR,
     file: 'src/components/navigation/Menu.popover.tsx',
+    done: true,
   },
   {
     id: 'dialog-content-legacy-motion',
@@ -940,6 +943,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'Dialog.Content:legacy-motion',
     changelogAnchor: PRESENCE_CLASS_NAME_ANCHOR,
     file: 'src/components/overlays/Dialog.tsx',
+    done: true,
   },
   {
     id: 'drawer-legacy-motion',
@@ -952,6 +956,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'Drawer:legacy-motion',
     changelogAnchor: PRESENCE_CLASS_NAME_ANCHOR,
     file: 'src/components/overlays/Drawer.root.tsx',
+    done: true,
   },
   {
     id: 'navdrawer-legacy-motion',
@@ -964,6 +969,7 @@ export const DEPRECATIONS: readonly Deprecation[] = [
     warningKey: 'NavDrawer:legacy-motion',
     changelogAnchor: PRESENCE_CLASS_NAME_ANCHOR,
     file: 'src/components/navigation/NavDrawer.tsx',
+    done: true,
   },
 
   // Optional `details` arguments that become required (types only). WaveUI passes `details` on

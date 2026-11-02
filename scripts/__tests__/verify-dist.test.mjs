@@ -2798,7 +2798,6 @@ describe('module-only names (0.11 INTEGRATION)', () => {
         'useMotionClasses',
         'useMotionPreference',
         'usePresenceGroup',
-        'usesLegacyMotion',
         'collapseMotion',
         'dialogMotion',
         'popupMotion',
@@ -3041,23 +3040,18 @@ const MOTION_LITERALS = [
 ];
 
 /**
- * The resolver of a fixture `lib/motion` (without its export), whose own literal holds the
- * presence-variant text, as the real module's does.
+ * The resolver of a fixture `lib/motion` (without its export), as the real module's: the slot, then
+ * the provider's preference, then the recipe (1.0: no className rule, so no literal of its own).
  */
 const MOTION_RESOLVER =
-  "const PRESENCE_VARIANT = '[presence=';\n" +
-  'function resolveMotion(slot, recipe, preference, legacyClassName) {\n' +
+  'function resolveMotion(slot, recipe, preference) {\n' +
   "  if (slot === null) return '';\n" +
   "  if (slot !== undefined) return typeof slot === 'string' ? slot : slot.className;\n" +
   "  if (preference === 'none') return '';\n" +
-  "  if (legacyClassName !== undefined && legacyClassName.includes(PRESENCE_VARIANT)) return '';\n" +
   '  return recipe;\n' +
   '}\n';
 
-/**
- * A fixture `lib/motion.mjs`: the recipes, the durations, `extra` exports and the resolver, whose
- * own literal holds the presence-variant text, as the real module's does.
- */
+/** A fixture `lib/motion.mjs`: the recipes, the durations, `extra` exports and the resolver. */
 function motionModule(extra = '') {
   return (
     MOTION_RESOLVER +
@@ -5114,7 +5108,6 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       'src/components/table/Table.resize.tsx': ['TableResizeHandlePartProps'],
       'src/hooks/useFieldControl.ts': ['fieldLocks'],
       'src/hooks/useListbox.ts': ['OPTION_STATE_LOCKS', 'preventMouseDown'],
-      'src/hooks/useMotion.ts': ['useLegacyMotionWarning'],
       'src/lib/mergeProps.ts': ['ID_LIST_KEYS'],
       'src/lib/slot.ts': ['resolveWiredSlot'],
     };
@@ -5307,10 +5300,11 @@ describe('verifyDist and main', () => {
       ),
     });
     const { errors } = await verifyDist(dist, noPending);
+    // The modules alone: the resolver holds no presence variant of its own since 1.0 (the
+    // className rule is gone), and this Button keeps no recipe.
     expect(errors).toEqual([
       'hooks/useMotion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
       'lib/motion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
-      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
     ]);
   }, 90_000);
 

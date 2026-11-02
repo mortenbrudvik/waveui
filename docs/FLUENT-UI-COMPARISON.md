@@ -320,7 +320,7 @@ Fluent callbacks receive `(event, data)`. WaveUI state callbacks are named after
 | Menu, Popover and the pickers `onOpenChange(ev, { open })` | `onOpenChange(open)` |
 | Tooltip `onVisibleChange(ev, { visible })` | `onOpenChange(open)` |
 | Menu, Toolbar `onCheckedValueChange(ev, { name, checkedItems })` | `onCheckedValuesChange(checkedValues, { name, checkedItems, event })` |
-| DataGrid `onSortChange(ev, { sortColumn, sortDirection })` | `onSortChange({ columnId, direction })` when `sort` or `defaultSort` is passed (`null` counts, `undefined` does not); without them it receives WaveUI 0.4's arguments, `(columnId, direction)` |
+| DataGrid `onSortChange(ev, { sortColumn, sortDirection })` | `onSortChange({ columnId, direction }, details)` when `items`, `sort` or `defaultSort` is passed (`null` counts, `undefined` does not); a grid without any of them takes no `onSortChange` (WaveUI 0.4's `(columnId, direction)` is removed in 1.0): pass `defaultSort={null}` |
 | DataGrid `onSelectionChange(ev, { selectedItems })`, a `Set` | `onSelectedItemsChange(ids)`, an array |
 | List `onSelectionChange(ev, { selectedItems })` | `onSelectionChange(selected)`, an array |
 | Card `onSelectionChange(ev, { selected })` | `onSelect()`, called on every activation without a value: you flip `selected` |

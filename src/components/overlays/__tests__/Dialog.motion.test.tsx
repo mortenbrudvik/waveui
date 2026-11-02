@@ -17,16 +17,13 @@ import {
 } from '../../../test-utils';
 
 /*
- * P10-DLG (spec §4.1, D7, D9, D16, D19): Dialog.Content's default motion on the surface
- * (`motion`) and the backdrop (`backdropMotion`), the presence pair of the surface, `appear`, and
- * the two fixes an exit makes visible: a stacked dialog's backdrop keeps its appearance (risk 7)
- * and the titles keep their end padding (risk 8) while the surface exits. jsdom loads no CSS, so
- * the phases wait only where `mockAnimations` gives the surface a running animation.
+ * P10-DLG (spec §4.1, D7, D9, D16): Dialog.Content's default motion on the surface (`motion`) and
+ * the backdrop (`backdropMotion`), the presence pair of the surface, `appear`, and the two fixes an
+ * exit makes visible: a stacked dialog's backdrop keeps its appearance (risk 7) and the titles
+ * keep their end padding (risk 8) while the surface exits. A `className` with presence variants
+ * is a plain class list (0.15's D19 rule is removed in 1.0). jsdom loads no CSS, so the phases
+ * wait only where `mockAnimations` gives the surface a running animation.
  */
-
-/** The development warning of a `className` with presence variants (P13-03). */
-const LEGACY_WARNING =
-  '[WaveUI] Dialog.Content: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.';
 
 /** Spies on `console.warn`; the returned function asserts the warnings logged so far. */
 function spyOnWarnings() {
@@ -154,35 +151,53 @@ describe('Dialog.Content motion slots (D5, D6)', () => {
     }
   });
 
-  describe('a className with presence variants keeps 0.14’s own motion (D19)', () => {
-    const legacy = ['p-8', 'data-[presence=exiting]:opacity-0'];
+  // 0.14's motion in `className` turned the default off through 0.x; in 1.0 it is a plain class
+  // list, composed after the motion classes.
+  describe('a className with presence variants is a plain class list (the rule is removed in 1.0)', () => {
+    const presenceClasses = ['p-8', 'data-[presence=exiting]:opacity-0'];
 
-    it('leaves the default motion out and keeps both consumer classes', () => {
+    it('keeps the default motion, composes the className after it and warns about nothing', () => {
       const expectWarnings = spyOnWarnings();
       render(
         <OrderDialog
           dialogProps={{ defaultOpen: true }}
-          contentProps={{ className: legacy.join(' ') }}
-        />,
-      );
-      expectWarnings([LEGACY_WARNING]);
-      expect(surface()).toHaveClass(...legacy);
-      expectNoWordOf(surface(), dialogMotion, legacy);
-      // The backdrop is not the className's element: it keeps its default.
-      expect(backdrop()).toHaveClass(...motionClasses(dialogBackdropMotion));
-    });
-
-    it('applies an explicit motion next to that className, without the warning', () => {
-      const expectWarnings = spyOnWarnings();
-      render(
-        <OrderDialog
-          dialogProps={{ defaultOpen: true }}
-          contentProps={{ className: legacy.join(' '), motion: 'my-motion' }}
+          contentProps={{ className: presenceClasses.join(' ') }}
         />,
       );
       expectWarnings([]);
-      expect(surface()).toHaveClass('my-motion', ...legacy);
-      expectNoWordOf(surface(), dialogMotion, legacy);
+      expect(surface()).toHaveClass(...motionClasses(dialogMotion), ...presenceClasses);
+      expect(Array.from(surface()!.classList).slice(-2)).toEqual(presenceClasses);
+      expect(backdrop()).toHaveClass(...motionClasses(dialogBackdropMotion));
+    });
+
+    it('merges a conflicting presence class as any class: it replaces only the default’s word of the same variant', () => {
+      const expectWarnings = spyOnWarnings();
+      render(
+        <OrderDialog
+          dialogProps={{ defaultOpen: true }}
+          contentProps={{ className: 'data-[presence=exiting]:opacity-50' }}
+        />,
+      );
+      expectWarnings([]);
+      const replaced = 'data-[presence=exiting]:opacity-0';
+      expect(surface()).toHaveClass(
+        ...motionClasses(dialogMotion).filter((word) => word !== replaced),
+        'data-[presence=exiting]:opacity-50',
+      );
+      expect(surface()).not.toHaveClass(replaced);
+    });
+
+    it('an explicit motion still replaces the default; the className stays', () => {
+      const expectWarnings = spyOnWarnings();
+      render(
+        <OrderDialog
+          dialogProps={{ defaultOpen: true }}
+          contentProps={{ className: presenceClasses.join(' '), motion: 'my-motion' }}
+        />,
+      );
+      expectWarnings([]);
+      expect(surface()).toHaveClass('my-motion', ...presenceClasses);
+      expectNoWordOf(surface(), dialogMotion, presenceClasses);
     });
   });
 
