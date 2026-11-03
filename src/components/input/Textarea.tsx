@@ -38,9 +38,33 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
    * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
    */
   appearance?: InputAppearance;
+  /**
+   * Which directions the user can drag the corner handle to resize the field in (Fluent UI's
+   * `resize`): `none`, `vertical`, `horizontal` or `both`. Default: `'vertical'`, the height-only
+   * resize WaveUI has always drawn (Fluent's default is `'none'`).
+   * @default 'vertical'
+   */
+  resize?: TextareaResize;
+  /**
+   * Called with the new string value on every change, next to the native `onChange` event
+   * handler (`onValueChange={setNote}` instead of `onChange={(e) => setNote(e.target.value)}`;
+   * Fluent UI's `onChange(event, data)` with `data.value`).
+   */
+  onValueChange?: (value: string) => void;
   /** Ref to the `<textarea>` element. */
   ref?: React.Ref<HTMLTextAreaElement>;
 }
+
+/** The directions a Textarea can be resized in: the values of its `resize` prop. */
+export type TextareaResize = 'none' | 'vertical' | 'horizontal' | 'both';
+
+/** The resize utilities of each `resize` value. */
+const TEXTAREA_RESIZE: Readonly<Record<TextareaResize, string>> = {
+  none: 'wave:resize-none',
+  vertical: 'wave:resize-y',
+  horizontal: 'wave:resize-x',
+  both: 'wave:resize',
+};
 
 /** Minimum height, padding and type ramp of each size (medium is the 0.7 look). */
 const TEXTAREA_SIZE: Readonly<Record<CoreSize, string>> = {
@@ -50,7 +74,7 @@ const TEXTAREA_SIZE: Readonly<Record<CoreSize, string>> = {
 };
 
 /**
- * A multi-line text input with Fluent styling (vertical resize, accessible bottom stroke, primary
+ * A multi-line text input with Fluent styling (`resize` vertical by default, accessible bottom stroke, primary
  * bottom border while focused). Inside a `Field` it picks up the label, hint, error, `required`
  * (native attribute) and invalid state automatically.
  *
@@ -69,6 +93,9 @@ export const Textarea = ({
   errorMessageProps,
   size: sizeProp,
   appearance: appearanceProp,
+  resize = 'vertical',
+  onChange,
+  onValueChange,
   className,
   ref,
   id,
@@ -102,6 +129,14 @@ export const Textarea = ({
   const invalidLook = isInvalidLook(invalid, fieldProps['aria-invalid']);
   const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
+  const handleChange =
+    onChange || onValueChange
+      ? (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+          onChange?.(event);
+          onValueChange?.(event.currentTarget.value);
+        }
+      : undefined;
+
   const control = (
     <textarea
       ref={ref}
@@ -109,7 +144,9 @@ export const Textarea = ({
       data-appearance={appearance}
       className={wcn(
         textareaClassNames.root,
-        'wave:w-full wave:resize-y',
+        'wave:w-full',
+        // A value outside the four (untyped code) falls back to the default resize.
+        TEXTAREA_RESIZE[resize] ?? TEXTAREA_RESIZE.vertical,
         TEXTAREA_SIZE[size],
         inputAppearanceClasses[appearance],
         'wave:text-foreground wave:placeholder:text-muted-foreground',
@@ -120,6 +157,7 @@ export const Textarea = ({
       )}
       {...props}
       {...fieldProps}
+      onChange={handleChange}
       aria-errormessage={joinIds(ariaErrorMessage, messageId)}
     />
   );
