@@ -105,13 +105,6 @@ function spacerHeights(): [string, number][] {
   ]);
 }
 
-/** The sum of the row heights of `[from, to)` (the table above). */
-const heightBetween = (from: number, to: number) => {
-  let sum = 0;
-  for (let index = from; index < to; index++) sum += heightOf(index);
-  return sum;
-};
-
 /**
  * The height of the whole list as the window knows it: measured rows at their heights (the rows
  * that were rendered), every other row at the estimate.
