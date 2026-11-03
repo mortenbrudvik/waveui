@@ -28,6 +28,10 @@ export type {
   PopoverTriggerProps,
   PopoverTriggerChildProps,
   PopoverContentProps,
+  PopoverOpenChangeReason,
+  PopoverOpenChangeDetails,
+  PopoverAppearance,
+  PopoverSize,
 } from './Popover';
 
 export { Tooltip } from './Tooltip';

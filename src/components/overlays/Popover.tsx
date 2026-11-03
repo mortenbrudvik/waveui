@@ -7,8 +7,10 @@ import { slotRendersContent } from '../../lib/slot';
 import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusElement, getFirstTabbable, isConnectedAndFocusable } from '../../lib/focus';
+import { isInsideLayerTree, Z_INDEX } from '../../lib/layers';
 import type {
   MotionSlot,
+  OpenChangeDetails,
   PopupAlign,
   PopupPositioning,
   PopupSide,
@@ -17,10 +19,11 @@ import type {
 } from '../../lib/types';
 import { usePopupTarget } from '../../hooks/useResolvedTarget';
 import { useId } from '../../hooks/useId';
-import { useControllable, type SetValue } from '../../hooks/useControllable';
+import { useControllable } from '../../hooks/useControllable';
 import { useContextMenuAnchor, type ContextMenuAnchor } from '../../hooks/useContextMenuAnchor';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useHoverIntent, type HoverIntent } from '../../hooks/useHoverIntent';
 import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
@@ -35,13 +38,33 @@ import {
   useTriggerFocusRef,
 } from '../../hooks/useTriggerElement';
 import { Portal } from '../portal/Portal';
+import { getNativeEvent } from './Dialog.shared';
 import {
   getTabbableThrough,
   isFocusInSurfaceTree,
   PopoverBeak,
+  popoverAppearanceClasses,
+  popoverScrollerClasses,
+  popoverSizeClasses,
   usePopoverTabOrder,
+  type PopoverAppearance,
   type PopoverPhysicalSide,
+  type PopoverSize,
 } from './Popover.shared';
+
+export type { PopoverAppearance, PopoverSize } from './Popover.shared';
+
+/**
+ * Why a {@link Popover} asks to open or close: `trigger` (a click on `Popover.Trigger`), `hover`
+ * (`openOnHover`), `context` (a context gesture, or a right click outside, with `openOnContext`),
+ * `escape`, `outside-press`, `scroll` (`closeOnScroll`, or the scroll of a context popover's row)
+ * and `parent-closed` (the Dialog, Drawer or popup it was opened from closed).
+ */
+export type PopoverOpenChangeReason =
+  'trigger' | 'hover' | 'context' | 'escape' | 'outside-press' | 'scroll' | 'parent-closed';
+
+/** The second argument of a {@link Popover}'s `onOpenChange`: the reason and the DOM event. */
+export type PopoverOpenChangeDetails = OpenChangeDetails<PopoverOpenChangeReason>;
 
 /** Properties for the Popover component. */
 export interface PopoverProps {
@@ -58,11 +81,18 @@ export interface PopoverProps {
   defaultOpen?: boolean;
   /**
    * Called with the requested open state when it differs from the current one: a trigger click,
-   * Escape and an outside press; the hover opening and closing of `openOnHover`; and, with
+   * Escape and an outside press; the hover opening and closing of `openOnHover`; a scroll with
+   * `closeOnScroll`; the close of the Dialog, Drawer or popup it was opened from; and, with
    * `openOnContext`, a context gesture (a right click, a macOS Ctrl+click, Shift+F10 or the
    * ContextMenu key), a right click outside, and a scroll that moves the row it opened at.
+   *
+   * The second argument says why (`details.reason`: `trigger`, `hover`, `context`, `escape`,
+   * `outside-press`, `scroll` or `parent-closed`) and passes the DOM event behind the request
+   * (`details.event`), so a controlled popover can refuse only some ways of closing. WaveUI
+   * always passes it; it is typed optional so that a handler written before it keeps compiling
+   * (a next major makes it required, as Dialog's is).
    */
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: (open: boolean, details?: PopoverOpenChangeDetails) => void;
   /**
    * Side of the trigger the content opens on. `start`/`end` follow the writing direction. The
    * content flips to the opposite side when there is not enough room.
@@ -137,6 +167,54 @@ export interface PopoverProps {
    * @default `{ offset: 8 }`
    */
   positioning?: PopupPositioning;
+  /**
+   * Draws the beak, the small triangle that points at the trigger (or `target`). Pass `false` for
+   * a surface without it; the beak slot (`slotProps.beak`) then renders nothing. Fluent's
+   * `withArrow`, whose default is no arrow: WaveUI keeps drawing it by default.
+   * @default true
+   */
+  withArrow?: boolean;
+  /**
+   * Traps focus in the content while it is open, like a dialog that leaves the page usable:
+   * focus moves into the content when it opens (its first focusable element, else the content
+   * itself) and Tab and Shift+Tab cycle inside it, toasts and popups opened from it included;
+   * Escape and a press outside still close it. A hover-opened popover (`openOnHover`) takes no
+   * trap until a click pins it. The page is not made `inert` and does not stop scrolling. Without
+   * it, focus stays on the trigger when the popover opens and Tab enters the content from there
+   * (WaveUI's design, popoversurface-3). Fluent's `trapFocus`.
+   * @default false
+   */
+  trapFocus?: boolean;
+  /**
+   * Renders the content in place, as the next sibling of the element that renders `Popover.Content`
+   * (position it where the trigger is: it is placed with the `absolute` strategy against its
+   * nearest positioned ancestor), instead of in a portal at the end of the document. Use it
+   * where the content must stay inside its container: a shadow root, a region that is
+   * rotated or scaled, a tab order that must follow the DOM. The content still moves in and out
+   * with its dismiss layer. Fluent's `inline`.
+   * @default false
+   */
+  inline?: boolean;
+  /**
+   * Closes the popover when anything outside it scrolls (the page, or any scrollable container; a
+   * scroll inside the content or inside a popup opened from it does not), reporting the reason
+   * `scroll`. Fluent's `closeOnScroll`.
+   * @default false
+   */
+  closeOnScroll?: boolean;
+  /**
+   * The look of the content: `neutral` (the page background with a border), `brand` (the brand
+   * fill) or `inverted` (a dark surface in the light theme). Rendered as `data-appearance`.
+   * Fluent's `appearance`, which has `brand` and `inverted` and a neutral default.
+   * @default 'neutral'
+   */
+  appearance?: PopoverAppearance;
+  /**
+   * The padding of the content: `small` (12px), `medium` (16px) or `large` (20px). Rendered as
+   * `data-size`. The width is 16rem; put a width in `className` for another. Fluent's `size`.
+   * @default 'medium'
+   */
+  size?: PopoverSize;
   /** `Popover.Trigger` and `Popover.Content`. */
   children: React.ReactNode;
 }
@@ -150,6 +228,10 @@ export interface PopoverProps {
  */
 export type PopoverTriggerChildProps = Omit<React.HTMLAttributes<HTMLElement>, 'children'> & {
   id: string;
+  /**
+   * `dialog`; the render function receives `undefined` for it, and an element none, while
+   * `Popover.Content` has the role `group` or `region`, which no `aria-haspopup` value describes.
+   */
   'aria-haspopup': 'dialog';
   'aria-expanded': boolean;
   /** The content's id, only while the popover is open (never with `openOnContext`). */
@@ -195,6 +277,16 @@ export interface PopoverContentProps extends Omit<React.HTMLAttributes<HTMLDivEl
   /** Id of the surface; the trigger's `aria-controls` follows it. Defaults to a generated id. */
   id?: string;
   /**
+   * The surface's role, `dialog` by default (a `role` you pass wins, as before). Pass `group` for a
+   * popover that only presents content, a hover card or a list of details, which a dialog
+   * would over-announce; `alertdialog` for one that interrupts. While it is `group` or
+   * `region` the trigger carries no `aria-haspopup`, which has no value for such a role.
+   * Name a `group` with `title`, `aria-label` or `aria-labelledby`. Fluent's `PopoverSurface`
+   * role, which is `group` unless `trapFocus` is set.
+   * @default 'dialog'
+   */
+  role?: React.AriaRole;
+  /**
    * The popover's motion. By default it fades in and slides 4px away from its trigger, on the
    * side it opened on, over 200 ms with a decelerating curve, and fades out and slides back over
    * 100 ms with an accelerating curve; under reduced motion it appears and disappears at once.
@@ -239,7 +331,10 @@ export interface PopoverContentProps extends Omit<React.HTMLAttributes<HTMLDivEl
 
 interface PopoverContextValue {
   open: boolean;
-  setOpen: SetValue<boolean>;
+  setOpen: (
+    next: boolean | ((current: boolean) => boolean),
+    details: PopoverOpenChangeDetails,
+  ) => void;
   /** The content's id: the consumer's `Popover.Content` id when given, else a generated one. */
   contentId: string;
   /** `Popover.Content` reports the consumer's `id` so the trigger's `aria-controls` follows it. */
@@ -257,7 +352,7 @@ interface PopoverContextValue {
   surfaceElementRef: React.RefCallback<HTMLElement>;
   arrowRef: React.RefObject<HTMLDivElement | null>;
   /** The trigger's click: toggles the popover, or pins one that hover opened (keeps it open). */
-  onTriggerClick: () => void;
+  onTriggerClick: (event?: unknown) => void;
   /** Tab from the open trigger enters the portaled content. */
   onTriggerKeyDown: React.KeyboardEventHandler<HTMLElement>;
   /** Hover opening (`openOnHover`): composed onto the trigger; `null` without it. */
@@ -280,6 +375,18 @@ interface PopoverContextValue {
   placedSide: PopoverPhysicalSide;
   /** `positioning.fitViewport`: the content scrolls inside the border when it is limited. */
   fitViewport: boolean;
+  /** `withArrow`: whether the beak is drawn. */
+  withArrow: boolean;
+  /** `inline`: the content renders in place instead of a portal. */
+  inline: boolean;
+  /** `trapFocus` (and not hover-opened): focus is trapped in the content while it is open. */
+  trapped: boolean;
+  appearance: PopoverAppearance;
+  size: PopoverSize;
+  /** The role the content reports, `undefined` until it has mounted (read as `dialog`). */
+  contentRole: string | undefined;
+  /** `Popover.Content` reports its role so the trigger's `aria-haspopup` follows it. */
+  setContentRole: (role: string | undefined) => void;
 }
 
 const PopoverContext = React.createContext<PopoverContextValue | null>(null);
@@ -316,6 +423,13 @@ function getInertContext(): PopoverContextValue {
     arrowStyles: {},
     placedSide: 'bottom',
     fitViewport: false,
+    withArrow: true,
+    inline: false,
+    trapped: false,
+    appearance: 'neutral',
+    size: 'medium',
+    contentRole: undefined,
+    setContentRole: () => {},
   };
   return inertContext;
 }
@@ -424,19 +538,44 @@ const PopoverRoot = ({
   openOnContext = false,
   target: targetProp,
   positioning,
+  withArrow = true,
+  trapFocus = false,
+  inline = false,
+  closeOnScroll = false,
+  appearance = 'neutral',
+  size = 'medium',
   children,
 }: PopoverProps) => {
   const { target, pending: targetPending } = usePopupTarget('Popover', targetProp, positioning);
-  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  // Every internal path asks through `setOpenWith(next, details)`, which writes `details` to a ref,
+  // calls the setter and clears the ref once the setter returns (as `useModalOpenState` does):
+  // `useControllable` calls its `onChange` synchronously inside the setter, only when the value
+  // changes, and that `onChange` passes the ref's details on as `onOpenChange(next, details)`.
+  const detailsRef = React.useRef<PopoverOpenChangeDetails | undefined>(undefined);
+  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, (next: boolean) =>
+    onOpenChange?.(next, detailsRef.current),
+  );
+  const setOpenWith = useEventCallback(
+    (next: boolean | ((current: boolean) => boolean), details: PopoverOpenChangeDetails) => {
+      detailsRef.current = details;
+      try {
+        setOpen(next);
+      } finally {
+        detailsRef.current = undefined;
+      }
+    },
+  );
   // A hover close in flight (written in handlers, read when the popover closes): set when the hover
   // intent asks to close, so that close moves no focus even when a controlled parent applies it in
   // a later render (a transition). Every other request to open or close forgets it, and so does
   // the next opening.
   const hoverCloseRef = React.useRef(false);
-  const requestOpen = useEventCallback<SetValue<boolean>>((next) => {
-    hoverCloseRef.current = false;
-    setOpen(next);
-  });
+  const requestOpen = useEventCallback(
+    (next: boolean | ((current: boolean) => boolean), details: PopoverOpenChangeDetails) => {
+      hoverCloseRef.current = false;
+      setOpenWith(next, details);
+    },
+  );
   const isHoverClose = React.useCallback(() => hoverCloseRef.current, []);
   // The content lives in a portal, which renders only in the browser: until then (the server
   // HTML, hydration) the popover reports itself closed, so the trigger's aria-expanded and
@@ -488,7 +627,9 @@ const PopoverRoot = ({
     open,
     side,
     align,
-    arrowRef,
+    arrowRef: withArrow ? arrowRef : undefined,
+    // An inline surface is positioned against its nearest positioned ancestor, as it lies in place.
+    strategy: inline ? 'absolute' : undefined,
     ...resolvePositioning(positioning, { offset: 8 }),
   });
   // A ref target that holds no element yet keeps the popup hidden (as TeachingPopover's is).
@@ -530,7 +671,9 @@ const PopoverRoot = ({
   );
   const { layerId } = useDismiss({
     open,
-    onDismiss: () => requestOpen(false),
+    onDismiss: (why, event) =>
+      // `focus-outside` never reaches this layer (it does not ask for it).
+      requestOpen(false, { reason: why === 'focus-outside' ? 'outside-press' : why, event }),
     refs: openOnContext
       ? [surfaceRef, targetRef, ...(ignoreOutsideRefs ?? [])]
       : [surfaceRef, triggerRef, targetRef, ...(ignoreOutsideRefs ?? [])],
@@ -553,11 +696,12 @@ const PopoverRoot = ({
     open,
     trigger: triggerElement,
     layerId,
-    onOpen: (origin) => {
+    onOpen: (origin, event) => {
       focusContentRef.current = origin === 'keyboard';
-      requestOpen(true);
+      requestOpen(true, { reason: 'context', event });
     },
-    onClose: () => requestOpen(false),
+    onClose: (why, event) =>
+      requestOpen(false, { reason: why === 'scroll' ? 'scroll' : 'context', event }),
   });
   React.useInsertionEffect(() => {
     contextOpenerRef.current = contextOpener;
@@ -657,23 +801,44 @@ const PopoverRoot = ({
     closeDelay,
     trigger: triggerElement,
     surface,
-    onOpen: () => {
+    onOpen: (event) => {
       setHoverRequested(true);
-      requestOpen(true);
+      requestOpen(true, { reason: 'hover', event });
     },
-    onClose: () => {
+    onClose: (event) => {
       // Before the request: a parent may apply it synchronously (flushSync).
       hoverCloseRef.current = true;
-      setOpen(false);
+      setOpenWith(false, { reason: 'hover', event });
     },
     canClose: canHoverClose,
   });
 
-  const onTriggerClick = useEventCallback(() => {
+  const onTriggerClick = useEventCallback((event?: unknown) => {
     cancelHover();
     if (open && reason === 'hover') setOpenReason('other');
-    else requestOpen((current) => !current);
+    else requestOpen((current) => !current, { reason: 'trigger', event: getNativeEvent(event) });
   });
+
+  // `closeOnScroll`: a scroll anywhere outside the content (and the popups opened from it) closes
+  // it. The scroll event does not bubble, so the capture phase of the document sees every scroller.
+  const onDocumentScroll = useEventCallback((event: Event) => {
+    const scrolled = event.target;
+    const inside =
+      scrolled instanceof Node &&
+      (!!surfaceRef.current?.contains(scrolled) || isInsideLayerTree(layerId, scrolled));
+    if (!inside) requestOpen(false, { reason: 'scroll', event });
+  });
+  React.useEffect(() => {
+    if (!open || !closeOnScroll) return;
+    const doc = (surfaceRef.current ?? triggerRef.current)?.ownerDocument ?? document;
+    doc.addEventListener('scroll', onDocumentScroll, true);
+    return () => doc.removeEventListener('scroll', onDocumentScroll, true);
+  }, [open, closeOnScroll, onDocumentScroll]);
+
+  // `trapFocus`: focus moves into the content and cycles in it while it is open, but not while a
+  // hover opened it (a hover card takes no focus until a click pins it).
+  const trapped = trapFocus && reason !== 'hover';
+  useFocusTrap(surface, { enabled: open && trapped, layerId });
 
   // The element the content follows in the keyboard order: in context mode the element focused
   // at the gesture when it lies inside the region, else the trigger, else a `target` element.
@@ -695,7 +860,9 @@ const PopoverRoot = ({
   // is, and no Tab cycle forms (see usePopoverTabOrder). In a context region only Tab from the
   // element the content follows enters it; Tab on the region's other rows moves on as usual.
   const onTriggerKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Tab' || event.shiftKey || !open) return;
+    // A trapped or inline popover takes no part in this order: focus is already inside it, or the
+    // content lies in the DOM where the browser's own order finds it.
+    if (event.key !== 'Tab' || event.shiftKey || !open || trapped || inline) return;
     if (openOnContext) {
       const anchor = resolveTabAnchor();
       if (!anchor || event.target !== (getTriggerFocusTarget(anchor) ?? anchor)) return;
@@ -708,7 +875,7 @@ const PopoverRoot = ({
   });
 
   const onContentKeyDown = usePopoverTabOrder({
-    enabled: open,
+    enabled: open && !trapped && !inline,
     surface,
     anchorRef: tabAnchorRef,
     // Shift+Tab from the content's first element returns to the trigger (the element in a span),
@@ -717,6 +884,7 @@ const PopoverRoot = ({
   });
 
   const keyboardContext = fromContext && contextOrigin === 'keyboard';
+  const [contentRole, setContentRole] = React.useState<string | undefined>(undefined);
   const context = React.useMemo<PopoverContextValue>(
     () => ({
       open,
@@ -745,6 +913,13 @@ const PopoverRoot = ({
       arrowStyles,
       placedSide,
       fitViewport: positioning?.fitViewport === true,
+      withArrow,
+      inline,
+      trapped,
+      appearance,
+      size,
+      contentRole,
+      setContentRole,
     }),
     [
       open,
@@ -770,6 +945,12 @@ const PopoverRoot = ({
       arrowStyles,
       placedSide,
       positioning?.fitViewport,
+      withArrow,
+      inline,
+      trapped,
+      appearance,
+      size,
+      contentRole,
     ],
   );
 
@@ -833,6 +1014,7 @@ export const PopoverTrigger = ({
     hoverTriggerHandlers: hover,
     contextMode,
     contextTriggerHandlers: gesture,
+    contentRole,
   } = usePopoverContext('Popover.Trigger');
   const elementRef = useMergedRefs<HTMLElement>(ref, triggerElementRef);
 
@@ -844,7 +1026,9 @@ export const PopoverTrigger = ({
   const triggerProps = {
     ...rest,
     id: idProp ?? triggerId,
-    'aria-haspopup': 'dialog' as const,
+    // A content with another role than a dialog (a `group`) has no `aria-haspopup` value.
+    'aria-haspopup':
+      contentRole === 'group' || contentRole === 'region' ? undefined : ('dialog' as const),
     'aria-expanded': contextMode ? false : open,
     'aria-controls': open && !contextMode ? contentId : undefined,
     onClick: composeEventHandlers(onClick, contextMode ? undefined : onTriggerClick),
@@ -932,6 +1116,7 @@ export const PopoverContent = ({
   onPointerEnter,
   onPointerLeave,
   motion,
+  role = 'dialog',
   ref,
   slotProps,
   ...rest
@@ -940,6 +1125,12 @@ export const PopoverContent = ({
     open,
     contentId,
     setCustomContentId,
+    setContentRole,
+    withArrow,
+    inline,
+    trapped,
+    appearance,
+    size,
     resolvedTriggerId,
     triggerRef,
     triggerElement,
@@ -1006,6 +1197,11 @@ export const PopoverContent = ({
     setCustomContentId(customId);
     return () => setCustomContentId(undefined);
   }, [customId, setCustomContentId]);
+  // And the role, so the trigger's `aria-haspopup` follows it.
+  React.useEffect(() => {
+    setContentRole(role);
+    return () => setContentRole(undefined);
+  }, [role, setContentRole]);
 
   React.useEffect(() => {
     if (!open || !unnamed || !contextMode || !isDev) return;
@@ -1066,12 +1262,14 @@ export const PopoverContent = ({
   });
 
   return (
-    <Portal layerId={layerId}>
+    <Portal disabled={inline} layerId={layerId}>
       <div
-        role="dialog"
+        role={role}
         aria-label={ariaLabel}
         aria-labelledby={labelledBy}
-        tabIndex={keyboardContext ? -1 : undefined}
+        tabIndex={keyboardContext || trapped ? -1 : undefined}
+        data-appearance={appearance}
+        data-size={size}
         {...rest}
         {...presenceProps}
         ref={elementRef}
@@ -1079,7 +1277,12 @@ export const PopoverContent = ({
         data-state={open ? 'open' : 'closed'}
         data-side={floatingProps['data-side']}
         data-align={floatingProps['data-align']}
-        style={{ ...style, ...floatingProps.style }}
+        // An inline surface has no portal wrapper to stack it: it takes the overlay layer itself.
+        style={{
+          ...(inline ? { zIndex: Z_INDEX.overlay } : undefined),
+          ...style,
+          ...floatingProps.style,
+        }}
         onKeyDown={composeEventHandlers(onKeyDown, onContentKeyDown)}
         onContextMenu={composeEventHandlers(onContextMenu, onContentContextMenu)}
         onPointerEnter={
@@ -1090,23 +1293,25 @@ export const PopoverContent = ({
         }
         className={wcn(
           popoverContentClassNames.root,
-          'wave:w-64 wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-4 wave:text-body-1 wave:font-normal wave:text-foreground wave:normal-case wave:tracking-normal wave:text-start wave:shadow-4',
+          'wave:w-64 wave:rounded-md wave:border wave:text-body-1 wave:font-normal wave:normal-case wave:tracking-normal wave:text-start wave:shadow-4',
+          popoverAppearanceClasses[appearance],
+          popoverSizeClasses[size],
           motionClassName,
           className,
         )}
       >
-        <PopoverBeak
-          {...beak}
-          ref={beakRef}
-          side={placedSide}
-          style={lockPositionStyle(beak.style, arrowStyles)}
-        />
+        {withArrow && (
+          <PopoverBeak
+            {...beak}
+            ref={beakRef}
+            side={placedSide}
+            style={lockPositionStyle(beak.style, arrowStyles)}
+          />
+        )}
         {fitViewport ? (
           // The beak sits half outside the border, so the scroller is inside it: the viewport
-          // limit minus the content's padding (2 x 1rem) and border (2 x 1px).
-          <div className="wave:overflow-y-auto wave:max-h-[calc(var(--wave-popup-available-height)-2rem-2px)]">
-            {titleAndChildren}
-          </div>
+          // limit minus the content's padding (2 x the size's) and border (2 x 1px).
+          <div className={popoverScrollerClasses[size]}>{titleAndChildren}</div>
         ) : (
           titleAndChildren
         )}

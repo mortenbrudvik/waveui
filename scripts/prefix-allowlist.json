@@ -59,7 +59,7 @@
   "src/components/overlays/Drawer.parts.tsx": ["inline"],
   "src/components/overlays/Drawer.root.tsx": ["hidden"],
   "src/components/overlays/Popover.shared.tsx": ["blur", "hidden"],
-  "src/components/overlays/Popover.tsx": ["hidden"],
+  "src/components/overlays/Popover.tsx": ["absolute", "group", "hidden"],
   "src/components/overlays/TeachingPopover.parts.tsx": ["group", "hidden", "outline"],
   "src/components/overlays/TeachingPopover.stack.ts": ["resize"],
   "src/components/portal/Portal.tsx": ["relative"],
