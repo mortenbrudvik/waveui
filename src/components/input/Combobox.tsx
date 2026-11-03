@@ -32,6 +32,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { HiddenInput } from '../internal/HiddenInput';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
+import { PickerClearButton } from './PickerClearButton';
 import { insertedText, replacedText } from './Combobox.text';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
@@ -1102,7 +1103,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
           )}
         />
         {showClear && (
-          <button
+          <PickerClearButton
+            fallbackRef={inputRef}
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
             {...mergeSlotProps(slotProps?.clearButton, {
@@ -1131,7 +1133,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
             })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-          </button>
+          </PickerClearButton>
         )}
         {showExpand && (
           <PickerExpandButton

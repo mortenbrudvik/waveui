@@ -45,6 +45,7 @@ import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPositi
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
+import { PickerClearButton } from './PickerClearButton';
 import {
   DEFAULT_TIME_STEP,
   generateTimeOptions,
@@ -1103,7 +1104,8 @@ export const TimePicker = (props: TimePickerProps) => {
             ref={inputRefs}
           />
           {showClear && (
-            <button
+            <PickerClearButton
+              fallbackRef={inputRef}
               // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot
               // change it).
               type="button"
@@ -1133,7 +1135,7 @@ export const TimePicker = (props: TimePickerProps) => {
               })}
             >
               <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-            </button>
+            </PickerClearButton>
           )}
           {showExpand && (
             <PickerExpandButton

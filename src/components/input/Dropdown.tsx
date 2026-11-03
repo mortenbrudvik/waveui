@@ -33,6 +33,7 @@ import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { unwrapButtonGlyph } from '../button/Button.slots';
 import { HiddenInput } from '../internal/HiddenInput';
 import { showsExpandButton } from './Combobox.expand';
+import { PickerClearButton } from './PickerClearButton';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import {
@@ -754,7 +755,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             ))}
         </button>
         {showClear && (
-          <button
+          <PickerClearButton
+            fallbackRef={buttonRef}
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
             {...mergeSlotProps(slotProps?.clearButton, {
@@ -784,7 +786,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-          </button>
+          </PickerClearButton>
         )}
       </div>
       <PickerListboxSurface
