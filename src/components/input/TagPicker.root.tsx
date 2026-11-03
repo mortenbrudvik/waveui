@@ -23,9 +23,11 @@ import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { HiddenInput } from '../internal/HiddenInput';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
+import { useShownListScroll } from './Option.data';
 import { useListboxPopup } from './Option';
 import { announceToggle } from './pickerLabels';
 import { EMPTY_VALUES, sameValues } from './pickerValues';
@@ -176,6 +178,21 @@ export interface TagPickerProps extends Omit<
    * once it unlocks. Not used with TagPicker.Button.
    */
   onQueryChange?: (query: string) => void;
+  /**
+   * Renders only the options in view of a long list of `options`, plus an overscan, and spacers
+   * (`aria-hidden`, `data-virtual-spacer`) as tall as the options they stand for: pass the result
+   * of `useVirtualWindow({ itemSize })`, or an object of your own that implements
+   * `VirtualWindow`. It applies to the array form (`options`, and the create option, which is
+   * the last item): with a `TagPicker.List` that has children, the window is ignored with a
+   * development warning, since the options are yours. The open list is the window's scroller (it
+   * scrolls within its own maximum height, 15rem), has no block padding while windowed and no
+   * scroll anchoring of the browser; every option is exactly `itemSize` tall (an option with
+   * `media` and `secondaryContent` needs more than the 32 pixels of one line). The window counts
+   * the listed options: typing narrows it, as it narrows `aria-setsize`. The keys move over all of
+   * them, the active option stays rendered while it is scrolled away, and opening the list scrolls
+   * the active option to the middle. A closed list renders no option. The server renders no list.
+   */
+  virtualWindow?: VirtualWindow;
   /**
    * Whether the tag picker is disabled: nothing can be added or removed, the remove buttons leave
    * the tab order, and the expand and clear buttons are disabled. The field dims once.
@@ -488,6 +505,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     onOptionCreate,
     clearable = false,
     expandIcon,
+    virtualWindow,
     overflow: overflowProp = 'wrap',
     labels,
     inputMode,
@@ -732,10 +750,29 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     announceToggle(labels, text, true, next.length);
   };
 
+  // The window applies to the array form only: a List with children renders the options itself.
+  const activeWindow = registration ? undefined : virtualWindow;
+  const windowIgnored = registration && virtualWindow !== undefined;
+  React.useEffect(() => {
+    if (windowIgnored) {
+      warnOnce(
+        'TagPicker:virtual-window-requires-options',
+        'TagPicker: `virtualWindow` is ignored with a `TagPicker.List` that has children: only the ' +
+          'options of the array form (`options`) are windowed, so every option child is rendered. ' +
+          'Pass the options as `options`.',
+      );
+    }
+  }, [windowIgnored]);
+
   const listbox = useListbox({
     open,
     onOpenChange: (next) => setOpen(next),
     mode: isButtonTrigger ? 'select-only' : 'editable',
+    // An active option that the window does not render: scrolled to by its index among the shown
+    // options, the window's count.
+    onScrollToItem: activeWindow
+      ? (index) => activeWindow.scrollToIndex(index, { align: 'auto' })
+      : undefined,
     multiselect: true,
     selectedValues: selected,
     onSelect: (value, details) => {
@@ -793,6 +830,12 @@ export const TagPickerRoot = (props: TagPickerProps) => {
   // The popup shows the options, or "No matches" for a query.
   const surfaceOpen = open && (expanded || query !== '');
   const noMatches = surfaceOpen && !expanded && !showCreate;
+  // The window scrolls the shown list only, which mounts with the popup; the closed list in place
+  // is another, hidden element.
+  const listScrollRef = useMergedRefs<HTMLUListElement>(
+    expanded ? activeWindow?.scrollRef : undefined,
+  );
+  useShownListScroll(expanded, activeWindow, listbox.items, listbox.activeValue, selected);
   const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
     positioning,
     open,
@@ -958,6 +1001,8 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       warnsUnknownValues: !registration && !allowCreate,
       dataMode: !registration,
       listbox,
+      virtualWindow: activeWindow,
+      listScrollRef,
       open,
       expanded,
       query,
@@ -1014,6 +1059,8 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       registration,
       allowCreate,
       listbox,
+      activeWindow,
+      listScrollRef,
       open,
       expanded,
       query,

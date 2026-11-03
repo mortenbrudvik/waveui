@@ -994,10 +994,11 @@ export const TimePicker = (props: TimePickerProps) => {
       {...mergeSlotProps(slotProps?.listbox, {
         className: wcn(
           timePickerClassNames.listbox,
-          'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:focus:outline-hidden',
           // A window counts the options from the top of the list: no block padding, and the
           // browser's scroll anchoring only fights the window.
-          virtualWindow ? 'wave:[overflow-anchor:none]' : 'wave:py-1',
+          virtualWindow
+            ? 'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:[overflow-anchor:none] wave:focus:outline-hidden'
+            : 'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden',
         ),
         ref: virtualWindow ? listScrollRef : undefined,
         locked: {
