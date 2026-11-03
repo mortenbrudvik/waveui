@@ -325,7 +325,7 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * within its own maximum height (15rem, 240 pixels at the default root size, less where the
    * viewport has no room). Every option is exactly `itemSize` tall (the list sets its height,
    * after the option's own `style`), so an option's content must fit in it: the default `Option`
-   * with one line of text is 32 pixels tall.
+   * with one line of text is 32 pixels tall. With a window that measures its rows (`useVirtualWindow({ itemSize, measureItems: true })`, `itemSize` being the estimate) an option has the height of its content instead, and carries the window's `itemProps`.
    *
    * The window counts the shown options: typing narrows it, as it narrows `aria-setsize`. The
    * arrow keys move over all of them; the active option stays rendered while it is scrolled away,

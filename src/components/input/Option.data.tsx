@@ -36,6 +36,8 @@ interface DataOptionProps {
   setSize: number;
   /** The window's item size, in a windowed list: the option's height. */
   itemSize: number | undefined;
+  /** The window's `itemProps`, in a list whose window measures its rows (no fixed height). */
+  itemProps: VirtualWindow['itemProps'];
   selected: boolean;
   active: boolean;
   renderOption: RenderOption | undefined;
@@ -51,13 +53,19 @@ function DataOptionImpl({
   index,
   setSize,
   itemSize,
+  itemProps,
   selected,
   active,
   renderOption,
 }: DataOptionProps) {
   const position = React.useMemo<ListboxOptionPosition>(
-    () => (itemSize === undefined ? { index, setSize } : { index, setSize, itemSize }),
-    [index, setSize, itemSize],
+    () =>
+      itemProps
+        ? { index, setSize, itemProps }
+        : itemSize === undefined
+          ? { index, setSize }
+          : { index, setSize, itemSize },
+    [index, setSize, itemSize, itemProps],
   );
   return (
     <ListboxOptionPositionContext.Provider value={position}>
@@ -88,6 +96,7 @@ function dataOption(
   state: ListboxItemsState,
   key: string,
   itemSize?: number,
+  itemProps?: VirtualWindow['itemProps'],
 ): React.ReactElement {
   const item = items[index];
   return (
@@ -97,6 +106,7 @@ function dataOption(
       index={index}
       setSize={items.length}
       itemSize={itemSize}
+      itemProps={itemProps}
       selected={state.selected.has(item.value)}
       active={state.activeValue === item.value}
       renderOption={state.renderOption}
@@ -171,6 +181,7 @@ export function renderListboxWindow(
           state,
           `option:${items[entry.index].value}`,
           virtualWindow.itemSize,
+          virtualWindow.itemProps,
         )
       ) : (
         <ListboxSpacer key={`spacer:${entry.key}`} size={entry.size} className={spacerClassName} />

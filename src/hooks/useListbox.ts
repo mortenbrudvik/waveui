@@ -17,6 +17,7 @@ import { useEventCallback } from './useEventCallback';
 import { useId } from './useId';
 import { useMergedRefs } from './useMergedRefs';
 import { isAltGraphCharacter, useTypeahead } from './useTypeahead';
+import type { VirtualWindow } from './useVirtualWindow';
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -786,14 +787,16 @@ ListboxContext.displayName = 'ListboxContext';
 
 /**
  * Where an option of a data-mode list stands among the shown options: `index` from 0 and the
- * number of shown options, and in a windowed list the window's `itemSize`. Read by
- * {@link useListboxOption}, which renders `aria-posinset` and `aria-setsize` from it, and the
- * option's height from `itemSize`.
+ * number of shown options, and in a windowed list the window's `itemSize`, or, for a window that
+ * measures its rows, its `itemProps`. Read by {@link useListboxOption}, which renders
+ * `aria-posinset` and `aria-setsize` from it, and the option's height from `itemSize` (an
+ * option of a measuring window has the height of its content and the attributes of `itemProps`).
  */
 export interface ListboxOptionPosition {
   index: number;
   setSize: number;
   itemSize?: number;
+  itemProps?: VirtualWindow['itemProps'];
 }
 
 /**
@@ -1606,8 +1609,12 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
   if (position) {
     optionProps['aria-setsize'] = position.setSize;
     optionProps['aria-posinset'] = position.index + 1;
-    // A windowed list lays its options out at exactly the window's item size.
-    if (position.itemSize !== undefined) {
+    // A windowed list lays its options out at exactly the window's item size, or, in a window
+    // that measures its rows, at the height of their content, found by the window's attributes.
+    if (position.itemProps) {
+      Object.assign(optionProps, position.itemProps(position.index));
+      optionProps.style = { boxSizing: 'border-box', flexShrink: 0 };
+    } else if (position.itemSize !== undefined) {
       optionProps.style = { height: position.itemSize, boxSizing: 'border-box', flexShrink: 0 };
     }
   }

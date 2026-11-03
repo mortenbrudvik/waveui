@@ -69,7 +69,7 @@ export interface ListProps<M extends ListSelectionMode = ListSelectionMode> exte
    * or navigate its items (`navigationMode="items"`). A `tabIndex` you pass wins.
    *
    * Every item has the window's `itemSize` as its height (the list sets it, after the item's own
-   * `style`), so an item's content must fit in it. Each item carries `data-index` (its 0-based
+   * `style`), so an item's content must fit in it. With a window that measures its rows (`useVirtualWindow({ itemSize, measureItems: true })`, `itemSize` being the estimate) an item has the height of its content instead, and carries the window's `itemProps`. Each item carries `data-index` (its 0-based
    * index) and its place in the whole list: `aria-setsize` and `aria-posinset`, or in a grid
    * (`navigationMode="composite"`) the list's `aria-rowcount` and the row's `aria-rowindex`.
    *
@@ -293,6 +293,11 @@ interface ListWindow {
   count: number;
   /** The height of every item, in pixels (the window's `itemSize`). */
   itemSize: number;
+  /**
+   * The window's `itemProps`, present when it measures its items: they have no fixed height and
+   * carry these attributes.
+   */
+  itemProps: VirtualWindow['itemProps'];
 }
 
 interface ListContextValue {
@@ -687,9 +692,10 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     !windowed && (virtualWindow !== undefined || count !== undefined || renderItem !== null);
   const itemCount = windowed ? toItemCount(count) : 0;
   const itemSize = activeWindow?.itemSize;
+  const itemProps = activeWindow?.itemProps;
   const listWindow = React.useMemo<ListWindow | null>(
-    () => (itemSize === undefined ? null : { count: itemCount, itemSize }),
-    [itemCount, itemSize],
+    () => (itemSize === undefined ? null : { count: itemCount, itemSize, itemProps }),
+    [itemCount, itemSize, itemProps],
   );
 
   const multiple = selectionMode === 'multiple';
@@ -1432,6 +1438,7 @@ export const ListItem = ({
     listWindow && windowIndex !== null
       ? {
           'data-index': windowIndex,
+          ...listWindow.itemProps?.(windowIndex),
           ...(mode === 'grid'
             ? { 'aria-rowindex': windowIndex + 1 }
             : { 'aria-setsize': listWindow.count, 'aria-posinset': windowIndex + 1 }),
@@ -1445,7 +1452,8 @@ export const ListItem = ({
       className={wcn(
         listItemClassNames.root,
         'wave:flex wave:items-center wave:border-b wave:border-border wave:px-4 wave:py-2 wave:text-body-1',
-        // A windowed item is exactly the window's item size, its bottom rule included.
+        // A windowed item is exactly the window's item size (the height of a measured one is its
+        // own), its bottom rule included.
         windowIndex !== null && 'wave:box-border',
         navigable ? ['wave:relative', cursor, focusRingInset] : cursor,
         isSelected
@@ -1456,7 +1464,11 @@ export const ListItem = ({
           : hoverable && 'wave:hover:bg-subtle-hover',
         className,
       )}
-      style={listWindow && windowIndex !== null ? { ...style, height: listWindow.itemSize } : style}
+      style={
+        listWindow && windowIndex !== null && !listWindow.itemProps
+          ? { ...style, height: listWindow.itemSize }
+          : style
+      }
       {...rest}
       ref={itemRefs}
       {...interactiveProps}

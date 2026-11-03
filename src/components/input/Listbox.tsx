@@ -143,7 +143,10 @@ export interface ListboxProps<M extends boolean = false> extends Omit<
    * `className`), so the options start at its top, where the window counts them, and no scroll
    * anchoring of the browser (the window lays the options out). Every option is exactly
    * `itemSize` tall (the list sets its height, after the option's own `style`), so an option's
-   * content must fit in it: the default `Option` with one line of text is 32 pixels tall.
+   * content must fit in it: the default `Option` with one line of text is 32 pixels tall. With a
+   * window that measures its rows (`useVirtualWindow({ itemSize, measureItems: true })`,
+   * `itemSize` being the estimate) an option has the height of its content instead, and carries
+   * the window's `itemProps`.
    *
    * The window counts the shown options (the items that are not `hidden`). The keys and typeahead
    * move over all of them (Home and End to the first and the last, PageUp and PageDown by ten); the

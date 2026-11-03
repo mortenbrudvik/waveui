@@ -333,7 +333,8 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    * The grid's scroll wrapper (the element of `containerProps`) becomes the window's scroller, so
    * give it a bounded height, a height or a maximum height in `containerProps`: without one the
    * window measures the whole list and renders every row (a development warning says so). Every
-   * row has the window's `itemSize` as its height: the grid sets it on each body row, drops the
+   * row has the window's `itemSize` as its height (a window that measures its rows lays the grid out
+   * from its estimate: table rows are not measured): the grid sets it on each body row, drops the
    * vertical padding of its cells and keeps their text on one line, so a cell's content must fit
    * in it. The columns are laid out from widths (as with `columnSizingOptions`), so they never
    * change width as rows come and go. The header stays at the top of the scroller: pass its height
